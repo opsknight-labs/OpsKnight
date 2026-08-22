@@ -240,11 +240,6 @@ export async function completePasswordReset(
   try {
     if (!token) return { success: false, error: 'Invalid token' };
 
-    const strengthError = validatePasswordStrength(password || '');
-    if (strengthError) {
-      return { success: false, error: strengthError };
-    }
-
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const record = await prisma.userToken.findFirst({
       where: { tokenHash, type: 'PASSWORD_RESET', usedAt: null },
@@ -252,6 +247,14 @@ export async function completePasswordReset(
 
     if (!record || record.expiresAt < new Date()) {
       return { success: false, error: 'Invalid or expired token' };
+    }
+
+    // Validate the token before the replacement password. Besides preserving the
+    // reset API contract, this prevents used/expired tokens from returning
+    // password-policy details instead of the canonical token error.
+    const strengthError = validatePasswordStrength(password || '');
+    if (strengthError) {
+      return { success: false, error: strengthError };
     }
 
     const user = await prisma.user.findUnique({ where: { email: record.identifier } });
