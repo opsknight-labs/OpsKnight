@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 
 type CoverageBlock = {
   id: string;
+  userId?: string;
   userName: string;
   userAvatar?: string | null;
   userGender?: string | null;
@@ -125,7 +126,10 @@ export default function CurrentCoverageDisplay({
                 className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
               >
                 <DirectUserAvatar
-                  avatarUrl={block.userAvatar || getDefaultAvatar(block.userGender, block.userName)}
+                  avatarUrl={
+                    block.userAvatar ||
+                    getDefaultAvatar(block.userGender, block.userId || block.userName)
+                  }
                   name={block.userName}
                   size="sm"
                   className="h-9 w-9 ring-1 ring-slate-200 shadow-sm"

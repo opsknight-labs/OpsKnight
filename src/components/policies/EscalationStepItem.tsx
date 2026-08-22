@@ -89,7 +89,7 @@ export default function EscalationStepItem({
         subLabel: step.targetUser.email,
         avatar:
           step.targetUser.avatarUrl ||
-          getDefaultAvatar(step.targetUser.gender, step.targetUser.name),
+          getDefaultAvatar(step.targetUser.gender, step.targetUser.id || step.targetUser.name),
       };
     }
     if (step.targetType === 'TEAM' && step.targetTeam) {

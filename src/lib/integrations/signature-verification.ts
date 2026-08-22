@@ -15,6 +15,8 @@ function safeCompare(a: string, b: string): boolean {
   const aBuf = Buffer.from(a);
   const bBuf = Buffer.from(b);
   if (aBuf.length !== bBuf.length) {
+    // Perform dummy timingSafeEqual comparison to mitigate timing attacks
+    crypto.timingSafeEqual(Buffer.alloc(32), Buffer.alloc(32));
     return false;
   }
   return crypto.timingSafeEqual(aBuf, bBuf);
@@ -47,16 +49,28 @@ export function verifyHmacSignature(
 
 /**
  * Validate timestamp to prevent replay attacks
- * @param timestamp Unix timestamp in seconds or ISO string
+ * @param timestamp Unix timestamp in seconds/ms or ISO string
  * @param maxAgeSeconds Maximum age allowed (default: 5 minutes)
  */
 export function isTimestampValid(timestamp: number | string, maxAgeSeconds: number = 300): boolean {
-  const ts =
-    typeof timestamp === 'string'
-      ? timestamp.includes('T')
-        ? Math.floor(new Date(timestamp).getTime() / 1000)
-        : parseInt(timestamp, 10)
-      : timestamp;
+  let ts: number;
+  if (typeof timestamp === 'number') {
+    // If millisecond timestamp (e.g. > 1e11), convert to seconds
+    ts = timestamp > 1e11 ? Math.floor(timestamp / 1000) : Math.floor(timestamp);
+  } else if (typeof timestamp === 'string') {
+    const trimmed = timestamp.trim();
+    // Check if numeric string
+    if (/^\d+$/.test(trimmed)) {
+      const num = parseInt(trimmed, 10);
+      ts = num > 1e11 ? Math.floor(num / 1000) : num;
+    } else {
+      const parsedDate = new Date(trimmed);
+      if (isNaN(parsedDate.getTime())) return false;
+      ts = Math.floor(parsedDate.getTime() / 1000);
+    }
+  } else {
+    return false;
+  }
 
   if (isNaN(ts)) return false;
 

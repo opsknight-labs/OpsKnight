@@ -113,7 +113,7 @@ export default async function ScheduleDetailPage({
         },
       }),
       prisma.user.findMany({
-        select: { id: true, name: true },
+        select: { id: true, name: true, avatarUrl: true, gender: true },
         orderBy: { name: 'asc' },
       }),
       prisma.onCallOverride.findMany({
@@ -599,7 +599,10 @@ export default async function ScheduleDetailPage({
                         <div className="flex items-center gap-3 min-w-0">
                           <Avatar className="h-7 w-7">
                             <AvatarImage
-                              src={o.user.avatarUrl || getDefaultAvatar(o.user.gender, o.user.name)}
+                              src={
+                                o.user.avatarUrl ||
+                                getDefaultAvatar(o.user.gender, o.userId || o.user.name)
+                              }
                             />
                             <AvatarFallback className="text-[10px] font-semibold">
                               {getInitials(o.user.name)}
@@ -645,7 +648,10 @@ export default async function ScheduleDetailPage({
                         <div className="flex items-center gap-3 min-w-0">
                           <Avatar className="h-7 w-7">
                             <AvatarImage
-                              src={o.user.avatarUrl || getDefaultAvatar(o.user.gender, o.user.name)}
+                              src={
+                                o.user.avatarUrl ||
+                                getDefaultAvatar(o.user.gender, o.userId || o.user.name)
+                              }
                             />
                             <AvatarFallback className="text-[10px] font-semibold">
                               {getInitials(o.user.name)}

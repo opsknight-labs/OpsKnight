@@ -37,6 +37,7 @@ type MobileMoreContentProps = {
   email: string;
   role: string;
   gender?: string | null;
+  avatarUrl?: string | null;
 };
 
 const chevronIcon = (
@@ -261,9 +262,10 @@ export default function MobileMoreContent({
   email,
   role,
   gender,
+  avatarUrl: avatarUrlProp,
 }: MobileMoreContentProps) {
   const { getAvatar } = useUserAvatarContextSafe();
-  const avatarUrl = userId ? getAvatar(userId, gender, name) : undefined;
+  const avatarUrl = userId ? getAvatar(userId, gender, name, avatarUrlProp) : avatarUrlProp;
   const shortcuts: ShortcutItem[] = [
     {
       href: '/m/teams',
@@ -384,7 +386,7 @@ export default function MobileMoreContent({
       <section className="mobile-more-hero">
         <div className="mobile-more-hero-content">
           <div className="mobile-more-avatar">
-            <MobileAvatar name={name} src={avatarUrl} size="xl" />
+            <MobileAvatar name={name} src={avatarUrl || undefined} size="xl" />
           </div>
           <div className="mobile-more-identity">
             <h1 className="mobile-more-name">{name}</h1>

@@ -8,6 +8,7 @@ export interface DynamicOnCallShift {
     id: string;
     name: string | null;
     avatarUrl?: string | null;
+    gender?: string | null;
   };
   scheduleId: string;
   schedule: {
@@ -117,6 +118,7 @@ export async function getActiveOnCallShifts(
           id: block.userId,
           name: block.userName,
           avatarUrl: block.userAvatar,
+          gender: block.userGender,
         },
         scheduleId: schedule.id,
         schedule: {
@@ -228,6 +230,7 @@ export async function getWindowOnCallShifts(
           id: block.userId,
           name: block.userName,
           avatarUrl: block.userAvatar,
+          gender: block.userGender,
         },
         scheduleId: schedule.id,
         schedule: {

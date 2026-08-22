@@ -9,7 +9,13 @@ import { MessageSquare, Send, Lock, User } from 'lucide-react';
 type Note = {
   id: string;
   content: string;
-  user: { name: string; email: string; avatarUrl?: string | null; gender?: string | null };
+  user: {
+    id?: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+    gender?: string | null;
+  };
   createdAt: Date;
 };
 
@@ -77,6 +83,7 @@ export default function IncidentNotes({ notes, canManage, onAddNote }: IncidentN
             <NoteCard
               key={note.id}
               content={note.content}
+              userId={note.user.id}
               userName={note.user.name}
               userAvatar={note.user.avatarUrl}
               userGender={note.user.gender}

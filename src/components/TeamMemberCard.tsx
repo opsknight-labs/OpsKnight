@@ -144,6 +144,7 @@ function TeamMemberCard({
               userId={member.user.id}
               name={member.user.name}
               gender={member.user.gender}
+              avatarUrl={member.user.avatarUrl}
               size="lg"
               className="ring-2 ring-background shadow-md hover:scale-110 transition-transform cursor-pointer"
             />

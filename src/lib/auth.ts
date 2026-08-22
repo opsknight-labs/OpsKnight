@@ -715,9 +715,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             // If user exists by email but isn't linked, we MUST BLOCK the login to prevent Account Takeover.
             // An attacker could simply create an OIDC account with the same email to hijack the admin account.
             if (!existingIdentity && targetUser) {
-              // Only allow if we just created the user (auto-provision case)
-              // The reliable way to know if we just created it is if !existing was true at start.
-              if (existing) {
+              // Allow if we just created the user (auto-provision case) or if the user is in INVITED status
+              const isInvitedUser = targetUser.status === 'INVITED';
+              if (existing && !isInvitedUser) {
                 logger.warn(
                   '[Auth] OIDC sign-in blocked: Account Takeover Attempt - Email exists but not linked',
                   {
@@ -730,7 +730,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 return false;
               }
 
-              // If we just created the user in this request (auto-provision), it's safe to link.
+              // If we just created the user in this request (auto-provision) or user was invited, it's safe to link.
               await prisma.oidcIdentity.create({
                 data: {
                   issuer,
@@ -739,11 +739,18 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   userId: targetUser.id,
                 },
               });
-              logger.info('[Auth] Linked OIDC identity to NEW user', {
+              if (isInvitedUser) {
+                await prisma.user.update({
+                  where: { id: targetUser.id },
+                  data: { status: 'ACTIVE' },
+                });
+              }
+              logger.info('[Auth] Linked OIDC identity to user', {
                 component: 'auth:signIn',
                 issuer,
                 subject,
                 userId: targetUser.id,
+                isInvitedUser,
               });
             } else if (!existingIdentity) {
               // Should not happen if auto-provision worked correctly (targetUser should be null if not created)
@@ -888,7 +895,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 const avatar = String(oidcProfile[mapping.avatarUrl]);
                 // Only sync if value changed AND the current value is NOT a locally uploaded file
                 // This prevents OIDC from overwriting a user's custom uploaded photo.
-                const isLocalUpload = targetUser.avatarUrl?.startsWith('/uploads/');
+                const isLocalUpload =
+                  targetUser.avatarUrl?.startsWith('/api/users/') ||
+                  targetUser.avatarUrl?.startsWith('/uploads/');
 
                 if (avatar && avatar !== targetUser.avatarUrl && !isLocalUpload) {
                   updateData.avatarUrl = avatar;

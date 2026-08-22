@@ -109,6 +109,7 @@ export default function IncidentWatchers({
                               userId={selectedUser.id}
                               name={selectedUser.name}
                               gender={selectedUser.gender}
+                              avatarUrl={selectedUser.avatarUrl}
                               size="xs"
                               className="shrink-0"
                             />
@@ -148,6 +149,7 @@ export default function IncidentWatchers({
                                   userId={user.id}
                                   name={user.name}
                                   gender={user.gender}
+                                  avatarUrl={user.avatarUrl}
                                   size="sm"
                                   className="border-slate-200"
                                 />
@@ -218,6 +220,7 @@ export default function IncidentWatchers({
                       userId={watcher.user.id}
                       name={watcher.user.name}
                       gender={watcher.user.gender}
+                      avatarUrl={watcher.user.avatarUrl}
                       size="sm"
                       className="h-9 w-9 border-2 border-white shadow-sm"
                       fallbackClassName="bg-primary/10 text-primary"

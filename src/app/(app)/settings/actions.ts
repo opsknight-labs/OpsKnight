@@ -14,7 +14,7 @@ import {
   getWhatsAppConfig,
 } from '@/lib/notification-providers';
 import { logger } from '@/lib/logger';
-import { getDefaultAvatar } from '@/lib/avatar';
+import { getDefaultAvatar, isDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 
 type ActionState = {
@@ -45,11 +45,13 @@ export async function updateProfile(
 
     const avatarFile = formData.get('avatar') as File | null;
 
+    const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
     let avatarUrl = undefined;
     if (avatarFile && avatarFile.size > 0) {
       // Validate file type
-      if (!avatarFile.type.startsWith('image/')) {
-        return { error: 'Invalid file type. Please upload an image.' };
+      if (!ALLOWED_MIME_TYPES.has(avatarFile.type)) {
+        return { error: 'Invalid file type. Please upload a PNG, JPEG, WebP, or GIF image.' };
       }
       if (avatarFile.size > 2 * 1024 * 1024) {
         // 2MB limit
@@ -59,6 +61,26 @@ export async function updateProfile(
       try {
         const bytes = await avatarFile.arrayBuffer();
         const buffer = Buffer.from(bytes);
+
+        // Verify magic bytes
+        const isPng =
+          buffer.length >= 4 &&
+          buffer[0] === 0x89 &&
+          buffer[1] === 0x50 &&
+          buffer[2] === 0x4e &&
+          buffer[3] === 0x47;
+        const isJpeg =
+          buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+        const isGif =
+          buffer.length >= 3 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
+        const isWebp =
+          buffer.length >= 12 &&
+          buffer.toString('ascii', 0, 4) === 'RIFF' &&
+          buffer.toString('ascii', 8, 12) === 'WEBP';
+
+        if (!isPng && !isJpeg && !isGif && !isWebp) {
+          return { error: 'Invalid image file signature. Please upload a valid image.' };
+        }
 
         // Save to database (UserAvatar table)
         await prisma.userAvatar.upsert({
@@ -116,13 +138,23 @@ export async function updateProfile(
     }
 
     // Handle direct avatarUrl (from avatar picker)
-    const directAvatarUrl = formData.get('avatarUrl') as string | null;
+    const directAvatarUrl = (formData.get('avatarUrl') as string | null)?.trim();
+    const isValidDirectUrl = (url: string) => {
+      if (url.startsWith('/api/avatar') || url.startsWith('/avatars/')) return true;
+      try {
+        const parsed = new URL(url);
+        return parsed.protocol === 'https:' && parsed.hostname === 'api.dicebear.com';
+      } catch {
+        return false;
+      }
+    };
 
     // Avatar Logic
     if (removeAvatar) {
-      // User explicitly requested removal - set to default based on gender
+      // User explicitly requested removal - clean up DB binary and set to default based on gender
+      await prisma.userAvatar.deleteMany({ where: { userId: user.id } });
       data.avatarUrl = getDefaultAvatar(newGender, user.id);
-    } else if (directAvatarUrl) {
+    } else if (directAvatarUrl && isValidDirectUrl(directAvatarUrl)) {
       // User selected an avatar from the picker
       data.avatarUrl = directAvatarUrl;
     } else if (avatarUrl !== undefined) {
@@ -131,22 +163,7 @@ export async function updateProfile(
     } else if (data.gender !== undefined) {
       // Gender changed, but no new file uploaded.
       // Check if we should update the avatar to match the new gender.
-      // We only do this if the current avatar is:
-      // 1. null (no avatar)
-      // 2. OR one of our default DiceBear avatars (meaning user hasn't uploaded a custom one)
-
-      const isCurrentDefault =
-        !user.avatarUrl ||
-        user.avatarUrl.startsWith('/api/avatar') ||
-        (() => {
-          try {
-            const url = new URL(user.avatarUrl!);
-            return url.hostname === 'api.dicebear.com';
-          } catch {
-            // If the URL is invalid, treat it as non-default/custom.
-            return false;
-          }
-        })();
+      const isCurrentDefault = isDefaultAvatar(user.avatarUrl);
 
       if (isCurrentDefault) {
         const newDefault = getDefaultAvatar(newGender, user.id);

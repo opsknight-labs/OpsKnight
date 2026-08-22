@@ -31,8 +31,9 @@ export async function createTeam(
   _prevState: TeamFormState,
   formData: FormData
 ): Promise<TeamFormState> {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     return {
       error:
@@ -65,7 +66,7 @@ export async function createTeam(
     },
   });
 
-  const actorId = await getDefaultActorId();
+  const actorId = currentUser.id;
   await logAudit({
     action: 'team.created',
     entityType: 'TEAM',
@@ -84,8 +85,9 @@ export async function createTeam(
 }
 
 export async function updateTeam(teamId: string, formData: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     return {
       error:
@@ -131,7 +133,7 @@ export async function updateTeam(teamId: string, formData: FormData) {
     },
   });
 
-  const actorId = await getDefaultActorId();
+  const actorId = currentUser.id;
   await logAudit({
     action: 'team.updated',
     entityType: 'TEAM',
@@ -153,8 +155,9 @@ export async function updateTeam(teamId: string, formData: FormData) {
 }
 
 export async function deleteTeam(teamId: string) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
@@ -173,7 +176,7 @@ export async function deleteTeam(teamId: string) {
     where: { id: teamId },
   });
 
-  const actorId = await getDefaultActorId();
+  const actorId = currentUser.id;
   await logAudit({
     action: 'team.deleted',
     entityType: 'TEAM',
@@ -229,7 +232,7 @@ export async function addTeamMember(teamId: string, formData: FormData) {
     },
   });
 
-  const actorId = await getDefaultActorId();
+  const actorId = currentUser.id;
   await logAudit({
     action: 'team.member.added',
     entityType: 'TEAM_MEMBER',
@@ -314,7 +317,7 @@ export async function updateTeamMemberRole(
     data: { role: role as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
   });
 
-  const actorId = await getDefaultActorId();
+  const actorId = currentUser.id;
   await logAudit({
     action: 'team.member.role.updated',
     entityType: 'TEAM_MEMBER',
@@ -349,8 +352,9 @@ export async function updateTeamMemberNotifications(
     return { error: 'Member not found.' };
   }
 
+  let currentUser;
   try {
-    await assertAdminOrTeamOwner(member.teamId);
+    currentUser = await assertAdminOrTeamOwner(member.teamId);
   } catch (error) {
     return {
       error:
@@ -365,7 +369,7 @@ export async function updateTeamMemberNotifications(
     data: { receiveTeamNotifications: receiveNotifications },
   });
 
-  const actorId = await getDefaultActorId();
+  const actorId = currentUser.id;
   await logAudit({
     action: 'team.member.notifications.updated',
     entityType: 'TEAM_MEMBER',
@@ -401,8 +405,9 @@ export async function removeTeamMember(memberId: string): Promise<{ error?: stri
   }
 
   // Check if user is admin or owner of this specific team
+  let currentUser;
   try {
-    await assertAdminOrTeamOwner(member.teamId);
+    currentUser = await assertAdminOrTeamOwner(member.teamId);
   } catch (error) {
     return {
       error:
@@ -432,7 +437,7 @@ export async function removeTeamMember(memberId: string): Promise<{ error?: stri
     });
   });
 
-  const actorId = await getDefaultActorId();
+  const actorId = currentUser.id;
   await logAudit({
     action: 'team.member.removed',
     entityType: 'TEAM_MEMBER',

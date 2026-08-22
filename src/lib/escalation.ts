@@ -706,9 +706,7 @@ export async function processPendingEscalations(
       },
       escalationStatus: 'ESCALATING',
       OR: [{ escalationProcessingAt: null }, { escalationProcessingAt: { lt: lockCutoff } }],
-      status: {
-        in: ['OPEN', 'SNOOZED'], // Only escalate if still open or snoozed
-      },
+      status: 'OPEN', // Only escalate if still open
     },
     take: 50, // Process in batches to avoid OOM
     orderBy: { nextEscalationAt: 'asc' }, // Process oldest due first

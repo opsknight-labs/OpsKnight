@@ -38,33 +38,45 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = validation.data;
-    const routingKey =
-      searchParams.get('integrationId') ||
+    const paramId = searchParams.get('integrationId');
+    const providedKey =
       searchParams.get('key') ||
       searchParams.get('token') ||
       payload.routing_key ||
       payload.routingKey ||
-      req.headers.get('x-routing-key');
+      req.headers.get('x-routing-key') ||
+      req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
 
-    if (!routingKey) {
+    if (!paramId && !providedKey) {
       return new Response(
-        JSON.stringify({ status: 'error', message: 'routing_key or integrationId is required' }),
+        JSON.stringify({ status: 'error', message: 'routing_key or integration key is required' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    const integration = await prisma.integration.findFirst({
-      where: {
-        OR: [{ id: routingKey }, { key: routingKey }],
-        enabled: true,
-      },
-    });
+    const integration = paramId
+      ? await prisma.integration.findUnique({
+          where: { id: paramId },
+        })
+      : await prisma.integration.findFirst({
+          where: {
+            key: providedKey || '',
+            enabled: true,
+          },
+        });
 
-    if (!integration) {
+    if (!integration || !integration.enabled) {
       return new Response(
         JSON.stringify({ status: 'error', message: 'Integration not found or disabled' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    if (paramId && (!providedKey || integration.key !== providedKey)) {
+      return new Response(JSON.stringify({ status: 'error', message: 'Invalid integration key' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     integrationId = integration.id;

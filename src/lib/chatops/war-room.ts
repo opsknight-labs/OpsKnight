@@ -244,15 +244,25 @@ export async function createIncidentWarRoom(
     const channelName = `${config.channelPrefix}-${idSuffix}-${serviceSlug}`.slice(0, 80);
 
     // Create channel via Slack API
-    const createResult = await slackApiCall('conversations.create', botToken, {
-      name: channelName,
+    let effectiveChannelName = channelName;
+    let createResult = await slackApiCall('conversations.create', botToken, {
+      name: effectiveChannelName,
       is_private: false,
     });
+
+    if (!createResult.ok && createResult.error === 'name_taken') {
+      const suffix = Math.floor(Math.random() * 8999 + 1000).toString();
+      effectiveChannelName = `${channelName.slice(0, 74)}-${suffix}`;
+      createResult = await slackApiCall('conversations.create', botToken, {
+        name: effectiveChannelName,
+        is_private: false,
+      });
+    }
 
     if (!createResult.ok) {
       logger.error('[ChatOps] Failed to create Slack channel', {
         error: createResult.error,
-        channelName,
+        channelName: effectiveChannelName,
         incidentId,
       });
       const errorMsg =

@@ -12,7 +12,7 @@ export default async function MobileMorePage() {
   const user = session?.user?.email
     ? await prisma.user.findUnique({
         where: { email: session.user.email },
-        select: { id: true, name: true, email: true, role: true, gender: true },
+        select: { id: true, name: true, email: true, role: true, gender: true, avatarUrl: true },
       })
     : null;
 
@@ -23,6 +23,7 @@ export default async function MobileMorePage() {
       email={user?.email || ''}
       role={user?.role || 'User'}
       gender={user?.gender}
+      avatarUrl={user?.avatarUrl}
     />
   );
 }

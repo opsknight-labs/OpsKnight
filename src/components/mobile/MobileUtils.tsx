@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 // Status Badge component
@@ -97,6 +97,7 @@ export function MobileAvatar({
   src?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }) {
+  const [hasError, setHasError] = useState(false);
   const sizeClass = (() => {
     switch (size) {
       case 'sm':
@@ -121,21 +122,24 @@ export function MobileAvatar({
         return 64;
     }
   })();
-  const initials = name
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  const initials =
+    (name || 'U')
+      .trim()
+      .split(/\s+/)
+      .map(n => n[0] || '')
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'U';
 
-  if (src) {
+  if (src && !hasError) {
     return (
       <Image
         src={src}
-        alt={name}
+        alt={name || 'User'}
         width={imageSize}
         height={imageSize}
         className={cn('rounded-full object-cover', sizeClass)}
+        onError={() => setHasError(true)}
         unoptimized
       />
     );

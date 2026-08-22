@@ -345,7 +345,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
                     <AvatarImage
                       src={
                         incident.assignee.avatarUrl ||
-                        getDefaultAvatar(incident.assignee.gender, incident.assignee.name)
+                        getDefaultAvatar(incident.assignee.gender, incident.assignee.id)
                       }
                     />
                     <AvatarFallback className="text-[9px] bg-slate-100 text-slate-600">

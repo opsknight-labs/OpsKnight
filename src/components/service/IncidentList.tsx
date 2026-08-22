@@ -223,7 +223,10 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
                             <AvatarImage
                               src={
                                 incident.assignee.avatarUrl ||
-                                getDefaultAvatar(incident.assignee.gender, incident.assignee.name)
+                                getDefaultAvatar(
+                                  incident.assignee.gender,
+                                  incident.assignee.id || incident.assignee.name
+                                )
                               }
                             />
                             <AvatarFallback className="text-[9px]">

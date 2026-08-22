@@ -120,6 +120,10 @@ export function createIntegrationHandler<T>(
         throw IntegrationErrors.notFound(integrationId);
       }
 
+      if (!integration.enabled) {
+        throw IntegrationErrors.unauthorized('Integration is disabled');
+      }
+
       if (!isIntegrationAuthorized(req, integration.key)) {
         throw IntegrationErrors.invalidPayload('Invalid integration key');
       }

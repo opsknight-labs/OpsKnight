@@ -23,12 +23,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Convert Buffer to Uint8Array for NextResponse compatibility
     const uint8Array = new Uint8Array(userAvatar.data);
 
+    const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+    const safeMimeType = ALLOWED_MIME_TYPES.has(userAvatar.mimeType)
+      ? userAvatar.mimeType
+      : 'image/png';
+
     return new NextResponse(uint8Array, {
       headers: {
-        'Content-Type': userAvatar.mimeType,
+        'Content-Type': safeMimeType,
         // Aggressive caching: 1 year, immutable (browser won't revalidate)
         // Cache invalidation is done by changing the URL query param (?t=timestamp)
         'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'",
       },
     });
   } catch (error) {

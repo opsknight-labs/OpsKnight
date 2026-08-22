@@ -30,7 +30,7 @@ type Props = {
 
 export default function TopbarUserMenu({ name, email, role, avatarUrl, gender, userId }: Props) {
   const router = useRouter();
-  const finalAvatarUrl = useUserAvatarSafe(userId, gender, name || email || 'User');
+  const finalAvatarUrl = useUserAvatarSafe(userId, gender, name || email || 'User', avatarUrl);
   const initials = (name || email || 'U').slice(0, 2).toUpperCase();
 
   return (

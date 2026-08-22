@@ -444,6 +444,7 @@ export default function Sidebar(
               userId={userId || 'user'}
               name={currentName}
               gender={currentGender}
+              avatarUrl={userAvatar}
               size={isDesktopCollapsed ? 'sm' : 'sm'}
               showOnlineStatus={true}
               className={cn(

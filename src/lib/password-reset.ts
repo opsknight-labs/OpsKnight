@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'crypto';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { logger } from '@/lib/logger';
+import { validatePasswordStrength } from '@/lib/passwords';
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const MAX_ATTEMPTS_PER_WINDOW = 5;
 
@@ -246,6 +247,14 @@ export async function completePasswordReset(
 
     if (!record || record.expiresAt < new Date()) {
       return { success: false, error: 'Invalid or expired token' };
+    }
+
+    // Validate the token before the replacement password. Besides preserving the
+    // reset API contract, this prevents used/expired tokens from returning
+    // password-policy details instead of the canonical token error.
+    const strengthError = validatePasswordStrength(password || '');
+    if (strengthError) {
+      return { success: false, error: strengthError };
     }
 
     const user = await prisma.user.findUnique({ where: { email: record.identifier } });

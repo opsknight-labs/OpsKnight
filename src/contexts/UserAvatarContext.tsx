@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useState,
+  useEffect,
   useCallback,
   ReactNode,
   useMemo,
@@ -94,6 +95,30 @@ export function UserAvatarProvider({
     return cache;
   });
 
+  // Keep cache synced with current user props when they change
+  useEffect(() => {
+    if (!currentUserId) return;
+    setAvatarCache(prev => {
+      const existing = prev.get(currentUserId);
+      if (
+        existing &&
+        existing.avatarUrl === currentUserAvatar &&
+        existing.gender === currentUserGender &&
+        existing.name === currentUserName
+      ) {
+        return prev;
+      }
+      const newCache = new Map(prev);
+      newCache.set(currentUserId, {
+        avatarUrl: currentUserAvatar,
+        gender: currentUserGender,
+        name: currentUserName,
+        lastAccessed: Date.now(),
+      });
+      return newCache;
+    });
+  }, [currentUserId, currentUserAvatar, currentUserGender, currentUserName]);
+
   // Helper to evict LRU entries when cache exceeds max size
   const evictLRU = useCallback(
     (cache: Map<string, AvatarCacheEntry>, protectedId?: string | null) => {
@@ -115,47 +140,16 @@ export function UserAvatarProvider({
     []
   );
 
-  // Track access time updates without causing re-renders
-  const accessUpdateQueue = useRef<Set<string>>(new Set());
-  const accessUpdateScheduled = useRef(false);
-
   // Get avatar URL for a user, using cache or falling back to default
   const getAvatar = useCallback(
     (
       userId: string,
       gender?: string | null,
-      fallbackName?: string | null,
+      _fallbackName?: string | null,
       avatarUrlProp?: string | null
     ): string => {
       const cached = avatarCache.get(userId);
       const effectiveAvatarUrl = avatarUrlProp || cached?.avatarUrl;
-
-      // Queue access time update (batched to avoid frequent state updates)
-      if (cached && !accessUpdateQueue.current.has(userId)) {
-        accessUpdateQueue.current.add(userId);
-        if (!accessUpdateScheduled.current) {
-          accessUpdateScheduled.current = true;
-          // Batch access time updates
-          setTimeout(() => {
-            const idsToUpdate = Array.from(accessUpdateQueue.current);
-            accessUpdateQueue.current.clear();
-            accessUpdateScheduled.current = false;
-            if (idsToUpdate.length > 0) {
-              setAvatarCache(prev => {
-                const newCache = new Map(prev);
-                const now = Date.now();
-                idsToUpdate.forEach(id => {
-                  const entry = newCache.get(id);
-                  if (entry) {
-                    newCache.set(id, { ...entry, lastAccessed: now });
-                  }
-                });
-                return newCache;
-              });
-            }
-          }, 1000); // Batch updates every 1 second
-        }
-      }
 
       if (effectiveAvatarUrl) {
         return effectiveAvatarUrl;
@@ -163,10 +157,9 @@ export function UserAvatarProvider({
 
       // Use cached gender if available, otherwise use provided gender
       const effectiveGender = cached?.gender ?? gender;
-      const effectiveName = cached?.name ?? fallbackName;
 
-      // Generate default avatar
-      return getDefaultAvatar(effectiveGender, effectiveName || userId);
+      // Generate default avatar using consistent userId seed
+      return getDefaultAvatar(effectiveGender, userId || 'user');
     },
     [avatarCache]
   );
@@ -279,7 +272,7 @@ export function useUserAvatarContextSafe() {
     return {
       currentUserId: null,
       getAvatar: (userId: string, gender?: string | null, fallbackName?: string | null) =>
-        getDefaultAvatar(gender, fallbackName || userId),
+        getDefaultAvatar(gender, userId || fallbackName || 'user'),
       updateAvatar: () => {},
       invalidateAvatar: () => {},
       preloadAvatars: () => {},

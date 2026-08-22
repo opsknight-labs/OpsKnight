@@ -33,7 +33,11 @@ const formatPercent = (value: number) => `${value.toFixed(0)}%`;
 
 function escapeCSV(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '';
-  const str = String(value);
+  let str = String(value);
+  // Mitigate CSV Formula Injection (CWE-1236)
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -352,14 +356,13 @@ export async function GET(req: NextRequest) {
     ]);
 
     recentIncidents.forEach(incident => {
+      const endTime =
+        incident.status === 'RESOLVED' && incident.resolvedAt
+          ? incident.resolvedAt
+          : incident.updatedAt;
       const duration =
-        incident.updatedAt && incident.createdAt
-          ? (
-              (incident.updatedAt.getTime() - incident.createdAt.getTime()) /
-              1000 /
-              60 /
-              60
-            ).toFixed(2)
+        endTime && incident.createdAt
+          ? ((endTime.getTime() - incident.createdAt.getTime()) / 1000 / 60 / 60).toFixed(2)
           : '--';
 
       csvRows.push([

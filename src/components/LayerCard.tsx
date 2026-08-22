@@ -24,7 +24,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/shadcn/tooltip';
-import { Trash2, Edit3, Users, Clock, ArrowUp, ArrowDown, Layers, Info, X, ChevronDown } from 'lucide-react';
+import {
+  Trash2,
+  Edit3,
+  Users,
+  Clock,
+  ArrowUp,
+  ArrowDown,
+  Layers,
+  Info,
+  X,
+  ChevronDown,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type LayerRestrictions = {
@@ -263,19 +274,30 @@ export default function LayerCard({
                   {layer.rotationLengthHours}h rotation
                 </Badge>
                 {layer.shiftLengthHours && layer.shiftLengthHours !== layer.rotationLengthHours && (
-                  <Badge variant="outline" size="xs" className="border-orange-200 bg-orange-50 text-orange-700">
+                  <Badge
+                    variant="outline"
+                    size="xs"
+                    className="border-orange-200 bg-orange-50 text-orange-700"
+                  >
                     {layer.shiftLengthHours}h shift
                   </Badge>
                 )}
-                {layer.restrictions && (layer.restrictions.daysOfWeek?.length || layer.restrictions.startHour != null) && (
-                  <>
-                    {formatRestrictions(layer.restrictions).map((badge, i) => (
-                      <Badge key={i} variant="outline" size="xs" className="border-purple-200 bg-purple-50 text-purple-700">
-                        {badge}
-                      </Badge>
-                    ))}
-                  </>
-                )}
+                {layer.restrictions &&
+                  (layer.restrictions.daysOfWeek?.length ||
+                    layer.restrictions.startHour != null) && (
+                    <>
+                      {formatRestrictions(layer.restrictions).map((badge, i) => (
+                        <Badge
+                          key={i}
+                          variant="outline"
+                          size="xs"
+                          className="border-purple-200 bg-purple-50 text-purple-700"
+                        >
+                          {badge}
+                        </Badge>
+                      ))}
+                    </>
+                  )}
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {formatShortTime(new Date(layer.start), timeZone)}
@@ -391,6 +413,7 @@ export default function LayerCard({
                         userId={layerUser.userId}
                         name={layerUser.user.name}
                         gender={layerUser.user.gender}
+                        avatarUrl={layerUser.user.avatarUrl}
                         size="xs"
                         className="h-6 w-6"
                       />

@@ -15,6 +15,7 @@ import { Sun, Moon, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type CoverageBlock = {
+  userId?: string;
   userName: string;
   userAvatar?: string | null;
   userGender?: string | null;
@@ -180,7 +181,7 @@ export default function CoverageTimeline({ shifts, timeZone }: CoverageTimelineP
                             <AvatarImage
                               src={
                                 shift.userAvatar ||
-                                getDefaultAvatar(shift.userGender, shift.userName)
+                                getDefaultAvatar(shift.userGender, shift.userId || shift.userName)
                               }
                             />
                             <AvatarFallback className="text-[8px] bg-white/20 text-white">

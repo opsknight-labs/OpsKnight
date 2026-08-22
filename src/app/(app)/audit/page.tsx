@@ -85,7 +85,10 @@ export default async function AuditLogPage() {
                         <DirectUserAvatar
                           avatarUrl={
                             log.actor.avatarUrl ||
-                            getDefaultAvatar(log.actor.gender, log.actor.name)
+                            getDefaultAvatar(
+                              log.actor.gender,
+                              log.actor.id || log.actor.name || 'user'
+                            )
                           }
                           name={log.actor.name}
                           size="sm"

@@ -458,7 +458,10 @@ export default function ScheduleTimeline({
                                     <DirectUserAvatar
                                       avatarUrl={
                                         shift.userAvatar ||
-                                        getDefaultAvatar(shift.userGender, shift.userName)
+                                        getDefaultAvatar(
+                                          shift.userGender,
+                                          shift.userId || shift.userName
+                                        )
                                       }
                                       name={shift.userName}
                                       size="sm"
@@ -499,7 +502,10 @@ export default function ScheduleTimeline({
                                       <DirectUserAvatar
                                         avatarUrl={
                                           shift.userAvatar ||
-                                          getDefaultAvatar(shift.userGender, shift.userName)
+                                          getDefaultAvatar(
+                                            shift.userGender,
+                                            shift.userId || shift.userName
+                                          )
                                         }
                                         name={shift.userName}
                                         size="xs"
@@ -615,7 +621,10 @@ export default function ScheduleTimeline({
                                 <DirectUserAvatar
                                   avatarUrl={
                                     block.userAvatar ||
-                                    getDefaultAvatar(block.userGender, block.userName)
+                                    getDefaultAvatar(
+                                      block.userGender,
+                                      block.userId || block.userName
+                                    )
                                   }
                                   name={block.userName}
                                   size="sm"
@@ -651,7 +660,10 @@ export default function ScheduleTimeline({
                                   <DirectUserAvatar
                                     avatarUrl={
                                       block.userAvatar ||
-                                      getDefaultAvatar(block.userGender, block.userName)
+                                      getDefaultAvatar(
+                                        block.userGender,
+                                        block.userId || block.userName
+                                      )
                                     }
                                     name={block.userName}
                                     size="xs"

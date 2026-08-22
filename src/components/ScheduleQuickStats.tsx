@@ -17,6 +17,7 @@ type QuickStatsProps = {
     }>;
   }>;
   activeBlocks: Array<{
+    userId?: string;
     userName: string;
     userAvatar?: string | null;
     userGender?: string | null;
@@ -38,7 +39,7 @@ export default function ScheduleQuickStats({
       layer.users.forEach(u => allResponders.add(u.userId));
     });
 
-    // Next handoff - earliest end time from active blocks
+    // Find next handoff time (earliest end time of active blocks)
     let nextHandoff: {
       time: Date;
       from: string;
@@ -47,11 +48,14 @@ export default function ScheduleQuickStats({
       toAvatar: string;
       layer: string;
     } | null = null;
-    if (activeBlocks.length > 0) {
-      const sortedBlocks = [...activeBlocks].sort((a, b) => a.end.getTime() - b.end.getTime());
-      const earliest = sortedBlocks[0];
 
-      // Find who's next in that layer
+    if (activeBlocks.length > 0) {
+      const sorted = [...activeBlocks].sort(
+        (a, b) => new Date(a.end).getTime() - new Date(b.end).getTime()
+      );
+      const earliest = sorted[0];
+
+      // Find who's next in rotation for this layer
       const layer = layers.find(l => l.name === earliest.layerName);
       let nextPerson = 'Next responder';
       let nextPersonAvatar = getDefaultAvatar(null, 'next');
@@ -68,7 +72,9 @@ export default function ScheduleQuickStats({
       nextHandoff = {
         time: earliest.end,
         from: earliest.userName,
-        fromAvatar: earliest.userAvatar || getDefaultAvatar(earliest.userGender, earliest.userName),
+        fromAvatar:
+          earliest.userAvatar ||
+          getDefaultAvatar(earliest.userGender, earliest.userId || earliest.userName),
         to: nextPerson,
         toAvatar: nextPersonAvatar,
         layer: earliest.layerName,

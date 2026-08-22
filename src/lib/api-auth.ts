@@ -20,14 +20,14 @@ export async function authenticateApiKey(req: NextRequest) {
 
   const v2Hash = hashTokenV2(token);
   let apiKey = await prisma.apiKey.findFirst({
-    where: { tokenHash: v2Hash, revokedAt: null },
+    where: { tokenHash: v2Hash, revokedAt: null, user: { status: 'ACTIVE' } },
   });
 
   // Lazy migration: Check legacy hash if V2 not found
   if (!apiKey) {
     const v1Hash = hashTokenV1(token);
     apiKey = await prisma.apiKey.findFirst({
-      where: { tokenHash: v1Hash, revokedAt: null },
+      where: { tokenHash: v1Hash, revokedAt: null, user: { status: 'ACTIVE' } },
     });
 
     if (apiKey) {

@@ -53,7 +53,7 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
         name: currentShift.user.name,
         email: '',
         avatarUrl: currentShift.user.avatarUrl,
-        gender: null,
+        gender: currentShift.user.gender ?? null,
       }
     : null;
   const totalParticipants = schedule.layers.reduce((acc, layer) => acc + layer.users.length, 0);

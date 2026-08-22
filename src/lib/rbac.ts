@@ -12,10 +12,13 @@ export async function getCurrentUser() {
   }
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, role: true, email: true, name: true, timeZone: true },
+    select: { id: true, role: true, email: true, name: true, timeZone: true, status: true },
   });
   if (!user) {
     throw new Error('User not found');
+  }
+  if (user.status === 'DISABLED') {
+    throw new Error('Unauthorized. User is inactive or disabled.');
   }
   return user;
 }

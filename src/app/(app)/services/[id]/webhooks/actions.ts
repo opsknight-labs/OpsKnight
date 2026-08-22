@@ -8,8 +8,9 @@ import { redirect } from 'next/navigation';
 import { assertWebhookIntegrationNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 
 export async function createWebhookIntegration(serviceId: string, formData: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -50,7 +51,7 @@ export async function createWebhookIntegration(serviceId: string, formData: Form
     action: 'webhook.integration.created',
     entityType: 'SERVICE',
     entityId: serviceId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { name: normalizedName, type },
   });
 
@@ -63,8 +64,9 @@ export async function updateWebhookIntegration(
   serviceId: string,
   formData: FormData
 ) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -113,7 +115,7 @@ export async function updateWebhookIntegration(
     action: 'webhook.integration.updated',
     entityType: 'SERVICE',
     entityId: serviceId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { integrationId, name: normalizedName, type },
   });
 
@@ -123,8 +125,9 @@ export async function updateWebhookIntegration(
 }
 
 export async function deleteWebhookIntegration(integrationId: string, serviceId: string) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -137,7 +140,7 @@ export async function deleteWebhookIntegration(integrationId: string, serviceId:
     action: 'webhook.integration.deleted',
     entityType: 'SERVICE',
     entityId: serviceId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { integrationId },
   });
 

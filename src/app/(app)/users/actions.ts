@@ -251,7 +251,7 @@ export async function addUser(
       action: 'user.invited',
       entityType: 'USER',
       entityId: user.id,
-      actorId: await getDefaultActorId(),
+      actorId: admin?.id || null,
       details: { email, role: role || 'USER' },
     });
 
@@ -275,8 +275,9 @@ export async function addUser(
 }
 
 export async function updateUserRole(userId: string, formData: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    const currentUser = await assertAdmin();
+    currentUser = await assertAdmin();
     assertNotSelf(currentUser.id, userId, 'change the role of');
   } catch (error) {
     return {
@@ -288,12 +289,13 @@ export async function updateUserRole(userId: string, formData: FormData) {
     where: { id: userId },
     data: { role: role as 'ADMIN' | 'RESPONDER' | 'USER' },
   });
+  await revokeUserSessions(userId);
 
   await logAudit({
     action: 'user.role.updated',
     entityType: 'USER',
     entityId: userId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser?.id || null,
     details: { role },
   });
 
@@ -302,8 +304,9 @@ export async function updateUserRole(userId: string, formData: FormData) {
 }
 
 export async function addUserToTeam(userId: string, formData: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     return {
       error:
@@ -335,7 +338,7 @@ export async function addUserToTeam(userId: string, formData: FormData) {
     action: 'team.member.added',
     entityType: 'TEAM_MEMBER',
     entityId: `${teamId}:${userId}`,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser?.id || null,
     details: { teamId, userId, role: role || 'MEMBER' },
   });
 
@@ -345,7 +348,7 @@ export async function addUserToTeam(userId: string, formData: FormData) {
 }
 
 export async function removeUserFromTeam(memberId: string) {
-  await assertAdmin();
+  const currentUser = await assertAdmin();
   const member = await prisma.teamMember.delete({
     where: { id: memberId },
   });
@@ -354,7 +357,7 @@ export async function removeUserFromTeam(memberId: string) {
     action: 'team.member.removed',
     entityType: 'TEAM_MEMBER',
     entityId: memberId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { teamId: member.teamId, userId: member.userId },
   });
 
@@ -364,8 +367,9 @@ export async function removeUserFromTeam(memberId: string) {
 }
 
 export async function deactivateUser(userId: string, _formData?: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    const currentUser = await assertAdmin();
+    currentUser = await assertAdmin();
     assertNotSelf(currentUser.id, userId, 'deactivate');
   } catch (error) {
     return {
@@ -385,7 +389,7 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
     action: 'user.deactivated',
     entityType: 'USER',
     entityId: userId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser?.id || null,
   });
 
   revalidatePath('/users');
@@ -393,8 +397,9 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
 }
 
 export async function reactivateUser(userId: string, _formData?: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
@@ -412,7 +417,7 @@ export async function reactivateUser(userId: string, _formData?: FormData) {
     action: 'user.reactivated',
     entityType: 'USER',
     entityId: userId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser?.id || null,
   });
 
   revalidatePath('/users');
@@ -468,7 +473,7 @@ export async function generateInvite(
     action: 'user.invite.resent',
     entityType: 'USER',
     entityId: user.id,
-    actorId: await getDefaultActorId(),
+    actorId: admin?.id || null,
     details: { email: user.email },
   });
 
@@ -489,8 +494,9 @@ export async function deleteUser(
   userId: string,
   _formData?: FormData
 ): Promise<{ error?: string } | undefined> {
+  let currentUser: { id: string } | null = null;
   try {
-    const currentUser = await assertAdmin();
+    currentUser = await assertAdmin();
     assertNotSelf(currentUser.id, userId, 'delete');
   } catch (error) {
     return {
@@ -505,7 +511,7 @@ export async function deleteUser(
       action: 'user.deleted',
       entityType: 'USER',
       entityId: userId,
-      actorId: await getDefaultActorId(),
+      actorId: currentUser?.id || null,
     });
 
     revalidatePath('/users');
@@ -527,8 +533,9 @@ export async function bulkUpdateUsers(
   _prevState: BulkUserActionState,
   formData: FormData
 ): Promise<BulkUserActionState> {
+  let admin: { id: string } | null = null;
   try {
-    await assertAdmin();
+    admin = await assertAdmin();
   } catch {
     return { error: 'Unauthorized. Admin access required.' };
   }
@@ -557,7 +564,7 @@ export async function bulkUpdateUsers(
         action: 'user.reactivated',
         entityType: 'USER',
         entityId: userId,
-        actorId: await getDefaultActorId(),
+        actorId: admin?.id || null,
       });
     }
   } else if (action === 'deactivate') {
@@ -575,7 +582,7 @@ export async function bulkUpdateUsers(
         action: 'user.deactivated',
         entityType: 'USER',
         entityId: userId,
-        actorId: await getDefaultActorId(),
+        actorId: admin?.id || null,
       });
     }
     revalidatePath('/users');
@@ -597,7 +604,7 @@ export async function bulkUpdateUsers(
         action: 'user.deleted',
         entityType: 'USER',
         entityId: userId,
-        actorId: await getDefaultActorId(),
+        actorId: admin?.id || null,
       });
     }
     revalidatePath('/users');
@@ -612,12 +619,13 @@ export async function bulkUpdateUsers(
         where: { id: userId },
         data: { role: role as 'ADMIN' | 'RESPONDER' | 'USER' },
       });
+      await revokeUserSessions(userId);
 
       await logAudit({
         action: 'user.role.updated',
         entityType: 'USER',
         entityId: userId,
-        actorId: await getDefaultActorId(),
+        actorId: admin?.id || null,
         details: { role },
       });
     }

@@ -12,8 +12,9 @@ import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/ji
 const JIRA_AUTO_CREATE_URGENCIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
 
 export async function createIntegration(formData: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -41,7 +42,7 @@ export async function createIntegration(formData: FormData) {
     action: 'integration.created',
     entityType: 'SERVICE',
     entityId: serviceId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { name, type },
   });
 
@@ -53,8 +54,9 @@ export async function deleteIntegration(
   serviceId: string,
   _formData?: FormData
 ) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -67,7 +69,7 @@ export async function deleteIntegration(
     action: 'integration.deleted',
     entityType: 'SERVICE',
     entityId: serviceId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { integrationId },
   });
 
@@ -76,8 +78,9 @@ export async function deleteIntegration(
 }
 
 export async function updateService(serviceId: string, formData: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -109,8 +112,10 @@ export async function updateService(serviceId: string, formData: FormData) {
   const autoCreateWarRoomValue = formData.get('autoCreateWarRoom');
   const autoCreateWarRoom = autoCreateWarRoomValue === 'on' || autoCreateWarRoomValue === 'true';
   const warRoomVideoBridgeRaw = formData.get('warRoomVideoBridge') as string | null;
-  const warRoomVideoBridge = warRoomVideoBridgeRaw && warRoomVideoBridgeRaw !== 'INHERIT' ? warRoomVideoBridgeRaw : null;
-  const warRoomCustomBridgeUrl = ((formData.get('warRoomCustomBridgeUrl') as string | null) ?? '').trim() || null;
+  const warRoomVideoBridge =
+    warRoomVideoBridgeRaw && warRoomVideoBridgeRaw !== 'INHERIT' ? warRoomVideoBridgeRaw : null;
+  const warRoomCustomBridgeUrl =
+    ((formData.get('warRoomCustomBridgeUrl') as string | null) ?? '').trim() || null;
 
   try {
     const normalizedName = await assertServiceNameAvailable(name, { excludeId: serviceId });
@@ -144,7 +149,7 @@ export async function updateService(serviceId: string, formData: FormData) {
       action: 'service.updated',
       entityType: 'SERVICE',
       entityId: serviceId,
-      actorId: await getDefaultActorId(),
+      actorId: currentUser.id,
       details: {
         name: normalizedName,
         teamId: teamId || null,
@@ -170,8 +175,9 @@ export async function saveJiraServiceMapping(
   _prevState: { success?: boolean; error?: string | null } | undefined,
   formData: FormData
 ): Promise<{ success?: boolean; error?: string | null }> {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unauthorized' };
   }
@@ -239,7 +245,7 @@ export async function saveJiraServiceMapping(
       action: 'jira.service_mapping.updated',
       entityType: 'SERVICE',
       entityId: serviceId,
-      actorId: await getDefaultActorId(),
+      actorId: currentUser.id,
       details: {
         projectKey,
         incidentIssueType,
@@ -262,8 +268,9 @@ export async function saveJiraServiceMapping(
 }
 
 export async function rotateIntegrationSecret(integrationId: string, serviceId: string) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -279,7 +286,7 @@ export async function rotateIntegrationSecret(integrationId: string, serviceId: 
     action: 'integration.secret_rotated',
     entityType: 'SERVICE',
     entityId: serviceId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { integrationId },
   });
 
@@ -287,8 +294,9 @@ export async function rotateIntegrationSecret(integrationId: string, serviceId: 
 }
 
 export async function clearIntegrationSecret(integrationId: string, serviceId: string) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -302,7 +310,7 @@ export async function clearIntegrationSecret(integrationId: string, serviceId: s
     action: 'integration.secret_cleared',
     entityType: 'SERVICE',
     entityId: serviceId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { integrationId },
   });
 
@@ -314,8 +322,9 @@ export async function toggleIntegrationStatus(
   serviceId: string,
   enabled: boolean
 ) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -329,7 +338,7 @@ export async function toggleIntegrationStatus(
     action: 'integration.status_updated',
     entityType: 'SERVICE',
     entityId: serviceId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { integrationId, enabled },
   });
 
@@ -337,8 +346,9 @@ export async function toggleIntegrationStatus(
 }
 
 export async function deleteService(serviceId: string) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     throw new Error(
       error instanceof Error ? error.message : 'Unauthorized. Admin access required.'
@@ -359,7 +369,7 @@ export async function deleteService(serviceId: string) {
     action: 'service.deleted',
     entityType: 'SERVICE',
     entityId: serviceId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { serviceId },
   });
 

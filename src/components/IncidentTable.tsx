@@ -22,7 +22,7 @@ type Incident = {
   status: string;
   urgency?: string;
   service: { name: string };
-  assignee: { name: string; avatarUrl?: string | null; gender?: string | null } | null;
+  assignee: { id?: string; name: string; avatarUrl?: string | null; gender?: string | null } | null;
   team?: { name: string } | null;
   createdAt: Date;
 };
@@ -482,7 +482,10 @@ export default memo(function IncidentTable({
                             <DirectUserAvatar
                               avatarUrl={
                                 incident.assignee.avatarUrl ||
-                                getDefaultAvatar(incident.assignee.gender, incident.assignee.name)
+                                getDefaultAvatar(
+                                  incident.assignee.gender,
+                                  incident.assignee.id || incident.assignee.name
+                                )
                               }
                               name={incident.assignee.name}
                               size="xs"

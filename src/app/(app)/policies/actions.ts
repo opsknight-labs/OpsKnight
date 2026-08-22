@@ -8,8 +8,9 @@ import { getDefaultActorId, logAudit } from '@/lib/audit';
 import { assertEscalationPolicyNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 
 export async function createPolicy(formData: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     throw new Error(
       error instanceof Error ? error.message : 'Unauthorized. Admin access required.'
@@ -91,7 +92,7 @@ export async function createPolicy(formData: FormData) {
     action: 'escalation_policy.created',
     entityType: 'ESCALATION_POLICY',
     entityId: policy.id,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { name: normalizedName, stepCount: steps.length },
   });
 
@@ -100,8 +101,9 @@ export async function createPolicy(formData: FormData) {
 }
 
 export async function updatePolicy(policyId: string, formData: FormData) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     throw new Error(
       error instanceof Error ? error.message : 'Unauthorized. Admin access required.'
@@ -133,7 +135,7 @@ export async function updatePolicy(policyId: string, formData: FormData) {
     action: 'escalation_policy.updated',
     entityType: 'ESCALATION_POLICY',
     entityId: policyId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
     details: { name: normalizedName },
   });
 
@@ -142,8 +144,9 @@ export async function updatePolicy(policyId: string, formData: FormData) {
 }
 
 export async function deletePolicy(policyId: string) {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     throw new Error(
       error instanceof Error ? error.message : 'Unauthorized. Admin access required.'
@@ -171,7 +174,7 @@ export async function deletePolicy(policyId: string) {
     action: 'escalation_policy.deleted',
     entityType: 'ESCALATION_POLICY',
     entityId: policyId,
-    actorId: await getDefaultActorId(),
+    actorId: currentUser.id,
   });
 
   revalidatePath('/policies');
@@ -182,8 +185,9 @@ export async function addPolicyStep(
   policyId: string,
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
@@ -240,7 +244,7 @@ export async function addPolicyStep(
       action: 'escalation_policy.step_added',
       entityType: 'ESCALATION_POLICY',
       entityId: policyId,
-      actorId: await getDefaultActorId(),
+      actorId: currentUser.id,
       details: { stepOrder: nextStepOrder, targetType },
     });
 
@@ -254,8 +258,9 @@ export async function updatePolicyStep(
   stepId: string,
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
@@ -325,7 +330,7 @@ export async function updatePolicyStep(
       action: 'escalation_policy.step_updated',
       entityType: 'ESCALATION_POLICY',
       entityId: step.policyId,
-      actorId: await getDefaultActorId(),
+      actorId: currentUser.id,
       details: { stepId, stepOrder: step.stepOrder, targetType: finalTargetType },
     });
 
@@ -336,8 +341,9 @@ export async function updatePolicyStep(
 }
 
 export async function deletePolicyStep(stepId: string): Promise<{ error?: string } | undefined> {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
@@ -381,7 +387,7 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
       action: 'escalation_policy.step_deleted',
       entityType: 'ESCALATION_POLICY',
       entityId: policyId,
-      actorId: await getDefaultActorId(),
+      actorId: currentUser.id,
       details: { deletedStepOrder },
     });
 
@@ -395,8 +401,9 @@ export async function movePolicyStep(
   stepId: string,
   direction: 'up' | 'down'
 ): Promise<{ error?: string } | undefined> {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
@@ -453,7 +460,7 @@ export async function movePolicyStep(
       action: 'escalation_policy.step_moved',
       entityType: 'ESCALATION_POLICY',
       entityId: policyId,
-      actorId: await getDefaultActorId(),
+      actorId: currentUser.id,
       details: { stepId, from: currentOrder, to: newOrder },
     });
 
@@ -467,8 +474,9 @@ export async function reorderPolicySteps(
   policyId: string,
   newOrder: string[]
 ): Promise<{ error?: string } | undefined> {
+  let currentUser: { id: string } | null = null;
   try {
-    await assertAdmin();
+    currentUser = await assertAdmin();
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
@@ -505,7 +513,7 @@ export async function reorderPolicySteps(
       action: 'escalation_policy.steps_reordered',
       entityType: 'ESCALATION_POLICY',
       entityId: policyId,
-      actorId: await getDefaultActorId(),
+      actorId: currentUser.id,
       details: { newOrderCount: newOrder.length },
     });
 

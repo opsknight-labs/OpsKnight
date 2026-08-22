@@ -8,6 +8,7 @@ import { getDefaultAvatar } from '@/lib/avatar';
 
 type NoteCardProps = {
   content: string;
+  userId?: string;
   userName: string;
   userAvatar?: string | null;
   userGender?: string | null;
@@ -17,6 +18,7 @@ type NoteCardProps = {
 
 function NoteCard({
   content,
+  userId,
   userName,
   userAvatar,
   userGender,
@@ -59,7 +61,7 @@ function NoteCard({
     <div style={{ display: 'flex', gap: '1rem' }}>
       {/* Avatar */}
       <DirectUserAvatar
-        avatarUrl={userAvatar || getDefaultAvatar(userGender, userName)}
+        avatarUrl={userAvatar || getDefaultAvatar(userGender, userId || userName)}
         name={userName}
         size="sm"
         className={`ring-2 ${isResolution ? 'ring-orange-100 shadow-orange-100' : 'ring-slate-100 shadow-slate-100'} shadow-md transition-transform hover:scale-105`}

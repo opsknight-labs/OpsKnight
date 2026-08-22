@@ -8,7 +8,17 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 
 import Pagination from '@/components/incident/Pagination';
-import { MoreHorizontal, FileText, CheckCircle2, Eye, Edit2, Globe, Lock, Trash2, Loader2 } from 'lucide-react';
+import {
+  MoreHorizontal,
+  FileText,
+  CheckCircle2,
+  Eye,
+  Edit2,
+  Globe,
+  Lock,
+  Trash2,
+  Loader2,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,14 +91,16 @@ export default function PostmortemsListTable({
 
   const toggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
+    setSelectedIds(prev => (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]));
   };
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected postmortem(s)? This action cannot be undone.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to delete ${selectedIds.length} selected postmortem(s)? This action cannot be undone.`
+      )
+    ) {
       return;
     }
 
@@ -251,6 +263,19 @@ export default function PostmortemsListTable({
                           <span className="text-xs">Private</span>
                         </div>
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <UserAvatar
+                          userId={pm.createdBy?.id || 'unknown'}
+                          name={pm.createdBy?.name}
+                          avatarUrl={pm.createdBy?.avatarUrl}
+                          size="sm"
+                        />
+                        <span className="text-xs text-slate-700 truncate max-w-[100px]">
+                          {pm.createdBy?.name || pm.createdBy?.email || 'Unknown'}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-slate-700">

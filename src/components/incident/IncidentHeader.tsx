@@ -258,6 +258,7 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
                     userId={incident.assignee.id}
                     name={incident.assignee.name}
                     gender={incident.assignee.gender}
+                    avatarUrl={incident.assignee.avatarUrl}
                     size="sm"
                     className="border-slate-200 shadow-sm"
                   />

@@ -288,6 +288,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // If incident was reopened, ensure escalation is triggered if due
+  if (
+    status === 'OPEN' &&
+    ['SNOOZED', 'SUPPRESSED', 'ACKNOWLEDGED', 'RESOLVED'].includes(currentIncident.status)
+  ) {
+    try {
+      const { executeEscalation } = await import('@/lib/escalation');
+      await executeEscalation(incident.id, 0);
+    } catch (err) {
+      logger.warn('[Incidents API] Failed to trigger escalation on reopen', {
+        error: err,
+        incidentId: incident.id,
+      });
+    }
+  }
+
   // Trigger status page webhooks for incident updates
   try {
     const updatedIncident = await prisma.incident.findUnique({

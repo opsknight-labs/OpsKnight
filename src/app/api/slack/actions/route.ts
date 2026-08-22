@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
 
             await prisma.incident.update({
               where: { id: incidentId },
-              data: { assigneeId: targetUser.id },
+              data: { assigneeId: targetUser.id, teamId: null },
             });
             updateWarRoomTopic(incidentId).catch(() => {});
             responseMessage = `🙋 Incident assigned to *${targetUser.name}* (<@${slackUserId}>)`;
@@ -254,6 +254,26 @@ export async function POST(request: NextRequest) {
             text: '⚠️ Could not identify your Slack user, so the incident was left unchanged.',
           });
         }
+      } else if (actionType === 'snooze' || actionType === 'snooze_incident') {
+        const snoozeMinutes = actionValue.minutes ? parseInt(String(actionValue.minutes), 10) : 60;
+        const snoozedUntil = new Date(Date.now() + snoozeMinutes * 60 * 1000);
+        await prisma.incident.update({
+          where: { id: incidentId },
+          data: {
+            status: 'SNOOZED',
+            snoozedUntil,
+            escalationStatus: 'PAUSED',
+          },
+        });
+        responseMessage = `💤 Incident snoozed for ${snoozeMinutes}m by <@${slackUserId || 'responder'}>`;
+        timelineMessage = `Snoozed for ${snoozeMinutes}m via Slack button by ${actorName}`;
+        notifyEventType = 'updated';
+      } else if (actionType === 'escalate' || actionType === 'escalate_incident') {
+        const { executeEscalation } = await import('@/lib/escalation');
+        await executeEscalation(incidentId);
+        responseMessage = `⚡ Incident escalated by <@${slackUserId || 'responder'}>`;
+        timelineMessage = `Escalated via Slack button by ${actorName}`;
+        notifyEventType = 'updated';
       } else {
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
       }

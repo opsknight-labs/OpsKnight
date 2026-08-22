@@ -49,7 +49,10 @@ export async function GET(request: NextRequest) {
     : 'png';
 
   // Validate radius is a number between 0-50
-  const radius = Math.min(50, Math.max(0, parseInt(radiusParam, 10) || 50)).toString();
+  const parsedRadius = parseInt(radiusParam, 10);
+  const radius = (
+    Number.isNaN(parsedRadius) ? 50 : Math.min(50, Math.max(0, parsedRadius))
+  ).toString();
 
   // Validate backgroundColor is a valid hex color (6 chars, alphanumeric only)
   const bgColor = /^[a-fA-F0-9]{6}$/.test(backgroundColor) ? backgroundColor : '84cc16';
@@ -62,6 +65,7 @@ export async function GET(request: NextRequest) {
       headers: {
         Accept: 'image/*',
       },
+      signal: AbortSignal.timeout(5000),
       // Cache for 1 day
       next: { revalidate: 86400 },
     });
@@ -78,6 +82,8 @@ export async function GET(request: NextRequest) {
         'Content-Type': contentType,
         // Cache avatars for 1 year - URL changes (via seed param) handle cache invalidation
         'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
       },
     });
   } catch (error) {

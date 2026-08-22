@@ -157,6 +157,7 @@ export default function AssigneeSection({
                 userId={u.id}
                 name={u.name}
                 gender={u.gender}
+                avatarUrl={u.avatarUrl}
                 size="sm"
                 className="mr-2 border-slate-200"
               />
@@ -220,6 +221,7 @@ export default function AssigneeSection({
                 userId={assignee.id}
                 name={assignee.name}
                 gender={assignee.gender}
+                avatarUrl={assignee.avatarUrl}
                 size="xs"
                 className="border-slate-200"
               />

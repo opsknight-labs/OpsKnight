@@ -18,6 +18,7 @@ export type EventPayload = {
   };
 };
 
+import { createHash } from 'crypto';
 import { runSerializableTransaction } from './db-utils';
 
 const MAX_DEDUP_KEY_LENGTH = 512;
@@ -42,10 +43,13 @@ const MAX_DESCRIPTION_LENGTH = 10000;
 
 // Sanitize text to prevent XSS and remove control characters
 function sanitizeText(text: string): string {
+  if (!text) return '';
   return (
     text
       // Remove null bytes and control characters (except newlines/tabs)
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+      // Normalize Unicode to prevent homoglyph attacks
+      .normalize('NFC')
       // Basic HTML entity encoding for XSS prevention
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -66,9 +70,9 @@ function truncateString(str: string, maxLength: number): string {
 
 function truncateDedupKey(key: string): string {
   if (key.length <= MAX_DEDUP_KEY_LENGTH) return key;
-  // Keep start and end for readability/entropy
-  const half = Math.floor((MAX_DEDUP_KEY_LENGTH - 3) / 2);
-  return `${key.slice(0, half)}...${key.slice(-half)}`;
+  const hash = createHash('sha256').update(key).digest('hex').slice(0, 32);
+  const prefixLength = MAX_DEDUP_KEY_LENGTH - 33; // 32 hex chars + 1 underscore
+  return `${key.slice(0, prefixLength)}_${hash}`;
 }
 
 export async function processEvent(
