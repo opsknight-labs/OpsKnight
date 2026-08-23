@@ -1,95 +1,119 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createAvatar } from '@dicebear/core';
+import {
+  initials,
+  shapes,
+  personas,
+  identicon,
+  avataaars,
+  bottts,
+  thumbs,
+  lorelei,
+  notionists,
+  openPeeps,
+  micah,
+  miniavs,
+  pixelArt,
+  rings,
+  glass,
+} from '@dicebear/collection';
 import { logger } from '@/lib/logger';
 
-// Whitelist allowed styles and formats to prevent injection attacks
-const ALLOWED_STYLES = [
-  'big-smile',
-  'avataaars',
-  'bottts',
-  'identicon',
-  'initials',
-  'lorelei',
-  'micah',
-  'miniavs',
-  'notionists',
-  'open-peeps',
-  'personas',
-  'pixel-art',
-  'shapes',
-  'thumbs',
-] as const;
+// Map of locally compiled DiceBear style engines (0ms in-process generation, 0 external network calls)
+const STYLE_ENGINES: Record<string, any> = {
+  initials,
+  shapes,
+  personas,
+  identicon,
+  avataaars,
+  bottts,
+  thumbs,
+  lorelei,
+  notionists,
+  'open-peeps': openPeeps,
+  micah,
+  miniavs,
+  'pixel-art': pixelArt,
+  rings,
+  glass,
+};
 
-const ALLOWED_FORMATS = ['png', 'svg', 'jpg'] as const;
+function sanitizeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
 
-/**
- * Avatar Proxy API Route
- *
- * This proxies DiceBear avatar requests through our own domain to avoid
- * CSP/infrastructure blocks in production environments.
- *
- * Usage: /api/avatar?style=big-smile&seed=user-123&backgroundColor=b91c1c&radius=50
- */
+function generateFallbackSvg(seed: string, bgColor: string, radius: number): string {
+  // Sanitize seed to safe alphanumeric characters only (prevent XML injection / reflected XSS)
+  const cleanSeed = seed
+    .replace(/[^a-zA-Z0-9\s_-]/g, '')
+    .replace(/-(male|female|nb|other|neutral)$/, '');
+  const initial = sanitizeXml(cleanSeed.trim().slice(0, 2).toUpperCase() || 'U');
+  const safeBg = /^[a-fA-F0-9]{6}$/.test(bgColor) ? bgColor : '6366f1';
+  const rx = radius === 0 ? 0 : 50;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+    <rect width="100" height="100" fill="#${safeBg}" rx="${rx}"/>
+    <text x="50%" y="54%" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="38" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">${initial}</text>
+  </svg>`;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
-  const styleParam = searchParams.get('style') || 'big-smile';
-  const seed = searchParams.get('seed') || 'default';
-  const backgroundColor = searchParams.get('backgroundColor') || '84cc16';
+  const styleParam = (searchParams.get('style') || 'initials').toLowerCase();
+  const rawSeed = searchParams.get('seed') || 'default';
+  const backgroundColor = searchParams.get('backgroundColor') || '6366f1';
   const radiusParam = searchParams.get('radius') || '50';
-  const formatParam = searchParams.get('format') || 'png';
 
-  // Validate style against whitelist
-  const style = ALLOWED_STYLES.includes(styleParam as (typeof ALLOWED_STYLES)[number])
-    ? styleParam
-    : 'big-smile';
-
-  // Validate format against whitelist
-  const format = ALLOWED_FORMATS.includes(formatParam as (typeof ALLOWED_FORMATS)[number])
-    ? formatParam
-    : 'png';
+  // Sanitize seed to alphanumeric, whitespace, hyphen, underscore only
+  const sanitizedSeed = decodeURIComponent(rawSeed)
+    .replace(/[^a-zA-Z0-9\s_-]/g, '')
+    .slice(0, 64);
 
   // Validate radius is a number between 0-50
   const parsedRadius = parseInt(radiusParam, 10);
-  const radius = (
-    Number.isNaN(parsedRadius) ? 50 : Math.min(50, Math.max(0, parsedRadius))
-  ).toString();
+  const radius = Number.isNaN(parsedRadius) ? 50 : Math.min(50, Math.max(0, parsedRadius));
 
   // Validate backgroundColor is a valid hex color (6 chars, alphanumeric only)
-  const bgColor = /^[a-fA-F0-9]{6}$/.test(backgroundColor) ? backgroundColor : '84cc16';
+  const bgColor = /^[a-fA-F0-9]{6}$/.test(backgroundColor) ? backgroundColor : '6366f1';
 
-  // Construct the DiceBear URL with validated parameters
-  const dicebearUrl = `https://api.dicebear.com/9.x/${style}/${format}?seed=${encodeURIComponent(seed)}&backgroundColor=${bgColor}&radius=${radius}`;
+  // Resolve style engine
+  const styleEngine = STYLE_ENGINES[styleParam] || STYLE_ENGINES.initials;
+
+  const securityHeaders = {
+    'Content-Type': 'image/svg+xml; charset=utf-8',
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+  };
 
   try {
-    const response = await fetch(dicebearUrl, {
-      headers: {
-        Accept: 'image/*',
-      },
-      signal: AbortSignal.timeout(5000),
-      // Cache for 1 day
-      next: { revalidate: 86400 },
+    const avatar = createAvatar(styleEngine, {
+      seed: sanitizedSeed,
+      backgroundColor: [bgColor],
+      radius,
     });
 
-    if (!response.ok) {
-      return NextResponse.json({ error: 'Failed to fetch avatar' }, { status: response.status });
-    }
+    const svg = avatar.toString();
 
-    const contentType = response.headers.get('content-type') || 'image/png';
-    const buffer = await response.arrayBuffer();
-
-    return new NextResponse(buffer, {
-      headers: {
-        'Content-Type': contentType,
-        // Cache avatars for 1 year - URL changes (via seed param) handle cache invalidation
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
-      },
+    return new NextResponse(svg, {
+      headers: securityHeaders,
     });
   } catch (error) {
-    logger.error('Avatar proxy error', {
+    logger.warn('Local avatar generation error, using fallback SVG', {
       error: error instanceof Error ? error.message : String(error),
+      style: styleParam,
+      seed: sanitizedSeed,
     });
-    return NextResponse.json({ error: 'Failed to proxy avatar' }, { status: 500 });
+
+    const fallbackSvg = generateFallbackSvg(sanitizedSeed, bgColor, radius);
+    return new NextResponse(fallbackSvg, {
+      headers: securityHeaders,
+    });
   }
 }

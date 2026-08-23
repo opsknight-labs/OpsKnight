@@ -79,7 +79,9 @@ export async function GET(req: NextRequest) {
     take: limit,
     include: {
       service: { select: { id: true, name: true } },
-      assignee: { select: { id: true, name: true, email: true } },
+      assignee: {
+        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+      },
     },
   });
 
@@ -167,7 +169,9 @@ export async function POST(req: NextRequest) {
     },
     include: {
       service: { select: { id: true, name: true } },
-      assignee: { select: { id: true, name: true, email: true } },
+      assignee: {
+        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+      },
     },
   });
 

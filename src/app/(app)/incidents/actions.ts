@@ -166,7 +166,9 @@ export async function updateIncidentStatus(id: string, status: IncidentStatus) {
       where: { id },
       include: {
         service: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: {
+          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+        },
       },
     });
 
@@ -384,7 +386,9 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
       where: { id },
       include: {
         service: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: {
+          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+        },
       },
     });
 
@@ -732,7 +736,9 @@ export async function createIncident(formData: FormData) {
       where: { id: incident.id },
       include: {
         service: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: {
+          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+        },
       },
     });
 

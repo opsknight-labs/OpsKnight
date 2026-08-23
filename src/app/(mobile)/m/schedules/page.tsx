@@ -11,7 +11,9 @@ export default async function MobileSchedulesPage() {
         include: {
           users: {
             include: {
-              user: { select: { id: true, name: true, email: true } },
+              user: {
+                select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+              },
             },
           },
         },

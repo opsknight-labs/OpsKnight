@@ -152,7 +152,9 @@ export async function processAutoUnsnooze() {
         where: { id: incident.id },
         include: {
           service: { select: { id: true, name: true } },
-          assignee: { select: { id: true, name: true, email: true } },
+          assignee: {
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+          },
         },
       });
       if (updatedIncident) {
