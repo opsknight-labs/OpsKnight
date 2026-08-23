@@ -705,32 +705,54 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             const subject =
               account?.providerAccountId ||
               (profile as any)?.sub || // eslint-disable-line @typescript-eslint/no-explicit-any
-              user.id;
+              null;
+
+            if (!subject) {
+              logger.warn('[Auth] OIDC sign-in rejected: stable subject claim missing', {
+                component: 'auth:signIn',
+                issuer,
+                email,
+              });
+              return false;
+            }
 
             const existingIdentity = await prisma.oidcIdentity.findUnique({
               where: { issuer_subject: { issuer, subject } },
             });
 
-            // SECURITY: If no identity link exists, check if user exists by email.
-            // If user exists by email but isn't linked, we MUST BLOCK the login to prevent Account Takeover.
-            // An attacker could simply create an OIDC account with the same email to hijack the admin account.
-            if (!existingIdentity && targetUser) {
-              // Allow if we just created the user (auto-provision case) or if the user is in INVITED status
+            if (!existingIdentity) {
               const isInvitedUser = targetUser.status === 'INVITED';
+              let hasProvisioningEvidence = false;
+
+              // Existing ACTIVE users may have completed the password invite before trying SSO.
+              // The used INVITE token is intentionally retained for audit history, so it is a
+              // durable server-side signal that an administrator provisioned this email address.
               if (existing && !isInvitedUser) {
-                logger.warn(
-                  '[Auth] OIDC sign-in blocked: Account Takeover Attempt - Email exists but not linked',
-                  {
+                const inviteRecord = await prisma.userToken.findFirst({
+                  where: { identifier: email, type: 'INVITE' },
+                  select: { id: true },
+                });
+                hasProvisioningEvidence = !!inviteRecord;
+              }
+
+              // SECURITY: Never link a pre-existing account on email match alone. For an
+              // existing user we require BOTH explicit admin-provisioning evidence and an
+              // explicit email_verified=true claim from the configured OIDC provider.
+              if (existing) {
+                const adminProvisioned = isInvitedUser || hasProvisioningEvidence;
+                if (!adminProvisioned || emailVerifiedClaim !== true) {
+                  logger.warn('[Auth] OIDC sign-in blocked: existing account is not safe to link', {
                     component: 'auth:signIn',
                     email,
                     issuer,
                     subject,
-                  }
-                );
-                return false;
+                    adminProvisioned,
+                    emailVerified: emailVerifiedClaim === true,
+                  });
+                  return false;
+                }
               }
 
-              // If we just created the user in this request (auto-provision) or user was invited, it's safe to link.
               await prisma.oidcIdentity.create({
                 data: {
                   issuer,
@@ -751,12 +773,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 subject,
                 userId: targetUser.id,
                 isInvitedUser,
+                adminProvisioned: !!existing,
               });
-            } else if (!existingIdentity) {
-              // Should not happen if auto-provision worked correctly (targetUser should be null if not created)
-              // But if targetUser exists (which it does via auto-provision), we handle it above.
-              // This block effectively unreachable if targetUser is ensured.
-            } else if (existingIdentity && existingIdentity.userId !== targetUser.id) {
+            } else if (existingIdentity.userId !== targetUser.id) {
               logger.warn('[Auth] OIDC sign-in rejected: identity already linked to another user', {
                 component: 'auth:signIn',
                 issuer,
