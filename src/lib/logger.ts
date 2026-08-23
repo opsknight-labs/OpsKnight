@@ -30,7 +30,9 @@ interface Timer {
   done: (message?: string, context?: LogContext) => void;
 }
 
-const LOG_BUFFER_MAX = Number(process.env.LOG_BUFFER_MAX || 500);
+const parsedMax = Number.parseInt(process.env.LOG_BUFFER_MAX || '500', 10);
+const LOG_BUFFER_MAX =
+  Number.isFinite(parsedMax) && parsedMax >= 0 ? Math.min(parsedMax, 5000) : 500;
 const logBuffer: LogEntry[] = [];
 
 function getBufferLimit(limit?: number) {
@@ -39,23 +41,59 @@ function getBufferLimit(limit?: number) {
 }
 
 const SENSITIVE_KEYS = [
-  /pass/i,
+  /pass(word)?/i,
   /token/i,
   /secret/i,
   /key/i,
-  /auth/i,
+  /auth(orization)?/i,
+  /credential/i,
+  /signature/i,
+  /private_?key/i,
   /email/i,
+  /phone(_?number)?/i,
+  /mobile/i,
+  /tel/i,
+  /\bto\b/i,
   /session/i,
   /cookie/i,
+  /jwt/i,
+  /bearer/i,
+  /ssn/i,
+  /credit_?card|cvv|cvc/i,
+  /webhook_?url/i,
 ];
 
-function sanitizeContext(context: unknown): unknown {
+const SECRET_PATTERNS = [
+  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, // Email
+  /Bearer\s+[A-Za-z0-9\-_.]+/gi, // Bearer tokens
+  /xox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*/g, // Slack tokens
+  /AKIA[0-9A-Z]{16}/g, // AWS Access Keys
+  /(?:https?:\/\/[^\s]+(?:\?|&)(?:token|secret|key|sig|signature|api_key)=)[^&\s]+/gi, // URL query tokens
+];
+
+export function sanitizeString(val: string): string {
+  let result = val;
+  for (const pattern of SECRET_PATTERNS) {
+    result = result.replace(pattern, '[REDACTED]');
+  }
+  return result;
+}
+
+export function sanitizeContext(context: unknown, seen = new WeakSet<object>()): unknown {
   if (!context || typeof context !== 'object') {
+    if (typeof context === 'string') {
+      return sanitizeString(context);
+    }
     return context;
   }
 
+  if (seen.has(context)) {
+    return '[CIRCULAR]';
+  }
+  seen.add(context);
+
   if (Array.isArray(context)) {
-    return context.map(sanitizeContext);
+    return context.map(item => sanitizeContext(item, seen));
   }
 
   const sanitized: Record<string, unknown> = {};
@@ -63,7 +101,9 @@ function sanitizeContext(context: unknown): unknown {
     if (SENSITIVE_KEYS.some(regex => regex.test(key))) {
       sanitized[key] = '[REDACTED]';
     } else if (typeof value === 'object' && value !== null) {
-      sanitized[key] = sanitizeContext(value);
+      sanitized[key] = sanitizeContext(value, seen);
+    } else if (typeof value === 'string') {
+      sanitized[key] = sanitizeString(value);
     } else {
       sanitized[key] = value;
     }
@@ -75,30 +115,7 @@ function addToBuffer(entry: LogEntry) {
   if (LOG_BUFFER_MAX <= 0) {
     return;
   }
-  // Deep clone and sanitize before buffering
-  const sanitizedEntry = {
-    ...entry,
-    message: entry.message.replace(
-      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-      '[EMAIL_REDACTED]'
-    ),
-    context: entry.context ? (sanitizeContext(entry.context) as LogContext) : undefined,
-    error: entry.error
-      ? {
-          ...entry.error,
-          message: entry.error.message.replace(
-            /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-            '[EMAIL_REDACTED]'
-          ),
-          stack: entry.error.stack?.replace(
-            /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-            '[EMAIL_REDACTED]'
-          ),
-        }
-      : undefined,
-  };
-
-  logBuffer.push(sanitizedEntry);
+  logBuffer.push(entry);
   if (logBuffer.length > LOG_BUFFER_MAX) {
     logBuffer.splice(0, logBuffer.length - LOG_BUFFER_MAX);
   }
@@ -256,41 +273,58 @@ class Logger {
   }
 
   private log(level: LogLevel, message: string, context?: LogContext): void {
+    const rawContext = { ...this.persistentContext, ...this.config.context, ...context };
+
+    let component: string | undefined;
+    let requestId: string | undefined;
+    let userId: string | undefined;
+    let duration: number | undefined;
+    let error: LogEntry['error'] | undefined;
+
+    if (rawContext.component) {
+      component = String(rawContext.component);
+      delete rawContext.component;
+    }
+    if (rawContext.requestId) {
+      requestId = String(rawContext.requestId);
+      delete rawContext.requestId;
+    }
+    if (rawContext.userId) {
+      userId = String(rawContext.userId);
+      delete rawContext.userId;
+    }
+    if (rawContext.duration !== undefined) {
+      duration = Number(rawContext.duration);
+      delete rawContext.duration;
+    }
+    if (rawContext.error) {
+      error = this.serializeError(rawContext.error);
+      delete rawContext.error;
+    }
+
+    const sanitizedMessage = sanitizeString(message);
+    const sanitizedContext =
+      Object.keys(rawContext).length > 0 ? (sanitizeContext(rawContext) as LogContext) : undefined;
+
+    const sanitizedError = error
+      ? {
+          ...error,
+          message: sanitizeString(error.message),
+          stack: error.stack ? sanitizeString(error.stack) : undefined,
+        }
+      : undefined;
+
     const entry: LogEntry = {
       level,
-      message,
+      message: sanitizedMessage,
       timestamp: new Date().toISOString(),
-      context: { ...this.persistentContext, ...this.config.context, ...context },
+      context: sanitizedContext,
+      component,
+      requestId,
+      userId,
+      duration,
+      error: sanitizedError,
     };
-
-    // Extract special fields
-    if (entry.context) {
-      if (entry.context.component) {
-        entry.component = String(entry.context.component);
-        delete entry.context.component;
-      }
-      if (entry.context.requestId) {
-        entry.requestId = String(entry.context.requestId);
-        delete entry.context.requestId;
-      }
-      if (entry.context.userId) {
-        entry.userId = String(entry.context.userId);
-        delete entry.context.userId;
-      }
-      if (entry.context.duration !== undefined) {
-        entry.duration = Number(entry.context.duration);
-        delete entry.context.duration;
-      }
-      if (entry.context.error) {
-        entry.error = this.serializeError(entry.context.error);
-        delete entry.context.error;
-      }
-
-      // Clean up empty context
-      if (Object.keys(entry.context).length === 0) {
-        delete entry.context;
-      }
-    }
 
     addToBuffer(entry);
     this.emit(entry);
@@ -340,10 +374,11 @@ class Logger {
    * Start a performance timer
    * Returns a timer object with a done() method to log completion time
    */
-  startTimer(): Timer {
+  startTimer(): Timer & { start: number } {
     const start = Date.now();
 
     return {
+      start,
       done: (message?: string, context?: LogContext) => {
         const duration = Date.now() - start;
         const logMessage = message || 'Operation completed';

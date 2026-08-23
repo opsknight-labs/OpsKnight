@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getIncidentContext } from '@/lib/incident-enrichment';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { assertCanViewIncident } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 
 /**
  * GET: Fetch telemetry context for an incident
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(await getAuthOptions());
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { id } = await params;
+  if (!id || !/^[a-z0-9_-]{1,64}$/i.test(id)) {
+    return NextResponse.json({ error: 'Invalid incident ID' }, { status: 400 });
   }
 
-  const { id } = await params;
+  try {
+    await assertCanViewIncident(id);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unauthorized';
+    return NextResponse.json({ error: msg }, { status: msg === 'Incident not found' ? 404 : 403 });
+  }
+
   const { searchParams } = new URL(request.url);
   const windowMinutes = parseInt(searchParams.get('window') || '30', 10);
 

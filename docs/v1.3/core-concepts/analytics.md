@@ -40,6 +40,7 @@ When a requested window extends beyond incident retention, OpsKnight clips the q
 | Unassigned active      | Active incidents with no user assignee                                                      |
 | MTTA                   | Mean time from incident creation to `acknowledgedAt`, for incidents with an acknowledgement |
 | MTTR                   | Mean time from incident creation to `resolvedAt`, for resolved incidents                    |
+| MTBF                   | Mean time between failures: total operating time divided by failure count in window         |
 | Acknowledgement rate   | Share of the relevant incident set with an acknowledgement                                  |
 | Resolution rate        | Share of the relevant incident set that is resolved                                         |
 | Acknowledge compliance | Incidents acknowledged at or before the service's acknowledge target                        |
@@ -59,7 +60,7 @@ When no qualifying sample exists, a time or compliance metric can display `--`/n
 
 The page groups data into operational sections that can include:
 
-- incident totals, active work, MTTA, and MTTR with previous-period comparisons;
+- incident totals, active work, MTTA, MTTR, and MTBF with previous-period comparisons;
 - acknowledge/resolve compliance and breach counts;
 - incident trend series;
 - status and urgency distributions;
@@ -86,6 +87,10 @@ Cards can compare the selected period with the immediately preceding period of e
 4. Confirm the report header contains the expected filter values and effective dates.
 
 The export contains a report header, applied filters, KPIs, status distribution, top services, and up to 10,000 matching incidents. It is CSV only. PDF, JSON, scheduled email reports, and a published analytics REST API are not v1.3 features.
+
+### CSV Formula Injection Protections (CWE-1236)
+
+To protect spreadsheet users against Formula Injection, OpsKnight automatically sanitizes cell values beginning with formula trigger characters (`=`, `+`, `-`, `@`, `\t`, `\r`, `|`, `%`) by prepending a single quote (`'`). Exports are encoded in UTF-8 with a Byte Order Mark (`\uFEFF`) for compatibility with Microsoft Excel and Apple Numbers.
 
 Because the export includes incident titles and assignee information, do not attach it to public tickets or status pages without review.
 

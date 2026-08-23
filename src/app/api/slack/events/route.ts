@@ -210,25 +210,36 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: true });
           }
 
-          await prisma.incidentNote.create({
-            data: {
-              incidentId: incident.id,
-              userId: noteUserId,
-              content: `📌 [Slack Pin by ${authorName}]: ${messageText}`,
-            },
-          });
+          const created = await prisma
+            .$transaction(async tx => {
+              const existingClaim = await tx.slackPinnedMessage.findUnique({
+                where: {
+                  channelId_messageTs: {
+                    channelId,
+                    messageTs,
+                  },
+                },
+              });
+              if (existingClaim) return false;
 
-          // Records the claim so a repeat reaction is ignored above. Best-effort:
-          // a lost race here means at worst one duplicate, never a lost note.
-          await prisma.slackPinnedMessage
-            .create({
-              data: { incidentId: incident.id, channelId, messageTs, pinnedBy: authorName },
+              await tx.slackPinnedMessage.create({
+                data: { incidentId: incident.id, channelId, messageTs, pinnedBy: authorName },
+              });
+
+              await tx.incidentNote.create({
+                data: {
+                  incidentId: incident.id,
+                  userId: noteUserId,
+                  content: `📌 [Slack Pin by ${authorName}]: ${messageText}`,
+                },
+              });
+              return true;
             })
-            .catch(() => {});
+            .catch(() => false);
 
-          // Deliberately no timeline event: a pin captures the message itself,
-          // which is what the note holds. Emitting an event as well duplicated
-          // every pin across both the notes list and the timeline.
+          if (!created) {
+            return NextResponse.json({ ok: true });
+          }
 
           // Post confirmation thread reply in Slack
           await retryFetch('https://slack.com/api/chat.postMessage', {

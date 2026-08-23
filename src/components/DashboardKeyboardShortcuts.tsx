@@ -9,9 +9,9 @@ type DashboardKeyboardShortcutsProps = {
   onExport?: () => void;
 };
 
-export default function DashboardKeyboardShortcuts({ 
-  onRefresh, 
-  onExport 
+export default function DashboardKeyboardShortcuts({
+  onRefresh,
+  onExport,
 }: DashboardKeyboardShortcutsProps) {
   const router = useRouter();
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -53,12 +53,12 @@ export default function DashboardKeyboardShortcuts({
 
       // Quick navigation
       if (e.key === 'g') {
-        // Wait for second key
+        let handleSecondKey: (e2: KeyboardEvent) => void;
         const timeout = setTimeout(() => {
-          // If no second key pressed, do nothing
+          document.removeEventListener('keydown', handleSecondKey);
         }, 1000);
 
-        const handleSecondKey = (e2: KeyboardEvent) => {
+        handleSecondKey = (e2: KeyboardEvent) => {
           clearTimeout(timeout);
           document.removeEventListener('keydown', handleSecondKey);
 
@@ -100,12 +100,8 @@ export default function DashboardKeyboardShortcuts({
   return (
     <>
       {showShortcuts && (
-        <KeyboardShortcuts 
-          isOpen={showShortcuts} 
-          onClose={() => setShowShortcuts(false)} 
-        />
+        <KeyboardShortcuts isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
       )}
     </>
   );
 }
-

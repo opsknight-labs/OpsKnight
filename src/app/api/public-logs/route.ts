@@ -12,7 +12,7 @@ function toNumber(value: string | null, fallback: number) {
 export async function GET(request: NextRequest) {
   // Require ADMIN authentication to view logs
   const session = await getServerSession(await getAuthOptions());
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  if (!session?.user || (session.user as { role?: string }).role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

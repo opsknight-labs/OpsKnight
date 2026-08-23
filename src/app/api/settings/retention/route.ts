@@ -1,14 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { logger } from '@/lib/logger';
 import {
   getRetentionPolicy,
   updateRetentionPolicy,
   type RetentionPolicy,
 } from '@/lib/retention-policy';
 import { getStorageStats, performDataCleanup } from '@/lib/data-cleanup';
+import { assertAdmin } from '@/lib/rbac';
+import { logger } from '@/lib/logger';
 import { logAudit } from '@/lib/audit';
+import { z } from 'zod';
+
+const RetentionUpdateSchema = z
+  .object({
+    incidentRetentionDays: z.number().int().min(1).max(3650).optional(),
+    alertRetentionDays: z.number().int().min(1).max(3650).optional(),
+    logRetentionDays: z.number().int().min(1).max(3650).optional(),
+    metricsRetentionDays: z.number().int().min(1).max(3650).optional(),
+    realTimeWindowDays: z.number().int().min(1).max(365).optional(),
+  })
+  .refine(data => Object.keys(data).length > 0, { message: 'No valid fields provided' });
 
 /**
  * GET /api/settings/retention
@@ -16,17 +28,7 @@ import { logAudit } from '@/lib/audit';
  */
 export async function GET() {
   try {
-    const session = await getServerSession(await getAuthOptions());
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check for admin role
-    const userRole = (session.user as any).role;
-    if (userRole !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
+    await assertAdmin();
 
     const [policy, stats] = await Promise.all([getRetentionPolicy(), getStorageStats()]);
 
@@ -77,6 +79,10 @@ export async function GET() {
       ],
     });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Failed to fetch retention settings';
+    if (msg.includes('Unauthorized') || msg.includes('Admin access required')) {
+      return NextResponse.json({ error: msg }, { status: 403 });
+    }
     logger.error('[API] Failed to fetch retention settings', { error });
     return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
   }
@@ -88,54 +94,30 @@ export async function GET() {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userRole = (session.user as any).role;
-    if (userRole !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
-
+    const admin = await assertAdmin();
     const body = await request.json();
+    const parsed = RetentionUpdateSchema.safeParse(body);
 
-    // Validate input
-    const updates: Partial<RetentionPolicy> = {};
-
-    if (typeof body.incidentRetentionDays === 'number') {
-      updates.incidentRetentionDays = body.incidentRetentionDays;
-    }
-    if (typeof body.alertRetentionDays === 'number') {
-      updates.alertRetentionDays = body.alertRetentionDays;
-    }
-    if (typeof body.logRetentionDays === 'number') {
-      updates.logRetentionDays = body.logRetentionDays;
-    }
-    if (typeof body.metricsRetentionDays === 'number') {
-      updates.metricsRetentionDays = body.metricsRetentionDays;
-    }
-    if (typeof body.realTimeWindowDays === 'number') {
-      updates.realTimeWindowDays = body.realTimeWindowDays;
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid retention settings', issues: parsed.error.issues },
+        { status: 400 }
+      );
     }
 
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
-    }
-
+    const updates: Partial<RetentionPolicy> = parsed.data;
     const updatedPolicy = await updateRetentionPolicy(updates);
 
     await logAudit({
       action: 'retention.policy.updated',
       entityType: 'USER',
-      entityId: session.user.id,
-      actorId: session.user.id,
+      entityId: admin.id,
+      actorId: admin.id,
       details: updates,
     });
 
     logger.info('[API] Retention policy updated', {
-      userId: session.user.id,
+      userId: admin.id,
       updates,
     });
 
@@ -144,6 +126,10 @@ export async function PUT(request: NextRequest) {
       policy: updatedPolicy,
     });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Failed to update settings';
+    if (msg.includes('Unauthorized') || msg.includes('Admin access required')) {
+      return NextResponse.json({ error: msg }, { status: 403 });
+    }
     logger.error('[API] Failed to update retention settings', { error });
     return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
   }
@@ -155,17 +141,7 @@ export async function PUT(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userRole = (session.user as any).role;
-    if (userRole !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
-
+    const admin = await assertAdmin();
     const body = await request.json();
     const dryRun = body.dryRun !== false; // Default to dry run for safety
 
@@ -175,15 +151,16 @@ export async function POST(request: NextRequest) {
       await logAudit({
         action: 'retention.data.purged',
         entityType: 'USER',
-        entityId: session.user.id,
-        actorId: session.user.id,
+        entityId: admin.id,
+        actorId: admin.id,
         details: JSON.parse(JSON.stringify(result)),
       });
     }
 
-    logger.info('[API] Data cleanup triggered', {
-      userId: session.user.id,
+    logger.info('[API] Data cleanup executed', {
+      userId: admin.id,
       dryRun,
+      result,
     });
 
     return NextResponse.json({
@@ -192,7 +169,11 @@ export async function POST(request: NextRequest) {
       result,
     });
   } catch (error) {
-    logger.error('[API] Failed to perform data cleanup', { error });
-    return NextResponse.json({ error: 'Failed to perform cleanup' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : 'Failed to execute cleanup';
+    if (msg.includes('Unauthorized') || msg.includes('Admin access required')) {
+      return NextResponse.json({ error: msg }, { status: 403 });
+    }
+    logger.error('[API] Data cleanup failed', { error });
+    return NextResponse.json({ error: 'Failed to execute cleanup' }, { status: 500 });
   }
 }

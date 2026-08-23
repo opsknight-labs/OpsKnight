@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security & Hardening
 
+- **API Security, IDOR Mitigation & Role Validation**: Added `assertCanViewIncident(id)` on incident telemetry context; converted session role checks to database-verified `assertAdmin()` on SLA definitions, public logs, and retention endpoints; added positive integer boundary validation (`1–3650`) for data retention policies; enforced team-scoped access on Slack test notifications and widget feeds.
+- **Structured Logging Redaction**: Enhanced logger sanitization before stdout/stderr and ingestion endpoints to redact authorization headers, bearer tokens, Slack bot tokens, AWS keys, phone numbers, and webhook secrets; added circular reference protection via `WeakSet`.
+- **Database Concurrency & Transaction Atomicity**: Wrapped policy step creation and re-indexing in atomic `prisma.$transaction`; enforced last active administrator checks across multi-user bulk batches; deduplicated custom field insertions to eliminate unique constraint collisions (`P2002`).
 - **Authentication & Sessions**: Added OIDC nonce state validation and strict email verification check on invited user linking; enforced `tokenVersion` check in JWT fallback path for immediate session revocation on role changes or password resets; wrapped bootstrap admin initialization in an atomic transaction; protected last active administrator from demotion/deletion; prevented responders from demoting team owners.
 - **CSV Formula Injection Mitigation (CWE-1236)**: Implemented strict sanitization (`buildCsv` / `sanitizeCsvCell`) prepending quotes to formula triggers (`=`, `+`, `-`, `@`, `\t`, `\r`, `|`, `%`) across uptime reports and analytics exports.
 - **Status Page & Subscriber Protection**: Replaced automatic GET-based unsubscribe mutation with an explicit confirmation form to block anti-spam scanner unsubscriptions; added SVG script/event-handler sanitization and strict CSP on logo endpoints; enforced private incident visibility filtering (`visibility !== 'PUBLIC'`) across status page notifications, webhooks, and RSS feeds.
@@ -22,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Template IDOR Mitigation**: Enforced author and admin role checks before deleting incident templates.
 
 ### Fixed
+
+- **Mobile PWA & Accessibility (a11y)**: Restored trigger element focus on modal/dialog cleanup via `trapFocus`; added `role="switch"`, `aria-checked`, and Enter/Space keyboard handlers to `MobileThemeToggle` and `MobileBiometricToggle`; added `role="alertdialog"`, theme background tokens, and focus trapping to confirmation dialogs; added `role="listbox"` and `aria-expanded` to analytics date range picker; added `aria-label` and `aria-pressed` to schedule layer restriction day buttons; cleaned up chord keydown event listeners on timeout.
+- **Observability & Health Checks**: Cleared `setTimeout` timer handles in health check database probe; evaluated memory pressure against V8 maximum heap limit (`v8.getHeapStatistics().heap_size_limit`); added background scheduler state check; eliminated N+1 database queries in SLA breach monitor by pre-fetching active warning events.
+- **ChatOps & Postmortem Lifecycle**: Atomically reserved Slack pin records in transaction before note creation to eliminate duplicate notes; guarded Jira sync against out-of-order stale webhooks using event timestamps; included incident notes and sorted chronological timeline events in postmortem drafts.
 
 - **Mobile PWA, Web Push & Touch UX**: Resolved swipe conflicts between `MobileSwipeNavigator` and modal/sheet controls; fixed iOS Safari background rubber-band scrolling via `.mobile-content` container lock; added fallback WebAuthn biometric credential resolution; automatically disabled push notifications on 410/404 Gone device endpoints.
 - **Postmortems & Timelines**: Preserved `publishedAt` timestamp on edits and cleared on `DRAFT`; deduplicated synthetic lifecycle markers when database events exist; fixed timezone offset drift on datetime-local inputs; auto-completed Action Items on Jira ticket resolution.

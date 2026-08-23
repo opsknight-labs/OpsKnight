@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '../../ToastProvider';
+import { trapFocus } from '@/lib/focus-trap';
 
 type SnoozeDurationDialogProps = {
   incidentId: string;
@@ -20,8 +21,16 @@ export default function SnoozeDurationDialog({
   const [durationType, setDurationType] = useState<'preset' | 'custom'>('preset');
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (dialogRef.current) {
+      const cleanup = trapFocus(dialogRef.current, onClose);
+      return cleanup;
+    }
+  }, [onClose]);
 
   const presetDurations = [
     { label: '15 minutes', minutes: 15 },
@@ -70,6 +79,7 @@ export default function SnoozeDurationDialog({
         right: 0,
         bottom: 0,
         background: 'rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -79,9 +89,13 @@ export default function SnoozeDurationDialog({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="snooze-dialog-title"
+        className="bg-card text-card-foreground border border-border"
         style={{
-          background: 'white',
-          borderRadius: '0px',
+          borderRadius: '12px',
           padding: '2rem',
           maxWidth: '500px',
           width: '100%',
@@ -89,7 +103,10 @@ export default function SnoozeDurationDialog({
         }}
         onClick={e => e.stopPropagation()}
       >
-        <h3 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem' }}>
+        <h3
+          id="snooze-dialog-title"
+          style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem' }}
+        >
           Snooze Incident
         </h3>
 

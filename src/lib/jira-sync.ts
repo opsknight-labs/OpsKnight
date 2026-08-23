@@ -197,6 +197,7 @@ export async function syncExternalIssueLink(linkId: string) {
 // ---------------------------------------------------------------------------
 
 export type JiraWebhookPayload = {
+  timestamp?: number | string;
   webhookEvent?: string;
   issue?: {
     id?: string;
@@ -204,6 +205,7 @@ export type JiraWebhookPayload = {
     fields?: {
       status?: { name?: string };
       assignee?: { displayName?: string; emailAddress?: string };
+      updated?: string;
     };
   };
 };
@@ -239,12 +241,30 @@ export async function processJiraWebhookEvent(
     return { updated: 0 };
   }
 
+  // Discard out-of-order stale webhooks if event timestamp is older than lastSyncedAt
+  const eventTime = payload.timestamp
+    ? new Date(
+        typeof payload.timestamp === 'number' ? payload.timestamp : String(payload.timestamp)
+      )
+    : payload.issue?.fields?.updated
+      ? new Date(payload.issue.fields.updated)
+      : null;
+
+  const validLinks =
+    eventTime && !isNaN(eventTime.getTime())
+      ? links.filter(l => !l.lastSyncedAt || l.lastSyncedAt <= eventTime)
+      : links;
+
+  if (validLinks.length === 0) {
+    return { updated: 0 };
+  }
+
   // Only update fields that are actually present in the webhook payload.
   // Jira webhooks often omit unchanged fields — blindly setting them to null
   // would erase valid data stored from a previous sync.
   const data: Record<string, unknown> = {
     syncState: 'SYNCED',
-    lastSyncedAt: new Date(),
+    lastSyncedAt: eventTime && !isNaN(eventTime.getTime()) ? eventTime : new Date(),
   };
 
   if (payload.issue?.fields && 'status' in payload.issue.fields) {
@@ -260,7 +280,7 @@ export async function processJiraWebhookEvent(
 
   await prisma.externalIssueLink.updateMany({
     where: {
-      id: { in: links.map(l => l.id) },
+      id: { in: validLinks.map(l => l.id) },
     },
     data,
   });

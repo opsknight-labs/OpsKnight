@@ -224,28 +224,31 @@ export async function addPolicyStep(
     return { error: `Target ${targetType} is required` };
   }
 
-  // Get current max step order
-  const maxStep = await prisma.escalationRule.findFirst({
-    where: { policyId },
-    orderBy: { stepOrder: 'desc' },
-  });
-
-  const nextStepOrder = maxStep ? maxStep.stepOrder + 1 : 0;
-
   try {
-    await prisma.escalationRule.create({
-      data: {
-        policyId,
-        targetType,
-        targetUserId: targetType === 'USER' ? targetId : null,
-        targetTeamId: targetType === 'TEAM' ? targetId : null,
-        targetScheduleId: targetType === 'SCHEDULE' ? targetId : null,
-        delayMinutes,
-        stepOrder: nextStepOrder,
-        notificationChannels:
-          notificationChannels.length > 0 ? (notificationChannels as any[]) : [], // eslint-disable-line @typescript-eslint/no-explicit-any
-        notifyOnlyTeamLead: targetType === 'TEAM' ? notifyOnlyTeamLead : false,
-      },
+    const nextStepOrder = await prisma.$transaction(async tx => {
+      const maxStep = await tx.escalationRule.findFirst({
+        where: { policyId },
+        orderBy: { stepOrder: 'desc' },
+      });
+
+      const order = maxStep ? maxStep.stepOrder + 1 : 0;
+
+      await tx.escalationRule.create({
+        data: {
+          policyId,
+          targetType,
+          targetUserId: targetType === 'USER' ? targetId : null,
+          targetTeamId: targetType === 'TEAM' ? targetId : null,
+          targetScheduleId: targetType === 'SCHEDULE' ? targetId : null,
+          delayMinutes,
+          stepOrder: order,
+          notificationChannels:
+            notificationChannels.length > 0 ? (notificationChannels as any[]) : [], // eslint-disable-line @typescript-eslint/no-explicit-any
+          notifyOnlyTeamLead: targetType === 'TEAM' ? notifyOnlyTeamLead : false,
+        },
+      });
+
+      return order;
     });
 
     await logAudit({
@@ -371,25 +374,27 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
   const deletedStepOrder = step.stepOrder;
 
   try {
-    await prisma.escalationRule.delete({
-      where: { id: stepId },
-    });
+    await prisma.$transaction(async tx => {
+      await tx.escalationRule.delete({
+        where: { id: stepId },
+      });
 
-    // Reorder remaining steps
-    const remainingSteps = await prisma.escalationRule.findMany({
-      where: { policyId },
-      orderBy: { stepOrder: 'asc' },
-    });
+      // Reorder remaining steps
+      const remainingSteps = await tx.escalationRule.findMany({
+        where: { policyId },
+        orderBy: { stepOrder: 'asc' },
+      });
 
-    // Update step orders to be sequential
-    for (let i = 0; i < remainingSteps.length; i++) {
-      if (remainingSteps[i].stepOrder !== i) {
-        await prisma.escalationRule.update({
-          where: { id: remainingSteps[i].id },
-          data: { stepOrder: i },
-        });
+      // Update step orders to be sequential
+      for (let i = 0; i < remainingSteps.length; i++) {
+        if (remainingSteps[i].stepOrder !== i) {
+          await tx.escalationRule.update({
+            where: { id: remainingSteps[i].id },
+            data: { stepOrder: i },
+          });
+        }
       }
-    }
+    });
 
     await logAudit({
       action: 'escalation_policy.step_deleted',

@@ -390,6 +390,8 @@ export default function LayerEditSheet({
                     type="button"
                     onClick={() => toggleDay(i)}
                     disabled={isPending}
+                    aria-label={DAY_LABELS[i]}
+                    aria-pressed={selectedDays.includes(i)}
                     className={cn(
                       'h-10 rounded-lg text-sm font-semibold transition-all',
                       selectedDays.includes(i)

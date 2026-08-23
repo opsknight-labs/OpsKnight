@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { APP_VERSION } from '@/lib/version';
 
+import v8 from 'v8';
+
 // Generate a unique ID when the server process starts
 const SERVER_INSTANCE_ID = Date.now().toString();
 
@@ -10,19 +12,8 @@ const SERVER_INSTANCE_ID = Date.now().toString();
  * Returns the health status of the application and its dependencies
  *
  * GET /api/health
- *
- * Response:
- * {
- *   status: "healthy" | "degraded" | "unhealthy",
- *   timestamp: string,
- *   checks: {
- *     database: { status: "healthy" | "unhealthy", latency?: number },
- *     // Add more checks as needed
- *   }
- * }
  */
 export async function GET(request: NextRequest) {
-  const _startTime = Date.now();
   const mode = request.nextUrl.searchParams.get('mode') || 'liveness';
   const checks: Record<
     string,
@@ -33,14 +24,16 @@ export async function GET(request: NextRequest) {
     // Check database connection with timeout
     try {
       const dbStartTime = Date.now();
-      // Use Promise.race to add timeout
-      const dbCheck = Promise.race([
-        prisma.$queryRaw`SELECT 1`,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Database connection timeout')), 5000)
-        ),
-      ]);
-      await dbCheck;
+      let timerId: NodeJS.Timeout | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timerId = setTimeout(() => reject(new Error('Database connection timeout')), 5000);
+      });
+
+      try {
+        await Promise.race([prisma.$queryRaw`SELECT 1`, timeoutPromise]);
+      } finally {
+        if (timerId) clearTimeout(timerId);
+      }
       const dbLatency = Date.now() - dbStartTime;
 
       checks.database = {
@@ -48,32 +41,42 @@ export async function GET(request: NextRequest) {
         latency: dbLatency,
       };
     } catch (error: any) {
-      // eslint-disable-line @typescript-eslint/no-explicit-any
       checks.database = {
         status: 'unhealthy',
         error: error.message || 'Database connection failed',
       };
     }
+
+    // Check background scheduler state
+    try {
+      const schedulerStartTime = Date.now();
+      const schedulerState = await prisma.cronSchedulerState.findUnique({
+        where: { id: 'singleton' },
+        select: { lastRunAt: true, lastError: true },
+      });
+      if (schedulerState) {
+        checks.scheduler = {
+          status: schedulerState.lastError ? 'unhealthy' : 'healthy',
+          latency: Date.now() - schedulerStartTime,
+          ...(schedulerState.lastError ? { error: schedulerState.lastError } : {}),
+        };
+      }
+    } catch (_) {}
   }
 
-  // Check memory usage
+  // Check memory usage (evaluated against V8 max heap limit)
   try {
     const memUsage = process.memoryUsage();
-    const memUsageMB = {
-      rss: Math.round(memUsage.rss / 1024 / 1024),
-      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-      external: Math.round(memUsage.external / 1024 / 1024),
-    };
+    const heapStats = typeof v8.getHeapStatistics === 'function' ? v8.getHeapStatistics() : null;
+    const heapUsedPercent = heapStats
+      ? (heapStats.used_heap_size / heapStats.heap_size_limit) * 100
+      : (memUsage.heapUsed / memUsage.heapTotal) * 100;
 
-    // Consider unhealthy if heap used > 90% of heap total
-    const heapUsagePercent = (memUsage.heapUsed / memUsage.heapTotal) * 100;
     checks.memory = {
-      status: heapUsagePercent > 90 ? 'unhealthy' : 'healthy',
-      latency: memUsageMB.heapUsed,
+      status: heapUsedPercent > 92 ? 'unhealthy' : 'healthy',
+      latency: Math.round(memUsage.heapUsed / 1024 / 1024),
     };
   } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
     checks.memory = {
       status: 'unhealthy',
       error: error.message,

@@ -110,9 +110,7 @@ WhatsApp uses Twilio's WhatsApp Business capability and is stored with the Twili
 
 Required:
 
-- WhatsApp Business sending number;
-- either reusable Twilio SMS credentials or WhatsApp-specific Account SID/Auth Token;
-- optional approved Content/Template SID when the conversation rules require it;
+- approved Twilio Content/Template SID (`whatsappContentSid`) required for message template dispatch;
 - recipient phone in E.164 format and enabled WhatsApp preference.
 
 Test within Twilio's template and conversation-window rules. A normal SMS-capable Twilio number is not automatically WhatsApp-enabled.

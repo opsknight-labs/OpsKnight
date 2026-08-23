@@ -130,13 +130,42 @@ export async function checkSLABreaches(
     snoozeMap.set(ev.incidentId, list);
   }
 
+  const maxThreshold = Math.max(ackWarningThreshold, resolveWarningThreshold) + 30000;
+  const recentWarningEvents =
+    incidentIds.length > 0 && prisma.incidentEvent?.findMany
+      ? await prisma.incidentEvent.findMany({
+          where: {
+            incidentId: { in: incidentIds },
+            createdAt: { gte: new Date(now.getTime() - maxThreshold) },
+            OR: [
+              { message: { startsWith: '🚨 SLA ACK Breached' } },
+              { message: { startsWith: '⏰ SLA ACK Warning' } },
+              { message: { startsWith: '🚨 SLA RESOLVE Breached' } },
+              { message: { startsWith: '⚠️ SLA RESOLVE Warning' } },
+            ],
+          },
+          select: { incidentId: true, message: true },
+        })
+      : [];
+
+  const recentWarningMap = new Set<string>();
+  for (const evt of recentWarningEvents) {
+    if (evt.message.startsWith('🚨 SLA ACK Breached'))
+      recentWarningMap.add(`${evt.incidentId}:ack:breached`);
+    if (evt.message.startsWith('⏰ SLA ACK Warning'))
+      recentWarningMap.add(`${evt.incidentId}:ack:warning`);
+    if (evt.message.startsWith('🚨 SLA RESOLVE Breached'))
+      recentWarningMap.add(`${evt.incidentId}:resolve:breached`);
+    if (evt.message.startsWith('⚠️ SLA RESOLVE Warning'))
+      recentWarningMap.add(`${evt.incidentId}:resolve:warning`);
+  }
+
   for (const incident of incidents) {
     // Calculate total time spent in SNOOZED state to deduct from elapsedMs
     let snoozedMs = 0;
-    const snoozeEvents = snoozeMap.get(incident.id) || [];
-
     let currentSnoozeStart: Date | null = null;
-    for (const ev of snoozeEvents) {
+    const incidentEvents = snoozeMap.get(incident.id) || [];
+    for (const ev of incidentEvents) {
       const msg = ev.message.toLowerCase();
       if (msg.includes('snoozed') && !msg.includes('unsnoozed') && !currentSnoozeStart) {
         currentSnoozeStart = ev.createdAt;
@@ -170,30 +199,25 @@ export async function checkSLABreaches(
       // Warning or breach
       if (ackRemainingMs < ackWarningThreshold) {
         const isBreached = ackRemainingMs <= 0;
-        const eventPrefix = isBreached ? '🚨 SLA ACK Breached' : '⏰ SLA ACK Warning';
+        const key = isBreached ? 'breached' : 'warning';
 
         // Check if we already warned/alerted about this recently
-        const recentWarning = await prisma.incidentEvent.findFirst({
-          where: {
-            incidentId: incident.id,
-            message: { startsWith: eventPrefix },
-            createdAt: {
-              gte: new Date(now.getTime() - ackWarningThreshold - 30000),
-            },
-          },
-        });
+        const alreadyWarned = recentWarningMap.has(`${incident.id}:ack:${key}`);
 
-        if (!recentWarning) {
+        if (!alreadyWarned) {
+          recentWarningMap.add(`${incident.id}:ack:${key}`);
           // Record the event in DB immediately to prevent repeat notification spam across cron loops
           try {
-            await prisma.incidentEvent.create({
-              data: {
-                incidentId: incident.id,
-                message: isBreached
-                  ? `🚨 SLA ACK Breached: target was ${ackTargetMinutes} min`
-                  : `⏰ SLA ACK Warning: ${Math.max(1, Math.round(ackRemainingMs / 60000))} min remaining`,
-              },
-            });
+            if (prisma.incidentEvent?.create) {
+              await prisma.incidentEvent.create({
+                data: {
+                  incidentId: incident.id,
+                  message: isBreached
+                    ? `🚨 SLA ACK Breached: target was ${ackTargetMinutes} min`
+                    : `⏰ SLA ACK Warning: ${Math.max(1, Math.round(ackRemainingMs / 60000))} min remaining`,
+                },
+              });
+            }
           } catch {
             // Non-critical if event logging fails
           }
@@ -225,30 +249,25 @@ export async function checkSLABreaches(
     // Warning or breach
     if (resolveRemainingMs < resolveWarningThreshold) {
       const isBreached = resolveRemainingMs <= 0;
-      const eventPrefix = isBreached ? '🚨 SLA RESOLVE Breached' : '⚠️ SLA RESOLVE Warning';
+      const key = isBreached ? 'breached' : 'warning';
 
       // Check if we already warned/alerted about this recently
-      const recentWarning = await prisma.incidentEvent.findFirst({
-        where: {
-          incidentId: incident.id,
-          message: { startsWith: eventPrefix },
-          createdAt: {
-            gte: new Date(now.getTime() - resolveWarningThreshold - 30000),
-          },
-        },
-      });
+      const alreadyWarned = recentWarningMap.has(`${incident.id}:resolve:${key}`);
 
-      if (!recentWarning) {
+      if (!alreadyWarned) {
+        recentWarningMap.add(`${incident.id}:resolve:${key}`);
         // Record the event in DB immediately to prevent repeat notification spam across cron loops
         try {
-          await prisma.incidentEvent.create({
-            data: {
-              incidentId: incident.id,
-              message: isBreached
-                ? `🚨 SLA RESOLVE Breached: target was ${resolveTargetMinutes} min`
-                : `⚠️ SLA RESOLVE Warning: ${Math.max(1, Math.round(resolveRemainingMs / 60000))} min remaining`,
-            },
-          });
+          if (prisma.incidentEvent?.create) {
+            await prisma.incidentEvent.create({
+              data: {
+                incidentId: incident.id,
+                message: isBreached
+                  ? `🚨 SLA RESOLVE Breached: target was ${resolveTargetMinutes} min`
+                  : `⚠️ SLA RESOLVE Warning: ${Math.max(1, Math.round(resolveRemainingMs / 60000))} min remaining`,
+              },
+            });
+          }
         } catch {
           // Non-critical if event logging fails
         }
