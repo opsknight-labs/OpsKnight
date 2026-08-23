@@ -109,5 +109,8 @@ Restore into an isolated environment, use the original encryption key, and verif
 - [Helm](./helm)
 - [Monitoring](./monitoring)
 - [Maintenance](./maintenance)
+- [Database migrations](./database-migrations)
+- [Backup and restore](./backup-restore)
+- [Upgrade and rollback](./upgrade-rollback)
 - [Configuration Reference](../getting-started/configuration)
 - [Security](../security/README)
