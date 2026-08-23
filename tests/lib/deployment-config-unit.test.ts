@@ -64,4 +64,17 @@ describe('deployment configuration invariants', () => {
     expect(read('helm/opsknight/values.yaml')).toContain('database:\n  url:');
     expect(read('helm/opsknight/templates/secret.yaml')).toContain('DATABASE_URL:');
   });
+
+  it('keeps Compose host-safe and project-safe by default', () => {
+    const compose = read('docker-compose.yml');
+    expect(compose).toContain("127.0.0.1:${POSTGRES_PORT:-5432}:5432");
+    expect(compose).not.toContain('container_name:');
+    expect(compose).not.toContain('com.docker.network.bridge.name');
+  });
+
+  it('publishes release images for amd64 and arm64', () => {
+    const workflow = read('.github/workflows/docker-image.yml');
+    expect(workflow).toContain('docker/setup-qemu-action@v3');
+    expect(workflow).toContain('platforms: linux/amd64,linux/arm64');
+  });
 });
