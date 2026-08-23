@@ -12,6 +12,7 @@ on:
       - 'k8s/**'
       - 'docs/v1.3/deployment/**'
       - 'tests/lib/deployment-config-unit.test.ts'
+      - '.github/workflows/docker-image.yml'
       - '.github/workflows/deployment-validation.yml'
   push:
     branches: [main]
@@ -22,6 +23,7 @@ on:
       - 'env.example'
       - 'helm/**'
       - 'k8s/**'
+      - '.github/workflows/docker-image.yml'
       - '.github/workflows/deployment-validation.yml'
 
 permissions:
