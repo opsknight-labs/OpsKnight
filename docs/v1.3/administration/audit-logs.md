@@ -1,5 +1,5 @@
 ---
-order: 4
+order: 7
 title: Audit Logs
 description: Review the administrative changes recorded by OpsKnight v1.3 and understand the evidence boundary.
 ---

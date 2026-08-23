@@ -1,177 +1,176 @@
 ---
 order: 2
+title: Kubernetes deployment
+description: Choose Helm or Kustomize, replace unsafe base values, deploy the app and PostgreSQL topology, and verify migrations and incident delivery.
 ---
 
-# Kubernetes Deployment
+# Kubernetes deployment
 
-Deploy OpsKnight on Kubernetes for production workloads and horizontal scaling.
+OpsKnight ships both a Helm chart at `helm/opsknight` and a Kustomize base at `k8s/`. Both deploy the same Next.js application and PostgreSQL-backed runtime. Use the method your platform team can render, review, secure, upgrade, and recover consistently.
 
-## Prerequisites
+## Choose a packaging path
 
-- Kubernetes 1.24+
-- `kubectl` configured
-- Ingress controller (nginx-ingress or similar)
-- PostgreSQL (in-cluster or managed)
+| Path                        | Use it when                                                       | Detailed guide           |
+| --------------------------- | ----------------------------------------------------------------- | ------------------------ |
+| Helm chart                  | Your release process manages versioned values and Helm releases.  | [Helm](./helm)           |
+| Kustomize base and overlays | Your release process owns rendered YAML and environment overlays. | [Kustomize](./kustomize) |
 
-## Quick Start (Manifests)
+Do not install both into the same namespace. Their resource names and lifecycle ownership differ.
 
-```bash
-cd k8s
+## Production prerequisites
 
-# Create namespace
-kubectl apply -f namespace.yaml
+- A Kubernetes cluster and `kubectl` access that can perform a server-side dry run.
+- Helm 3 for the Helm path, or the Kustomize support included in `kubectl` for the raw-manifest path.
+- A tested immutable OpsKnight image tag or digest.
+- An ingress controller, DNS, and TLS-certificate process.
+- A PostgreSQL topology with durable storage, capacity monitoring, backups, and a tested restore.
+- A secrets-delivery process for the database password, `NEXTAUTH_SECRET`, and 64-hex-character `ENCRYPTION_KEY`.
+- External collection for application/container logs and platform/database metrics.
 
-# Create secrets (edit first!)
-kubectl apply -f secret.yaml
+Validate rendered API versions and admission/security policies against the actual target cluster. v1.3 does not declare one universal Kubernetes-version support matrix.
 
-# Deploy
-kubectl apply -f .
-```
+## Understand the shipped Kustomize base
 
-## Manifest Overview
+`k8s/kustomization.yaml` includes:
 
-| File              | Purpose                   |
-| ----------------- | ------------------------- |
-| `namespace.yaml`  | OpsKnight namespace       |
-| `secret.yaml`     | Sensitive configuration   |
-| `configmap.yaml`  | Non-sensitive config      |
-| `deployment.yaml` | Application deployment    |
-| `service.yaml`    | Internal service          |
-| `ingress.yaml`    | External access           |
-| `hpa.yaml`        | Horizontal Pod Autoscaler |
-| `postgres-*.yaml` | PostgreSQL (optional)     |
+- Namespace, ServiceAccount, application Deployment, Service, Ingress, HPA, PodDisruptionBudget, and NetworkPolicy;
+- Secret and ConfigMap examples; and
+- a single PostgreSQL StatefulSet, Service, and persistent-volume resources.
 
-## Configuration
+The checked-in base is an example, not a production release:
 
-### Secrets
+- `secret.yaml` contains known placeholder values;
+- the application URL is localhost;
+- the application image uses the floating `latest` tag;
+- `DATABASE_URL` contains a fixed per-process pool setting;
+- ingress host/class, timeouts, rate controls, and TLS assumptions are nginx-specific examples;
+- NetworkPolicy selectors/namespaces require cluster-specific review; and
+- the included PostgreSQL is a single instance, not an HA, backup, or managed-database service.
 
-Edit `secret.yaml` before applying:
+Never apply the base unchanged to production and never commit real Secret values. Build an overlay or use the Helm production-values process.
 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: opsknight-secrets
-  namespace: opsknight
-type: Opaque
-stringData:
-  DATABASE_URL: postgresql://user:pass@postgres:5432/opsknight
-  NEXTAUTH_SECRET: your-32-char-secret
-  NEXTAUTH_URL: https://ops.yourcompany.com
-```
+## Configure the shared runtime
 
-### ConfigMap
+Every application replica must receive consistent values:
 
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: opsknight-config
-  namespace: opsknight
-data:
-```
+| Value                 | Requirement                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`        | One reachable, migrated PostgreSQL database; size the total connection budget across replicas. |
+| `NEXTAUTH_URL`        | Exact external HTTPS origin used by authentication.                                            |
+| `NEXT_PUBLIC_APP_URL` | External origin used in user-facing links; normally matches `NEXTAUTH_URL`.                    |
+| `NEXTAUTH_SECRET`     | Stable, high-entropy value identical on every replica.                                         |
+| `ENCRYPTION_KEY`      | Stable 64-hex-character value identical on every replica and preserved with recovery material. |
 
-> **Note:** Store secrets in `Secret` objects and keep the ConfigMap non-sensitive.
+For an external database, remove/disable the bundled PostgreSQL resources and replace the application's `DATABASE_URL`; changing only `POSTGRES_HOST` can leave other bundled assumptions in place. Configure database TLS/trust according to the provider.
 
-## Ingress
+Notification providers are configured in the OpsKnight UI and encrypted in PostgreSQL. Backing up Kubernetes Secrets without the database does not recover those provider records; backing up PostgreSQL without `ENCRYPTION_KEY` does not recover usable encrypted credentials.
 
-Configure for your domain and TLS:
+## Render before applying
 
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: opsknight-ingress
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-spec:
-  tls:
-    - hosts:
-        - ops.yourcompany.com
-      secretName: opsknight-tls
-  rules:
-    - host: ops.yourcompany.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: opsknight
-                port:
-                  number: 3000
-```
-
-## Scaling
-
-### Horizontal Pod Autoscaler
-
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: opsknight-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: opsknight
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
-```
-
-## Database Options
-
-### In-Cluster PostgreSQL
-
-Apply the included manifests:
+For Kustomize:
 
 ```bash
-kubectl apply -f postgres-pvc.yaml
-kubectl apply -f postgres-statefulset.yaml
-kubectl apply -f postgres-service.yaml
+kubectl kustomize deploy/overlays/production > /tmp/opsknight-rendered.yaml
+kubectl apply --server-side --dry-run=server -f /tmp/opsknight-rendered.yaml
 ```
 
-### Managed PostgreSQL
-
-Use AWS RDS, GCP Cloud SQL, or Azure Database:
-
-- Update `DATABASE_URL` in your Secret.
-- Ensure network connectivity from the cluster.
-
-## Updating
+For Helm:
 
 ```bash
-# Update image
-kubectl set image deployment/opsknight \
-  opsknight=ghcr.io/your-org/opsknight:latest
-
-# Or apply updated manifests
-kubectl apply -f deployment.yaml
+helm lint helm/opsknight --values values.production.yaml
+helm template opsknight helm/opsknight \
+  --namespace opsknight \
+  --values values.production.yaml > /tmp/opsknight-rendered.yaml
+kubectl apply --dry-run=server -f /tmp/opsknight-rendered.yaml
 ```
+
+Review the rendered image reference, public origins, Secret sources, database URL, ingress/TLS, service exposure, probes, resources, HPA/PDB, storage, and NetworkPolicy. Scan for placeholder strings and the `latest` tag.
+
+## Apply and verify
+
+Apply through the matching owner:
+
+```bash
+# Kustomize overlay
+kubectl apply -k deploy/overlays/production
+
+# Or Helm release
+helm upgrade --install opsknight helm/opsknight \
+  --namespace opsknight \
+  --create-namespace \
+  --values values.production.yaml \
+  --wait --timeout 10m
+```
+
+For the checked-in Kustomize names:
+
+```bash
+kubectl -n opsknight rollout status deployment/opsknight-app --timeout=10m
+kubectl -n opsknight get pods,svc,ingress,pvc,hpa,pdb
+kubectl -n opsknight logs deployment/opsknight-app --tail=200
+```
+
+Helm's generated Deployment is normally `opsknight`; confirm with `helm status` when name overrides are used.
+
+The container attempts `prisma migrate deploy` up to three times and can start the server after all attempts fail. A Ready pod is therefore necessary but not sufficient migration evidence. Inspect startup logs, call readiness, then exercise a database write:
+
+```bash
+kubectl -n opsknight port-forward service/opsknight-service 3000:80
+curl --fail 'http://127.0.0.1:3000/api/health?mode=readiness'
+```
+
+After ingress is live, verify login, create a synthetic service/incident, trigger and resolve through the intended inbound route, and confirm the intended external notification.
+
+## Ingress and streaming
+
+Forward the original host, scheme, and client IP only through trusted proxies. Allow long-lived server-sent event responses, disable buffering for them, and choose proxy idle/read timeouts that do not cut the dashboard stream unexpectedly. Do not copy the base nginx annotations to another ingress controller.
+
+Preserve `/api/health` for liveness and `/api/health?mode=readiness` for traffic gating. The readiness check includes PostgreSQL; liveness alone does not prove the application can serve product workflows.
+
+## Replicas, HPA, and scheduled work
+
+The Kustomize base HPA example targets two to ten application replicas using CPU and memory utilization. The Helm chart has its own values. These are configuration defaults, not measured capacity recommendations; set requests, limits, replica floors, and scaling thresholds from a production-like load test. HPA resource metrics require a working cluster metrics pipeline.
+
+Every application process can start the internal scheduler, while a PostgreSQL lock coordinates active ownership. Leave `ENABLE_INTERNAL_CRON` enabled on at least one healthy replica. Each replica still has its own immediate notification queue, real-time cache, and circuit-breaker state; drain pods before termination and test delivery during rollouts.
+
+The shipped PDB limits voluntary disruption but cannot protect against node, zone, database, storage, or provider failure. Test the complete topology before calling it highly available.
+
+## PostgreSQL and recovery
+
+The bundled PostgreSQL StatefulSet has one replica. A PVC and PDB do not create database failover or backups. For production, either operate that database with an explicit single-instance risk acceptance and recovery plan, or replace it with a managed/operator-owned topology.
+
+Back up PostgreSQL outside the cluster failure domain and rehearse restore with the matching `ENCRYPTION_KEY`. Monitor connections, locks, query latency, storage, WAL/replication where applicable, and backup success.
+
+## Upgrade and rollback
+
+1. Record the current rendered resources, image digest, Secret/config sources, and database schema state.
+2. Take and verify a database backup.
+3. Render and server-dry-run the new release.
+4. Apply a pinned image and observe migration/startup logs.
+5. Run readiness, authentication, write, synthetic incident, and notification checks.
+
+A Deployment or Helm rollback changes application resources; it does not reverse PostgreSQL migrations or data changes. Confirm schema compatibility before rolling back code, and use the pre-upgrade recovery point when data rollback is required.
 
 ## Troubleshooting
 
-```bash
-# View pods
-kubectl get pods -n opsknight
+| Symptom                               | Check                                                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Pod starts but readiness fails        | PostgreSQL DNS/network/TLS/credentials, migration logs, and schema state.                             |
+| Login redirects repeatedly            | Exact external `NEXTAUTH_URL`, ingress forwarded host/scheme, and identical secrets across replicas.  |
+| Only some requests fail after scaling | Replica configuration drift, different secrets, pool exhaustion, or process-local state assumptions.  |
+| SSE/dashboard refresh disconnects     | Ingress buffering and idle/read timeouts, connection draining, and client reconnects.                 |
+| HPA shows unknown metrics             | Metrics pipeline, resource requests, HPA API support, and HPA events.                                 |
+| Scheduled actions stop                | Scheduler logs/state, PostgreSQL lock/heartbeat, and at least one replica with internal cron enabled. |
+| Provider settings cannot decrypt      | The running `ENCRYPTION_KEY` does not match the database contents.                                    |
+| NetworkPolicy blocks traffic          | Ingress-controller namespace labels, DNS, PostgreSQL, and required provider egress destinations.      |
 
-# View logs
-kubectl logs -f deploy/opsknight -n opsknight
+## Related topics
 
-# Shell access
-kubectl exec -it deploy/opsknight -n opsknight -- sh
-```
-
-## Verification
-
-- Ensure the deployment is `Ready`.
-- Confirm ingress routes to the service.
-- Log in and create a test service to validate persistence.
+- [Kustomize](./kustomize)
+- [Helm](./helm)
+- [Monitoring](./monitoring)
+- [Database migrations](./database-migrations)
+- [Backup and restore](./backup-restore)
+- [Upgrade and rollback](./upgrade-rollback)
+- [Scalability and capacity planning](../core-concepts/scalability)
+- [Troubleshooting](../troubleshooting)

@@ -1,5 +1,5 @@
 ---
-order: 3
+order: 4
 title: Kustomize
 description: Render, customize, validate, and apply the Kubernetes manifests shipped with OpsKnight v1.3.
 ---

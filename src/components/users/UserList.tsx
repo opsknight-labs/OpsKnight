@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/shadcn/dropdown-menu';
-import { ChevronDown, Trash2, UserX, UserCheck, Shield, MoreHorizontal } from 'lucide-react';
+import { ChevronDown, Trash2, UserX, UserCheck, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 
 type User = {
@@ -124,7 +124,6 @@ export default function UserList({
 
   return (
     <div className="space-y-4">
-      {/* Bulk Actions Bar */}
       {selectedIds.size > 0 && (
         <div className="sticky top-0 z-10 flex items-center justify-between p-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border rounded-md shadow-sm">
           <div className="flex items-center gap-3 px-2">
@@ -171,12 +170,6 @@ export default function UserList({
         </div>
       )}
 
-      {/* Select All (Only if no active selection bar to avoid duplication, mostly for empty state or consistent header? 
-          Actually, let's keep the standard header if nothing selected, or just merge them. 
-          The user requested "single line". Let's show the standard "Select All" bar when 0 selected, 
-          and swap it for the "Bulk Actions" bar when >0 selected. 
-          Or just keep one bar that transforms.
-      */}
       {users.length > 0 && selectedIds.size === 0 && (
         <div className="flex items-center gap-3 px-4 py-2 bg-muted/30 rounded-md border border-transparent">
           <Checkbox
@@ -188,7 +181,6 @@ export default function UserList({
         </div>
       )}
 
-      {/* User Cards */}
       <div className="space-y-2">
         {users.map(user => {
           const handleUpdateRole = async (role: string) => {

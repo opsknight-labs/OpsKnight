@@ -1,7 +1,7 @@
 ---
 title: Status page
 description: Publish service health, incidents, maintenance, uptime, subscriptions, feeds, and signed webhooks safely.
-order: 8
+order: 9
 ---
 
 # Status page

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import UserAvatar from '@/components/UserAvatar';
+import OidcLinkingApprovalButton from './OidcLinkingApprovalButton';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   DropdownMenu,
@@ -30,7 +31,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/shadcn/select';
 import {
   Dialog,
@@ -38,7 +38,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/shadcn/dialog';
 import {
   Mail,
@@ -50,8 +49,6 @@ import {
   UserCheck,
   MoreHorizontal,
   Users,
-  Shield,
-  UserPlus,
   Key,
   Link as LinkIcon,
   Copy,
@@ -112,7 +109,7 @@ export function UserCard({
   onActivate,
   onDeactivate,
   onDelete,
-  onGenerateInvite,
+  onGenerateInvite: _onGenerateInvite,
   onUpdateRole,
   onAddToTeam,
 }: UserCardProps) {
@@ -204,7 +201,6 @@ export function UserCard({
             : 'border-border bg-card hover:border-primary/30'
         )}
       >
-        {/* Selection Checkbox */}
         <input
           type="checkbox"
           name="userIds"
@@ -215,7 +211,6 @@ export function UserCard({
           className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
         />
 
-        {/* Avatar */}
         <UserAvatar
           userId={user.id}
           avatarUrl={user.avatarUrl}
@@ -225,7 +220,6 @@ export function UserCard({
           className="ring-2 ring-background shadow-md transition-transform duration-300 group-hover:scale-105"
         />
 
-        {/* User Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-semibold text-sm truncate">{user.name}</h3>
@@ -258,7 +252,6 @@ export function UserCard({
             </div>
           )}
 
-          {/* Team Badges - moved from right side */}
           {user.teamMemberships && user.teamMemberships.length > 0 && (
             <div className="flex flex-wrap items-center gap-1">
               {user.teamMemberships.map(member => (
@@ -276,10 +269,7 @@ export function UserCard({
           )}
         </div>
 
-        {/* Right Side: Badges and Actions */}
         <div className="flex items-center gap-4">
-          {/* Status & Role Badges */}
-
           <div className="flex items-center gap-2">
             {!isCurrentUser && isAdmin && onUpdateRole ? (
               <Select value={user.role} onValueChange={value => onUpdateRole(value)}>
@@ -289,7 +279,6 @@ export function UserCard({
                     roleTriggerColors[user.role as keyof typeof roleTriggerColors]
                   )}
                 >
-                  {/* Manually render value to keep trigger simple while items vary */}
                   <span className="truncate">
                     {user.role === 'ADMIN'
                       ? 'Admin'
@@ -338,7 +327,6 @@ export function UserCard({
             </Badge>
           </div>
 
-          {/* More Actions Dropdown */}
           {!isCurrentUser && isAdmin && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -347,12 +335,11 @@ export function UserCard({
                   <span className="sr-only">Open menu</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                 <DropdownMenuSeparator />
 
-                {/* Generate Invite/Reset Link */}
-                {!isCurrentUser && (user.status === 'ACTIVE' || user.status === 'INVITED') && (
+                {(user.status === 'ACTIVE' || user.status === 'INVITED') && (
                   <DropdownMenuItem
                     onClick={handleGenerateLink}
                     className={cn(
@@ -370,7 +357,10 @@ export function UserCard({
                   </DropdownMenuItem>
                 )}
 
-                {/* Add to Team Submenu */}
+                {user.status === 'ACTIVE' && (
+                  <OidcLinkingApprovalButton userId={user.id} userName={user.name} />
+                )}
+
                 {onAddToTeam && availableTeams.length > 0 && (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
@@ -387,7 +377,6 @@ export function UserCard({
                   </DropdownMenuSub>
                 )}
 
-                {/* Activate Action */}
                 {user.status === 'DISABLED' && onActivate && (
                   <DropdownMenuItem
                     onClick={onActivate}
@@ -398,7 +387,6 @@ export function UserCard({
                   </DropdownMenuItem>
                 )}
 
-                {/* Deactivate Action */}
                 {user.status === 'ACTIVE' && onDeactivate && (
                   <DropdownMenuItem
                     onClick={() => setShowDeactivateDialog(true)}
@@ -411,7 +399,6 @@ export function UserCard({
 
                 <DropdownMenuSeparator />
 
-                {/* Delete Action */}
                 {onDelete && (
                   <DropdownMenuItem
                     onClick={() => setShowDeleteDialog(true)}
@@ -427,7 +414,6 @@ export function UserCard({
         </div>
       </div>
 
-      {/* Deactivate Confirmation Dialog */}
       <AlertDialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -452,7 +438,6 @@ export function UserCard({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -476,7 +461,7 @@ export function UserCard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* Invite/Reset Link Dialog */}
+
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
         <DialogContent>
           <DialogHeader>

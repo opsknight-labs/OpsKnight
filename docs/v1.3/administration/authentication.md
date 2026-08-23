@@ -31,6 +31,8 @@ Admins invite subsequent users from **Users**. An invitation is valid for seven 
 
 Passwords must be 10–128 characters and contain lowercase, uppercase, numeric, and special characters. These rules are fixed in v1.3; there is no configurable expiry, history, or complexity policy.
 
+After five failed local logins for one normalized email/client-IP key, v1.3 applies progressive process-local lockouts of approximately 1, 5, 15, then 60 minutes for repeated groups. The state is not shared across application replicas and is cleared by a process restart. Configure trusted proxy forwarding and an independent edge/identity-provider throttle for internet-facing deployments.
+
 ### Password recovery
 
 The login page's **Forgot password** flow returns the same message for registered and unknown addresses. A reset token:
@@ -63,9 +65,38 @@ Default scopes are `openid email profile`; custom scopes are appended. The provi
 
 ### Email and identity safety
 
-OpsKnight requires an email. An explicit `email_verified: false` is rejected. Set `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT=true` to also reject a missing claim.
+OpsKnight requires an email. An explicit `email_verified: false` is rejected. Set `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT=true` to also reject a missing claim for all OIDC sign-ins.
 
-An OIDC identity is bound to normalized issuer plus subject. If an existing local user's email has no such identity link, v1.3 blocks automatic email-only linking to prevent account takeover. Plan account migration and test it before enforcing SSO.
+An OIDC identity is bound to the normalized issuer plus the provider subject (`sub`). OpsKnight does not treat an email address by itself as a stable external identity. This prevents an unrelated OIDC identity that happens to present the same email from silently taking over an existing OpsKnight account.
+
+For an existing account that does not yet have an OIDC identity, first-time linking requires all of the following:
+
+- the configured OIDC provider returns a stable subject;
+- the provider explicitly returns `email_verified: true`;
+- the OpsKnight account has administrator-provisioning evidence from the invite flow or from an Admin allowing OIDC linking;
+- the issuer-plus-subject identity is not already linked to another OpsKnight user.
+
+After the first successful link, later sign-ins use the stored issuer-plus-subject identity rather than email-only matching.
+
+### Manage OIDC linking for an existing user
+
+Use this workflow for an existing **Active** account that needs to establish its first OIDC identity link.
+
+1. Sign in as an Admin and open **Users**.
+2. Open the user's **⋯** actions menu.
+3. Select **Allow OIDC linking**.
+4. Review the confirmation and select **Allow linking**.
+5. Ask the user to sign in through the configured OIDC provider.
+
+The approval does not change the user's role, status, password, or existing sessions. The next first-time OIDC link is still accepted only when the provider returns the same account email, a stable subject, and `email_verified: true`, and the external identity is not linked elsewhere.
+
+Until an OIDC identity is established, the same **⋯** menu shows **Revoke OIDC linking approval**. Revoking removes the stored first-link provisioning evidence for that Active user. It does not disable the account or affect password authentication.
+
+Once an OIDC identity has been established, the menu shows **OIDC linked**. Approval revocation is intentionally not used as an unlink operation; removing an established external identity is a separate security-sensitive lifecycle operation.
+
+Users still in **Invited** status already have administrator-provisioning evidence from the supported invite workflow. The explicit allow/revoke control is therefore limited to Active accounts.
+
+Do not use approval to work around an email mismatch, an unverified email claim, a missing subject, or an identity already linked to another user. Correct the identity-provider configuration instead.
 
 ### Auto-provisioning and domains
 
@@ -98,25 +129,31 @@ Cookies are HTTP-only where appropriate and use `SameSite=Lax`. `NEXTAUTH_URL` b
 
 **Settings** → **Security** offers **Revoke all sessions**. It increments the user's token version; v1.3 does not list or revoke individual devices. Role/status changes may take effect after the authentication user-cache refresh, so use session revocation for urgent access removal and remove access at the IdP too.
 
+## Unsupported authentication methods
+
+v1.3 does not provide native MFA, passkey/WebAuthn login, SAML, or email magic-link authentication. Enforce MFA at the OIDC provider or a trusted access proxy when required. The optional mobile platform-authenticator prompt is a client-side privacy overlay, not server authentication or a second factor.
+
 ## Failure-safe rollout
 
 - Keep a tested local break-glass Admin while introducing OIDC.
 - Restrict auto-provision domains before enabling it.
 - Test normal, denied-domain, missing-claim, disabled-user, and Admin-group cases.
 - Confirm role mapping cannot grant Admin through a user-controlled claim.
+- Verify allow, revoke, and first-link behavior with a non-Admin test account before migrating production accounts.
 - Verify revoke-all and IdP disable behavior.
 - Record the rollback: disable OIDC using the retained local Admin session.
 
 ## Troubleshooting
 
-| Symptom                       | Check                                                                                   |
-| ----------------------------- | --------------------------------------------------------------------------------------- |
-| Redirect/cookie loop          | Exact HTTPS `NEXTAUTH_URL`, forwarded host/scheme, and browser cookie policy.           |
-| Discovery test fails          | Issuer is HTTPS and exposes valid OIDC discovery metadata from the app network.         |
-| Existing local user is denied | Identity is not safely linked; do not bypass by weakening email/subject checks.         |
-| New user is denied            | Auto-provision setting, exact allowed domain, email and verification claims.            |
-| Role does not update          | Requested custom scope, actual ID-token/profile claim, JSON rule order and exact value. |
-| Secret cannot decrypt         | Restore the matching `ENCRYPTION_KEY` or enter a new client secret.                     |
+| Symptom                       | Check                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Redirect/cookie loop          | Exact HTTPS `NEXTAUTH_URL`, forwarded host/scheme, and browser cookie policy.                                       |
+| Discovery test fails          | Issuer is HTTPS and exposes valid OIDC discovery metadata from the app network.                                     |
+| Existing local user is denied | Approval/invite evidence, verified email, stable subject, allowed domain, and whether the identity is already used. |
+| Approval shows OIDC linked    | The user already has a stored issuer-plus-subject identity; approval revoke is not an unlink operation.             |
+| New user is denied            | Auto-provision setting, exact allowed domain, email and verification claims.                                        |
+| Role does not update          | Requested custom scope, actual ID-token/profile claim, JSON rule order and exact value.                             |
+| Secret cannot decrypt         | Restore the matching `ENCRYPTION_KEY` or enter a new client secret.                                                 |
 
 ## Related topics
 

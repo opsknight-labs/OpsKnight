@@ -45,6 +45,24 @@ The invite link is a credential. Do not place it in tickets, public chat, screen
 
 If email delivery fails, the account and copyable link can still be created. Configure a provider and resend, or share the link securely.
 
+## Manage first-time OIDC linking
+
+For an existing **Active** account that has not linked OIDC yet:
+
+1. Open **Users** as an Admin.
+2. Open the user's **⋯** actions menu.
+3. Select **Allow OIDC linking**.
+4. Review the confirmation and select **Allow linking**.
+5. Ask the user to sign in through the configured OIDC provider.
+
+The approval does not change role, account status, password, or existing sessions. First-time linking still requires the configured provider to return the same email, a stable subject, and `email_verified: true`, and the external identity must not already belong to another OpsKnight account.
+
+Before the identity is established, reopen **⋯** and select **Revoke OIDC linking approval** to disallow the first-time link again. Revocation does not deactivate the user or remove password access.
+
+After the identity is established, the menu shows **OIDC linked**. The approval control intentionally does not unlink an established identity.
+
+Users in **Invited** status already carry administrator-provisioning evidence from the invite workflow, so the explicit allow/revoke control is shown only for Active users. See [Authentication](../administration/authentication.md#manage-oidc-linking-for-an-existing-user).
+
 ## Find and manage accounts
 
 The Users page shows 20 users per page and supports search by name/email, filters for status, application role, and team, plus sorting by creation date, name, email, or status. It also shows user/team audit activity.
@@ -54,6 +72,7 @@ An Admin can:
 - change another user's application role;
 - activate or deactivate accounts individually or in bulk;
 - generate a new invite;
+- allow or revoke first-time OIDC linking for an existing Active user;
 - add users to teams;
 - delete accounts after safety checks.
 
@@ -136,6 +155,12 @@ Deletion of a sole Team Owner or the last Admin is blocked. Prefer deactivation 
 
 Use the copyable invite link, inspect the email provider and logs, verify sender/domain configuration, and generate a new invite if the earlier token should be invalidated.
 
+### An existing user still cannot sign in with OIDC
+
+For an Active user, open **⋯** and confirm the menu shows **Revoke OIDC linking approval**, which means first-time linking is currently allowed. Then verify the configured provider returns a stable subject, the same account email, and `email_verified: true`. Also check allowed-domain policy and whether the identity is already linked elsewhere.
+
+If the menu shows **Allow OIDC linking**, approval is not currently present. If it shows **OIDC linked**, the external identity is already established and the problem is not first-link approval.
+
 ### A user is targeted but receives no page
 
 Confirm account status, channel preference, contact/device data, team notification participation, workspace provider, and notification history.
@@ -150,4 +175,5 @@ Check whether it is the current Admin, last Admin, a sole Team Owner, or still r
 - [On-call schedules](schedules.md)
 - [Escalation policies](escalation-policies.md)
 - [Authentication and security](authentication-security.md)
+- [Authentication](../administration/authentication.md)
 - [Published API and CLI guides](../api/README.md)

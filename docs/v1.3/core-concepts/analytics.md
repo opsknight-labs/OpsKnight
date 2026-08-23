@@ -1,7 +1,7 @@
 ---
 title: Analytics and SLA
 description: Interpret incident, response, coverage, and SLA metrics and export the filtered data
-order: 11
+order: 15
 ---
 
 # Analytics and SLA

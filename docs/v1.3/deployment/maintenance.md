@@ -1,5 +1,5 @@
 ---
-order: 6
+order: 9
 title: Maintenance
 description: Operate scheduled work, retention, backups, upgrades, and recurring verification safely.
 ---

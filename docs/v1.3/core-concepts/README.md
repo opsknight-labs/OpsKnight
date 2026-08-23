@@ -61,24 +61,24 @@ OpsKnight is built around a simple but powerful model: **Alerts become Incidents
 
 ## Concepts at a Glance
 
-| Concept                                        | What It Is                              | Why It Matters                            |
-| ---------------------------------------------- | --------------------------------------- | ----------------------------------------- |
-| [Dashboard](./dashboard)                       | Command center for real-time visibility | See the forest, not just the trees        |
-| [Services](./services)                         | Systems you monitor with ownership      | Alerts need context and routing           |
-| [Incidents](./incidents)                       | Actionable work items from alerts       | Track resolution from trigger to close    |
-| [Incident Templates](./incident-templates)     | Reusable defaults for manual incidents  | Standardize recurring response patterns   |
-| [Escalation Policies](./escalation-policies)   | Who gets notified and when              | Ensure issues never fall through cracks   |
-| [Schedules](./schedules)                       | On-call rotations and shifts            | Fair distribution of on-call duty         |
-| [Teams](./teams)                               | User groups with shared responsibility  | Organize people and permissions           |
-| [Users](./users)                               | Individuals with roles and preferences  | Authentication and personalization        |
-| [Analytics](./analytics)                       | Metrics, SLAs, and trends               | Measure and improve performance           |
-| [Postmortems](./postmortems)                   | Incident retrospectives                 | Learn from failures                       |
-| [Action Items](./action-items)                 | Owned corrective work from postmortems  | Turn lessons into accountable changes     |
-| [Event Logs](./event-logs)                     | Cross-incident lifecycle history        | Review and test incident activity         |
-| [Reports and Dashboards](./reports-dashboards) | User-owned metric layouts               | Build role-focused operational views      |
-| [Status Pages](./status-page)                  | Public service health communication     | Transparency with customers               |
-| [Integrations](./integrations)                 | Connections to monitoring tools         | Route alerts from your stack              |
-| [Scalability](./scalability)                   | Capacity targets and tuning             | Understand scale limits and optimizations |
+| Concept                                        | What It Is                              | Why It Matters                          |
+| ---------------------------------------------- | --------------------------------------- | --------------------------------------- |
+| [Dashboard](./dashboard)                       | Command center for real-time visibility | See the forest, not just the trees      |
+| [Services](./services)                         | Systems you monitor with ownership      | Alerts need context and routing         |
+| [Incidents](./incidents)                       | Actionable work items from alerts       | Track resolution from trigger to close  |
+| [Incident Templates](./incident-templates)     | Reusable defaults for manual incidents  | Standardize recurring response patterns |
+| [Escalation Policies](./escalation-policies)   | Who gets notified and when              | Define primary and fallback routing     |
+| [Schedules](./schedules)                       | On-call rotations and shifts            | Fair distribution of on-call duty       |
+| [Teams](./teams)                               | User groups with shared responsibility  | Organize people and permissions         |
+| [Users](./users)                               | Individuals with roles and preferences  | Authentication and personalization      |
+| [Analytics](./analytics)                       | Metrics, SLAs, and trends               | Measure and improve performance         |
+| [Postmortems](./postmortems)                   | Incident retrospectives                 | Learn from failures                     |
+| [Action Items](./action-items)                 | Owned corrective work from postmortems  | Turn lessons into accountable changes   |
+| [Event Logs](./event-logs)                     | Cross-incident lifecycle history        | Review and test incident activity       |
+| [Reports and Dashboards](./reports-dashboards) | User-owned metric layouts               | Build role-focused operational views    |
+| [Status Pages](./status-page)                  | Public service health communication     | Transparency with customers             |
+| [Integrations](./integrations)                 | Connections to monitoring tools         | Route alerts from your stack            |
+| [Scalability](./scalability)                   | Capacity planning and safe scaling      | Prove limits for your own deployment    |
 
 ---
 
