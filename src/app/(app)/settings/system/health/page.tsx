@@ -48,7 +48,7 @@ export default async function AdminHealthCenterPage() {
         <AlertTitle>Overall status: {overall.label}</AlertTitle>
         <AlertDescription>
           Generated {new Date(report.generatedAt).toLocaleString()}. Unknown is intentionally not
-          treated as healthy. Confirm external backup, provider, cluster, and database telemetry
+          treated as healthy. Confirm external provider, cluster, database, and recovery telemetry
           before declaring the installation healthy.
         </AlertDescription>
       </Alert>

@@ -107,7 +107,7 @@ Reproduce the repository build order: install the lockfile, copy the schema/migr
 
 ### Pages are slow or time out
 
-Correlate application request/query latency with PostgreSQL connections, pool wait, slow queries, locks, CPU, memory, storage latency, and table/index growth. The Admin **Settings → Performance Monitoring** page shows selected SLA-query observations; it is not a complete database/APM system.
+Correlate application request/query latency with PostgreSQL connections, pool wait, slow queries, locks, CPU, memory, storage latency, and table/index growth. The Admin **Settings → Health Center** page shows selected SLA-query observations; it is not a complete database/APM system.
 
 ```sql
 SHOW max_connections;

@@ -150,8 +150,6 @@ OpenTelemetry variables are not consumed by the v1.3 application code and are th
 | `DISABLE_PWA`                    | `false`      | Set to `true` at build time to disable production service-worker generation, PWA installation, push, and supported offline behavior. |
 | `EMAIL_FROM`                     | derived      | Fallback sender address when code paths do not receive a provider-specific From address; prefer an explicitly verified provider identity. |
 | `MIGRATION_RECOVERY_MODE`        | `safe`       | Startup recovery policy. Do not use `aggressive` without database-owner review of the failed migration and actual schema state. |
-| `OPSKNIGHT_BACKUP_LAST_SUCCESS_AT` | unset      | ISO-8601 timestamp reported by the external backup controller after a successful backup; displayed as attestation in Health Center. |
-| `OPSKNIGHT_RESTORE_TEST_LAST_SUCCESS_AT` | unset | ISO-8601 timestamp recorded only after an isolated restore test succeeds; displayed as attestation in Health Center. |
 
 ## Authentication and integration overrides
 
