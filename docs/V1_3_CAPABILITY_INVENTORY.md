@@ -100,7 +100,7 @@ The documentation maintainer owns inventory state and link/navigation quality on
 | API keys and scopes                         | Admin, API consumer         | API-key settings/routes/models                    | Revise   | API authentication guide                         | Contract             | 5, 6  |
 | Audit log                                   | Admin, security reviewer    | audit page/model/writers                          | Complete | `v1.3/administration/audit-logs.md`              | Operations/reference | 5     |
 | System logs                                 | Admin, operator             | system-logs page and logger                       | Complete | `v1.3/administration/system-logs.md`             | Troubleshooting      | 5     |
-| Secrets, encryption, HTTPS, proxies         | Security reviewer, operator | configuration/security libraries                  | Revise   | security and deployment guides                   | Hardening            | 5     |
+| Secrets, encryption, HTTPS, proxies         | Security reviewer, operator | configuration/security libraries                  | Complete | security and deployment guides                   | Hardening            | 5     |
 
 ## Published automation contracts
 
