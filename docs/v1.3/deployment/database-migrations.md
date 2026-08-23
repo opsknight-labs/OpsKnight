@@ -1,5 +1,5 @@
 ---
-order: 6
+order: 7
 title: Database Migrations
 description: Understand startup migration behavior, verify schema state, and recover safely from failures
 ---

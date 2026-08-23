@@ -1,7 +1,7 @@
 ---
 title: Event Logs
 description: Review incident lifecycle history and test Events API ingestion
-order: 10
+order: 13
 ---
 
 # Event Logs

@@ -2,7 +2,7 @@
 title: Webhook authentication and signatures
 description: Exact inbound integration authentication, optional provider signatures, Slack verification, and outbound signature formats
 version: v1.3
-order: 2
+order: 4
 ---
 
 # Webhook authentication and signatures

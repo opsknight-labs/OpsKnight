@@ -1,5 +1,5 @@
 ---
-order: 7
+order: 8
 title: Backup and Restore
 description: Back up PostgreSQL and critical secrets, restore safely, and prove application recovery
 ---

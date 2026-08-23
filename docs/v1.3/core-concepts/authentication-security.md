@@ -1,5 +1,5 @@
 ---
-order: 13
+order: 17
 title: Authentication and session security
 description: Understand local and OIDC identity, login protection, sessions, revocation, audit evidence, and v1.3 boundaries.
 ---

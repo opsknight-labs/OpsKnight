@@ -1,5 +1,5 @@
 ---
-order: 5
+order: 6
 title: Monitoring OpsKnight
 description: Monitor health, database readiness, logs, resources, scheduled work, and synthetic incident delivery.
 ---

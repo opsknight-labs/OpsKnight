@@ -1,5 +1,5 @@
 ---
-order: 14
+order: 18
 title: Scalability and capacity planning
 description: Measure OpsKnight capacity, scale the shipped runtime safely, and prove workload limits before production.
 ---

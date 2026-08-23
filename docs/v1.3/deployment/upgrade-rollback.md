@@ -1,5 +1,5 @@
 ---
-order: 8
+order: 10
 title: Upgrade and Rollback
 description: Upgrade application and schema together, validate service behavior, and choose a safe rollback path
 ---

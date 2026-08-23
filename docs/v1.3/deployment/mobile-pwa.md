@@ -1,5 +1,5 @@
 ---
-order: 4
+order: 5
 title: Mobile PWA
 description: Install and operate the mobile experience, web push, local app lock, and supported offline actions
 ---

@@ -1,4 +1,5 @@
 ---
+order: 2
 title: PagerDuty Events API v2 ingest
 description: Ingest adapter for Events API v2 payloads. Change the destination URL. Not a PagerDuty product.
 version: v1.3

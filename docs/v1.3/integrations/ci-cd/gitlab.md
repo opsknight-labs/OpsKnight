@@ -1,5 +1,5 @@
 ---
-order: 2
+order: 3
 title: GitLab
 description: Route GitLab pipeline, job, merge request, deployment, issue, incident, and alert webhooks into OpsKnight.
 ---

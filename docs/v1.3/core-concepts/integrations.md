@@ -1,7 +1,7 @@
 ---
 title: How integrations work
 description: Understand inbound routing, authentication, signing, normalization, deduplication, recovery, and safe credential operations.
-order: 9
+order: 12
 ---
 
 # How integrations work

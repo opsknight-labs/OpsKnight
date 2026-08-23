@@ -1,4 +1,5 @@
 ---
+order: 4
 title: Zabbix Integration Guide
 description: Configure Zabbix Webhook Media Types to trigger and auto-resolve OpsKnight incidents.
 version: v1.3

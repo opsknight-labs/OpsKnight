@@ -1,7 +1,7 @@
 ---
 title: Incident Templates
 description: Standardize manual incident creation with reusable defaults
-order: 7
+order: 8
 ---
 
 # Incident Templates

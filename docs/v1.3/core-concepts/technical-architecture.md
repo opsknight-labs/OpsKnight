@@ -1,5 +1,5 @@
 ---
-order: 5
+order: 19
 title: Technical architecture
 description: Runtime topology, event processing, background work, durability boundaries, and scaling behavior in OpsKnight v1.3
 ---
