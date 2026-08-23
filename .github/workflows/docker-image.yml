@@ -210,7 +210,6 @@ jobs:
           tags: ${{ steps.meta_test_pr.outputs.tags }}
           labels: ${{ steps.meta_test_pr.outputs.labels }}
           cache-from: type=gha,scope=opsknight-main-amd64
-          cache-to: type=gha,scope=opsknight-pr-${{ github.event.pull_request.number }},mode=max
           provenance: false
           sbom: false
 
