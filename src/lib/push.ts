@@ -138,12 +138,34 @@ export async function sendPush(
           throw new Error('Malformed subscription object');
         }
       } catch {
-        await prisma.userDevice.delete({ where: { id: device.id } });
+        await prisma.userDevice.deleteMany({ where: { id: device.id } });
+        const remaining = await prisma.userDevice.count({
+          where: { userId: options.userId },
+        });
+        if (remaining === 0) {
+          await prisma.user.update({
+            where: { id: options.userId },
+            data: { pushNotificationsEnabled: false },
+          });
+        }
         errorMessages.push(`Device ${device.deviceId}: Corrupted token purged`);
         return;
       }
 
       try {
+        let parsedActions: unknown = undefined;
+        if (options.data?.actions) {
+          if (Array.isArray(options.data.actions)) {
+            parsedActions = options.data.actions;
+          } else if (typeof options.data.actions === 'string') {
+            try {
+              parsedActions = JSON.parse(options.data.actions);
+            } catch {
+              parsedActions = undefined;
+            }
+          }
+        }
+
         const payload = JSON.stringify({
           title: options.title,
           body: options.body,
@@ -151,7 +173,7 @@ export async function sendPush(
           icon: '/icons/app-icon-192.png',
           badge: options.data?.badge || '/icons/app-icon-192.png',
           url: options.data?.url || '/m',
-          actions: options.data?.actions ? JSON.parse(options.data.actions) : undefined,
+          actions: parsedActions,
         });
         let sent = false;
         let lastErrorMessage = 'Unknown error';
@@ -178,7 +200,7 @@ export async function sendPush(
             lastErrorMessage = errorMessage;
 
             if (statusCode === 410 || statusCode === 404) {
-              await prisma.userDevice.delete({ where: { id: device.id } });
+              await prisma.userDevice.deleteMany({ where: { id: device.id } });
               const remaining = await prisma.userDevice.count({
                 where: { userId: options.userId },
               });
@@ -219,7 +241,7 @@ export async function sendPush(
             : 'Unknown error';
 
         if (statusCode === 410 || statusCode === 404) {
-          await prisma.userDevice.delete({ where: { id: device.id } });
+          await prisma.userDevice.deleteMany({ where: { id: device.id } });
           const remaining = await prisma.userDevice.count({ where: { userId: options.userId } });
           if (remaining === 0) {
             await prisma.user.update({

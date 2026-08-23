@@ -17,7 +17,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
     runtimeCaching: [
       {
         urlPattern:
-          /^\/api\/(auth|user|notifications|incidents|admin|settings|teams|schedules|services)\/.*/i,
+          /^\/api\/(auth|user|notifications|incidents|admin|settings|teams|schedules|services|search|dashboards|sidebar-stats|events|audit|reports|sla|sla-definitions|avatar|health)(\/.*)?$/i,
         handler: 'NetworkOnly',
         options: {
           cacheName: 'no-cache-authenticated-apis',

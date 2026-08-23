@@ -49,10 +49,11 @@ The end time must be after the start. Hours use `0` through `23`; week-day value
 
 - Daily handoff: rotation length `24`, no shorter shift length.
 - Weekly handoff: rotation length `168`.
-- Twelve-hour rotation: rotation length `12`.
+- Twelve-hour rotation: rotation length `12` (automatically calendar-anchored to the schedule timezone to eliminate wall-clock drift across Daylight Saving Time transitions).
+- Eight-hour rotation: rotation length `8`.
 - Business-hours-only slot: set a restriction and confirm final coverage is supplied by another layer outside it.
 
-These values are examples, not presets. Preview the result rather than assuming a duration produces the intended local handoff through daylight-saving changes.
+These values are examples, not presets. Preview the result in the timeline rather than assuming a duration produces the intended local handoff through daylight-saving changes. Sub-daily integer divisors of 24h (12h, 8h, 6h) are anchored to local calendar days in the schedule timezone.
 
 ## Manage participants
 

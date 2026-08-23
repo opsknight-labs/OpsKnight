@@ -26,6 +26,14 @@ export async function POST(req: NextRequest) {
     const deviceId = subscription.endpoint;
     const token = JSON.stringify(subscription);
 
+    // Remove any legacy subscriptions on this endpoint from other users on shared browsers
+    await prisma.userDevice.deleteMany({
+      where: {
+        deviceId,
+        userId: { not: session.user.id },
+      },
+    });
+
     await prisma.userDevice.upsert({
       where: {
         userId_deviceId: {

@@ -224,6 +224,13 @@ function generateLayerBlocks(
         index * (layer.rotationLengthHours / 24),
         timeZone
       );
+    } else if (layer.rotationLengthHours < 24 && 24 % layer.rotationLengthHours === 0) {
+      // Calendar-anchored math for sub-daily integer factors of 24 (12h, 8h, 6h, 4h, 2h, 1h)
+      const totalHours = index * layer.rotationLengthHours;
+      const dayOffset = Math.floor(totalHours / 24);
+      const hourOffset = totalHours % 24;
+      const dayBase = addCalendarDaysInTimeZone(layerStart, dayOffset, timeZone);
+      blockStart = new Date(dayBase.getTime() + hourOffset * 3600000);
     } else {
       const rotationStartTime = layerStart.getTime() + index * rotationMs;
       blockStart = new Date(rotationStartTime);
@@ -503,12 +510,7 @@ export function getFinalScheduleBlocks(
   const merged: OnCallBlock[] = [];
   for (const block of result) {
     const last = merged[merged.length - 1];
-    if (
-      last &&
-      last.userId === block.userId &&
-      last.end.getTime() === block.start.getTime() &&
-      last.layerId === block.layerId
-    ) {
+    if (last && last.userId === block.userId && last.end.getTime() === block.start.getTime()) {
       last.end = block.end;
     } else {
       merged.push({ ...block });
