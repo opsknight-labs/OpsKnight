@@ -18,19 +18,18 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # GHCR image names must be lowercase; use the app name (lowercased).
-  # "test" channel image (always updated from main)
   IMAGE_NAME_TEST: ghcr.io/${{ github.repository_owner }}/opsknight-test
-  # "release" channel image (published only from version tags)
   IMAGE_NAME_RELEASE: ghcr.io/${{ github.repository_owner }}/opsknight
 
 jobs:
   build:
-    # Pin runner for stability.
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -69,7 +68,6 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME_RELEASE }}
           tags: |
-            # Publishes: opsknight:latest + version tags from git tags (e.g. v1.2.3)
             type=raw,value=latest
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -82,7 +80,6 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          # PR validation should be fast/reliable; multi-arch builds are validated on main/tag.
           platforms: linux/amd64
           push: false
           tags: ${{ steps.meta_test_pr.outputs.tags }}
@@ -98,8 +95,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          # Fastest build: amd64 only.
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta_test_main.outputs.tags }}
           labels: ${{ steps.meta_test_main.outputs.labels }}
@@ -114,8 +110,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          # Fastest build: amd64 only.
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta_release_tag.outputs.tags }}
           labels: ${{ steps.meta_release_tag.outputs.labels }}
