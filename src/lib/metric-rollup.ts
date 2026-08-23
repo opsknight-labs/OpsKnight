@@ -740,7 +740,11 @@ export async function backfillRollups(
 
   let count = 0;
   while (current <= end) {
-    await generateDailyRollup(current, serviceId);
+    if (serviceId) {
+      await generateDailyRollup(current, serviceId);
+    } else {
+      await generateAllDailyRollups(current);
+    }
     current.setUTCDate(current.getUTCDate() + 1);
     count++;
   }

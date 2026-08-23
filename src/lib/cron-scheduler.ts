@@ -156,7 +156,11 @@ async function getNextScheduledTime(): Promise<Date> {
         select: { scheduledAt: true },
       }),
       prisma.incident.findFirst({
-        where: { status: { not: 'RESOLVED' } },
+        where: {
+          status: 'OPEN',
+          acknowledgedAt: null,
+          service: { serviceNotifyOnSlaBreach: true },
+        },
         orderBy: { createdAt: 'asc' },
         select: {
           createdAt: true,
@@ -190,7 +194,7 @@ async function getNextScheduledTime(): Promise<Date> {
     if (
       nextSlaBreach &&
       !nextSlaBreach.acknowledgedAt &&
-      nextSlaBreach.service.serviceNotifyOnSlaBreach
+      nextSlaBreach.service?.serviceNotifyOnSlaBreach
     ) {
       const createdAt = new Date(nextSlaBreach.createdAt).getTime();
       const ackWarningMs = 5 * 60 * 1000;
@@ -205,9 +209,17 @@ async function getNextScheduledTime(): Promise<Date> {
       return new Date(Date.now() + MAX_DELAY_MS);
     }
 
-    return new Date(Math.min(...validTimes));
+    // Return the earliest scheduled time, bounded by MIN_DELAY and MAX_DELAY
+    const earliestTime = Math.min(...validTimes);
+    const now = Date.now();
+    const delay = Math.max(MIN_DELAY_MS, Math.min(MAX_DELAY_MS, earliestTime - now));
+
+    return new Date(now + delay);
   } catch (error) {
-    logger.error('[Cron] Failed to query next scheduled time', { error });
+    logger.error('[Cron] Error calculating next scheduled time, using fallback', {
+      component: 'cron-scheduler',
+      error,
+    });
     return new Date(Date.now() + MAX_DELAY_MS);
   }
 }
@@ -242,11 +254,9 @@ function scheduleNextRun(targetTime: Date) {
  * Execute one cron cycle
  */
 async function runOnce() {
-  // Try to acquire lock
-  const hasLock = await acquireLock();
-  if (!hasLock) {
-    // Another worker is running, schedule retry
-    scheduleNextRun(new Date(Date.now() + MIN_DELAY_MS));
+  const isLeader = await acquireLock();
+  if (!isLeader) {
+    logger.debug('[Cron] Not the leader, skipping tick');
     return;
   }
 
@@ -270,12 +280,9 @@ async function runOnce() {
   }, 30_000);
 
   try {
-    // Process tasks in parallel groups for better throughput
-    // Group 1: Critical real-time tasks (escalations + jobs)
-    const [escalationResult, jobResult] = await Promise.all([
-      processPendingEscalations(),
-      processPendingJobs(100, 15), // Increased limit and concurrency for scale
-    ]);
+    // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
+    const jobResult = await processPendingJobs(100, 15);
+    const escalationResult = await processPendingEscalations();
 
     logger.info('[Cron] Critical tasks processed', {
       escalations: { processed: escalationResult.processed, total: escalationResult.total },

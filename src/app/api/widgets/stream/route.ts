@@ -54,13 +54,15 @@ export async function GET(request: Request) {
       includeAllTime: range === 'all',
     };
 
+    let cleanup: () => void = () => {};
+
     const stream = new ReadableStream({
       async start(controller) {
         let isClosed = false;
         let intervalId: NodeJS.Timeout | null = null;
         let isUpdating = false;
 
-        const cleanup = () => {
+        cleanup = () => {
           isClosed = true;
           if (intervalId) {
             clearInterval(intervalId);
@@ -111,7 +113,7 @@ export async function GET(request: Request) {
         });
       },
       cancel() {
-        // Stream canceled by consumer
+        cleanup();
       },
     });
 

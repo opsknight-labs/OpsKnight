@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { assertAdminOrResponder } from '@/lib/rbac';
 import { createInAppNotifications, getScheduleUserIds } from '@/lib/in-app-notifications';
-import { parseDateTimeInTimeZone } from '@/lib/timezone';
+import { parseDateTimeInTimeZone, isValidTimeZone } from '@/lib/timezone';
 import { assertScheduleNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 type ScheduleFormState = {
   error?: string | null;
@@ -23,18 +23,33 @@ async function notifyScheduleMembers(
   scheduleId: string,
   title: string,
   message: string,
-  userIds?: string[]
+  recipientsOrActor?: string[] | string
 ) {
-  const recipients = userIds && userIds.length > 0 ? userIds : await getScheduleUserIds(scheduleId);
+  try {
+    let targetUserIds: string[];
+    if (Array.isArray(recipientsOrActor)) {
+      targetUserIds = recipientsOrActor;
+    } else {
+      const allUserIds = await getScheduleUserIds(scheduleId);
+      targetUserIds =
+        typeof recipientsOrActor === 'string'
+          ? allUserIds.filter(id => id !== recipientsOrActor)
+          : allUserIds;
+    }
 
-  await createInAppNotifications({
-    userIds: recipients,
-    type: 'SCHEDULE',
-    title,
-    message,
-    entityType: 'SCHEDULE',
-    entityId: scheduleId,
-  });
+    if (targetUserIds.length > 0) {
+      await createInAppNotifications({
+        userIds: targetUserIds,
+        type: 'SCHEDULE',
+        title,
+        message,
+        entityType: 'SCHEDULE',
+        entityId: scheduleId,
+      });
+    }
+  } catch (_error) {
+    // Non-critical, continue
+  }
 }
 
 export async function createSchedule(
@@ -56,6 +71,10 @@ export async function createSchedule(
 
   if (!name) {
     return { error: 'Schedule name is required.' };
+  }
+
+  if (timeZone && !isValidTimeZone(timeZone)) {
+    return { error: 'Invalid IANA timezone specified.' };
   }
 
   try {
@@ -94,6 +113,10 @@ export async function updateSchedule(
 
   if (!name) {
     return { error: 'Schedule name is required.' };
+  }
+
+  if (timeZone && !isValidTimeZone(timeZone)) {
+    return { error: 'Invalid IANA timezone specified.' };
   }
 
   try {
@@ -350,8 +373,7 @@ export async function addLayerUser(
   await notifyScheduleMembers(
     layer.scheduleId,
     'Schedule updated',
-    `You were added to ${scheduleName}`,
-    [userId]
+    `You were added to ${scheduleName}`
   );
 
   revalidatePath(`/schedules/${layer.scheduleId}`);

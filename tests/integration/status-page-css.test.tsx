@@ -13,11 +13,27 @@ const mockPrisma = vi.hoisted(() => ({
   },
   incident: {
     findMany: vi.fn(),
+    count: vi.fn().mockResolvedValue(0),
+  },
+  slaPolicy: {
+    findFirst: vi.fn().mockResolvedValue(null),
   },
 }));
 
 vi.mock('@/lib/prisma', () => ({
   default: mockPrisma,
+}));
+
+vi.mock('@/lib/sla-server', () => ({
+  calculateSLAMetrics: vi.fn().mockResolvedValue({
+    dynamicStatus: 'OPERATIONAL',
+    activeIncidents: 0,
+    totalIncidents: 0,
+    serviceMetrics: [],
+  }),
+  calculateMultiServiceUptime: vi.fn().mockResolvedValue(new Map()),
+  getExternalIncidentStatus: vi.fn().mockReturnValue('investigating'),
+  getExternalStatusLabel: vi.fn().mockReturnValue('Investigating'),
 }));
 
 // Mock child components to simplify testing

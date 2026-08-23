@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
       return new Response('Unauthorized', { status: 401 });
     }
 
+    let cleanup: () => void = () => {};
+
     // Create a readable stream for SSE with change detection
     const stream = new ReadableStream({
       async start(controller) {
@@ -24,7 +26,7 @@ export async function GET(req: NextRequest) {
         let pollInterval: NodeJS.Timeout | null = null;
         let isPolling = false;
 
-        const cleanup = () => {
+        cleanup = () => {
           isClosed = true;
           if (pollInterval) {
             clearInterval(pollInterval);
@@ -135,7 +137,7 @@ export async function GET(req: NextRequest) {
         });
       },
       cancel() {
-        // Consumer canceled the stream
+        cleanup();
       },
     });
 

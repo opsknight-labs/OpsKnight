@@ -132,7 +132,10 @@ function splitBlockByRestrictions(
 
     // Check hour restriction
     if (allowed && startHour != null && endHour != null) {
-      if (startHour <= endHour) {
+      if (startHour === endHour) {
+        // startHour === endHour represents an unrestricted 24-hour window
+        allowed = true;
+      } else if (startHour < endHour) {
         // Normal range (e.g., 09:00 - 17:00)
         if (hour < startHour || hour >= endHour) allowed = false;
       } else {

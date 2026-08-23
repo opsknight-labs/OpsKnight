@@ -286,12 +286,19 @@ export const CircuitBreakers = {
       timeout: 10000,
     }),
 
-  webhook: (url: string) =>
-    getCircuitBreaker(`webhook:${new URL(url).hostname}`, {
+  webhook: (url: string) => {
+    let host = 'generic';
+    try {
+      host = new URL(url).hostname;
+    } catch {
+      host = 'invalid-url';
+    }
+    return getCircuitBreaker(`webhook:${host}`, {
       failureThreshold: 3,
       resetTimeout: 60000, // 1 minute
       timeout: 10000,
-    }),
+    });
+  },
 
   push: () =>
     getCircuitBreaker('push', {

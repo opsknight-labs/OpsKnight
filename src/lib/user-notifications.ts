@@ -163,6 +163,24 @@ export async function sendUserNotification(
     }
   }
 
+  // Fallback: If all primary specified channels failed, attempt delivery via user's other available channels
+  if (channelsUsed.length === 0 && userChannels.length > 0) {
+    const fallbackChannels = userChannels.filter(ch => !channels.includes(ch));
+    for (const fbChannel of fallbackChannels) {
+      const fbResult = await sendNotification(incidentId, userId, fbChannel, message);
+      if (fbResult.success) {
+        channelsUsed.push(fbChannel);
+        logger.warn(`[UserNotification] Fallback delivery succeeded via ${fbChannel}`, {
+          incidentId,
+          userId,
+        });
+        break;
+      } else {
+        errors.push(`Fallback ${fbChannel}: ${fbResult.error || 'Failed'}`);
+      }
+    }
+  }
+
   return {
     success: channelsUsed.length > 0,
     channelsUsed,

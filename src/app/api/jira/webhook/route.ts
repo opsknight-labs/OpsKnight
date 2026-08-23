@@ -36,11 +36,8 @@ async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
   if (!provided) return false;
 
   try {
-    const { timingSafeEqual } = await import('crypto');
-    const secretBuf = Buffer.from(secret, 'utf-8');
-    const providedBuf = Buffer.from(provided, 'utf-8');
-    if (secretBuf.length !== providedBuf.length) return false;
-    return timingSafeEqual(secretBuf, providedBuf);
+    const { safeCompare } = await import('@/lib/integrations/signature-verification');
+    return safeCompare(secret, provided);
   } catch {
     return false;
   }

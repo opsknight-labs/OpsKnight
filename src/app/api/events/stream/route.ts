@@ -81,6 +81,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  let cleanup: () => void = () => {};
+
   // Create a ReadableStream for SSE with change detection
   const stream = new ReadableStream({
     async start(controller) {
@@ -91,7 +93,7 @@ export async function GET(req: NextRequest) {
       let interval: NodeJS.Timeout | null = null;
       let isChecking = false;
 
-      const cleanup = () => {
+      cleanup = () => {
         isClosed = true;
         if (interval) {
           clearInterval(interval);
@@ -219,7 +221,7 @@ export async function GET(req: NextRequest) {
       });
     },
     cancel() {
-      // Stream canceled by consumer
+      cleanup();
     },
   });
 

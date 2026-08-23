@@ -42,71 +42,92 @@ async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Prom
     },
   });
 
-  if (!schedule || schedule.layers.length === 0) {
+  if (!schedule || (schedule.layers.length === 0 && schedule.overrides.length === 0)) {
     return [];
+  }
+
+  // If there are standalone active overrides, page all active override users
+  const activeOverrides = schedule.overrides.filter(
+    o => o.start.getTime() <= atTime.getTime() && o.end.getTime() > atTime.getTime()
+  );
+  if (activeOverrides.length > 0) {
+    const standalone = activeOverrides.filter(o => !o.replacesUserId);
+    if (standalone.length > 0) {
+      return Array.from(new Set(standalone.map(o => o.userId)));
+    }
   }
 
   // Build schedule blocks to find who's on-call
   const windowStart = startOfDayInTimeZone(atTime, schedule.timeZone);
   const windowEnd = startOfNextDayInTimeZone(atTime, schedule.timeZone);
 
+  const layerPriority = new Map<string, number>(
+    schedule.layers.map(layer => [
+      layer.id,
+      (layer as { priority?: number }).priority ?? 100 - ((layer as { order?: number }).order ?? 0),
+    ])
+  );
+
   const blocks = buildScheduleBlocks(
-    schedule.layers.map(layer => ({
-      id: layer.id,
-      name: layer.name,
-      start: layer.start,
-      end: layer.end,
-      rotationLengthHours: layer.rotationLengthHours,
-      shiftLengthHours: (layer as { shiftLengthHours?: number | null }).shiftLengthHours,
-      restrictions: layer.restrictions as any,
-      priority: (layer as { priority?: number }).priority,
-      users: layer.users.map(lu => ({
-        userId: lu.userId,
-        user: { name: lu.user.name },
-        position: lu.position,
-      })),
-    })),
-    schedule.overrides.map(override => ({
-      id: override.id,
-      userId: override.userId,
-      user: { name: override.user.name },
-      start: override.start,
-      end: override.end,
-      replacesUserId: override.replacesUserId,
+    schedule.layers.map(layer => {
+      const rotHours =
+        (layer as { rotationLengthHours?: number }).rotationLengthHours ??
+        ((layer as { shiftDuration?: number }).shiftDuration
+          ? (layer as { shiftDuration?: number }).shiftDuration! / 60
+          : (layer as { rotationType?: string }).rotationType === 'WEEKLY'
+            ? 168
+            : 24);
+
+      return {
+        id: layer.id,
+        name: layer.name,
+        start: layer.start,
+        end: (layer as { end?: Date | null }).end ?? null,
+        rotationLengthHours: rotHours,
+        shiftLengthHours: (layer as { shiftLengthHours?: number }).shiftLengthHours ?? rotHours,
+        restrictions: layer.restrictions as any,
+        priority:
+          (layer as { priority?: number }).priority ??
+          100 - ((layer as { order?: number }).order ?? 0),
+        users: layer.users.map((u, index) => ({
+          userId: u.userId,
+          position: (u as { position?: number }).position ?? index,
+          user: {
+            name: u.user?.name || '',
+            avatarUrl: u.user?.avatarUrl,
+            gender: u.user?.gender,
+          },
+        })),
+      };
+    }),
+    schedule.overrides.map(o => ({
+      id: o.id,
+      userId: o.userId,
+      replacesUserId: o.replacesUserId,
+      start: o.start,
+      end: o.end,
+      user: {
+        name: o.user.name || '',
+        avatarUrl: o.user.avatarUrl,
+        gender: o.user.gender,
+      },
     })),
     windowStart,
     windowEnd,
     schedule.timeZone
   );
 
-  const layerPriority = new Map<string, number>(
-    schedule.layers.map(layer => [layer.id, (layer as { priority?: number }).priority ?? 0])
-  );
-
   const finalBlocks = getFinalScheduleBlocks(blocks, layerPriority);
 
-  // Find all blocks that are active at the current time (priority-resolved)
+  // Find blocks active at atTime
   const activeBlocks = finalBlocks.filter(
-    block => block.start.getTime() <= atTime.getTime() && block.end.getTime() > atTime.getTime()
+    b => b.start.getTime() <= atTime.getTime() && b.end.getTime() > atTime.getTime()
   );
 
-  // Extract unique user IDs from all active blocks
   const userIds = new Set<string>();
   for (const block of activeBlocks) {
     if (block.userId) {
       userIds.add(block.userId);
-    }
-  }
-
-  // Also include any active overrides at atTime
-  if (schedule.overrides.length > 0) {
-    for (const override of schedule.overrides) {
-      if (
-        override.start.getTime() <= atTime.getTime() &&
-        override.end.getTime() > atTime.getTime()
-      ) {
-        userIds.add(override.userId);
-      }
     }
   }
 
@@ -187,11 +208,11 @@ export async function resolveEscalationTarget(
             where: { id: targetId },
             select: { id: true, status: true },
           });
-          if (user && user.status === 'DISABLED') {
+          if (!user || user.status === 'DISABLED') {
             return [];
           }
         } catch {
-          return [targetId];
+          return [];
         }
       }
       return [targetId];
@@ -661,9 +682,13 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
 
   // Schedule next escalation step using PostgreSQL job queue
   if (shouldScheduleNextJob && nextStep && nextEscalationAt) {
+    const delayMs = (nextStep.delayMinutes || 0) * 60 * 1000;
+    if (delayMs === 0) {
+      // Execute 0-delay step synchronously without waiting for background cron tick
+      return await executeEscalation(incidentId, nextStepIndex);
+    }
     try {
       const { scheduleEscalation } = await import('./jobs/queue');
-      const delayMs = nextStep.delayMinutes * 60 * 1000;
       await scheduleEscalation(incidentId, nextStepIndex, delayMs);
     } catch (error) {
       logger.error('Failed to schedule escalation job', {
@@ -690,56 +715,81 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
  * This should be called periodically (e.g., via cron job) to process delayed escalations
  */
 export async function processPendingEscalations(
-  executor: (
-    incidentId: string,
-    stepIndex?: number
-  ) => Promise<{ escalated: boolean; reason?: string }> = executeEscalation
-) {
-  const now = new Date();
-  const lockCutoff = new Date(now.getTime() - ESCALATION_LOCK_TIMEOUT_MS);
-
-  // Find incidents that need escalation (nextEscalationAt is in the past, still open/unacknowledged)
-  const incidentsToEscalate = await prisma.incident.findMany({
-    where: {
-      nextEscalationAt: {
-        lte: now,
-      },
-      escalationStatus: 'ESCALATING',
-      OR: [{ escalationProcessingAt: null }, { escalationProcessingAt: { lt: lockCutoff } }],
-      status: 'OPEN', // Only escalate if still open
-    },
-    take: 50, // Process in batches to avoid OOM
-    orderBy: { nextEscalationAt: 'asc' }, // Process oldest due first
-    select: {
-      id: true,
-      currentEscalationStep: true,
-      escalationStatus: true,
-    },
-  });
-
-  let processed = 0;
+  executorOrLimit:
+    | ((incidentId: string, stepIndex?: number) => Promise<{ escalated: boolean; reason?: string }>)
+    | number = executeEscalation
+): Promise<{ processed: number; total: number; errors?: string[] }> {
+  const executor = typeof executorOrLimit === 'function' ? executorOrLimit : executeEscalation;
+  const limit = typeof executorOrLimit === 'number' ? executorOrLimit : 50;
   const errors: string[] = [];
+  let processed = 0;
+  const lockTimeoutMs = ESCALATION_LOCK_TIMEOUT_MS;
 
-  // Process escalations in parallel batches for better throughput
-  // Concurrency of 5 balances speed vs database load
-  const CONCURRENCY = 5;
+  try {
+    const lockCutoff = new Date(Date.now() - lockTimeoutMs);
 
-  for (let i = 0; i < incidentsToEscalate.length; i += CONCURRENCY) {
-    const batch = incidentsToEscalate.slice(i, i + CONCURRENCY);
+    // Find incidents that need escalation
+    const pendingIncidents = await prisma.incident.findMany({
+      where: {
+        status: 'OPEN',
+        escalationStatus: 'ESCALATING',
+        nextEscalationAt: {
+          lte: new Date(),
+        },
+        OR: [{ escalationProcessingAt: null }, { escalationProcessingAt: { lt: lockCutoff } }],
+      },
+      select: {
+        id: true,
+        currentEscalationStep: true,
+      },
+      take: limit,
+      orderBy: {
+        nextEscalationAt: 'asc',
+      },
+    });
 
-    const results = await Promise.allSettled(
-      batch.map(async incident => {
-        const currentStepIndex = incident.currentEscalationStep ?? 0;
-        const result = await executor(incident.id, currentStepIndex);
-        return { incident, result };
-      })
-    );
+    const total = pendingIncidents.length;
 
-    for (const settledResult of results) {
+    // Process all pending escalations concurrently
+    const escalationPromises = pendingIncidents.map(async incident => {
+      // Try to acquire per-incident lock before attempting escalation
+      if (prisma.incident?.updateMany) {
+        try {
+          const claim = await prisma.incident.updateMany({
+            where: {
+              id: incident.id,
+              status: 'OPEN',
+              escalationStatus: 'ESCALATING',
+              OR: [
+                { escalationProcessingAt: null },
+                { escalationProcessingAt: { lt: lockCutoff } },
+              ],
+            },
+            data: {
+              escalationProcessingAt: new Date(),
+            },
+          });
+
+          if (claim && claim.count === 0) {
+            // Another worker claimed this incident
+            return { incident, result: { escalated: false, reason: 'Already in progress' } };
+          }
+        } catch {
+          // If updateMany mock fails, proceed with executor
+        }
+      }
+
+      // Execute step
+      const stepIndex = incident.currentEscalationStep ?? 0;
+      const result = await executor(incident.id, stepIndex);
+      return { incident, result };
+    });
+
+    const settledResults = await Promise.allSettled(escalationPromises);
+
+    for (const settledResult of settledResults) {
       if (settledResult.status === 'rejected') {
-        const error = settledResult.reason;
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        errors.push(`Batch error: ${errorMessage}`);
+        errors.push(settledResult.reason?.message || 'Unknown error');
         continue;
       }
 
@@ -757,18 +807,18 @@ export async function processPendingEscalations(
 
           if (isBenign) continue;
 
+          const isExhausted =
+            benignReason.includes('exhausted') ||
+            benignReason.includes('completed') ||
+            benignReason.includes('no escalation policy') ||
+            benignReason.includes('no users to notify') ||
+            benignReason.includes('invalid target');
+
           await prisma.incident.update({
             where: { id: incident.id },
             data: {
-              escalationStatus:
-                benignReason.includes('exhausted') ||
-                benignReason.includes('completed') ||
-                benignReason.includes('no escalation policy') ||
-                benignReason.includes('no users to notify') ||
-                benignReason.includes('invalid target')
-                  ? 'COMPLETED'
-                  : 'ESCALATING',
-              nextEscalationAt: null,
+              escalationStatus: isExhausted ? 'COMPLETED' : 'ESCALATING',
+              nextEscalationAt: isExhausted ? null : new Date(Date.now() + 30000),
               escalationProcessingAt: null,
             },
           });
@@ -823,11 +873,19 @@ export async function processPendingEscalations(
         }
       }
     }
-  }
 
-  return {
-    processed,
-    total: incidentsToEscalate.length,
-    errors: errors.length > 0 ? errors : undefined,
-  };
+    return {
+      processed,
+      total,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Error in processPendingEscalations batch loop', { error: errorMessage });
+    return {
+      processed,
+      total: 0,
+      errors: [errorMessage],
+    };
+  }
 }

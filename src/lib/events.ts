@@ -68,11 +68,12 @@ function truncateString(str: string, maxLength: number): string {
   return chars.slice(0, maxLength - 3).join('') + '...';
 }
 
-function truncateDedupKey(key: string): string {
-  if (key.length <= MAX_DEDUP_KEY_LENGTH) return key;
-  const hash = createHash('sha256').update(key).digest('hex').slice(0, 32);
+function truncateDedupKey(key: unknown): string {
+  const str = typeof key === 'string' ? key : String(key || 'default');
+  if (str.length <= MAX_DEDUP_KEY_LENGTH) return str;
+  const hash = createHash('sha256').update(str).digest('hex').slice(0, 32);
   const prefixLength = MAX_DEDUP_KEY_LENGTH - 33; // 32 hex chars + 1 underscore
-  return `${key.slice(0, prefixLength)}_${hash}`;
+  return `${str.slice(0, prefixLength)}_${hash}`;
 }
 
 export async function processEvent(

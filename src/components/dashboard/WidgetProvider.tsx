@@ -52,6 +52,7 @@ export function WidgetProvider({ children, initialData }: WidgetProviderProps) {
   const isMountedRef = useRef(true);
   const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY_MS);
   const reconnectAttemptsRef = useRef(0);
+  const connectRef = useRef<() => void>(() => {});
 
   /**
    * Cleans up SSE connection and timers
@@ -153,8 +154,7 @@ export function WidgetProvider({ children, initialData }: WidgetProviderProps) {
           reconnectTimeoutRef.current = setTimeout(() => {
             if (isMountedRef.current) {
               reconnectDelayRef.current *= RECONNECT_BACKOFF_MULTIPLIER;
-              // Re-trigger connect by forcing a state update
-              setConnectionState(prev => ({ ...prev }));
+              connectRef.current();
             }
           }, delay);
         }
@@ -169,20 +169,20 @@ export function WidgetProvider({ children, initialData }: WidgetProviderProps) {
     }
   }, [cleanup]);
 
-  // Initialize connection on mount and reconnect on state change (for retry)
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
+  // Initialize connection on mount
   useEffect(() => {
     isMountedRef.current = true;
-
-    // Only connect if not already connected
-    if (!connectionState.isConnected && eventSourceRef.current === null) {
-      connect();
-    }
+    connect();
 
     return () => {
       isMountedRef.current = false;
       cleanup();
     };
-  }, [connect, cleanup, connectionState]);
+  }, [connect, cleanup]);
 
   // Handle visibility change - reconnect when tab becomes visible
   useEffect(() => {

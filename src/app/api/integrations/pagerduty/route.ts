@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (paramId && (!providedKey || integration.key !== providedKey)) {
+    const { safeCompare } = await import('@/lib/integrations/signature-verification');
+    if (paramId && (!providedKey || !safeCompare(integration.key, providedKey))) {
       return new Response(JSON.stringify({ status: 'error', message: 'Invalid integration key' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },

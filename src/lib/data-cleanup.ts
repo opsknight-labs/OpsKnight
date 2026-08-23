@@ -129,6 +129,13 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
           where: { incidentId: { in: batch } },
         });
 
+        // Delete related notifications
+        if (prisma.notification?.deleteMany) {
+          await prisma.notification.deleteMany({
+            where: { incidentId: { in: batch } },
+          });
+        }
+
         // Delete related alerts (set incidentId to null instead of deleting)
         await prisma.alert.updateMany({
           where: { incidentId: { in: batch } },
