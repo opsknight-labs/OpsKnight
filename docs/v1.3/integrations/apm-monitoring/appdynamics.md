@@ -13,7 +13,7 @@ Receive health rule violations from AppDynamics.
 ## Endpoint
 
 ```
-POST /api/integrations/appdynamics?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/appdynamics?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/appdynamics?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **AppDynamics** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/appdynamics?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/appdynamics?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure AppDynamics
 
@@ -68,7 +68,7 @@ Dedup key is generated from `appdynamics-{incidentId}`.
 ### Using cURL
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/appdynamics?integrationId=YOUR_ID" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/appdynamics?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "summary": "Health Rule Violation",

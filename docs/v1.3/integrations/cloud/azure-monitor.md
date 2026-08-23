@@ -13,7 +13,7 @@ Receive alerts from Azure Monitor in OpsKnight.
 ## Endpoint
 
 ```
-POST /api/integrations/azure?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/azure?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/azure?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **Azure Monitor** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/azure?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/azure?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure Azure Monitor
 
@@ -94,7 +94,7 @@ Dedup key is generated from `data.essentials.alertId`.
 ### Using cURL
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/azure?integrationId=YOUR_ID" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/azure?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "data": {

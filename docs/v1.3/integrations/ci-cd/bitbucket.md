@@ -13,7 +13,7 @@ Monitor Bitbucket Pipelines and receive alerts for build failures.
 ## Endpoint
 
 ```
-POST /api/integrations/bitbucket?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/bitbucket?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/bitbucket?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **Bitbucket** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/bitbucket?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/bitbucket?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure Bitbucket
 

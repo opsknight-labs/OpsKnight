@@ -13,7 +13,7 @@ Receive outgoing webhooks from Splunk On-Call.
 ## Endpoint
 
 ```
-POST /api/integrations/splunk-oncall?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/splunk-oncall?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/splunk-oncall?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **Splunk On-Call** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/splunk-oncall?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/splunk-oncall?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure Splunk On-Call
 

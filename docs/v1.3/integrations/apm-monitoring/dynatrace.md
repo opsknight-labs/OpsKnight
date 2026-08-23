@@ -13,7 +13,7 @@ Receive problem notifications from Dynatrace.
 ## Endpoint
 
 ```
-POST /api/integrations/dynatrace?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/dynatrace?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/dynatrace?integrationId=YOUR_INTEGRATION_ID
 1. Go to **Service -> Integrations**.
 2. Add a **Dynatrace** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/dynatrace?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/dynatrace?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure Dynatrace
 

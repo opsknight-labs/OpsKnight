@@ -13,7 +13,7 @@ Receive alerts from Grafana (Legacy Alerting or Unified Alerting) and create inc
 ## Endpoint
 
 ```
-POST /api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -37,11 +37,11 @@ POST /api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID
 2. Click **+ Add contact point**
 3. Configure:
 
-| Field           | Value                                                                                   |
-| --------------- | --------------------------------------------------------------------------------------- |
-| **Name**        | `OpsKnight`                                                                             |
-| **Integration** | Webhook                                                                                 |
-| **URL**         | `https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID` |
+| Field           | Value                                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Name**        | `OpsKnight`                                                                                                                 |
+| **Integration** | Webhook                                                                                                                     |
+| **URL**         | `https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
 
 4. Click **Save contact point**
 5. Click **Test** to verify
@@ -52,11 +52,11 @@ POST /api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID
 2. Click **Add channel**
 3. Configure:
 
-| Field    | Value                                                                                   |
-| -------- | --------------------------------------------------------------------------------------- |
-| **Name** | `OpsKnight`                                                                             |
-| **Type** | webhook                                                                                 |
-| **URL**  | `https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID` |
+| Field    | Value                                                                                                                       |
+| -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Name** | `OpsKnight`                                                                                                                 |
+| **Type** | webhook                                                                                                                     |
+| **URL**  | `https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
 
 4. Click **Save**
 
@@ -202,7 +202,7 @@ Dedup keys are generated as:
 Send a test payload directly:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_ID" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Test Alert from Grafana",

@@ -13,7 +13,7 @@ Receive CloudWatch alarms in OpsKnight via Amazon SNS.
 ## Endpoint
 
 ```
-POST /api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -42,10 +42,10 @@ POST /api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID
 2. Click **Create subscription**
 3. Configure:
 
-| Field        | Value                                                                                      |
-| ------------ | ------------------------------------------------------------------------------------------ |
-| **Protocol** | HTTPS                                                                                      |
-| **Endpoint** | `https://YOUR_OPSKNIGHT_URL/api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID` |
+| Field        | Value                                                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Protocol** | HTTPS                                                                                                                          |
+| **Endpoint** | `https://YOUR_OPSKNIGHT_URL/api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
 
 4. Click **Create subscription**
 

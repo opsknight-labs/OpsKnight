@@ -20,4 +20,5 @@ Connect OpsKnight to your APM and observability stack to turn signals into incid
 - [Honeycomb](./honeycomb) — Integrate Honeycomb triggers with OpsKnight.
 - [Sentry](./sentry) — Receive Sentry issue alerts in OpsKnight
 - [Splunk Observability](./splunk-observability) — Integrate Splunk (SignalFx) detectors.
+
 <!-- integrations-list:end -->

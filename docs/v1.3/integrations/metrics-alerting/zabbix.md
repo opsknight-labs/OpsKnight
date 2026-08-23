@@ -46,62 +46,62 @@ https://your-opsknight-instance.com/api/integrations/zabbix?integrationId=YOUR_I
    - **Type**: `Webhook`
    - **Parameters**: Add the following parameter keys and values:
 
-| Parameter Key | Value (Zabbix Macro) |
-| :--- | :--- |
-| `event_id` | `{EVENT.ID}` |
-| `event_name` | `{EVENT.NAME}` |
-| `event_severity` | `{EVENT.SEVERITY}` |
-| `event_status` | `{EVENT.STATUS}` |
-| `event_value` | `{EVENT.VALUE}` |
-| `trigger_id` | `{TRIGGER.ID}` |
-| `trigger_description` | `{TRIGGER.DESCRIPTION}` |
-| `host_name` | `{HOST.NAME}` |
-| `host_ip` | `{HOST.IP}` |
-| `item_name` | `{ITEM.NAME}` |
-| `item_key` | `{ITEM.KEY}` |
-| `item_value` | `{ITEM.VALUE}` |
-| `event_tags` | `{EVENT.TAGS}` |
-| `event_url` | `{$ZABBIX.URL}/tr_events.php?triggerid={TRIGGER.ID}&eventid={EVENT.ID}` |
-| `integration_url` | `<PASTE YOUR OPSKNIGHT WEBHOOK URL HERE>` |
+| Parameter Key         | Value (Zabbix Macro)                                                    |
+| :-------------------- | :---------------------------------------------------------------------- |
+| `event_id`            | `{EVENT.ID}`                                                            |
+| `event_name`          | `{EVENT.NAME}`                                                          |
+| `event_severity`      | `{EVENT.SEVERITY}`                                                      |
+| `event_status`        | `{EVENT.STATUS}`                                                        |
+| `event_value`         | `{EVENT.VALUE}`                                                         |
+| `trigger_id`          | `{TRIGGER.ID}`                                                          |
+| `trigger_description` | `{TRIGGER.DESCRIPTION}`                                                 |
+| `host_name`           | `{HOST.NAME}`                                                           |
+| `host_ip`             | `{HOST.IP}`                                                             |
+| `item_name`           | `{ITEM.NAME}`                                                           |
+| `item_key`            | `{ITEM.KEY}`                                                            |
+| `item_value`          | `{ITEM.VALUE}`                                                          |
+| `event_tags`          | `{EVENT.TAGS}`                                                          |
+| `event_url`           | `{$ZABBIX.URL}/tr_events.php?triggerid={TRIGGER.ID}&eventid={EVENT.ID}` |
+| `integration_url`     | `<PASTE YOUR OPSKNIGHT WEBHOOK URL HERE>`                               |
 
 4. **Script**: Paste the following JavaScript handler into the **Script** text area:
 
 ```javascript
 try {
-    Zabbix.log(4, '[OpsKnight Webhook] Processing alert: ' + value);
+  Zabbix.log(4, '[OpsKnight Webhook] Processing alert: ' + value);
 
-    var params = JSON.parse(value);
-    var req = new HttpRequest();
+  var params = JSON.parse(value);
+  var req = new HttpRequest();
 
-    req.addHeader('Content-Type: application/json');
+  req.addHeader('Content-Type: application/json');
 
-    var payload = {
-        event_id: params.event_id,
-        event_name: params.event_name,
-        event_severity: params.event_severity,
-        event_status: params.event_status,
-        event_value: params.event_value,
-        trigger_id: params.trigger_id,
-        trigger_description: params.trigger_description,
-        host_name: params.host_name,
-        host_ip: params.host_ip,
-        item_name: params.item_name,
-        item_key: params.item_key,
-        item_value: params.item_value,
-        event_tags: params.event_tags,
-        event_url: params.event_url
-    };
+  var payload = {
+    event_id: params.event_id,
+    event_name: params.event_name,
+    event_severity: params.event_severity,
+    event_status: params.event_status,
+    event_value: params.event_value,
+    trigger_id: params.trigger_id,
+    trigger_description: params.trigger_description,
+    host_name: params.host_name,
+    host_ip: params.host_ip,
+    item_name: params.item_name,
+    item_key: params.item_key,
+    item_value: params.item_value,
+    event_tags: params.event_tags,
+    event_url: params.event_url,
+  };
 
-    var response = req.post(params.integration_url, JSON.stringify(payload));
+  var response = req.post(params.integration_url, JSON.stringify(payload));
 
-    if (req.getStatus() !== 200 && req.getStatus() !== 202) {
-        throw 'Request failed with status code ' + req.getStatus() + ': ' + response;
-    }
+  if (req.getStatus() !== 200 && req.getStatus() !== 202) {
+    throw 'Request failed with status code ' + req.getStatus() + ': ' + response;
+  }
 
-    return 'OK';
+  return 'OK';
 } catch (error) {
-    Zabbix.log(3, '[OpsKnight Webhook] Notification failed: ' + error);
-    throw 'OpsKnight notification failed: ' + error;
+  Zabbix.log(3, '[OpsKnight Webhook] Notification failed: ' + error);
+  throw 'OpsKnight notification failed: ' + error;
 }
 ```
 
@@ -144,8 +144,8 @@ OpsKnight accepts JSON payloads matching this schema:
 
 ## 🛠️ Troubleshooting
 
-| Symptom | Cause | Solution |
-| :--- | :--- | :--- |
-| `HTTP 401 Unauthorized` | Invalid or missing integration key | Verify the `integrationKey` query parameter or `x-integration-key` header matches the key in OpsKnight. |
-| `HTTP 400 Bad Request` | Missing required fields | Ensure the media type script passes valid JSON and at least `event_name` or `trigger_description`. |
-| Recovery not closing incident | `event_id` missing | Verify `{EVENT.ID}` is mapped in parameters so OpsKnight matches the deduplication key. |
+| Symptom                       | Cause                              | Solution                                                                                                |
+| :---------------------------- | :--------------------------------- | :------------------------------------------------------------------------------------------------------ |
+| `HTTP 401 Unauthorized`       | Invalid or missing integration key | Verify the `integrationKey` query parameter or `x-integration-key` header matches the key in OpsKnight. |
+| `HTTP 400 Bad Request`        | Missing required fields            | Ensure the media type script passes valid JSON and at least `event_name` or `trigger_description`.      |
+| Recovery not closing incident | `event_id` missing                 | Verify `{EVENT.ID}` is mapped in parameters so OpsKnight matches the deduplication key.                 |

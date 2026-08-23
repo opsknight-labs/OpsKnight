@@ -16,6 +16,7 @@ Detect failed deployments and pipeline issues before they impact users.
 - [GitLab CI/CD](./gitlab) — Track GitLab pipeline errors and auto-resolve upon successful subsequent builds.
 - [Bitbucket Pipelines](./bitbucket) — Receive Bitbucket Pipeline failure alerts in OpsKnight.
 - [Vercel Deployments](./vercel) — Monitor production deployments, build errors, and preview deployment failures.
+
 <!-- integrations-list:end -->
 
 ---

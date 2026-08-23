@@ -13,7 +13,7 @@ Receive alerts from GitHub Actions workflow failures, check failures, and deploy
 ## Endpoint
 
 ```
-POST /api/integrations/github?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/github?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -35,11 +35,11 @@ POST /api/integrations/github?integrationId=YOUR_INTEGRATION_ID
 2. Click **Add webhook**
 3. Configure:
 
-| Field            | Value                                                                                  |
-| ---------------- | -------------------------------------------------------------------------------------- |
-| **Payload URL**  | `https://YOUR_OPSKNIGHT_URL/api/integrations/github?integrationId=YOUR_INTEGRATION_ID` |
-| **Content type** | `application/json`                                                                     |
-| **Secret**       | Your signing secret (if using)                                                         |
+| Field            | Value                                                                                                                      |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Payload URL**  | `https://YOUR_OPSKNIGHT_URL/api/integrations/github?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
+| **Content type** | `application/json`                                                                                                         |
+| **Secret**       | Your signing secret (if using)                                                                                             |
 
 4. Select **Let me select individual events**
 5. Check the events you want:
@@ -210,7 +210,7 @@ This integration also supports GitLab CI/CD webhooks:
 Send a test payload directly:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/github?integrationId=YOUR_ID" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/github?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "action": "completed",

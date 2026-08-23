@@ -21,6 +21,7 @@ OpsKnight natively integrates with **Vercel** via Webhooks to monitor frontend b
 ## 🚀 Setup Instructions
 
 ### 1. In OpsKnight
+
 1. Go to **Services** $\to$ select target service $\to$ **Integrations** tab.
 2. Click **Add Integration** $\to$ choose **Vercel**.
 3. Copy your **Webhook URL** and **Integration Key**.
@@ -32,6 +33,7 @@ https://your-opsknight.com/api/integrations/vercel?integrationId=YOUR_INTEGRATIO
 ---
 
 ### 2. In Vercel
+
 1. In your Vercel Dashboard, go to your Team/Project **Settings** $\to$ **Webhooks**.
 2. Click **Create Webhook**.
 3. **Endpoint URL**: Paste your OpsKnight Webhook URL.
@@ -47,9 +49,9 @@ https://your-opsknight.com/api/integrations/vercel?integrationId=YOUR_INTEGRATIO
 
 ## 🔍 Event Mapping
 
-| Vercel Event | OpsKnight Action | Severity |
-| :--- | :--- | :--- |
-| `deployment.error` | `trigger` | `critical` (Production) / `error` (Preview) |
-| `deployment.succeeded` | `resolve` | `info` |
-| `deployment.canceled` | `acknowledge` | `warning` |
-| `deployment.created` | `acknowledge` | `info` |
+| Vercel Event           | OpsKnight Action | Severity                                    |
+| :--------------------- | :--------------- | :------------------------------------------ |
+| `deployment.error`     | `trigger`        | `critical` (Production) / `error` (Preview) |
+| `deployment.succeeded` | `resolve`        | `info`                                      |
+| `deployment.canceled`  | `acknowledge`    | `warning`                                   |
+| `deployment.created`   | `acknowledge`    | `info`                                      |

@@ -13,7 +13,7 @@ Receive alerts from New Relic and create incidents automatically.
 ## Endpoint
 
 ```
-POST /api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -35,10 +35,10 @@ POST /api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID
 3. Select **Webhook**
 4. Configure:
 
-| Field            | Value                                                                                    |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| **Name**         | `OpsKnight`                                                                              |
-| **Endpoint URL** | `https://YOUR_OPSKNIGHT_URL/api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID` |
+| Field            | Value                                                                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Name**         | `OpsKnight`                                                                                                                  |
+| **Endpoint URL** | `https://YOUR_OPSKNIGHT_URL/api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
 
 5. Click **Save destination**
 
@@ -178,7 +178,7 @@ You can secure the webhook with HMAC signature verification:
 Send a test payload directly:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/newrelic?integrationId=YOUR_ID" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/newrelic?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "account_id": 12345,

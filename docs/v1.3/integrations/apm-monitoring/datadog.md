@@ -13,7 +13,7 @@ Receive alerts from Datadog monitors and create incidents automatically.
 ## Endpoint
 
 ```
-POST /api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -34,12 +34,12 @@ POST /api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID
 2. Click **+ New Webhook**
 3. Configure:
 
-| Field              | Value                                                                                   |
-| ------------------ | --------------------------------------------------------------------------------------- |
-| **Name**           | `OpsKnight`                                                                             |
-| **URL**            | `https://YOUR_OPSKNIGHT_URL/api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID` |
-| **Payload**        | Use default (leave empty)                                                               |
-| **Custom Headers** | Optional                                                                                |
+| Field              | Value                                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| **Name**           | `OpsKnight`                                                                                                                 |
+| **URL**            | `https://YOUR_OPSKNIGHT_URL/api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
+| **Payload**        | Use default (leave empty)                                                                                                   |
+| **Custom Headers** | Optional                                                                                                                    |
 
 4. Click **Save**
 
@@ -177,7 +177,7 @@ You can secure the webhook with HMAC signature verification:
 Send a test payload directly:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/datadog?integrationId=YOUR_ID" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/datadog?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "event_type": "alert",

@@ -13,7 +13,7 @@ Receive alerts from Prometheus Alertmanager and create incidents automatically.
 ## Endpoint
 
 ```
-POST /api/integrations/prometheus?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/prometheus?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -36,7 +36,7 @@ Add OpsKnight as a receiver in your `alertmanager.yml`:
 receivers:
   - name: 'opsknight'
     webhook_configs:
-      - url: 'https://YOUR_OPSKNIGHT_URL/api/integrations/prometheus?integrationId=YOUR_INTEGRATION_ID'
+      - url: 'https://YOUR_OPSKNIGHT_URL/api/integrations/prometheus?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY'
         send_resolved: true
 
 route:
@@ -192,7 +192,7 @@ curl -X POST http://alertmanager:9093/api/v2/alerts \
 Send a test payload directly to OpsKnight:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/prometheus?integrationId=YOUR_ID" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/prometheus?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "version": "4",

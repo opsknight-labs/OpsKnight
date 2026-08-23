@@ -11,7 +11,7 @@ Receive alerts from Elasticsearch Watcher or Kibana Alerts.
 ## Endpoint
 
 ```
-POST /api/integrations/elastic?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/elastic?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ## Setup
@@ -19,7 +19,7 @@ POST /api/integrations/elastic?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **Elastic** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/elastic?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/elastic?integrationId=[ID]&integrationKey=[KEY]`
 
 ## Configuration in Kibana
 
@@ -62,7 +62,7 @@ Dedup key is generated from `elastic-{alert.id}` or `elastic-{rule.id}`.
 ### Using cURL
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/elastic?integrationId=YOUR_ID" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/elastic?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "rule": { "name": "Test Rule" },

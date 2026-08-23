@@ -19,10 +19,11 @@ There is no native voice/PSTN notification channel in v1.3. PagerDuty support is
 ## Start here
 
 1. Read [How integrations work](../core-concepts/integrations.md) for keys, URLs, signing, deduplication, recovery, and safe testing.
-2. Create the integration under **Service → Integrations**.
-3. Follow the provider runbook below.
-4. Trigger and resolve a synthetic alert using the exact production path.
-5. Configure and test outbound [notification providers](../administration/notifications.md).
+2. Read the [Inbound webhook reference](./inbound-webhook-reference.md) for the exact shared authentication, signature, lifecycle, rate-limit, and response contract.
+3. Create the integration under **Service → Integrations**.
+4. Follow the provider runbook below.
+5. Trigger and resolve a synthetic alert using the exact production path.
+6. Configure and test outbound [notification providers](../administration/notifications.md).
 
 ## Inbound integration catalog
 

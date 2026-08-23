@@ -22,6 +22,7 @@ OpsKnight natively integrates with **GitLab.com and self-hosted GitLab CE/EE** v
 ## 🚀 Setup Instructions
 
 ### 1. In OpsKnight
+
 1. Go to **Services** $\to$ select target service $\to$ **Integrations** tab.
 2. Click **Add Integration** $\to$ choose **GitLab**.
 3. Copy the **Webhook URL** and **Integration Key / Secret Token**.
@@ -33,6 +34,7 @@ https://your-opsknight.com/api/integrations/gitlab?integrationId=YOUR_INTEGRATIO
 ---
 
 ### 2. In GitLab
+
 1. Open your GitLab Project $\to$ **Settings** $\to$ **Webhooks**.
 2. Click **Add new webhook**.
 3. **URL**: Paste your OpsKnight Webhook URL.

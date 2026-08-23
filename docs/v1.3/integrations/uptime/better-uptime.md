@@ -13,7 +13,7 @@ Receive down alerts from Better Uptime.
 ## Endpoint
 
 ```
-POST /api/integrations/better-uptime?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/better-uptime?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/better-uptime?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **Better Uptime** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/better-uptime?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/better-uptime?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure Better Uptime
 

@@ -13,7 +13,7 @@ Receive detector alerts from Splunk Observability Cloud.
 ## Endpoint
 
 ```
-POST /api/integrations/splunk-observability?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/splunk-observability?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/splunk-observability?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **Splunk Observability** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/splunk-observability?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/splunk-observability?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure Splunk Observability
 

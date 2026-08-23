@@ -13,7 +13,7 @@ Receive alerts from Uptime Kuma.
 ## Endpoint
 
 ```
-POST /api/integrations/uptime-kuma?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/uptime-kuma?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/uptime-kuma?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **Uptime Kuma** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/uptime-kuma?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/uptime-kuma?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure Uptime Kuma
 
@@ -76,7 +76,7 @@ Dedup key is generated from `uptime-kuma-{monitorID}`.
 ### Using cURL
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/uptime-kuma?integrationId=YOUR_ID" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/uptime-kuma?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "heartbeat": { "status": 0, "msg": "Test Down", "monitorID": 99 },

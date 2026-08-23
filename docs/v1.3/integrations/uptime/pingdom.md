@@ -13,7 +13,7 @@ Receive down/up alerts from Pingdom.
 ## Endpoint
 
 ```
-POST /api/integrations/pingdom?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/pingdom?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/pingdom?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **Pingdom** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/pingdom?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/pingdom?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure Pingdom
 

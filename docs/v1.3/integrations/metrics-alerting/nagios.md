@@ -21,6 +21,7 @@ OpsKnight natively integrates with **Nagios Core and Nagios XI** via notificatio
 ## 🚀 Setup Instructions
 
 ### 1. In OpsKnight
+
 1. Go to **Services** $\to$ select target service $\to$ **Integrations** tab.
 2. Click **Add Integration** $\to$ choose **Nagios**.
 3. Copy your **Webhook URL** and **Integration Key**.
@@ -65,6 +66,7 @@ define contact {
 ```
 
 Then reload or restart Nagios:
+
 ```bash
 sudo systemctl reload nagios
 ```

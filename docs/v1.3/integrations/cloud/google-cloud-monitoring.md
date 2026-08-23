@@ -13,7 +13,7 @@ Receive alerts from GCP in OpsKnight.
 ## Endpoint
 
 ```
-POST /api/integrations/google-cloud-monitoring?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/google-cloud-monitoring?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -25,7 +25,7 @@ POST /api/integrations/google-cloud-monitoring?integrationId=YOUR_INTEGRATION_ID
 1. In OpsKnight, go to **Service -> Integrations**.
 2. Add a **Google Cloud Monitoring** integration.
 3. Copy the **Webhook URL**:
-   `https://[YOUR_DOMAIN]/api/integrations/google-cloud-monitoring?integrationId=[ID]`
+   `https://[YOUR_DOMAIN]/api/integrations/google-cloud-monitoring?integrationId=[ID]&integrationKey=[KEY]`
 
 ### Step 2: Configure Google Cloud Monitoring
 

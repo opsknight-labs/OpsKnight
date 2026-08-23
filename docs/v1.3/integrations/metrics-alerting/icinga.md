@@ -13,6 +13,7 @@ OpsKnight natively integrates with **Icinga 2** monitoring daemons.
 ## 🚀 Setup Instructions
 
 ### 1. In OpsKnight
+
 1. Go to **Services** $\to$ select target service $\to$ **Integrations** tab.
 2. Click **Add Integration** $\to$ choose **Icinga**.
 3. Copy your **Webhook URL** and **Integration Key**.
@@ -64,6 +65,7 @@ apply Notification "opsknight-alerts" to Service {
 ```
 
 Restart Icinga 2:
+
 ```bash
 sudo systemctl restart icinga2
 ```
