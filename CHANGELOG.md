@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security & Hardening
 
+- **Admin-Only Event Logs & Audit Log Access**: Enforced `assertAdmin()` on the Event Logs page (`/events`) and Audit Log page (`/audit`); restricted Event Logs and Audit Log sidebar navigation links strictly to users with the `ADMIN` role (`requiresRole: ['ADMIN']`); removed restricted administrative links (Audit Logs, Notification Providers, Performance Monitoring) from the settings overview, navigation, and search for standard users and responders.
 - **API Security, IDOR Mitigation & Role Validation**: Added `assertCanViewIncident(id)` on incident telemetry context; converted session role checks to database-verified `assertAdmin()` on SLA definitions, public logs, and retention endpoints; added positive integer boundary validation (`1–3650`) for data retention policies; enforced team-scoped access on Slack test notifications and widget feeds.
 - **Structured Logging Redaction**: Enhanced logger sanitization before stdout/stderr and ingestion endpoints to redact authorization headers, bearer tokens, Slack bot tokens, AWS keys, phone numbers, and webhook secrets; added circular reference protection via `WeakSet`.
 - **Database Concurrency & Transaction Atomicity**: Wrapped policy step creation and re-indexing in atomic `prisma.$transaction`; enforced last active administrator checks across multi-user bulk batches; deduplicated custom field insertions to eliminate unique constraint collisions (`P2002`).

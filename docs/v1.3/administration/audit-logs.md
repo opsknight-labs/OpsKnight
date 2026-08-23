@@ -16,7 +16,7 @@ The audit log answers a focused question: **who changed supported OpsKnight conf
 
 The page shows the newest **250** records. v1.3 has no audit search, filtering, pagination, or export. Query or export the PostgreSQL `AuditLog` table through an operator-controlled process if an investigation needs older records.
 
-> **Access boundary:** the v1.3 page is available to signed-in users; it does not enforce an Admin-only check. Treat audit metadata as sensitive and restrict application access at the identity or reverse-proxy layer when policy requires tighter separation.
+> **Access boundary:** The Audit Log page (`/audit`) and its settings link are strictly restricted to Administrators (`ADMIN` role only). Users and Responders cannot access this page and will not see it in the sidebar navigation or settings overview. Treat audit metadata as sensitive and restrict application access at the identity or reverse-proxy layer when policy requires tighter separation.
 
 ## What an entry contains
 

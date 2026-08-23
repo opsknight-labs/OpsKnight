@@ -50,7 +50,8 @@ export default async function SettingsOverviewPage() {
   };
 
   const sectionGroups = SETTINGS_NAV_SECTIONS.filter(section => section.id !== 'overview');
-  const popularLinks = SETTINGS_NAV_ITEMS.filter(item =>
+  const accessibleItems = SETTINGS_NAV_ITEMS.filter(canAccess);
+  const popularLinks = accessibleItems.filter(item =>
     ['profile', 'preferences', 'security', 'api-keys', 'notifications-admin'].includes(item.id)
   );
 
@@ -71,56 +72,42 @@ export default async function SettingsOverviewPage() {
           <CardDescription>Quickly jump to the page you need</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <SettingsSearch
-            items={SETTINGS_NAV_ITEMS}
-            placeholder="Search settings, integrations..."
-          />
+          <SettingsSearch items={accessibleItems} placeholder="Search settings, integrations..." />
 
           {/* Quick Links */}
-          <div>
-            <h3 className="text-sm font-medium mb-3">Quick Access</h3>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {popularLinks.map(item => {
-                const disabled = !canAccess(item);
-                const Icon = itemIcons[item.id] || Settings;
+          {popularLinks.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium mb-3">Quick Access</h3>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {popularLinks.map(item => {
+                  const Icon = itemIcons[item.id] || Settings;
 
-                if (disabled) {
                   return (
-                    <div
+                    <Link
                       key={item.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 opacity-60 cursor-not-allowed"
+                      href={item.href}
+                      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background hover:bg-accent hover:shadow-md transition-all duration-200 group"
                     >
-                      <Icon className="h-5 w-5 text-muted-foreground" />
+                      <Icon className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{item.label}</p>
-                        <p className="text-xs text-muted-foreground">Restricted</p>
+                        <p className="text-xs text-muted-foreground truncate">{item.description}</p>
                       </div>
-                    </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+                    </Link>
                   );
-                }
-
-                return (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background hover:bg-accent hover:shadow-md transition-all duration-200 group"
-                  >
-                    <Icon className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{item.label}</p>
-                      <p className="text-xs text-muted-foreground truncate">{item.description}</p>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
-                  </Link>
-                );
-              })}
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Settings Categories */}
       {sectionGroups.map(section => {
+        const visibleItems = section.items.filter(canAccess);
+        if (visibleItems.length === 0) return null;
+
         const SectionIcon = sectionIcons[section.id] || Settings;
 
         return (
@@ -140,46 +127,23 @@ export default async function SettingsOverviewPage() {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {section.items.map(item => {
-                  const disabled = !canAccess(item);
-
-                  if (disabled) {
-                    return (
-                      <div
-                        key={item.id}
-                        className="relative p-4 rounded-lg border border-border bg-muted/30 opacity-60 cursor-not-allowed"
-                      >
-                        <div className="space-y-2">
-                          <h3 className="font-semibold text-base">{item.label}</h3>
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {item.description}
-                          </p>
-                        </div>
-                        <Badge variant="secondary" size="xs" className="absolute top-4 right-4">
-                          {item.requiresAdmin ? 'Admin only' : 'Responder+'}
-                        </Badge>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className="group relative p-4 rounded-lg border border-border bg-background hover:bg-accent hover:shadow-md hover:border-primary/20 transition-all duration-200"
-                    >
-                      <div className="space-y-2">
-                        <h3 className="font-semibold text-base group-hover:text-primary transition-colors">
-                          {item.label}
-                        </h3>
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {item.description}
-                        </p>
-                      </div>
-                      <ArrowRight className="absolute top-4 right-4 h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-                    </Link>
-                  );
-                })}
+                {visibleItems.map(item => (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className="group relative p-4 rounded-lg border border-border bg-background hover:bg-accent hover:shadow-md hover:border-primary/20 transition-all duration-200"
+                  >
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-base group-hover:text-primary transition-colors">
+                        {item.label}
+                      </h3>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {item.description}
+                      </p>
+                    </div>
+                    <ArrowRight className="absolute top-4 right-4 h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                  </Link>
+                ))}
               </div>
             </CardContent>
           </Card>

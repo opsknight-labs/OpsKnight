@@ -14,7 +14,7 @@ The sidebar groups the signed-in application into three working areas:
 
 - **Dashboard, Incidents, and Services** for the active response loop;
 - **Operations** for teams, users, schedules, and escalation policies; and
-- **Insights** for analytics, postmortems, status, action items, event logs, audit evidence, and reports.
+- **Insights** for analytics, postmortems, status, action items, reports, and administrative event logs and audit log evidence (available to Admins only).
 
 The visible page is highlighted. Collapse the sidebar when more horizontal space is useful; collapsing it does not change access. Some destinations and actions are still restricted by application role or resource ownership. A hidden or disabled control is not the authorization boundary—OpsKnight checks permission on the server.
 
@@ -57,11 +57,11 @@ The mobile **Alerts** route provides its own all/unread list and read-state acti
 
 An in-app notification requires the user to be signed in and looking at OpsKnight. It is not a substitute for an external on-call channel.
 
-| Surface | Purpose | Delivery evidence |
-| --- | --- | --- |
-| Bell / mobile Alerts | Personal in-app awareness and navigation | Record appears and read state changes. |
-| Notification History | Administrative delivery diagnostics | Attempt, provider status, timing, and error details. |
-| Email, SMS, push, WhatsApp, Slack, or webhook | Reach a responder or external system | Provider acceptance plus a controlled end-to-end test. |
+| Surface                                       | Purpose                                  | Delivery evidence                                      |
+| --------------------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
+| Bell / mobile Alerts                          | Personal in-app awareness and navigation | Record appears and read state changes.                 |
+| Notification History                          | Administrative delivery diagnostics      | Attempt, provider status, timing, and error details.   |
+| Email, SMS, push, WhatsApp, Slack, or webhook | Reach a responder or external system     | Provider acceptance plus a controlled end-to-end test. |
 
 For a paging test, trigger a synthetic incident through the same service and escalation policy used in production. Verify the incident timeline, intended recipient, in-app record, external provider result, and the responder's actual device. A green inbox state alone is not end-to-end evidence.
 
@@ -73,14 +73,14 @@ When a shortcut conflicts with a browser, operating system, assistive technology
 
 ## Troubleshooting
 
-| Symptom | Check |
-| --- | --- |
-| No search results | Use at least two characters; try a distinctive title/name; use the destination page filters; confirm session and database health. |
-| A policy or postmortem is not shown | This is a current result-menu boundary; open **Escalation Policies** or **Postmortems** directly. |
-| Search opens the wrong record | Confirm the record type, title, subtitle, and ID before selection; duplicate names can exist across types. |
-| Bell count does not update | Reopen/reload, check the live connection fallback, and verify `/api/notifications` through application logs. |
-| Notification is present but no page arrived | Check user preferences, contact/device data, provider configuration, escalation targeting, and Notification History. |
-| Mark-all-read appears ineffective | Refresh once; if state returns, inspect the notification API response and server logs before repeating. |
+| Symptom                                     | Check                                                                                                                             |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| No search results                           | Use at least two characters; try a distinctive title/name; use the destination page filters; confirm session and database health. |
+| A policy or postmortem is not shown         | This is a current result-menu boundary; open **Escalation Policies** or **Postmortems** directly.                                 |
+| Search opens the wrong record               | Confirm the record type, title, subtitle, and ID before selection; duplicate names can exist across types.                        |
+| Bell count does not update                  | Reopen/reload, check the live connection fallback, and verify `/api/notifications` through application logs.                      |
+| Notification is present but no page arrived | Check user preferences, contact/device data, provider configuration, escalation targeting, and Notification History.              |
+| Mark-all-read appears ineffective           | Refresh once; if state returns, inspect the notification API response and server logs before repeating.                           |
 
 ## Related topics
 

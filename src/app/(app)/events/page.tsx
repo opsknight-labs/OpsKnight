@@ -13,9 +13,12 @@ import {
 } from '@/components/ui/shadcn/table';
 import { Card } from '@/components/ui/shadcn/card';
 
+import { assertAdmin } from '@/lib/rbac';
+
 export const dynamic = 'force-dynamic';
 
 export default async function EventLogsPage() {
+  await assertAdmin();
   const session = await getServerSession(await getAuthOptions());
   const email = session?.user?.email ?? null;
   const user = email

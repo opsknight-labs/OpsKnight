@@ -118,12 +118,14 @@ const navigationItems: NavItem[] = [
     label: 'Event Logs',
     icon: <FileClock />,
     section: 'INSIGHTS',
+    requiresRole: ['ADMIN'],
   },
   {
     href: '/audit',
     label: 'Audit Log',
     icon: <ClipboardList />,
     section: 'INSIGHTS',
+    requiresRole: ['ADMIN'],
   },
   {
     href: '/reports',
