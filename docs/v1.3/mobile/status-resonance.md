@@ -1,11 +1,12 @@
 ---
-order: 1
+order: 3
+title: Mobile status resonance
+description: Contributor note for mobile system-status colors, animation, and accessibility boundaries
 ---
 
 # Mobile Status Resonance (UI)
 
-This note captures the mobile header/status updates and the status-tinted ambient background.
-We will mirror the same idea on desktop later.
+This contributor note describes the mobile header status indicator and status-tinted ambient background. It is a visual summary; responders must use incident and service data for the operational detail behind the color.
 
 ## Scope
 
@@ -29,7 +30,9 @@ We will mirror the same idea on desktop later.
 - The `mobile-content` background uses status-tinted radial gradients and a resonance animation.
 - The status capsule includes orbiting rings and a pulsing stroke (resonating effect).
 
-## Follow-up (Desktop)
+Color and animation are supplementary. Preserve the visible text label, do not encode status only by color, and disable nonessential motion when `prefers-reduced-motion: reduce` is active.
+
+## Desktop parity checklist
 
 Apply the same system on desktop:
 

@@ -15,7 +15,7 @@ Open the OpsKnight URL on a mobile device over HTTPS, then use the browser's ins
 - **iPhone/iPad (Safari):** Share → **Add to Home Screen**.
 - **Android (Chrome):** browser menu → **Install app** or **Add to Home Screen**.
 
-The manifest requests standalone display and portrait orientation. The PWA service worker is disabled in development and can also be disabled by setting `DISABLE_PWA=true`; in either case installation and web push will not work as a production PWA flow.
+The manifest requests standalone display and portrait orientation. The PWA service worker is disabled in development and can also be disabled by setting `DISABLE_PWA=true`; in either case installation and web push will not work as a production PWA flow. The production build generates `/sw.js` and imports `/custom-sw.js` for OpsKnight's push and offline-queue handlers.
 
 ## Push notifications
 
@@ -34,17 +34,21 @@ The service worker opens the URL supplied by a notification payload, or `/m/noti
 
 ## Offline behavior
 
-Offline support is deliberately limited. It uses browser IndexedDB for selected last-known mobile data and a request queue for a small set of user actions.
+Offline support is deliberately limited. Selected last-known list data is encrypted and stored in browser `localStorage`. A separate request queue in IndexedDB stores a small set of user actions.
 
-| Capability                                                                                          | Offline behavior                                                           |
-| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Incident list                                                                                       | Can show a previously cached mobile incident list. The data can be stale.  |
-| Notifications                                                                                       | Can show a previously cached notification list when available.             |
-| Acknowledge, snooze, resolve from the mobile incident list                                          | The mobile client can queue the status update if it detects it is offline. |
-| Mark notification read/unread and similar mobile notification actions                               | The mobile client can queue the request while offline.                     |
-| New incidents, administration, integrations, schedules, policies, and arbitrary application actions | Not supported as an offline guarantee. Reconnect first.                    |
+| Capability                                                               | Offline behavior                                                                     |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Incident list                                                            | Can show a previously cached mobile incident list. The data can be stale.            |
+| Notification list                                                        | Can show a previously cached notification list when available.                       |
+| Service, schedule, and team lists                                        | Can show the corresponding last-known list; service/team search caches are separate. |
+| Detail pages and all other read views                                    | No documented offline guarantee.                                                     |
+| Acknowledge, snooze, or resolve from the mobile incident list            | The mobile client can queue the status update if it detects it is offline.           |
+| Mark one notification read or mark all notifications read                | The mobile client can queue the request while offline.                               |
+| New incidents, detail-page actions, notes, assignments, and admin writes | Not queued. Reconnect first.                                                         |
 
-Queued requests are stored locally in the browser, then retried on background sync when supported or when the mobile app comes online. Requests are not a durable incident command log: clearing site data, signing out, device loss, browser eviction, expired sessions, authorization changes, malformed requests, or server-side conflicts can prevent an action from being applied. Retryable responses—including 401, 408, 429, and server errors in the client queue—remain queued; do not assume they will eventually succeed without checking the incident.
+Queued requests are stored locally in the browser, then retried on background sync when supported or when the mobile app comes online. Requests are not a durable incident command log: clearing site data, signing out, device loss, browser eviction, expired sessions, authorization changes, malformed requests, or server-side conflicts can prevent an action from being applied. Retryable responses—including 401, 408, 429, and server errors in the client queue—can remain queued; do not assume they will eventually succeed without checking the incident. The service-worker retry classification is narrower than the foreground client, so behavior can also depend on which component performs the retry.
+
+The last-known list cache is encrypted by browser-side application code. It reduces casual disclosure in storage inspection but is not a user-held encryption boundary: the application code needed to decrypt it is delivered to the same browser. Device encryption, screen lock, session controls, MDM, and remote wipe remain the security controls.
 
 After reconnecting, open the incident and confirm its server-side status and timeline before treating an offline action as complete. Do not use offline mode for a time-critical acknowledgement when another online response path is available.
 
@@ -58,7 +62,7 @@ Use it as an additional protection on shared or frequently handled devices. Keep
 
 Before announcing mobile support to responders:
 
-1. Serve the deployment over HTTPS and confirm `/manifest.json` and `/sw.js` are reachable.
+1. Serve the deployment over HTTPS and confirm `/manifest.webmanifest`, `/sw.js`, and `/custom-sw.js` are reachable.
 2. Install the PWA on a representative iOS and Android device.
 3. Configure Web Push, subscribe, and send a test notification.
 4. Trigger a synthetic incident and verify the notification opens the intended mobile route.

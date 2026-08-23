@@ -25,5 +25,7 @@ This tree is **v1.3**. Switch versions in the sidebar for older releases.
 - [OIDC SSO](./security/oidc-setup)
 - [Encryption](./security/encryption)
 - [API](./api)
+- [Mobile](./mobile/README) — mobile routes, PWA, push, and exact offline support
+- [Accessibility](./accessibility/README) — keyboard, focus, screen-reader, motion, and testing boundaries
 
 SSO is **OIDC**, not SAML. Microsoft Teams and Google Chat are **webhook formats**, not Slack-style rooms.
