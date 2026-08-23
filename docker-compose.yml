@@ -1,7 +1,6 @@
 services:
   opsknight-db:
     image: postgres:15-alpine
-    container_name: opsknight_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-opsknight}
@@ -27,7 +26,6 @@ services:
   opsknight-app:
     # Pin OPSKNIGHT_IMAGE to an immutable release tag/digest for production.
     image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
-    container_name: opsknight_app
     pull_policy: always
     restart: unless-stopped
     ports:
