@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/shadcn/table';
 import { Card } from '@/components/ui/shadcn/card';
 
-import { assertResponderOrAbove } from '@/lib/rbac';
+import { assertAdmin } from '@/lib/rbac';
 import type { AuditEntityType } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +29,7 @@ type AuditLogPageProps = {
 };
 
 export default async function AuditLogPage({ searchParams }: AuditLogPageProps) {
-  await assertResponderOrAbove();
+  await assertAdmin();
 
   const awaitedParams = await searchParams;
   const entityType = awaitedParams?.entityType as AuditEntityType | undefined;

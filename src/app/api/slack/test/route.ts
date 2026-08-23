@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/rbac';
+import { assertAdminOrResponder } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
 import { getSlackBotToken } from '@/lib/slack';
@@ -10,10 +10,7 @@ import { getSlackBotToken } from '@/lib/slack';
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const user = await assertAdminOrResponder();
 
     const body = await request.json();
     const channelId = typeof body?.channelId === 'string' ? body.channelId : null;

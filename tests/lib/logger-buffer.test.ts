@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { logger, getLogBuffer } from '@/lib/logger';
+import { logger, getLogBuffer, sanitizeString } from '@/lib/logger';
 import * as publicLogsRoute from '@/app/api/public-logs/route';
 import { createMockRequest, parseResponse } from '../helpers/api-test';
 import { getServerSession } from 'next-auth';
@@ -34,6 +34,38 @@ describe('Logger Buffer', () => {
     const entries = getLogBuffer(1);
     expect(entries).toHaveLength(1);
     expect(entries[0].message).toBe(second);
+  });
+});
+
+describe('String Sanitization & ReDoS Defense', () => {
+  it('redacts sensitive tokens and emails cleanly', () => {
+    expect(sanitizeString('Contact user at test@example.com for info')).toBe(
+      'Contact user at [REDACTED] for info'
+    );
+    expect(sanitizeString('Token Bearer eyJhbGciOiJIUzI1NiJ9')).toBe('Token [REDACTED]');
+    expect(sanitizeString('Webhook https://api.ops.com?token=secret123&other=val')).toBe(
+      'Webhook [REDACTED]&other=val'
+    );
+  });
+
+  it('safely handles strings with repeated percent signs without polynomial backtracking', () => {
+    const payload = '%' + '%'.repeat(5000) + '@example.com';
+    const start = performance.now();
+    const result = sanitizeString(payload);
+    const elapsed = performance.now() - start;
+
+    expect(typeof result).toBe('string');
+    expect(elapsed).toBeLessThan(100);
+  });
+
+  it('safely handles strings with repeated http prefixes without polynomial backtracking', () => {
+    const payload = 'http://' + 'http://'.repeat(2000) + '?token=abc';
+    const start = performance.now();
+    const result = sanitizeString(payload);
+    const elapsed = performance.now() - start;
+
+    expect(typeof result).toBe('string');
+    expect(elapsed).toBeLessThan(100);
   });
 });
 

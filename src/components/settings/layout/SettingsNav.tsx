@@ -69,73 +69,56 @@ export default function SettingsNav({
         variant === 'drawer' && 'p-0 border-0 bg-transparent'
       )}
     >
-      {SETTINGS_NAV_SECTIONS.map(section => (
-        <div key={section.id} className="flex flex-col gap-2">
-          <div className="px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            {section.label}
-          </div>
-          <div className="flex flex-col gap-1">
-            {section.items.map(item => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-              const disabled = isItemDisabled(item);
-              const Icon = iconMap[item.icon] ?? Settings;
+      {SETTINGS_NAV_SECTIONS.map(section => {
+        const visibleItems = section.items.filter(item => !isItemDisabled(item));
+        if (visibleItems.length === 0) return null;
 
-              if (disabled) {
+        return (
+          <div key={section.id} className="flex flex-col gap-2">
+            <div className="px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              {section.label}
+            </div>
+            <div className="flex flex-col gap-1">
+              {visibleItems.map(item => {
+                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const Icon = iconMap[item.icon] ?? Settings;
+
                 return (
-                  <div
+                  <Link
                     key={item.id}
-                    className="flex items-center gap-4 px-3 py-3 rounded-lg bg-muted/50 opacity-60 cursor-not-allowed"
-                    aria-disabled="true"
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-4 px-3 py-3 rounded-lg transition-all duration-200',
+                      'hover:bg-accent/50',
+                      active && 'bg-accent border-l-2 border-primary'
+                    )}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={onNavigate}
                   >
-                    <Icon size={24} className="text-muted-foreground flex-shrink-0" />
+                    <Icon
+                      size={24}
+                      className={cn(
+                        'flex-shrink-0 transition-colors duration-200',
+                        active ? 'text-primary' : 'text-muted-foreground'
+                      )}
+                    />
                     <div className="flex flex-col min-w-0">
-                      <span className="text-sm font-medium truncate">{item.label}</span>
+                      <span
+                        className={cn('text-sm font-medium truncate', active && 'text-foreground')}
+                      >
+                        {item.label}
+                      </span>
                       <span className="text-xs text-muted-foreground truncate">
                         {item.description}
                       </span>
                     </div>
-                    <span className="ml-auto text-xs font-medium bg-muted px-2 py-0.5 rounded-full">
-                      {item.requiresAdmin ? 'Admin' : 'Responder+'}
-                    </span>
-                  </div>
+                  </Link>
                 );
-              }
-
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-4 px-3 py-3 rounded-lg transition-all duration-200',
-                    'hover:bg-accent/50',
-                    active && 'bg-accent border-l-2 border-primary'
-                  )}
-                  aria-current={active ? 'page' : undefined}
-                  onClick={onNavigate}
-                >
-                  <Icon
-                    size={24}
-                    className={cn(
-                      'flex-shrink-0 transition-colors duration-200',
-                      active ? 'text-primary' : 'text-muted-foreground'
-                    )}
-                  />
-                  <div className="flex flex-col min-w-0">
-                    <span
-                      className={cn('text-sm font-medium truncate', active && 'text-foreground')}
-                    >
-                      {item.label}
-                    </span>
-                    <span className="text-xs text-muted-foreground truncate">
-                      {item.description}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </nav>
   );
 }

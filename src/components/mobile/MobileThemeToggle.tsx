@@ -62,6 +62,10 @@ export default function MobileThemeToggle() {
   return (
     <MobileCard variant="default" padding="md">
       <div
+        role="switch"
+        aria-checked={isDark}
+        aria-label="Toggle dark mode"
+        tabIndex={0}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -69,6 +73,12 @@ export default function MobileThemeToggle() {
           cursor: 'pointer',
         }}
         onClick={handleToggle}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            handleToggle();
+          }
+        }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
           <span className="mobile-menu-icon">{isDark ? '🌙' : '☀️'}</span>

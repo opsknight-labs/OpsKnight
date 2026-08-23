@@ -33,7 +33,11 @@ export default function DateRangePicker() {
   return (
     <div className="relative relative-date-picker">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label="Select date range"
         className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-background border border-border hover:bg-secondary/50 rounded-lg transition-all shadow-sm min-w-[160px] justify-between"
       >
         <div className="flex items-center gap-2">
@@ -48,11 +52,18 @@ export default function DateRangePicker() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-[calc(100%+4px)] right-0 z-50 w-56 bg-popover border border-border rounded-lg shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+          <div
+            role="listbox"
+            aria-label="Date range options"
+            className="absolute top-[calc(100%+4px)] right-0 z-50 w-56 bg-popover border border-border rounded-lg shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+          >
             <div className="p-1">
               {ranges.map(range => (
                 <button
                   key={range.value}
+                  type="button"
+                  role="option"
+                  aria-selected={currentWindow === range.value}
                   onClick={() => handleSelect(range.value)}
                   className={`w-full text-left px-3 py-2 text-sm rounded-md flex items-center justify-between transition-colors ${currentWindow === range.value ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-secondary text-popover-foreground'}`}
                 >

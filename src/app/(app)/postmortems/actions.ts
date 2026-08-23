@@ -403,6 +403,12 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
       events: {
         orderBy: { createdAt: 'asc' },
       },
+      notes: {
+        include: {
+          user: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
     },
   });
 
@@ -449,8 +455,8 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
 
   const summary = `On ${date}, the ${incident.service.name} service experienced an incident${incident.urgency === 'HIGH' ? ' (High Urgency)' : ''}. The incident began at ${startTime} and was resolved at ${endTime}. The total duration of impact was ${durationString}.`;
 
-  // 3. Generate Timeline from Incident Events
-  const timeline: TimelineEvent[] = incident.events.map(event => {
+  // 3. Generate Timeline from Incident Events & Notes
+  const eventEntries: TimelineEvent[] = incident.events.map(event => {
     let type: TimelineEvent['type'] = 'DETECTION';
     const msg = event.message.toLowerCase();
     if (msg.includes('resolved') || msg.includes('fixed')) type = 'RESOLUTION';
@@ -459,7 +465,7 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
     else if (msg.includes('mitigated') || msg.includes('stabilized')) type = 'MITIGATION';
 
     return {
-      id: `draft-${event.id}`,
+      id: `draft-evt-${event.id}`,
       timestamp: event.createdAt.toISOString(),
       type,
       title: event.message.length > 50 ? event.message.substring(0, 50) + '...' : event.message,
@@ -467,6 +473,19 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
       actor: 'System',
     };
   });
+
+  const noteEntries: TimelineEvent[] = (incident.notes || []).map(note => ({
+    id: `draft-note-${note.id}`,
+    timestamp: note.createdAt.toISOString(),
+    type: 'MITIGATION',
+    title: `Note by ${note.user?.name || 'Responder'}`,
+    description: note.content,
+    actor: note.user?.name || 'Responder',
+  }));
+
+  const timeline: TimelineEvent[] = [...eventEntries, ...noteEntries].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 
   // Add explicit start/end events if missing
   if (!timeline.some(e => e.type === 'DETECTION')) {

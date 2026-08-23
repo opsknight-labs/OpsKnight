@@ -99,6 +99,29 @@ async function assertNotLastAdmin(userId: string) {
   }
 }
 
+async function assertBatchLeavesActiveAdmin(userIds: string[]) {
+  const targetedAdminCount = await prisma.user.count({
+    where: {
+      id: { in: userIds },
+      role: 'ADMIN',
+      status: { not: 'DISABLED' },
+    },
+  });
+
+  if (targetedAdminCount === 0) return;
+
+  const totalActiveAdmins = await prisma.user.count({
+    where: {
+      role: 'ADMIN',
+      status: { not: 'DISABLED' },
+    },
+  });
+
+  if (totalActiveAdmins - targetedAdminCount < 1) {
+    throw new Error('Operation would leave the system with no active administrators.');
+  }
+}
+
 async function deleteUserInternal(userId: string) {
   await assertUserIsNotSoleOwner(userId);
   await assertNotLastAdmin(userId);
@@ -594,6 +617,7 @@ export async function bulkUpdateUsers(
     }
 
     try {
+      await assertBatchLeavesActiveAdmin(userIds);
       for (const userId of userIds) {
         await assertNotLastAdmin(userId);
       }
@@ -628,6 +652,7 @@ export async function bulkUpdateUsers(
     }
 
     try {
+      await assertBatchLeavesActiveAdmin(userIds);
       for (const userId of userIds) {
         await assertUserIsNotSoleOwner(userId);
         await assertNotLastAdmin(userId);
@@ -670,6 +695,7 @@ export async function bulkUpdateUsers(
         return { error: 'You cannot demote your own admin account.' };
       }
       try {
+        await assertBatchLeavesActiveAdmin(userIds);
         for (const userId of userIds) {
           await assertNotLastAdmin(userId);
         }

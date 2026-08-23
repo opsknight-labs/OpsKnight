@@ -533,17 +533,21 @@ export async function createIncident(formData: FormData) {
   const dedupKey = formData.get('dedupKey') as string | null;
   const assigneeId = formData.get('assigneeId') as string | null;
 
-  // Extract custom field values
-  const customFieldEntries: Array<{ fieldId: string; value: string }> = [];
+  // Extract custom field values (deduplicated by fieldId)
+  const customFieldMap = new Map<string, string>();
   for (const [key, value] of formData.entries()) {
     if (key.startsWith('customField_')) {
       const fieldId = key.replace('customField_', '');
       const fieldValue = value as string;
       if (fieldValue && fieldValue.trim()) {
-        customFieldEntries.push({ fieldId, value: fieldValue.trim() });
+        customFieldMap.set(fieldId, fieldValue.trim());
       }
     }
   }
+  const customFieldEntries = Array.from(customFieldMap.entries()).map(([fieldId, val]) => ({
+    fieldId,
+    value: val,
+  }));
 
   const teamId = formData.get('teamId') as string | null;
   const visibility = (formData.get('visibility') as 'PUBLIC' | 'PRIVATE') || 'PUBLIC';

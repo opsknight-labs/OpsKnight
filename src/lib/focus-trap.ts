@@ -8,6 +8,9 @@ function getFocusableElements(root: HTMLElement) {
 }
 
 export function trapFocus(root: HTMLElement, onEscape?: () => void) {
+  const previouslyFocused =
+    typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
+
   const focusFirst = () => {
     const focusable = getFocusableElements(root);
     (focusable[0] ?? root).focus();
@@ -47,5 +50,12 @@ export function trapFocus(root: HTMLElement, onEscape?: () => void) {
   };
 
   root.addEventListener('keydown', handleKeyDown);
-  return () => root.removeEventListener('keydown', handleKeyDown);
+  return () => {
+    root.removeEventListener('keydown', handleKeyDown);
+    try {
+      previouslyFocused?.focus();
+    } catch {
+      // Ignore if element is unmounted
+    }
+  };
 }

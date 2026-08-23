@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { trapFocus } from '@/lib/focus-trap';
 
 type ConfirmDialogProps = {
   isOpen: boolean;
@@ -28,33 +29,17 @@ export default function ConfirmDialog({
 
   useEffect(() => {
     if (isOpen) {
-      // Focus the confirm button when dialog opens
-      confirmButtonRef.current?.focus();
-      // Prevent body scroll
       document.body.style.overflow = 'hidden';
-    } else {
-      // Restore body scroll
-      document.body.style.overflow = '';
-    }
-
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onCancel();
+      if (dialogRef.current) {
+        const cleanup = trapFocus(dialogRef.current, onCancel);
+        return () => {
+          document.body.style.overflow = '';
+          cleanup();
+        };
       }
-    };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
     }
-
     return () => {
-      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = '';
     };
   }, [isOpen, onCancel]);
 
@@ -103,8 +88,8 @@ export default function ConfirmDialog({
     >
       <div
         ref={dialogRef}
+        className="bg-card text-card-foreground"
         style={{
-          background: '#ffffff',
           borderRadius: '16px',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
           maxWidth: '500px',
@@ -115,7 +100,7 @@ export default function ConfirmDialog({
           animation: 'fadeIn 0.2s ease-out',
         }}
         onClick={e => e.stopPropagation()}
-        role="dialog"
+        role="alertdialog"
         aria-modal="true"
         aria-labelledby="dialog-title"
         aria-describedby="dialog-message"

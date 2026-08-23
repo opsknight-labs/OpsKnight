@@ -51,7 +51,7 @@ Multiple application replicas can use the same PostgreSQL database. For every re
 1. Deploy the same application version and runtime configuration.
 2. Use the same `NEXTAUTH_SECRET`, `ENCRYPTION_KEY`, public URL, and provider settings.
 3. Connect to the same migrated PostgreSQL database.
-4. Keep the scheduler enabled on at least one healthy instance. PostgreSQL coordinates scheduler ownership.
+4. Keep the scheduler enabled across instances. PostgreSQL coordinates scheduler ownership via `CronSchedulerState` distributed locks with 30-second heartbeats and 5-minute timeout. Standby replicas poll with randomized jitter (15–30s) to ensure automated leader failover if the active leader replica stops.
 5. Allow long-lived SSE responses at the load balancer or reverse proxy and disable response buffering for them.
 6. Drain traffic and in-flight work before stopping the process.
 

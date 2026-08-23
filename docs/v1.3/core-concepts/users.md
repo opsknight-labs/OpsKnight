@@ -82,6 +82,10 @@ Admins cannot change their own role, deactivate themselves, or delete themselves
 
 Each user can open **Settings → Profile** to manage supported profile fields, timezone, gender/avatar selection, and an uploaded JPG, GIF, or PNG avatar up to 2 MB. Email and role are governed fields rather than normal profile edits. OIDC profile synchronization may update department, job title, or external avatar according to workspace configuration.
 
+### In-process vector avatar engine
+
+OpsKnight provides a zero-latency, local `@dicebear` vector avatar generator at `/api/avatar`. Users can select from 15 curated SVG style presets (including `bottts`, `shapes`, `initials`, `personas`, `identicon`, `avataaars`, `thumbs`, `lorelei`, `notionists`, `open-peeps`, `micah`, `miniavs`, `pixel-art`, `rings`, and `glass`) with gender-appropriate styling. Avatar SVGs are rendered locally without third-party network dependencies, cached immutably with `Cache-Control: public, max-age=31536000, immutable`, and served with strict SVG sandbox headers (`Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`).
+
 Timezone affects how the application displays dates for that user. Schedule calculation remains authoritative in each schedule's timezone.
 
 ## Notification preferences

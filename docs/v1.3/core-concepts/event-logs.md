@@ -10,7 +10,7 @@ The **Event Logs** page is a cross-incident view of incident lifecycle events. I
 
 ## Review lifecycle events
 
-Open **Event Logs** from the main navigation. The page displays the 200 most recent incident events, newest first.
+Open **Event Logs** from the main navigation (restricted to **Administrators**; hidden from Users and Responders). The page displays the 200 most recent incident events, newest first.
 
 Each row contains the timestamp in your configured time zone, a short incident identifier and title, the incident's service, and the lifecycle message. Select the incident identifier to open the full incident timeline.
 

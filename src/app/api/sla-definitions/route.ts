@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { assertAdmin } from '@/lib/rbac';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 
@@ -36,10 +37,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(await getAuthOptions());
-  const userRole = session?.user ? (session.user as { role?: string }).role : undefined;
-  if (!session?.user || userRole !== 'ADMIN') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  try {
+    await assertAdmin();
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Admin access required' },
+      { status: 403 }
+    );
   }
 
   try {
