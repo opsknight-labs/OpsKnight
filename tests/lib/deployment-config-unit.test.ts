@@ -6,11 +6,13 @@ const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 
 describe('deployment configuration invariants', () => {
-  it('keeps Helm appVersion aligned with the application version', () => {
+  it('keeps packaged deployment versions aligned with the application version', () => {
     const pkg = JSON.parse(read('package.json')) as { version: string };
     const chart = read('helm/opsknight/Chart.yaml');
+    const rawDeployment = read('k8s/deployment.yaml');
     expect(chart).toContain(`version: ${pkg.version}`);
     expect(chart).toContain(`appVersion: '${pkg.version}'`);
+    expect(rawDeployment).toContain(`ghcr.io/opsknight-labs/opsknight:${pkg.version}`);
   });
 
   it('runs postgres:15-alpine with its uid/gid instead of uid 999', () => {
