@@ -19,7 +19,9 @@ export default async function MobilePolicyDetailPage({ params }: PageProps) {
       steps: {
         orderBy: { stepOrder: 'asc' },
         include: {
-          targetUser: { select: { id: true, name: true, email: true } },
+          targetUser: {
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+          },
           targetTeam: { select: { id: true, name: true } },
           targetSchedule: { select: { id: true, name: true } },
         },

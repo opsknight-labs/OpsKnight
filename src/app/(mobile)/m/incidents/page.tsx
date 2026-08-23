@@ -66,7 +66,7 @@ export default async function MobileIncidentsPage(props: {
         urgency: true,
         createdAt: true,
         service: { select: { name: true } },
-        assignee: { select: { name: true } },
+        assignee: { select: { id: true, name: true, avatarUrl: true, gender: true } },
       },
     }),
     prisma.incident.count({ where }),

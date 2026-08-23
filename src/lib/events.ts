@@ -374,7 +374,9 @@ export async function processEvent(
         where: { id: result.incident.id },
         include: {
           service: { select: { id: true, name: true } },
-          assignee: { select: { id: true, name: true, email: true } },
+          assignee: {
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+          },
         },
       });
 
@@ -511,7 +513,9 @@ export async function processEvent(
         where: { id: result.incident.id },
         include: {
           service: { select: { id: true, name: true } },
-          assignee: { select: { id: true, name: true, email: true } },
+          assignee: {
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+          },
         },
       });
 

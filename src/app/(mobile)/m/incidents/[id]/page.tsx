@@ -72,10 +72,18 @@ export default async function MobileIncidentDetailPage({ params }: PageProps) {
       },
       notes: {
         orderBy: { createdAt: 'desc' },
-        include: { user: { select: { name: true, email: true } } },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+          },
+        },
       },
       watchers: {
-        include: { user: { select: { id: true, name: true, email: true } } },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+          },
+        },
       },
       tags: {
         include: { tag: { select: { id: true, name: true, color: true } } },

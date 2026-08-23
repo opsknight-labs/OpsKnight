@@ -25,7 +25,7 @@ function getDeterministicColor(seed: string): string {
 
 /**
  * Generates a modern, professional default avatar URL based on gender or userId.
- * Uses DiceBear's 'lorelei' (sleek minimalist vector portraits) via our local API proxy.
+ * Uses DiceBear's 'personas' (clean illustrated tech professional avatars) in SVG format via our local API proxy.
  */
 export const getDefaultAvatar = (
   gender: string | null | undefined,
@@ -36,23 +36,23 @@ export const getDefaultAvatar = (
 
   switch (genderLower) {
     case 'male':
-      return `/api/avatar?style=lorelei&seed=${encodeURIComponent(userId)}-male&backgroundColor=${bg}&radius=0`;
+      return `/api/avatar?style=personas&seed=${encodeURIComponent(userId)}-male&backgroundColor=${bg}&radius=0&format=svg`;
     case 'female':
-      return `/api/avatar?style=lorelei&seed=${encodeURIComponent(userId)}-female&backgroundColor=${bg}&radius=0`;
+      return `/api/avatar?style=personas&seed=${encodeURIComponent(userId)}-female&backgroundColor=${bg}&radius=0&format=svg`;
     case 'non-binary':
-      return `/api/avatar?style=lorelei&seed=${encodeURIComponent(userId)}-nb&backgroundColor=${bg}&radius=0`;
+      return `/api/avatar?style=personas&seed=${encodeURIComponent(userId)}-nb&backgroundColor=${bg}&radius=0&format=svg`;
     case 'other':
-      return `/api/avatar?style=lorelei&seed=${encodeURIComponent(userId)}-other&backgroundColor=${bg}&radius=0`;
+      return `/api/avatar?style=personas&seed=${encodeURIComponent(userId)}-other&backgroundColor=${bg}&radius=0&format=svg`;
     case 'prefer-not-to-say':
-      return `/api/avatar?style=lorelei&seed=${encodeURIComponent(userId)}-neutral&backgroundColor=${bg}&radius=0`;
+      return `/api/avatar?style=personas&seed=${encodeURIComponent(userId)}-neutral&backgroundColor=${bg}&radius=0&format=svg`;
     default:
-      return `/api/avatar?style=lorelei&seed=${encodeURIComponent(userId)}&backgroundColor=${bg}&radius=0`;
+      return `/api/avatar?style=personas&seed=${encodeURIComponent(userId)}&backgroundColor=${bg}&radius=0&format=svg`;
   }
 };
 
 /**
  * Checks if an avatar URL is one of our default system-generated ones.
- * Returns true for default system avatars (lorelei, legacy big-smile, legacy bottts).
+ * Returns true for default system avatars (personas, lorelei, legacy big-smile, legacy bottts).
  * Custom chosen presets from AvatarPicker and uploaded avatars are NOT flagged as default.
  */
 export const isDefaultAvatar = (url: string | null | undefined): boolean => {
@@ -61,7 +61,8 @@ export const isDefaultAvatar = (url: string | null | undefined): boolean => {
   // Check if it's our proxy URL
   if (url.startsWith('/api/avatar')) {
     const isSystemDefault =
-      (url.includes('style=lorelei') ||
+      (url.includes('style=personas') ||
+        url.includes('style=lorelei') ||
         url.includes('style=big-smile') ||
         url.includes('style=bottts')) &&
       url.includes('radius=0');
@@ -74,6 +75,7 @@ export const isDefaultAvatar = (url: string | null | undefined): boolean => {
     if (urlObj.hostname === 'api.dicebear.com') {
       const pathname = urlObj.pathname;
       return (
+        pathname.includes('personas') ||
         pathname.includes('lorelei') ||
         pathname.includes('big-smile') ||
         pathname.includes('bottts')

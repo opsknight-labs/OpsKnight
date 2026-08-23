@@ -46,7 +46,9 @@ export async function bulkAcknowledge(incidentIds: string[]) {
       where: { id: { in: incidentIds } },
       include: {
         service: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: {
+          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+        },
       },
     });
 
@@ -133,7 +135,9 @@ export async function bulkResolve(incidentIds: string[]) {
       where: { id: { in: incidentIds } },
       include: {
         service: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: {
+          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+        },
       },
     });
 
@@ -231,7 +235,9 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
       where: { id: { in: incidentIds } },
       include: {
         service: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: {
+          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+        },
       },
     });
 
@@ -663,7 +669,9 @@ export async function bulkUpdateStatus(
       where: { id: { in: incidentIds } },
       include: {
         service: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: {
+          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+        },
       },
     });
 
