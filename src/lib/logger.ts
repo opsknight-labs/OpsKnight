@@ -64,15 +64,18 @@ const SENSITIVE_KEYS = [
 ];
 
 const SECRET_PATTERNS = [
-  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, // Email
+  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/g, // Email (strictly disjoint domain labels)
   /Bearer\s+[A-Za-z0-9\-_.]+/gi, // Bearer tokens
   /xox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*/g, // Slack tokens
   /AKIA[0-9A-Z]{16}/g, // AWS Access Keys
-  /(?:https?:\/\/[^\s]+(?:\?|&)(?:token|secret|key|sig|signature|api_key)=)[^&\s]+/gi, // URL query tokens
+  /(?:https?:\/\/[^\s?#]+\?[^\s#]*(?:token|secret|key|sig|signature|api_key)=)[^&\s]+/gi, // URL query tokens (bounded by ? and #)
 ];
 
 export function sanitizeString(val: string): string {
-  let result = val;
+  if (typeof val !== 'string' || val.length === 0) return val;
+  // Bound string length to prevent ReDoS on huge uncontrolled inputs
+  const input = val.length > 50000 ? val.slice(0, 50000) : val;
+  let result = input;
   for (const pattern of SECRET_PATTERNS) {
     result = result.replace(pattern, '[REDACTED]');
   }
