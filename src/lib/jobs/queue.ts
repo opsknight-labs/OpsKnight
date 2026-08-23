@@ -447,12 +447,22 @@ export async function cleanupOldJobs(olderThanDays: number = 7): Promise<number>
 
   const result = await prisma.backgroundJob.deleteMany({
     where: {
-      status: {
-        in: ['COMPLETED', 'CANCELLED'],
-      },
-      completedAt: {
-        lte: cutoffDate,
-      },
+      OR: [
+        {
+          status: {
+            in: ['COMPLETED', 'CANCELLED'],
+          },
+          completedAt: {
+            lte: cutoffDate,
+          },
+        },
+        {
+          status: 'FAILED',
+          failedAt: {
+            lte: cutoffDate,
+          },
+        },
+      ],
     },
   });
 

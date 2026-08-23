@@ -49,9 +49,13 @@ export async function sendNotification(
               ? 'acknowledged'
               : 'triggered';
         // Use circuit breaker to prevent cascade failures
-        result = await CircuitBreakers.email().execute(() =>
-          sendIncidentEmail(userId, incidentId, eventType)
-        );
+        result = await CircuitBreakers.email().execute(async () => {
+          const res = await sendIncidentEmail(userId, incidentId, eventType);
+          if (!res.success) {
+            throw new Error(res.error || 'Email delivery failed');
+          }
+          return res;
+        });
         break;
 
       case 'SMS':
@@ -64,9 +68,13 @@ export async function sendNotification(
             : incidentForSMS?.status === 'ACKNOWLEDGED'
               ? 'acknowledged'
               : 'triggered';
-        result = await CircuitBreakers.sms().execute(() =>
-          sendIncidentSMS(userId, incidentId, eventTypeSMS)
-        );
+        result = await CircuitBreakers.sms().execute(async () => {
+          const res = await sendIncidentSMS(userId, incidentId, eventTypeSMS);
+          if (!res.success) {
+            throw new Error(res.error || 'SMS delivery failed');
+          }
+          return res;
+        });
         break;
 
       case 'PUSH':
@@ -79,9 +87,13 @@ export async function sendNotification(
             : incidentForPush?.status === 'ACKNOWLEDGED'
               ? 'acknowledged'
               : 'triggered';
-        result = await CircuitBreakers.push().execute(() =>
-          sendIncidentPush(userId, incidentId, eventTypePush)
-        );
+        result = await CircuitBreakers.push().execute(async () => {
+          const res = await sendIncidentPush(userId, incidentId, eventTypePush);
+          if (!res.success) {
+            throw new Error(res.error || 'Push delivery failed');
+          }
+          return res;
+        });
         break;
 
       case 'SLACK':
@@ -142,9 +154,13 @@ export async function sendNotification(
             : incidentForWhatsApp?.status === 'ACKNOWLEDGED'
               ? 'acknowledged'
               : 'triggered';
-        result = await CircuitBreakers.whatsapp().execute(() =>
-          sendIncidentWhatsApp(userId, incidentId, eventTypeWhatsApp)
-        );
+        result = await CircuitBreakers.whatsapp().execute(async () => {
+          const res = await sendIncidentWhatsApp(userId, incidentId, eventTypeWhatsApp);
+          if (!res.success) {
+            throw new Error(res.error || 'WhatsApp delivery failed');
+          }
+          return res;
+        });
         break;
 
       default:
@@ -160,17 +176,33 @@ export async function sendNotification(
         },
       });
 
+      // Fetch recipient details for attribution
+      const recipient = prisma.user?.findUnique
+        ? await prisma.user
+            .findUnique({
+              where: { id: userId },
+              select: { name: true, email: true },
+            })
+            .catch(() => null)
+        : null;
+      const recipientName = recipient?.name || recipient?.email || userId;
+
       // Log to incident timeline
-      await prisma.incidentEvent.create({
-        data: {
-          incidentId,
-          message: `Notification sent via ${channel}`,
-        },
-      });
+      try {
+        if (prisma.incidentEvent?.create) {
+          await prisma.incidentEvent.create({
+            data: {
+              incidentId,
+              type: 'STATUS_CHANGE',
+              message: `Notification sent to ${recipientName} via ${channel}`,
+            },
+          });
+        }
+      } catch (_) {}
 
       return { success: true, notificationId: notification.id };
     } else {
-      throw new Error(result.error || 'Notification delivery failed');
+      throw new Error((result as any).error || 'Notification delivery failed');
     }
   } catch (error: any) {
     // Handle circuit breaker errors specially - don't count as attempt failure

@@ -78,10 +78,7 @@ export async function sendEmail(
         source: emailConfig.source,
       });
 
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      return { success: true };
+      return { success: false, error: 'Email provider not configured or disabled' };
     }
 
     // Production: Use configured provider

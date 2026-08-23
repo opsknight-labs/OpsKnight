@@ -171,6 +171,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (status === 'RESOLVED' && !currentIncident.resolvedAt) {
       updates.resolvedAt = new Date();
     }
+    if (currentIncident.status === 'RESOLVED' && status !== 'RESOLVED') {
+      updates.resolvedAt = null;
+    }
     if (status === 'ACKNOWLEDGED' || status === 'RESOLVED') {
       updates.escalationStatus = 'COMPLETED';
       updates.nextEscalationAt = null;

@@ -293,6 +293,19 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
         escalationProcessingAt: null,
       },
     });
+
+    try {
+      if (prisma.incidentEvent?.create) {
+        await prisma.incidentEvent.create({
+          data: {
+            incidentId,
+            type: 'ESCALATED',
+            message: `Escalation policy exhausted: all ${policySteps.length} step(s) completed without acknowledgment.`,
+          },
+        });
+      }
+    } catch (_) {}
+
     return { escalated: false, reason: 'All escalation steps exhausted' };
   }
 
