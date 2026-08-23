@@ -6,31 +6,33 @@ description: Render, customize, validate, and apply the Kubernetes manifests shi
 
 # Kustomize
 
-The repository's `k8s/kustomization.yaml` composes the namespace, application, PostgreSQL, services, ingress, HPA, network policy, service account, PVC, and PodDisruptionBudget manifests.
+`k8s/kustomization.yaml` is the entry point for the raw Kubernetes base. It composes the namespace, application, PostgreSQL StatefulSet and governing Service, application Service, ingress, HPA, NetworkPolicy, ServiceAccount, ConfigMap, Secret, and PodDisruptionBudget. PostgreSQL storage is created by the StatefulSet volume claim template; the base no longer allocates an unused standalone PVC.
 
 ## Do not apply the base unchanged in production
 
-The base contains placeholder secrets, a localhost application URL, a floating `latest` image, and an in-cluster single PostgreSQL StatefulSet. Create an overlay that replaces these values and review every rendered object.
+The base deliberately contains placeholder secrets, localhost public URLs, a floating `latest` application image, an example nginx/cert-manager ingress, and a single in-cluster PostgreSQL instance. Build a production overlay and review the complete rendered output.
 
 ```text
 deploy/overlays/production/
 ├── kustomization.yaml
 ├── ingress-patch.yaml
 ├── app-patch.yaml
-└── generated secret input outside Git
+├── database-patch.yaml
+└── secret input managed outside Git
 ```
 
-At minimum, customize:
+At minimum customize:
 
 - image tag or digest;
-- `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` public HTTPS origin;
-- database credentials and `DATABASE_URL`/database topology;
-- `NEXTAUTH_SECRET` and 64-hex-character `ENCRYPTION_KEY`;
-- ingress class, host, TLS secret, and annotations;
-- StorageClass, capacity, retention policy, and backup tooling;
-- resource requests/limits, replica count, HPA, PDB, and network policy.
+- both `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL`;
+- database topology/URI and credentials;
+- `NEXTAUTH_SECRET` and `ENCRYPTION_KEY`;
+- ingress class, host, TLS strategy, and annotations;
+- storage class/capacity/backup policy;
+- resource requests/limits, replicas, HPA and PDB;
+- NetworkPolicy ingress namespace labels and database destinations.
 
-Use a secret controller or platform secret store. Do not commit a generated Secret containing production values.
+Use your platform secret controller/store for production values. Do not commit rendered production Secrets.
 
 ## Render and validate
 
@@ -39,28 +41,35 @@ kubectl kustomize deploy/overlays/production > /tmp/opsknight-rendered.yaml
 kubectl apply --server-side --dry-run=server -f /tmp/opsknight-rendered.yaml
 ```
 
-Review the rendered output for placeholder values and unintended public services before applying. A server-side dry run validates against the target cluster's API and admission policies without persisting objects.
+Review the rendered image, Secrets, `DATABASE_URL`, public URLs, ingress, NetworkPolicy, storage, and health probes before applying.
+
+## External database overlays
+
+The base application constructs a URI for its bundled PostgreSQL. For managed PostgreSQL, patch the `DATABASE_URL` environment entry to read a complete URI from your secret system. This supports TLS parameters, PgBouncer, provider options, and percent-encoded credentials without reconstructing the URI from separate fields.
+
+The raw NetworkPolicy allows TCP/5432 to external destinations so an external database is not accidentally blocked. Narrow that rule to your known database CIDR/namespace in the production overlay.
 
 ## Apply and observe
 
 ```bash
 kubectl apply -k deploy/overlays/production
-kubectl -n opsknight rollout status deployment/opsknight-app
+kubectl -n opsknight rollout status deployment/opsknight-app --timeout=10m
 kubectl -n opsknight get pods,svc,ingress,pvc
 kubectl -n opsknight logs deployment/opsknight-app --tail=200
 ```
 
-The container runs database migrations on startup. Verify migration logs and `/api/health?mode=readiness`, then test login, a database write, and an incident workflow.
+The application performs Prisma migrations before starting. Failed migrations now make the container exit non-zero; the startup probe protects a legitimate long migration/cold start from liveness restarts. Verify migration completion and `/api/health?mode=readiness`, then test login, a write, and an incident flow.
 
 ## Update and rollback
 
-Commit overlay changes, take a database backup, change only the pinned image reference, render/diff, and apply. Keep the previous manifest and image digest.
+Commit overlay changes, take a verified database backup, change the pinned image reference, render/diff, and apply. Keep the previous manifest and image digest.
 
-Kubernetes rollout rollback changes pods; it does not undo PostgreSQL migrations. If a release requires data rollback, use the release-specific procedure and pre-upgrade database recovery point.
+Kubernetes rollout rollback does not undo PostgreSQL migrations. Confirm schema compatibility before reverting an image; use the pre-upgrade database recovery point when data rollback is required.
 
 ## Related topics
 
 - [Kubernetes](./kubernetes)
 - [Deployment](./README)
+- [Helm](./helm)
 - [Monitoring](./monitoring)
-- [Configuration Reference](../getting-started/configuration)
+- [Configuration reference](../getting-started/configuration)
