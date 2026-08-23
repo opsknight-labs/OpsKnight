@@ -26,14 +26,21 @@ cd OpsKnight
 cp env.example .env
 ```
 
-Set these in `.env` before you start:
+Generate the two secrets, then paste the output values into `.env` before you start:
 
 ```bash
+openssl rand -base64 32
+openssl rand -hex 32
+```
+
+```dotenv
 NEXTAUTH_URL=http://localhost:3000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXTAUTH_SECRET=$(openssl rand -base64 32)
-ENCRYPTION_KEY=$(openssl rand -hex 32)
+NEXTAUTH_SECRET=PASTE_BASE64_OUTPUT
+ENCRYPTION_KEY=PASTE_64_HEX_CHARACTER_OUTPUT
 ```
+
+Dotenv files do not evaluate `$(...)` shell substitutions.
 
 Keep `DATABASE_URL` pointing at the Compose Postgres service from `env.example`.
 

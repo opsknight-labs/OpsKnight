@@ -1,8 +1,10 @@
 ---
-order: 3
+order: 7
+title: Operational data flow and diagnostics
+description: Contributor map for event ingestion, SLA analytics, scheduled work, retention, logs, and diagnostic boundaries.
 ---
 
-# Observability & Operations Architecture (current code)
+# Operational data flow and diagnostics
 
 This document describes **what is implemented today** in OpsKnight.
 
@@ -74,14 +76,16 @@ Tasks handled include escalation steps, notification retries, SLA breach checks,
 
 ## Logs & Diagnostics
 
-Current logging pipeline:
+Current in-app logging path:
 
 - **Client log ingest**: `/api/logs/ingest`
 - **Logger**: `src/lib/logger.ts` (in-memory buffer)
-- **Public log view**: `/api/public-logs`
+- **Admin-only log-buffer route**: `/api/public-logs`
 
 Note: `LogEntry` exists in the Prisma schema, but the current ingest route writes to the
 application logger, not to the database.
+
+`/api/logs/ingest` is an internal client-log route with IP-keyed rate and body-size limits, not a published automation or telemetry API. The logger buffer and Admin view are per process and short-lived. Production deployments need independent durable log collection and platform/PostgreSQL telemetry.
 
 ---
 

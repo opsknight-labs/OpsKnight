@@ -17,9 +17,10 @@ Start with these two guides:
 
 - [Circuit breakers](./circuit-breakers) — outbound failure isolation and state transitions.
 - [Deduplication engine](./deduplication-engine) — event correlation and noise reduction.
-- [Enterprise observability](./enterprise-observability) — integration normalization and operational signals.
+- [Operational data flow and diagnostics](./enterprise-observability) — integration normalization, analytics, logging, and operational signals.
 - [Dashboard](./dashboard) — dashboard rendering and interaction design.
 - [System settings](./settings) — settings boundaries, roles, API keys, and secret handling.
+- [Analytics surface matrix](./analytics-parity-audit) — desktop, mobile, executive, and export behavior.
 
 ## Important boundaries
 

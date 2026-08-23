@@ -1,8 +1,10 @@
 ---
 order: 1
+title: Dashboard component architecture
+description: Contributor map for dashboard server data, metrics, widgets, real-time refresh, and presentation components.
 ---
 
-# Dashboard Component Architecture
+# Dashboard component architecture
 
 ## Entry Point
 
@@ -17,12 +19,13 @@ Primary data sources:
 
 ---
 
-## Component Structure
+## Selected component structure
 
 ```
 src/components/dashboard/
 ├── DashboardCommandCenter.tsx
 ├── DashboardIncidentFilters.tsx
+├── LiveClock.tsx
 ├── MetricCard.tsx
 ├── QuickActionsPanel.tsx
 ├── OnCallWidget.tsx
@@ -33,7 +36,9 @@ src/components/dashboard/
 │   ├── IncidentHeatmapWidget.tsx
 │   └── SLABreachAlertsWidget.tsx
 └── compact/
+    ├── CompactOnCallStatus.tsx
     ├── CompactPerformanceMetrics.tsx
+    ├── CompactStatsOverview.tsx
     └── CompactTeamLoad.tsx
 ```
 

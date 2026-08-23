@@ -1,145 +1,178 @@
 ---
 order: 1
+title: Installation
+description: Install OpsKnight with Docker Compose, Helm, Kustomize, or a Node.js development checkout and verify the complete incident path.
 ---
 
-# Installation Guide
+# Installation
 
-This guide covers the recommended ways to install OpsKnight and get a working instance quickly.
+For the fastest evaluation, use Docker Compose. For production, choose the deployment method whose database, secrets, ingress, monitoring, backup, upgrade, and recovery lifecycle your team can own.
 
-## Before You Begin
+If you want the shortest end-to-end tutorial, follow [Getting started](./README). This page covers installation choices and source development.
 
-- Docker Engine 20+ and Docker Compose 2+ (for container installs)
-- PostgreSQL 14+ (required for any deployment)
-- A stable base URL for production installs (used by auth callbacks)
+## Choose a method
 
-## Deployment Options
+| Method                       | Intended use                                                       | Next guide                             |
+| ---------------------------- | ------------------------------------------------------------------ | -------------------------------------- |
+| Docker Compose               | Evaluation, development, or an accepted single-host topology.      | [Docker Compose](../deployment/docker) |
+| Helm                         | Values-driven Kubernetes release managed by a platform team.       | [Helm](../deployment/helm)             |
+| Kustomize                    | Raw Kubernetes manifests with reviewed environment overlays.       | [Kustomize](../deployment/kustomize)   |
+| Node.js development checkout | Application development and local testing, not a packaged release. | [From source](#install-from-source)    |
 
-| Method                                  | Best For                          |
-| --------------------------------------- | --------------------------------- |
-| [Docker Compose](#docker-compose)       | Development and small deployments |
-| [Kubernetes](../deployment/kubernetes)  | Production and scaling            |
-| [Helm](../deployment/helm)              | Templated Kubernetes installs     |
-| [Local Development](#local-development) | Contributing and testing          |
+All methods require PostgreSQL. The published Compose and Kubernetes examples use PostgreSQL 15; the project declares PostgreSQL 14+ support. The production image and source package use Node.js 20 (`>=20 <21`).
 
----
+## Install with Docker Compose
 
-## Docker Compose
-
-The fastest way to run OpsKnight locally or in a small environment.
-
-### Step 1: Clone and Configure
+### 1. Prepare the repository and secrets
 
 ```bash
-git clone https://github.com/opsknight-labs/opsknight.git
-cd opsknight
+git clone https://github.com/opsknight-labs/OpsKnight.git
+cd OpsKnight
 cp env.example .env
+openssl rand -base64 32
+openssl rand -hex 32
 ```
 
-### Step 2: Set Core Environment Variables
+Edit `.env` and paste the generated values. Dotenv files do not evaluate `$(...)` shell substitutions.
 
-Edit `.env` and set the required values:
-
-```bash
-# Required
-DATABASE_URL=postgresql://opsknight:your_password@postgres:5432/opsknight_db
+```dotenv
+POSTGRES_USER=opsknight
+POSTGRES_PASSWORD=replace-with-a-long-database-password
+POSTGRES_DB=opsknight_db
 NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your-secret-key-here  # openssl rand -base64 32
-ENCRYPTION_KEY=your-encryption-key    # openssl rand -hex 32
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXTAUTH_SECRET=replace-with-the-base64-output
+ENCRYPTION_KEY=replace-with-the-64-hex-character-output
+APP_PORT=3000
 ```
 
-> **Note:** In production, set `NEXTAUTH_URL` to your public domain (HTTPS).
+For a production origin, use the exact public HTTPS URL for both URL settings and store the secrets outside the repository. Keep `ENCRYPTION_KEY` stable and backed up; it is required to decrypt stored provider credentials.
 
-### Step 3: Start Services
+### 2. Render, start, and inspect
 
 ```bash
+docker compose config
+docker compose pull
 docker compose up -d
+docker compose ps
+docker compose logs --tail=200 opsknight-app
+curl --fail http://localhost:3000/api/health?mode=readiness
 ```
 
-### Step 4: Create Admin User
+The Compose stack runs the application plus PostgreSQL 15 in the `opsknight_postgres_data` named volume. The application startup attempts database migrations. Inspect migration logs even when the container is running, because startup can continue after repeated migration failure.
 
-Open `http://localhost:3000` in your browser. You'll be automatically redirected to `/setup` where you can create your admin account:
+### 3. Bootstrap the first Admin
 
-1. Enter your **Name**
-2. Enter your **Email**
-3. Click **Create Admin Account**
-4. **Important**: Copy the generated password immediately — it's shown only once
+Open `http://localhost:3000`. When no users exist, OpsKnight redirects to `/setup`.
 
-After setup, log in with your email and the generated password.
+1. Enter the first Admin's name and email.
+2. Create the account.
+3. Copy the generated password; it is shown once.
+4. Sign in, change the generated password, and create a second Admin.
 
----
+Setup stops accepting another bootstrap after the first user exists.
 
-## Helm (Kubernetes)
+### 4. Verify a product workflow
 
-Use the Helm chart for repeatable Kubernetes installs.
+Do not stop at the login page:
 
-Follow the full guide here: [Helm Deployment](../deployment/helm).
+1. Create a team, schedule, escalation policy, and service.
+2. Create a controlled incident for that service.
+3. Confirm the expected assignment/escalation state.
+4. Acknowledge and resolve it.
+5. After configuring a provider, verify an external notification and its history.
 
----
+The [15-minute getting-started path](./README) gives the exact UI sequence.
 
-## Local Development
+## Install on Kubernetes
 
-For contributors and developers running the app directly.
+Use one packaging path:
+
+- [Helm](../deployment/helm) for the chart at `helm/opsknight`.
+- [Kustomize](../deployment/kustomize) for overlays based on `k8s/kustomization.yaml`.
+
+Both checked-in defaults contain example or placeholder values. Before applying, pin an image, replace every secret, configure the exact public HTTPS origin, choose an owned PostgreSQL topology, render/server-dry-run resources, and define backup/recovery. See [Kubernetes deployment](../deployment/kubernetes) for the shared runtime and scaling boundaries.
+
+## Install from source
+
+Use this path for contribution and development. It is not a substitute for the tested production image/entrypoint.
 
 ### Prerequisites
 
-- Node.js 20 (the version the production image is built on; `engines` pins
-  `>=20 <21`). Older runtimes resolve `Intl` hour cycles differently, which
-  affects on-call schedule calculations.
-- PostgreSQL 14+
-- npm or yarn
+- Node.js 20 and npm.
+- PostgreSQL 14+ reachable from the host.
+- Build tools required by Node dependencies on your operating system.
 
-### Setup
+### Set up the application
 
 ```bash
-# Install dependencies
-npm install
+git clone https://github.com/opsknight-labs/OpsKnight.git
+cd OpsKnight
+npm ci
+cp env.example .env
+openssl rand -base64 32
+openssl rand -hex 32
+```
 
-# Set up database
-npx prisma migrate deploy
+Edit `.env`. For PostgreSQL exposed from Compose to the development host, the hostname is `localhost`, not the container-only `opsknight-db` name:
+
+```dotenv
+DATABASE_URL=postgresql://opsknight:YOUR_PASSWORD@localhost:5432/opsknight_db?sslmode=prefer
+NEXTAUTH_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXTAUTH_SECRET=PASTE_BASE64_OUTPUT
+ENCRYPTION_KEY=PASTE_64_HEX_CHARACTER_OUTPUT
+```
+
+Create or select a disposable development database, then:
+
+```bash
+npx prisma validate
 npx prisma generate
-
-# Start development server
+npx prisma migrate deploy
 npm run dev
 ```
 
----
+Open `http://localhost:3000`, bootstrap the Admin, and run the same controlled incident workflow. Production builds use `npm run build`; use the packaged deployment guides for an operated installation.
 
-## Verify the Install
+## Common installation failures
 
-After installation, verify:
-
-1. Application loads at `http://localhost:3000`
-2. You can log in with the admin account
-3. Dashboard displays without errors
-4. You can create a service successfully
-
----
-
-## Common Issues
-
-### Database Connection Issues
+### PostgreSQL is unhealthy or unreachable
 
 ```bash
-# Check PostgreSQL is running
-docker compose logs postgres
-
-# Reset database
-docker compose down -v
-docker compose up -d
+docker compose ps
+docker compose logs --tail=200 opsknight-db
+docker compose exec -T opsknight-db \
+  pg_isready -U "${POSTGRES_USER:-opsknight}" -d "${POSTGRES_DB:-opsknight_db}"
 ```
 
-### Port Conflicts
+Check database credentials, hostname, port, disk/volume state, TLS requirements, and application migration logs. Inside the application container, `localhost` refers to that container, not PostgreSQL.
 
-If port 3000 is in use, modify `docker-compose.yml`:
+### Port 3000 is already used
 
-```yaml
-ports:
-  - '3001:3000' # Use port 3001 instead
+Set a different host port without changing the container port:
+
+```dotenv
+APP_PORT=3001
+NEXTAUTH_URL=http://localhost:3001
+NEXT_PUBLIC_APP_URL=http://localhost:3001
 ```
 
-### Login Redirects
+Recreate the application and open port 3001.
 
-If the login redirects unexpectedly:
+### Login redirects repeatedly
 
-- Confirm `NEXTAUTH_URL` matches your real base URL.
-- Regenerate `NEXTAUTH_SECRET` if sessions fail to validate.
+The browser origin must exactly match `NEXTAUTH_URL`, including scheme and port. Behind a proxy, forward the original host and scheme. Keep the same `NEXTAUTH_SECRET` across restarts/replicas; replacing it invalidates existing sessions and does not fix an origin mismatch.
+
+### You need a clean disposable database
+
+Do not use `docker compose down -v` as a routine troubleshooting command: `-v` deletes the named PostgreSQL volume. For a disposable install only, first confirm the Compose project/volume target and that no data or backup is needed. Production recovery must use the [backup and restore](../deployment/backup-restore) runbook.
+
+## Next steps
+
+- [First steps](./first-steps) — first-week configuration.
+- [Configuration reference](./configuration) — supported environment behavior.
+- [Authentication](../administration/authentication) — bootstrap, OIDC, sessions, and recovery.
+- [Monitoring](../deployment/monitoring) — readiness, logs, and synthetic validation.
+- [Upgrade and rollback](../deployment/upgrade-rollback) — controlled release workflow.
+- [Troubleshooting](../troubleshooting) — application and integration diagnosis.

@@ -1,8 +1,10 @@
 ---
 order: 4
+title: Analytics surface matrix
+description: Compare desktop, mobile, executive-report, and CSV-export analytics behavior and access boundaries.
 ---
 
-# Analytics Coverage Audit (current code)
+# Analytics surface matrix
 
 This page documents what exists **today** across analytics surfaces. All statements are derived
 from the current codebase in `OpsKnight/`.
@@ -74,7 +76,7 @@ All surfaces share the same SLA engine but expose different subsets in UI:
 
 ---
 
-## Suggested Follow-ups
+## Design questions for contributors
 
 1. Decide whether analytics pages should enforce responder/admin role like export.
 2. Decide if mobile analytics should add filters or remain a quick summary view.
