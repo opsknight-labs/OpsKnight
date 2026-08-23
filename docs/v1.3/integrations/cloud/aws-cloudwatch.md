@@ -51,13 +51,7 @@ POST /api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID&integrationK
 
 ### Step 4: Confirm Subscription
 
-> **Important**: OpsKnight does NOT auto-confirm SNS subscriptions for security.
-
-To confirm the subscription:
-
-1. Check OpsKnight audit logs or server logs for the `SubscribeURL`
-2. Visit the URL once to confirm
-3. Or confirm manually in AWS Console if visible
+OpsKnight handles an SNS `SubscriptionConfirmation` request automatically. Before following the supplied `SubscribeURL`, it requires HTTPS, validates the URL, and restricts the destination to an Amazon SNS hostname. Confirm that SNS reports the subscription as **Confirmed** and inspect OpsKnight logs if it remains pending. Do not visit or copy a confirmation URL from an untrusted source.
 
 ### Step 5: Configure CloudWatch Alarms
 

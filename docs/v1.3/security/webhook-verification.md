@@ -26,7 +26,7 @@ sequenceDiagram
     Provider->>Middleware: POST /api/integrations/:type (Payload + Headers)
     Middleware->>Security: 1. Extract Integration Key (Bearer, Token, x-key, Query)
     Security-->>Middleware: Integration Key Validated (Constant-time check)
-    
+
     alt Secret Configured
         Middleware->>Security: 2. Verify Cryptographic Signature (HMAC-SHA256, HMAC-SHA1)
         Security-->>Middleware: Signature Validated
@@ -43,7 +43,7 @@ sequenceDiagram
 OpsKnight extracts integration keys across standard headers and fallbacks:
 
 1. `Authorization: Bearer <KEY>`
-2. `Authorization: Token token=<KEY>` (PagerDuty v2 standard)
+2. `Authorization: Token token=<KEY>` (shared provider middleware and Events API; the PagerDuty-compatible adapter uses Bearer or `routing_key` in the payload)
 3. `x-integration-key: <KEY>` or `x-api-key: <KEY>`
 4. `?integrationKey=<KEY>` or `?key=<KEY>`
 
@@ -70,15 +70,15 @@ function safeEqual(a: string, b: string): boolean {
 
 OpsKnight provides built-in cryptographic verifiers for all major webhook protocols:
 
-| Provider | Signature Header | Algorithm | Signature Format |
-| :--- | :--- | :--- | :--- |
-| **GitHub** | `x-hub-signature-256` | HMAC-SHA256 | `sha256=<hex_digest>` |
-| **GitLab** | `x-gitlab-token` | Constant-time string | `<secret_token>` |
-| **Sentry** | `sentry-hook-signature` | HMAC-SHA256 | `<hex_digest>` |
-| **Slack ChatOps** | `x-slack-signature` | HMAC-SHA256 | `v0=<hex_digest>` (with timestamp) |
-| **Grafana** | `x-grafana-signature` | HMAC-SHA256 | `<hex_digest>` |
-| **Vercel** | `x-vercel-signature` | HMAC-SHA1 | `<hex_digest>` |
-| **Generic Webhooks** | `x-signature` / `x-webhook-signature` | HMAC-SHA256 | `<hex_digest>` |
+| Provider             | Signature Header                      | Algorithm            | Signature Format                   |
+| :------------------- | :------------------------------------ | :------------------- | :--------------------------------- |
+| **GitHub**           | `x-hub-signature-256`                 | HMAC-SHA256          | `sha256=<hex_digest>`              |
+| **GitLab**           | `x-gitlab-token`                      | Constant-time string | `<secret_token>`                   |
+| **Sentry**           | `sentry-hook-signature`               | HMAC-SHA256          | `<hex_digest>`                     |
+| **Slack ChatOps**    | `x-slack-signature`                   | HMAC-SHA256          | `v0=<hex_digest>` (with timestamp) |
+| **Grafana**          | `x-grafana-signature`                 | HMAC-SHA256          | `<hex_digest>`                     |
+| **Vercel**           | `x-vercel-signature`                  | HMAC-SHA1            | `<hex_digest>`                     |
+| **Generic Webhooks** | `x-signature` / `x-webhook-signature` | HMAC-SHA256          | `<hex_digest>`                     |
 
 ---
 
@@ -89,10 +89,7 @@ When OpsKnight sends outbound webhooks (e.g. status page notifications, third-pa
 ```typescript
 const timestamp = Math.floor(Date.now() / 1000).toString();
 const signedPayload = `${timestamp}.${payloadString}`;
-const hmac = crypto
-  .createHmac('sha256', secret)
-  .update(signedPayload)
-  .digest('hex');
+const hmac = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
 
 // Sent as:
 // X-OpsKnight-Timestamp: 1786973846

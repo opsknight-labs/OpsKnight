@@ -50,12 +50,12 @@ UptimeRobot sends parameters as query strings or JSON. OpsKnight supports JSON:
 
 ## Event Mapping
 
-| Alert Type | Status  | OpsKnight Action   |
-| ---------- | ------- | ------------------ |
-| `1`        | Down    | Trigger (Critical) |
-| `2`        | Up      | Resolve            |
-| `98`       | Started | Info               |
-| `99`       | Paused  | Info               |
+| Alert Type | Status | OpsKnight Action   |
+| ---------- | ------ | ------------------ |
+| `1`        | Down   | Trigger (Critical) |
+| `2`        | Up     | Resolve            |
+
+Other numeric alert types are not special-cased by the v1.3 adapter and therefore follow the trigger fallback. Configure the upstream contact to send down (`1`) and up (`2`) events for a reliable lifecycle.
 
 ## Deduplication
 
