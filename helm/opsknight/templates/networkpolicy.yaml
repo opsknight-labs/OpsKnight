@@ -14,15 +14,13 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Allow ingress from ingress controller
     - from:
         - namespaceSelector:
             matchLabels:
-              name: ingress-nginx # Common default, adjust if needed
+              {{- toYaml .Values.networkPolicy.ingressNamespaceLabels | nindent 14 }}
       ports:
         - protocol: TCP
           port: {{ .Values.service.targetPort }}
-    # Allow ingress from same namespace
     - from:
         - podSelector:
             matchLabels:
@@ -31,7 +29,6 @@ spec:
         - protocol: TCP
           port: {{ .Values.service.targetPort }}
   egress:
-    # Allow egress to PostgreSQL
     {{- if .Values.postgresql.enabled }}
     - to:
         - podSelector:
@@ -40,14 +37,20 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+    {{- else }}
+    # External/managed PostgreSQL may live outside this namespace or cluster.
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.port | int }}
     {{- end }}
-    # Allow DNS resolution
     - to:
         - namespaceSelector: {}
       ports:
         - protocol: UDP
           port: 53
-    # Allow HTTPS for external API calls
+        - protocol: TCP
+          port: 53
     - to: []
       ports:
         - protocol: TCP
