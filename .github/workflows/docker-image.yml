@@ -129,11 +129,11 @@ jobs:
 
       - name: Set up Helm
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Set up kubectl
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
 
       - name: Render release deployment contract
         if: startsWith(github.ref, 'refs/tags/v')
@@ -155,14 +155,14 @@ jobs:
 
       - name: Set up QEMU
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -179,7 +179,7 @@ jobs:
       - name: Docker metadata (test channel - PR)
         if: github.event_name == 'pull_request'
         id: meta_test_pr
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_NAME_TEST }}
           tags: |
@@ -188,7 +188,7 @@ jobs:
       - name: Docker metadata (test channel - main)
         if: github.ref == 'refs/heads/main'
         id: meta_test_main
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_NAME_TEST }}
           tags: |
@@ -198,7 +198,7 @@ jobs:
       - name: Docker metadata (release channel - version tag)
         if: startsWith(github.ref, 'refs/tags/v')
         id: meta_release_tag
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_NAME_RELEASE }}
           tags: |
@@ -210,7 +210,7 @@ jobs:
 
       - name: Build (PR validation - no push)
         if: github.event_name == 'pull_request'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -225,7 +225,7 @@ jobs:
 
       - name: Build + push (test channel - main)
         if: github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -240,7 +240,7 @@ jobs:
 
       - name: Build + push (release channel - version tag)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
