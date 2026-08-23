@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const root = path.resolve(__dirname, '../..');
+const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 
 describe('deployment configuration invariants', () => {
@@ -49,12 +49,11 @@ describe('deployment configuration invariants', () => {
     expect(read('helm/opsknight/templates/deployment.yaml')).toContain('startupProbe:');
     const entrypoint = read('docker-entrypoint.sh');
     expect(entrypoint).toContain('Refusing to start against an unknown database schema');
-    expect(entrypoint).toMatch(/MIGRATION_SUCCESS.*0[\s\S]*exit 1/);
+    expect(entrypoint).toMatch(/MIGRATION_SUCCESS=0[\s\S]*exit 1/);
   });
 
   it('does not allocate an unused standalone postgres PVC', () => {
-    const kustomization = read('k8s/kustomization.yaml');
-    expect(kustomization).not.toContain('postgres-pvc.yaml');
+    expect(read('k8s/kustomization.yaml')).not.toContain('postgres-pvc.yaml');
     expect(fs.existsSync(path.join(root, 'k8s/postgres-pvc.yaml'))).toBe(false);
   });
 
