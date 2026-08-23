@@ -1,0 +1,73 @@
+name: Deployment manifests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-entrypoint.sh'
+      - 'docker-compose.yml'
+      - 'env.example'
+      - 'helm/**'
+      - 'k8s/**'
+      - 'docs/v1.3/deployment/**'
+      - 'tests/lib/deployment-config-unit.test.ts'
+      - '.github/workflows/deployment-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-entrypoint.sh'
+      - 'docker-compose.yml'
+      - 'env.example'
+      - 'helm/**'
+      - 'k8s/**'
+      - '.github/workflows/deployment-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Lint Helm chart
+        run: helm lint helm/opsknight
+
+      - name: Render Helm defaults
+        run: helm template opsknight helm/opsknight --namespace opsknight > /tmp/opsknight-helm.yaml
+
+      - name: Render Helm external database configuration
+        run: |
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            --set postgresql.enabled=false \
+            --set-string database.url='postgresql://user:encoded%40password@db.example.com:5432/opsknight_db?sslmode=require' \
+            --set networkPolicy.enabled=true \
+            > /tmp/opsknight-helm-external-db.yaml
+
+      - name: Render Kustomize base
+        run: kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+
+      - name: Validate rendered invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'ghcr.io/opsknight-labs/opsknight:' /tmp/opsknight-helm.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
+          grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-helm.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
+          grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
+          if grep -q 'runAsUser: 999' /tmp/opsknight-helm.yaml /tmp/opsknight-kustomize.yaml; then
+            echo 'obsolete PostgreSQL uid 999 found'
+            exit 1
+          fi
