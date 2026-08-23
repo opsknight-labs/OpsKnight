@@ -5,6 +5,7 @@ import { NextRequest } from 'next/server';
 const mockPrisma = vi.hoisted(() => ({
   user: {
     findUnique: vi.fn(),
+    update: vi.fn(),
   },
   userToken: {
     deleteMany: vi.fn(),
@@ -77,6 +78,10 @@ describe('API: Admin Generate Reset Link', () => {
     expect(data.link).toBeDefined();
     expect(data.link).toContain('/reset-password?token=');
     expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'target-id' } });
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'target-id' },
+      data: { tokenVersion: { increment: 1 } },
+    });
     expect(mockPrisma.userToken.create).toHaveBeenCalled();
     expect(mockPrisma.auditLog.create).toHaveBeenCalled();
   });
