@@ -58,8 +58,9 @@ resources:
     cpu: 500m
     memory: 1Gi
 
+# Disabled by default so a basic install does not depend on metrics-server.
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
@@ -73,7 +74,6 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# Startup probe protects long first starts/migrations from the liveness probe.
 startupProbe:
   httpGet:
     path: /api/health?mode=readiness
@@ -102,7 +102,6 @@ readinessProbe:
 secrets:
   nextauthSecret: 'change_this_to_a_random_secret_in_production'
   encryptionKey: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
-  cronSecret: 'change_me_to_a_secure_token'
 
 networkPolicy:
   enabled: false
