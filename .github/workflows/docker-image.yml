@@ -23,6 +23,7 @@ env:
 
 jobs:
   release-quality:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     services:
       postgres:
@@ -48,25 +49,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Non-release image validation path
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run: echo 'Stable release-quality contract is enforced for version tags.'
-
       - name: Set up Node
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
 
       - name: Install candidate dependencies
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           HUSKY: '0'
         run: npm ci --legacy-peer-deps
 
       - name: Clean-install and migration contract
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           mkdir -p reports
           npx prisma migrate deploy
@@ -81,7 +75,6 @@ jobs:
             tests/lib/deployment-config-unit.test.ts
 
       - name: Event, escalation, and notification contract
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           VITEST_USE_REAL_DB: '1'
         run: |
@@ -91,7 +84,6 @@ jobs:
             tests/integration/job-queue.test.ts
 
       - name: Upgrade from previous stable release
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
           set -euo pipefail
@@ -113,7 +105,6 @@ jobs:
           DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_upgrade?schema=public' npm run prisma:health
 
       - name: Backup and restore contract
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           POSTGRES_CONTAINER="${{ job.services.postgres.id }}"
           test -n "$POSTGRES_CONTAINER"
@@ -128,15 +119,12 @@ jobs:
           DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_restore?schema=public' node scripts/ci-db-smoke.cjs
 
       - name: Set up Helm
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: azure/setup-helm@v5
 
       - name: Set up kubectl
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: azure/setup-kubectl@v5
 
       - name: Render release deployment contract
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           cp env.example .env
           docker compose config > /tmp/opsknight-compose.yaml
@@ -148,6 +136,9 @@ jobs:
 
   build:
     needs: release-quality
+    if: >-
+      always() &&
+      (needs.release-quality.result == 'success' || needs.release-quality.result == 'skipped')
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -218,8 +209,8 @@ jobs:
           push: false
           tags: ${{ steps.meta_test_pr.outputs.tags }}
           labels: ${{ steps.meta_test_pr.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
+          cache-from: type=gha,scope=opsknight-main-amd64
+          cache-to: type=gha,scope=opsknight-pr-${{ github.event.pull_request.number }},mode=max
           provenance: false
           sbom: false
 
@@ -233,8 +224,8 @@ jobs:
           push: true
           tags: ${{ steps.meta_test_main.outputs.tags }}
           labels: ${{ steps.meta_test_main.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
+          cache-from: type=gha,scope=opsknight-main-amd64
+          cache-to: type=gha,scope=opsknight-main-amd64,mode=max
           provenance: false
           sbom: false
 
@@ -248,7 +239,9 @@ jobs:
           push: true
           tags: ${{ steps.meta_release_tag.outputs.tags }}
           labels: ${{ steps.meta_release_tag.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
+          cache-from: |
+            type=gha,scope=opsknight-release
+            type=gha,scope=opsknight-main-amd64
+          cache-to: type=gha,scope=opsknight-release,mode=max
           provenance: mode=max
           sbom: true
