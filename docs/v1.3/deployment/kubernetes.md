@@ -6,9 +6,9 @@ description: Deploy and customize the raw Kubernetes manifests shipped with OpsK
 
 # Kubernetes deployment
 
-OpsKnight ships a raw Kubernetes base in `k8s/`. It includes the application Deployment and Service, an optional-style in-cluster PostgreSQL topology, Ingress, HPA, PodDisruptionBudget, NetworkPolicy, ServiceAccount, ConfigMap, and Secret. `k8s/kustomization.yaml` is the supported entry point for rendering the complete base.
+OpsKnight ships a raw Kubernetes base in `k8s/`. It includes the application Deployment and Service, an in-cluster PostgreSQL topology, Ingress, HPA, PodDisruptionBudget, NetworkPolicy, ServiceAccount, ConfigMap, and Secret. `k8s/kustomization.yaml` is the supported entry point for rendering the complete base.
 
-Do not apply the base unchanged to production. The checked-in values intentionally contain example credentials, `localhost` URLs, an example ingress host, a floating application image tag, and a single PostgreSQL instance.
+Do not apply the base unchanged to production. The checked-in values intentionally contain example credentials, `localhost` URLs, an example ingress host, a release-pinned application image, and a single PostgreSQL instance. Choose the exact image tag or digest validated for your environment.
 
 ## Prerequisites
 
@@ -41,11 +41,11 @@ kubectl -n opsknight logs deployment/opsknight-app --tail=200
 
 ## Required production customization
 
-At minimum, replace:
+At minimum, replace or verify:
 
 - `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` in `k8s/configmap.yaml` with the same public HTTPS origin;
 - every placeholder in `k8s/secret.yaml`;
-- `ghcr.io/opsknight-labs/opsknight:latest` with a tested immutable release tag or digest;
+- the packaged OpsKnight image tag with the immutable release tag or digest you tested;
 - `opsknight.example.com`, ingress class, certificate issuer/annotations, and TLS secret;
 - storage capacity/class and backup handling;
 - HPA/resource settings based on your cluster and load test;
