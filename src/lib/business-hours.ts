@@ -63,9 +63,11 @@ export function isIncidentAfterHours(
   const isBusinessDay = allowedDays.includes(dayNum);
 
   const isBusinessHours =
-    startHour <= endHour
-      ? hour >= startHour && hour < endHour
-      : hour >= startHour || hour < endHour;
+    startHour === endHour
+      ? true // startHour === endHour represents 24-hour round-the-clock coverage
+      : startHour < endHour
+        ? hour >= startHour && hour < endHour
+        : hour >= startHour || hour < endHour;
 
   return !isBusinessDay || !isBusinessHours;
 }

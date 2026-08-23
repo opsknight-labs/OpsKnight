@@ -34,6 +34,9 @@ export async function getActiveOnCallShifts(
       layers: {
         include: {
           users: {
+            where: {
+              user: { status: 'ACTIVE' },
+            },
             include: {
               user: {
                 select: { id: true, name: true, avatarUrl: true, gender: true },

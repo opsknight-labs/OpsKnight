@@ -1240,9 +1240,9 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         COUNT(*) FILTER (WHERE "urgency" = 'MEDIUM') as medium_urgency_count,
         COUNT(*) FILTER (WHERE "urgency" = 'LOW') as low_urgency_count,
         AVG(EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000)
-          FILTER (WHERE "acknowledgedAt" IS NOT NULL) as avg_mtta_ms,
+          FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as avg_mtta_ms,
         AVG(EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000)
-          FILTER (WHERE "status" = 'RESOLVED' AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL) as avg_mttr_ms,
+          FILTER (WHERE "status" = 'RESOLVED' AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
         COUNT(*) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as ack_count,
         COUNT(*) FILTER (WHERE "status" = 'RESOLVED') as resolve_count
       FROM "Incident"
@@ -1973,7 +1973,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   );
 
   // Coverage & Others
-  const mtbfMs = calculateMtbfMs(recentIncidents.map(i => i.createdAt));
+  const mtbfMs = calculateMtbfMs(
+    recentIncidents.map(i => i.createdAt),
+    finalStart,
+    finalEnd
+  );
 
   // Resolved tenant business-hours TZ. The same value flows into the
   // SQL aggregate above and the rollup generator, so all three paths
@@ -2033,7 +2037,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   // `reopenCountFinal`.
   const resolvedCountForCalc = dbAggMetrics ? dbAggMetrics.resolvedCount : solvedIncidents.length;
   const autoResolvedCount = autoResolveCountFinal;
-  const reopenRate = resolvedCountForCalc > 0 ? (reopenCountFinal / resolvedCountForCalc) * 100 : 0;
+  const reopenRate =
+    resolvedCountForCalc > 0 ? Math.min(100, (reopenCountFinal / resolvedCountForCalc) * 100) : 0;
   const rawManualResolved = resolvedCountForCalc - autoResolvedCount;
   if (rawManualResolved < 0) {
     logger.warn('[SLA] manualResolved computed as negative in live path; clamping to 0', {
@@ -2604,6 +2609,7 @@ export async function calculateMultiServiceUptime(
         {
           OR: [
             { resolvedAt: { gte: effectiveStart } },
+            { updatedAt: { gte: effectiveStart } },
             { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
           ],
         },
@@ -2613,6 +2619,7 @@ export async function calculateMultiServiceUptime(
       serviceId: true,
       createdAt: true,
       resolvedAt: true,
+      updatedAt: true,
       status: true,
     },
   });
@@ -2631,13 +2638,14 @@ export async function calculateMultiServiceUptime(
     );
 
     const intervals = serviceIncidents
-      .map(incident => ({
-        start: incident.createdAt > effectiveStart ? incident.createdAt : effectiveStart,
-        end:
-          incident.resolvedAt && incident.resolvedAt < effectiveEnd
-            ? incident.resolvedAt
-            : effectiveEnd,
-      }))
+      .map(incident => {
+        const resolvedTime =
+          incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
+        return {
+          start: incident.createdAt > effectiveStart ? incident.createdAt : effectiveStart,
+          end: resolvedTime && resolvedTime < effectiveEnd ? resolvedTime : effectiveEnd,
+        };
+      })
       .filter(interval => interval.start < interval.end);
 
     const downtimeMs = calculateMergedDuration(intervals);

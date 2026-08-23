@@ -74,8 +74,8 @@ export default async function ScheduleDetailPage({
   const awaitedSearchParams = await searchParams;
   // Use current time - this will be recalculated on each page load/refresh
   const now = new Date();
-  const calendarRangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const calendarRangeEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  const calendarRangeStart = new Date(now.getTime() - 35 * 86400000);
+  const calendarRangeEnd = new Date(now.getTime() + 65 * 86400000);
   const historyPageSize = 8;
   const historyPage = Math.max(1, Number(awaitedSearchParams?.history ?? 1) || 1);
 
@@ -98,6 +98,9 @@ export default async function ScheduleDetailPage({
               restrictions: true,
               priority: true,
               users: {
+                where: {
+                  user: { status: 'ACTIVE' },
+                },
                 select: {
                   userId: true,
                   position: true,
