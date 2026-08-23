@@ -883,13 +883,27 @@ export async function ensurePostmortemDraft(incidentId: string): Promise<string 
     });
 
     const timelineEntries = [
-      ...events.map(e => ({ time: e.createdAt, text: e.message, type: 'event' })),
-      ...notes.map(n => ({
-        time: n.createdAt,
-        text: `[${n.user.name}]: ${n.content}`,
-        type: 'note',
+      ...events.map(e => ({
+        id: `event-${e.id}`,
+        timestamp: e.createdAt.toISOString(),
+        type: (e.type === 'ACKNOWLEDGED' || e.type === 'ESCALATED'
+          ? 'ESCALATION'
+          : e.type === 'MANUAL_RESOLVED' || e.type === 'AUTO_RESOLVED'
+            ? 'RESOLUTION'
+            : 'DETECTION') as 'DETECTION' | 'ESCALATION' | 'MITIGATION' | 'RESOLUTION',
+        title: e.message.slice(0, 60),
+        description: e.message,
+        actor: 'System',
       })),
-    ].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+      ...notes.map(n => ({
+        id: `note-${n.id}`,
+        timestamp: n.createdAt.toISOString(),
+        type: 'MITIGATION' as const,
+        title: `Note by ${n.user.name}`,
+        description: n.content,
+        actor: n.user.name,
+      })),
+    ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
     const actionItemsFromNotes = notes
       .filter(n => /todo:|action item:|fix:|followup:/i.test(n.content))

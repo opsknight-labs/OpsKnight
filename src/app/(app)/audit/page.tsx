@@ -14,9 +14,29 @@ import {
 } from '@/components/ui/shadcn/table';
 import { Card } from '@/components/ui/shadcn/card';
 
+import { assertResponderOrAbove } from '@/lib/rbac';
+import type { AuditEntityType } from '@prisma/client';
+
 export const dynamic = 'force-dynamic';
 
-export default async function AuditLogPage() {
+type AuditLogPageProps = {
+  searchParams?: Promise<{
+    entityType?: string;
+    entityId?: string;
+    actorId?: string;
+    action?: string;
+  }>;
+};
+
+export default async function AuditLogPage({ searchParams }: AuditLogPageProps) {
+  await assertResponderOrAbove();
+
+  const awaitedParams = await searchParams;
+  const entityType = awaitedParams?.entityType as AuditEntityType | undefined;
+  const entityId = awaitedParams?.entityId;
+  const actorId = awaitedParams?.actorId;
+  const action = awaitedParams?.action;
+
   const session = await getServerSession(await getAuthOptions());
   const email = session?.user?.email ?? null;
   const user = email
@@ -24,7 +44,15 @@ export default async function AuditLogPage() {
     : null;
   const userTimeZone = getUserTimeZone(user ?? undefined);
 
+  const where = {
+    ...(entityType ? { entityType } : {}),
+    ...(entityId ? { entityId } : {}),
+    ...(actorId ? { actorId } : {}),
+    ...(action ? { action } : {}),
+  };
+
   const logs = await prisma.auditLog.findMany({
+    where,
     include: {
       actor: {
         select: {

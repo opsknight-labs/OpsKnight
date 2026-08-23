@@ -51,6 +51,8 @@ export default function MobileModal({
 
       {/* Bottom Sheet */}
       <div
+        data-swipe-ignore="true"
+        onPointerDown={e => e.stopPropagation()}
         style={{
           position: 'fixed',
           bottom: 0,
@@ -64,6 +66,7 @@ export default function MobileModal({
           display: 'flex',
           flexDirection: 'column',
           animation: 'slideUp 0.3s ease',
+          paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
         }}
         ref={dialogRef}
         role="dialog"

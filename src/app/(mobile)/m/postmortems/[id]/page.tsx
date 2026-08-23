@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
+import { getUserPermissions } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,11 @@ export default async function MobilePostmortemDetailPage({ params }: PageProps) 
   });
 
   if (!pm) {
+    notFound();
+  }
+
+  const permissions = await getUserPermissions();
+  if (pm.status !== 'PUBLISHED' && !permissions.isResponderOrAbove) {
     notFound();
   }
 

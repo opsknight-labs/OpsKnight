@@ -285,6 +285,16 @@ export async function updateUserRole(userId: string, formData: FormData) {
     };
   }
   const role = formData.get('role') as string;
+  if (role !== 'ADMIN') {
+    try {
+      await assertNotLastAdmin(userId);
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Cannot demote the last admin.',
+      };
+    }
+  }
+
   await prisma.user.update({
     where: { id: userId },
     data: { role: role as 'ADMIN' | 'RESPONDER' | 'USER' },
@@ -505,6 +515,11 @@ export async function deleteUser(
   }
 
   try {
+    const userToDelete = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true, role: true },
+    });
+
     await deleteUserInternal(userId);
 
     await logAudit({
@@ -512,6 +527,12 @@ export async function deleteUser(
       entityType: 'USER',
       entityId: userId,
       actorId: currentUser?.id || null,
+      targetEmail: userToDelete?.email,
+      details: {
+        email: userToDelete?.email,
+        name: userToDelete?.name,
+        role: userToDelete?.role,
+      },
     });
 
     revalidatePath('/users');
@@ -568,6 +589,20 @@ export async function bulkUpdateUsers(
       });
     }
   } else if (action === 'deactivate') {
+    if (admin && userIds.includes(admin.id)) {
+      return { error: 'You cannot deactivate your own account.' };
+    }
+
+    try {
+      for (const userId of userIds) {
+        await assertNotLastAdmin(userId);
+      }
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Cannot deactivate the last admin.',
+      };
+    }
+
     for (const userId of userIds) {
       await prisma.user.update({
         where: { id: userId },
@@ -588,6 +623,10 @@ export async function bulkUpdateUsers(
     revalidatePath('/users');
     return { success: true, message: `Deactivated ${userIds.length} user(s)` };
   } else if (action === 'delete') {
+    if (admin && userIds.includes(admin.id)) {
+      return { error: 'You cannot delete your own account.' };
+    }
+
     try {
       for (const userId of userIds) {
         await assertUserIsNotSoleOwner(userId);
@@ -598,6 +637,11 @@ export async function bulkUpdateUsers(
     }
 
     for (const userId of userIds) {
+      const userToDelete = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true, role: true },
+      });
+
       await deleteUserInternal(userId);
 
       await logAudit({
@@ -605,6 +649,12 @@ export async function bulkUpdateUsers(
         entityType: 'USER',
         entityId: userId,
         actorId: admin?.id || null,
+        targetEmail: userToDelete?.email,
+        details: {
+          email: userToDelete?.email,
+          name: userToDelete?.name,
+          role: userToDelete?.role,
+        },
       });
     }
     revalidatePath('/users');
@@ -614,6 +664,20 @@ export async function bulkUpdateUsers(
     if (!role) {
       return { error: 'Role is required.' };
     }
+
+    if (role !== 'ADMIN') {
+      if (admin && userIds.includes(admin.id)) {
+        return { error: 'You cannot demote your own admin account.' };
+      }
+      try {
+        for (const userId of userIds) {
+          await assertNotLastAdmin(userId);
+        }
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : 'Cannot demote the last admin.' };
+      }
+    }
+
     for (const userId of userIds) {
       await prisma.user.update({
         where: { id: userId },

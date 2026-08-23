@@ -2,7 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { getCurrentUser, assertResponderOrAbove } from '@/lib/rbac';
+import { getCurrentUser, assertResponderOrAbove, getUserPermissions } from '@/lib/rbac';
 import {
   getStoredActionItemId,
   normalizeLegacyActionItems,
@@ -73,18 +73,30 @@ export async function upsertPostmortem(incidentId: string, data: PostmortemData)
   }
 
   const postmortem = await prisma.$transaction(async tx => {
+    const existingPostmortem = await tx.postmortem.findUnique({
+      where: { incidentId },
+      select: { publishedAt: true, status: true },
+    });
+
+    const publishedAt =
+      data.status === 'PUBLISHED'
+        ? (existingPostmortem?.publishedAt ?? new Date())
+        : data.status === 'DRAFT'
+          ? null
+          : existingPostmortem?.publishedAt;
+
     const upserted = await tx.postmortem.upsert({
       where: { incidentId },
       update: {
         ...data,
+        publishedAt,
         updatedAt: new Date(),
-        ...(data.status === 'PUBLISHED' && { publishedAt: new Date() }),
       },
       create: {
         incidentId,
         createdById: user.id,
         ...data,
-        ...(data.status === 'PUBLISHED' && { publishedAt: new Date() }),
+        publishedAt: data.status === 'PUBLISHED' ? new Date() : null,
       },
     });
 
@@ -298,7 +310,9 @@ export async function getAllPostmortems(
   const { status, page = 1, limit = 50 } = options;
   const skip = (page - 1) * limit;
 
-  const where = status ? { status } : {};
+  const permissions = await getUserPermissions();
+  const baseWhere = permissions.isResponderOrAbove ? {} : { status: 'PUBLISHED' as const };
+  const where = status ? { ...baseWhere, status } : baseWhere;
 
   const [postmortems, total] = await Promise.all([
     prisma.postmortem.findMany({
@@ -341,10 +355,26 @@ export async function getAllPostmortems(
  * Delete a postmortem
  */
 export async function deletePostmortem(incidentId: string) {
+  let user;
   try {
-    await assertResponderOrAbove();
+    user = await assertResponderOrAbove();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
+  }
+
+  const pm = await prisma.postmortem.findUnique({
+    where: { incidentId },
+    select: { id: true, createdById: true },
+  });
+
+  if (!pm) {
+    throw new Error('Postmortem not found');
+  }
+
+  if (user.role !== 'ADMIN' && pm.createdById !== user.id) {
+    throw new Error(
+      'Forbidden: Only administrators or the postmortem author can delete this record'
+    );
   }
 
   await prisma.postmortem.delete({

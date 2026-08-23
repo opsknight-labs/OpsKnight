@@ -112,7 +112,7 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
             You have been unsubscribed from {subscription.statusPage.name} status updates. You will
             no longer receive email notifications.
           </p>
-          <a
+          <Link
             href="/status"
             style={{
               display: 'inline-block',
@@ -125,7 +125,7 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
             }}
           >
             View Status Page
-          </a>
+          </Link>
         </div>
       </div>
     );

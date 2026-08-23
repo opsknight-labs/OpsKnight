@@ -443,6 +443,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             token.sub = user.id ?? (user as AugmentedUser).id ?? token.sub;
             token.name = user.name;
             token.email = user.email;
+            (token as AugmentedJWT).tokenVersion = (user as AugmentedUser).tokenVersion ?? 0;
           }
 
           // Handle client-side update() calls

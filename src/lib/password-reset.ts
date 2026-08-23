@@ -263,13 +263,35 @@ export async function completePasswordReset(
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-        tokenVersion: { increment: 1 },
-      },
+    const result = await prisma.$transaction(async tx => {
+      const updatedToken = await tx.userToken.updateMany({
+        where: {
+          tokenHash,
+          type: 'PASSWORD_RESET',
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: { usedAt: new Date() },
+      });
+
+      if (updatedToken.count === 0) {
+        throw new Error('TOKEN_EXPIRED_OR_USED');
+      }
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          tokenVersion: { increment: 1 },
+        },
+      });
+
+      return true;
     });
+
+    if (!result) {
+      return { success: false, error: 'Invalid or expired token' };
+    }
 
     // Log session revocation for observability
     logger.info('[PasswordReset] Password updated, sessions revoked', {
@@ -278,13 +300,11 @@ export async function completePasswordReset(
       email: user.email,
     });
 
-    await prisma.userToken.update({
-      where: { tokenHash },
-      data: { usedAt: new Date() },
-    });
-
     return { success: true, message: 'Password reset successfully' };
-  } catch (e) {
+  } catch (e: any) {
+    if (e?.message === 'TOKEN_EXPIRED_OR_USED') {
+      return { success: false, error: 'Invalid or expired token' };
+    }
     logger.error('password.reset.complete.error', {
       error: e instanceof Error ? e.message : String(e),
     });

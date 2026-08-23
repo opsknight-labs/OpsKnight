@@ -78,7 +78,9 @@ export async function POST(req: NextRequest) {
         entityType: 'USER',
         entityId: user.id,
         actorId: sessionUser.id,
-        details: { targetEmail: user.email },
+        targetEmail: sessionUser.email,
+        ip,
+        details: { targetEmail: user.email, generatedFor: user.id },
       },
     });
 

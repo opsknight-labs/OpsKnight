@@ -17,7 +17,7 @@ export interface WebhookPayload {
 /**
  * Deliver webhook payload to a URL
  */
-async function deliverWebhook(
+export async function deliverWebhook(
   url: string,
   secret: string,
   payload: WebhookPayload
@@ -123,13 +123,16 @@ export async function getStatusPagesForService(serviceId: string): Promise<strin
           select: {
             id: true,
             enabled: true,
+            showIncidents: true,
           },
         },
       },
     });
 
-    // Return only enabled status pages
-    return statusPageServices.filter(sps => sps.statusPage.enabled).map(sps => sps.statusPageId);
+    // Return only enabled status pages that show incidents
+    return statusPageServices
+      .filter(sps => sps.statusPage.enabled && sps.statusPage.showIncidents)
+      .map(sps => sps.statusPageId);
   } catch (error: any) {
     logger.error('api.status_page.get_status_pages_for_service_error', {
       serviceId,
@@ -212,12 +215,16 @@ export async function triggerWebhooksForService(
   incidentData: any // eslint-disable-line @typescript-eslint/no-explicit-any
 ): Promise<void> {
   try {
+    if (incidentData?.visibility && incidentData.visibility !== 'PUBLIC') {
+      return;
+    }
+
     const statusPageIds = await getStatusPagesForService(serviceId);
 
     // If no status pages are associated, try to trigger for the default enabled status page
     if (statusPageIds.length === 0) {
       const defaultStatusPage = await prisma.statusPage.findFirst({
-        where: { enabled: true },
+        where: { enabled: true, showIncidents: true },
         select: { id: true },
       });
 

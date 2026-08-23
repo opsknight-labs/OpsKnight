@@ -5,11 +5,10 @@ export type OidcValidationResult = {
   error?: string;
 };
 
-function hasPathQueryOrHash(urlObj: URL): boolean {
-  const hasNonRootPath = urlObj.pathname && urlObj.pathname !== '/';
+function hasQueryOrHash(urlObj: URL): boolean {
   const hasQuery = !!urlObj.search;
   const hasHash = !!urlObj.hash;
-  return hasNonRootPath || hasQuery || hasHash;
+  return hasQuery || hasHash;
 }
 
 function isPrivateOrLocalHostname(hostname: string): boolean {
@@ -56,11 +55,11 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
       };
     }
 
-    // 4. Reject URLs with paths, queries, or fragments
-    if (hasPathQueryOrHash(parsedUrl)) {
+    // 4. Reject URLs with queries or fragments
+    if (hasQueryOrHash(parsedUrl)) {
       return {
         isValid: false,
-        error: 'Issuer URL must not include a path, query string, or fragment.',
+        error: 'Issuer URL must not include a query string or fragment.',
       };
     }
 
@@ -83,11 +82,19 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
     }
 
     // 6. Build the discovery URL from validated primitives.
-    //    This severs the CodeQL taint chain: the fetch URL is constructed
-    //    from the literal "https://" prefix + validated hostname + a
-    //    static well-known path. No user-provided string flows to fetch().
+    const cleanPath = parsedUrl.pathname.replace(/\/+$/, '');
+    const pathSegments = cleanPath.split('/').filter(Boolean);
+    if (pathSegments.some(seg => !/^[a-zA-Z0-9._-]+$/.test(seg))) {
+      return {
+        isValid: false,
+        error: 'Issuer URL path contains invalid characters.',
+      };
+    }
+    const safePath = pathSegments.join('/');
     const safeHost = port ? `${validatedHostname}:${port}` : validatedHostname;
-    const discoveryUrl = `https://${safeHost}/.well-known/openid-configuration`;
+    const discoveryUrl = safePath
+      ? `https://${safeHost}/${safePath}/.well-known/openid-configuration`
+      : `https://${safeHost}/.well-known/openid-configuration`;
 
     logger.info(`[OIDC Validation] Checking discovery URL: ${discoveryUrl}`);
 

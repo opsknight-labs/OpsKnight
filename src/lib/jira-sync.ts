@@ -265,6 +265,21 @@ export async function processJiraWebhookEvent(
     data,
   });
 
+  if (
+    data.externalStatus &&
+    ['done', 'closed', 'resolved', 'complete', 'completed'].includes(
+      String(data.externalStatus).toLowerCase()
+    )
+  ) {
+    const actionItemIds = links.map(l => l.actionItemId).filter(Boolean) as string[];
+    if (actionItemIds.length > 0) {
+      await prisma.actionItem.updateMany({
+        where: { id: { in: actionItemIds }, status: { not: 'COMPLETED' } },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+      });
+    }
+  }
+
   return { updated: links.length };
 }
 
@@ -287,9 +302,7 @@ export async function syncIncidentNoteToJira(
 
     const formattedComment = `[OpsKnight Note by ${authorName}]:\n${noteContent}`;
 
-    await Promise.allSettled(
-      links.map(link => addJiraComment(link.externalKey, formattedComment))
-    );
+    await Promise.allSettled(links.map(link => addJiraComment(link.externalKey, formattedComment)));
 
     return links.length;
   } catch (error) {
@@ -319,9 +332,7 @@ export async function syncIncidentEventToJira(
 
     const formattedComment = `[OpsKnight Update]: ${eventMessage}`;
 
-    await Promise.allSettled(
-      links.map(link => addJiraComment(link.externalKey, formattedComment))
-    );
+    await Promise.allSettled(links.map(link => addJiraComment(link.externalKey, formattedComment)));
 
     return links.length;
   } catch (error) {
@@ -333,4 +344,3 @@ export async function syncIncidentEventToJira(
     return 0;
   }
 }
-

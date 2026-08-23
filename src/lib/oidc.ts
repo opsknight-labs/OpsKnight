@@ -40,7 +40,7 @@ export default function OIDCProvider(config: OIDCConfig): OAuthConfig<OIDCProfil
     clientSecret: config.clientSecret,
     authorization: { params: { scope: scopes } },
     idToken: true,
-    checks: ['pkce', 'state'],
+    checks: ['pkce', 'state', 'nonce'],
     profile(profile) {
       logger.debug('[OIDC] Processing profile from IdP', {
         component: 'OIDCProvider',

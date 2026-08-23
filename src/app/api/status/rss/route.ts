@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
       visibility: 'PUBLIC',
     });
 
-    const incidents = metrics.recentIncidents || [];
+    const incidents = statusPage.showIncidents ? metrics.recentIncidents || [] : [];
 
     const description = metrics.isClipped
       ? `Current status and incidents (limited to ${metrics.retentionDays} days retention)`
@@ -97,6 +97,9 @@ export async function GET(req: NextRequest) {
             const pubDate = new Date(incident.createdAt).toUTCString();
             const guid = `${baseUrl}/status#incident-${incident.id}`;
             const serviceName = incident.service?.name || 'General';
+            const incidentDetails = statusPage.showIncidentDescriptions
+              ? incident.description || incident.title
+              : incident.title;
 
             return `
         <item>
@@ -104,7 +107,7 @@ export async function GET(req: NextRequest) {
             <link>${guid}</link>
             <guid isPermaLink="false">${guid}</guid>
             <pubDate>${pubDate}</pubDate>
-            <description>${escapeXml(incident.description || incident.title)} - Service: ${escapeXml(serviceName)}</description>
+            <description>${escapeXml(incidentDetails)} - Service: ${escapeXml(serviceName)}</description>
             <category>${escapeXml(serviceName)}</category>
         </item>`;
           })
@@ -128,6 +131,7 @@ export async function GET(req: NextRequest) {
 function escapeXml(unsafe: string | null): string {
   if (!unsafe) return '';
   return unsafe
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

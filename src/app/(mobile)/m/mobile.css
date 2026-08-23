@@ -68,7 +68,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: calc(0.95rem + env(safe-area-inset-top, 0)) 1.1rem 0.95rem;
+    padding: calc(0.95rem + env(safe-area-inset-top, 0)) calc(1.1rem + env(safe-area-inset-right, 0)) 0.95rem calc(1.1rem + env(safe-area-inset-left, 0));
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border);
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
