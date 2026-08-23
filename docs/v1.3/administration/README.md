@@ -19,6 +19,7 @@ Administration turns a working OpsKnight installation into a governed service. U
 | [Data retention](data-retention.md)   | Set cleanup policy and understand reporting/status-history effects.                                                |
 | [Audit logs](audit-logs.md)           | Investigate user, team, service, policy, and administrative changes recorded by v1.3.                              |
 | [System logs](system-logs.md)         | Troubleshoot the current process and understand the boundary with durable platform logs.                           |
+| [Administrator Health Center](health-center.md) | Review database, migration, worker, paging, provider, backup, URL, encryption, and version signals. |
 
 User, team, service, schedule, escalation-policy, and API-key operations are also documented in their task guides. The API index intentionally does not publish Users, Teams, Services, or Schedules REST contracts.
 

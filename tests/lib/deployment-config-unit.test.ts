@@ -124,6 +124,20 @@ describe('deployment configuration invariants', () => {
     expect(releaseBuild).toContain('provenance: mode=max');
     expect(releaseBuild).toContain('sbom: true');
     expect(workflow).toContain('scripts/validate-release-tag.cjs');
+    expect(workflow).toContain('release-quality:');
+    expect(workflow).toContain('needs: release-quality');
+    expect(workflow).toContain('Upgrade from previous stable release');
+    expect(workflow).toContain('Backup and restore contract');
+    expect(workflow).toContain('Event, escalation, and notification contract');
+  });
+
+  it('keeps documentation capability coverage in CI and the release gate', () => {
+    expect(read('package.json')).toContain('scripts/check-docs-capabilities.cjs');
+    expect(read('.github/workflows/docs-links.yml')).toContain(
+      'node scripts/check-docs-capabilities.cjs'
+    );
+    expect(read('.github/workflows/docker-image.yml')).toContain('npm run docs:capabilities');
+    expect(read('docs/RELEASE_QUALITY_CONTRACT.md')).toContain('Upgrade from the previous stable release');
   });
 
   it('only accepts a new stable release tag matching package.json', () => {

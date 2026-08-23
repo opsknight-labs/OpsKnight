@@ -99,4 +99,37 @@ describe('Sidebar', () => {
       expect(setItemSpy).toHaveBeenCalledWith('sidebarCollapsed', '0');
     });
   });
+
+  it('renders Event Logs and Audit Log only for ADMIN role', async () => {
+    const { unmount } = renderWithProvider(
+      <Sidebar userName="Admin User" userEmail="admin@example.com" userRole="ADMIN" />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Event Logs')).toBeInTheDocument();
+      expect(screen.getByText('Audit Log')).toBeInTheDocument();
+    });
+
+    unmount();
+
+    renderWithProvider(
+      <Sidebar userName="Responder User" userEmail="responder@example.com" userRole="RESPONDER" />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Event Logs')).not.toBeInTheDocument();
+      expect(screen.queryByText('Audit Log')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides Event Logs and Audit Log for standard USER role', async () => {
+    renderWithProvider(
+      <Sidebar userName="Regular User" userEmail="user@example.com" userRole="USER" />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Event Logs')).not.toBeInTheDocument();
+      expect(screen.queryByText('Audit Log')).not.toBeInTheDocument();
+    });
+  });
 });
