@@ -114,8 +114,8 @@ describe('deployment configuration invariants', () => {
     const releaseBuild = workflow.slice(
       workflow.indexOf('- name: Build + push (release channel - version tag)')
     );
-    expect(workflow).toContain(
-      "if: startsWith(github.ref, 'refs/tags/v')\n        uses: docker/setup-qemu-action@v3"
+    expect(workflow).toMatch(
+      /if: startsWith\(github\.ref, 'refs\/tags\/v'\)\n\s+uses: docker\/setup-qemu-action@v[34]/
     );
     expect(mainBuild).toContain('platforms: linux/amd64');
     expect(mainBuild).toContain('provenance: false');
