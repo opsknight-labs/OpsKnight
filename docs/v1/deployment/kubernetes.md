@@ -151,7 +151,7 @@ Use AWS RDS, GCP Cloud SQL, or Azure Database:
 ```bash
 # Update image
 kubectl set image deployment/opsknight \
-  opsknight=ghcr.io/your-org/opsknight:latest
+  opsknight=ghcr.io/opsknight-labs/opsknight:latest
 
 # Or apply updated manifests
 kubectl apply -f deployment.yaml
