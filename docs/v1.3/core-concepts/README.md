@@ -64,6 +64,7 @@ OpsKnight is built around a simple but powerful model: **Alerts become Incidents
 | Concept                                        | What It Is                              | Why It Matters                          |
 | ---------------------------------------------- | --------------------------------------- | --------------------------------------- |
 | [Dashboard](./dashboard)                       | Command center for real-time visibility | See the forest, not just the trees      |
+| [Navigation, Search, and Alerts](./navigation-search-notifications) | Desktop navigation, global search, and the personal inbox | Find records and separate in-app awareness from paging |
 | [Services](./services)                         | Systems you monitor with ownership      | Alerts need context and routing         |
 | [Incidents](./incidents)                       | Actionable work items from alerts       | Track resolution from trigger to close  |
 | [Incident Templates](./incident-templates)     | Reusable defaults for manual incidents  | Standardize recurring response patterns |
@@ -151,6 +152,7 @@ If you're new to OpsKnight, we recommend reading the concepts in this order:
 
 ### For Incident Responders
 
+- [Navigation, search, and alerts](./navigation-search-notifications) — Find records and triage the in-app inbox
 - [Incident Lifecycle](./incidents#incident-lifecycle) — Understand statuses and actions
 - [Bulk triage](./incidents#find-and-triage-incidents) — Manage alert storms efficiently
 - [Mobile Access](../mobile) — Respond from anywhere

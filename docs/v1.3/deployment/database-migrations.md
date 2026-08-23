@@ -10,13 +10,15 @@ OpsKnight stores application state in PostgreSQL and ships ordered Prisma migrat
 
 ## Startup behavior
 
-The production container entrypoint runs `prisma migrate deploy` before starting the Next.js server. It attempts migration up to three times, waits five seconds between attempts, and invokes the packaged auto-recovery helper after a failed attempt.
+The production container entrypoint in this repository revision runs `prisma migrate deploy` before starting the Next.js server. It attempts migration up to three times, waits five seconds between attempts, and invokes the packaged auto-recovery helper after a failed attempt. If migration still fails, the container exits non-zero instead of serving against an unknown schema.
 
-If all attempts fail, the entrypoint logs the failure and starts the application anyway. Therefore:
+The immutable published `1.3.1` image predates this fail-closed behavior and can start after migration failure. Confirm the exact image release before relying on startup behavior. For every release:
 
-- a running container does not prove the schema is current;
-- a liveness response does not prove every schema-dependent workflow works;
-- every deployment must inspect migration logs and exercise a database write.
+- inspect migration logs rather than treating container state as migration evidence;
+- use readiness rather than liveness alone;
+- verify migration health and exercise a database write.
+
+Recovery defaults to `MIGRATION_RECOVERY_MODE=safe`. Safe mode handles only the specifically recognized escalation-policy enum migration and leaves unknown failed migrations for manual review. `aggressive` mode marks an unknown failed migration rolled back before retrying; do not enable it as a routine production setting. Use it only after a database owner has inspected the migration, actual schema/data state, and a tested recovery copy.
 
 The shipped Helm chart does not create a separate pre-upgrade migration Job. With multiple replicas, each newly started container can attempt `migrate deploy`; use a controlled rollout and observe PostgreSQL migration locking/errors.
 

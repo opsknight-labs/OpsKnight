@@ -8,8 +8,6 @@ order: 1
 
 The Command Center at `/` is the shared operational landing page. It combines current incident pressure with a filtered incident preview, service risk, on-call coverage, SLA warnings, action items, and recent trends.
 
-![Command Center dashboard](../assets/dashboard-command-center-1200.jpg)
-
 For user-owned executive or role-specific layouts, use [Reports and Dashboards](./reports-dashboards). For deeper metric definitions and exports, use [Analytics](./analytics).
 
 ## Read system status
