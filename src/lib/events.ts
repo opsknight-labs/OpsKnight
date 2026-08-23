@@ -423,9 +423,10 @@ export async function processEvent(
     const notifyStart = performance.now();
     executeEscalation(result.incident.id)
       .then(escalationResult => {
+        const isEscalated = escalationResult?.escalated === true;
         const hasEscalationPolicy = escalationResult?.reason !== 'No escalation policy configured';
 
-        if (hasEscalationPolicy) {
+        if (hasEscalationPolicy && isEscalated) {
           import('./service-notifications')
             .then(({ sendServiceNotifications }) => {
               sendServiceNotifications(result.incident.id, 'triggered')
@@ -445,6 +446,7 @@ export async function processEvent(
             })
             .catch(e => logger.error('Failed to load service-notifications', { error: e }));
         } else {
+          // Fallback: If no policy or escalation produced no responders, notify service team & owners
           import('./user-notifications')
             .then(({ sendIncidentNotifications }) => {
               sendIncidentNotifications(result.incident.id, 'triggered')
@@ -463,6 +465,15 @@ export async function processEvent(
                 });
             })
             .catch(e => logger.error('Failed to load user-notifications', { error: e }));
+
+          // Also trigger service channel notifications if present
+          if (hasEscalationPolicy) {
+            import('./service-notifications')
+              .then(({ sendServiceNotifications }) => {
+                sendServiceNotifications(result.incident.id, 'triggered').catch(() => {});
+              })
+              .catch(() => {});
+          }
         }
       })
       .catch(error => {

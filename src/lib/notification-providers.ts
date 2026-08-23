@@ -287,7 +287,13 @@ export async function getWhatsAppConfig(): Promise<SMSConfig> {
 
       // Check if WhatsApp is enabled (independent of Twilio SMS)
       const whatsappEnabled = config.whatsappEnabled !== undefined ? config.whatsappEnabled : true;
-      if (whatsappEnabled && accountSid && authToken && config.whatsappNumber) {
+      if (
+        whatsappEnabled &&
+        accountSid &&
+        authToken &&
+        config.whatsappNumber &&
+        config.whatsappContentSid
+      ) {
         return {
           enabled: true,
           provider: 'twilio',
@@ -295,7 +301,7 @@ export async function getWhatsAppConfig(): Promise<SMSConfig> {
           authToken,
           fromNumber: config.fromNumber as string | undefined,
           whatsappNumber: config.whatsappNumber as string,
-          whatsappContentSid: config.whatsappContentSid as string | undefined,
+          whatsappContentSid: config.whatsappContentSid as string,
         };
       }
     }

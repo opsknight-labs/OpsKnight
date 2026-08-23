@@ -148,39 +148,48 @@ export async function POST(request: NextRequest) {
       let notifyEventType: 'acknowledged' | 'resolved' | 'updated' | null = null;
 
       if (actionType === 'ack') {
-        if (incident.status === 'OPEN') {
-          await prisma.incident.update({
-            where: { id: incidentId },
-            data: {
-              status: 'ACKNOWLEDGED',
-              acknowledgedAt: incident.acknowledgedAt ?? new Date(),
-              // Acknowledging must stop the escalation chain, exactly as
-              // `/incident ack` does — otherwise the button changes the
-              // status label while OpsKnight keeps paging the next step.
-              escalationStatus: 'COMPLETED',
-              nextEscalationAt: null,
-            },
-          });
+        const updateResult = await prisma.incident.updateMany({
+          where: {
+            id: incidentId,
+            status: 'OPEN',
+          },
+          data: {
+            status: 'ACKNOWLEDGED',
+            acknowledgedAt: incident.acknowledgedAt ?? new Date(),
+            escalationStatus: 'COMPLETED',
+            nextEscalationAt: null,
+          },
+        });
+
+        if (updateResult.count > 0) {
           responseMessage = `👀 Incident acknowledged by <@${slackUserId || 'responder'}>`;
           timelineMessage = `Acknowledged via Slack button by ${actorName}`;
           notifyEventType = 'acknowledged';
         } else {
+          const fresh = await prisma.incident.findUnique({
+            where: { id: incidentId },
+            select: { status: true },
+          });
           return NextResponse.json({
-            text: `ℹ️ Incident is already ${incident.status.toLowerCase()}`,
+            text: `ℹ️ Incident is already ${fresh?.status?.toLowerCase() || 'processed'}`,
           });
         }
       } else if (actionType === 'resolve') {
-        if (incident.status !== 'RESOLVED') {
-          await prisma.incident.update({
-            where: { id: incidentId },
-            data: {
-              status: 'RESOLVED',
-              resolvedAt: incident.resolvedAt ?? new Date(),
-              acknowledgedAt: incident.acknowledgedAt ?? new Date(),
-              escalationStatus: 'COMPLETED',
-              nextEscalationAt: null,
-            },
-          });
+        const updateResult = await prisma.incident.updateMany({
+          where: {
+            id: incidentId,
+            status: { not: 'RESOLVED' },
+          },
+          data: {
+            status: 'RESOLVED',
+            resolvedAt: incident.resolvedAt ?? new Date(),
+            acknowledgedAt: incident.acknowledgedAt ?? new Date(),
+            escalationStatus: 'COMPLETED',
+            nextEscalationAt: null,
+          },
+        });
+
+        if (updateResult.count > 0) {
           responseMessage = `✅ Incident resolved by <@${slackUserId || 'responder'}>`;
           timelineMessage = `Resolved via Slack button by ${actorName}`;
           notifyEventType = 'resolved';

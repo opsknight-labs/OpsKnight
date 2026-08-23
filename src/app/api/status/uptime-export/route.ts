@@ -8,41 +8,76 @@ function escapePdf(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
-function buildSimplePdf(lines: string[]) {
-  const contentLines = lines
-    .map((line, index) => {
-      const y = 760 - index * 16;
-      return `BT /F1 12 50 ${y} Td (${escapePdf(line)}) Tj ET`;
-    })
-    .join('\n');
+function buildSimplePdf(lines: string[]): Buffer {
+  const PAGE_HEIGHT = 792;
+  const TOP_MARGIN = 750;
+  const LINE_HEIGHT = 16;
+  const LINES_PER_PAGE = Math.max(1, Math.floor((TOP_MARGIN - 50) / LINE_HEIGHT));
 
-  const objects: string[] = [];
-  objects.push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj');
-  objects.push('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj');
-  objects.push(
-    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj'
-  );
-  objects.push('4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj');
-  objects.push(
-    `5 0 obj\n<< /Length ${contentLines.length} >>\nstream\n${contentLines}\nendstream\nendobj`
-  );
+  const pages: string[][] = [];
+  for (let i = 0; i < lines.length; i += LINES_PER_PAGE) {
+    pages.push(lines.slice(i, i + LINES_PER_PAGE));
+  }
+  if (pages.length === 0) pages.push(['']);
 
-  let offset = 0;
-  const xref: number[] = [];
-  let body = '%PDF-1.4\n';
-  objects.forEach(obj => {
-    xref.push(offset);
-    body += obj + '\n';
-    offset = Buffer.byteLength(body, 'utf8');
+  const pageObjectIds: number[] = [];
+  const contentObjectIds: number[] = [];
+  let nextObjId = 4; // 1=Catalog, 2=Pages, 3=Font
+
+  pages.forEach(() => {
+    pageObjectIds.push(nextObjId++);
+    contentObjectIds.push(nextObjId++);
   });
 
-  const xrefStart = offset;
-  let xrefTable = 'xref\n0 6\n0000000000 65535 f \n';
-  xref.forEach(off => {
+  const objects: { id: number; data: string }[] = [];
+  objects.push({ id: 1, data: '<< /Type /Catalog /Pages 2 0 R >>' });
+  objects.push({
+    id: 2,
+    data: `<< /Type /Pages /Kids [${pageObjectIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`,
+  });
+  objects.push({ id: 3, data: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>' });
+
+  pages.forEach((pageLines, idx) => {
+    const pageObjId = pageObjectIds[idx];
+    const contentObjId = contentObjectIds[idx];
+
+    objects.push({
+      id: pageObjId,
+      data: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjId} 0 R >>`,
+    });
+
+    const streamContent = pageLines
+      .map((line, lineIdx) => {
+        const y = TOP_MARGIN - lineIdx * LINE_HEIGHT;
+        return `BT /F1 11 50 ${y} Td (${escapePdf(line)}) Tj ET`;
+      })
+      .join('\n');
+
+    const byteLen = Buffer.byteLength(streamContent, 'utf8');
+    objects.push({
+      id: contentObjId,
+      data: `<< /Length ${byteLen} >>\nstream\n${streamContent}\nendstream`,
+    });
+  });
+
+  // Sort objects by ID for standard xref order
+  objects.sort((a, b) => a.id - b.id);
+
+  let body = '%PDF-1.4\n';
+  const xrefOffsets: number[] = [];
+
+  objects.forEach(obj => {
+    xrefOffsets.push(Buffer.byteLength(body, 'utf8'));
+    body += `${obj.id} 0 obj\n${obj.data}\nendobj\n`;
+  });
+
+  const startXref = Buffer.byteLength(body, 'utf8');
+  let xrefTable = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  xrefOffsets.forEach(off => {
     xrefTable += `${off.toString().padStart(10, '0')} 00000 n \n`;
   });
 
-  const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  const trailer = `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF`;
   return Buffer.from(body + xrefTable + trailer, 'utf8');
 }
 
@@ -114,7 +149,7 @@ export async function GET(req: NextRequest) {
         ...uptimeRows.map(row => `${row.name}: ${row.uptime.toFixed(3)}%`),
       ];
       const pdf = buildSimplePdf(lines);
-      return new NextResponse(pdf, {
+      return new NextResponse(new Uint8Array(pdf), {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="uptime-${year}-${String(monthIndex + 1).padStart(2, '0')}.pdf"`,
