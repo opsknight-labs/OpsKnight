@@ -116,7 +116,7 @@ The container attempts `prisma migrate deploy` up to three times and can start t
 
 ```bash
 kubectl -n opsknight port-forward service/opsknight-service 3000:80
-curl --fail http://127.0.0.1:3000/api/health?mode=readiness
+curl --fail 'http://127.0.0.1:3000/api/health?mode=readiness'
 ```
 
 After ingress is live, verify login, create a synthetic service/incident, trigger and resolve through the intended inbound route, and confirm the intended external notification.

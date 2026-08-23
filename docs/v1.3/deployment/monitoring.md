@@ -12,7 +12,7 @@ Monitor OpsKnight as part of the incident-delivery path. A reachable login page 
 
 ```bash
 curl --fail https://ops.example.com/api/health
-curl --fail https://ops.example.com/api/health?mode=readiness
+curl --fail 'https://ops.example.com/api/health?mode=readiness'
 ```
 
 The default `liveness` mode reports process metadata and memory and returns HTTP 200. `readiness` also runs a PostgreSQL `SELECT 1` with a five-second timeout and returns HTTP 503 when that dependency is unhealthy.

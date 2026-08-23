@@ -42,7 +42,7 @@ ENCRYPTION_KEY=PASTE_64_HEX_CHARACTER_OUTPUT
 
 Dotenv files do not evaluate `$(...)` shell substitutions.
 
-Keep `DATABASE_URL` pointing at the Compose Postgres service from `env.example`.
+The Compose file constructs the application's container-only `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`; you do not need to change the host-development `DATABASE_URL` example for this path.
 
 ```bash
 docker compose up -d

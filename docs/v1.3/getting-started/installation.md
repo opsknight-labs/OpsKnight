@@ -56,7 +56,7 @@ docker compose pull
 docker compose up -d
 docker compose ps
 docker compose logs --tail=200 opsknight-app
-curl --fail http://localhost:3000/api/health?mode=readiness
+curl --fail 'http://localhost:3000/api/health?mode=readiness'
 ```
 
 The Compose stack runs the application plus PostgreSQL 15 in the `opsknight_postgres_data` named volume. The application startup attempts database migrations. Inspect migration logs even when the container is running, because startup can continue after repeated migration failure.
