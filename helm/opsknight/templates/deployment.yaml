@@ -25,6 +25,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "opsknight.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -42,9 +43,6 @@ spec:
                 name: {{ include "opsknight.fullname" . }}-config
             - secretRef:
                 name: {{ include "opsknight.fullname" . }}-secrets
-          env:
-            - name: DATABASE_URL
-              value: {{ include "opsknight.databaseUrl" . | quote }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
