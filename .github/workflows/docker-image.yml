@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up QEMU
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -103,14 +104,14 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta_test_main.outputs.tags }}
           labels: ${{ steps.meta_test_main.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=min
-          provenance: mode=max
-          sbom: true
+          provenance: false
+          sbom: false
 
       - name: Build + push (release channel - version tag)
         if: startsWith(github.ref, 'refs/tags/v')
