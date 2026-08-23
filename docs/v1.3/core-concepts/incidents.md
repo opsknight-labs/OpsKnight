@@ -1,155 +1,333 @@
 ---
-title: Incident management
-description: Create, triage, assign, escalate, communicate, and resolve incidents in OpsKnight.
-order: 2
+order: 3
+title: Incident Management
+description: Master the Incident List, Bulk Actions, and SLAs.
 ---
 
-# Incident management
+# Incident Management
 
-An incident is the operational record for a service disruption or other issue that needs coordinated response. It connects the alert, responders, service, escalation state, response timeline, communications, and follow-up work.
+The **Incident List** is the tactical workspace for responders.
 
-Use this guide for work in the OpsKnight interface. For supported automation, see the [Incidents API](../api/incidents.md) and [Events API](../api/events.md).
+### Why is this needed?
 
-## Before you begin
+Alerts are typically noisy and raw; Incidents represent the actual "Work" to be done. This page turns chaotic noise into a structured queue. It ensures nothing slips through the cracks by enforcing **Assignment** (Who is fixing it?) and **SLAs** (When must it be fixed?).
 
-- You must be signed in to view incidents.
-- A **Responder** or **Admin** can create and change incidents. A **User** has read-only access to incident response controls.
-- Create the affected [service](services.md) first. Assign an [escalation policy](escalation-policies.md) to the service if the incident should page responders.
-- Configure integrations and notification providers before relying on them during a real incident.
+![Incident List Interface](/incident-list-v2.png)
 
-## Incident lifecycle
+## 1. The Interface at a Glance
 
-| Status           | Meaning                              | Escalation behavior                                                                                   |
-| ---------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| **Open**         | Response is required.                | The service policy can continue escalating.                                                           |
-| **Acknowledged** | A responder has taken ownership.     | The active escalation is completed.                                                                   |
-| **Snoozed**      | Response is paused temporarily.      | Escalation is paused until the incident is returned to Open. A timed snooze can reopen automatically. |
-| **Suppressed**   | The incident is intentionally muted. | Escalation is paused until the incident is unsuppressed.                                              |
-| **Resolved**     | Response is complete.                | Escalation is completed and resolution time is recorded.                                              |
+Each row in the incident list is packed with real-time operational data.
 
-Returning a resolved incident to **Open** reopens it. Status changes are recorded in the timeline and may notify configured service channels, status-page subscribers, and webhooks.
+### Visual State Indicators
 
-## Create an incident
+- **Status Borders**: The left border color-codes the state at a glance:
+  - <span class="text-red-500 font-bold">Red</span>: **Open** (Needs attention)
+  - <span class="text-amber-500 font-bold">Amber</span>: **Acknowledged** (Someone is working on it)
+  - <span class="text-emerald-500 font-bold">Green</span>: **Resolved** (Fixed)
+  - <span class="text-slate-400 font-bold">Grey</span>: **Snoozed / Suppressed** (Hidden)
+- **SLA Countdowns**: Two distinct SLAs are tracked:
+  - **Time to Ack**: How long until someone _must_ look at it.
+  - **Time to Resolve**: How long until the issue _must_ be fixed.
+  - _Visuals_: Shows "20m left" (Warning) or "Breached" (Critical) badges inline.
 
-1. Open **Incidents** and select **Create incident**.
-2. Enter a concise title and optional description.
-3. Select the affected service.
-4. Choose **High**, **Medium**, or **Low** urgency.
-5. Optionally select priority **P1–P5**, an individual assignee or team, and public or private visibility.
-6. Review any duplicate warning and submit the incident.
+### Navigation & Interaction
 
-You can start from an [incident template](incident-templates.md). Templates prefill common fields but do not bypass validation or routing.
+- **Keyboard Navigation**: Use `Up` / `Down` arrows to highlight rows, and `Enter` or `Space` to open details.
+- **Quick Preview**: Clicking a row shows an "Opening..." spinner overlay while pre-fetching data.
 
-OpsKnight uses the event deduplication key for integration-created incidents. A matching active incident is reused; a recently resolved matching incident can be reopened. Treat the integration key and deduplication key as separate values: the integration key authenticates and routes the event, while the deduplication key identifies the alert condition.
+---
 
-### Public and private incidents
+## 2. Filters & Deep Search
 
-**Public** visibility makes the incident eligible for display through the configured status page. **Private** keeps it out of public incident views. Visibility alone does not publish a postmortem or override status-page privacy settings.
+The filter bar allows for complex querying of the incident database.
 
-## Find and triage incidents
+- **Deep Search**: Queries against `Title`, `Description`, and `Incident ID` (e.g., `#5A261`).
+- **Context Filters**:
+  - **Mine / My Teams**: Quickly toggle between your personal queue and your squad's workload.
+  - **UrgencyChips**: Filter by specific `High`, `Medium`, or `Low` urgency levels.
+- **URL Addressable**: Every filter state is reflected in the URL.
+  - _Example_: `?urgency=HIGH&status=OPEN&sort=priority`
+  - _Pro Tip_: Bookmark your team's specific view for distinct dashboards.
 
-The Incidents page displays 50 records per page and provides counts for Mine, Open, Resolved, Snoozed, and Suppressed.
+---
 
-Use the controls to:
+## 3. Bulk Actions & Triage
 
-- search incident title, description, or identifier;
-- filter by status, priority, urgency, team, or incidents assigned to you;
-- sort by creation time, title, priority, urgency, or status;
-- select incidents for supported bulk operations.
+Manage "Alert Storms" effectively with the sticky command bar.
 
-Bulk controls can acknowledge, resolve, reassign, change status, change urgency or priority, snooze, unsnooze, suppress, or unsuppress selected incidents. Confirm the selection before applying an action: bulk changes update every selected record and can trigger downstream notifications.
+![Bulk Actions Bar](/bulk-actions.png)
 
-## Respond from the incident page
+### Selection Logic
 
-Open an incident to see its service, current owner, status, urgency, priority, SLA state, escalation state, notes, timeline, tags, watchers, custom fields, and connected response tools.
+- **Smart Hints**: The bar analyzes your selection and displays hints like _"Selected contains SUPPRESSED"_ if you've accidentally grabbed hidden items.
 
-### Acknowledge and assign
+### Command Reference
 
-1. Select **Acknowledge** when you take responsibility.
-2. Assign the incident to one active user or one team when ownership changes.
-3. Check the escalation badge and next-step information.
+| Action          | Description                                      |
+| :-------------- | :----------------------------------------------- |
+| **Acknowledge** | Mark as seen. Stops escalation notifications.    |
+| **Resolve**     | Close the incident.                              |
+| **Reassign**    | Transfer ownership to a **User** OR a **Team**.  |
+| **Snooze**      | Hide for a duration (15m, 30m, 1h, 4h, 8h, 24h). |
+| **Priority**    | Mass-update severity (P1 - P5).                  |
+| **Urgency**     | Update urgency classification (High/Medium/Low). |
+| **Status**      | Force a specific status update.                  |
 
-An incident has either an individual assignee or a team assignment. Acknowledgement records `acknowledgedAt`, which is used for MTTA and acknowledgement-SLA calculations.
+### Advanced Actions ("More" Menu)
 
-### Set urgency and priority
+- **Unsnooze**: Bring snoozed items back to the active queue immediately.
+- **Suppress**: Mark as noise/false alarm (hides from default view without resolving).
+- **Unsuppress**: Restore suppressed items.
+- **Unacknowledge**: Revert an incident from Acknowledged back to Open (useful if accidental).
 
-- **Urgency** is **High**, **Medium**, or **Low** and affects response attention and notification behavior.
-- **Priority** is an optional business-impact classification from **P1** through **P5**.
+---
 
-They are separate fields. If priority-specific SLA targets are configured for the service, OpsKnight uses them; otherwise it uses the service's default acknowledgement and resolution targets. See [Urgency and severity mapping](urgency-mapping.md).
+## 4. Inline Management
 
-### Add response context
+You don't always need to open the full details page.
 
-- Add notes for decisions, observations, commands run, and handoffs.
-- Add or remove tags for later discovery.
-- Set configured custom fields.
-- Add watchers as follower, stakeholder, or executive participants.
-- Review the event timeline for recorded status, assignment, escalation, and other changes. It is operational history, not a comprehensive immutable compliance ledger.
+- **Quick Reassign**: Click the assignee avatar in the list to open a search popover. You can assign to:
+  - **Specific Users** (Search by name/email)
+  - **Entire Teams** (Search by team name)
+- **Status Toggles**: Use the "meatball" menu (`...`) on the right of any row to quickly **Resolve**, **Snooze**, or **Ack** that single item.
 
-Do not place credentials or sensitive customer data in notes, tags, custom fields, or public incident content.
+  ![Incident Actions Menu](/incident-actions-menu.png)
 
-### Snooze or suppress
+---
 
-Use **Snooze** for a temporary pause, ideally with an end time and reason. Use **Suppress** when the alert should remain muted until a responder explicitly restores it. Both states pause escalation; neither resolves the underlying incident.
+## 5. Incident Statuses
 
-After returning the incident to **Open**, verify that an assignee or escalation path is available.
+Incidents move through a defined lifecycle with five possible statuses:
 
-### Use Jira and a Slack war room
+| Status           | Description                                               | Visual       |
+| :--------------- | :-------------------------------------------------------- | :----------- |
+| **OPEN**         | New incident requiring attention. Escalation is active.   | Red border   |
+| **ACKNOWLEDGED** | Someone is working on it. Escalation paused.              | Amber border |
+| **SNOOZED**      | Temporarily hidden. Auto-reopens after snooze period.     | Grey border  |
+| **SUPPRESSED**   | Marked as noise/false positive. Hidden from default view. | Grey border  |
+| **RESOLVED**     | Issue fixed. Incident closed.                             | Green border |
 
-When Jira is enabled and the service has a project mapping, the incident page can create a Jira issue, link an existing issue, unlink it, and refresh its state. See [Jira integration](../integrations/issue-tracking/jira.md).
+### Status Transitions
 
-When Slack ChatOps is configured, eligible incidents can have a dedicated war-room channel and video bridge. Resolving the incident can archive the channel while retaining its identifiers for history. See [Slack ChatOps](../integrations/communication/slack-chatops.md).
+```
+         ┌──────────────────────────────────────┐
+         │                                      │
+         ▼                                      │
+      OPEN ──────► ACKNOWLEDGED ──────► RESOLVED
+         │              │                   ▲
+         │              │                   │
+         ▼              ▼                   │
+      SNOOZED ◄────► SUPPRESSED ───────────┘
+         │
+         │ (auto-unsnooze)
+         ▼
+       OPEN
+```
 
-## Resolve and follow up
+- **OPEN → ACKNOWLEDGED**: User acknowledges, stopping escalation
+- **ACKNOWLEDGED → RESOLVED**: Issue fixed, incident closed
+- **OPEN → SNOOZED**: Temporarily defer (auto-returns to OPEN)
+- **Any → SUPPRESSED**: Mark as false positive/noise
+- **SUPPRESSED → RESOLVED**: Clean up suppressed incidents
 
-1. Confirm service recovery and monitoring stability.
-2. Select **Resolve** and add a useful resolution note.
-3. Verify the status is **Resolved** and the resolution time is recorded.
-4. Create or update the [postmortem](postmortems.md) when learning or accountability is required.
-5. Track remediation in [action items](action-items.md).
+---
 
-A resolution note should state what changed, how recovery was verified, and any remaining risk. Resolution may notify configured service channels, status-page subscribers, and service webhooks. It also stops active escalation and can archive an associated Slack war room.
+## 6. Incident Detail Page
 
-## Verify the workflow before production use
+Click any incident to open the full detail view with rich context and actions.
 
-Run one test incident for each critical service:
+<!-- placeholder:incident-detail-page -->
+<!-- Add: Screenshot of the incident detail page -->
 
-1. Trigger it through the same inbound path production monitoring will use.
-2. Confirm the correct service and urgency.
-3. Confirm the expected user, team, or schedule receives the first notification.
-4. Let a test escalation advance once, then acknowledge it.
-5. Add a note, assign it, and resolve it.
-6. Confirm the timeline, notification history, and any configured status-page or webhook update.
+### Header Section
 
-## Troubleshooting
+- **Title**: Incident summary from the triggering alert
+- **Status Badge**: Current status with quick-action buttons
+- **Service**: The affected service (links to service page)
+- **Created**: When the incident was triggered
 
-### No responder is notified
+### Properties Panel
 
-- Confirm the service has an escalation policy.
-- Confirm every policy step has a valid active user, team member, or current on-call schedule participant.
-- Confirm the intended channel is enabled globally and for the target.
-- Check **Notification History**, **Event Logs**, and system logs for provider errors.
+| Property              | Description                                               |
+| :-------------------- | :-------------------------------------------------------- |
+| **Urgency**           | Impact level: `HIGH`, `MEDIUM`, or `LOW`                  |
+| **Priority**          | Business priority: `P1` (critical) through `P5` (minimal) |
+| **Assignee**          | Current owner — can be a **User** OR a **Team**           |
+| **Service**           | The service this incident belongs to                      |
+| **Escalation Policy** | The policy handling notifications                         |
 
-### An integration creates duplicate incidents
+### Reassigning Incidents
 
-- Use a stable deduplication key for the same alert condition.
-- Confirm events use the same service integration key.
-- Check whether the earlier incident was resolved outside the reopen window.
+Incidents can be assigned to:
 
-### Snoozed or suppressed response does not resume
+- **Individual Users**: Direct assignment to a specific person
+- **Teams**: Assignment to a team (any member can work on it)
 
-Return the incident to **Open**, confirm its escalation state is active, and verify the service policy still has a resolvable target.
+To reassign:
 
-### The incident does not appear publicly
+1. Click the assignee field
+2. Search by name/email (for users) or team name
+3. Select the new assignee
 
-Confirm the incident is public, the status page is enabled, the service is included, and the status-page privacy controls permit incident details. See [Status page](status-page.md).
+---
 
-## Related topics
+## 7. Timeline
 
-- [Services](services.md)
-- [Escalation policies](escalation-policies.md)
-- [On-call schedules](schedules.md)
-- [Incident templates](incident-templates.md)
-- [Postmortems](postmortems.md)
-- [Events API](../api/events.md)
-- [Troubleshooting](../troubleshooting.md)
+The timeline is the complete audit trail of everything that happened during the incident.
+
+### Timeline Events
+
+| Event Type            | Description                         |
+| :-------------------- | :---------------------------------- |
+| **Triggered**         | Incident was created                |
+| **Acknowledged**      | Someone acknowledged the incident   |
+| **Resolved**          | Incident was marked resolved        |
+| **Escalated**         | Notification escalated to next step |
+| **Notification Sent** | Alert sent via Email/SMS/Push/Slack |
+| **Note Added**        | User added a comment                |
+| **Reassigned**        | Assignee changed                    |
+| **Priority Changed**  | Priority level updated              |
+| **Urgency Changed**   | Urgency level updated               |
+| **Snoozed**           | Incident was snoozed                |
+| **Unsnoozed**         | Incident returned from snooze       |
+| **Suppressed**        | Incident marked as noise            |
+
+Each event shows:
+
+- **Timestamp**: When it occurred
+- **Actor**: Who/what triggered it (user or system)
+- **Details**: Additional context
+
+---
+
+## 8. Notes
+
+Add notes to incidents to capture investigation progress, findings, or handoff information.
+
+### Adding Notes
+
+1. Scroll to the **Notes** section
+2. Type your note in the text field
+3. Click **Add Note**
+
+### Note Features
+
+- **Markdown Support**: Format notes with headers, lists, code blocks
+- **@Mentions**: Tag team members (they receive notifications)
+- **Timestamps**: Each note shows when it was added and by whom
+- **Persistence**: Notes remain even after incident is resolved
+
+### Best Practices
+
+- Document investigation steps as you go
+- Note any temporary fixes or workarounds applied
+- Tag incoming on-call when handing off
+- Include relevant links (dashboards, logs, runbooks)
+
+---
+
+## 9. Tags
+
+Tags help categorize and filter incidents for better organization and reporting.
+
+### Using Tags
+
+- **Add Tags**: Click the tags field and type or select existing tags
+- **Remove Tags**: Click the × on any tag to remove it
+- **Filter by Tags**: Use the tag filter in the incident list
+
+### Common Tag Patterns
+
+| Pattern         | Example Tags                              |
+| :-------------- | :---------------------------------------- |
+| **Environment** | `prod`, `staging`, `dev`                  |
+| **Region**      | `us-east`, `eu-west`, `apac`              |
+| **Category**    | `database`, `network`, `auth`             |
+| **Root Cause**  | `config-change`, `capacity`, `dependency` |
+
+---
+
+## 10. Resolution Notes
+
+When resolving an incident, you can add a resolution note to document what fixed the issue.
+
+### Adding a Resolution Note
+
+1. Click **Resolve** on the incident
+2. In the modal, enter the resolution note
+3. Click **Resolve Incident**
+
+### What to Include
+
+- **Root Cause**: What caused the incident
+- **Fix Applied**: What was done to resolve it
+- **Prevention**: Any follow-up actions needed
+- **Duration**: How long the incident lasted
+
+Resolution notes are visible in the incident timeline and analytics reports.
+
+---
+
+## 11. Postmortems
+
+For significant incidents, create a postmortem to conduct a structured retrospective.
+
+### Creating a Postmortem
+
+1. Open the resolved incident
+2. Click **Create Postmortem**
+3. Fill in the postmortem template
+
+### Postmortem Sections
+
+| Section             | Purpose                               |
+| :------------------ | :------------------------------------ |
+| **Summary**         | Brief description of what happened    |
+| **Impact**          | Users/services affected, duration     |
+| **Timeline**        | Chronological sequence of events      |
+| **Root Cause**      | The underlying cause(s)               |
+| **Resolution**      | How the incident was fixed            |
+| **Action Items**    | Follow-up tasks to prevent recurrence |
+| **Lessons Learned** | What the team learned                 |
+
+### Postmortem Workflow
+
+1. **Draft**: Initial creation, editable
+2. **In Review**: Team reviewing and adding input
+3. **Published**: Finalized and shared
+
+---
+
+## 12. Creating Incidents Manually
+
+While most incidents are created automatically via integrations, you can create them manually.
+
+### When to Create Manually
+
+- Customer-reported issues not triggering alerts
+- Internal incidents (process failures, etc.)
+- Training and testing scenarios
+
+### How to Create
+
+1. Click **Create Incident** button
+2. Fill in required fields:
+   - **Title**: Clear summary of the issue
+   - **Service**: Which service is affected
+   - **Urgency**: HIGH, MEDIUM, or LOW
+3. Optional fields:
+   - **Description**: Detailed information
+   - **Priority**: P1-P5
+   - **Assignee**: User or Team
+4. Click **Create**
+
+The incident follows the normal escalation flow based on the service's escalation policy.
+
+---
+
+## Related Topics
+
+- [Services](./services) — Service configuration
+- [Escalation Policies](./escalation-policies) — Notification routing
+- [Analytics](./analytics) — Incident metrics and SLAs
+- [Postmortems](./postmortems) — Retrospective process

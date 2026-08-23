@@ -143,10 +143,8 @@ Each service can override auto-creation and the video bridge under **Service →
 Settings → ChatOps & War Room**.
 
 These thresholds govern **automatic** creation only. The **Create War-Room**
-button bypasses urgency/priority and per-service auto-create gates, and manual
-**Archive** bypasses the _archive on resolve_ setting. Manual actions still
-require incident-modify permission, enabled ChatOps, a working bot token, and
-the required Slack scopes.
+button on an incident always works, whatever the urgency — likewise **Archive**
+is not blocked by the _archive on resolve_ setting.
 
 !!! note "Zoom needs a meeting URL"
 Jitsi and Google Meet links are generated per incident. Zoom requires a

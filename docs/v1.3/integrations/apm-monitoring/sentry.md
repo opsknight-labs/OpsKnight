@@ -13,7 +13,7 @@ Receive error and issue alerts from Sentry and create incidents automatically.
 ## Endpoint
 
 ```
-POST /api/integrations/sentry?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
+POST /api/integrations/sentry?integrationId=YOUR_INTEGRATION_ID
 ```
 
 ---
@@ -36,7 +36,7 @@ POST /api/integrations/sentry?integrationId=YOUR_INTEGRATION_ID&integrationKey=Y
 3. Click **Add to Project** or configure existing
 4. Set **Callback URL**:
    ```
-   https://YOUR_OPSKNIGHT_URL/api/integrations/sentry?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
+   https://YOUR_OPSKNIGHT_URL/api/integrations/sentry?integrationId=YOUR_INTEGRATION_ID
    ```
 
 ### Step 3: Create Alert Rule
@@ -172,7 +172,7 @@ This ensures the same Sentry issue maps to the same OpsKnight incident.
 Send a test payload directly:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/sentry?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/sentry?integrationId=YOUR_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "action": "created",

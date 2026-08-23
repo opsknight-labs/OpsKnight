@@ -13,6 +13,5 @@ alongside the rest of your engineering backlog.
 
 <!-- integrations-list:start -->
 
-- [Jira](./jira) — Create or link incident/action-item work, add OpsKnight updates as comments, and receive Jira status/assignee metadata.
-
+- [Jira](./issue-tracking/jira) — Bi-directional Jira Cloud sync: auto-create issues from incidents and reflect status changes both ways
 <!-- integrations-list:end -->

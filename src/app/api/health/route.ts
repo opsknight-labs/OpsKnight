@@ -40,10 +40,10 @@ export async function GET(request: NextRequest) {
         status: 'healthy',
         latency: dbLatency,
       };
-    } catch (error: any) {
+    } catch (_) {
       checks.database = {
         status: 'unhealthy',
-        error: error.message || 'Database connection failed',
+        error: 'Database connection failed',
       };
     }
 
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
         checks.scheduler = {
           status: schedulerState.lastError ? 'unhealthy' : 'healthy',
           latency: Date.now() - schedulerStartTime,
-          ...(schedulerState.lastError ? { error: schedulerState.lastError } : {}),
+          ...(schedulerState.lastError ? { error: 'Scheduler reported an error' } : {}),
         };
       }
     } catch (_) {}
@@ -76,10 +76,10 @@ export async function GET(request: NextRequest) {
       status: heapUsedPercent > 92 ? 'unhealthy' : 'healthy',
       latency: Math.round(memUsage.heapUsed / 1024 / 1024),
     };
-  } catch (error: any) {
+  } catch (_) {
     checks.memory = {
       status: 'unhealthy',
-      error: error.message,
+      error: 'Memory check failed',
     };
   }
 

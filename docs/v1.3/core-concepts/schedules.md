@@ -1,123 +1,407 @@
 ---
-title: On-call schedules
-description: Build timezone-aware rotations, layered coverage, and temporary overrides for escalation.
 order: 5
+title: On-Call Schedules
+description: Build flexible rotation schedules with layers, overrides, and timezone support
 ---
 
-# On-call schedules
+# On-Call Schedules
 
-A schedule answers “who is on call now?” for an escalation-policy step. Each schedule has an IANA timezone, one or more ordered layers, responders in rotation order, and optional temporary overrides.
+On-call schedules define who is responsible for responding to incidents during specific time periods. They're the backbone of reliable incident response, ensuring there's always someone available to help.
 
-## Permissions
+![On-call schedule overview](/schedule-main.png)
 
-Signed-in users can view schedules they are allowed to see. Application **Responders** and **Admins** can create and edit schedules, layers, participants, and overrides.
+---
 
-## Scheduling model
+## Why Schedules Matter
 
-| Element         | Purpose                                                                                                                       |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Schedule        | Named timezone boundary referenced by escalation policies.                                                                    |
-| Layer           | A repeating rotation with start/end bounds, participants, restrictions, and priority.                                         |
-| Rotation length | Hours before responsibility moves to the next participant. Must be greater than zero.                                         |
-| Shift length    | Optional active portion within a rotation slot. It cannot exceed rotation length; a shorter value intentionally creates gaps. |
-| Restriction     | Optional days of week and start/end hours when a layer can apply.                                                             |
-| Override        | Temporary assignment, optionally replacing a particular user for an exact time range.                                         |
+Without schedules, you'd have to manually assign every incident or broadcast alerts to everyone (causing alert fatigue). Schedules solve this by:
 
-Layers are evaluated by priority. Higher-priority layers override lower ones in the final effective schedule. The calendar can also show all raw layers simultaneously, so distinguish the layer view from final coverage.
+- **Automatic routing** — Escalation policies use schedules to find the right person
+- **Fair distribution** — Rotate on-call duty fairly among team members
+- **Clear ownership** — Everyone knows who's responsible at any given time
+- **Flexibility** — Handle vacations, sick days, and coverage swaps easily
 
-## Create a schedule
+---
 
-1. Open **Schedules** and select **Create Schedule**.
-2. Enter a unique name.
-3. Select the schedule timezone.
-4. Open the new schedule and add its first layer.
+## Key Concepts
 
-All layer dates, restrictions, overrides, calendars, and handoff displays use the schedule timezone. Changing it changes how existing instants are displayed; review coverage around the change, especially near daylight-saving transitions.
+### Schedule
 
-## Add a rotation layer
+A schedule is a container that defines on-call coverage for a specific purpose (e.g., "Payment API Primary On-Call"). Each schedule has:
 
-1. Select **Add layer**.
-2. Enter the layer name and start time; optionally add an end time.
-3. Enter a positive rotation length in hours.
-4. Optionally set a shift length to create an active portion shorter than the rotation slot.
-5. Optionally restrict days of week and start/end hours.
-6. Save, add responders, and put them in the intended rotation order.
+- **Name** — Descriptive identifier
+- **Timezone** — All times are interpreted in this timezone
+- **Layers** — One or more rotation patterns
 
-The end time must be after the start. Hours use `0` through `23`; week-day values are interpreted in the schedule timezone. Use an unrestricted baseline layer for continuous coverage, then add higher-priority restricted layers for business hours or special coverage.
+### Layer
 
-### Rotation examples
+**Why multiple layers?**
 
-- Daily handoff: rotation length `24`, no shorter shift length.
-- Weekly handoff: rotation length `168`.
-- Twelve-hour rotation: rotation length `12` (automatically calendar-anchored to the schedule timezone to eliminate wall-clock drift across Daylight Saving Time transitions).
-- Eight-hour rotation: rotation length `8`.
-- Business-hours-only slot: set a restriction and confirm final coverage is supplied by another layer outside it.
+- **Primary/Secondary** — Different responders for initial vs. backup
+- **Business hours/After hours** — Different coverage by time of day
+- **Holiday coverage** — Special rotations for holidays
 
-These values are examples, not presets. Preview the result in the timeline rather than assuming a duration produces the intended local handoff through daylight-saving changes. Sub-daily integer divisors of 24h (12h, 8h, 6h) are anchored to local calendar days in the schedule timezone.
+**Layer precedence**: Higher layers override lower layers. If Layer 2 has someone on-call, they take precedence over Layer 1.
 
-## Manage participants
+### Rotation
 
-Add active users to a layer and order them in the sequence they should rotate. Moving a participant changes future rotation order. Removing the only participant leaves the layer without coverage.
+A rotation defines how users cycle through on-call duty within a layer:
 
-The schedule health panel flags missing layers, empty or single-person layers, ended or soon-ending layers, and uncovered days in its preview window. Treat warnings as prompts for manual verification, not as proof that every escalation path works.
+- **Rotation Length** — How long each person is on-call (24h, 168h, etc.). Sub-daily integer divisors of 24h (12h, 8h, 6h) are automatically calendar-anchored to the schedule timezone to eliminate wall-clock drift across Daylight Saving Time transitions.
+- **Rotation Order** — The sequence of users in the rotation
 
-## Create an override
+### Override
 
-Use an override for leave, a one-time swap, or exceptional coverage:
+An override is a temporary change to the normal rotation, used for:
 
-1. Select **Add override**.
-2. Choose the replacement user.
-3. Optionally choose the user being replaced.
-4. Set start and end in the schedule timezone.
-5. Save and verify the timeline and calendar.
+- **Vacation coverage** — Someone else takes over during PTO
+- **Shift swaps** — Trading on-call with a teammate
+- **Emergency coverage** — Filling gaps when someone is unavailable
 
-The end must be after the start. OpsKnight notifies the affected replacement and replaced user through in-app schedule notifications. Remove an override when it is no longer valid; past overrides remain visible in history according to application retention.
+---
 
-## Connect a schedule to escalation
+## Creating a Schedule
 
-1. Open or create an [escalation policy](escalation-policies.md).
-2. Add a step with target type **Schedule**.
-3. Select this schedule and the desired channels.
-4. Save the policy and attach it to a service.
-5. Trigger a test incident during a known slot.
+### Step 1: Navigate to Schedules
 
-At execution time OpsKnight resolves the effective current user from the schedule. An empty layer, intentional shift gap, expired layer, invalid override, or disabled user can leave the step without a usable target.
+1. Click **Schedules** in the sidebar
 
-## Verify coverage
+### Step 2: Create New Schedule
 
-Before using a schedule for production:
+1. Click **Create Schedule**
+2. Enter schedule details:
+   - **Name**: `Platform Team Primary`
+   - **Timezone**: `America/New_York` (or your team's timezone)
+3. Click **Create**
 
-- [ ] Confirm the timezone and expected daylight-saving behavior.
-- [ ] Inspect the timeline, final coverage, and monthly calendar.
-- [ ] Check at least the next 90 days, including weekends and holidays.
-- [ ] Resolve every health warning or document the intentional gap.
-- [ ] Confirm each responder is active and has working notification channels.
-- [ ] Test a policy during a normal slot and an override.
-- [ ] Verify the next handoff time and next responder.
-- [ ] Confirm an operational owner reviews upcoming override and layer end dates.
+<!-- placeholder:create-schedule -->
+
+![Create schedule](/schedule-create.png)
+
+### Step 3: Add a Layer
+
+1. Click **Add Layer**
+2. Configure layer settings:
+   - **Name**: `Weekly Rotation`
+   - **Rotation Length**: `168 hours` (1 week)
+   - **Start Time**: When the rotation should begin
+
+### Step 4: Add Users
+
+1. Click **Add User** in the layer
+2. Select team members in rotation order
+3. Drag to reorder if needed
+
+**Result**: Users rotate through on-call duty based on the rotation length.
+
+---
+
+## Rotation Types
+
+### Daily Rotation (24 hours)
+
+Each person is on-call for one day:
+
+```
+Monday:    Alice
+Tuesday:   Bob
+Wednesday: Charlie
+Thursday:  Alice
+Friday:    Bob
+Saturday:  Charlie
+Sunday:    Alice
+```
+
+**Best for**: Teams that want to limit on-call burden to one day at a time.
+
+### Weekly Rotation (168 hours)
+
+Each person is on-call for one week:
+
+```
+Week 1: Alice
+Week 2: Bob
+Week 3: Charlie
+Week 4: Alice
+...
+```
+
+**Best for**: Most teams — provides continuity without too much context switching.
+
+### Custom Rotation
+
+Set any rotation length in hours for specific needs:
+
+- **12 hours** — Split day/night shifts
+- **48 hours** — Two-day on-call periods
+- **336 hours** — Bi-weekly rotation
+
+---
+
+## Schedule Layers
+
+Layers are powerful tools for building complex coverage patterns.
+
+### How Layers Work
+
+Think of layers as transparent overlays. Higher layers "cover" lower layers:
+
+```
+       ┌─────────────────────────────────────────┐
+Layer 2│   │   Bob (Override)   │               │ ← Higher priority
+       └─────────────────────────────────────────┘
+       ┌─────────────────────────────────────────┐
+Layer 1│ Alice │ Alice │ Alice │ Alice │ Alice │ ← Base rotation
+       └─────────────────────────────────────────┘
+        Mon    Tue    Wed    Thu    Fri
+
+Result:  Alice  Bob    Bob    Alice  Alice
+```
+
+### Example: Primary + Secondary
+
+**Layer 1 (Primary)**:
+
+- Weekly rotation: Alice → Bob → Charlie
+
+**Layer 2 (Secondary)**:
+
+- Weekly rotation: Bob → Charlie → Alice
+
+When escalation looks for "Primary On-Call," it gets Layer 1.
+When escalation looks for "Secondary On-Call," it gets Layer 2.
+
+### Example: Business Hours Override
+
+**Layer 1 (24x7 Coverage)**:
+
+- Weekly rotation among night team
+
+**Layer 2 (Business Hours Only)**:
+
+- Time window: 9am - 6pm
+- Daily rotation among day team
+
+During business hours, Layer 2 takes over. Outside business hours, Layer 1 is active.
+
+### Example: Holiday Coverage
+
+**Layer 1 (Normal Rotation)**:
+
+- Standard weekly rotation
+
+**Layer 2 (Holiday)**:
+
+- Time window: Dec 24 - Jan 1
+- Special rotation: Volunteers who signed up for holiday coverage
+
+---
+
+## Overrides
+
+Overrides let you make temporary changes without modifying the base rotation.
+
+### Creating an Override
+
+1. Open the schedule
+2. Click on the timeline where you want the override
+3. Select **Create Override**
+4. Configure:
+   - **Start/End Time**: When the override is active
+   - **User**: Who will be on-call instead
+   - **Replaces** (optional): Whose shift is being covered
+
+<!-- placeholder:create-override -->
+
+![Create override](/schedule-override.png)
+
+### Common Override Scenarios
+
+#### Vacation Coverage
+
+Alice is on vacation next week. Bob agrees to cover:
+
+```yaml
+Override:
+  Start: Monday 9am
+  End: Sunday 11:59pm
+  User: Bob
+  Replaces: Alice
+```
+
+#### Shift Swap
+
+Charlie wants to swap Tuesday with Diana:
+
+```yaml
+Override 1:
+  Start: Tuesday 12am
+  End: Tuesday 11:59pm
+  User: Diana
+  Replaces: Charlie
+
+Override 2:
+  Start: Thursday 12am
+  End: Thursday 11:59pm
+  User: Charlie
+  Replaces: Diana
+```
+
+#### Emergency Gap Coverage
+
+The scheduled person is suddenly unavailable:
+
+```yaml
+Override:
+  Start: Now
+  End: Tomorrow 9am
+  User: Team Lead
+  Replaces: Original person
+```
+
+### Viewing Overrides
+
+- **Calendar View**: Overrides appear as highlighted blocks
+- **Override List**: View all active and upcoming overrides
+- **Filter**: Show only your overrides or all team overrides
+
+---
+
+## Timezone Handling
+
+Schedules are **timezone-authoritative**. This means:
+
+1. All times in the schedule are in the schedule's timezone
+2. When you view the schedule, times are shown in the schedule's timezone
+3. On-call lookups use the schedule's timezone
+
+### Example
+
+Schedule: `Platform Team On-Call`
+Timezone: `America/New_York` (EST/EDT)
+
+If the rotation starts at "9am Monday":
+
+- This means 9am Eastern Time
+- NOT 9am in the viewer's local timezone
+
+### Working with Global Teams
+
+For follow-the-sun coverage, you have two options:
+
+**Option 1: One schedule, multiple layers**
+
+```
+Schedule: Global On-Call (UTC)
+  Layer 1: APAC team (active 9am-5pm JST = 0am-8am UTC)
+  Layer 2: EU team (active 9am-5pm CET = 8am-4pm UTC)
+  Layer 3: US team (active 9am-5pm EST = 2pm-10pm UTC)
+```
+
+**Option 2: Separate schedules per region**
+
+```
+Schedule: APAC On-Call (Asia/Tokyo)
+Schedule: EU On-Call (Europe/London)
+Schedule: US On-Call (America/New_York)
+```
+
+Both work — choose based on your escalation policy needs.
+
+---
+
+## Who's On-Call Now?
+
+### Via UI
+
+1. Open the **Schedules** page
+2. Each schedule shows the current on-call person
+3. Click a schedule to see the full calendar
+
+---
+
+## Connecting Schedules to Escalation Policies
+
+Schedules become useful when connected to escalation policies:
+
+### In Escalation Policy Builder
+
+1. Add a step
+2. Set **Target Type**: `Schedule`
+3. Select your schedule
+4. Set delay (usually 0 for first step)
+
+### What Happens at Escalation Time
+
+1. Escalation engine queries the schedule
+2. Schedule returns the current on-call user
+3. That user receives notifications
+4. If no ack, escalation continues to next step
+
+---
+
+## Best Practices
+
+### For Rotation Design
+
+- **Avoid single-person schedules** — Always have backup coverage
+- **Keep rotation length reasonable** — Weekly is a good default
+- **Document handoff procedures** — Clear context transfer
+- **Balance workload** — Fair distribution among team members
+
+### For Overrides
+
+- **Create overrides proactively** — Don't wait until the last minute
+- **Use "Replaces" field** — Makes tracking easier
+- **Review upcoming overrides** — Avoid gaps in coverage
+- **Set calendar reminders** — For coverage you've agreed to provide
+
+### For Global Teams
+
+- **Choose a reference timezone** — UTC or your HQ timezone
+- **Document timezone expectations** — Clear communication
+- **Test coverage across timezones** — Verify no gaps
+- **Consider on-call fatigue** — Fair distribution across regions
+
+---
 
 ## Troubleshooting
 
-### No one is on call
+### "No one on-call" Error
 
-Check that a layer has started and not ended, contains an active participant, applies on the current day/hour, and has no gap caused by a shorter shift length. Then inspect higher-priority layers and overrides.
+**Cause**: Gap in coverage at the queried time
 
-### The wrong responder is selected
+**Fix**:
 
-Verify participant order, rotation start, rotation length, schedule timezone, layer priority, restrictions, and active overrides. Do not calculate from browser timezone.
+1. Check layer configurations for gaps
+2. Verify rotation start times
+3. Add users to layers
+4. Create overrides to fill gaps
 
-### Handoff is an hour early or late
+### Wrong Person Notified
 
-Confirm the IANA timezone and inspect the date for a daylight-saving transition. Avoid treating a fixed UTC offset as a timezone.
+**Cause**: Override or layer precedence issue
 
-### An override has no effect
+**Fix**:
 
-Confirm its schedule, start/end range, replacement user, optional replaced user, and overlap with the effective layer. Reload the timeline after saving.
+1. Check active overrides
+2. Review layer priority (higher layers win)
+3. Verify timezone settings
 
-## Related topics
+### Schedule Shows Different Time Than Expected
 
-- [Escalation policies](escalation-policies.md)
-- [Users](users.md)
-- [Teams](teams.md)
-- [Incidents](incidents.md)
-- [Troubleshooting](../troubleshooting.md)
+**Cause**: Timezone mismatch
+
+**Fix**:
+
+1. Verify schedule timezone setting
+2. Remember times display in schedule timezone, not your local time
+3. Adjust layer time windows if needed
+
+---
+
+## Related Topics
+
+- [Escalation Policies](./escalation-policies) — Connect schedules to notification routing
+- [Teams](./teams) — Organize users who participate in schedules
+- [Notifications](../administration/notifications) — Configure how on-call users are alerted

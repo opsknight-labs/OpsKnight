@@ -765,34 +765,9 @@ export async function processPendingEscalations(
 
     // Process all pending escalations concurrently
     const escalationPromises = pendingIncidents.map(async incident => {
-      // Try to acquire per-incident lock before attempting escalation
-      if (prisma.incident?.updateMany) {
-        try {
-          const claim = await prisma.incident.updateMany({
-            where: {
-              id: incident.id,
-              status: 'OPEN',
-              escalationStatus: 'ESCALATING',
-              OR: [
-                { escalationProcessingAt: null },
-                { escalationProcessingAt: { lt: lockCutoff } },
-              ],
-            },
-            data: {
-              escalationProcessingAt: new Date(),
-            },
-          });
-
-          if (claim && claim.count === 0) {
-            // Another worker claimed this incident
-            return { incident, result: { escalated: false, reason: 'Already in progress' } };
-          }
-        } catch {
-          // If updateMany mock fails, proceed with executor
-        }
-      }
-
-      // Execute step
+      // executeEscalation owns the single atomic per-incident claim. Pre-claiming
+      // here would make the executor reject its own fresh lock and strand the
+      // orphaned escalation until every lock timeout.
       const stepIndex = incident.currentEscalationStep ?? 0;
       const result = await executor(incident.id, stepIndex);
       return { incident, result };

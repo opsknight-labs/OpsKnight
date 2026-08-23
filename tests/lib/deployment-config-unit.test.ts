@@ -128,6 +128,8 @@ describe('deployment configuration invariants', () => {
     expect(workflow).toContain('needs: release-quality');
     expect(workflow).toContain('Upgrade from previous stable release');
     expect(workflow).toContain('Backup and restore contract');
+    expect(workflow).toContain('docker exec "$POSTGRES_CONTAINER" pg_dump');
+    expect(workflow).toContain('POSTGRES_CONTAINER="${{ job.services.postgres.id }}"');
     expect(workflow).toContain('Event, escalation, and notification contract');
   });
 
@@ -137,22 +139,24 @@ describe('deployment configuration invariants', () => {
       'node scripts/check-docs-capabilities.cjs'
     );
     expect(read('.github/workflows/docker-image.yml')).toContain('npm run docs:capabilities');
-    expect(read('docs/RELEASE_QUALITY_CONTRACT.md')).toContain('Upgrade from the previous stable release');
+    expect(read('docs/RELEASE_QUALITY_CONTRACT.md')).toContain(
+      'Upgrade from the previous stable release'
+    );
   });
 
   it('only accepts a new stable release tag matching package.json', () => {
     const script = path.join(root, 'scripts/validate-release-tag.cjs');
-    const valid = spawnSync(process.execPath, [script, 'v1.3.1'], {
+    const valid = spawnSync(process.execPath, [script, 'v1.4.0'], {
       cwd: root,
-      env: { ...process.env, LATEST_RELEASE_TAG: 'v1.3.0' },
+      env: { ...process.env, LATEST_RELEASE_TAG: 'v1.3.1' },
       encoding: 'utf8',
     });
     expect(valid.status).toBe(0);
 
     for (const [tag, latest] of [
-      ['v1.3.1-beta.1', 'v1.3.0'],
-      ['v1.3.0', 'v1.2.0'],
-      ['v1.3.1', 'v1.3.1'],
+      ['v1.4.0-beta.1', 'v1.3.1'],
+      ['v1.3.1', 'v1.3.0'],
+      ['v1.4.0', 'v1.4.0'],
     ]) {
       const invalid = spawnSync(process.execPath, [script, tag], {
         cwd: root,

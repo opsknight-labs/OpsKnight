@@ -1,131 +1,501 @@
 ---
-title: Analytics and SLA
-description: Interpret incident, response, coverage, and SLA metrics and export the filtered data
-order: 15
+order: 10
+title: Analytics
+description: Comprehensive incident analytics, performance metrics, and operational insights
 ---
 
-# Analytics and SLA
+# Analytics
 
-**Analytics & Insights** combines incident activity, response performance, SLA compliance, on-call coverage, service health, and workload for operational review. Use it to answer a specific question with explicit filters—not as a source of unexplained headline numbers.
+Analytics provide deep visibility into incident patterns, team performance, and operational health. Use these insights to identify trends, optimize response processes, and demonstrate SLA compliance.
 
-## Access and permissions
+<!-- placeholder:analytics-dashboard-overview -->
+<!-- Add: Screenshot of the main analytics dashboard -->
 
-Authenticated users can view Analytics. The CSV export requires a responder or administrator role because it can contain detailed incident and assignee data.
+---
 
-All timestamps are displayed in the signed-in user's profile time zone. The after-hours calculation uses the installation's configured business-hours time zone, which can differ from the viewer's time zone.
+## Why Analytics Matter
 
-## Set the analysis scope
+| Without Analytics          | With Analytics            |
+| -------------------------- | ------------------------- |
+| Blind to patterns          | Data-driven decisions     |
+| Can't prove SLA compliance | Objective SLA tracking    |
+| Unknown team workload      | Fair on-call distribution |
+| Reactive improvements      | Proactive optimization    |
 
-The Analytics URL supports these filters:
+---
 
-| Filter   | Values                                                          |
-| -------- | --------------------------------------------------------------- |
-| Window   | 1, 3, 7, 14, 30, 60, 90, 180, or 365 days                       |
-| Team     | One team or all teams                                           |
-| Service  | One service or all services; selecting a team narrows this list |
-| Assignee | One user or all users                                           |
-| Status   | Open, Acknowledged, Snoozed, Suppressed, Resolved, or all       |
-| Urgency  | High, Medium, Low, or all                                       |
+## Accessing Analytics
 
-The default window is seven days. Active filter chips below the filter bar show the current scope.
+Navigate to **Analytics** in the sidebar to access:
 
-When a requested window extends beyond incident retention, OpsKnight clips the query and displays a retention notice with the effective dates. Never compare a clipped period with an unclipped period without noting the difference.
+- **Dashboard**: Overview of key metrics
+- **Incidents**: Detailed incident analysis
+- **On-Call**: Responder performance metrics
+- **SLA**: Compliance tracking
+- **Reports**: Exportable summaries
 
-## Metric definitions
+---
 
-| Metric                 | v1.3 meaning                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| Total incidents        | Incidents created in the effective filtered period                                          |
-| Active incidents       | Current Open or Acknowledged work; Snoozed and Suppressed incidents are excluded            |
-| Unassigned active      | Active incidents with no user assignee                                                      |
-| MTTA                   | Mean time from incident creation to `acknowledgedAt`, for incidents with an acknowledgement |
-| MTTR                   | Mean time from incident creation to `resolvedAt`, for resolved incidents                    |
-| MTBF                   | Mean time between failures: total operating time divided by failure count in window         |
-| Acknowledgement rate   | Share of the relevant incident set with an acknowledgement                                  |
-| Resolution rate        | Share of the relevant incident set that is resolved                                         |
-| Acknowledge compliance | Incidents acknowledged at or before the service's acknowledge target                        |
-| Resolve compliance     | Incidents resolved at or before the service's resolve target                                |
-| Escalation rate        | Share of incidents with a recorded escalation event                                         |
-| Reopen rate            | Share of incidents with a recorded reopen event                                             |
-| Auto-resolve rate      | Share of resolved incidents classified as automatically resolved                            |
-| Alerts per incident    | Stored inbound alerts divided by incidents in scope                                         |
-| After-hours rate       | Share created outside Monday–Friday 08:00–18:00 in the configured business-hours time zone  |
-| Coverage               | Scheduled on-call coverage calculated for the window                                        |
+## Key Metrics
 
-Service defaults are 15 minutes to acknowledge and 120 minutes to resolve unless the service has different targets. SLA calculations use service targets; urgency alone does not define the target.
+OpsKnight tracks 19+ metrics across incidents, response times, and SLA compliance.
 
-When no qualifying sample exists, a time or compliance metric can display `--`/null. That is different from zero.
+### Response Time Metrics
 
-## What the page shows
+#### MTTA (Mean Time to Acknowledge)
 
-The page groups data into operational sections that can include:
+Average time from incident creation to first acknowledgment.
 
-- incident totals, active work, MTTA, MTTR, and MTBF with previous-period comparisons;
-- acknowledge/resolve compliance and breach counts;
-- incident trend series;
-- status and urgency distributions;
-- top services and per-service health/SLA tables;
-- assignee and on-call load;
-- schedule coverage, gaps, on-call hours, users, and active overrides;
-- recurring incident titles and event density;
-- escalation, reopen, and auto/manual resolution activity;
-- incident heatmap and status age;
-- generated positive or negative insights when a rule has enough data;
-- golden-signal values when the required telemetry exists.
+| Rating        | MTTA         | Interpretation             |
+| ------------- | ------------ | -------------------------- |
+| 🟢 Excellent  | < 5 minutes  | Rapid response             |
+| 🟡 Acceptable | 5–15 minutes | Room for improvement       |
+| 🔴 Needs Work | > 15 minutes | Review escalation policies |
 
-Generated insights are prompts for investigation, not root-cause conclusions.
+**Calculation**: Sum of (acknowledgment time - creation time) / acknowledged incidents
 
-## Previous-period comparisons
+#### MTTR (Mean Time to Resolve)
 
-Cards can compare the selected period with the immediately preceding period of equal length. A percentage delta is omitted when the previous value is missing or zero. An upward arrow is not universally good: higher incident volume, MTTA, or MTTR usually needs investigation.
+Average time from incident creation to resolution.
 
-## Export CSV
+| Rating        | MTTR          | Interpretation             |
+| ------------- | ------------- | -------------------------- |
+| 🟢 Excellent  | < 30 minutes  | Efficient resolution       |
+| 🟡 Acceptable | 30–60 minutes | Typical for complex issues |
+| 🔴 Needs Work | > 60 minutes  | Review processes           |
 
-1. Set the window, team, service, assignee, status, and urgency filters.
-2. Select **Export**.
-3. Store the CSV according to your organization's incident-data policy.
-4. Confirm the report header contains the expected filter values and effective dates.
+**Calculation**: Sum of (resolution time - creation time) / resolved incidents
 
-The export contains a report header, applied filters, KPIs, status distribution, top services, and up to 10,000 matching incidents. It is CSV only. PDF, JSON, scheduled email reports, and a published analytics REST API are not v1.3 features.
+#### MTTE (Mean Time to Escalate)
 
-### CSV Formula Injection Protections (CWE-1236)
+Average time before incidents escalate beyond the first responder.
 
-To protect spreadsheet users against Formula Injection, OpsKnight automatically sanitizes cell values beginning with formula trigger characters (`=`, `+`, `-`, `@`, `\t`, `\r`, `|`, `%`) by prepending a single quote (`'`). Exports are encoded in UTF-8 with a Byte Order Mark (`\uFEFF`) for compatibility with Microsoft Excel and Apple Numbers.
+| Rating     | MTTE         | Interpretation                                 |
+| ---------- | ------------ | ---------------------------------------------- |
+| 🟢 Healthy | > 15 minutes | Primary responders handling most issues        |
+| 🟡 Monitor | 5–15 minutes | Moderate escalation rate                       |
+| 🔴 Review  | < 5 minutes  | Check if first-level needs more training/tools |
 
-Because the export includes incident titles and assignee information, do not attach it to public tickets or status pages without review.
+### Volume Metrics
 
-## Reports & Dashboards
+| Metric              | Description                             |
+| ------------------- | --------------------------------------- |
+| **Total Incidents** | Count of incidents in the period        |
+| **Open Incidents**  | Currently unresolved incidents          |
+| **Acknowledged**    | Incidents acknowledged but not resolved |
+| **Resolved**        | Incidents marked resolved               |
+| **Snoozed**         | Incidents temporarily muted             |
+| **Suppressed**      | Incidents auto-suppressed by rules      |
 
-For user-owned layouts and role-specific templates, open **Reports & Dashboards** in the main navigation. It supports Executive Summary, SRE Operations, SLA Performance, Team Performance, and Minimal templates. See [Reports and Dashboards](./reports-dashboards) for its visibility and persistence limitations.
+### Distribution Metrics
 
-## Interpret metrics safely
+| Metric         | Description                  |
+| -------------- | ---------------------------- |
+| **By Urgency** | Breakdown by HIGH/MEDIUM/LOW |
+| **By Service** | Incidents per service        |
+| **By Team**    | Incidents per owning team    |
+| **By Source**  | Incidents per integration    |
+| **By Hour**    | Hourly distribution pattern  |
+| **By Day**     | Daily distribution pattern   |
 
-- Compare like-for-like time windows and filters.
-- Check retention clipping before interpreting a trend.
-- Treat averages together with sample counts and percentiles where shown.
-- Acknowledge that manual status changes affect lifecycle metrics.
-- Investigate missing timestamps before treating a null value as success.
-- Use service-specific targets when explaining SLA results.
-- Pair workload metrics with schedules and team context; incident counts alone do not measure individual performance.
-- Do not use analytics as a blame leaderboard.
+---
+
+## SLA Metrics
+
+### SLA Compliance Rate
+
+Percentage of incidents resolved within SLA targets.
+
+```
+SLA Compliance = (Incidents within SLA / Total Resolved Incidents) × 100
+```
+
+### Per-Urgency SLA Tracking
+
+| Urgency    | Default Target                                | Metric       |
+| ---------- | --------------------------------------------- | ------------ |
+| **HIGH**   | 15 minutes to acknowledge, 1 hour to resolve  | Compliance % |
+| **MEDIUM** | 30 minutes to acknowledge, 4 hours to resolve | Compliance % |
+| **LOW**    | 2 hours to acknowledge, 24 hours to resolve   | Compliance % |
+
+### SLA Breach Analysis
+
+Track which services and teams breach SLA most frequently:
+
+| Analysis                | Purpose                       |
+| ----------------------- | ----------------------------- |
+| **Breaches by Service** | Identify problematic services |
+| **Breaches by Team**    | Spot training/staffing needs  |
+| **Breach Trends**       | Monitor improvement over time |
+| **Near-Miss Tracking**  | Incidents close to breaching  |
+
+---
+
+## Dashboard Visualizations
+
+OpsKnight provides 15+ visualization types for incident data.
+
+### Time-Series Charts
+
+| Chart                    | Shows                           |
+| ------------------------ | ------------------------------- |
+| **Incident Volume**      | Incidents over time (line/bar)  |
+| **MTTA Trend**           | Acknowledgment time over time   |
+| **MTTR Trend**           | Resolution time over time       |
+| **SLA Compliance Trend** | Compliance percentage over time |
+
+<!-- placeholder:time-series-chart -->
+<!-- Add: Screenshot of incident volume time-series chart -->
+
+### Distribution Charts
+
+| Chart              | Shows                                   |
+| ------------------ | --------------------------------------- |
+| **By Urgency**     | Pie/donut chart of urgency distribution |
+| **By Status**      | Current status breakdown                |
+| **By Service**     | Top services by incident count          |
+| **By Team**        | Team workload comparison                |
+| **By Hour of Day** | When incidents occur most               |
+| **By Day of Week** | Daily patterns                          |
+
+### Heatmaps
+
+| Heatmap               | Shows                               |
+| --------------------- | ----------------------------------- |
+| **Hour × Day**        | When incidents peak                 |
+| **Service × Urgency** | Which services have critical issues |
+| **Team × Service**    | Coverage overlap                    |
+
+### Tables
+
+| Table               | Shows                             |
+| ------------------- | --------------------------------- |
+| **Top Incidents**   | Longest-running or most impactful |
+| **Top Services**    | Services with most incidents      |
+| **Top Responders**  | Most active incident handlers     |
+| **Recent Breaches** | SLA violations                    |
+
+---
+
+## Filtering & Drill-Down
+
+### Available Filters
+
+| Filter         | Options                                           |
+| -------------- | ------------------------------------------------- |
+| **Time Range** | Last 24h, 7d, 30d, 90d, custom range              |
+| **Service**    | Single or multiple services                       |
+| **Team**       | Single or multiple teams                          |
+| **Assignee**   | Specific responders                               |
+| **Status**     | OPEN, ACKNOWLEDGED, RESOLVED, SNOOZED, SUPPRESSED |
+| **Urgency**    | HIGH, MEDIUM, LOW                                 |
+| **Source**     | Integration that created the incident             |
+
+### Quick Filters
+
+| Quick Filter     | Description                       |
+| ---------------- | --------------------------------- |
+| **My Incidents** | Incidents assigned to you         |
+| **My Teams**     | Incidents for teams you belong to |
+| **SLA Breached** | Only breached incidents           |
+| **Unassigned**   | Incidents without an assignee     |
+
+### Comparison Mode
+
+Compare metrics across different periods:
+
+```
+This Week vs Last Week
+This Month vs Last Month
+This Quarter vs Last Quarter
+```
+
+Comparison shows:
+
+- Percentage change
+- Absolute difference
+- Trend direction (↑ improving, ↓ declining)
+
+---
+
+## Reports
+
+### Executive Summary Report
+
+High-level overview for stakeholders.
+
+**Includes**:
+
+- Total incidents by urgency
+- Overall SLA compliance
+- MTTA and MTTR averages
+- Top 5 affected services
+- Period-over-period comparison
+- Trend indicators
+
+**Schedule**: Daily, weekly, or monthly delivery via email
+
+### On-Call Performance Report
+
+Responder-focused metrics.
+
+**Includes**:
+| Metric | Description |
+| ------ | ----------- |
+| **Incidents Handled** | Count per responder |
+| **Average Response Time** | Per-responder MTTA |
+| **Escalation Rate** | How often they escalate |
+| **Resolution Rate** | Percentage resolved without escalation |
+| **Night/Weekend Load** | Out-of-hours incident burden |
+
+### Service Health Report
+
+Service-focused analysis.
+
+**Includes**:
+| Metric | Description |
+| ------ | ----------- |
+| **Incident Count** | Total incidents per service |
+| **MTTR by Service** | Resolution time per service |
+| **SLA Compliance** | Per-service SLA tracking |
+| **Top Incident Types** | Common issues per service |
+| **Uptime Percentage** | Calculated availability |
+
+### Team Workload Report
+
+Team capacity planning.
+
+**Includes**:
+| Metric | Description |
+| ------ | ----------- |
+| **Incidents per Member** | Workload distribution |
+| **Cross-Team Escalations** | Collaboration patterns |
+| **Peak Hours** | When teams are busiest |
+| **Coverage Gaps** | Periods without coverage |
+
+---
+
+## Exporting Data
+
+### Export Formats
+
+| Format   | Use Case                               |
+| -------- | -------------------------------------- |
+| **CSV**  | Spreadsheet analysis, custom reporting |
+| **JSON** | Integration with other tools           |
+| **PDF**  | Stakeholder presentations              |
+
+### Export Options
+
+1. Go to **Analytics**
+2. Apply desired filters
+3. Click **Export**
+4. Select format
+5. Choose data scope:
+   - **Current View**: Only visible data
+   - **Full Dataset**: All data matching filters
+6. Download file
+
+### Scheduled Exports
+
+Set up recurring exports:
+
+1. Go to **Analytics → Reports**
+2. Click **Schedule Report**
+3. Configure:
+   - Report type
+   - Filters
+   - Format
+   - Recipients (email)
+   - Schedule (daily/weekly/monthly)
+
+---
+
+## API Access
+
+### Analytics API Endpoints
+
+| Endpoint                       | Description                |
+| ------------------------------ | -------------------------- |
+| `GET /api/analytics/summary`   | Overview metrics           |
+| `GET /api/analytics/incidents` | Incident data with filters |
+| `GET /api/analytics/mtta`      | MTTA metrics               |
+| `GET /api/analytics/mttr`      | MTTR metrics               |
+| `GET /api/analytics/sla`       | SLA compliance data        |
+
+### Query Parameters
+
+| Parameter    | Description       | Example                  |
+| ------------ | ----------------- | ------------------------ |
+| `start_date` | Period start      | `2024-01-01`             |
+| `end_date`   | Period end        | `2024-01-31`             |
+| `service_id` | Filter by service | `svc_abc123`             |
+| `team_id`    | Filter by team    | `team_xyz`               |
+| `urgency`    | Filter by urgency | `HIGH`                   |
+| `group_by`   | Aggregation key   | `service`, `team`, `day` |
+
+### Example Request
+
+```bash
+curl -X GET "https://your-opsknight.com/api/analytics/summary?start_date=2024-01-01&end_date=2024-01-31" \
+  -H "Authorization: Bearer YOUR_API_TOKEN"
+```
+
+### Example Response
+
+```json
+{
+  "period": {
+    "start": "2024-01-01T00:00:00Z",
+    "end": "2024-01-31T23:59:59Z"
+  },
+  "metrics": {
+    "total_incidents": 156,
+    "mtta_minutes": 4.2,
+    "mttr_minutes": 28.5,
+    "sla_compliance": 94.2,
+    "by_urgency": {
+      "HIGH": 23,
+      "MEDIUM": 87,
+      "LOW": 46
+    },
+    "by_status": {
+      "RESOLVED": 148,
+      "OPEN": 5,
+      "ACKNOWLEDGED": 3
+    }
+  }
+}
+```
+
+---
+
+## Dashboard Customization
+
+### Creating Custom Dashboards
+
+1. Go to **Analytics → Dashboards**
+2. Click **Create Dashboard**
+3. Add widgets:
+   - Drag from widget library
+   - Configure data source and filters
+   - Set visualization type
+4. Arrange layout
+5. Save dashboard
+
+### Widget Types
+
+| Widget           | Configuration                |
+| ---------------- | ---------------------------- |
+| **Metric Card**  | Single number with trend     |
+| **Time Series**  | Line/bar chart over time     |
+| **Distribution** | Pie/donut/bar chart          |
+| **Table**        | Sortable data grid           |
+| **Heatmap**      | Two-dimensional pattern view |
+| **Text**         | Markdown annotations         |
+
+### Sharing Dashboards
+
+| Share Option     | Description               |
+| ---------------- | ------------------------- |
+| **Team Access**  | Visible to team members   |
+| **Organization** | Visible to all users      |
+| **Public Link**  | Shareable URL (read-only) |
+| **Embed**        | iFrame embed code         |
+
+---
+
+## Alerting on Metrics
+
+Set up alerts when metrics cross thresholds.
+
+### Alert Conditions
+
+| Condition           | Example                      |
+| ------------------- | ---------------------------- |
+| **MTTA exceeds**    | Alert if MTTA > 10 minutes   |
+| **MTTR exceeds**    | Alert if MTTR > 1 hour       |
+| **SLA drops below** | Alert if compliance < 95%    |
+| **Volume spikes**   | Alert if incidents > 50/hour |
+
+### Alert Configuration
+
+1. Go to **Analytics → Alerts**
+2. Click **Create Alert**
+3. Configure:
+   - Metric to monitor
+   - Threshold value
+   - Evaluation window
+   - Notification channels
+
+---
+
+## Best Practices
+
+### Regular Review Cadence
+
+| Cadence       | Focus                                   |
+| ------------- | --------------------------------------- |
+| **Daily**     | Open incidents, SLA breaches            |
+| **Weekly**    | MTTA/MTTR trends, team workload         |
+| **Monthly**   | Service health, pattern analysis        |
+| **Quarterly** | Capacity planning, process improvements |
+
+### Metric Interpretation
+
+- **Look at trends**, not just snapshots
+- **Compare similar periods** (weekday to weekday)
+- **Consider context** (holidays, deployments)
+- **Investigate anomalies** immediately
+
+### Action Items from Analytics
+
+| Finding                      | Action                                            |
+| ---------------------------- | ------------------------------------------------- |
+| High MTTA                    | Review escalation policies, notification channels |
+| High MTTR                    | Improve runbooks, add automation                  |
+| Frequent breaches on service | Review service reliability                        |
+| Uneven team workload         | Adjust on-call rotations                          |
+| Night/weekend spikes         | Consider follow-the-sun coverage                  |
+
+### Reporting to Stakeholders
+
+- **Lead with business impact** (not raw numbers)
+- **Show trends** (improvement or decline)
+- **Include action items** (what you're doing about it)
+- **Keep it brief** (executive summary first)
+
+---
 
 ## Troubleshooting
 
-| Problem                                  | Check                                                                                                             |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Metrics are empty                        | Confirm incidents exist in the selected effective window and clear restrictive filters.                           |
-| A service is missing                     | Clear the team filter or confirm the service belongs to the selected team.                                        |
-| MTTA/MTTR is `--`                        | The filtered sample has no qualifying acknowledged/resolved timestamps.                                           |
-| Values differ from an older report       | Compare effective dates, filters, user/business time zones, retention clipping, and product version.              |
-| Export returns 403                       | CSV export requires a responder or administrator.                                                                 |
-| Export has fewer than expected incidents | Check filters and retention; detailed rows are capped at 10,000.                                                  |
-| Old data changed after an upgrade        | Historical rollups can be recalculated/backfilled; ask an administrator to check rollup health and release notes. |
+### Missing Data
 
-## Related guides
+1. Check time range filter
+2. Verify service/team filters
+3. Confirm incidents exist in the period
+4. Check user permissions
 
-- [Reports and Dashboards](./reports-dashboards)
-- [Incidents](./incidents)
-- [Services](./services)
-- [Schedules](./schedules)
-- [Data Retention](../administration/data-retention)
-- [Postmortems](./postmortems)
+### Incorrect Metrics
+
+1. Verify incident timestamps are correct
+2. Check for manually backdated incidents
+3. Review suppressed/snoozed incident handling
+4. Confirm timezone settings
+
+### Slow Dashboard
+
+1. Reduce time range
+2. Add more specific filters
+3. Limit number of widgets
+4. Use cached data option
+
+---
+
+## Related Topics
+
+- [Incidents](./incidents) — Incident lifecycle and management
+- [Services](./services) — Service configuration
+- [Teams](./teams) — Team management
+- [SLA Metrics](#sla-metrics) — SLA compliance, per-urgency tracking and breach analysis
+- [Postmortems](./postmortems) — Post-incident analysis

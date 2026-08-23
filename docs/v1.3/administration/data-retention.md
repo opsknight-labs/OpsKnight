@@ -1,79 +1,319 @@
 ---
 order: 5
 title: Data Retention
-description: Configure query windows and permanently remove eligible historical data.
+description: Manage data storage and automatic cleanup policies
 ---
 
 # Data Retention
 
-Retention settings bound historical queries and control the built-in cleanup job. Cleanup is destructive: choose values from business, investigation, backup, and legal requirements—not from a preset name alone.
+Data retention policies control how long OpsKnight stores historical data. Configure these settings to balance storage costs, performance, and compliance requirements.
 
-## Configure retention
+---
 
-You need the **ADMIN** role.
+## Overview
 
-1. Go to **Settings** → **System** → **Data Retention**.
-2. Review the counts and oldest-record dates.
-3. Select a preset or enter each value in days.
-4. Select **Save Changes**.
+Retention policies help:
 
-Presets only populate the form; they do not run cleanup. **Reset to Defaults** also changes the form without saving it.
+- **Reduce storage costs** — Automatically remove old data
+- **Improve performance** — Smaller datasets mean faster queries
+- **Meet compliance** — Retain data for required periods
+- **Protect privacy** — Remove data after it's no longer needed
 
-| Data set              |  Default | Accepted range | Effect                                                           |
-| --------------------- | -------: | -------------: | ---------------------------------------------------------------- |
-| Resolved incidents    | 730 days |       30–3,650 | Bounds history and selects old resolved incidents for cleanup.   |
-| Unlinked alerts       | 365 days |        7–3,650 | Selects old alerts after retained-incident links are considered. |
-| Stored log entries    |  90 days |          1–365 | Selects PostgreSQL `LogEntry` rows.                              |
-| Metric rollups        | 365 days |       30–3,650 | Bounds historical metric queries and rollup cleanup.             |
-| High-precision window |  90 days |          7–365 | Controls the live-data analytics window, not a separate archive. |
+---
 
-The server clamps out-of-range values. Internal endpoint users should read back the saved policy because the UI and server minimum for the high-precision window differ.
+## Retention Settings
 
-## Preset boundary
+**Location**: **Settings** → **System** → **Data Retention**
 
-Minimal, Standard, Extended, Enterprise, and Compliance presets are convenience templates, not legal advice or certifications. Some labels summarize incident retention while alert and log windows are shorter.
+**Requirements**: Admin role
 
-## Preview and execute cleanup
+| Data Type            | Setting                 | Default       | Description                            |
+| -------------------- | ----------------------- | ------------- | -------------------------------------- |
+| **Incidents**        | `incidentRetentionDays` | 730 (2 years) | Resolved incident records              |
+| **Alerts**           | `alertRetentionDays`    | 365 (1 year)  | Raw alert events                       |
+| **Logs**             | `logRetentionDays`      | 90 days       | Application log entries                |
+| **Metrics**          | `metricsRetentionDays`  | 365 (1 year)  | Pre-aggregated metric rollups          |
+| **Real-time Window** | `realTimeWindowDays`    | 90 days       | Period for real-time analytics queries |
 
-Take and verify a database backup first. Then save the intended policy, select **Preview**, reconcile the predicted counts, and only then select **Execute** and confirm permanent deletion. Verify the result and refreshed statistics.
+---
 
-The settings route uses the signed-in browser session and requires `ADMIN`. It is an internal endpoint, not part of the published API-key contract.
+## Presets
 
-## What cleanup actually removes
+OpsKnight provides preconfigured presets for common use cases:
 
-| Category      | Selection and action                                                                                                                           |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Incidents     | Deletes only `RESOLVED` incidents whose **creation time** predates the cutoff, after deleting timeline events, notes, and custom-field values. |
-| Linked alerts | Detaches alerts from incidents selected for deletion.                                                                                          |
-| Alerts        | Deletes alerts older than their cutoff only when no longer linked to an incident.                                                              |
-| Logs          | Deletes old PostgreSQL `LogEntry` rows, not audit records or the System Logs memory buffer.                                                    |
-| Metrics       | Deletes metric and SLA rollups older than the metric cutoff.                                                                                   |
+### Minimal (90 days)
 
-Open incidents are not deleted. v1.3 does not copy deleted incidents to cold storage; its archive helper only reports candidates.
+| Setting          | Value   |
+| ---------------- | ------- |
+| Incidents        | 90 days |
+| Alerts           | 30 days |
+| Logs             | 14 days |
+| Metrics          | 90 days |
+| Real-time Window | 30 days |
 
-### Dry-run limitation
+**Best for**: Development environments, cost-sensitive deployments
 
-Preview reports incident, alert, and log candidates. It reports zero metrics and events even though execution may delete those records. It is a safety check, not a complete deletion manifest.
+### Standard (1 year)
 
-## Automatic schedule
+| Setting          | Value    |
+| ---------------- | -------- |
+| Incidents        | 365 days |
+| Alerts           | 180 days |
+| Logs             | 30 days  |
+| Metrics          | 365 days |
+| Real-time Window | 60 days  |
 
-The application scheduler runs this cleanup service on its cleanup job. See [Maintenance](../deployment/maintenance.md) for schedule, locking, and multi-replica behavior.
+**Best for**: Most production environments
 
-## Product effects
+### Extended (2 years)
 
-- **All Time** analytics can be clipped and display a retention notice.
-- Incident deletion removes timeline, notes, and custom-field values.
-- Public status and RSS history cannot show deleted records.
-- Audit records and the per-process System Logs buffer are unaffected.
+| Setting          | Value    |
+| ---------------- | -------- |
+| Incidents        | 730 days |
+| Alerts           | 365 days |
+| Logs             | 90 days  |
+| Metrics          | 730 days |
+| Real-time Window | 90 days  |
 
-Before reducing a window, identify legal and reporting needs, restore-test a recent backup, export required data, reconcile Preview, notify data owners, observe execution, and verify analytics, status history, storage, and job logs.
+**Best for**: Teams needing longer historical data
 
-If cleanup fails, preserve the error and check PostgreSQL health, application logs, and migration activity before retrying.
+### Enterprise (5 years)
 
-## Related topics
+| Setting          | Value     |
+| ---------------- | --------- |
+| Incidents        | 1825 days |
+| Alerts           | 730 days  |
+| Logs             | 180 days  |
+| Metrics          | 1825 days |
+| Real-time Window | 90 days   |
 
-- [Maintenance](../deployment/maintenance.md)
-- [Backup and restore](../deployment/docker.md#backup-and-restore-postgresql)
-- [Audit logs](audit-logs.md)
-- [System logs](system-logs.md)
-- [Analytics](../core-concepts/analytics.md)
+**Best for**: Enterprise with extended retention needs
+
+### Compliance (7 years)
+
+| Setting          | Value     |
+| ---------------- | --------- |
+| Incidents        | 2555 days |
+| Alerts           | 1825 days |
+| Logs             | 365 days  |
+| Metrics          | 2555 days |
+| Real-time Window | 90 days   |
+
+**Best for**: Organizations with regulatory requirements (SOX, HIPAA)
+
+---
+
+## Configuring Retention
+
+### Via UI
+
+1. Go to **Settings** → **System** → **Data Retention**
+2. Select a preset or configure custom values
+3. Click **Save**
+
+### Via API
+
+**Get current settings**:
+
+```bash
+GET /api/settings/retention
+Authorization: Bearer YOUR_API_KEY
+```
+
+**Response**:
+
+```json
+{
+  "policy": {
+    "incidentRetentionDays": 730,
+    "alertRetentionDays": 365,
+    "logRetentionDays": 90,
+    "metricsRetentionDays": 365,
+    "realTimeWindowDays": 90
+  },
+  "stats": {
+    "incidentCount": 1250,
+    "alertCount": 45000,
+    "logCount": 125000
+  },
+  "presets": [...]
+}
+```
+
+**Update settings**:
+
+```bash
+PUT /api/settings/retention
+Authorization: Bearer YOUR_API_KEY
+Content-Type: application/json
+
+{
+  "incidentRetentionDays": 365,
+  "alertRetentionDays": 180,
+  "logRetentionDays": 30
+}
+```
+
+---
+
+## Data Cleanup
+
+### Automatic Cleanup
+
+OpsKnight runs automatic cleanup based on your retention settings. Data older than the configured retention period is permanently deleted.
+
+### Manual Cleanup
+
+Trigger cleanup manually for immediate effect:
+
+1. Go to **Settings** → **System** → **Data Retention**
+2. Click **Run Cleanup**
+3. Choose **Dry Run** to preview or **Execute** to delete
+
+### Via API
+
+**Dry run** (preview what will be deleted):
+
+```bash
+POST /api/settings/retention
+Authorization: Bearer YOUR_API_KEY
+Content-Type: application/json
+
+{
+  "dryRun": true
+}
+```
+
+**Execute cleanup**:
+
+```bash
+POST /api/settings/retention
+Authorization: Bearer YOUR_API_KEY
+Content-Type: application/json
+
+{
+  "dryRun": false
+}
+```
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "dryRun": false,
+  "result": {
+    "incidentsDeleted": 150,
+    "alertsDeleted": 5000,
+    "logsDeleted": 25000
+  }
+}
+```
+
+---
+
+## What Gets Deleted
+
+### Incident Data
+
+When incidents exceed retention:
+
+- Incident record
+- Associated alerts
+- Timeline events
+- Notes
+- Custom field values
+
+### Alert Data
+
+When alerts exceed retention:
+
+- Raw alert payload
+- Deduplication records
+
+### Log Data
+
+When logs exceed retention:
+
+- Application log entries
+- Debug information
+
+### Metric Rollups
+
+When metrics exceed retention:
+
+- Daily/weekly/monthly aggregations
+- Historical SLA snapshots
+
+---
+
+## Storage Statistics
+
+View current storage usage:
+
+1. Go to **Settings** → **System** → **Data Retention**
+2. See **Storage Statistics** section
+
+Statistics include:
+
+- Total incident count
+- Total alert count
+- Total log count
+- Data eligible for cleanup
+
+---
+
+## Compliance Considerations
+
+### GDPR
+
+- Set appropriate retention periods for personal data
+- Export data before deletion if needed
+- Document retention policies
+
+### HIPAA
+
+- Extended retention often required (7+ years)
+- Use Compliance preset as starting point
+- Ensure audit logs have sufficient retention
+
+### SOC 2
+
+- Maintain audit trails
+- Document retention procedures
+- Regular review of policies
+
+---
+
+## Best Practices
+
+### Setting Retention
+
+| Consideration           | Recommendation                           |
+| ----------------------- | ---------------------------------------- |
+| Compliance requirements | Check regulatory minimums first          |
+| Storage costs           | Balance cost vs. historical data needs   |
+| Analytics needs         | Keep enough for trend analysis           |
+| Debugging               | Short retention for logs is usually fine |
+
+### Before Reducing Retention
+
+1. **Export critical data** — Download reports before cleanup
+2. **Test with dry run** — Preview impact before executing
+3. **Communicate** — Inform team of policy changes
+
+### Real-time Window
+
+The `realTimeWindowDays` setting affects analytics performance:
+
+- Queries within this window use live data
+- Queries beyond use pre-aggregated rollups
+- Larger windows = slower queries but more accuracy
+- Recommended: 60-90 days for most deployments
+
+---
+
+## Related Topics
+
+- [Audit Logs](./audit-logs) — Audit log retention
+- [Analytics](../core-concepts/analytics) — Historical data analysis

@@ -1,205 +1,431 @@
 ---
-title: First steps
-description: Complete a first-week setup with users, team ownership, on-call coverage, paging, integrations, and operational verification.
-order: 3
+order: 2
+title: First Steps
+description: Create your first service, escalation policy, on-call schedule, and test incident
 ---
 
-# First steps
+# First Steps
 
-The [Getting Started](README.md) page is the 15-minute Compose path. This guide is the longer first-week setup for a real team: accounts, ownership, on-call rotation, escalation, notifications, integration ingest, status communication, and operating checks.
+This guide walks you through setting up OpsKnight from scratch. By the end, you'll have a complete incident management workflow configured and tested.
 
-## What you will build
+<!-- placeholder:first-steps-overview -->
+<!-- Add: Screenshot showing the OpsKnight dashboard after initial setup -->
 
-```text
-active users → team → schedule → escalation policy → service
-                                                  ↘ integration → incident
-service + policy + providers → tested responder notification
+---
+
+## What We'll Build
+
+In this guide, you'll create:
+
+1. **An Admin User** — Your first login account
+2. **A Team** — To organize your responders
+3. **A Service** — Representing a system you monitor
+4. **An Escalation Policy** — Defining who gets notified
+5. **An On-Call Schedule** — Rotating on-call duties
+6. **A Test Incident** — Verifying everything works
+
+Each step builds on the previous, so follow them in order.
+
+---
+
+## Step 1: Create Admin User (First-Time Setup)
+
+When you first access OpsKnight, you'll be automatically redirected to the setup page at `/setup`.
+
+### On the Setup Page:
+
+1. Enter your **Name** (e.g., "Jane Admin")
+2. Enter your **Email** (e.g., jane@example.com)
+3. Click **Create Admin Account**
+
+<!-- placeholder:setup-page -->
+<!-- Add: Screenshot of the /setup page with name and email fields -->
+
+**Important**: A secure password will be generated for you and displayed **only once**. Copy it immediately and store it safely — you won't be able to see it again.
+
+### After Setup:
+
+1. You'll be redirected to the login page
+2. Log in with your email and the generated password
+3. Once logged in, you can change your password in **Profile** settings
+
+<!-- placeholder:login-screen -->
+<!-- Add: Screenshot of the OpsKnight login page -->
+
+> **Note**: The `/setup` page is only accessible when no users exist in the system. After the first admin is created, this page becomes unavailable.
+
+---
+
+## Step 2: Invite Team Members
+
+Before setting up schedules, you need team members to put on-call.
+
+### Navigate to Users
+
+1. Click **Settings** in the sidebar
+2. Select **Users**
+
+### Invite a User
+
+1. Click **Invite User**
+2. Enter their email address
+3. Select a role:
+   - **User** — Can view and acknowledge incidents
+   - **Responder** — Can handle incidents and be on-call
+   - **Admin** — Full system access
+4. Click **Send Invitation**
+
+<!-- placeholder:invite-user-modal -->
+<!-- Add: Screenshot of the user invitation modal -->
+
+The user receives an email with a link to set their password and activate their account.
+
+> **Tip**: For testing, invite yourself with a different email to simulate a team member.
+
+---
+
+## Step 3: Create a Team
+
+Teams organize users and can be targeted by escalation policies.
+
+### Navigate to Teams
+
+1. Click **Teams** in the sidebar
+
+### Create Your Team
+
+1. Click **Create Team**
+2. Enter team details:
+   - **Name**: `Platform Engineering`
+   - **Description**: `Responsible for core infrastructure`
+3. Click **Create**
+
+### Add Members
+
+1. Open your new team
+2. Click **Add Members**
+3. Select users and assign roles:
+   - **Owner** — Can manage the team
+   - **Admin** — Can add/remove members
+   - **Member** — Standard team member
+
+<!-- placeholder:team-creation -->
+<!-- Add: Screenshot of team creation form with members list -->
+
+**Why Teams Matter**:
+
+- Escalation policies can notify entire teams
+- Incidents can be assigned to teams
+- Dashboards can filter by team
+
+---
+
+## Step 4: Create a Service
+
+Services represent the systems you monitor — APIs, databases, applications, or infrastructure components.
+
+### Navigate to Services
+
+1. Click **Services** in the sidebar
+
+### Create Your Service
+
+1. Click **Create Service**
+2. Fill in the details:
+   - **Name**: `Payment API`
+   - **Description**: `Handles all payment processing`
+   - **Team**: Select `Platform Engineering`
+3. Leave **Escalation Policy** empty for now (we'll create one next)
+4. Click **Create**
+
+<!-- placeholder:service-creation -->
+<!-- Add: Screenshot of the service creation form -->
+
+**Why Services Matter**:
+
+- Alerts route through services to reach the right people
+- Services connect to escalation policies
+- Analytics track metrics per service
+- Status pages display service health
+
+---
+
+## Step 5: Create an Escalation Policy
+
+Escalation policies define who gets notified when an incident occurs and how notifications escalate if no one responds.
+
+### Navigate to Escalation Policies
+
+1. Click **Policies** in the sidebar
+
+### Create Your Policy
+
+1. Click **Create Policy**
+2. Enter basic info:
+   - **Name**: `Payment API Escalation`
+   - **Description**: `Primary → Secondary → Team Lead`
+
+### Add Escalation Steps
+
+**Step 1 — Primary On-Call**:
+
+1. Click **Add Step**
+2. Configure:
+   - **Target Type**: `Schedule` (we'll create this next)
+   - **Delay**: `0 minutes` (notify immediately)
+
+**Step 2 — Secondary Backup**:
+
+1. Click **Add Step**
+2. Configure:
+   - **Target Type**: `User`
+   - **Target**: Select a backup person
+   - **Delay**: `5 minutes` (if no ack after 5 min)
+
+**Step 3 — Team Escalation**:
+
+1. Click **Add Step**
+2. Configure:
+   - **Target Type**: `Team`
+   - **Target**: `Platform Engineering`
+   - **Delay**: `10 minutes`
+
+3. Enable **Repeat** to loop back to Step 1 if no one acknowledges
+4. Click **Create**
+
+<!-- placeholder:escalation-policy -->
+<!-- Add: Screenshot showing the escalation policy builder with multiple steps -->
+
+### How Escalation Works
+
+```
+Incident Created
+    ↓
+Step 1: Notify Primary On-Call (from schedule)
+    ↓ (wait 5 min if not acknowledged)
+Step 2: Notify Backup User
+    ↓ (wait 10 min if still not acknowledged)
+Step 3: Notify Entire Team
+    ↓ (if repeat enabled, go back to Step 1)
 ```
 
-Use synthetic names and a non-production service until the workflow is verified.
+---
 
-## 1. Secure the first Admin
+## Step 6: Create an On-Call Schedule
 
-On a new installation, `/setup` is available only while no user exists.
+On-call schedules define who is responsible for responding during specific time periods.
 
-1. Enter the first Admin's name and email.
-2. Select **Generate Admin Credentials**.
-3. Copy the generated temporary password; it is shown once.
-4. Sign in at `/login`.
-5. Open **Settings → Security**, change the password, and store recovery information securely.
+### Navigate to Schedules
 
-Create a second Admin before production so administration does not depend on one account.
+1. Click **Schedules** in the sidebar
 
-## 2. Configure a notification provider
+### Create Your Schedule
 
-In-app notifications work without a third-party provider, but they are not sufficient for dependable on-call paging.
+1. Click **Create Schedule**
+2. Enter details:
+   - **Name**: `Payment API Primary On-Call`
+   - **Timezone**: Select your team's timezone (e.g., `America/New_York`)
+3. Click **Create**
 
-1. Open **Settings → Notification Providers**.
-2. Configure at least one provider—email is a practical first test.
-3. Save and enable it.
-4. Open your personal **Settings → Notifications** and enable the matching channel.
-5. Add the required phone/device data for SMS, WhatsApp, or push.
+### Add a Layer
 
-The provider card's save result is not a delivery test. You will verify it with a test incident later. See [Notifications](../administration/notifications.md).
+Layers allow multiple rotation patterns (e.g., weekday vs. weekend coverage).
 
-## 3. Invite responders
+1. Click **Add Layer**
+2. Configure:
+   - **Name**: `Primary Rotation`
+   - **Rotation Length**: `168 hours` (1 week per person)
+   - **Start Time**: Select when the rotation begins
 
-1. Open **Users**.
-2. Invite at least one additional person as **Responder**.
-3. Copy the invitation link and deliver it through a secure channel.
-4. Have the user set a password, sign in, configure a timezone, and enable a notification channel.
+### Add Users to the Layer
 
-Use **User** for standard read-oriented access, **Responder** for incident/on-call work, and **Admin** for workspace governance. Do not give Admin access merely to make paging work.
+1. Click **Add User**
+2. Select team members in rotation order
+3. Drag to reorder if needed
 
-## 4. Create the owning team
+<!-- placeholder:schedule-calendar -->
+<!-- Add: Screenshot of the schedule calendar view showing rotation timeline -->
 
-1. Open **Teams** and create a uniquely named team, such as `Platform Engineering`.
-2. Add active responders.
-3. Assign at least two appropriate Team Owners.
-4. Optionally select a Team Lead.
-5. Confirm `Receive team notifications` is enabled for people expected to receive team-targeted pages.
+**Schedule Concepts**:
 
-Application roles and team roles are separate. See [Teams](../core-concepts/teams.md).
+- **Layers** — Different rotation patterns (primary, secondary, holiday)
+- **Rotation Length** — How long each person is on-call (24h, 168h, etc.)
+- **Overrides** — Temporary changes (vacation coverage, swaps)
 
-## 5. Create and verify the schedule
+---
 
-Create the schedule before the policy so it is available as a policy target.
+## Step 7: Connect Policy to Service
 
-1. Open **Schedules** and create `Platform Primary On-Call`.
-2. Select the team's authoritative IANA timezone, for example `America/New_York`.
-3. Add a `Primary Rotation` layer with a current start time and rotation length such as `168` hours for weekly handoff.
-4. Add responders in rotation order.
-5. Inspect the timeline, calendar, current on-call user, and next handoff.
-6. Create a short test override, verify it changes effective coverage, then remove it.
+Now link everything together.
 
-Do not continue with an empty layer, expired layer, coverage warning, or unexpected current user. See [On-call schedules](../core-concepts/schedules.md).
+### Update Your Service
 
-## 6. Create the escalation policy
+1. Go to **Services** → **Payment API**
+2. Click **Edit**
+3. Set **Escalation Policy**: `Payment API Escalation`
+4. Click **Save**
 
-Only an application Admin can manage policies.
+**The Chain is Complete**:
 
-1. Open **Escalation Policies** and create `Platform Service Escalation`.
-2. Add these example steps:
+```
+Payment API (Service)
+    ↓
+Payment API Escalation (Policy)
+    ↓
+Step 1: Payment API Primary On-Call (Schedule)
+    ↓
+Currently: Jane Admin (based on rotation)
+```
 
-| Step | Target                              |      Delay | Purpose                                         |
-| ---- | ----------------------------------- | ---------: | ----------------------------------------------- |
-| 1    | `Platform Primary On-Call` schedule |  0 minutes | Notify current primary immediately.             |
-| 2    | Backup Responder user               |  5 minutes | Cover a missed acknowledgement or schedule gap. |
-| 3    | `Platform Engineering` team         | 10 minutes | Broader escalation.                             |
+---
 
-3. Confirm the displayed order and delays.
+## Step 8: Configure Notifications (Optional)
 
-The delay belongs to the step and is the wait before that step runs. Policies do not repeat after the final step in v1.3. The current add-step UI uses user notification preferences; it does not expose a new per-step channel selector. See [Escalation policies](../core-concepts/escalation-policies.md).
+Before testing, set up at least one notification channel.
 
-## 7. Create the service
+### Email (Simplest)
 
-1. Open **Services** and select **Create New Service**.
-2. Use a unique name such as `Payment API - Docs Test`.
-3. Select the owning team and escalation policy.
-4. Optionally choose region and SLA tier.
-5. Create the service, then open **Settings** to verify ownership and policy.
+1. Go to **Settings** → **Notifications**
+2. Configure SMTP or a provider (SendGrid, Resend, etc.)
+3. Test with **Send Test Email**
 
-The tier label does not set the service's acknowledgement/resolution target minutes in the v1.3 settings UI. See [Services](../core-concepts/services.md).
+### Slack (Recommended)
 
-## 8. Run a manual incident test
+1. Go to **Settings** → **Integrations** → **Slack**
+2. Click **Connect to Slack**
+3. Authorize OpsKnight in your workspace
+4. Select a default channel for notifications
 
-Coordinate the test with all recipients.
+See the [Notifications Guide](../administration/notifications) for detailed setup.
 
-1. Open **Incidents → Create incident**.
-2. Enter `TEST: Payment API response workflow`.
-3. Select the test service, High urgency, and private visibility.
-4. Create the incident.
-5. Verify the incident timeline shows the first policy step and the expected current on-call user receives an in-app and configured external notification.
-6. Let the second step execute once and verify its timing.
-7. Acknowledge the incident and confirm no later step runs.
-8. Add a note, assign/reassign it, then resolve with a resolution note.
-9. Review Notification History and the event timeline.
+---
 
-If the test fails, keep the service out of production routing and use [Troubleshooting](../troubleshooting.md).
+## Step 9: Create a Test Incident
 
-## 9. Add an inbound integration
+Let's verify everything works by creating a manual incident.
 
-1. Open **Service → Integrations**.
-2. Select **Events API** for the simplest contract test or choose the production monitoring provider.
-3. Enter a descriptive integration name and create it.
-4. Copy the generated integration/routing key into secret storage.
+### Create the Incident
 
-Test Events API ingest:
+1. Click **Incidents** in the sidebar
+2. Click **Create Incident**
+3. Fill in:
+   - **Title**: `Test: Payment API High Latency`
+   - **Description**: `This is a test incident to verify the workflow`
+   - **Service**: `Payment API`
+   - **Urgency**: `High`
+4. Click **Create**
+
+<!-- placeholder:create-incident -->
+<!-- Add: Screenshot of the incident creation form -->
+
+### What Should Happen
+
+1. **Incident Created** — Appears in the incident list with status `OPEN`
+2. **Notification Sent** — Current on-call person receives alert via configured channels
+3. **Timeline Updated** — Shows "Incident triggered" event
+
+### Verify the Flow
+
+1. Open the incident to see the timeline
+2. Check that notifications were sent (look for delivery status)
+3. Click **Acknowledge** to stop escalation
+4. Click **Resolve** to close the incident
+
+<!-- placeholder:incident-detail -->
+<!-- Add: Screenshot of incident detail page showing timeline and actions -->
+
+---
+
+## Step 10: Test via API (Optional)
+
+For a more realistic test, send an alert via the Events API:
 
 ```bash
-curl --request POST "https://YOUR_OPSKNIGHT_HOST/api/events" \
-  --header "Authorization: Token token=INTEGRATION_KEY" \
-  --header "Content-Type: application/json" \
-  --data '{
+curl -X POST http://localhost:3000/api/events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "routing_key": "payment-api",
     "event_action": "trigger",
-    "dedup_key": "first-week/payment-api",
+    "dedup_key": "test-alert-001",
     "payload": {
-      "summary": "TEST: integration routing",
-      "source": "first-week-check",
-      "severity": "warning"
+      "summary": "High CPU usage on payment-api-prod-1",
+      "severity": "critical",
+      "source": "monitoring-system",
+      "custom_details": {
+        "cpu_percent": 95,
+        "host": "payment-api-prod-1"
+      }
     }
   }'
 ```
 
-Confirm it creates a Medium-urgency incident for the correct service. Send a resolve with the same integration key and `dedup_key`:
+> **Note**: The `routing_key` should match an integration key configured for your service.
 
-```bash
-curl --request POST "https://YOUR_OPSKNIGHT_HOST/api/events" \
-  --header "Authorization: Token token=INTEGRATION_KEY" \
-  --header "Content-Type: application/json" \
-  --data '{
-    "event_action": "resolve",
-    "dedup_key": "first-week/payment-api",
-    "payload": {
-      "summary": "TEST: integration routing recovered",
-      "source": "first-week-check",
-      "severity": "info"
-    }
-  }'
-```
+---
 
-See the [Events API](../api/events.md) and [Integration catalog](../integrations/README.md).
+## Congratulations!
 
-## 10. Configure public communication intentionally
+You've successfully set up OpsKnight with:
 
-If you need a status page:
+- A team of responders
+- A monitored service
+- An escalation policy with multiple steps
+- An on-call rotation schedule
+- A tested incident workflow
 
-1. Open **Settings → Status Page**.
-2. Add only approved services.
-3. Review every privacy field.
-4. Keep the page disabled while testing its preview.
-5. Enable it, then inspect `/status` signed out and from outside your network.
+---
 
-Use a private synthetic incident to prove excluded data stays private, then a public synthetic incident to verify the approved display. See [Status page](../core-concepts/status-page.md).
+## What's Next?
 
-## 11. Establish operating ownership
+Now that the basics are working, explore these areas:
 
-Before production, assign owners for:
+### Connect Real Monitoring Tools
 
-- user onboarding/offboarding and Admin continuity;
-- schedule coverage and override review;
-- provider credentials and delivery failures;
-- each service and inbound integration;
-- status-page communication and subscribers;
-- backups, upgrades, retention, audit review, and security response.
+Route alerts from your actual infrastructure:
 
-## First-week acceptance checklist
+- [Datadog Integration](../integrations/apm-monitoring/datadog)
+- [Prometheus Integration](../integrations/metrics-alerting/prometheus)
+- [Generic Webhooks](../integrations/custom/webhooks)
 
-- [ ] Two active Admins can sign in and manage the workspace.
-- [ ] Responders completed invitation and configured timezone/channels.
-- [ ] Team ownership and notification participation are correct.
-- [ ] Schedule has continuous expected coverage and a tested override.
-- [ ] Policy reaches schedule, backup, and team targets at expected times.
-- [ ] Manual incident acknowledge/resolve stops later escalation.
-- [ ] Events API trigger and resolve reuse one incident.
-- [ ] Notification History shows expected success/failure detail.
-- [ ] Service ownership, SLA labels/limits, integrations, and status-page exposure are reviewed.
-- [ ] Backup, upgrade, retention, and security owners are named.
+### Set Up More Notification Channels
 
-## Continue learning
+Reach responders through multiple channels:
 
-- [Core concepts](../core-concepts/README.md)
-- [Deployment](../deployment/README.md)
-- [Administration](../administration/README.md)
-- [Security](../security/README.md)
-- [Mobile](../mobile/README.md)
+- [SMS via Twilio](../administration/notifications#sms)
+- [Push Notifications](../administration/notifications#push)
+- [Slack Integration](../integrations/communication/slack)
+
+### Configure SLAs
+
+Track response time commitments:
+
+- [SLA Configuration](../core-concepts/analytics#sla-tracking)
+
+### Create a Status Page
+
+Communicate with customers:
+
+- [Status Page Setup](../core-concepts/status-page)
+
+### Understand Core Concepts
+
+Deepen your knowledge:
+
+- [Incident Lifecycle](../core-concepts/incidents)
+- [Schedule Deep Dive](../core-concepts/schedules)
+- [Escalation Details](../core-concepts/escalation-policies)
+
+---
+
+## Quick Reference
+
+| What                       | Where                    |
+| -------------------------- | ------------------------ |
+| Create/manage users        | Settings → Users         |
+| Create/manage teams        | Teams                    |
+| Create/manage services     | Services                 |
+| Create escalation policies | Policies                 |
+| Create on-call schedules   | Schedules                |
+| View/manage incidents      | Incidents                |
+| Configure notifications    | Settings → Notifications |
+| Connect integrations       | Settings → Integrations  |

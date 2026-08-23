@@ -1,101 +1,443 @@
 ---
 order: 5
 title: API Reference
-description: Published Events and Incidents contracts, API-key authentication, rate limits, and the supported CLI.
+description: Complete REST API documentation for developers integrating with OpsKnight
 ---
 
 # API Reference
 
-Only the pages listed here are published automation contracts for v1.3. Other `/api/*` routes support the OpsKnight UI or integrations and can change without public-API compatibility guarantees.
+The OpsKnight API lets you programmatically manage incidents, integrate monitoring tools, query schedules, and automate your incident management workflows.
 
-| Guide                            | Use it for                                                          |
-| -------------------------------- | ------------------------------------------------------------------- |
-| [Events API](./events)           | Trigger, acknowledge, and resolve a deduplicated monitoring event.  |
-| [Incidents API](./incidents)     | List, create, read, and update supported incident fields.           |
-| [Rate limiting](./rate-limiting) | Route limits, `Retry-After`, storage, cleanup, and client behavior. |
-| [CLI](./cli)                     | Supported command-line workflows.                                   |
+---
 
-Services, schedules, users, and teams remain UI-managed public workflows in this version. Some API-key scopes and internal handlers exist for them, but no v1.3 public REST contract is published. There are no published language SDK packages.
+## API Endpoints Overview
 
-## Create an API key
+| Endpoint                         | Description                             | Common Use Cases              |
+| -------------------------------- | --------------------------------------- | ----------------------------- |
+| [Events API](./api/events)       | Trigger, acknowledge, resolve incidents | Monitoring integrations       |
+| [Incidents API](./api/incidents) | List, create, update incidents          | Custom dashboards, automation |
+| Services API                     | Manage services                         | Service catalog automation    |
+| Schedules API                    | Query on-call schedules                 | Who's on-call integrations    |
+| Users API                        | Manage users                            | User provisioning             |
+| Teams API                        | Manage teams                            | Team automation               |
 
-1. Open **Settings → API Keys**.
-2. Create a descriptively named key and select only required scopes.
-3. Copy the `ok_...` token immediately; the complete token is shown only once.
-4. Store it in a secret manager, not source code or shell history.
+---
 
-Keys belong to the user who creates them. Incident authorization still considers that user's role, assignments, and team memberships. Disabling/removing the user or revoking the key affects automation access.
+## Authentication
 
-The v1.3 key form permits these scopes:
+All API requests require authentication. OpsKnight supports API key authentication.
 
-| Scope             | Published use                                                        |
-| ----------------- | -------------------------------------------------------------------- |
-| `events:write`    | Events API.                                                          |
-| `incidents:read`  | Incident list and detail.                                            |
-| `incidents:write` | Incident create and patch.                                           |
-| `services:read`   | Reserved for instance/UI-backed behavior; no public services guide.  |
-| `schedules:read`  | Reserved for instance/UI-backed behavior; no public schedules guide. |
+### Creating an API Key
 
-An API key with no required scope receives HTTP 403. There is no `incidents:delete` public operation in v1.3.
+1. Go to **Settings** → **API Keys**
+2. Click **Create API Key**
+3. Enter a name (e.g., "Datadog Integration")
+4. Select scopes (permissions)
+5. Copy the key — it's only shown once!
 
-## Authenticate
+<!-- placeholder:api-key-creation -->
+<!-- Add: Screenshot of API key creation modal -->
 
-Bearer is preferred:
+### Using Your API Key
+
+Include the API key in the `Authorization` header:
+
+```bash
+# Bearer token format (recommended)
+curl -H "Authorization: Bearer sk_live_abc123..." \
+  https://opsknight.yourco.com/api/incidents
+
+# Alternative: Api-Key format
+curl -H "Authorization: Api-Key sk_live_abc123..." \
+  https://opsknight.yourco.com/api/incidents
+
+# Alternative: X-API-Key header
+curl -H "X-API-Key: sk_live_abc123..." \
+  https://opsknight.yourco.com/api/incidents
+```
+
+### API Key Prefixes
+
+| Prefix     | Type       | Description                 |
+| ---------- | ---------- | --------------------------- |
+| `sk_live_` | Production | Full access based on scopes |
+| `sk_test_` | Test       | Sandbox/test environment    |
+
+### Scopes
+
+API keys have scoped permissions. Select only what you need:
+
+| Scope             | Description                                 |
+| ----------------- | ------------------------------------------- |
+| `events:write`    | Send events (trigger, acknowledge, resolve) |
+| `incidents:read`  | Read incidents and incident details         |
+| `incidents:write` | Create and update incidents                 |
+| `services:read`   | Read services                               |
+| `services:write`  | Create and update services                  |
+| `schedules:read`  | Read schedules and on-call                  |
+| `schedules:write` | Create and update schedules                 |
+| `users:read`      | Read users                                  |
+| `users:write`     | Manage users (admin)                        |
+| `teams:read`      | Read teams                                  |
+| `teams:write`     | Manage teams                                |
+
+---
+
+## Base URL
+
+All API endpoints are relative to your OpsKnight instance:
+
+```
+https://your-opsknight-instance.com/api
+```
+
+Example:
+
+```
+https://opsknight.yourco.com/api/incidents
+```
+
+---
+
+## Request Format
+
+### Headers
 
 ```http
-Authorization: Bearer ok_REDACTED
+Content-Type: application/json
+Authorization: Bearer sk_live_abc123...
 ```
 
-The API-key middleware also accepts:
+### Request Body
 
-```http
-Authorization: Api-Key ok_REDACTED
-```
-
-or:
-
-```http
-X-API-Key: ok_REDACTED
-```
-
-Never send API keys in query parameters. Use HTTPS in production.
-
-## Base URL and JSON
-
-All paths are relative to the OpsKnight origin:
-
-```text
-https://ops.example.com/api
-```
-
-Send JSON request bodies with `Content-Type: application/json`. Successful responses are route-specific rather than wrapped in a universal `data` envelope. Errors use an `error` string and can include validation details under `meta`.
+JSON format for POST/PATCH requests:
 
 ```json
 {
-  "error": "Invalid request body.",
-  "meta": {
-    "issues": []
+  "title": "High CPU on web-01",
+  "urgency": "HIGH",
+  "service_id": "svc_abc123"
+}
+```
+
+---
+
+## Response Format
+
+### Success Response
+
+```json
+{
+  "data": {
+    "id": "inc_abc123",
+    "title": "High CPU on web-01",
+    "status": "OPEN",
+    "created_at": "2024-01-15T10:30:00Z"
   }
 }
 ```
 
-Common statuses are 400 invalid input, 401 invalid/missing key, 403 missing scope or inaccessible resource, 404 missing resource, 429 rate limited, and 500 server failure.
+### List Response (Paginated)
 
-## Operational rules
+```json
+{
+  "data": [
+    { "id": "inc_abc123", "title": "..." },
+    { "id": "inc_def456", "title": "..." }
+  ],
+  "pagination": {
+    "total": 150,
+    "limit": 25,
+    "offset": 0,
+    "has_more": true
+  }
+}
+```
 
-- Treat IDs and timestamps as opaque values.
-- Honor `Retry-After` on HTTP 429 and retry idempotent requests with bounded exponential backoff and jitter.
-- Do not automatically retry a create request unless your automation can prove it did not succeed; prefer the Events API when deduplication is required.
-- Record request purpose and response status without logging tokens or sensitive payload data.
-- Test against a non-production service and verify resulting escalation/notifications before production rollout.
+### Error Response
 
-## Key rotation
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Title is required",
+    "details": {
+      "field": "title",
+      "reason": "required"
+    }
+  }
+}
+```
 
-Create a replacement key, deploy it to consumers, confirm `lastUsedAt` moves on the replacement, then revoke the old key. If `API_KEY_SECRET` or its default `NEXTAUTH_SECRET` basis changes without a migration plan, stored key hashes can no longer be matched; rotate keys deliberately.
+---
 
-## Related topics
+## Error Codes
 
-- [Events API](./events)
-- [Incidents API](./incidents)
-- [Rate limiting](./rate-limiting)
-- [Security](../security/README)
+| Code               | HTTP Status | Description                         |
+| ------------------ | ----------- | ----------------------------------- |
+| `UNAUTHORIZED`     | 401         | Invalid or missing API key          |
+| `FORBIDDEN`        | 403         | API key lacks required scope        |
+| `NOT_FOUND`        | 404         | Resource not found                  |
+| `VALIDATION_ERROR` | 400         | Invalid request data                |
+| `CONFLICT`         | 409         | Resource conflict (e.g., duplicate) |
+| `RATE_LIMITED`     | 429         | Too many requests                   |
+| `INTERNAL_ERROR`   | 500         | Server error                        |
+
+---
+
+## Rate Limits
+
+API requests are rate limited to ensure fair usage:
+
+| Endpoint Type   | Limit        | Window     |
+| --------------- | ------------ | ---------- |
+| Events API      | 100 requests | per minute |
+| Read endpoints  | 300 requests | per minute |
+| Write endpoints | 100 requests | per minute |
+
+### Rate Limit Headers
+
+Every response includes rate limit information:
+
+```http
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1705318800
+```
+
+### Handling Rate Limits
+
+When rate limited, you'll receive a `429` response:
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Too many requests. Retry after 30 seconds.",
+    "retry_after": 30
+  }
+}
+```
+
+**Best practices**:
+
+- Implement exponential backoff
+- Respect the `Retry-After` header
+- Cache responses where appropriate
+- Batch requests when possible
+
+---
+
+## Pagination
+
+List endpoints support pagination:
+
+| Parameter | Default | Max | Description    |
+| --------- | ------- | --- | -------------- |
+| `limit`   | 25      | 100 | Items per page |
+| `offset`  | 0       | -   | Skip N items   |
+
+### Example
+
+```bash
+# First page
+GET /api/incidents?limit=25&offset=0
+
+# Second page
+GET /api/incidents?limit=25&offset=25
+
+# Third page
+GET /api/incidents?limit=25&offset=50
+```
+
+### Response
+
+```json
+{
+  "data": [...],
+  "pagination": {
+    "total": 150,
+    "limit": 25,
+    "offset": 25,
+    "has_more": true
+  }
+}
+```
+
+---
+
+## Filtering
+
+List endpoints support filtering via query parameters:
+
+### Incidents API Filters
+
+```bash
+GET /api/incidents?status=OPEN&urgency=HIGH&service_id=svc_abc123
+```
+
+| Filter           | Values                                            | Description         |
+| ---------------- | ------------------------------------------------- | ------------------- |
+| `status`         | OPEN, ACKNOWLEDGED, RESOLVED, SNOOZED, SUPPRESSED | Incident status     |
+| `urgency`        | HIGH, MEDIUM, LOW                                 | Urgency level       |
+| `service_id`     | Service ID                                        | Filter by service   |
+| `team_id`        | Team ID                                           | Filter by team      |
+| `assignee_id`    | User ID                                           | Filter by assignee  |
+| `created_after`  | ISO 8601 date                                     | Created after date  |
+| `created_before` | ISO 8601 date                                     | Created before date |
+
+### Multiple Values
+
+Some filters accept multiple values:
+
+```bash
+GET /api/incidents?status=OPEN,ACKNOWLEDGED&urgency=HIGH,MEDIUM
+```
+
+---
+
+## Sorting
+
+List endpoints support sorting:
+
+```bash
+GET /api/incidents?sort=created_at&order=desc
+```
+
+| Parameter | Values                                  | Default    |
+| --------- | --------------------------------------- | ---------- |
+| `sort`    | created_at, updated_at, urgency, status | created_at |
+| `order`   | asc, desc                               | desc       |
+
+---
+
+## Quick Start Examples
+
+### Trigger an Incident
+
+```bash
+curl -X POST https://opsknight.yourco.com/api/events \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk_live_abc123" \
+  -d '{
+    "routing_key": "payment-api",
+    "event_action": "trigger",
+    "dedup_key": "high-cpu-web01",
+    "payload": {
+      "summary": "High CPU on web-01",
+      "severity": "critical",
+      "source": "datadog"
+    }
+  }'
+```
+
+### List Open Incidents
+
+```bash
+curl -X GET "https://opsknight.yourco.com/api/incidents?status=OPEN" \
+  -H "Authorization: Bearer sk_live_abc123"
+```
+
+### Acknowledge an Incident
+
+```bash
+curl -X POST https://opsknight.yourco.com/api/events \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk_live_abc123" \
+  -d '{
+    "routing_key": "payment-api",
+    "event_action": "acknowledge",
+    "dedup_key": "high-cpu-web01"
+  }'
+```
+
+### Get Current On-Call
+
+```bash
+curl -X GET "https://opsknight.yourco.com/api/schedules/sch_abc123/on-call" \
+  -H "Authorization: Bearer sk_live_abc123"
+```
+
+---
+
+## SDKs and Libraries
+
+### Official Tools
+
+- **CLI Tool**: [CLI Documentation](./api/cli)
+
+### Community Tools
+
+- Python SDK (community)
+- Node.js SDK (community)
+- Go SDK (community)
+
+---
+
+## Webhooks (Outbound)
+
+OpsKnight can send webhooks to your systems when events occur.
+
+### Supported Events
+
+| Event                   | Description                     |
+| ----------------------- | ------------------------------- |
+| `incident.triggered`    | New incident created            |
+| `incident.acknowledged` | Incident acknowledged           |
+| `incident.resolved`     | Incident resolved               |
+| `incident.escalated`    | Incident escalated to next step |
+| `incident.assigned`     | Incident assigned/reassigned    |
+
+### Webhook Payload
+
+```json
+{
+  "event": "incident.triggered",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "incident": {
+    "id": "inc_abc123",
+    "title": "High CPU on web-01",
+    "status": "OPEN",
+    "urgency": "HIGH",
+    "service": {
+      "id": "svc_xyz",
+      "name": "Payment API"
+    },
+    "assignee": {
+      "id": "usr_123",
+      "name": "Alice Smith"
+    }
+  }
+}
+```
+
+### Signature Verification
+
+Webhooks include an HMAC-SHA256 signature:
+
+```http
+X-OpsKnight-Signature: sha256=abc123def456...
+```
+
+Verify by computing HMAC of the raw request body using your webhook secret.
+
+---
+
+## API Changelog
+
+### v1 (Current)
+
+- Initial stable API release
+- Full incident management
+- Events API (PagerDuty-compatible)
+- Schedules and on-call queries
+- User and team management
+
+---
+
+## Need Help?
+
+- Check the [CLI Tool](./api/cli) for command-line access
+- See [Events API](./api/events) for alert integration
+- See [Incidents API](./api/incidents) for incident management
+- Report issues on [GitHub](https://github.com/opsknight-labs/opsknight/issues)

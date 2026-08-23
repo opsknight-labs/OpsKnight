@@ -12,8 +12,7 @@ Use cloud-native alerting from AWS, Azure, and Google Cloud to feed OpsKnight in
 
 <!-- integrations-list:start -->
 
-- [AWS CloudWatch](./aws-cloudwatch) — Receive AWS CloudWatch alarms in OpsKnight via SNS
-- [Azure Monitor](./azure-monitor) — Integrate Azure Monitor with OpsKnight to receive alerts.
-- [Google Cloud Monitoring](./google-cloud-monitoring) — Integrate Google Cloud Monitoring with OpsKnight.
-
+- [AWS CloudWatch](./cloud/aws-cloudwatch) — Receive AWS CloudWatch alarms in OpsKnight via SNS
+- [Azure Monitor](./cloud/azure-monitor) — Integrate Azure Monitor with OpsKnight to receive alerts.
+- [Google Cloud Monitoring](./cloud/google-cloud-monitoring) — Integrate Google Cloud Monitoring with OpsKnight.
 <!-- integrations-list:end -->

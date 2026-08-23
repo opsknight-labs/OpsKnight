@@ -1,136 +1,455 @@
 ---
-title: Escalation policies
-description: Define ordered paging steps for users, teams, and current on-call responders.
-order: 6
+order: 4
+title: Escalation Policies
+description: Define who gets notified, when, and how incidents escalate
 ---
 
-# Escalation policies
+# Escalation Policies
 
-An escalation policy defines who OpsKnight contacts, in what order, and how long it waits before each step. A policy runs only when it is attached to the incident's service.
+Escalation policies are the rules that determine who gets notified when an incident occurs and how alerts escalate if no one responds. They're the backbone of reliable incident response.
 
-Only an application **Admin** can create, change, reorder, or delete policies and their steps. Responders can see policy and escalation state but cannot administer it.
+![Escalation policies list](/escalation-policies.png)
 
-## How execution works
+---
 
-1. A new Open incident starts the service's policy.
-2. OpsKnight waits for the first step's delay, if any.
-3. It resolves the step target to one or more users, assigns an unassigned incident to the target, and sends notifications.
-4. It schedules the next step using that next step's delay.
-5. Acknowledging, resolving, snoozing, or suppressing the incident stops or pauses further escalation according to the incident lifecycle.
-6. If a target is invalid or resolves to no users, the timeline records the failure and OpsKnight advances to the next step. After the last step, escalation is complete.
+## Why Escalation Policies Matter
 
-Delays mean “wait before this step,” not “wait after the previous notification.” A zero delay executes the step immediately.
+| Without Policies         | With Policies                      |
+| ------------------------ | ---------------------------------- |
+| Alerts go to fixed users | Dynamic routing to on-call         |
+| No escalation if ignored | Automatic escalation after timeout |
+| Single point of failure  | Multi-tier redundancy              |
+| Manual notification      | Automated multi-channel delivery   |
 
-Policies do not repeat in v1.3. After the last step is exhausted, the escalation is complete.
+---
 
-## Target types
+## Policy Structure
 
-| Target       | Resolution behavior                                                                                                                |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **User**     | Contacts the selected user directly.                                                                                               |
-| **Team**     | Contacts members whose team-notification participation is enabled. Existing lead-only steps contact the configured Team Lead only. |
-| **Schedule** | Contacts the effective user or users on call at execution time after layer priority and overrides are applied.                     |
+An escalation policy consists of:
 
-For a Team target, service ownership is not required. For a Schedule target, an empty coverage window resolves to no users; OpsKnight does not notify the entire schedule roster as a fallback.
+1. **Name**: Unique identifier for the policy
+2. **Description**: What this policy is for
+3. **Steps**: Ordered list of escalation rules
+4. **Services**: Which services use this policy
 
-## Create a policy
+```
+Payment API Escalation Policy
+├── Step 1: Primary On-Call (Schedule) → wait 5 min
+├── Step 2: Secondary On-Call (Schedule) → wait 10 min
+├── Step 3: Platform Team Lead (User) → wait 10 min
+└── Step 4: Entire Platform Team (Team) → repeat
+```
 
-1. Open **Escalation Policies** and select **Create Policy**.
-2. Enter a unique name and a description that states when the policy should be used.
-3. Create the empty policy.
-4. Open it and add ordered steps.
-5. For each step, select User, Team, or Schedule and set a non-negative delay.
-6. Drag or move steps into final order.
-7. Attach the policy from **Service → Settings**.
+---
 
-The policy can be saved with no steps, but it cannot page anyone until at least one valid step exists.
+## Escalation Steps
 
-### Channel behavior in the v1.3 interface
+Each step in a policy defines:
 
-New steps created in the current v1.3 policy interface do not expose a per-step channel selector. They use each resolved user's enabled notification preferences and the configured workspace providers. Although the data model supports stored step-channel overrides, do not depend on an undocumented database-level configuration as a public workflow.
+| Field                     | Description                                | Required |
+| ------------------------- | ------------------------------------------ | -------- |
+| **Target Type**           | USER, TEAM, or SCHEDULE                    | Yes      |
+| **Target**                | The specific user, team, or schedule       | Yes      |
+| **Delay**                 | Minutes to wait before moving to next step | Yes      |
+| **Notification Channels** | Override default channels (optional)       | No       |
+| **Notify Team Lead Only** | For TEAM targets, only notify the lead     | No       |
 
-Likewise, the current add-step interface does not expose the Team Lead-only toggle. Existing lead-only steps can execute and are labeled in the policy view, but new policy design should not depend on setting that flag through the v1.3 UI.
+### Step Order
 
-## Design a resilient policy
+Steps execute in order (0-indexed internally):
 
-A typical production sequence is:
+- **Step 1** executes immediately when incident triggers
+- **Step 2** executes after Step 1's delay (if not acknowledged)
+- And so on...
 
-| Step | Target                        |         Delay | Purpose                                       |
-| ---- | ----------------------------- | ------------: | --------------------------------------------- |
-| 1    | Primary on-call schedule      |     0 minutes | Immediate accountable responder.              |
-| 2    | Backup schedule or team       |  5–10 minutes | Coverage for a missed page or schedule gap.   |
-| 3    | Incident commander or manager | 10–20 minutes | Human escalation when response has not begun. |
+---
 
-Choose timing based on actual acknowledgement objectives and provider latency. Avoid multiple immediate steps unless parallel paging is intentional.
+## Target Types
 
-For every policy:
+### USER
 
-- include a final target that is maintained and likely to resolve;
-- avoid disabled users and empty teams;
-- monitor schedule end dates and coverage gaps;
-- ensure each target has at least one configured delivery channel;
-- use descriptions that distinguish critical and non-critical paths;
-- retest after membership, schedule, provider, or policy changes.
+Notify a specific individual directly.
 
-## Reorder and edit safely
+| Use Case              | Example                               |
+| --------------------- | ------------------------------------- |
+| Backup escalation     | Notify team lead after primary fails  |
+| Subject matter expert | Notify database admin for DB issues   |
+| Management escalation | Notify manager for critical incidents |
 
-The interface supports adding, deleting, and reordering steps. Reordering preserves the delay associated with each position in the sequence rather than moving delay semantics blindly with a person. Review every displayed delay after reordering.
+```
+Target Type: USER
+Target: jane.doe@company.com
+Delay: 10 minutes
+```
 
-Policy changes can affect active incidents because escalation reads the service's current policy as it advances. Before a production edit:
+### TEAM
 
-1. Review currently escalating incidents.
-2. Record the original order and timing.
-3. Apply the smallest change.
-4. Reopen the policy and confirm target order and delays.
-5. Run a test incident through at least two steps.
+Notify team members who have team notifications enabled.
 
-## Attach, replace, or remove a policy
+| Option             | Behavior                                     |
+| ------------------ | -------------------------------------------- |
+| **All Members**    | Every team member with notifications enabled |
+| **Team Lead Only** | Only the designated team lead                |
 
-Open **Service → Settings → Ownership & Escalation**. Select a policy, save, and trigger a test incident.
+```
+Target Type: TEAM
+Target: Platform Engineering
+Notify Team Lead Only: false
+Delay: 15 minutes
+```
 
-Selecting no policy leaves the service in manual-paging mode. Before replacement or removal, check active incidents and ensure operators know how those incidents will be handled.
+**Important**: Only members with `receiveTeamNotifications: true` are notified.
 
-A policy cannot be deleted while any service uses it. Reassign or remove it from every listed service first.
+### SCHEDULE
 
-## Test the policy
+Notify whoever is currently on-call in a schedule.
 
-Use a non-production service or coordinated test window:
+| Behavior                 | Description                           |
+| ------------------------ | ------------------------------------- |
+| **Real-time Resolution** | Determines on-call at escalation time |
+| **Layer Support**        | Considers all schedule layers         |
+| **Override Support**     | Respects active overrides             |
 
-1. Create an Open test incident through the real integration path.
-2. Confirm the timeline records the initial scheduled or executed step.
-3. Verify the expected user receives a notification through their enabled channel.
-4. Allow the next step to execute and verify its target and timing.
-5. Acknowledge and confirm no later step runs.
-6. Repeat during a schedule override and a known coverage edge.
-7. Resolve and remove test artifacts according to retention policy.
+```
+Target Type: SCHEDULE
+Target: Primary On-Call Schedule
+Delay: 5 minutes
+```
+
+This is the most common target type for initial escalation steps.
+
+---
+
+## Delay Configuration
+
+The **delay** determines how long to wait before escalating to the next step:
+
+| Delay           | Behavior                                           |
+| --------------- | -------------------------------------------------- |
+| **0 minutes**   | Execute immediately (no delay after previous step) |
+| **5 minutes**   | Wait 5 minutes before escalating                   |
+| **10+ minutes** | Standard escalation window                         |
+
+### Timing Guidelines
+
+| Step   | Recommended Delay | Rationale                    |
+| ------ | ----------------- | ---------------------------- |
+| Step 1 | 0 min             | Immediate notification       |
+| Step 2 | 5-10 min          | Give primary time to respond |
+| Step 3 | 10-15 min         | Backup escalation            |
+| Final  | 15-30 min         | Management/team-wide         |
+
+### What Stops Escalation
+
+Escalation stops when:
+
+- Incident is **acknowledged**
+- Incident is **resolved**
+- Incident is **snoozed**
+- Incident is **suppressed**
+
+---
+
+## Notification Channel Overrides
+
+By default, users receive notifications via their personal preferences. Steps can override this:
+
+### Available Channels
+
+| Channel      | Description         |
+| ------------ | ------------------- |
+| **EMAIL**    | Email notification  |
+| **SMS**      | Text message        |
+| **PUSH**     | Mobile/browser push |
+| **SLACK**    | Slack message       |
+| **WEBHOOK**  | Custom webhook      |
+| **WHATSAPP** | WhatsApp message    |
+
+### Per-Step Override
+
+Configure specific channels for a step:
+
+```
+Step 2: Backup On-Call
+├── Target: Secondary Schedule
+├── Delay: 10 minutes
+└── Channels: [SMS, PUSH]  ← Override
+```
+
+When channels are specified, only those channels are used (user preferences ignored for this step).
+
+### When to Override
+
+- **Critical escalations**: Force SMS + Push for urgent steps
+- **Quiet hours**: Use only SMS for after-hours escalation
+- **Slack-first**: Use only Slack for non-urgent teams
+
+---
+
+## Creating a Policy
+
+### Step 1: Basic Info
+
+1. Go to **Policies** in the sidebar
+2. Click **Create Policy**
+3. Enter:
+   - **Name**: "Payment API Escalation"
+   - **Description**: "Primary → Secondary → Team"
+
+### Step 2: Add Steps
+
+1. Click **Add Step**
+2. Configure the step:
+   - Select target type (USER, TEAM, SCHEDULE)
+   - Choose the target
+   - Set delay in minutes
+   - Optionally override notification channels
+3. Repeat for additional steps
+
+<!-- placeholder:policy-step-form -->
+
+![Escalation step configuration](/escalation-step.png)
+
+### Step 3: Review & Save
+
+1. Review the step order
+2. Drag to reorder if needed
+3. Click **Create Policy**
+
+---
+
+## Managing Steps
+
+### Reordering Steps
+
+Two methods to reorder:
+
+1. **Drag and Drop**: Grab the handle and drag to new position
+2. **Menu Actions**: Click **⋮** → Move Up / Move Down
+
+> **Note**: When reordering, delay values are preserved (not recalculated).
+
+### Editing Steps
+
+1. Click the **Edit** button on a step
+2. Modify target, delay, or channels
+3. Save changes
+
+### Deleting Steps
+
+1. Click **⋮** → **Delete**
+2. Confirm deletion
+3. Remaining steps are automatically renumbered
+
+---
+
+## Assigning Policies to Services
+
+Policies must be linked to services to take effect:
+
+### Link via Service Settings
+
+1. Open the service
+2. Go to **Settings**
+3. Select **Escalation Policy** from dropdown
+4. Save
+
+### Link via Policy Page
+
+1. Open the policy
+2. View **Services Using This Policy**
+3. Click **Add Service**
+4. Select services to link
+
+---
+
+## Repeat Behavior
+
+The final step can be configured to repeat:
+
+| Behavior   | Description                      |
+| ---------- | -------------------------------- |
+| **Stop**   | Escalation ends after final step |
+| **Repeat** | Loop back to Step 1 and continue |
+
+### Repeat Configuration
+
+```
+Step 1: Primary On-Call → wait 5 min
+Step 2: Secondary On-Call → wait 10 min
+Step 3: Team → wait 15 min → REPEAT
+```
+
+With repeat enabled:
+
+- After Step 3 delay, escalation returns to Step 1
+- Continues until acknowledged/resolved
+- Ensures someone eventually responds
+
+---
+
+## How Escalation Executes
+
+When an incident triggers:
+
+```
+Incident Created
+       │
+       ▼
+┌──────────────────────┐
+│ Find Service's       │
+│ Escalation Policy    │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Execute Step 1       │
+│ (delay = 0, immediate)│
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Resolve Target       │──► USER: Return user ID
+│ (at current time)    │──► TEAM: Return member IDs
+│                      │──► SCHEDULE: Return on-call IDs
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Send Notifications   │
+│ (via configured      │
+│  channels)           │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Schedule Next Step   │
+│ (wait delay minutes) │
+└──────────┬───────────┘
+           │
+    [Not acknowledged]
+           │
+           ▼
+┌──────────────────────┐
+│ Execute Step 2...    │
+└──────────────────────┘
+```
+
+### Schedule Resolution
+
+When a step targets a SCHEDULE:
+
+1. **Query schedule layers** at current time
+2. **Apply layer priority** (higher layers override lower)
+3. **Apply overrides** (temporary substitutions)
+4. **Return all on-call users** from final result
+
+This ensures the right person is notified even if schedules change.
+
+---
+
+## Example Policies
+
+### Simple: Direct User
+
+```
+Policy: "CEO Direct Line"
+└── Step 1: CEO (User) → no delay
+```
+
+### Standard: Primary/Secondary
+
+```
+Policy: "Standard Escalation"
+├── Step 1: Primary On-Call (Schedule) → wait 5 min
+├── Step 2: Secondary On-Call (Schedule) → wait 10 min
+└── Step 3: Team Lead (User) → wait 15 min
+```
+
+### Complex: Multi-Tier
+
+```
+Policy: "Critical Infrastructure"
+├── Step 1: Primary On-Call (Schedule) → wait 3 min
+│   └── Channels: [SMS, PUSH]
+├── Step 2: Secondary On-Call (Schedule) → wait 5 min
+│   └── Channels: [SMS, PUSH, EMAIL]
+├── Step 3: Platform Team Lead (Team Lead Only) → wait 10 min
+├── Step 4: Entire Platform Team (Team) → wait 15 min
+└── Step 5: VP Engineering (User) → repeat
+```
+
+### Follow-the-Sun
+
+```
+Policy: "Global Support"
+├── Step 1: Regional On-Call (Schedule) → wait 10 min
+│   (Schedule has timezone-based layers)
+├── Step 2: Global Support Lead (User) → wait 15 min
+└── Step 3: All Regions On-Call (Team) → wait 20 min
+```
+
+---
+
+## Best Practices
+
+### Step Design
+
+- **Start with schedules** — First step should target on-call
+- **Add redundancy** — Include backup escalation path
+- **End with team** — Final step should be team-wide or management
+- **Keep delays short** — 5-10 minutes between steps
+
+### Channel Strategy
+
+| Step    | Channels        | Rationale             |
+| ------- | --------------- | --------------------- |
+| Initial | User preference | Respect user settings |
+| Backup  | SMS + Push      | Ensure delivery       |
+| Final   | All channels    | Maximum reach         |
+
+### Policy Organization
+
+- **One policy per service tier** — Different SLAs need different escalation
+- **Name clearly** — "Payment API - P1" vs "Payment API - P2"
+- **Document the rationale** — Use description field
+
+### Testing
+
+1. Create a test incident for the service
+2. Verify Step 1 notifications arrive
+3. Let it escalate to verify timing
+4. Acknowledge to confirm escalation stops
+
+---
 
 ## Troubleshooting
 
-### Escalation does not start
+### Notifications Not Sending
 
-Confirm the service has this policy, the incident is Open, the policy has steps, and the incident escalation state is not already completed or paused.
+1. Verify policy is assigned to service
+2. Check target user/team/schedule exists
+3. Verify users have contact methods configured
+4. Check notification channel is enabled for user
 
-### A step resolves to no users
+### Wrong Person Notified
 
-- User: confirm the account exists and is active.
-- Team: confirm eligible members have team notifications enabled; for a lead-only legacy step, configure a Team Lead and enable their team notifications.
-- Schedule: inspect effective coverage at the execution time, including timezone, restrictions, gaps, priority, and overrides.
+1. Check schedule for correct on-call at incident time
+2. Verify overrides are set correctly
+3. Check team member notification preferences
 
-OpsKnight records the problem in the incident timeline and advances when another step exists.
+### Escalation Not Progressing
 
-### A target is correct but receives no message
+1. Verify incident is not acknowledged/resolved
+2. Check delays are configured correctly
+3. Look at incident timeline for escalation events
 
-Check the user's notification preferences, contact/device data, provider settings, notification history, and system logs. A policy target is not proof that a delivery provider accepted the message.
+---
 
-### Later steps continue after response
+## Related Topics
 
-Confirm the incident was actually acknowledged or resolved and inspect its escalation status and timeline. Assignment alone does not acknowledge an incident.
-
-## Related topics
-
-- [Services](services.md)
-- [On-call schedules](schedules.md)
-- [Teams](teams.md)
-- [Users](users.md)
-- [Incident management](incidents.md)
-- [Troubleshooting](../troubleshooting.md)
+- [Schedules](./schedules) — On-call rotation configuration
+- [Teams](./teams) — Team management
+- [Services](./services) — Service configuration
+- [Notifications](../administration/notifications) — Channel setup
+- [Incidents](./incidents) — Incident lifecycle
