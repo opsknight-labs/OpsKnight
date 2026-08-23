@@ -63,13 +63,17 @@ export async function bootstrapAdmin(formData: FormData) {
 
   if (!user) throw new Error('Failed to initialize the system safely. Please retry.');
 
-  await logAudit({
-    action: 'user.bootstrap',
-    entityType: 'USER',
-    entityId: user.id,
-    actorId: defaultActorId,
-    details: { email },
-  });
+  try {
+    await logAudit({
+      action: 'user.bootstrap',
+      entityType: 'USER',
+      entityId: user.id,
+      actorId: defaultActorId,
+      details: { email },
+    });
+  } catch (err) {
+    logger.warn('[Setup] Non-fatal audit log failure during admin bootstrap', { err });
+  }
 
   return { success: true, password, email };
 }

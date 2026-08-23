@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added & Enhanced
+
+- **Webhook Ingestion Reliability & Auto-Recovery**:
+  - **GitLab CI/CD**: Scoped pipeline deduplication keys to project + ref + buildName so succeeding runs properly auto-resolve failing runs.
+  - **Zabbix Integration**: Fixed signature provider configuration from `gitlab` to `generic` HMAC; prioritized trigger ID, problem ID, and `r_event_id` over dynamic event IDs to ensure recovery webhooks deterministically match open incidents.
+  - **Sentry, Prometheus & AWS CloudWatch Schemas**: Tolerated nullable fields (`assignedTo: null`, `AlarmDescription: null`), unhandled action verbs (`triggered`, `reopened`), and flexible timestamp encodings in Zod validation schemas.
+  - **Datadog Deduplication**: Stripped standard status prefixes (`[Triggered]`, `[Recovered]`, `[OK]`, `[Warn]`) before fallback title hashing to ensure alert recovery matches.
+  - **Integration Key Comparison**: Pre-hashed integration keys with SHA-256 before `crypto.timingSafeEqual` to eliminate secret length timing leaks.
+
+### Security & Hardening
+
+- **Authentication & Session Security**:
+  - **Administrative Reset Links**: Automatically invoked `revokeUserSessions(userId)` upon generating administrative reset links to immediately terminate compromised sessions.
+  - **IP Rate Limiting**: Extracted and sanitized leftmost client IP from `X-Forwarded-For` across password reset and admin reset link endpoints to prevent rate-limit evasion.
+  - **OIDC Synchronization**: Bumped `tokenVersion` on user role updates during OIDC group mapping sync.
+  - **Setup Hardening**: Wrapped post-creation `logAudit` in defensive error handling during admin bootstrap to eliminate permanent instance lockouts.
+  - **RBAC**: Restricted team `OWNER` role assignments in `addUserToTeam` exclusively to administrators.
+- **Web Push Subscription Isolation & API Caching**:
+  - Automatically purged conflicting subscriptions on shared browser endpoints during push registration; enforced `NetworkOnly` Service Worker caching across all root and nested authenticated API endpoints to eliminate stale cache leakage.
+
+### Fixed
+
+- **SLA Analytics Math & Precision**:
+  - **Zero-Item Datasets**: Returned `null` instead of `0` for MTTA and MTTR when zero incidents are acknowledged/resolved, preventing false "100% improvement" insight alerts.
+  - **Timezone Alignment**: Aligned `trendSeries` calendar points and historical rollup query ranges with user timezone days so negative UTC offset timezones (`America/New_York`) do not drop edge days.
+  - **Business Hours Robustness**: Added `try/catch` fallback to `DEFAULT_BUSINESS_HOURS_TIMEZONE` in `isIncidentAfterHours` to prevent unhandled `RangeError` on invalid timezone strings.
+  - **Metric Merging**: Added `Number.isFinite` guards in `reconstructMet` and `calculateMtbfMs` to eliminate `NaN` propagation.
+- **On-Call Scheduling DST Anchoring & Block Merging**:
+  - Calendar-anchored sub-daily shift rotations (12h, 8h, 6h) in the schedule timezone to eliminate wall-clock drift across Daylight Saving Time transitions; merged contiguous schedule blocks for the same responder across rotation and override boundaries; filtered deactivated users in shift window aggregations and added null-safe fallbacks for deleted override users.
+- **Web Push Delivery Resilience & PWA Hardening**:
+  - Safely normalized action payloads to prevent `JSON.parse` crashes during dispatch; made device token purges and HTTP 410/404 cleanup idempotent (`deleteMany`) to prevent concurrent worker exceptions.
+  - Handled `pointercancel` in `MobileSwipeNavigator` to abort tab transitions during native vertical scrolling; isolated modal and bottom sheet backdrops with `data-swipe-ignore`; enforced 16px minimum font size on mobile inputs to eliminate iOS Safari viewport auto-zoom displacement.
+
 ## [1.4.0] - 2026-08-23
 
 ### Added & Enhanced

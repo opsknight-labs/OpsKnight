@@ -34,12 +34,12 @@ export type StandardEvent = z.infer<typeof StandardEventSchema>;
 
 export const CloudWatchAlarmSchema = z.object({
   AlarmName: z.string(),
-  AlarmDescription: z.string().optional(),
-  AWSAccountId: z.string().optional(),
+  AlarmDescription: z.string().nullable().optional(),
+  AWSAccountId: z.string().nullable().optional(),
   NewStateValue: z.enum(['OK', 'ALARM', 'INSUFFICIENT_DATA']),
-  NewStateReason: z.string().optional(),
+  NewStateReason: z.string().nullable().optional(),
   StateChangeTime: z.string(),
-  Region: z.string(),
+  Region: z.string().optional(),
   Trigger: z
     .object({
       MetricName: z.string().optional(),
@@ -47,6 +47,7 @@ export const CloudWatchAlarmSchema = z.object({
       Statistic: z.string().optional(),
       Threshold: z.number().optional(),
     })
+    .nullable()
     .optional(),
 });
 
@@ -260,24 +261,24 @@ export type GrafanaAlert = z.infer<typeof GrafanaAlertSchema>;
 // ============================================
 
 export const PrometheusAlertSchema = z.object({
-  version: z.string(),
-  groupKey: z.string(),
+  version: z.string().optional(),
+  groupKey: z.string().optional(),
   status: z.enum(['firing', 'resolved']),
-  receiver: z.string(),
-  groupLabels: z.record(z.string()),
-  commonLabels: z.record(z.string()),
-  commonAnnotations: z.record(z.string()),
-  externalURL: z.string(),
+  receiver: z.string().optional(),
+  groupLabels: z.record(z.string()).optional(),
+  commonLabels: z.record(z.string()).optional(),
+  commonAnnotations: z.record(z.string()).optional(),
+  externalURL: z.string().optional(),
   alerts: z
     .array(
       z.object({
         status: z.enum(['firing', 'resolved']),
         labels: z.record(z.string()),
-        annotations: z.record(z.string()),
-        startsAt: z.string(),
+        annotations: z.record(z.string()).optional(),
+        startsAt: z.string().optional(),
         endsAt: z.string().optional(),
-        generatorURL: z.string(),
-        fingerprint: z.string(),
+        generatorURL: z.string().optional(),
+        fingerprint: z.string().optional(),
       })
     )
     .min(1),
@@ -332,46 +333,51 @@ export type NewRelicEvent = z.infer<typeof NewRelicEventSchema>;
 // ============================================
 
 export const SentryEventSchema = z.object({
-  action: z.enum(['created', 'resolved', 'assigned', 'unassigned', 'ignored']).optional(),
+  action: z.string().optional(),
   issue: z
     .object({
-      id: z.string(),
-      shortId: z.string(),
-      title: z.string(),
-      culprit: z.string(),
-      level: z.enum(['fatal', 'error', 'warning', 'info', 'debug']),
-      status: z.enum(['unresolved', 'resolved', 'ignored']),
+      id: z.string().optional(),
+      shortId: z.string().nullable().optional(),
+      title: z.string().optional(),
+      culprit: z.string().nullable().optional(),
+      level: z.enum(['fatal', 'error', 'warning', 'info', 'debug']).optional(),
+      status: z.enum(['unresolved', 'resolved', 'ignored']).optional(),
       assignedTo: z
         .object({
-          name: z.string(),
-          email: z.string(),
+          name: z.string().optional(),
+          email: z.string().optional(),
         })
+        .nullable()
         .optional(),
       metadata: z
         .object({
           type: z.string().optional(),
           value: z.string().optional(),
         })
+        .nullable()
         .optional(),
-      permalink: z.string(),
+      permalink: z.string().nullable().optional(),
     })
+    .nullable()
     .optional(),
   event: z
     .object({
-      event_id: z.string(),
+      event_id: z.string().optional(),
       message: z.string().optional(),
-      level: z.string(),
-      timestamp: z.number(),
-      platform: z.string(),
+      level: z.string().optional(),
+      timestamp: z.union([z.number(), z.string()]).optional(),
+      platform: z.string().optional(),
       tags: z.record(z.string()).optional(),
       contexts: z.record(z.unknown()).optional(),
     })
+    .nullable()
     .optional(),
   project: z
     .object({
-      name: z.string(),
-      slug: z.string(),
+      name: z.string().optional(),
+      slug: z.string().optional(),
     })
+    .nullable()
     .optional(),
 });
 

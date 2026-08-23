@@ -35,12 +35,22 @@ export function isIncidentAfterHours(
   endHour: number = DEFAULT_BUSINESS_HOURS_END,
   businessDays?: number[]
 ): boolean {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    hour: 'numeric',
-    hourCycle: 'h23',
-  });
+  let formatter: Intl.DateTimeFormat;
+  try {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone || DEFAULT_BUSINESS_HOURS_TIMEZONE,
+      weekday: 'short',
+      hour: 'numeric',
+      hourCycle: 'h23',
+    });
+  } catch {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: DEFAULT_BUSINESS_HOURS_TIMEZONE,
+      weekday: 'short',
+      hour: 'numeric',
+      hourCycle: 'h23',
+    });
+  }
   const parts = formatter.formatToParts(date);
   const weekday = parts.find(p => p.type === 'weekday')?.value || '';
   const hourStr = parts.find(p => p.type === 'hour')?.value;

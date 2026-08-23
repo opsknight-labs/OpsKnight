@@ -2,14 +2,10 @@ import crypto from 'crypto';
 import type { NextRequest } from 'next/server';
 
 function safeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
-  if (aBuf.length !== bBuf.length) {
-    // Perform dummy comparison to prevent timing attack on length check
-    crypto.timingSafeEqual(Buffer.alloc(32), Buffer.alloc(32));
-    return false;
-  }
-  return crypto.timingSafeEqual(aBuf, bBuf);
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const hashA = crypto.createHash('sha256').update(a).digest();
+  const hashB = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
 }
 
 export function extractIntegrationKey(req: NextRequest): string | null {

@@ -48,7 +48,7 @@ export function transformGitLabToEvent(data: GitLabPayload): {
     }
 
     const summary = `GitLab CI: Pipeline for ${projectPath} on ${ref} ${rawStatus}`;
-    // Include pipeline ID in dedup key so different pipelines on same branch don't collide
+    // Include pipeline ID in dedup key so different pipelines don't collide, with ref fallback
     const dedup_key = pipelineId
       ? `gitlab-${cleanProject}-pipeline-${pipelineId}`
       : `gitlab-${cleanProject}-${ref}`;
