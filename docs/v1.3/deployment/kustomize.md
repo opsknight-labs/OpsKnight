@@ -10,7 +10,7 @@ description: Render, customize, validate, and apply the Kubernetes manifests shi
 
 ## Do not apply the base unchanged in production
 
-The base deliberately contains placeholder secrets, localhost public URLs, a floating `latest` application image, an example nginx/cert-manager ingress, and a single in-cluster PostgreSQL instance. Build a production overlay and review the complete rendered output.
+The base deliberately contains placeholder secrets, localhost public URLs, a release-pinned application image, an example nginx/cert-manager ingress, and a single in-cluster PostgreSQL instance. Build a production overlay, choose the exact image tag or digest you have tested, and review the complete rendered output.
 
 ```text
 deploy/overlays/production/
@@ -58,7 +58,7 @@ kubectl -n opsknight get pods,svc,ingress,pvc
 kubectl -n opsknight logs deployment/opsknight-app --tail=200
 ```
 
-The application performs Prisma migrations before starting. Failed migrations now make the container exit non-zero; the startup probe protects a legitimate long migration/cold start from liveness restarts. Verify migration completion and `/api/health?mode=readiness`, then test login, a write, and an incident flow.
+The application performs Prisma migrations before starting. Failed migrations make the container exit non-zero; the startup probe protects a legitimate long migration/cold start from liveness restarts. Verify migration completion and `/api/health?mode=readiness`, then test login, a write, and an incident flow.
 
 ## Update and rollback
 
