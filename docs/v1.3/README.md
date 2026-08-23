@@ -28,4 +28,4 @@ This tree is **v1.3**. Switch versions in the sidebar for older releases.
 - [Mobile](./mobile/README) — mobile routes, PWA, push, and exact offline support
 - [Accessibility](./accessibility/README) — keyboard, focus, screen-reader, motion, and testing boundaries
 
-SSO is **OIDC**, not SAML. Microsoft Teams and Google Chat are **webhook formats**, not Slack-style rooms.
+SSO is **OIDC**, not SAML. v1.3 has no native MFA, passkey login, or email magic-link flow; enforce MFA at the OIDC provider or access proxy. Microsoft Teams and Google Chat are **webhook formats**, not Slack-style rooms.

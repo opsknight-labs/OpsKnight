@@ -1,53 +1,79 @@
 ---
 order: 13
+title: Authentication and session security
+description: Understand local and OIDC identity, login protection, sessions, revocation, audit evidence, and v1.3 boundaries.
 ---
 
-# Authentication and Security
+# Authentication and session security
 
-OpsKnight implements defense-in-depth to protect authentication flows, sessions, and sensitive data.
+OpsKnight v1.3 supports local email/password accounts and one workspace OIDC provider. Authentication establishes identity; workspace/team roles and resource checks separately determine authorization.
 
-## Security Controls
+For setup and recovery procedures, use [Authentication](../administration/authentication). This page explains the security model and its operational boundaries.
 
-| Risk              | Protection                     | Notes                                 |
-| ----------------- | ------------------------------ | ------------------------------------- |
-| Brute force       | Rate limiting + lockouts       | Progressive lockouts after failures   |
-| User enumeration  | Uniform responses              | Same response for valid/invalid users |
-| Session hijacking | Token versioning               | Invalidates old sessions immediately  |
-| Timing attacks    | Constant-time responses        | Prevents side-channel leaks           |
-| Privilege abuse   | Audit logging + admin controls | Sensitive actions logged              |
+## Supported identity model
 
-## Rate Limiting
+| Capability                          | v1.3 behavior                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Local credentials                   | Email plus a bcrypt-hashed password.                                                                    |
+| OIDC                                | One configurable generic OIDC provider, with domain, role, profile, provisioning, and linking controls. |
+| Sessions                            | Signed/encrypted JWT sessions with token-version revocation.                                            |
+| Password recovery                   | One-time, time-limited reset token with uniform request responses.                                      |
+| SAML, email magic links, native MFA | Not provided by v1.3. Enforce MFA at the OIDC identity provider or access proxy when required.          |
+| Passkeys/WebAuthn login             | Not provided. The optional mobile platform-authenticator prompt is only a client-side privacy screen.   |
 
-Login attempts are tracked by email + IP.
+Keep at least one tested local break-glass Admin while introducing OIDC, and protect that credential through your external privileged-access process.
 
-| Lockout Count | Duration   |
-| ------------- | ---------- |
-| 1             | 1 minute   |
-| 2             | 5 minutes  |
-| 3             | 15 minutes |
-| 4+            | 1 hour     |
+## Local password and login protection
 
-## Password Policy
+New passwords must be 10–128 characters and contain at least one lower-case letter, upper-case letter, number, and supported special character.
 
-- Minimum 10 characters
-- Uppercase and lowercase letters
-- At least one number
-- Special characters recommended
+Local credential failures are tracked by normalized email plus client IP. Five consecutive failures produce the first lockout; repeated five-attempt groups progress through approximately 1, 5, 15, and 60-minute lockouts. A successful login clears the key, and a record expires after one hour without another failure.
 
-## Sessions
+This login-attempt store is process-local memory. It is not shared across replicas and is cleared when a process restarts. Client IP is derived from forwarded request headers, so configure the trusted reverse proxy correctly. For an internet-facing or multi-replica deployment, add independent edge rate limiting and OIDC-provider protections; do not treat the application lockout as the only brute-force control.
 
-| Mode        | Duration |
-| ----------- | -------- |
-| Standard    | 7 days   |
-| Remember Me | 30 days  |
+Login errors do not deliberately reveal whether the user exists. Preserve that behavior in proxies and custom login integrations.
 
-Sessions can be revoked in **Settings → Profile & Preferences → Security**.
+## Session lifetime and revocation
 
-## Audit Logging
+| Client choice               | Session ceiling |
+| --------------------------- | --------------- |
+| Web without **Remember me** | 7 days          |
+| Web with **Remember me**    | 1 year          |
+| Mobile client detection     | 1 year          |
 
-Authentication events are recorded in audit logs for compliance and investigation.
+There is no separate configurable idle-timeout policy in v1.3. Session state can refresh during activity, subject to the ceiling.
 
-## Related Docs
+Session cookies are HTTP-only where appropriate and use `SameSite=Lax`. When `NEXTAUTH_URL` begins with `https://`, OpsKnight enables Secure cookies and secure cookie-name prefixes. The public origin and proxy scheme/host forwarding must agree or users can enter a login loop.
 
-- [Security](../security)
-- [Authentication](../administration/authentication)
+**Settings → Security → Revoke all sessions** increments the current user's token version. Password reset, user-management security actions, and status checks also use token version/status to reject stale access. v1.3 cannot list or revoke one individual device session. Database-backed role/status changes can remain cached briefly, so revoke sessions and remove IdP access for urgent offboarding.
+
+## OIDC identity boundary
+
+An established OIDC identity is bound to normalized issuer plus provider subject, not email alone. First-time linking to an existing account requires a stable subject, an explicitly verified email, administrator provisioning evidence, and an identity not already linked elsewhere. This prevents automatic email-only account takeover.
+
+OIDC role mappings can promote or demote a user on login. Use claims controlled by the identity administrator, restrict auto-provisioning domains, and test both allowed and denied cases. See [OIDC setup](../security/oidc-setup) for the exact workflow.
+
+## Authentication evidence
+
+The application logger records authentication events. Login success, failed/blocked attempts, and selected password/session actions can also write `AuditLog` rows. A database audit-write failure is logged but does not intentionally fail the login flow.
+
+Consequently, the built-in audit table is useful for investigation but is not a guaranteed, immutable authentication ledger. Export durable application logs, restrict database access, set retention, and test each event required by your control framework. See [Audit logs](../administration/audit-logs) and [System logs](../administration/system-logs).
+
+## Production checklist
+
+- [ ] `NEXTAUTH_URL` is the exact external HTTPS origin and trusted proxy headers are correct.
+- [ ] `NEXTAUTH_SECRET` and `ENCRYPTION_KEY` are stable, backed up, and identical across replicas.
+- [ ] A second local Admin and an independent break-glass procedure are tested.
+- [ ] Edge login throttling and IdP MFA are enabled where the threat model requires them.
+- [ ] OIDC linking, domain, provisioning, and role mappings are tested with non-Admin accounts.
+- [ ] Revoke-all, user disable, password reset, and IdP offboarding are verified.
+- [ ] Authentication logs are exported to durable access-controlled storage.
+
+## Related topics
+
+- [Authentication operations](../administration/authentication)
+- [Authorization and roles](../security/authorization)
+- [OIDC setup](../security/oidc-setup)
+- [Encryption](../security/encryption)
+- [Audit logs](../administration/audit-logs)
+- [Troubleshooting](../troubleshooting)

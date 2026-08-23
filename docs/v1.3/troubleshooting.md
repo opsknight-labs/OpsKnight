@@ -394,10 +394,16 @@ Do not repair a versioned deployment by installing ad hoc package versions into 
    ANALYZE;
    ```
 
-3. **Increase connection pool:**
+3. **Check connection pressure before changing the pool:**
+
+   ```sql
+   SHOW max_connections;
+   SELECT state, count(*)
+   FROM pg_stat_activity
+   GROUP BY state;
    ```
-   DATABASE_URL="...?connection_limit=20"
-   ```
+
+   Size the pool across all replicas and leave recovery/migration reserve. Raising a per-process limit can worsen a saturated database; reproduce the workload and follow [Scalability and capacity planning](./core-concepts/scalability).
 
 ### High memory usage
 

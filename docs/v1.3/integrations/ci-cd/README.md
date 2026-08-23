@@ -23,9 +23,9 @@ Detect failed deployments and pipeline issues before they impact users.
 
 ## Capabilities Comparison
 
-| Platform           | Event Triggers                            | Auto-Resolve Supported |        Signature Verification        |
-| :----------------- | :---------------------------------------- | :--------------------: | :----------------------------------: |
-| **GitHub Actions** | `workflow_run.completed` (`failure`)      |          Yes           | SHA-256 HMAC (`X-Hub-Signature-256`) |
-| **GitLab CI/CD**   | `Pipeline Hook` (`failed`)                |          Yes           |   Secret Token (`X-Gitlab-Token`)    |
-| **Bitbucket**      | `repo:commit_status_updated`              |          Yes           |         Token Header / HMAC          |
-| **Vercel**         | `deployment.error`, `deployment.canceled` |          Yes           |  SHA-1 HMAC (`x-vercel-signature`)   |
+| Platform           | Event Triggers                          | Auto-Resolve Supported |        Signature Verification        |
+| :----------------- | :-------------------------------------- | :--------------------: | :----------------------------------: |
+| **GitHub Actions** | `workflow_run.completed` (`failure`)    |          Yes           | SHA-256 HMAC (`X-Hub-Signature-256`) |
+| **GitLab CI/CD**   | `Pipeline Hook` (`failed`)              |          Yes           |   Secret Token (`X-Gitlab-Token`)    |
+| **Bitbucket**      | `repo:commit_status_updated`            |          Yes           |         Token Header / HMAC          |
+| **Vercel**         | `deployment.error`, `deployment.failed` |          Yes           |  SHA-1 HMAC (`x-vercel-signature`)   |

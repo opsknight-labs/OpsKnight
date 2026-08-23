@@ -67,7 +67,7 @@ OpsKnight is built around a simple but powerful model: **Alerts become Incidents
 | [Services](./services)                         | Systems you monitor with ownership      | Alerts need context and routing         |
 | [Incidents](./incidents)                       | Actionable work items from alerts       | Track resolution from trigger to close  |
 | [Incident Templates](./incident-templates)     | Reusable defaults for manual incidents  | Standardize recurring response patterns |
-| [Escalation Policies](./escalation-policies)   | Who gets notified and when              | Ensure issues never fall through cracks |
+| [Escalation Policies](./escalation-policies)   | Who gets notified and when              | Define primary and fallback routing     |
 | [Schedules](./schedules)                       | On-call rotations and shifts            | Fair distribution of on-call duty       |
 | [Teams](./teams)                               | User groups with shared responsibility  | Organize people and permissions         |
 | [Users](./users)                               | Individuals with roles and preferences  | Authentication and personalization      |

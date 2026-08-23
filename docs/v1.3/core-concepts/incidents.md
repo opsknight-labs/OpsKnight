@@ -84,7 +84,7 @@ They are separate fields. If priority-specific SLA targets are configured for th
 - Add or remove tags for later discovery.
 - Set configured custom fields.
 - Add watchers as follower, stakeholder, or executive participants.
-- Review the immutable event timeline for status, assignment, escalation, and other recorded changes.
+- Review the event timeline for recorded status, assignment, escalation, and other changes. It is operational history, not a comprehensive immutable compliance ledger.
 
 Do not place credentials or sensitive customer data in notes, tags, custom fields, or public incident content.
 

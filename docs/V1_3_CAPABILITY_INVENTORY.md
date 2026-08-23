@@ -83,25 +83,26 @@ The documentation maintainer owns inventory state and link/navigation quality on
 
 ## Deployment, operations, administration, and security
 
-| Capability                                   | Audience                    | Evidence                                          | State    | Documentation destination                        | Depth                | Phase |
-| -------------------------------------------- | --------------------------- | ------------------------------------------------- | -------- | ------------------------------------------------ | -------------------- | ----- |
-| Docker Compose production configuration      | Platform engineer           | Compose/env files, entrypoint, and health routes  | Complete | `v1.3/deployment/docker.md`; configuration guide | Runbook              | 4     |
-| Helm deployment                              | Platform engineer           | Helm chart and values                             | Complete | `v1.3/deployment/helm.md`                        | Runbook/reference    | 4     |
-| Kustomize deployment                         | Platform engineer           | `k8s/kustomization.yaml` and manifests            | Complete | `v1.3/deployment/kustomize.md`                   | Runbook/reference    | 4     |
-| Database migration and startup behavior      | Platform engineer           | Prisma scripts and container entrypoint           | Complete | `v1.3/deployment/database-migrations.md`         | Runbook              | 4     |
-| Backup and restore                           | Operator                    | PostgreSQL deployment model                       | Complete | `v1.3/deployment/backup-restore.md`              | Recovery runbook     | 4     |
-| Upgrade and rollback                         | Operator                    | image/chart/manifests/migrations                  | Complete | `v1.3/deployment/upgrade-rollback.md`            | Runbook              | 4     |
-| Health checks and observability              | Operator                    | health route, logging and Sentry configuration    | Complete | `v1.3/deployment/monitoring.md`                  | Operations           | 4     |
-| Retention, cleanup, scheduled jobs           | Operator                    | scheduler, retention library, settings, DB models | Complete | `v1.3/deployment/maintenance.md`                 | Operations           | 4     |
-| Workspace settings and system configuration  | Admin                       | settings routes and configuration code            | Complete | `v1.3/administration/system-settings.md`         | Reference/tasks      | 5     |
-| Authentication, sessions, password reset     | Admin, security reviewer    | auth routes/libraries                             | Complete | `v1.3/administration/authentication.md`          | Full guide           | 5     |
-| First-time OIDC link approval and revocation | Admin, existing user        | user OIDC actions, menu control, auth callbacks   | Complete | authentication and users guides                  | Security/task guide  | 5     |
-| USER, RESPONDER, ADMIN authorization         | Admin, security reviewer    | `src/lib/rbac`; role enum                         | Complete | `v1.3/security/authorization.md`; users guide    | Matrix and tasks     | 5     |
-| Team OWNER, ADMIN, MEMBER roles              | Team admin                  | team actions and enum                             | Complete | `v1.3/security/authorization.md`; teams guide    | Matrix and tasks     | 5     |
-| API keys and scopes                          | Admin, API consumer         | API-key settings/routes/models                    | Complete | API authentication guide                         | Contract             | 5, 6  |
-| Audit log                                    | Admin, security reviewer    | audit page/model/writers                          | Complete | `v1.3/administration/audit-logs.md`              | Operations/reference | 5     |
-| System logs                                  | Admin, operator             | system-logs page and logger                       | Complete | `v1.3/administration/system-logs.md`             | Troubleshooting      | 5     |
-| Secrets, encryption, HTTPS, proxies          | Security reviewer, operator | configuration/security libraries                  | Complete | security and deployment guides                   | Hardening            | 5     |
+| Capability                                   | Audience                    | Evidence                                          | State       | Documentation destination                        | Depth                | Phase |
+| -------------------------------------------- | --------------------------- | ------------------------------------------------- | ----------- | ------------------------------------------------ | -------------------- | ----- |
+| Docker Compose production configuration      | Platform engineer           | Compose/env files, entrypoint, and health routes  | Complete    | `v1.3/deployment/docker.md`; configuration guide | Runbook              | 4     |
+| Helm deployment                              | Platform engineer           | Helm chart and values                             | Complete    | `v1.3/deployment/helm.md`                        | Runbook/reference    | 4     |
+| Kustomize deployment                         | Platform engineer           | `k8s/kustomization.yaml` and manifests            | Complete    | `v1.3/deployment/kustomize.md`                   | Runbook/reference    | 4     |
+| Database migration and startup behavior      | Platform engineer           | Prisma scripts and container entrypoint           | Complete    | `v1.3/deployment/database-migrations.md`         | Runbook              | 4     |
+| Backup and restore                           | Operator                    | PostgreSQL deployment model                       | Complete    | `v1.3/deployment/backup-restore.md`              | Recovery runbook     | 4     |
+| Upgrade and rollback                         | Operator                    | image/chart/manifests/migrations                  | Complete    | `v1.3/deployment/upgrade-rollback.md`            | Runbook              | 4     |
+| Health checks and observability              | Operator                    | health route, logging and Sentry configuration    | Complete    | `v1.3/deployment/monitoring.md`                  | Operations           | 4     |
+| Retention, cleanup, scheduled jobs           | Operator                    | scheduler, retention library, settings, DB models | Complete    | `v1.3/deployment/maintenance.md`                 | Operations           | 4     |
+| Workspace settings and system configuration  | Admin                       | settings routes and configuration code            | Complete    | `v1.3/administration/system-settings.md`         | Reference/tasks      | 5     |
+| Authentication, sessions, password reset     | Admin, security reviewer    | auth routes/libraries                             | Complete    | `v1.3/administration/authentication.md`          | Full guide           | 5     |
+| First-time OIDC link approval and revocation | Admin, existing user        | user OIDC actions, menu control, auth callbacks   | Complete    | authentication and users guides                  | Security/task guide  | 5     |
+| Native MFA, passkey login, SAML, magic links | Security reviewer, user     | no matching v1.3 authentication provider/flow     | Unsupported | authentication capability boundary               | Explicit boundary    | 5     |
+| USER, RESPONDER, ADMIN authorization         | Admin, security reviewer    | `src/lib/rbac`; role enum                         | Complete    | `v1.3/security/authorization.md`; users guide    | Matrix and tasks     | 5     |
+| Team OWNER, ADMIN, MEMBER roles              | Team admin                  | team actions and enum                             | Complete    | `v1.3/security/authorization.md`; teams guide    | Matrix and tasks     | 5     |
+| API keys and scopes                          | Admin, API consumer         | API-key settings/routes/models                    | Complete    | API authentication guide                         | Contract             | 5, 6  |
+| Audit log                                    | Admin, security reviewer    | audit page/model/writers                          | Complete    | `v1.3/administration/audit-logs.md`              | Operations/reference | 5     |
+| System logs                                  | Admin, operator             | system-logs page and logger                       | Complete    | `v1.3/administration/system-logs.md`             | Troubleshooting      | 5     |
+| Secrets, encryption, HTTPS, proxies          | Security reviewer, operator | configuration/security libraries                  | Complete    | security and deployment guides                   | Hardening            | 5     |
 
 ## Published automation contracts
 
