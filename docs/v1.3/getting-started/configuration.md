@@ -32,7 +32,7 @@ These variables must be set for OpsKnight to start correctly in any environment.
 
 | Variable         | Required in Production | Description                                                                                      |
 | ---------------- | :--------------------: | ------------------------------------------------------------------------------------------------ |
-| `ENCRYPTION_KEY` |        **Yes**         | 32-byte hex master key (64 hex chars) used to encrypt integration secrets (SSO, Slack, API keys) |
+| `ENCRYPTION_KEY` |        **Yes**         | 32-byte hex master key (64 hex chars) used to encrypt supported stored provider and integration credentials. API keys are one-way hashed separately. |
 
 ### Generating the Encryption Key
 
@@ -46,7 +46,7 @@ This produces a 64-character hex string. Set it in your environment:
 ENCRYPTION_KEY=a3f1c2e4b5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2
 ```
 
-**Development note:** When `NODE_ENV=development` and `ENCRYPTION_KEY` is not set, a safe static fallback key is used automatically — no local configuration is required. This fallback is **not suitable for production**.
+**Development note:** When `NODE_ENV=development` and `ENCRYPTION_KEY` is not set, OpsKnight uses a public, deterministic fallback key so local encryption-dependent flows can run. It provides no secrecy and is **not suitable for shared or production data**.
 
 See [Encryption](../security/encryption) for key rotation, migration guidance, and security considerations.
 
@@ -147,6 +147,9 @@ OpenTelemetry variables are not consumed by the v1.3 application code and are th
 | `EVENT_TRANSACTION_MAX_ATTEMPTS` | code default | Advanced transaction retry limit; tune only after reviewing database contention.                                               |
 | `ESCALATION_LOCK_TIMEOUT_MS`     | code default | Advanced escalation lock timeout in milliseconds.                                                                              |
 | `SKIP_ENV_VALIDATION`            | unset        | Bypasses production environment validation. Use only for controlled build/diagnostic workflows.                                |
+| `DISABLE_PWA`                    | `false`      | Set to `true` at build time to disable production service-worker generation, PWA installation, push, and supported offline behavior. |
+| `EMAIL_FROM`                     | derived      | Fallback sender address when code paths do not receive a provider-specific From address; prefer an explicitly verified provider identity. |
+| `MIGRATION_RECOVERY_MODE`        | `safe`       | Startup recovery policy. Do not use `aggressive` without database-owner review of the failed migration and actual schema state. |
 
 ## Authentication and integration overrides
 
@@ -201,7 +204,7 @@ NEXTAUTH_SECRET=dev-secret-not-for-production
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # ENCRYPTION_KEY is intentionally omitted in development.
-# A safe static fallback key is used automatically when NODE_ENV=development.
+# A public deterministic fallback key is used when NODE_ENV=development.
 ```
 
 ---
