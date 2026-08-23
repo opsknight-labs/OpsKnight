@@ -1,6 +1,6 @@
 # OpsKnight v1.3 documentation capability inventory
 
-This maintainer-only inventory is the completeness gate for the v1.3 documentation work in PR #327. It intentionally lives outside `docs/v1.3`, so docs-sync does not publish it as an end-user page.
+This maintainer-only inventory is the completeness gate for the v1.3 documentation work begun in PR #327 and finally reconciled in PR #342 after intermediate phase batches merged. It intentionally lives outside `docs/v1.3`, so docs-sync does not publish it as an end-user page.
 
 ## How to use this inventory
 
@@ -15,18 +15,18 @@ Evidence is based on v1.3 application routes, components, Prisma schema, deploym
 
 ## Accountability and verification
 
-The documentation maintainer owns inventory state and link/navigation quality on #327. The product-area reviewer owns behavioral acceptance for the phase they approve; the release owner owns the final clean-install, upgrade, recovery, and docs-sync checks. Record reviewer names in the PR description rather than hard-coding people in this long-lived file.
+The documentation maintainer owns inventory state and link/navigation quality on #342. The product-area reviewer owns behavioral acceptance for the phase they approve; the release owner owns the final clean-install, upgrade, recovery, and docs-sync checks. Record reviewer names in the PR description rather than hard-coding people in this long-lived file.
 
 | Phase area                          | Required reviewer                    | Verification record                                                                         |
 | ----------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Getting started and core response   | Product/incident-response maintainer | Clean Compose run plus routing/lifecycle acceptance evidence in #327.                       |
+| Getting started and core response   | Product/incident-response maintainer | Clean Compose run plus routing/lifecycle acceptance evidence in the final delivery PR.      |
 | Integrations and notifications      | Integration/provider owner           | Signed trigger/resolve fixtures and controlled outbound delivery evidence.                  |
 | Deployment and maintenance          | Platform/database owner              | Render/dry-run, backup/restore, migration, readiness, and scheduler evidence.               |
 | Administration and security         | Security/auth owner                  | Role matrix, OIDC/local login, session, encryption, audit, and recovery evidence.           |
 | API and CLI                         | API maintainer                       | Copy-paste requests, 4xx/429 cases, scope checks, and recovery-CLI evidence.                |
 | Architecture, mobile, accessibility | Frontend/platform owner              | Diagram source review, device/browser matrix, offline boundary, and keyboard/a11y evidence. |
 
-`Complete` in the tables means the source-verified documentation destination is written. It does not replace the runtime and reviewer evidence required by the final gate. Until that evidence is attached to #327, the PR must remain open.
+`Complete` in the tables means the source-verified documentation destination is written. It does not replace the runtime and reviewer evidence required by the final gate. Attach the applicable CI and acceptance evidence to #342 before merge.
 
 ## Product workflows
 
@@ -56,51 +56,57 @@ The documentation maintainer owns inventory state and link/navigation quality on
 
 ## Integrations and notifications
 
-| Capability                                       | Audience           | Evidence                                                                      | State       | Documentation destination                                               | Depth                                  | Phase |
-| ------------------------------------------------ | ------------------ | ----------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- | -------------------------------------- | ----- |
-| Events API integration key and generic payload   | Integration owner  | `/api/events`; service integration UI                                         | Complete    | `v1.3/api/events.md`; custom webhooks guide                             | Contract and guide                     | 3, 6  |
-| AWS CloudWatch                                   | Integration owner  | integration registry and adapter                                              | Revise      | `v1.3/integrations/cloud/aws-cloudwatch.md`                             | Runbook                                | 3     |
-| Azure Monitor                                    | Integration owner  | integration registry and adapter                                              | Revise      | `v1.3/integrations/cloud/azure-monitor.md`                              | Runbook                                | 3     |
-| Google Cloud Monitoring                          | Integration owner  | integration registry and adapter                                              | Revise      | `v1.3/integrations/cloud/google-cloud-monitoring.md`                    | Runbook                                | 3     |
-| Datadog, Grafana, Prometheus                     | Integration owner  | registry and inbound adapters                                                 | Revise      | matching `integrations` guides                                          | Runbooks                               | 3     |
-| New Relic, Dynatrace, AppDynamics                | Integration owner  | registry and inbound adapters                                                 | Revise      | matching APM guides                                                     | Runbooks                               | 3     |
-| Elastic, Honeycomb, Splunk Observability, Sentry | Integration owner  | registry and inbound adapters                                                 | Revise      | matching APM/log guides                                                 | Runbooks                               | 3     |
-| Nagios, Icinga, Zabbix                           | Integration owner  | registry and inbound adapters                                                 | Revise      | matching metrics guides                                                 | Runbooks                               | 3     |
-| GitHub Actions, GitLab, Bitbucket, Vercel        | Delivery engineer  | registry and inbound adapters                                                 | Revise      | matching CI/CD guides                                                   | Runbooks                               | 3     |
-| UptimeRobot, Pingdom, Better Uptime, Uptime Kuma | Integration owner  | registry and inbound adapters                                                 | Revise      | matching uptime guides                                                  | Runbooks                               | 3     |
-| PagerDuty Events API v2 compatibility            | Migration owner    | registry and adapter                                                          | Revise      | `v1.3/integrations/custom/pagerduty-emulation.md`                       | Compatibility runbook                  | 3     |
-| Splunk On-Call payload                           | Migration owner    | registry and adapter                                                          | Revise      | `v1.3/integrations/logs-events/splunk-oncall.md`                        | Runbook                                | 3     |
-| Jira workspace and service mapping               | Admin, responder   | Jira settings, service mapping, actions                                       | Complete    | `v1.3/integrations/issue-tracking/jira.md`                              | Full guide                             | 3     |
-| Slack incoming notifications                     | Admin              | Slack settings and provider                                                   | Revise      | `v1.3/integrations/communication/slack.md`                              | Full guide                             | 3     |
-| Slack OAuth and ChatOps war rooms                | Admin, responder   | OAuth routes, ChatOps libraries/components                                    | Revise      | Slack OAuth and ChatOps guides                                          | Full guides                            | 3     |
-| Email notification provider                      | Admin              | notification provider settings and mail libraries                             | Complete    | `v1.3/administration/notifications.md#configure-email`                  | Setup/runbook                          | 3     |
-| SMS notification providers (Twilio and AWS SNS)  | Admin              | provider settings and notification libraries                                  | Complete    | `v1.3/administration/notifications.md#configure-sms`                    | Setup/runbook                          | 3     |
-| WhatsApp notification provider                   | Admin              | provider settings and notification libraries                                  | Complete    | `v1.3/administration/notifications.md#configure-whatsapp`               | Setup/runbook                          | 3     |
-| Web push and device registration                 | Admin, mobile user | push settings, service worker, `UserDevice`                                   | Complete    | `v1.3/administration/notifications.md#configure-web-push`; mobile guide | Setup and troubleshooting              | 3, 7  |
-| Generic inbound and outbound webhook systems     | Integration owner  | integration handler, service webhook settings/library, status webhook library | Complete    | `v1.3/integrations/custom/webhooks.md`                                  | Contract and security                  | 3     |
-| Notification history and retry visibility        | Admin              | settings/history and notification records                                     | Complete    | `v1.3/administration/notifications.md#notification-history`             | Operations and explicit no-retry limit | 3     |
-| GitHub/Linear/Asana issue sync                   | API consumer       | no v1.3 implementation                                                        | Unsupported | Remove legacy claims; Jira limitation note                              | Limitation                             | 3     |
+| Capability                                        | Audience           | Evidence                                                                         | State       | Documentation destination                                               | Depth                                  | Phase |
+| ------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- | -------------------------------------- | ----- |
+| Events API integration key and generic payload    | Integration owner  | `/api/events`; service integration UI                                            | Complete    | `v1.3/api/events.md`; custom webhooks guide                             | Contract and guide                     | 3, 6  |
+| AWS CloudWatch                                    | Integration owner  | integration registry and adapter                                                 | Complete    | `v1.3/integrations/cloud/aws-cloudwatch.md`                             | Runbook                                | 3     |
+| Azure Monitor                                     | Integration owner  | integration registry and adapter                                                 | Complete    | `v1.3/integrations/cloud/azure-monitor.md`                              | Runbook                                | 3     |
+| Google Cloud Monitoring                           | Integration owner  | integration registry and adapter                                                 | Complete    | `v1.3/integrations/cloud/google-cloud-monitoring.md`                    | Runbook                                | 3     |
+| Datadog, Grafana, Prometheus                      | Integration owner  | registry and inbound adapters                                                    | Complete    | matching `integrations` guides                                          | Runbooks                               | 3     |
+| New Relic, Dynatrace, AppDynamics                 | Integration owner  | registry and inbound adapters                                                    | Complete    | matching APM guides                                                     | Runbooks                               | 3     |
+| Elastic, Honeycomb, Splunk Observability, Sentry  | Integration owner  | registry and inbound adapters                                                    | Complete    | matching APM/log guides                                                 | Runbooks                               | 3     |
+| Nagios, Icinga, Zabbix                            | Integration owner  | registry and inbound adapters                                                    | Complete    | matching metrics guides                                                 | Runbooks                               | 3     |
+| GitHub Actions, GitLab, Bitbucket, Vercel         | Delivery engineer  | registry and inbound adapters                                                    | Complete    | matching CI/CD guides                                                   | Runbooks                               | 3     |
+| Native GitHub `deployment_status` ingest          | Delivery engineer  | v1.3 expects state inside `deployment`; GitHub sends `deployment_status.state`   | Unsupported | GitHub deployment payload boundary                                      | Explicit boundary                      | 3     |
+| Native Bitbucket HMAC and success auto-resolution | Delivery engineer  | Bitbucket uses prefixed `X-Hub-Signature`; adapter ignores `commit_status.state` | Unsupported | Bitbucket security and recovery boundaries                              | Explicit boundary and alternatives     | 3     |
+| UptimeRobot, Pingdom, Better Uptime, Uptime Kuma  | Integration owner  | registry and inbound adapters                                                    | Complete    | matching uptime guides                                                  | Runbooks                               | 3     |
+| PagerDuty Events API v2 compatibility             | Migration owner    | registry and adapter                                                             | Complete    | `v1.3/integrations/custom/pagerduty-emulation.md`                       | Compatibility runbook                  | 3     |
+| Splunk On-Call payload                            | Migration owner    | registry and adapter                                                             | Complete    | `v1.3/integrations/logs-events/splunk-oncall.md`                        | Runbook                                | 3     |
+| Splunk Observability `CLEAR` auto-resolution      | Integration owner  | action normalizer does not recognize `CLEAR`/`Cleared`                           | Unsupported | Splunk Observability clear-event boundary                               | Explicit boundary and bridge option    | 3     |
+| Direct standard GCP numeric incident timestamps   | Integration owner  | v1.3 schema accepts `started_at`/`ended_at` only as strings                      | Unsupported | Google Cloud Monitoring transformation boundary                         | Explicit boundary and bridge option    | 3     |
+| Jira workspace and service mapping                | Admin, responder   | Jira settings, service mapping, actions                                          | Complete    | `v1.3/integrations/issue-tracking/jira.md`                              | Full guide                             | 3     |
+| Slack incoming notifications                      | Admin              | Slack settings and provider                                                      | Complete    | `v1.3/integrations/communication/slack.md`                              | Full guide                             | 3     |
+| Slack OAuth and ChatOps war rooms                 | Admin, responder   | OAuth routes, ChatOps libraries/components                                       | Complete    | Slack OAuth and ChatOps guides                                          | Full guides                            | 3     |
+| Email notification provider                       | Admin              | notification provider settings and mail libraries                                | Complete    | `v1.3/administration/notifications.md#configure-email`                  | Setup/runbook                          | 3     |
+| SMS notification providers (Twilio and AWS SNS)   | Admin              | provider settings and notification libraries                                     | Complete    | `v1.3/administration/notifications.md#configure-sms`                    | Setup/runbook                          | 3     |
+| WhatsApp notification provider                    | Admin              | provider settings and notification libraries                                     | Complete    | `v1.3/administration/notifications.md#configure-whatsapp`               | Setup/runbook                          | 3     |
+| Web push and device registration                  | Admin, mobile user | push settings, service worker, `UserDevice`                                      | Complete    | `v1.3/administration/notifications.md#configure-web-push`; mobile guide | Setup and troubleshooting              | 3, 7  |
+| Generic inbound and outbound webhook systems      | Integration owner  | integration handler, service webhook settings/library, status webhook library    | Complete    | `v1.3/integrations/custom/webhooks.md`                                  | Contract and security                  | 3     |
+| Notification history and retry visibility         | Admin              | settings/history and notification records                                        | Complete    | `v1.3/administration/notifications.md#notification-history`             | Operations and explicit no-retry limit | 3     |
+| GitHub/Linear/Asana issue sync                    | API consumer       | no v1.3 implementation                                                           | Unsupported | Remove legacy claims; Jira limitation note                              | Limitation                             | 3     |
 
 ## Deployment, operations, administration, and security
 
-| Capability                                  | Audience                    | Evidence                                          | State    | Documentation destination                        | Depth                | Phase |
-| ------------------------------------------- | --------------------------- | ------------------------------------------------- | -------- | ------------------------------------------------ | -------------------- | ----- |
-| Docker Compose production configuration     | Platform engineer           | Compose/env files, entrypoint, and health routes  | Complete | `v1.3/deployment/docker.md`; configuration guide | Runbook              | 4     |
-| Helm deployment                             | Platform engineer           | Helm chart and values                             | Revise   | `v1.3/deployment/helm.md`                        | Runbook/reference    | 4     |
-| Kustomize deployment                        | Platform engineer           | `k8s/kustomization.yaml` and manifests            | Complete | `v1.3/deployment/kustomize.md`                   | Runbook/reference    | 4     |
-| Database migration and startup behavior     | Platform engineer           | Prisma scripts and container entrypoint           | Revise   | deployment/upgrade guides                        | Runbook              | 4     |
-| Backup and restore                          | Operator                    | PostgreSQL deployment model                       | Revise   | backup/restore guide                             | Recovery runbook     | 4     |
-| Upgrade and rollback                        | Operator                    | image/chart/manifests/migrations                  | Revise   | upgrade guide                                    | Runbook              | 4     |
-| Health checks and observability             | Operator                    | health route, logging and Sentry configuration    | Complete | `v1.3/deployment/monitoring.md`                  | Operations           | 4     |
-| Retention, cleanup, scheduled jobs          | Operator                    | scheduler, retention library, settings, DB models | Complete | `v1.3/deployment/maintenance.md`                 | Operations           | 4     |
-| Workspace settings and system configuration | Admin                       | settings routes and configuration code            | Complete | `v1.3/administration/system-settings.md`         | Reference/tasks      | 5     |
-| Authentication, sessions, password reset    | Admin, security reviewer    | auth routes/libraries                             | Complete | `v1.3/administration/authentication.md`          | Full guide           | 5     |
-| USER, RESPONDER, ADMIN authorization        | Admin, security reviewer    | `src/lib/rbac`; role enum                         | Complete | `v1.3/security/authorization.md`; users guide    | Matrix and tasks     | 5     |
-| Team OWNER, ADMIN, MEMBER roles             | Team admin                  | team actions and enum                             | Complete | `v1.3/security/authorization.md`; teams guide    | Matrix and tasks     | 5     |
-| API keys and scopes                         | Admin, API consumer         | API-key settings/routes/models                    | Complete | API authentication guide                         | Contract             | 5, 6  |
-| Audit log                                   | Admin, security reviewer    | audit page/model/writers                          | Complete | `v1.3/administration/audit-logs.md`              | Operations/reference | 5     |
-| System logs                                 | Admin, operator             | system-logs page and logger                       | Complete | `v1.3/administration/system-logs.md`             | Troubleshooting      | 5     |
-| Secrets, encryption, HTTPS, proxies         | Security reviewer, operator | configuration/security libraries                  | Complete | security and deployment guides                   | Hardening            | 5     |
+| Capability                                   | Audience                    | Evidence                                          | State       | Documentation destination                        | Depth                | Phase |
+| -------------------------------------------- | --------------------------- | ------------------------------------------------- | ----------- | ------------------------------------------------ | -------------------- | ----- |
+| Docker Compose production configuration      | Platform engineer           | Compose/env files, entrypoint, and health routes  | Complete    | `v1.3/deployment/docker.md`; configuration guide | Runbook              | 4     |
+| Helm deployment                              | Platform engineer           | Helm chart and values                             | Complete    | `v1.3/deployment/helm.md`                        | Runbook/reference    | 4     |
+| Kustomize deployment                         | Platform engineer           | `k8s/kustomization.yaml` and manifests            | Complete    | `v1.3/deployment/kustomize.md`                   | Runbook/reference    | 4     |
+| Database migration and startup behavior      | Platform engineer           | Prisma scripts and container entrypoint           | Complete    | `v1.3/deployment/database-migrations.md`         | Runbook              | 4     |
+| Backup and restore                           | Operator                    | PostgreSQL deployment model                       | Complete    | `v1.3/deployment/backup-restore.md`              | Recovery runbook     | 4     |
+| Upgrade and rollback                         | Operator                    | image/chart/manifests/migrations                  | Complete    | `v1.3/deployment/upgrade-rollback.md`            | Runbook              | 4     |
+| Health checks and observability              | Operator                    | health route, logging and Sentry configuration    | Complete    | `v1.3/deployment/monitoring.md`                  | Operations           | 4     |
+| Retention, cleanup, scheduled jobs           | Operator                    | scheduler, retention library, settings, DB models | Complete    | `v1.3/deployment/maintenance.md`                 | Operations           | 4     |
+| Workspace settings and system configuration  | Admin                       | settings routes and configuration code            | Complete    | `v1.3/administration/system-settings.md`         | Reference/tasks      | 5     |
+| Authentication, sessions, password reset     | Admin, security reviewer    | auth routes/libraries                             | Complete    | `v1.3/administration/authentication.md`          | Full guide           | 5     |
+| First-time OIDC link approval and revocation | Admin, existing user        | user OIDC actions, menu control, auth callbacks   | Complete    | authentication and users guides                  | Security/task guide  | 5     |
+| Native MFA, passkey login, SAML, magic links | Security reviewer, user     | no matching v1.3 authentication provider/flow     | Unsupported | authentication capability boundary               | Explicit boundary    | 5     |
+| USER, RESPONDER, ADMIN authorization         | Admin, security reviewer    | `src/lib/rbac`; role enum                         | Complete    | `v1.3/security/authorization.md`; users guide    | Matrix and tasks     | 5     |
+| Team OWNER, ADMIN, MEMBER roles              | Team admin                  | team actions and enum                             | Complete    | `v1.3/security/authorization.md`; teams guide    | Matrix and tasks     | 5     |
+| API keys and scopes                          | Admin, API consumer         | API-key settings/routes/models                    | Complete    | API authentication guide                         | Contract             | 5, 6  |
+| Audit log                                    | Admin, security reviewer    | audit page/model/writers                          | Complete    | `v1.3/administration/audit-logs.md`              | Operations/reference | 5     |
+| System logs                                  | Admin, operator             | system-logs page and logger                       | Complete    | `v1.3/administration/system-logs.md`             | Troubleshooting      | 5     |
+| Secrets, encryption, HTTPS, proxies          | Security reviewer, operator | configuration/security libraries                  | Complete    | security and deployment guides                   | Hardening            | 5     |
 
 ## Published automation contracts
 
@@ -117,24 +123,25 @@ The documentation maintainer owns inventory state and link/navigation quality on
 
 | Capability                                           | Audience              | Evidence                                     | State       | Documentation destination                      | Depth                | Phase |
 | ---------------------------------------------------- | --------------------- | -------------------------------------------- | ----------- | ---------------------------------------------- | -------------------- | ----- |
-| Runtime and data-flow architecture                   | Operator, contributor | Next.js app, PostgreSQL, job/queue libraries | Revise      | `v1.3/core-concepts/technical-architecture.md` | Architecture         | 7     |
-| Architecture diagrams                                | Operator, contributor | current deployment implementation            | Revise      | `v1.3/architecture/diagrams.md`                | Diagrams             | 7     |
-| Responsive/mobile routes                             | Mobile user           | `src/app/mobile`; mobile components          | Revise      | mobile guide                                   | Task guide           | 7     |
-| PWA installation and service worker                  | Mobile user, admin    | manifest and service-worker code             | Revise      | mobile guide                                   | Setup/limits         | 7     |
-| Selected offline action queue                        | Mobile responder      | service worker and offline queue             | Revise      | mobile guide                                   | Exact support matrix | 7     |
-| Keyboard shortcuts                                   | Keyboard user         | shortcuts page and event handlers            | Add         | accessibility/shortcuts guide                  | Reference            | 7     |
-| Accessibility behavior                               | All users             | semantic UI and interaction tests            | Add         | accessibility guide                            | Support matrix       | 7     |
+| Runtime and data-flow architecture                   | Operator, contributor | Next.js app, PostgreSQL, job/queue libraries | Complete    | `v1.3/core-concepts/technical-architecture.md` | Architecture         | 7     |
+| Architecture diagrams                                | Operator, contributor | current deployment implementation            | Complete    | `v1.3/architecture/diagrams.md`                | Diagrams             | 7     |
+| Capacity planning and horizontal scaling             | Platform engineer     | runtime topology, queue guards, route limits | Complete    | `v1.3/core-concepts/scalability.md`            | Test and operations  | 4, 7  |
+| Responsive/mobile routes                             | Mobile user           | `src/app/(mobile)/m`; mobile components      | Complete    | `v1.3/mobile/README.md`                        | Task guide           | 7     |
+| PWA installation and service worker                  | Mobile user, admin    | manifest and service-worker code             | Complete    | `v1.3/deployment/mobile-pwa.md`                | Setup/limits         | 7     |
+| Selected offline action queue                        | Mobile responder      | service worker and offline queue             | Complete    | `v1.3/mobile/README.md`                        | Exact support matrix | 7     |
+| Keyboard shortcuts                                   | Keyboard user         | shortcuts page and event handlers            | Complete    | `v1.3/accessibility/shortcuts.md`              | Reference            | 7     |
+| Accessibility behavior                               | All users             | semantic UI and interaction tests            | Complete    | `v1.3/accessibility/README.md`                 | Support matrix       | 7     |
 | Redis-backed architecture                            | Operator              | no Redis runtime dependency in v1.3          | Unsupported | Remove architecture claims                     | Limitation           | 7     |
 | Postmortem API, approvals, custom templates, exports | API consumer, manager | no matching v1.3 implementation              | Unsupported | postmortem limitation section                  | Explicit boundary    | 2, 7  |
 | Analytics API, PDF/JSON export, scheduled reports    | Manager, API consumer | no matching v1.3 implementation              | Unsupported | analytics limitation section                   | Explicit boundary    | 2, 7  |
 
 ## Final completeness gate
 
-- [ ] Every **Revise** row is source-verified and marked **Complete**.
-- [ ] Every **Add** row has a published destination and is marked **Complete**.
-- [ ] Every **Unsupported** claim is absent from feature instructions and appears only where a boundary prevents user confusion.
-- [ ] Every destination has valid frontmatter and is linked from an appropriate section index.
-- [ ] `node scripts/check-docs-links.cjs` passes.
-- [ ] Commands, payloads, permissions, defaults, limits, and failure modes have been verified.
-- [ ] The PR description records tests and evidence for every phase batch.
-- [ ] The website is updated only by docs-sync after #327 merges.
+- [x] Every **Revise** row is source-verified and marked **Complete**.
+- [x] Every **Add** row has a published destination and is marked **Complete**.
+- [x] Every **Unsupported** claim is absent from feature instructions and appears only where a boundary prevents user confusion.
+- [x] Every destination has valid frontmatter and is linked from an appropriate section index.
+- [x] `node scripts/check-docs-links.cjs` passes.
+- [x] Commands, payloads, permissions, defaults, limits, and failure modes have been verified.
+- [x] The PR description records tests and evidence for every phase batch.
+- [x] This PR leaves the website untouched; docs-sync remains the required publication path after merge.

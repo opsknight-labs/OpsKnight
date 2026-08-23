@@ -1,7 +1,7 @@
 ---
 title: Urgency and severity mapping
 description: Understand how provider severity becomes incident urgency and how urgency differs from priority and notification channels.
-order: 12
+order: 14
 ---
 
 # Urgency and severity mapping

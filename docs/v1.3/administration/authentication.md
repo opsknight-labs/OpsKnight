@@ -31,6 +31,8 @@ Admins invite subsequent users from **Users**. An invitation is valid for seven 
 
 Passwords must be 10–128 characters and contain lowercase, uppercase, numeric, and special characters. These rules are fixed in v1.3; there is no configurable expiry, history, or complexity policy.
 
+After five failed local logins for one normalized email/client-IP key, v1.3 applies progressive process-local lockouts of approximately 1, 5, 15, then 60 minutes for repeated groups. The state is not shared across application replicas and is cleared by a process restart. Configure trusted proxy forwarding and an independent edge/identity-provider throttle for internet-facing deployments.
+
 ### Password recovery
 
 The login page's **Forgot password** flow returns the same message for registered and unknown addresses. A reset token:
@@ -127,6 +129,10 @@ Cookies are HTTP-only where appropriate and use `SameSite=Lax`. `NEXTAUTH_URL` b
 
 **Settings** → **Security** offers **Revoke all sessions**. It increments the user's token version; v1.3 does not list or revoke individual devices. Role/status changes may take effect after the authentication user-cache refresh, so use session revocation for urgent access removal and remove access at the IdP too.
 
+## Unsupported authentication methods
+
+v1.3 does not provide native MFA, passkey/WebAuthn login, SAML, or email magic-link authentication. Enforce MFA at the OIDC provider or a trusted access proxy when required. The optional mobile platform-authenticator prompt is a client-side privacy overlay, not server authentication or a second factor.
+
 ## Failure-safe rollout
 
 - Keep a tested local break-glass Admin while introducing OIDC.
@@ -139,15 +145,15 @@ Cookies are HTTP-only where appropriate and use `SameSite=Lax`. `NEXTAUTH_URL` b
 
 ## Troubleshooting
 
-| Symptom                       | Check                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Redirect/cookie loop          | Exact HTTPS `NEXTAUTH_URL`, forwarded host/scheme, and browser cookie policy.                                      |
-| Discovery test fails          | Issuer is HTTPS and exposes valid OIDC discovery metadata from the app network.                                    |
+| Symptom                       | Check                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Redirect/cookie loop          | Exact HTTPS `NEXTAUTH_URL`, forwarded host/scheme, and browser cookie policy.                                       |
+| Discovery test fails          | Issuer is HTTPS and exposes valid OIDC discovery metadata from the app network.                                     |
 | Existing local user is denied | Approval/invite evidence, verified email, stable subject, allowed domain, and whether the identity is already used. |
-| Approval shows OIDC linked    | The user already has a stored issuer-plus-subject identity; approval revoke is not an unlink operation.            |
-| New user is denied            | Auto-provision setting, exact allowed domain, email and verification claims.                                       |
-| Role does not update          | Requested custom scope, actual ID-token/profile claim, JSON rule order and exact value.                            |
-| Secret cannot decrypt         | Restore the matching `ENCRYPTION_KEY` or enter a new client secret.                                                |
+| Approval shows OIDC linked    | The user already has a stored issuer-plus-subject identity; approval revoke is not an unlink operation.             |
+| New user is denied            | Auto-provision setting, exact allowed domain, email and verification claims.                                        |
+| Role does not update          | Requested custom scope, actual ID-token/profile claim, JSON rule order and exact value.                             |
+| Secret cannot decrypt         | Restore the matching `ENCRYPTION_KEY` or enter a new client secret.                                                 |
 
 ## Related topics
 

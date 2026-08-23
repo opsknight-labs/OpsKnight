@@ -75,17 +75,13 @@ See [Encryption](../security/encryption) for key rotation, migration guidance, a
 
 `POSTGRES_*` variables are used by Docker Compose to initialise the database container. For Kubernetes or Helm deployments, configure your database separately and set `DATABASE_URL` directly.
 
-**Recommended connection string options for production:**
+**Example encrypted connection:**
 
 ```bash
-DATABASE_URL=postgresql://opsknight:password@host:5432/opsknight_db?sslmode=require&connection_limit=40&pool_timeout=30
+DATABASE_URL=postgresql://opsknight:password@host:5432/opsknight_db?sslmode=require
 ```
 
-| Option             | Recommended Value | Purpose                         |
-| ------------------ | ----------------- | ------------------------------- |
-| `sslmode`          | `require`         | Enforce encrypted connections   |
-| `connection_limit` | `40`              | Max connections per process     |
-| `pool_timeout`     | `30`              | Seconds to wait for a free slot |
+Use the certificate-verification mode and trust configuration required by your PostgreSQL provider. Connection-pool size is deployment-specific: budget the per-process pool across all application replicas plus migration, backup, monitoring, and administrative reserve. Do not copy a fixed `connection_limit` or `pool_timeout` without load testing; see [Scalability and capacity planning](../core-concepts/scalability).
 
 ---
 
@@ -176,7 +172,7 @@ OpenTelemetry variables are not consumed by the v1.3 application code and are th
 # ============================================================
 
 # --- Required ---
-DATABASE_URL=postgresql://opsknight:your_secure_password@db-host:5432/opsknight_db?sslmode=require&connection_limit=40
+DATABASE_URL=postgresql://opsknight:your_secure_password@db-host:5432/opsknight_db?sslmode=require
 NEXTAUTH_URL=https://ops.yourcompany.com
 NEXTAUTH_SECRET=<output of: openssl rand -base64 32>
 

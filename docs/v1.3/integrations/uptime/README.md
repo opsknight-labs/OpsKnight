@@ -16,4 +16,5 @@ Turn uptime and synthetic check failures into actionable incidents.
 - [Pingdom](./pingdom) — Integrate Pingdom alerts with OpsKnight.
 - [Better Uptime](./better-uptime) — Integrate Better Uptime with OpsKnight.
 - [Uptime Kuma](./uptime-kuma) — Integrate self-hosted Uptime Kuma with OpsKnight.
+
 <!-- integrations-list:end -->

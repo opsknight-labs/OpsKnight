@@ -1,5 +1,5 @@
 ---
-order: 2
+order: 3
 title: Encryption
 description: Configure, protect, and recover the key that encrypts supported stored credentials
 ---

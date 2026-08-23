@@ -8,14 +8,13 @@ description: Send interactive incident notifications to Slack with acknowledge a
 
 The Slack integration brings incident management directly into your team's workspace. Receive rich notifications, acknowledge incidents without leaving Slack, and keep everyone informed with real-time updates.
 
-
 ---
 
 ## Endpoint
 
 Slack uses OAuth and interactive endpoints rather than a single webhook. Primary endpoints:
 
-- `GET /api/settings/slack-oauth/callback`
+- `GET /api/slack/oauth/callback`
 - `POST /api/slack/actions`
 - `POST /api/slack/commands`
 
@@ -104,7 +103,6 @@ Before setting up Slack integration:
    - **Workspace**: Select your workspace
 5. Click **Create App**
 
-
 ### App Credentials
 
 After creation, note these values (found in **Basic Information**):
@@ -157,7 +155,7 @@ Add these scopes under **Bot Token Scopes**:
 Under **Redirect URLs**, add:
 
 ```
-https://YOUR_OPSKNIGHT_URL/api/settings/slack-oauth/callback
+https://YOUR_OPSKNIGHT_URL/api/slack/oauth/callback
 ```
 
 Replace `YOUR_OPSKNIGHT_URL` with your OpsKnight instance URL.
@@ -229,7 +227,6 @@ After installation, copy the **Bot User OAuth Token** (starts with `xoxb-`).
 2. Verify "Connection successful" message
 3. Select a test channel
 4. Send a test message
-
 
 ---
 
@@ -422,7 +419,7 @@ Add slash commands for quick actions.
 3. Click **Create New Command**
 4. Configure:
    - **Command**: `/opsknight`
-   - **Request URL**: `https://YOUR_OPSKNIGHT_URL/api/integrations/slack/commands`
+   - **Request URL**: `https://YOUR_OPSKNIGHT_URL/api/slack/commands`
    - **Description**: OpsKnight incident management
 5. Save
 
@@ -570,7 +567,7 @@ Handles slash command invocations.
 ### OAuth Callback
 
 ```
-GET /api/settings/slack-oauth/callback
+GET /api/slack/oauth/callback
 ```
 
 Handles OAuth flow completion.

@@ -1,4 +1,5 @@
 ---
+order: 2
 title: PagerDuty Events API v2 ingest
 description: Ingest adapter for Events API v2 payloads. Change the destination URL. Not a PagerDuty product.
 version: v1.3
@@ -25,12 +26,14 @@ OpsKnight accepts PagerDuty v2 events on two routes:
 
 ## 🔑 Authentication & Routing
 
-OpsKnight supports all standard PagerDuty routing key locations:
+OpsKnight accepts the integration routing key in these locations:
 
-1. **`routing_key` inside Payload**: Included in the root JSON payload body.
-2. **`Authorization: Token token=...` Header**: Standard PagerDuty authentication header format.
-3. **`x-routing-key` Header**: Direct custom header.
-4. **URL Query Param**: `?routing_key=YOUR_INTEGRATION_KEY` or `?key=YOUR_INTEGRATION_KEY`.
+1. Root JSON `routing_key` or `routingKey`.
+2. `Authorization: Bearer YOUR_INTEGRATION_KEY`.
+3. `X-Routing-Key: YOUR_INTEGRATION_KEY`.
+4. Query parameter `?key=YOUR_INTEGRATION_KEY` or `?token=YOUR_INTEGRATION_KEY`.
+
+You can instead include `?integrationId=INTEGRATION_ID`, but the request must still provide the matching key in one of the supported locations above. `Authorization: Token token=…` and a `routing_key` query parameter are not accepted by the current v1.3 route.
 
 ---
 
@@ -94,7 +97,7 @@ curl -X POST https://your-opsknight.com/api/integrations/pagerduty/v2/enqueue \
 
 ## ⚡ Response Codes
 
-- `202 Accepted`: Event successfully parsed, validated, and queued into the incident pipeline.
+- `202 Accepted`: Event parsed, validated, and processed by the incident transaction. Escalation and notification delivery continue as separate downstream work.
   ```json
   {
     "status": "success",
@@ -103,5 +106,6 @@ curl -X POST https://your-opsknight.com/api/integrations/pagerduty/v2/enqueue \
   }
   ```
 - `400 Bad Request`: Payload validation error (e.g. missing summary or invalid severity).
-- `401 / 404 Not Found`: Invalid or disabled integration routing key.
+- `401 Unauthorized`: An `integrationId` was supplied but its matching key was missing or invalid.
+- `404 Not Found`: No enabled integration matched the supplied ID or routing key.
 - `429 Too Many Requests`: Rate limit exceeded for this integration key (returns `Retry-After` header).

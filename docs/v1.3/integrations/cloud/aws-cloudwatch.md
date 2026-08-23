@@ -13,7 +13,7 @@ Receive CloudWatch alarms in OpsKnight via Amazon SNS.
 ## Endpoint
 
 ```
-POST /api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID
+POST /api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
 ```
 
 ---
@@ -42,22 +42,16 @@ POST /api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID
 2. Click **Create subscription**
 3. Configure:
 
-| Field        | Value                                                                                      |
-| ------------ | ------------------------------------------------------------------------------------------ |
-| **Protocol** | HTTPS                                                                                      |
-| **Endpoint** | `https://YOUR_OPSKNIGHT_URL/api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID` |
+| Field        | Value                                                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Protocol** | HTTPS                                                                                                                          |
+| **Endpoint** | `https://YOUR_OPSKNIGHT_URL/api/integrations/cloudwatch?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
 
 4. Click **Create subscription**
 
 ### Step 4: Confirm Subscription
 
-> **Important**: OpsKnight does NOT auto-confirm SNS subscriptions for security.
-
-To confirm the subscription:
-
-1. Check OpsKnight audit logs or server logs for the `SubscribeURL`
-2. Visit the URL once to confirm
-3. Or confirm manually in AWS Console if visible
+OpsKnight handles an SNS `SubscriptionConfirmation` request automatically. Before following the supplied `SubscribeURL`, it requires HTTPS, validates the URL, and restricts the destination to an Amazon SNS hostname. Confirm that SNS reports the subscription as **Confirmed** and inspect OpsKnight logs if it remains pending. Do not visit or copy a confirmation URL from an untrusted source.
 
 ### Step 5: Configure CloudWatch Alarms
 
@@ -147,9 +141,9 @@ The source is formatted as: `AWS CloudWatch ({Region})`
 
 ## Deduplication
 
-Dedup key format: `cloudwatch-{Region}-{AlarmName}`
+Dedup key format: `cloudwatch-{AWSAccountId}-{Region}-{AlarmName}` when `AWSAccountId` is present, otherwise `cloudwatch-{Region}-{AlarmName}`.
 
-This ensures the same alarm in the same region maps to the same incident.
+This keeps identically named alarms in different AWS accounts or regions separate. Opening and recovery must carry the same account, region, and alarm name.
 
 ---
 

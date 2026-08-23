@@ -58,13 +58,13 @@ Use a stable `dedup_key` for the same alert lifecycle. Test trigger and resolve 
 When the integration has a Signature Secret, calculate HMAC-SHA256 over the raw request body and send either:
 
 ```http
-X-Signature: sha256=HEX_DIGEST
+X-Signature: HEX_HMAC_SHA256
 ```
 
 or:
 
 ```http
-X-Webhook-Signature: sha256=HEX_DIGEST
+X-Webhook-Signature: HEX_HMAC_SHA256
 ```
 
 Do not reserialize JSON between signing and sending. Signature verification is enabled by default on the standard integration handler; `INTEGRATION_VERIFY_SIGNATURES=false` is a diagnostic escape hatch, not a production configuration.
@@ -149,7 +149,7 @@ They sign the raw body with `X-Webhook-Signature`, identify the event in `X-Webh
 
 | Symptom                           | Check                                                                                     |
 | --------------------------------- | ----------------------------------------------------------------------------------------- |
-| Inbound 401/403                   | Integration ID/key, signature secret, raw-body HMAC, and signature-verification setting.  |
+| Inbound 400/401                   | Integration ID/key, signature secret, raw-body HMAC, and signature-verification setting.  |
 | A new incident appears on resolve | Trigger and resolve used different or missing deduplication keys.                         |
 | Outbound URL rejected             | HTTPS scheme, DNS resolution, redirect target, and private/restricted address checks.     |
 | Chat receiver rejects payload     | Correct webhook type, current receiver product requirements, and a captured test payload. |

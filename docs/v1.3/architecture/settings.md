@@ -1,8 +1,10 @@
 ---
 order: 2
+title: Settings architecture
+description: Contributor map for settings navigation, page shells, provider configuration, system controls, and server actions.
 ---
 
-# Settings Architecture
+# Settings architecture
 
 ## Entry Points
 
@@ -12,10 +14,12 @@ Settings pages live under `src/app/(app)/settings` and are grouped by area:
 - `/settings/profile`
 - `/settings/security`
 - `/settings/notifications`
+- `/settings/notifications/history`
 - `/settings/status-page`
 - `/settings/system/*`
 - `/settings/integrations/*`
 - `/settings/api-keys`
+- `/settings/custom-fields`
 
 Navigation is defined in `src/components/settings/navConfig.ts` and rendered by the settings
 layout shell.
@@ -77,3 +81,5 @@ Most settings pages use server actions defined in:
 - `src/app/(app)/settings/security/actions.ts`
 
 Access control is enforced via RBAC helpers in `src/lib/rbac.ts`.
+
+Do not infer a common permission level from the `/settings` prefix. Pages and server actions apply task-specific checks; system/provider/identity settings require Admin while profile and selected security/preferences flows operate on the current user. Preserve server-side checks when adding UI navigation or controls.

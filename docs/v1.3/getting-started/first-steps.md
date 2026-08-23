@@ -1,7 +1,7 @@
 ---
 title: First steps
 description: Complete a first-week setup with users, team ownership, on-call coverage, paging, integrations, and operational verification.
-order: 2
+order: 3
 ---
 
 # First steps

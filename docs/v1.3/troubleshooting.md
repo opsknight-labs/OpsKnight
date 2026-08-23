@@ -1,535 +1,271 @@
 ---
 order: 10
 title: Troubleshooting
-description: Compose, database, auth, paging, and webhook failures
+description: Diagnose Compose, Kubernetes, database, migration, authentication, scheduler, incident, integration, and notification failures safely.
 ---
 
 # Troubleshooting
 
-Most production and eval installs are **Docker Compose or Kubernetes**, not `npm install` on a laptop. Start with the Compose section. From-source Node issues are further down.
+Start at the earliest failed boundary and preserve evidence before changing configuration. A healthy login page does not prove PostgreSQL writes, scheduled work, inbound integrations, or responder notifications function.
 
----
+## First five checks
 
-## Compose and containers
+1. Record the OpsKnight image/version, deployment method, failure time/time zone, affected service/user/integration, and the last known successful test.
+2. Check liveness and database readiness separately:
 
-### `docker compose up` exits or the UI never loads
+   ```bash
+   curl --fail https://ops.example.com/api/health
+   curl --fail 'https://ops.example.com/api/health?mode=readiness'
+   ```
 
-1. Confirm both app and Postgres are up: `docker compose ps`
-2. App logs: `docker compose logs -f` (look for Prisma migrate errors and missing `NEXTAUTH_SECRET` / `ENCRYPTION_KEY`)
-3. Postgres: `docker compose logs postgres`
-4. Health: `curl -s http://localhost:3000/api/health`
+3. Check application startup/runtime logs and PostgreSQL/platform health for the same window.
+4. Reproduce with one controlled synthetic workflow; do not page production responders repeatedly.
+5. Change one layer at a time and retain before/after evidence.
 
-### Port 3000 already in use
+Redact passwords, session/API/integration keys, signature secrets, authenticated webhook URLs, provider payloads, cookies, and personal data before sharing output.
+
+## Docker Compose
+
+### The UI never loads or `docker compose up` exits
+
+```bash
+docker compose ps
+docker compose logs --tail=200 opsknight-app
+docker compose logs --tail=200 opsknight-db
+curl --fail 'http://localhost:3000/api/health?mode=readiness'
+```
+
+Check in this order:
+
+- `opsknight-db` reaches `healthy` and has disk/volume capacity;
+- database credentials in `.env` agree with the initialized volume;
+- `NEXTAUTH_SECRET` is present and `ENCRYPTION_KEY` is 64 hexadecimal characters;
+- application startup logs show the migration result; and
+- `APP_PORT`, `NEXTAUTH_URL`, and `NEXT_PUBLIC_APP_URL` match the browser origin.
+
+`docker compose config` is useful for detecting interpolation problems, but its output can contain rendered secrets. Do not paste it into a ticket without redaction.
+
+### PostgreSQL connection is refused
+
+Inside the Compose application network, PostgreSQL is `opsknight-db:5432`, not `localhost`. On the development host, a published PostgreSQL port normally uses `localhost`.
+
+```bash
+docker compose exec -T opsknight-db \
+  pg_isready -U "${POSTGRES_USER:-opsknight}" -d "${POSTGRES_DB:-opsknight_db}"
+```
+
+If the database volume was initialized with an older password, changing `.env` does not rewrite the database role automatically. Restore the original credential or follow a planned PostgreSQL credential-rotation procedure.
+
+### Port 3000 is already in use
 
 ```bash
 lsof -i :3000
-# or map another host port in compose: "3001:3000"
 ```
 
-### Login loop or immediate session expiry
+Set `APP_PORT=3001` and use `http://localhost:3001` for both application URL settings, then recreate the app container. Do not change the container's internal port 3000 in the standard Compose file.
 
-`NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` should match the URL in the browser, including scheme and port (`http://localhost:3000` locally). After changing them, recreate the app container.
+### You think the database must be reset
 
-### Database connection refused
+Stop. `docker compose down -v` deletes the named PostgreSQL volume. It is not a routine repair command. Confirm the exact Compose project/volume, preserve a backup, and use it only for a deliberately disposable environment. For real data, follow [Backup and restore](./deployment/backup-restore).
 
-`DATABASE_URL` inside the repository Compose network uses the **service hostname** `opsknight-db`, not `localhost`. `localhost` is the app container, not Postgres.
+## Kubernetes
 
-Reset the volume only if you can throw the database away:
+The Kustomize Deployment is normally `opsknight-app`; the Helm Deployment is normally `opsknight`. Inspect actual names before copying commands.
 
 ```bash
-docker compose down -v
-docker compose up -d
+kubectl -n opsknight get deploy,pods,svc,ingress,pvc,hpa,pdb
+kubectl -n opsknight get events --sort-by=.lastTimestamp
+kubectl -n opsknight describe pod POD_NAME
+kubectl -n opsknight logs POD_NAME --all-containers --tail=200
 ```
 
----
+For intermittent failures, compare pod image digests, restart counts, environment/Secret sources, node/zone placement, and the health response `instanceId`. Different `NEXTAUTH_SECRET`, `ENCRYPTION_KEY`, URL, or database settings across replicas cause request-dependent failures.
 
-This guide also covers from-source installs, auth, notifications, and ingest webhooks.
+If readiness fails, check PostgreSQL DNS/network/TLS/credentials and migration state. If only real-time updates disconnect, check ingress buffering and idle/read timeouts for SSE. If scheduled work stalls, keep internal cron enabled on at least one healthy replica and inspect scheduler state/logs.
 
-## Table of Contents
+See [Kubernetes deployment](./deployment/kubernetes) for the complete topology checklist.
 
-- [Compose and containers](#compose-and-containers)
-- [Installation Issues](#installation-issues)
-- [Database Connection Problems](#database-connection-problems)
-- [Authentication Failures](#authentication-failures)
-- [Notification Delivery Issues](#notification-delivery-issues)
-- [Performance Troubleshooting](#performance-troubleshooting)
-- [Debug Logging](#debug-logging)
+## Database and migrations
 
----
+### The app runs but queries fail after an upgrade
 
-## Installation Issues
+The container can start after three failed migration attempts. Inspect startup logs instead of assuming a running/Ready process proves schema success.
 
-### npm install fails with permission errors
-
-**Symptoms:**
-
-- `EACCES` permission denied errors
-- `EPERM` operation not permitted
-
-**Solutions:**
-
-1. **Don't use sudo with npm.** Instead, fix npm permissions:
-
-   ```bash
-   mkdir ~/.npm-global
-   npm config set prefix '~/.npm-global'
-   echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
-   source ~/.bashrc
-   ```
-
-2. **Use a Node version manager** like nvm or fnm:
-   ```bash
-   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-   nvm install 20
-   nvm use 20
-   ```
-
-### Build fails with "out of memory"
-
-**Symptoms:**
-
-- `JavaScript heap out of memory`
-- Build process killed
-
-**Solutions:**
-
-1. **Increase Node.js memory limit:**
-
-   ```bash
-   export NODE_OPTIONS="--max-old-space-size=4096"
-   npm run build
-   ```
-
-2. **Use the standalone build** (recommended for production):
-   ```bash
-   npm run build
-   # This creates .next/standalone with optimized bundle
-   ```
-
-### Notification-provider package is missing in a custom build
-
-**Symptoms:**
-
-- A provider test reports that Twilio, Resend, SendGrid, or the AWS SNS client is not installed.
-- You built a custom image or used a dependency-pruning workflow.
-
-The published Dockerfile installs the provider packages declared by OpsKnight. First compare your image build with the repository Dockerfile and lockfile. For a from-source installation, restore the locked dependency set:
+From a matching source checkout or application container:
 
 ```bash
-npm ci
+npm run prisma:validate
+npm run prisma:health
+npx prisma migrate status
 ```
 
-Do not repair a versioned deployment by installing ad hoc package versions into a running container; rebuild a pinned image and redeploy it.
+Do not use `prisma db push`, edit `_prisma_migrations`, or mark a migration applied merely to clear an error. Capture the exact Prisma code/message and follow [Database migrations](./deployment/database-migrations). Preserve a recovery point before any repair.
 
----
+### `@prisma/client` is not initialized in a custom build
 
-## Database Connection Problems
+Reproduce the repository build order: install the lockfile, copy the schema/migrations, run `npx prisma generate`, build, and include the generated Prisma client/runtime in the final image. The published Dockerfile already does this. Rebuild a pinned image; do not install or generate ad hoc inside a running production container.
 
-### "Connection refused" or "Connection timed out"
+### Pages are slow or time out
 
-**Symptoms:**
+Correlate application request/query latency with PostgreSQL connections, pool wait, slow queries, locks, CPU, memory, storage latency, and table/index growth. The Admin **Settings → Performance Monitoring** page shows selected SLA-query observations; it is not a complete database/APM system.
 
-- `ECONNREFUSED` error
-- `Connection timed out` after deployment
+```sql
+SHOW max_connections;
+SELECT state, count(*)
+FROM pg_stat_activity
+GROUP BY state;
+```
 
-**Solutions:**
+Do not blindly raise a per-process pool limit. Budget every replica plus migration, backup, monitoring, and administrative reserve, then load-test. See [Scalability and capacity planning](./core-concepts/scalability).
 
-1. **Verify PostgreSQL is running:**
+## Authentication
 
-   ```bash
-   # Check if PostgreSQL is running
-   pg_isready -h localhost -p 5432
+### Login loops or the session disappears
 
-   # For Docker
-   docker ps | grep postgres
-   ```
+- The browser origin must exactly match `NEXTAUTH_URL`, including HTTPS and port.
+- `NEXT_PUBLIC_APP_URL` should normally match it.
+- The trusted proxy must forward the original host and scheme.
+- All replicas must use the same stable `NEXTAUTH_SECRET`.
+- Secure-cookie selection follows whether `NEXTAUTH_URL` begins with `https://`.
 
-2. **Check your DATABASE_URL format:**
+Replacing `NEXTAUTH_SECRET` invalidates existing sessions and does not fix an origin mismatch. Restore the intended stable secret, clear only the affected site's cookies, and retry in a private browser window.
 
-   ```
-   postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
-   ```
+### A valid local account cannot sign in
 
-3. **For cloud databases (Supabase, Neon, etc.):**
-   - Enable SSL: Add `?sslmode=require` to the connection string
-   - Check firewall rules allow your IP
-   - Verify the database is in the same region as your app
+Confirm normalized email, account status, and whether the user is a local-password or OIDC-only identity. After five failures for one email/client-IP key, the process-local login guard applies a progressive lockout. Wait for the displayed lockout, stop repeated retries, and investigate the client IP forwarded by the trusted proxy.
 
-### "Prisma Client not initialized"
+Use **Forgot password** or an Admin-generated reset link for normal recovery. The bundled CLI creates/updates a local user directly; it does not provide `user:list` or `user:reset-password` subcommands. Use it only through the [User recovery CLI](./api/cli) runbook.
 
-**Symptoms:**
+Changing `ENCRYPTION_KEY` does not repair a bcrypt local password. It can make stored OIDC/provider credentials unreadable, which is a separate failure.
 
-- `@prisma/client did not initialize yet`
-- `PrismaClient is unable to be run in the browser`
+### OIDC sign-in fails
 
-**Solutions:**
+Check:
 
-1. **Regenerate Prisma Client:**
+1. the exact callback `https://YOUR_ORIGIN/api/auth/callback/oidc` at the IdP;
+2. HTTPS issuer discovery from the application network;
+3. configured client ID/secret and `ENCRYPTION_KEY` decryption;
+4. `openid email profile` plus any mapping claims in the actual token/profile;
+5. email, `email_verified`, allowed-domain, provisioning, and first-link approval rules; and
+6. issuer-plus-subject identity conflicts or role-mapping order.
 
-   ```bash
-   npx prisma generate
-   ```
+Retain a working local Admin while testing. See [Authentication](./administration/authentication) and [OIDC setup](./security/oidc-setup).
 
-2. **For production builds:**
-   ```bash
-   # Include in your build script
-   npm run build  # This runs prisma generate automatically
-   ```
+## Incident creation and correlation
 
-### Migration errors
+### An inbound alert does not create an incident
 
-**Symptoms:**
+Capture the sender's HTTP status/body and check:
 
-- `Migration failed` during deployment
-- `P3009: migrate found failed migrations`
+- the integration exists, is enabled, and belongs to the intended service;
+- the integration ID and key are both current;
+- any configured signature uses the exact provider header/algorithm/raw bytes;
+- the payload passes that provider's schema and maps to `trigger` rather than acknowledge/resolve;
+- HTTP 429 is retried only after `Retry-After`; and
+- **Event Logs**, system logs, and the service integration show the request.
 
-**Solutions:**
+Provider-native routes normally return HTTP 202 when accepted. Acceptance proves normalization/processing returned, not external notification delivery. See [Inbound webhook reference](./integrations/inbound-webhook-reference).
 
-1. **Check migration status:**
+### Duplicate incidents appear
 
-   ```bash
-   npx prisma migrate status
-   ```
+Compare the target service and normalized deduplication key. The same condition must send a stable provider identifier/key; timestamps and random IDs create new correlation groups. Confirm the earlier incident state and the provider-specific fallback behavior.
 
-2. **Use the safe migration script:**
+### Recovery does not resolve the incident
 
-   ```bash
-   npm run prisma:migrate:safe
-   ```
+Confirm the recovery maps to `resolve` and produces the same service/key as the trigger. Some providers use event/pipeline/deployment IDs rather than a branch or monitor display name. Open the provider guide and compare both raw deliveries. See [Event correlation](./architecture/deduplication-engine).
 
-3. **For failed migrations, use auto-recovery:**
+## Escalation and scheduled work
 
-   ```bash
-   npm run prisma:auto-recover
-   ```
+### A policy does not page or advance
 
-4. **Manual recovery (last resort):**
-   ```sql
-   -- Connect to your database and mark failed migration as applied
-   UPDATE "_prisma_migrations"
-   SET finished_at = NOW(), applied_steps_count = 1
-   WHERE migration_name = 'YYYYMMDDHHMMSS_migration_name'
-   AND finished_at IS NULL;
-   ```
+Verify the incident is actionable (`OPEN`), the service has the intended policy, the next step exists, and its user/team/schedule target resolves to an active eligible recipient. Assignment alone is not acknowledgment; acknowledgment/resolution completes escalation.
 
----
+Inspect scheduler logs for start/tick/lock/job errors. Read-only database checks can confirm coordination and backlog:
 
-## Authentication Failures
+```sql
+SELECT id, "lastRunAt", "lastSuccessAt", "nextRunAt", "lockedBy", "lockedAt", "lastError"
+FROM cron_scheduler_state;
 
-### "Invalid credentials" but credentials are correct
+SELECT status, type, count(*), min("scheduledAt") AS oldest_scheduled
+FROM "BackgroundJob"
+GROUP BY status, type
+ORDER BY status, type;
+```
 
-**Symptoms:**
+Do not clear the scheduler lock manually as a first response. The scheduler heartbeats active ownership and can reclaim a stale lock after its timeout. Identify a live owner, database latency, a long-running tick, and replica churn first.
 
-- Login fails with valid email/password
-- "Invalid credentials" error
+## Notification delivery
 
-**Solutions:**
+### An incident exists but no external notification arrives
 
-1. **Check if the user exists:**
+Trace the complete route:
 
-   ```bash
-   # Use the OpsKnight CLI
-   npm run ops user:list
-   ```
+1. the service policy reached the intended user/team/schedule;
+2. the recipient is active, eligible for team notification when applicable, and has the required email/phone/push subscription;
+3. the user/service notification selections permit the channel;
+4. **Settings → Notification Providers** shows one enabled provider with valid credentials;
+5. the provider's test succeeds; and
+6. **Settings → Notification History**, system logs, and provider logs agree.
 
-2. **Reset the password:**
+In-app notification creation and external delivery are separate. User channel selection uses fallback behavior in several flows; it is not guaranteed fan-out to every enabled channel.
 
-   ```bash
-   npm run ops user:reset-password --email user@example.com
-   ```
+### Email, SMS, WhatsApp, or push provider fails
 
-3. **Verify the encryption key hasn't changed** (see [Encryption Key Issues](#encryption-key-issues))
+- Email: verify enabled provider, sender/domain authorization, recipient, and provider activity/logs.
+- Twilio SMS/WhatsApp: verify SID/token, sender/from value, E.164 recipient, trial restrictions, and WhatsApp enablement/template/window rules.
+- AWS SNS/SES: verify region, least-privilege credentials, sender/domain state, sandbox restrictions, and provider response.
+- Web Push: require HTTPS (except localhost development), enabled VAPID provider, browser permission/subscription, and service-worker registration.
 
-### Session expires immediately
+The published image includes declared notification dependencies. If a custom pruned image reports a missing package, compare its build with the repository Dockerfile/lockfile and rebuild; do not run `npm install` inside the live container.
 
-**Symptoms:**
+Provider calls can be rejected, time out, exhaust retries, or encounter a process-local open circuit. Restoring configuration does not automatically replay every failed notification; verify with a fresh controlled incident.
 
-- Logged out after every page refresh
-- "Session expired" error immediately after login
+## Webhook response guide
 
-**Solutions:**
+| Status | Interpretation and next action                                                                        |
+| ------ | ----------------------------------------------------------------------------------------------------- |
+| 400    | Missing/invalid ID/key/body/schema on standardized routes; correct the request, do not blindly retry. |
+| 401    | Missing/invalid credential or configured signature on applicable routes; correct secrets/headers.     |
+| 403    | Disabled integration or authorization failure on applicable routes.                                   |
+| 404    | Integration/resource not found; verify current ID and destination.                                    |
+| 429    | Rate limit reached; honor `Retry-After`, add jitter, and inspect retry/noise volume.                  |
+| 5xx    | Unexpected processing/dependency failure; retry an idempotent event with bounds and preserve logs.    |
 
-1. **Check NEXTAUTH_URL matches your actual URL:**
+Authentication status codes differ on a few legacy/provider routes. Inspect the response JSON and provider guide instead of assuming one status universally identifies the cause.
 
-   ```bash
-   # .env
-   NEXTAUTH_URL=https://your-actual-domain.com
-   ```
+## Debug logging
 
-2. **Verify cookies are being set:**
-   - Open browser DevTools → Application → Cookies
-   - Look for `next-auth.session-token` cookie
-   - Check if `Secure` flag matches your protocol (HTTPS vs HTTP)
+Set `LOG_FORMAT=json` for collection and raise `LOG_LEVEL=debug` only for a bounded diagnostic window. Debug context can contain sensitive provider and operational data.
 
-3. **For reverse proxy setups,** ensure headers are forwarded:
-   ```nginx
-   # nginx example
-   proxy_set_header Host $host;
-   proxy_set_header X-Real-IP $remote_addr;
-   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-   proxy_set_header X-Forwarded-Proto $scheme;
-   ```
-
-### OIDC/SSO login fails
-
-**Symptoms:**
-
-- "Invalid state" or "Invalid nonce" errors
-- Redirect loop during SSO login
-
-**Solutions:**
-
-1. **Verify callback URL is configured correctly:**
-   - Callback URL should be: `https://your-domain.com/api/auth/callback/oidc`
-   - This must exactly match what's configured in your IdP
-
-2. **Check the OIDC configuration in Settings → Security → SSO**
-
-3. **For Azure AD:** Ensure `email` claim is included in the token
-
-4. **Enable debug logging** (see [Debug Logging](#debug-logging))
-
----
-
-## Notification Delivery Issues
-
-### Emails not being sent
-
-**Symptoms:**
-
-- No emails received
-- "Email provider not configured" warnings in logs
-
-**Solutions:**
-
-1. **Verify email provider is configured:**
-   - Go to Settings → System → Email Providers
-   - Ensure a provider is enabled and has valid credentials
-
-2. **Check the from email address:**
-   - For Resend/SendGrid: Domain must be verified
-   - For SMTP: Check your mail server allows this sender
-
-3. **Test email delivery:**
-   - Go to Settings → Notifications → Test Email
-   - Check logs for delivery errors
-
-### SMS not being delivered
-
-**Symptoms:**
-
-- SMS notifications not received
-- "Twilio package not installed" error
-
-**Solutions:**
-
-1. **Install the Twilio package:**
-
-   ```bash
-   npm install twilio
-   ```
-
-2. **Verify Twilio configuration:**
-   - Account SID and Auth Token in Settings → System → Notification Providers
-   - From Number must be a valid Twilio phone number
-   - For trial accounts: Target number must be verified
-
-3. **Check phone number format:**
-   - Must be in E.164 format: `+15551234567`
-   - Include country code
-
-### Push notifications not working
-
-**Symptoms:**
-
-- "Push notifications not enabled" error
-- Browser doesn't prompt for notification permission
-
-**Solutions:**
-
-1. **Check VAPID keys are configured:**
-   - Settings → System → Notification Providers → Web Push
-   - Generate new keys if needed:
-     ```bash
-     npx web-push generate-vapid-keys
-     ```
-
-2. **Verify HTTPS:**
-   - Push notifications only work over HTTPS
-   - Exception: `localhost` for development
-
-3. **Check browser permissions:**
-   - Click the lock icon in the URL bar
-   - Ensure notifications are "Allowed"
-
----
-
-## Performance Troubleshooting
-
-### Slow page loads
-
-**Symptoms:**
-
-- Pages take several seconds to load
-- Timeout errors
-
-**Solutions:**
-
-1. **Check database query performance:**
-
-   ```bash
-   # Enable query logging
-   LOG_LEVEL=debug npm start
-   ```
-
-2. **Optimize database:**
-
-   ```sql
-   -- Check for missing indexes
-   SELECT schemaname, tablename, indexname
-   FROM pg_indexes
-   WHERE schemaname = 'public';
-
-   -- Analyze tables
-   ANALYZE;
-   ```
-
-3. **Increase connection pool:**
-   ```
-   DATABASE_URL="...?connection_limit=20"
-   ```
-
-### High memory usage
-
-**Symptoms:**
-
-- Server runs out of memory
-- OOM killer terminates process
-
-**Solutions:**
-
-1. **For standalone builds,** memory usage should be lower:
-
-   ```bash
-   node .next/standalone/server.js
-   ```
-
-2. **Set appropriate memory limits:**
-
-   ```bash
-   # Docker
-   docker run --memory=512m opsknight
-
-   # Node.js
-   NODE_OPTIONS="--max-old-space-size=512" node server.js
-   ```
-
-3. **Check for memory leaks** using Node.js diagnostics:
-   ```bash
-   node --inspect .next/standalone/server.js
-   # Connect Chrome DevTools to take heap snapshots
-   ```
-
-### Cron jobs not running
-
-**Symptoms:**
-
-- Escalations not triggered on schedule
-- Scheduled jobs stuck as "pending"
-
-**Solutions:**
-
-1. **Check cron scheduler status:**
-   - Go to Settings → System → Background Jobs
-   - Verify "Cron Scheduler" shows as "Running"
-
-2. **Enable internal cron:**
-
-   ```bash
-   # Default is enabled
-   ENABLE_INTERNAL_CRON=true
-   ```
-
-3. **Check for lock issues:**
-
-   ```sql
-   -- View scheduler state
-   SELECT * FROM "CronSchedulerState";
-
-   -- Clear stale lock if needed
-   UPDATE "CronSchedulerState"
-   SET "lockedBy" = NULL, "lockedAt" = NULL
-   WHERE id = 'singleton';
-   ```
-
----
-
-## Debug Logging
-
-### Enable verbose logging
+For containers, change the deployment environment and recreate/restart through the normal release owner, then collect stdout/stderr:
 
 ```bash
-# Set log level
-LOG_LEVEL=debug npm start
-
-# For JSON output (better for log aggregation)
-LOG_FORMAT=json npm start
+docker compose logs -f opsknight-app
+kubectl -n opsknight logs deployment/opsknight-app --all-containers -f
 ```
 
-### Log levels
+Every replica has its own in-app System Logs buffer. Export platform logs durably and include instance/pod identity when correlating. Return to the normal log level after diagnosis.
 
-| Level   | Description                     |
-| ------- | ------------------------------- |
-| `error` | Only errors                     |
-| `warn`  | Errors and warnings             |
-| `info`  | Normal operation logs (default) |
-| `debug` | Detailed debugging information  |
+## Encryption-key failures
 
-### Common log locations
+If stored credentials suddenly fail to decrypt:
 
-- **Application logs:** stdout/stderr (or configured log destination)
-- **Database logs:** PostgreSQL log files
-- **Cron scheduler:** Look for `[Cron]` prefix in logs
-- **Notifications:** Look for `component: 'sms'`, `component: 'email'`, etc.
+1. compare the active `ENCRYPTION_KEY` source/version across every replica;
+2. restore the exact original key from the protected backup when it was changed accidentally;
+3. verify database and key belong to the same installation/recovery point; and
+4. if the key is irretrievably lost, configure a new valid key and re-enter each affected OIDC, Slack, Jira, and notification-provider credential.
 
-### Encryption Key Issues
+Do not rotate upstream credentials only in OpsKnight after suspected exposure; revoke/rotate them at the provider too. See [Encryption](./security/encryption).
 
-If you see `CRITICAL: Encryption Key failed canary check`:
+## Ask for help
 
-1. The encryption key has changed or is invalid
-2. Data encrypted with the old key cannot be decrypted
+Search [GitHub issues](https://github.com/opsknight-labs/OpsKnight/issues) and [discussions](https://github.com/opsknight-labs/OpsKnight/discussions). A useful report includes:
 
-**Recovery steps:**
+- OpsKnight version/image digest and deployment method;
+- browser, Node.js (source builds), PostgreSQL, and relevant platform versions;
+- precise timestamps/time zone and affected workflow;
+- minimal reproduction and expected/actual result;
+- health/readiness status and sanitized logs; and
+- whether a fresh controlled synthetic test succeeds.
 
-1. Restore the original `ENCRYPTION_KEY` from backup
-2. If key is lost, you'll need to re-enter all encrypted credentials (API keys, etc.)
-
----
-
-## Integrations & Webhook Diagnostic Matrix
-
-| Integration          | Error / Symptom                                  | Root Cause                                                                          | Solution                                                                                       |
-| :------------------- | :----------------------------------------------- | :---------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------- |
-| **All Integrations** | `401 Unauthorized: Invalid integration key`      | Missing or mismatched `integrationKey` query param or `x-integration-key` header    | Verify integration key matches the key generated in OpsKnight Service Integrations tab.        |
-| **All Integrations** | `429 Too Many Requests`                          | Ingestion rate limit exceeded (>100 req/min)                                        | Check upstream monitoring tool alert grouping interval; inspect `Retry-After` header.          |
-| **Zabbix**           | Incidents not auto-closing on OK                 | Missing `event_id` macro in media type script                                       | Map `event_id: "{EVENT.ID}"` in Zabbix Webhook Media Type parameters.                          |
-| **PagerDuty v2**     | `400 Bad Request: Event object is invalid`       | Payload missing required `summary` or `severity`                                    | Verify `payload.summary` and `payload.severity` (`critical`/`error`/`warning`/`info`) are set. |
-| **GitLab CI**        | `401 Unauthorized: Invalid token`                | `x-gitlab-token` header does not match `signatureSecret`                            | Configure identical secret token in GitLab Webhook and OpsKnight Integration settings.         |
-| **Vercel**           | `401 Unauthorized: Missing or invalid signature` | `x-vercel-signature` HMAC check failed                                              | Ensure webhook secret in Vercel matches `signatureSecret` in OpsKnight.                        |
-| **Nagios / Icinga**  | Service alerts ignored during maintenance        | `DOWNTIMESTART` notification received                                               | Expected behavior: scheduled downtime suppresses noise and avoids paging on-call.              |
-| **CloudWatch**       | `INSUFFICIENT_DATA` alarm not resolving          | By design: loss of telemetry is treated as warning trigger, not incident resolution | Incidents only resolve when AWS CloudWatch sends `NewStateValue: "OK"`.                        |
-
----
-
-## Getting Help
-
-If you're still stuck:
-
-1. **Search existing issues:** [GitHub Issues](https://github.com/opsknight-labs/OpsKnight/issues)
-2. **Check discussions:** [GitHub Discussions](https://github.com/opsknight-labs/OpsKnight/discussions)
-3. **Open a new issue** with:
-   - OpsKnight version
-   - Node.js version
-   - PostgreSQL version
-   - Relevant log output (redact sensitive data!)
-   - Steps to reproduce
+Never include credentials, complete authenticated URLs, cookies, raw customer alerts, or unreviewed database dumps.
