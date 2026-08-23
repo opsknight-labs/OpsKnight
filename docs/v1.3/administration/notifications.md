@@ -1,213 +1,468 @@
 ---
-title: Notifications
-description: Configure providers, user preferences, push devices, delivery order, service messages, and failure investigation.
 order: 2
+title: Notifications
+description: Configure Email, SMS, Push, WhatsApp, and Slack notification channels
 ---
 
-# Notifications
+# Notification Configuration
 
-OpsKnight can create in-app notifications and deliver incident messages through email, SMS, web push, WhatsApp, Slack, and service webhooks. There is no native voice/PSTN channel in v1.3.
+Notifications are the lifeblood of incident management. Without reliable notifications, incidents go unnoticed and response times suffer. This guide covers setting up all six notification channels supported by OpsKnight.
 
-Reliable delivery requires several independent layers:
+<!-- placeholder:notifications-overview -->
+<!-- Add: Screenshot of the Notifications settings page showing all providers -->
 
-```text
-valid incident recipient
-  + enabled workspace provider
-  + enabled user preference and contact/device data
-  + escalation or service event
-  → notification attempt and history
+---
+
+## Why Multiple Channels Matter
+
+Different situations call for different notification methods:
+
+| Scenario            | Best Channel | Why                          |
+| ------------------- | ------------ | ---------------------------- |
+| Normal alerts       | Email, Slack | Non-intrusive, async         |
+| Critical incidents  | SMS, Push    | Immediate attention          |
+| On-call escalation  | SMS + Push   | Can't be missed              |
+| Team coordination   | Slack        | Interactive, threaded        |
+| International teams | WhatsApp     | Global reach                 |
+| Automated systems   | Webhooks     | Integration with other tools |
+
+**Recommendation**: Configure at least **Email + Slack** for basic coverage, add **SMS** for critical alerts.
+
+---
+
+## Notification Channels Overview
+
+| Channel      | Provider Options                | Best For                     |
+| ------------ | ------------------------------- | ---------------------------- |
+| **Email**    | SMTP, SendGrid, AWS SES, Resend | All users, reliable delivery |
+| **SMS**      | Twilio, AWS SNS                 | Critical alerts, on-call     |
+| **Push**     | Web Push (PWA)                  | Mobile/PWA users             |
+| **Slack**    | Slack OAuth                     | Team collaboration           |
+| **WhatsApp** | Twilio                          | International teams          |
+| **Webhooks** | Any HTTP endpoint               | Custom integrations          |
+
+---
+
+## Email Configuration
+
+Email is the most universal notification channel — every user has an email address.
+
+### Provider Options
+
+| Provider     | Pros                   | Cons                 |
+| ------------ | ---------------------- | -------------------- |
+| **SMTP**     | Universal, self-hosted | May hit spam filters |
+| **SendGrid** | High deliverability    | Cost at scale        |
+| **AWS SES**  | Low cost, scalable     | AWS account required |
+| **Resend**   | Developer-friendly     | Newer service        |
+
+### SMTP Configuration
+
+For Gmail, Microsoft 365, or any SMTP server:
+
+1. Go to **Settings** → **Notification Provider** → **Email**
+2. Select **SMTP** provider
+3. Enter credentials:
+
+| Field            | Example              | Notes                          |
+| ---------------- | -------------------- | ------------------------------ |
+| **SMTP Host**    | `smtp.gmail.com`     | Your mail server               |
+| **SMTP Port**    | `587`                | Usually 587 (TLS) or 465 (SSL) |
+| **Username**     | `alerts@yourco.com`  | Email account                  |
+| **Password**     | `••••••••`           | App password recommended       |
+| **From Address** | `noreply@yourco.com` | Sender address                 |
+| **From Name**    | `OpsKnight Alerts`   | Display name                   |
+
+4. Click **Test Connection** to verify
+5. Click **Save**
+
+<!-- placeholder:smtp-config -->
+<!-- Add: Screenshot of SMTP configuration form -->
+
+#### Gmail Setup Notes
+
+For Gmail/Google Workspace:
+
+1. Enable "Less secure app access" OR
+2. Create an **App Password** (recommended):
+   - Go to Google Account → Security → App Passwords
+   - Generate password for "Mail"
+   - Use this as the SMTP password
+
+### SendGrid Configuration
+
+1. Create a SendGrid account at sendgrid.com
+2. Go to Settings → API Keys → Create API Key
+3. In OpsKnight:
+   - Select **SendGrid** provider
+   - Enter your API key
+   - Set From Address (must be verified in SendGrid)
+4. Test and save
+
+### AWS SES Configuration
+
+1. Set up AWS SES in your AWS account
+2. Verify your sending domain
+3. In OpsKnight:
+   - Select **AWS SES** provider
+   - Enter AWS credentials (Access Key, Secret Key)
+   - Set Region (e.g., `us-east-1`)
+   - Set From Address (must be verified)
+4. Test and save
+
+### Resend Configuration
+
+1. Create a Resend account at resend.com
+2. Generate an API key
+3. In OpsKnight:
+   - Select **Resend** provider
+   - Enter your API key
+   - Set From Address
+4. Test and save
+
+---
+
+## SMS Configuration
+
+SMS cuts through the noise — it's the best way to reach on-call responders for critical incidents.
+
+### Twilio Setup
+
+Twilio is the most popular option for SMS:
+
+1. **Create Twilio Account**
+   - Sign up at twilio.com
+   - Note your Account SID and Auth Token
+
+2. **Get a Phone Number**
+   - Buy a phone number with SMS capability
+   - Format: `+1234567890`
+
+3. **Configure in OpsKnight**
+   - Go to **Settings** → **Notifications** → **SMS**
+   - Select **Twilio** provider
+   - Enter credentials:
+
+| Field            | Description                |
+| ---------------- | -------------------------- |
+| **Account SID**  | From Twilio Console        |
+| **Auth Token**   | From Twilio Console        |
+| **Phone Number** | Your Twilio number (+1...) |
+
+4. **Test** by sending a test SMS
+5. **Save** configuration
+
+<!-- placeholder:twilio-config -->
+<!-- Add: Screenshot of Twilio configuration form -->
+
+### AWS SNS Setup
+
+For high-volume SMS or if you're already on AWS:
+
+1. **Set Up AWS SNS**
+   - Enable SMS in AWS SNS console
+   - Request production access for higher limits
+
+2. **Configure in OpsKnight**
+   - Select **AWS SNS** provider
+   - Enter credentials:
+
+| Field                 | Description         |
+| --------------------- | ------------------- |
+| **AWS Region**        | e.g., `us-east-1`   |
+| **Access Key ID**     | IAM user access key |
+| **Secret Access Key** | IAM user secret key |
+
+3. **Test** and **Save**
+
+### User Phone Numbers
+
+Users must add and verify their phone numbers:
+
+1. User goes to **Profile** → **Contact Info**
+2. Enters phone number (with country code)
+3. Clicks **Verify**
+4. Enters SMS verification code
+5. Phone number is now active for SMS
+
+> **Note**: Users can enable/disable SMS notifications in their preferences.
+
+---
+
+## Push Notifications (PWA)
+
+Push notifications reach users on their mobile and desktop devices via the OpsKnight Progressive Web App (PWA).
+
+### VAPID Configuration
+
+OpsKnight uses standard Web Push with VAPID keys, independent of third-party services like Firebase.
+
+1. **Generate VAPID Keys**
+   - You can generate these via command line: `npx web-push generate-vapid-keys`
+   - Or use an online VAPID generator
+
+2. **Configure in OpsKnight**
+   - Go to **Settings** → **Notification Provider** → **Web Push (PWA)**
+   - Enter your VAPID details:
+
+| Field                 | Description                    |
+| --------------------- | ------------------------------ |
+| **VAPID Public Key**  | The public key string          |
+| **VAPID Private Key** | The private key string         |
+| **Contact Email**     | `mailto:admin@yourcompany.com` |
+
+3. **Save** configuration
+
+### User Device Registration
+
+For push notifications to work, users must install the PWA:
+
+1. **Open OpsKnight** in a browser (Chrome/Edge/Safari)
+2. **Install App**:
+   - Desktop: Click install icon in address bar
+   - Mobile (iOS): Share → Add to Home Screen
+   - Mobile (Android): Install App prompt
+3. **Enable Notifications**:
+   - Open the installed app
+   - Accept notification permission when prompted
+   - Device is automatically registered
+
+Users can manage their push preferences in **Settings** → **Profile**.
+
+---
+
+## WhatsApp Configuration
+
+WhatsApp is useful for international teams where SMS may be unreliable or expensive.
+
+### Twilio WhatsApp Setup
+
+WhatsApp uses Twilio's WhatsApp Business API:
+
+1. **Enable WhatsApp in Twilio**
+   - Go to Twilio Console → Messaging → WhatsApp
+   - Complete WhatsApp Business onboarding
+
+2. **Get WhatsApp Number**
+   - Use your existing Twilio number OR
+   - Request a dedicated WhatsApp number
+
+3. **Configure in OpsKnight**
+   - Use the same Twilio credentials as SMS
+   - Enable WhatsApp channel
+   - Enter WhatsApp-enabled phone number
+
+4. **Test** and **Save**
+
+### WhatsApp User Setup
+
+Users must:
+
+1. Add their WhatsApp number to their profile
+2. Opt-in by sending a message to the OpsKnight WhatsApp number
+3. Receive confirmation
+
+---
+
+## Slack Integration
+
+Slack provides rich, interactive notifications with buttons for quick actions.
+
+### Why Slack is Recommended
+
+- **Interactive buttons** — Acknowledge/Resolve without leaving Slack
+- **Thread updates** — Timeline events in threads
+- **Channel routing** — Different channels for different services
+- **Team visibility** — Everyone sees incident activity
+
+### Setup
+
+Full setup guide: [Slack OAuth Setup](../integrations/communication/slack-oauth-setup)
+
+Quick overview:
+
+1. Go to **Settings** → **Integrations** → **Slack**
+2. Click **Connect to Slack**
+3. Authorize OpsKnight in your workspace
+4. Select default notification channel
+5. Done!
+
+### Per-Service Channels
+
+You can route different services to different Slack channels:
+
+1. Edit a service
+2. Set **Slack Channel** to the desired channel
+3. Alerts for that service go to that channel
+
+---
+
+## Webhooks (Custom)
+
+Send notifications to any HTTP endpoint for custom integrations.
+
+### Configuration
+
+Webhooks are configured per-service, allowing specific routing for different services.
+
+1. Go to **Services** and select a service
+2. Click **Settings** (tab)
+3. Under **Service Notification Channels**, check **WEBHOOK**
+4. In the **Webhook Integrations** card that appears, click **Add Webhook**
+5. Configure:
+
+| Field    | Description                                   |
+| -------- | --------------------------------------------- |
+| **Name** | Display name (e.g., "Internal Ops Dashboard") |
+| **URL**  | Your webhook endpoint                         |
+| **Type** | Generic, Google Chat, Microsoft Teams, etc.   |
+
+### Webhook Payload
+
+```json
+{
+  "event": "incident.triggered",
+  "incident": {
+    "id": "inc_abc123",
+    "title": "High CPU on web-01",
+    "status": "OPEN",
+    "urgency": "HIGH",
+    "service": "Payment API"
+  },
+  "timestamp": "2024-01-15T10:30:00Z"
+}
 ```
 
-Saving one layer does not verify the whole path. Test every production recipient type with a controlled incident.
+### Signature Verification
 
-## Permissions and settings
+OpsKnight signs webhooks with HMAC-SHA256 if a secret is configured. Requests include these headers:
 
-- An application **Admin** configures workspace providers in **Settings → Notification Providers**.
-- Each user configures personal Email, SMS, Push, and WhatsApp preferences under **Settings → Notifications**.
-- Admins/Responders configure service-level Slack and webhook events under **Service → Settings**.
-- Policy administration is Admin-only. New steps in the current v1.3 UI inherit user preferences; the UI does not expose new per-step channel overrides.
-- Signed-in users can open **Settings → Notification History**; access to operational data should still be governed by deployment policy.
+```
+X-OpsKnight-Signature: sha256=abc123...
+X-OpsKnight-Timestamp: 1706179200000
+```
 
-## Supported provider matrix
+Verify by computing HMAC of the request body with your secret. You can use the timestamp to protect against replay attacks.
 
-| Channel  | v1.3 provider/configuration                            | Recipient requirement                                               | Test method                                            |
-| -------- | ------------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
-| In-app   | Built in                                               | Active OpsKnight account                                            | Assign/target a test incident.                         |
-| Email    | Resend, SendGrid, SMTP, or Amazon SES                  | Email preference enabled and valid account email                    | Controlled incident; inspect provider and history.     |
-| SMS      | Twilio or AWS SNS                                      | SMS preference enabled and E.164 phone number                       | Controlled incident; inspect the provider and history. |
-| Push     | Standard Web Push with VAPID keys                      | Push preference, browser permission, registered subscription, HTTPS | User's **Test Push** control.                          |
-| WhatsApp | Twilio WhatsApp Business                               | WhatsApp preference and E.164 phone number                          | Approved test incident/template path.                  |
-| Slack    | Slack workspace/OAuth or service webhook configuration | Service/workspace channel configuration                             | Slack setup and synthetic incident.                    |
-| Webhook  | Service webhook integration                            | Reachable allowed URL and selected events                           | Webhook test plus synthetic incident.                  |
+---
 
-Microsoft Teams and Google Chat are not native notification-provider types. A generic webhook may work with a compatible incoming-webhook receiver, but its payload must be tested and it does not provide native rooms, slash commands, or interactive actions.
+## Notification Preferences
 
-## Delivery selection for users
+### User-Level Preferences
 
-For a policy/user notification, OpsKnight builds the available user channels in this order:
+Each user controls their notification preferences:
 
-1. Push
-2. SMS
-3. WhatsApp
-4. Email
+**Settings** → **Profile** → **Notifications**
 
-It attempts channels in order and normally stops after the first successful non-email delivery. For a High-urgency incident, it can continue to email after a successful primary non-email channel. Failed earlier channels are recorded and the next available channel is tried.
+| Setting                    | Description             |
+| -------------------------- | ----------------------- |
+| **Email notifications**    | Enable/disable email    |
+| **SMS notifications**      | Enable/disable SMS      |
+| **Push notifications**     | Enable/disable push     |
+| **WhatsApp notifications** | Enable/disable WhatsApp |
+| **Digest level**           | ALL, HIGH only, or NONE |
 
-This is ordered fallback, not guaranteed fan-out to every enabled channel. An in-app notification is created separately even when no external channel is available.
+### Service-Level Settings
 
-Stored escalation-channel data, when present, is intersected with the user's available channels. If the intersection is empty, the implementation falls back to the user's available preferences rather than dropping the page.
+Per-service notification settings:
 
-Service-level Slack/webhook/email/SMS/push/WhatsApp notifications are a separate path selected by service event settings. Avoid configuring duplicate paths until you have observed their combined behavior.
+| Setting                   | Default | Description            |
+| ------------------------- | ------- | ---------------------- |
+| **Notify on trigger**     | Yes     | When incident created  |
+| **Notify on acknowledge** | Yes     | When someone acks      |
+| **Notify on resolve**     | Yes     | When incident resolved |
+| **Notify on SLA breach**  | Yes     | When SLA exceeded      |
 
-## Configure email
+---
 
-Choose exactly the provider intended for workspace email and supply:
+## Notification Delivery Tracking
 
-| Provider   | Required fields                                                          |
-| ---------- | ------------------------------------------------------------------------ |
-| Resend     | API key and From email.                                                  |
-| SendGrid   | API key and From email.                                                  |
-| SMTP       | Host, port, username, password, From email, and optional TLS/SSL switch. |
-| Amazon SES | Access key ID, secret access key, AWS region, and From email.            |
+OpsKnight tracks delivery status for all notifications:
 
-1. Verify the sender/domain with the provider.
-2. Enter secrets in **Notification Providers**, save, and enable the provider.
-3. Enable Email for a test user.
-4. Trigger a controlled incident targeted to that user.
-5. Verify the message, link, sender, delivery record, and incident timeline.
+| Status        | Meaning                              |
+| ------------- | ------------------------------------ |
+| **PENDING**   | Queued for delivery                  |
+| **SENT**      | Sent to provider                     |
+| **DELIVERED** | Confirmed delivery (where supported) |
+| **FAILED**    | Delivery failed                      |
 
-Do not infer delivery from “Saved successfully.” The current provider card does not send a universal email test.
+### Viewing Delivery Status
 
-For status-page subscriber mail, also choose the status page's email provider in its Subscribers section and test verification/unsubscribe separately.
+1. Open an incident
+2. Check the **Timeline** for notification events
+3. See delivery status for each notification
 
-## Configure SMS
+### Troubleshooting Failed Notifications
 
-Choose either Twilio or AWS SNS in the SMS settings. Only the selected, enabled provider is used.
+1. Check **Event Logs** for error details
+2. Verify provider credentials
+3. Check user has valid contact info
+4. Verify user has channel enabled
+5. Check for rate limits
 
-### Twilio
+---
 
-1. Obtain a Twilio Account SID, Auth Token, and sending number.
-2. Enter the values under **Twilio (SMS)** and enable it.
-3. Add the recipient phone in E.164 format, such as `+14155550100`.
-4. Enable the user's SMS preference.
-5. Trigger a controlled incident and inspect Twilio and Notification History.
+## Best Practices
 
-Twilio trial accounts can generally send only to verified recipients. Regional permissions, sender registration, and carrier filtering can reject an otherwise valid request.
+## Notification Best Practices
 
-### AWS SNS
+### Reduce Alert Fatigue
 
-1. Create a least-privilege IAM principal permitted to publish SMS messages.
-2. Enter its Access Key ID, Secret Access Key, and the intended AWS region under **SMS Notifications**.
-3. Enable SMS, select **AWS SNS**, and save.
-4. Add an E.164 recipient phone number and enable the user's SMS preference.
-5. Use **Test SMS**, then validate a controlled incident and Notification History.
+- **Tune Triggers**: Ensure only actionable events trigger high-urgency incidents.
+- **Use Service Isolation**: Configure service-specific channels for non-critical alerts.
+- **Review Regularly**: Check Event Logs to identify noisy services.
 
-AWS sandbox status, origination identities, country-specific registration, opt-outs, and account spending limits can all affect delivery. Do not reuse the same IAM credentials as an unrelated Amazon SES provider.
+### Testing
 
-## Configure WhatsApp
+- **Test each provider** after configuration
+- **Test as different users** to verify routing
+- **Verify phone numbers** before relying on SMS
+- **Check spam folders** for email delivery
 
-WhatsApp uses Twilio's WhatsApp Business capability and is stored with the Twilio provider configuration.
+### Redundancy
 
-Required:
+- Configure **multiple channels** for critical services
+- SMS should always be a backup for on-call
+- Don't rely solely on email (can be delayed)
 
-- approved Twilio Content/Template SID (`whatsappContentSid`) required for message template dispatch;
-- recipient phone in E.164 format and enabled WhatsApp preference.
+---
 
-Test within Twilio's template and conversation-window rules. A normal SMS-capable Twilio number is not automatically WhatsApp-enabled.
+## Troubleshooting
 
-## Configure web push
+### Email Not Arriving
 
-### Administrator
+1. Check spam/junk folder
+2. Verify SMTP credentials
+3. Check if From Address is verified (SES, SendGrid)
+4. Test with "Send Test Email"
+5. Check **Event Logs** for errors
 
-1. Open **Web Push (PWA)**.
-2. Generate a VAPID key pair or provide a base64url public key, private key, and `mailto:` subject.
-3. Save and enable the provider.
-4. Serve OpsKnight over HTTPS; localhost is the only insecure-origin exception used by the client.
+### SMS Not Received
 
-Key rotation retains previous VAPID keys so existing devices can continue while new registrations use the latest key. Preserve old keys until device migration is complete.
+1. Verify phone number format (+1234567890)
+2. Check Twilio console for delivery status
+3. Verify user has SMS enabled
+4. Check Twilio account balance
+5. Verify phone number can receive SMS
 
-### User/device
+### Push Not Working
 
-1. Open the mobile/PWA notification settings in a browser with service-worker and PushManager support.
-2. Allow browser notifications.
-3. Select **Enable Push Notifications** to register `/sw.js` and save the browser endpoint to the account.
-4. Select **Test Push** and confirm it opens the mobile notifications destination.
+1. User must accept notification permission
+2. **Check Push notifications are enabled** in Settings → Profile
+3. Verify VAPID keys
+4. Check service worker is installed (PWA)
 
-Push registration is per browser profile/device. Clearing site data, denying permission, changing origin, or losing the subscription requires registration again. Installing the PWA is recommended for Android reliability but does not replace permission and subscription.
+### Slack Not Posting
 
-## Configure Slack and service webhooks
+1. Verify OAuth connection is active
+2. Check bot has access to channel
+3. Re-authorize if permissions changed
+4. Check Slack channel exists
 
-Slack notification connection, interactive actions, and ChatOps war rooms have provider-specific security and routing. See [Slack notifications](../integrations/communication/slack.md), [Slack OAuth](../integrations/communication/slack-oauth-setup.md), and [Slack ChatOps](../integrations/communication/slack-chatops.md).
+---
 
-Service webhooks send lifecycle events independently of user paging. See [Custom webhooks](../integrations/custom/webhooks.md). Status-page webhooks are a third, separately configured webhook system documented in [Status page](../core-concepts/status-page.md).
+## Related Topics
 
-## User and team readiness
-
-For every on-call user:
-
-- [ ] account status is Active;
-- [ ] at least one external channel is enabled and usable;
-- [ ] phone number is E.164 when SMS/WhatsApp is enabled;
-- [ ] push is registered on the intended device;
-- [ ] Team notification participation is enabled for team-targeted paging;
-- [ ] a direct test policy reaches the user;
-- [ ] the user can open and acknowledge the incident.
-
-No automatic email fallback is added when a user has disabled every channel. OpsKnight creates the in-app notification and returns an external-delivery failure.
-
-## Notification history
-
-Notification History displays records in pages of 50 with:
-
-- channel and status (`PENDING`, `SENT`, or `FAILED` in current filters);
-- incident and message;
-- creation, sent, delivered, or failure timing when recorded;
-- attempt count, latency/pending duration, and error message;
-- search, channel/status/date filters, totals, and manual refresh.
-
-`SENT` means the configured sender returned success; it does not prove a human read the message. Some downstream providers do not supply a delivered receipt, so `deliveredAt` can remain empty.
-
-There is no manual Retry button in the history page. Correct the provider or recipient, then use a controlled new notification/incident workflow. Do not repeatedly retrigger a live incident without incident-commander approval.
-
-## Failure response
-
-### No notification record
-
-Check that the incident actually targeted the user/team/schedule, the policy ran, assignment and lifecycle event are correct, and the user was eligible. Review the incident timeline and escalation state.
-
-### `FAILED` email
-
-Check enabled provider, exact credentials, From identity/domain verification, SMTP TLS/port, SES region/permissions, recipient validity, and provider logs.
-
-### `FAILED` SMS or WhatsApp
-
-For Twilio, check credentials, sender capability, trial verification, regional permissions, and provider error text. For AWS SNS, check IAM permissions, region, sandbox/production status, origination requirements, opt-outs, and spending limits. For WhatsApp, also check Twilio templates and conversation-window rules.
-
-### Push does not arrive
-
-Check HTTPS, browser support and permission, service worker `/sw.js`, VAPID public/private pairing, saved subscription, user preference, OS/browser background restrictions, and Test Push.
-
-### Slack or webhook fails
-
-Check the service event selection, workspace/service configuration, secret/signature, URL safety and reachability, provider rate limit, and the provider-specific guide.
-
-### Notifications stop during provider outage
-
-Provider calls use circuit breakers to avoid cascading failure. A circuit-open attempt is recorded as failed without incrementing a normal provider-attempt count. Restore the provider and verify with a fresh controlled test; Notification History does not automatically replay every failed record.
-
-## Security and operations
-
-- Store API keys, auth tokens, SMTP passwords, VAPID private keys, and webhook secrets only in approved secret storage.
-- Restrict Notification Provider settings to Admins and audit changes.
-- Rotate credentials with an overlap/test plan; avoid changing all channels at once.
-- Remove device subscriptions and rotate exposed credentials during offboarding.
-- Monitor failure rate and pending age, not only provider health.
-- Avoid customer secrets in message fields sent to third parties.
-
-## Related topics
-
-- [Escalation policies](../core-concepts/escalation-policies.md)
-- [Users](../core-concepts/users.md)
-- [Teams](../core-concepts/teams.md)
-- [Services](../core-concepts/services.md)
-- [Integration catalog](../integrations/README.md)
+- [Slack Integration](../integrations/communication/slack) — Full Slack setup
+- [User Management](../core-concepts/users) — User notification preferences
+- [Escalation Policies](../core-concepts/escalation-policies) — Channel routing

@@ -7,14 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-23
+
 ### Added & Enhanced
 
+- **Administrator Health Center**: Consolidated supported database, migration, scheduler, worker, escalation, notification-provider, integration, public URL, encryption, version, and upgrade signals in one administrative view; retired the standalone performance dashboard and removed misleading process-memory and operator-attestation backup signals.
+- **Release-Quality Contract**: Added automated clean-install, previous-release upgrade, migration-failure, backup/restore, incident lifecycle, escalation delivery, Helm/Kustomize rendering, documentation coverage, and tagged AMD64/ARM64 release checks.
+- **Deployment Reliability**: Added fail-closed migration startup with bounded recovery and multi-architecture stable container publishing; retained fast AMD64-only builds for the continuously updated test image.
 - **Modern In-Process Avatar Ecosystem**: Migrated to local in-process `@dicebear/core` and `@dicebear/collection` rendering (eliminating external HTTP calls to `api.dicebear.com`); added professional vector styles (`bottts`, `shapes`, `initials`, `pixel-art`, `avataaars`, `lorelei`, `micah`, `identicon`) with gender-based selection, SVG XML entity sanitization, and strict CSP headers.
 - **Admin-Controlled OIDC Account Linking**: Added explicit, reversible admin controls in user management to approve or revoke OIDC account linking, preventing account takeovers while allowing secure initial sign-in for invited team members.
 - **Comprehensive Documentation & Operations Runbooks**: Published complete v1.3 capability inventory (`docs/V1_3_CAPABILITY_INVENTORY.md`), 15-minute golden path getting-started guide, production deployment runbooks for Docker, Kubernetes & Helm, database backup & disaster recovery procedures, and updated container registries to `ghcr.io/opsknight-labs/opsknight`.
 
 ### Security & Hardening
 
+- **Bootstrap, OIDC & Readiness Hardening**: Serialized first-administrator creation with conflict retry, prevented disabled users from being reactivated through OIDC linking, and replaced internal scheduler errors in public readiness responses with a safe status message.
+- **Dependency Security Baseline**: Updated Next.js, Auth.js, Nodemailer, and vulnerable transitive packages to patched releases identified by the release security scan.
 - **Admin-Only Event Logs & Audit Log Access**: Enforced `assertAdmin()` on the Event Logs page (`/events`) and Audit Log page (`/audit`); restricted Event Logs and Audit Log sidebar navigation links strictly to users with the `ADMIN` role (`requiresRole: ['ADMIN']`); removed restricted administrative links (Audit Logs, Notification Providers, Performance Monitoring) from the settings overview, navigation, and search for standard users and responders.
 - **API Security, IDOR Mitigation & Role Validation**: Added `assertCanViewIncident(id)` on incident telemetry context; converted session role checks to database-verified `assertAdmin()` on SLA definitions, public logs, and retention endpoints; added positive integer boundary validation (`1–3650`) for data retention policies; enforced team-scoped access on Slack test notifications and widget feeds.
 - **Structured Logging Redaction**: Enhanced logger sanitization before stdout/stderr and ingestion endpoints to redact authorization headers, bearer tokens, Slack bot tokens, AWS keys, phone numbers, and webhook secrets; added circular reference protection via `WeakSet`.
@@ -29,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Paging Reliability**: Restored orphaned escalation processing through a single atomic claim, preserved policy delays without immediately paging a fallback team, and eliminated duplicate service notifications on genuine escalation fallback.
 - **Mobile PWA & Accessibility (a11y)**: Restored trigger element focus on modal/dialog cleanup via `trapFocus`; added `role="switch"`, `aria-checked`, and Enter/Space keyboard handlers to `MobileThemeToggle` and `MobileBiometricToggle`; added `role="alertdialog"`, theme background tokens, and focus trapping to confirmation dialogs; added `role="listbox"` and `aria-expanded` to analytics date range picker; added `aria-label` and `aria-pressed` to schedule layer restriction day buttons; cleaned up chord keydown event listeners on timeout.
 - **Observability & Health Checks**: Cleared `setTimeout` timer handles in health check database probe; evaluated memory pressure against V8 maximum heap limit (`v8.getHeapStatistics().heap_size_limit`); added background scheduler state check; eliminated N+1 database queries in SLA breach monitor by pre-fetching active warning events.
 - **ChatOps & Postmortem Lifecycle**: Atomically reserved Slack pin records in transaction before note creation to eliminate duplicate notes; guarded Jira sync against out-of-order stale webhooks using event timestamps; included incident notes and sorted chronological timeline events in postmortem drafts.

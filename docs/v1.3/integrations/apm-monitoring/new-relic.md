@@ -13,7 +13,7 @@ Receive alerts from New Relic and create incidents automatically.
 ## Endpoint
 
 ```
-POST /api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
+POST /api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID
 ```
 
 ---
@@ -35,10 +35,10 @@ POST /api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID&integrationKey
 3. Select **Webhook**
 4. Configure:
 
-| Field            | Value                                                                                                                        |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Name**         | `OpsKnight`                                                                                                                  |
-| **Endpoint URL** | `https://YOUR_OPSKNIGHT_URL/api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
+| Field            | Value                                                                                    |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| **Name**         | `OpsKnight`                                                                              |
+| **Endpoint URL** | `https://YOUR_OPSKNIGHT_URL/api/integrations/newrelic?integrationId=YOUR_INTEGRATION_ID` |
 
 5. Click **Save destination**
 
@@ -149,13 +149,18 @@ Dedup keys are generated based on format:
 
 - **Incident format**: `newrelic-{incident.id}`
 - **Legacy format**: `newrelic-{alert.id}`
-- **APM format**: a 32-character SHA-256 digest of `newrelic-apm-{alertTitle}`, falling back to `alertType`
+- **APM format**: `newrelic-{alertTimestamp}`
 
 ---
 
 ## Security
 
-The v1.3 New Relic route authenticates with the integration ID and integration key. It does not verify the integration's optional signature secret or an `X-Signature` header. Keep the generated URL/key secret and use a trusted gateway if your policy requires an additional sender-verification layer.
+### Signature Verification (Optional)
+
+You can secure the webhook with HMAC signature verification:
+
+1. In OpsKnight, set a **Signing Secret** on the integration
+2. Include header: `X-Signature: sha256=<hmac_signature>`
 
 ---
 
@@ -173,7 +178,7 @@ The v1.3 New Relic route authenticates with the integration ID and integration k
 Send a test payload directly:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/newrelic?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/newrelic?integrationId=YOUR_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "account_id": 12345,

@@ -1,185 +1,732 @@
 ---
-title: How integrations work
-description: Understand inbound routing, authentication, signing, normalization, deduplication, recovery, and safe credential operations.
-order: 12
+order: 8
+title: Integrations
+description: Complete guide to alert ingestion and notification integrations
 ---
 
-# How integrations work
+# Integrations
 
-Provider-native integrations convert an external webhook into the same trigger, acknowledge, and resolve model used by the Events API. They are service-scoped: the selected integration record determines which service receives the event.
+OpsKnight integrations connect your monitoring stack to incident management. This guide covers both **alert ingestion** (getting alerts into OpsKnight) and **notification channels** (sending alerts out to responders).
 
-```text
-Provider webhook
-  → integration ID and key validation
-  → optional provider-specific signature validation
-  → payload schema and normalization
-  → service-scoped deduplication
-  → incident action
-  → escalation and configured outbound notifications
+<!-- placeholder:integrations-overview -->
+<!-- Add: Diagram showing alert sources → OpsKnight → notification channels -->
+
+---
+
+## Integration Types
+
+OpsKnight has two categories of integrations:
+
+| Type                      | Purpose                              | Direction |
+| ------------------------- | ------------------------------------ | --------- |
+| **Alert Ingestion**       | Receive alerts from monitoring tools | Inbound   |
+| **Notification Channels** | Send alerts to responders            | Outbound  |
+
+```
+Alert Sources (Datadog, Prometheus, etc.)
+              │
+              ▼
+        ┌───────────┐
+        │ OpsKnight │
+        │ Incidents │
+        └─────┬─────┘
+              │
+              ▼
+Notification Channels (Email, Slack, SMS, etc.)
 ```
 
-See the [integration catalog](../integrations/README.md) for exact routes and vendor guides.
+---
 
-## Create an inbound integration
+# Part 1: Alert Ingestion Integrations
 
-Application **Responders** and **Admins** can manage service integrations.
+Alert ingestion integrations bring alerts from your monitoring tools into OpsKnight, creating and managing incidents automatically.
 
-1. Open **Services**, select the receiving service, and open **Integrations**.
-2. Select the provider type and enter a descriptive unique name.
-3. Create the integration.
-4. Copy its integration ID, provider-native URL, and generated integration key.
-5. If the provider can sign raw webhooks using the scheme supported by its OpsKnight route, rotate/create a signature secret and configure the same value at the provider.
-6. Send a synthetic trigger and recovery.
+## How Alert Ingestion Works
 
-An integration record contains its ID, type, service, generated 32-character hexadecimal key, enabled state, and optional signature secret.
+1. **External system** sends a webhook to OpsKnight
+2. **OpsKnight validates** the request (authentication, signature)
+3. **Payload is transformed** to a standard event format
+4. **Deduplication** checks for existing incidents
+5. **Incident is created** or updated
+6. **Escalation policy** triggers notifications
 
-## Authenticate provider-native routes
-
-The standard native route shape is:
-
-```text
-POST /api/integrations/PROVIDER?integrationId=INTEGRATION_ID
+```
+POST /api/integrations/{type}?integrationId=xxx
+  OR
+POST /api/events (with routing key)
+              │
+              ▼
+    ┌─────────────────────┐
+    │   Authentication    │
+    │ (Integration key or │
+    │   API key + scope)  │
+    └─────────┬───────────┘
+              │
+              ▼
+    ┌─────────────────────┐
+    │ Signature Verify    │
+    │ (if secret set)     │
+    └─────────┬───────────┘
+              │
+              ▼
+    ┌─────────────────────┐
+    │ Payload Transform   │
+    │ (Datadog → Event)   │
+    └─────────┬───────────┘
+              │
+              ▼
+    ┌─────────────────────┐
+    │   Deduplication     │
+    │ (same dedup_key?)   │
+    └─────────┬───────────┘
+              │
+              ▼
+    ┌─────────────────────┐
+    │  Create/Update      │
+    │    Incident         │
+    └─────────────────────┘
 ```
 
-The request must also provide the integration key. Accepted forms are:
+---
 
-```http
-Authorization: Bearer INTEGRATION_KEY
+## Supported Alert Sources (23+)
+
+### Monitoring & APM
+
+| Integration                 | Description                         |
+| --------------------------- | ----------------------------------- |
+| **Datadog**                 | Full Datadog monitor alerts         |
+| **Prometheus Alertmanager** | Prometheus/Alertmanager alerts      |
+| **Grafana**                 | Grafana alerting (unified & legacy) |
+| **New Relic**               | New Relic alert policies            |
+| **Dynatrace**               | Dynatrace problem notifications     |
+| **AppDynamics**             | AppDynamics health violations       |
+| **Elastic/Kibana**          | Elasticsearch Watcher alerts        |
+| **Honeycomb**               | Honeycomb triggers                  |
+| **Splunk Observability**    | Splunk detector alerts              |
+| **Sentry**                  | Sentry issue alerts                 |
+
+### Cloud Providers
+
+| Integration                 | Description               |
+| --------------------------- | ------------------------- |
+| **AWS CloudWatch**          | CloudWatch alarms via SNS |
+| **Azure Monitor**           | Azure Monitor alerts      |
+| **Google Cloud Monitoring** | GCP alerts via Pub/Sub    |
+
+### CI/CD & DevOps
+
+| Integration   | Description                        |
+| ------------- | ---------------------------------- |
+| **GitHub**    | Workflow failures, security alerts |
+| **GitLab**    | Pipeline failures, alerts          |
+| **Bitbucket** | Pipeline notifications             |
+
+### Uptime Monitoring
+
+| Integration       | Description               |
+| ----------------- | ------------------------- |
+| **UptimeRobot**   | Uptime monitor alerts     |
+| **Pingdom**       | Pingdom check alerts      |
+| **Better Uptime** | Better Uptime monitors    |
+| **Uptime Kuma**   | Self-hosted uptime alerts |
+
+### Other
+
+| Integration         | Description                        |
+| ------------------- | ---------------------------------- |
+| **Events API V2**   | Generic API (PagerDuty-compatible) |
+| **Generic Webhook** | Flexible custom webhook            |
+
+---
+
+## Creating an Integration
+
+### Step 1: Navigate to Service Integrations
+
+1. Go to **Services** in the sidebar
+2. Select the service to receive alerts
+3. Click the **Integrations** tab
+
+<!-- placeholder:service-integrations-tab -->
+<!-- Add: Screenshot of service integrations page -->
+
+### Step 2: Add Integration
+
+1. Click **Add Integration**
+2. Select the integration type (e.g., Datadog, Prometheus)
+3. Enter a **Name** (e.g., "Production Datadog Monitors")
+4. Click **Create**
+
+### Step 3: Copy Integration Details
+
+After creation, you'll see:
+
+- **Webhook URL**: The endpoint to configure in your monitoring tool
+- **Integration Key**: Unique routing key for this integration
+
+<!-- placeholder:integration-details -->
+<!-- Add: Screenshot showing integration card with key and URL -->
+
+### Step 4: Configure Your Monitoring Tool
+
+Use the webhook URL and integration key to configure alerts in your monitoring system.
+
+---
+
+## Integration Fields Explained
+
+When you create an integration, OpsKnight generates and stores:
+
+| Field               | Description                                  | Generated?    | Required?         |
+| ------------------- | -------------------------------------------- | ------------- | ----------------- |
+| **id**              | Unique integration identifier                | Auto          | -                 |
+| **name**            | Display name (e.g., "Prod Datadog")          | User input    | Yes               |
+| **type**            | Integration type (DATADOG, PROMETHEUS, etc.) | User select   | Yes               |
+| **key**             | 32-character hex routing key                 | Auto          | -                 |
+| **signatureSecret** | HMAC secret for webhook verification         | User input    | **No (Optional)** |
+| **enabled**         | Toggle to enable/disable                     | Default: true | -                 |
+| **serviceId**       | Which service receives alerts                | User select   | Yes               |
+
+### About the Integration Key (Routing Key)
+
+The **integration key** (also called routing key) is:
+
+- **Auto-generated**: 32-character hexadecimal string
+- **Unique per integration**: Each integration has its own key
+- **Used for authentication**: External systems send this key to identify the integration
+- **Tied to a service**: Routes alerts to the correct service
+
+Example key: `a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6`
+
+### About the Signature Secret (Optional)
+
+The **signature secret** is:
+
+- **Optional**: Not required, but recommended for security
+- **User-configured**: You set this after creation
+- **Used for verification**: Validates webhook requests are genuine
+- **HMAC-SHA256**: Standard cryptographic verification
+
+**When to use a signature secret**:
+
+- Your monitoring tool supports webhook signing (most do)
+- You want to verify requests are from your monitoring tool
+- You're in a production environment
+
+---
+
+## Authentication Methods
+
+### Method 1: Integration Key via Events API
+
+Send alerts using the routing key in the Authorization header:
+
+```bash
+curl -X POST https://your-opsknight.com/api/events \
+  -H "Authorization: Token token=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_action": "trigger",
+    "dedup_key": "unique-alert-id",
+    "payload": {
+      "summary": "High CPU on web-01",
+      "source": "monitoring",
+      "severity": "critical"
+    }
+  }'
 ```
 
-```http
-Authorization: Token token=INTEGRATION_KEY
+### Method 2: Integration-Specific Webhooks
+
+Configure your monitoring tool to send webhooks directly:
+
+```
+https://your-opsknight.com/api/integrations/datadog?integrationId=<integration_id>
 ```
 
-```http
-X-Integration-Key: INTEGRATION_KEY
+Each integration type has its own endpoint that understands the native payload format.
+
+### Method 3: API Key with Scopes
+
+For programmatic access with specific permissions:
+
+```bash
+curl -X POST https://your-opsknight.com/api/events \
+  -H "Authorization: Bearer sk_live_abc123..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service_id": "svc_xyz",
+    "event_action": "trigger",
+    ...
+  }'
 ```
 
-`X-API-Key` is also accepted. For senders that cannot set headers, `integrationKey`, `integration_key`, or `key` query parameters are fallback options.
+Requires `events:write` scope.
 
-Prefer a header. Query values leak more easily through provider UI, browser history, proxies, access logs, and monitoring. The integration ID is not a credential and does not authorize a request by itself.
+---
 
-The Events API uses the integration/routing key without an integration ID; follow the [Events API](../api/events.md) contract for that path.
+## Signature Verification
 
-## Signature verification
+### Why Use Signature Verification?
 
-When `INTEGRATION_VERIFY_SIGNATURES` is not `false`, a stored signature secret activates the signature check for routes that do not explicitly skip it. The exact header and message construction depend on the route's provider mode, such as GitHub, GitLab, Sentry, Grafana, Vercel, or generic HMAC.
+Signature verification ensures:
 
-Do not assume every vendor uses `X-Signature` or the same encoding. Follow the provider guide and validate a deliberately bad signature before production. The integration key remains required even when HMAC succeeds.
+- Webhooks are from your monitoring tool, not attackers
+- Payloads haven't been tampered with
+- Replay attacks are prevented
 
-If no signature secret is stored, key validation is the baseline request authentication. If a provider cannot generate the required signature format, keep the key in a header, restrict network ingress where possible, and document the limitation.
+### Setting Up Signature Verification
 
-## Normalization
+1. Open the integration in OpsKnight
+2. Click **Set Signature Secret**
+3. Enter a secret (or generate one)
+4. Copy the secret to your monitoring tool's webhook settings
 
-Each adapter maps the vendor payload to:
+### How Verification Works
+
+```
+1. Monitoring tool computes HMAC-SHA256:
+   signature = HMAC-SHA256(payload_body, secret)
+
+2. Sends header:
+   X-Signature: sha256=<computed_signature>
+
+3. OpsKnight verifies:
+   expected = HMAC-SHA256(received_body, stored_secret)
+   if expected != received_signature → 401 Unauthorized
+```
+
+### Provider-Specific Headers
+
+Different tools use different signature headers:
+
+| Provider | Header                                 |
+| -------- | -------------------------------------- |
+| GitHub   | `X-Hub-Signature-256`                  |
+| GitLab   | `X-Gitlab-Token`                       |
+| Sentry   | `Sentry-Hook-Signature`                |
+| Slack    | `X-Slack-Signature`                    |
+| Grafana  | `X-Grafana-Signature`                  |
+| Generic  | `X-Signature` or `X-Webhook-Signature` |
+
+---
+
+## Events API V2 Format
+
+The Events API uses a PagerDuty-compatible format that works with any tool:
+
+### Trigger Event
 
 ```json
 {
   "event_action": "trigger",
-  "dedup_key": "provider-stable-identity",
+  "dedup_key": "srv-web-01/high-cpu",
   "payload": {
-    "summary": "Human-readable alert",
-    "source": "provider or monitor",
+    "summary": "High CPU usage on web-01 (95%)",
+    "source": "monitoring-system",
     "severity": "critical",
-    "custom_details": {}
+    "custom_details": {
+      "cpu_percent": 95,
+      "host": "web-01",
+      "region": "us-east-1"
+    }
   }
 }
 ```
 
-Allowed actions are `trigger`, `acknowledge`, and `resolve`. Allowed normalized severities are `critical`, `error`, `warning`, and `info`. See [Urgency and severity mapping](urgency-mapping.md).
+### Acknowledge Event
 
-Provider payload detail is stored as alert context and must be treated as potentially sensitive. Keep secrets and unnecessary customer data out of webhook fields.
+```json
+{
+  "event_action": "acknowledge",
+  "dedup_key": "srv-web-01/high-cpu"
+}
+```
 
-## Deduplication and recovery
+### Resolve Event
 
-Deduplication is not a global SHA-256 fingerprinting service. Each adapter deliberately constructs a stable key from provider fields such as alarm ID, monitor ID, repository/workflow, check identity, or issue ID. Event processing matches the key within the integration's service.
+```json
+{
+  "event_action": "resolve",
+  "dedup_key": "srv-web-01/high-cpu"
+}
+```
 
-- A trigger with the same service and key reuses an active Open, Acknowledged, Snoozed, or Suppressed incident.
-- An acknowledge or resolve action needs the same service and key to find the incident.
-- A key is capped at 512 characters.
-- A different integration attached to the same service can still match if it produces the same key; design adapter keys to avoid collisions.
-- A recovery with a changed key cannot close the original incident.
+### Event Fields
 
-Test the provider's real recovery payload. A provider page showing “webhook delivered” is not evidence that OpsKnight resolved the intended incident.
+| Field                    | Required      | Description                            |
+| ------------------------ | ------------- | -------------------------------------- |
+| `event_action`           | Yes           | `trigger`, `acknowledge`, or `resolve` |
+| `dedup_key`              | Yes           | Unique identifier for deduplication    |
+| `payload.summary`        | Yes (trigger) | Alert title/summary                    |
+| `payload.source`         | Yes (trigger) | Origin system name                     |
+| `payload.severity`       | No            | `critical`, `error`, `warning`, `info` |
+| `payload.custom_details` | No            | Additional metadata (any JSON)         |
 
-## Rate limiting and responses
+### Deduplication
 
-Standard provider routes apply a per-integration PostgreSQL-backed rate limit unless `INTEGRATION_RATE_LIMIT=false` or a route explicitly skips it. The default integration limit is defined by the integration rate-limit configuration; rely on response headers rather than a hard-coded old-doc number.
+The `dedup_key` is crucial for deduplication:
 
-Common results:
+- Same `dedup_key` = same incident
+- New triggers update existing open incident
+- Resolve events close the matching incident
+- Choose keys that uniquely identify the alert (e.g., `host/check`)
 
-|      Status | Meaning                                                     | Sender action                                                |
-| ----------: | ----------------------------------------------------------- | ------------------------------------------------------------ |
-|       `202` | Valid payload accepted and processed into an event result.  | Record success.                                              |
-|       `400` | Missing integration ID, malformed payload, or schema error. | Fix configuration; do not retry unchanged data.              |
-| `401`/`403` | Invalid key or signature.                                   | Stop retries and rotate/fix credentials.                     |
-|       `404` | Integration record not found.                               | Recreate provider URL from the service.                      |
-|       `429` | Integration limit exceeded.                                 | Honor rate-limit headers and retry with backoff.             |
-|       `500` | Unexpected processing failure.                              | Retry with bounded exponential backoff and investigate logs. |
+---
 
-Not every older route returns an identical error envelope. Test the exact provider path.
+## Integration-Specific Setup
 
-## Enable, disable, rotate, and remove
+### Datadog
 
-### Disable
+1. In Datadog, go to **Integrations → Webhooks**
+2. Create a new webhook:
+   - **Name**: OpsKnight
+   - **URL**: `https://your-opsknight.com/api/integrations/datadog?integrationId=<id>`
+3. In your monitors, add the `@webhook-OpsKnight` notification
 
-The enabled flag is intended to stop event intake while preserving the record. In v1.3, legacy middleware rejects disabled integrations, but the newer standardized handler passes the flag to processors without consistently rejecting it. Verify the exact provider route before relying on the toggle, and treat key removal, network controls, or deletion as the effective stop when strict revocation is required. Track this behavior as a product defect rather than documenting the toggle as a universal security boundary.
+**Payload transformation**:
 
-### Rotate the integration key
+- `alert_type` → `severity` (error → critical, warning → warning)
+- `aggregation_key` → `dedup_key`
+- `title` → `summary`
 
-The UI currently generates the routing key when the integration is created; it exposes rotation for the optional signature secret, not a dedicated in-place routing-key rotation. If the routing key is exposed, create a replacement integration, update and test the sender, then delete the old integration.
+### Prometheus Alertmanager
 
-### Rotate or clear a signature secret
+Add to `alertmanager.yml`:
 
-1. Coordinate a maintenance window or provider dual-secret capability.
-2. Rotate the secret in OpsKnight.
-3. Update the provider immediately.
-4. Send valid and invalid test requests.
-5. Clear a secret only when signature verification is intentionally being removed.
+```yaml
+receivers:
+  - name: opsknight
+    webhook_configs:
+      - url: 'https://your-opsknight.com/api/integrations/prometheus?integrationId=<id>'
+        send_resolved: true
+```
 
-### Delete
+**Payload transformation**:
 
-Deleting an integration immediately invalidates its ID/key path and cannot be undone from the UI. Remove or update the provider destination first, preserve required audit evidence, and confirm another source covers the service.
+- `status: firing` → trigger event
+- `status: resolved` → resolve event
+- `labels.alertname` → summary
+- `labels.severity` → severity
+- Fingerprint or label hash → dedup_key
 
-## Test without creating noise
+### Grafana
 
-Use an isolated service and a unique key such as `docs-test/PROVIDER/TIMESTAMP`:
+1. In Grafana, go to **Alerting → Contact points**
+2. Add new contact point:
+   - **Type**: Webhook
+   - **URL**: `https://your-opsknight.com/api/integrations/grafana?integrationId=<id>`
+3. Create notification policy using this contact point
 
-1. Send the smallest valid trigger.
-2. Confirm service, source, summary, urgency, and custom detail.
-3. Repeat the trigger and confirm no duplicate incident.
-4. Send acknowledge if the provider supports it.
-5. Send recovery and confirm the same incident resolves.
-6. Send a bad key, then a bad signature, and confirm rejection.
-7. Disable the integration and confirm rejection/behavior.
-8. Review Event Logs, incident timeline, notification history, and server logs.
+**Supports both formats**:
+
+- Grafana unified alerting (new)
+- Prometheus Alertmanager format
+
+### Generic Webhook
+
+For tools not explicitly supported, use the generic webhook with custom field mapping:
+
+```
+URL: https://your-opsknight.com/api/integrations/webhook?integrationId=<id>
+```
+
+Configure field mapping in OpsKnight:
+
+- `summaryField`: Path to alert title (e.g., `alert.title`)
+- `severityField`: Path to severity (e.g., `level`)
+- `dedupKeyField`: Path to unique ID (e.g., `alert_id`)
+- `actionField`: Path to action (e.g., `status`)
+- `triggerValues`: Values that mean "trigger" (e.g., `["fired", "alert"]`)
+- `resolveValues`: Values that mean "resolve" (e.g., `["ok", "resolved"]`)
+
+---
+
+## Rate Limiting
+
+Integration webhooks are rate-limited to prevent abuse:
+
+| Limit             | Value                              |
+| ----------------- | ---------------------------------- |
+| Per integration   | 120 requests/minute                |
+| Response on limit | HTTP 429 with `Retry-After` header |
+
+If rate-limited:
+
+1. Queue alerts in your monitoring tool
+2. Retry with exponential backoff
+3. Respect the `Retry-After` header
+
+---
+
+## Enabling/Disabling Integrations
+
+Toggle integrations without deleting them:
+
+1. Open the service integrations page
+2. Find the integration
+3. Click the **Enable/Disable** toggle
+
+When disabled:
+
+- Webhooks return 403 Forbidden
+- No incidents are created
+- Easy to re-enable later
+
+---
+
+# Part 2: Notification Integrations
+
+Notification integrations send alerts to responders through various channels.
+
+## Notification Channels
+
+| Channel      | Description                           |
+| ------------ | ------------------------------------- |
+| **Email**    | SMTP, SendGrid, Resend                |
+| **SMS**      | Twilio, AWS SNS                       |
+| **Push**     | Browser/mobile push via OneSignal     |
+| **Slack**    | Slack workspace integration           |
+| **Webhook**  | Google Chat, Teams, Discord, Telegram |
+| **WhatsApp** | WhatsApp Business API                 |
+
+---
+
+## Service-Level Notification Settings
+
+Each service can have its own notification preferences.
+
+### Configure Service Notifications
+
+1. Open the service
+2. Go to **Settings**
+3. Configure notification options:
+
+| Setting                    | Description                           |
+| -------------------------- | ------------------------------------- |
+| **Notification Channels**  | Which channels to use                 |
+| **Notify on Triggered**    | Send notification when incident opens |
+| **Notify on Acknowledged** | Send notification when acknowledged   |
+| **Notify on Resolved**     | Send notification when resolved       |
+| **Notify on SLA Breach**   | Send notification on SLA breach       |
+
+### Channel Priority
+
+Channels are tried in order based on user preferences:
+
+1. Push notification (fastest)
+2. Slack (if workspace connected)
+3. SMS (for high urgency)
+4. Email (always sent)
+
+---
+
+## Slack Integration
+
+### Connecting Slack
+
+1. Go to **Settings → Integrations → Slack**
+2. Click **Connect to Slack**
+3. Authorize OpsKnight in your workspace
+4. Select a default notification channel
+
+### Slack Features
+
+- **Incident notifications** in channels
+- **Interactive buttons** (Acknowledge, Resolve)
+- **Thread updates** for incident timeline
+- **User mentions** for on-call responders
+- **Slash commands** (optional)
+
+### Per-Service Slack Channels
+
+Configure different Slack channels per service:
+
+1. Open the service
+2. Go to **Settings → Notifications**
+3. Select the Slack channel for this service
+
+---
+
+## Webhook Integrations (Outbound)
+
+Send notifications to external systems via webhooks.
+
+### Supported Destinations
+
+| Type                | Description                  |
+| ------------------- | ---------------------------- |
+| **Google Chat**     | Google Workspace chat        |
+| **Microsoft Teams** | Teams channels via connector |
+| **Discord**         | Discord server webhooks      |
+| **Telegram**        | Telegram bot notifications   |
+| **Generic**         | Any HTTP endpoint            |
+
+### Creating a Webhook Integration
+
+1. Go to **Settings → Integrations → Webhooks**
+2. Click **Add Webhook**
+3. Configure:
+   - **Name**: Display name
+   - **Type**: Google Chat, Teams, Discord, Telegram, or Generic
+   - **URL**: Webhook endpoint URL
+   - **Secret**: HMAC secret (optional)
+   - **Channel**: Channel identifier (if applicable)
+
+### Webhook Payload Format
+
+**Generic webhook payload**:
+
+```json
+{
+  "event": "incident.triggered",
+  "timestamp": "2024-01-23T10:30:00Z",
+  "incident": {
+    "id": "inc_abc123",
+    "title": "High CPU on web-01",
+    "status": "OPEN",
+    "urgency": "HIGH",
+    "service": {
+      "id": "svc_xyz",
+      "name": "Web Application"
+    },
+    "assignee": {
+      "id": "usr_123",
+      "name": "Jane Doe"
+    },
+    "url": "https://opsknight.example.com/incidents/inc_abc123"
+  }
+}
+```
+
+---
+
+## Email Configuration
+
+### Email Providers
+
+| Provider     | Configuration                  |
+| ------------ | ------------------------------ |
+| **Resend**   | API key                        |
+| **SendGrid** | API key                        |
+| **SMTP**     | Host, port, username, password |
+
+### Configure via Settings
+
+1. Go to **Settings → Notifications → Email**
+2. Select provider and enter credentials
+3. Test with **Send Test Email**
+
+### Configure via Environment
+
+```bash
+# SMTP
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=user@example.com
+SMTP_PASSWORD=password
+SMTP_FROM=noreply@example.com
+
+# Or Resend
+RESEND_API_KEY=re_xxx
+
+# Or SendGrid
+SENDGRID_API_KEY=SG.xxx
+```
+
+---
+
+## SMS Configuration
+
+### Twilio
+
+```bash
+TWILIO_ACCOUNT_SID=ACxxx
+TWILIO_AUTH_TOKEN=xxx
+TWILIO_PHONE_NUMBER=+1234567890
+```
+
+### AWS SNS
+
+```bash
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=xxx
+AWS_SECRET_ACCESS_KEY=xxx
+```
+
+### User Phone Numbers
+
+Users must add their phone number in **Profile → Contact Methods** to receive SMS.
+
+---
+
+## Push Notifications
+
+### OneSignal Setup
+
+```bash
+ONESIGNAL_APP_ID=xxx
+ONESIGNAL_API_KEY=xxx
+```
+
+### User Opt-In
+
+Users enable push notifications via:
+
+1. Installing the PWA
+2. Allowing notification permissions
+3. Device registered automatically
+
+---
+
+## Best Practices
+
+### For Alert Ingestion
+
+- **Use signature verification** in production
+- **Choose meaningful dedup keys** (e.g., `host/check/severity`)
+- **Send resolve events** when alerts clear
+- **Test integrations** before going live
+- **Monitor rate limits** if sending many alerts
+
+### For Notifications
+
+- **Enable multiple channels** for critical services
+- **Configure service-level channels** for team-specific Slack
+- **Set up SMS** for high-urgency incidents
+- **Test notification flow** with a test incident
+
+---
 
 ## Troubleshooting
 
-### Request says `integrationId is required`
+### Integration Not Receiving Alerts
 
-Use the exact URL copied from the service integration. The routing key cannot replace the record ID in the query.
+1. Check integration is **enabled**
+2. Verify **webhook URL** is correct in monitoring tool
+3. Check **integration key** matches
+4. Review OpsKnight logs for errors
 
-### Request says invalid integration key
+### Signature Verification Failing
 
-Confirm the key belongs to the same integration ID, remove whitespace, and use one accepted header form. Do not use a workspace API key.
+1. Verify **secret matches** in both systems
+2. Check **header name** is correct for your provider
+3. Ensure **payload isn't modified** in transit
 
-### Signature validation fails
+### Notifications Not Sending
 
-Compare the provider mode, header name, secret, raw request bytes, encoding, timestamp, and any prefix such as `sha256=`. JSON reserialization changes the signed bytes.
+1. Check **notification channel** is configured
+2. Verify **user contact methods** are set
+3. Check **service notification settings**
+4. Review notification logs in incident timeline
 
-### Repeated alerts create duplicates
+---
 
-Inspect the provider guide's deduplication source and compare actual trigger payloads. Remove timestamps or random values from the identity at the provider when configurable.
+## Related Topics
 
-### Recovery does not resolve
-
-Compare integration/service and the normalized deduplication key between trigger and recovery. Check whether the adapter recognized the recovery state.
-
-## Related topics
-
-- [Integration catalog](../integrations/README.md)
-- [Events API](../api/events.md)
-- [Services](services.md)
-- [Incident management](incidents.md)
-- [Notifications](../administration/notifications.md)
+- [Services](./services) — Service configuration
+- [Escalation Policies](./escalation-policies) — Notification routing
+- [Events API](../api/events) — API documentation
+- [Notifications](../administration/notifications) — Channel setup
+- [Slack Integration](../integrations/communication/slack) — Detailed Slack setup

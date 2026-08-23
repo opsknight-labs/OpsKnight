@@ -1,147 +1,611 @@
 ---
-title: Postmortems
-description: Document resolved incidents and turn lessons into owned corrective work
 order: 11
+title: Postmortems
+description: Document incidents, identify root causes, and track improvements with blameless postmortems
 ---
 
 # Postmortems
 
-OpsKnight postmortems capture what happened, the impact, why it happened, how service was restored, what the team learned, and which corrective actions have owners. A postmortem belongs to exactly one resolved incident, and an incident can have at most one postmortem.
+Postmortems (also called Post-Incident Reviews or PIRs) document what happened during an incident, why it happened, and what you'll do to prevent recurrence. OpsKnight provides a structured workflow for creating, reviewing, and tracking postmortems.
 
-## Permissions and lifecycle
+<!-- placeholder:postmortem-overview -->
+<!-- Add: Screenshot of a postmortem detail page -->
 
-- Any authenticated user can view the Postmortems list.
-- Responders and administrators can create, edit, publish, archive, and delete postmortems.
-- A postmortem can be created only for an incident whose status is **Resolved**.
-- The supported statuses are **Draft**, **Published**, and **Archived**.
-- There is no separate `IN_REVIEW` state or approval workflow in v1.3.
+---
 
-The `isPublic` setting controls whether a published review is eligible for the public status-page postmortem view. Review its content for secrets, personal data, internal URLs, and exploitable implementation details before making it public.
+## Why Postmortems Matter
 
-## Choose incidents that need a review
+| Without Postmortems         | With Postmortems                 |
+| --------------------------- | -------------------------------- |
+| Same incidents repeat       | Learn and prevent recurrence     |
+| Tribal knowledge            | Documented institutional memory  |
+| Blame culture               | Blameless improvement culture    |
+| No accountability for fixes | Tracked action items with owners |
 
-OpsKnight does not force a postmortem policy. Define one for your organization. Strong candidates include customer-impacting incidents, security or data events, missed SLA targets, repeated failure modes, long incidents, difficult handoffs, and useful near misses.
+---
 
-Do not use the postmortem to assign blame. Describe system conditions, signals, decisions, constraints, and opportunities for improvement.
+## Postmortem Workflow
 
-## Create a postmortem
+OpsKnight postmortems follow a structured lifecycle:
 
-1. Resolve the incident.
-2. Open **Postmortems**.
-3. Select **Create Postmortem**.
-4. Choose one of the most recent resolved incidents without a postmortem. The chooser loads up to 100 incidents.
-5. Enter a title (maximum 100 characters).
-6. Complete the relevant sections described below.
-7. Leave the status as **Draft** while the content is being reviewed.
-8. Save, reopen the postmortem, and check the rendered result.
+```
+DRAFT → IN_REVIEW → PUBLISHED → ARCHIVED
+```
 
-You can also create or open a postmortem from its incident page when that action is available.
+### Workflow States
 
-## Use Auto-Draft carefully
+| Status        | Description                         | Who Can Edit               |
+| ------------- | ----------------------------------- | -------------------------- |
+| **DRAFT**     | Initial creation, work in progress  | Author, Editors            |
+| **IN_REVIEW** | Ready for team review and feedback  | Author, Editors, Reviewers |
+| **PUBLISHED** | Finalized, visible to organization  | Admins only                |
+| **ARCHIVED**  | Historical record, no longer active | Admins only                |
 
-**Auto-Draft** builds a starting point from the incident's stored data and timeline. It is a deterministic product helper, not an external assertion that the generated root cause is correct.
+### State Transitions
 
-After generating a draft:
+```
+                    ┌─────────────┐
+                    │   DRAFT     │
+                    └──────┬──────┘
+                           │ Submit for Review
+                           ▼
+                    ┌─────────────┐
+              ┌─────│  IN_REVIEW  │─────┐
+              │     └──────┬──────┘     │
+    Request   │            │            │ Request
+    Changes   │            │ Approve    │ Changes
+              │            ▼            │
+              │     ┌─────────────┐     │
+              └────►│  PUBLISHED  │◄────┘
+                    └──────┬──────┘
+                           │ Archive
+                           ▼
+                    ┌─────────────┐
+                    │  ARCHIVED   │
+                    └─────────────┘
+```
 
-1. Check every timestamp and actor.
-2. Replace inferred root-cause language with evidence.
-3. Quantify impact from authoritative data.
-4. Remove irrelevant or sensitive timeline entries.
-5. Add owners and due dates to corrective actions.
+---
 
-## Fields and sections
+## When to Write a Postmortem
 
-| Section           | What to record                                                                                                                            |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Title             | A short identifier for this incident review                                                                                               |
-| Executive Summary | What happened, impact, duration, and restoration in plain language                                                                        |
-| Timeline          | Detection, escalation, mitigation, and resolution events with timestamps, titles, descriptions, and optional actors                       |
-| Impact            | Users affected, downtime, error rate, services affected, SLA breaches, revenue impact, API errors, and performance degradation when known |
-| Root Cause        | The technical and organizational conditions that produced the incident                                                                    |
-| Resolution        | What restored service and how recovery was verified                                                                                       |
-| Action Items      | Corrective work with owner, due date, priority, and status                                                                                |
-| Lessons Learned   | What helped, what hindered, and what should change                                                                                        |
-| Status            | Draft, Published, or Archived                                                                                                             |
-| Visibility        | Public or private status-page eligibility                                                                                                 |
+### Required Triggers
 
-Only the title is enforced as required by the form. Your organization's review policy may require additional fields.
+| Condition                          | Rationale                          |
+| ---------------------------------- | ---------------------------------- |
+| **Any HIGH urgency incident**      | Critical issues need documentation |
+| **Customer-impacting outage**      | External impact requires review    |
+| **Data loss or security incident** | Compliance and learning            |
+| **Incident duration > 1 hour**     | Extended incidents have lessons    |
 
-## Build the timeline
+### Recommended Triggers
 
-Timeline entries support four types:
+| Condition                          | Rationale                  |
+| ---------------------------------- | -------------------------- |
+| **Recurring incident pattern**     | Break the cycle            |
+| **Near-miss (almost critical)**    | Learn before it gets worse |
+| **Novel failure mode**             | Document new knowledge     |
+| **Cross-team coordination issues** | Process improvements       |
 
-- Detection
-- Escalation
-- Mitigation
-- Resolution
+### Skip Postmortem When
 
-Use the user's configured time zone consistently. Record why a decision was made, not only that a button was clicked. Preserve uncertainty where the team did not know something at the time.
+- Incident was false positive
+- Root cause is already well-documented
+- No meaningful learnings possible
+- Incident was immediately auto-resolved
 
-## Quantify impact
+---
 
-Use measured values when available and label estimates. The form supports users affected, downtime minutes, error rate, affected services, SLA breaches, revenue impact, API errors, and performance degradation.
+## Creating a Postmortem
 
-Avoid double-counting. For example, API errors and affected users measure different things and should not be summed into one impact number.
+### From an Incident
 
-## Track corrective actions
+1. Open a **resolved** incident
+2. Click **Create Postmortem**
+3. Incident data is automatically populated:
+   - Title and description
+   - Timeline events
+   - Affected services
+   - Participants
 
-Each action item supports:
+<!-- placeholder:create-postmortem-button -->
+<!-- Add: Screenshot showing the Create Postmortem button on an incident -->
 
-- title and description;
-- one active-user owner or no owner;
-- due date;
-- High, Medium, or Low priority;
-- Open, In Progress, Completed, or Blocked status;
-- an optional Jira issue link.
+### From Scratch
 
-The postmortem shows completion progress and marks past-due, incomplete items as overdue. The main **Action Items** page provides the organization-wide board and filters. See [Action Items](./action-items).
+1. Go to **Postmortems** in the sidebar
+2. Click **Create Postmortem**
+3. Link to an incident (optional)
+4. Fill in the template
 
-## Publish or archive
+### Postmortem Fields
 
-Before setting **Published**:
+| Field                    | Required | Description                           |
+| ------------------------ | -------- | ------------------------------------- |
+| **Title**                | Yes      | Clear, descriptive title              |
+| **Incident**             | No       | Linked incident (auto-populates data) |
+| **Summary**              | Yes      | Executive summary of what happened    |
+| **Timeline**             | Yes      | Chronological event sequence          |
+| **Impact**               | Yes      | Business and customer impact          |
+| **Root Cause**           | Yes      | Technical explanation of failure      |
+| **Resolution**           | Yes      | How the incident was resolved         |
+| **Action Items**         | Yes      | Follow-up tasks with owners           |
+| **Lessons Learned**      | No       | Key takeaways                         |
+| **Contributing Factors** | No       | Additional factors beyond root cause  |
+| **Detection**            | No       | How the incident was discovered       |
+| **Response**             | No       | Evaluation of incident response       |
 
-1. Confirm the incident is the correct one.
-2. Verify the summary, timeline, impact, root cause, and resolution.
-3. Give each required action item an accountable owner and realistic due date.
-4. Decide whether the postmortem is safe for public status-page display.
-5. Save and review the rendered page.
+---
 
-Published postmortems receive a publication timestamp. Use **Archived** for a historical record that should no longer appear as active review work.
+## Postmortem Sections
 
-## Find and manage postmortems
+### Summary
 
-The list shows totals for all, published, draft, and archived records. Filter by status and move through paginated results. The standard page size is 50.
+A brief executive summary (2-3 sentences) answering:
 
-Deleting a postmortem also deletes its normalized action items and their links through database relations. This is destructive and cannot be undone through the UI. Preserve required records before deletion.
+- What happened?
+- What was the impact?
+- How was it resolved?
 
-## Public status-page view
+**Example**:
 
-A public, published postmortem can be displayed at the status-page postmortem route for its incident when status-page settings allow post-incident reviews. This is not a generic unauthenticated share link for every private postmortem.
+> On January 15, 2024, the Payment API experienced a 45-minute outage due to a database connection pool exhaustion. Approximately 2,300 transactions failed during the incident. Service was restored by increasing connection pool limits and restarting affected pods.
 
-## Not supported as public v1.3 contracts
+### Timeline
 
-- There is no published Postmortems REST API in v1.3.
-- There is no postmortem approval/comment/reviewer workflow.
-- There is no custom postmortem-template editor.
-- There is no built-in postmortem meeting scheduler.
-- PDF, Markdown, HTML, and JSON postmortem exports are not published features.
-- Jira is the documented issue-tracker integration for action items; GitHub Issues, Linear, and Asana action-item sync are not published features.
+Chronological sequence of events with timestamps.
+
+| Time  | Event                                                         |
+| ----- | ------------------------------------------------------------- |
+| 14:00 | Monitoring alert triggered for elevated API latency           |
+| 14:03 | On-call engineer acknowledged alert                           |
+| 14:08 | Initial investigation started, high DB connection count noted |
+| 14:15 | Root cause identified: connection pool exhausted              |
+| 14:22 | Mitigation applied: increased pool size                       |
+| 14:30 | Service restored, monitoring confirmed                        |
+| 14:45 | Incident resolved, follow-up tasks created                    |
+
+**Timeline Best Practices**:
+
+- Use consistent timezone (UTC recommended)
+- Include who performed each action
+- Note key decisions and why they were made
+- Include any false starts or dead ends
+
+### Impact
+
+Quantify the business and customer impact.
+
+| Impact Type             | Measurement              |
+| ----------------------- | ------------------------ |
+| **Duration**            | 45 minutes               |
+| **Affected Users**      | ~2,300 customers         |
+| **Failed Transactions** | 2,347                    |
+| **Revenue Impact**      | $12,500 estimated        |
+| **SLA Breach**          | Yes, 99.9% target missed |
+| **Support Tickets**     | 47 tickets opened        |
+
+### Root Cause
+
+Technical explanation of why the incident occurred.
+
+**Structure**:
+
+1. **What failed**: The specific component or system
+2. **Why it failed**: The technical reason
+3. **Why wasn't it caught**: Detection gaps
+
+**Example**:
+
+> The database connection pool was configured with a maximum of 50 connections, inherited from initial deployment 2 years ago. Recent traffic growth increased average concurrent connections from 30 to 48. A traffic spike from a marketing campaign pushed connections over the limit, causing new requests to queue and timeout.
+>
+> The connection pool metrics were not monitored, so the gradual increase went unnoticed until the hard failure.
+
+### Resolution
+
+Steps taken to restore service.
+
+| Step | Action                           | Result                        |
+| ---- | -------------------------------- | ----------------------------- |
+| 1    | Increased connection pool to 100 | Pending connections processed |
+| 2    | Restarted 3 affected API pods    | Fresh connection pools        |
+| 3    | Verified transaction processing  | Normal throughput resumed     |
+| 4    | Monitored for 15 minutes         | No recurrence                 |
+
+### Action Items
+
+Tracked tasks to prevent recurrence.
+
+| Action                           | Owner  | Due Date | Priority | Status |
+| -------------------------------- | ------ | -------- | -------- | ------ |
+| Add connection pool monitoring   | @jane  | Jan 22   | HIGH     | Open   |
+| Set up alerts at 80% pool usage  | @jane  | Jan 22   | HIGH     | Open   |
+| Review all DB connection configs | @bob   | Jan 29   | MEDIUM   | Open   |
+| Document connection pool sizing  | @alice | Feb 5    | LOW      | Open   |
+
+### Lessons Learned
+
+Key takeaways for the team.
+
+**What went well**:
+
+- Alert fired within 3 minutes of issue
+- On-call responded quickly
+- Root cause identified in 12 minutes
+
+**What could be improved**:
+
+- No monitoring on connection pool utilization
+- Initial config was never revisited as traffic grew
+- Runbook didn't cover connection pool issues
+
+**Where we got lucky**:
+
+- Traffic spike was moderate; larger spike would have been worse
+- Database itself remained healthy
+
+---
+
+## Action Item Tracking
+
+### Action Item Fields
+
+| Field                | Required | Description                                                                                      |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| **Description**      | Yes      | What needs to be done                                                                            |
+| **Owner**            | Yes      | Person responsible                                                                               |
+| **Due Date**         | Yes      | Target completion date                                                                           |
+| **Priority**         | Yes      | HIGH, MEDIUM, LOW                                                                                |
+| **Status**           | Yes      | OPEN, IN_PROGRESS, COMPLETED, WONT_DO                                                            |
+| **Jira Integration** | No       | Create Jira issue (`+ Create Jira`) or link existing ticket (`SCRUM-42 ↗`) with live status sync |
+
+### Action Item Statuses
+
+| Status          | Meaning                                    |
+| --------------- | ------------------------------------------ |
+| **OPEN**        | Not yet started                            |
+| **IN_PROGRESS** | Work has begun                             |
+| **COMPLETED**   | Task finished                              |
+| **WONT_DO**     | Decided not to pursue (with justification) |
+
+### Tracking Progress
+
+View action item status across postmortems:
+
+1. Go to **Postmortems → Action Items**
+2. Filter by:
+   - Status (open, overdue, completed)
+   - Owner
+   - Priority
+   - Due date range
+3. Export for tracking meetings
+
+<!-- placeholder:action-items-dashboard -->
+<!-- Add: Screenshot of action items dashboard -->
+
+### Overdue Items
+
+OpsKnight highlights overdue action items:
+
+- Items past due date show warning indicator
+- Dashboard shows overdue count
+- Optional email reminders to owners
+
+---
+
+## Visibility & Sharing
+
+### Internal Visibility
+
+| Setting          | Who Can View                  |
+| ---------------- | ----------------------------- |
+| **Private**      | Only participants and editors |
+| **Team**         | Members of associated team(s) |
+| **Organization** | All organization members      |
+
+### External Sharing
+
+For customer communication:
+
+| Option             | Description                            |
+| ------------------ | -------------------------------------- |
+| **Public Summary** | Sanitized version for status page      |
+| **Customer Email** | Share directly with affected customers |
+| **Public Link**    | Generate shareable read-only link      |
+
+### What to Share Externally
+
+**Include**:
+
+- What happened (high level)
+- Impact duration
+- Resolution confirmation
+- Preventive measures (general)
+
+**Exclude**:
+
+- Internal tooling details
+- Specific infrastructure info
+- Individual names
+- Security-sensitive details
+
+---
+
+## Collaboration Features
+
+### Editors
+
+Add collaborators who can edit the postmortem:
+
+1. Open postmortem
+2. Click **Editors**
+3. Add team members
+4. Set permission level (Edit, Comment)
+
+### Comments & Discussion
+
+- Add comments to specific sections
+- @mention team members
+- Resolve comment threads
+- Track unresolved comments before publishing
+
+### Review Requests
+
+Request formal review before publishing:
+
+1. Change status to **IN_REVIEW**
+2. Add reviewers
+3. Reviewers receive notification
+4. Reviewers can approve or request changes
+5. All approvals required before publishing
+
+---
+
+## Templates
+
+### Default Template
+
+OpsKnight provides a default template with all standard sections.
+
+### Custom Templates
+
+Create organization-specific templates:
+
+1. Go to **Settings → Postmortems → Templates**
+2. Click **Create Template**
+3. Define:
+   - Template name
+   - Required sections
+   - Default content/prompts
+   - Custom fields
+4. Save template
+
+### Template Sections
+
+| Section           | Customizable |
+| ----------------- | ------------ |
+| Required/Optional | Yes          |
+| Default text      | Yes          |
+| Helper prompts    | Yes          |
+| Section order     | Yes          |
+| Custom sections   | Yes          |
+
+---
+
+## Linking to Incidents
+
+### Auto-Population
+
+When creating a postmortem from an incident:
+
+| Auto-Populated    | Source                   |
+| ----------------- | ------------------------ |
+| Title             | Incident title           |
+| Summary           | Incident description     |
+| Timeline          | Incident timeline events |
+| Affected Services | Incident services        |
+| Duration          | Incident timestamps      |
+| Participants      | Incident responders      |
+
+### Multiple Incidents
+
+Link multiple related incidents to one postmortem:
+
+- Common root cause affecting multiple services
+- Cascading failures
+- Related concurrent incidents
+
+---
+
+## Postmortem Meetings
+
+### Scheduling
+
+Schedule a postmortem review meeting:
+
+1. Open postmortem
+2. Click **Schedule Meeting**
+3. Select attendees (auto-suggests incident participants)
+4. Choose date/time
+5. Generate calendar invite
+
+### Meeting Integration
+
+| Platform        | Support                 |
+| --------------- | ----------------------- |
+| Google Calendar | Direct integration      |
+| Outlook/O365    | ICS file download       |
+| Zoom            | Meeting link generation |
+| Google Meet     | Meeting link generation |
+
+### Meeting Agenda
+
+Auto-generated agenda includes:
+
+1. Incident summary review
+2. Timeline walkthrough
+3. Root cause discussion
+4. Action item assignment
+5. Lessons learned
+
+---
+
+## Reporting & Analytics
+
+### Postmortem Metrics
+
+| Metric                       | Description                     |
+| ---------------------------- | ------------------------------- |
+| **Postmortems Created**      | Count per period                |
+| **Completion Rate**          | Draft → Published conversion    |
+| **Average Time to Complete** | Days from incident to published |
+| **Action Item Completion**   | % of items completed on time    |
+| **Overdue Items**            | Count of past-due actions       |
+
+### Trends
+
+Track patterns across postmortems:
+
+- Most common root causes
+- Frequently affected services
+- Recurring action item types
+- Team completion rates
+
+---
+
+## Best Practices
+
+### Blameless Culture
+
+| Do                             | Don't                        |
+| ------------------------------ | ---------------------------- |
+| Focus on systems and processes | Blame individuals            |
+| Ask "what" and "how"           | Ask "who"                    |
+| Assume good intentions         | Assume negligence            |
+| Treat failures as learning     | Treat failures as punishment |
+
+### Writing Quality
+
+- **Be specific**: Include exact times, metrics, commands
+- **Be factual**: Document what happened, not opinions
+- **Be complete**: Don't skip uncomfortable details
+- **Be constructive**: Every problem needs an action item
+
+### Timing
+
+| Phase            | Target                        |
+| ---------------- | ----------------------------- |
+| Draft started    | Within 24 hours of resolution |
+| Draft completed  | Within 48 hours               |
+| Review completed | Within 1 week                 |
+| Published        | Within 2 weeks                |
+
+### Action Items
+
+- Make them **specific** and **measurable**
+- Assign **one owner** (not a team)
+- Set **realistic due dates**
+- **Track to completion** (don't let items rot)
+- **Link to tickets** in your issue tracker
+
+---
+
+## API Access
+
+### Endpoints
+
+| Endpoint                            | Method | Description            |
+| ----------------------------------- | ------ | ---------------------- |
+| `/api/postmortems`                  | GET    | List postmortems       |
+| `/api/postmortems`                  | POST   | Create postmortem      |
+| `/api/postmortems/:id`              | GET    | Get postmortem details |
+| `/api/postmortems/:id`              | PATCH  | Update postmortem      |
+| `/api/postmortems/:id/action-items` | GET    | List action items      |
+| `/api/postmortems/:id/action-items` | POST   | Add action item        |
+
+### Example: Create Postmortem
+
+```bash
+curl -X POST "https://your-opsknight.com/api/postmortems" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Payment API Outage - Jan 15",
+    "incidentId": "inc_abc123",
+    "summary": "Database connection pool exhaustion caused 45-minute outage",
+    "status": "DRAFT"
+  }'
+```
+
+### Example: Add Action Item
+
+```bash
+curl -X POST "https://your-opsknight.com/api/postmortems/pm_xyz/action-items" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Add connection pool monitoring",
+    "ownerId": "user_jane",
+    "dueDate": "2024-01-22",
+    "priority": "HIGH"
+  }'
+```
+
+---
+
+## Integrations
+
+### Slack
+
+- Notify channel when postmortem is published
+- Share postmortem link with formatted preview
+- Receive action item reminders
+
+### Issue Trackers
+
+| Platform          | Features                                     |
+| ----------------- | -------------------------------------------- |
+| **Jira**          | Create issues from action items, sync status |
+| **GitHub Issues** | Create issues, link PRs                      |
+| **Linear**        | Create issues, track status                  |
+| **Asana**         | Create tasks from action items               |
+
+### Document Export
+
+| Format       | Use Case                         |
+| ------------ | -------------------------------- |
+| **PDF**      | Formal documentation, compliance |
+| **Markdown** | Wiki, documentation sites        |
+| **HTML**     | Email, web publishing            |
+| **JSON**     | Programmatic access              |
+
+---
 
 ## Troubleshooting
 
-| Problem                                               | Check                                                                                                     |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Create Postmortem** is unavailable                  | Your account must be a responder or administrator.                                                        |
-| An incident is not in the chooser                     | It must be Resolved, have no existing postmortem, and fall within the 100 most recent eligible incidents. |
-| Save says the incident is not resolved                | Reopen the incident, complete response work, and resolve it before creating the review.                   |
-| An action item is missing from the organization board | Save the postmortem and clear board filters.                                                              |
-| A postmortem is absent from the public status page    | Confirm it is Published, marked public, and the status page allows post-incident reviews.                 |
-| Jira actions fail                                     | Configure workspace Jira and the incident service's Jira mapping.                                         |
+### Can't Create Postmortem
 
-## Related guides
+1. Verify incident is **resolved**
+2. Check you have permission (incident participant or team member)
+3. Verify postmortem feature is enabled
 
-- [Incidents](./incidents)
-- [Action Items](./action-items)
-- [Status Page](./status-page)
-- [Jira Cloud](../integrations/issue-tracking/jira)
-- [Analytics](./analytics)
+### Can't Publish
+
+1. Check all required sections are completed
+2. Verify all reviewers have approved (if reviews required)
+3. Check you have publish permission
+
+### Action Items Not Syncing
+
+1. Verify integration is connected
+2. Check issue tracker permissions
+3. Review sync logs in integration settings
+
+---
+
+## Related Topics
+
+- [Incidents](./incidents) — Incident lifecycle
+- [Analytics](./analytics) — Performance metrics
+- [Teams](./teams) — Team management
+- [Status Page](./status-page) — Public communication

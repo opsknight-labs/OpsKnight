@@ -178,6 +178,59 @@ describe('Auth JWT + OIDC (unit)', () => {
     expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
   });
 
+  it('does not link or reactivate a disabled user with historical invite evidence', async () => {
+    const authOptions = await getAuthOptions();
+    const signIn = authOptions.callbacks?.signIn as unknown as (args: any) => Promise<boolean>;
+
+    (prisma.user.findUnique as any).mockResolvedValue({
+      id: 'u-disabled',
+      email: 'disabled@example.com',
+      name: 'Disabled',
+      role: 'USER',
+      status: 'DISABLED',
+    });
+    (prisma.userToken.findFirst as any).mockResolvedValue({ id: 'historical-invite' });
+
+    const result = await signIn({
+      user: { email: 'disabled@example.com', name: 'Disabled', id: 'oidc-sub' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
+      profile: { email_verified: true, sub: 'oidc-sub' },
+    });
+
+    expect(result).toBe(false);
+    expect(prisma.userToken.findFirst).not.toHaveBeenCalled();
+    expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a disabled user whose OIDC identity is already linked', async () => {
+    const authOptions = await getAuthOptions();
+    const signIn = authOptions.callbacks?.signIn as unknown as (args: any) => Promise<boolean>;
+
+    (prisma.user.findUnique as any).mockResolvedValue({
+      id: 'u-disabled',
+      email: 'disabled@example.com',
+      name: 'Disabled',
+      role: 'USER',
+      status: 'DISABLED',
+    });
+    (prisma.oidcIdentity.findUnique as any).mockResolvedValue({
+      issuer: 'https://login.example.com',
+      subject: 'oidc-sub',
+      userId: 'u-disabled',
+    });
+
+    const result = await signIn({
+      user: { email: 'disabled@example.com', name: 'Disabled', id: 'oidc-sub' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
+      profile: { email_verified: true, sub: 'oidc-sub' },
+    });
+
+    expect(result).toBe(false);
+    expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
   it('rejects sign-in if OIDC identity is linked to another user', async () => {
     const authOptions = await getAuthOptions();
     const signIn = authOptions.callbacks?.signIn as unknown as (args: any) => Promise<boolean>;

@@ -13,7 +13,7 @@ _From alert ingestion and on-call routing through response, customer communicati
 [![Docs](https://img.shields.io/badge/Docs-Read-2563eb?style=flat&logo=book&logoColor=white)](https://opsknight.com/docs)
 [![License](https://img.shields.io/badge/License-Apache_2.0-111827?style=flat)](LICENSE)
 [![Docker Package](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=flat&logo=docker&logoColor=white)](https://github.com/opsknight-labs/OpsKnight/pkgs/container/opsknight)
-[![Status](https://img.shields.io/badge/Status-v1.3.1-success?style=flat)](ROADMAP.md)
+[![Status](https://img.shields.io/badge/Status-v1.4.0-success?style=flat)](ROADMAP.md)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=flat&logo=github&logoColor=white)](https://github.com/sponsors/dushyant-rahangdale)
 [![Tests](https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml/badge.svg)](https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml)
 [![Security](https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml/badge.svg)](https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml)
@@ -24,22 +24,22 @@ _From alert ingestion and on-call routing through response, customer communicati
 
 ---
 
-> ### 🆕 What's new in v1.3
+> ### 🆕 What's new in v1.4
 >
-> **Six new native integrations** — Zabbix, PagerDuty Events API v2 ingest
-> adapter, GitLab CI/CD, Vercel, Nagios Core & XI, and Icinga 2, each with
-> severity mapping and automatic resolution on recovery.
+> **Paging reliability** — delayed escalations remain delayed, orphaned work is
+> recovered safely, and notification routes avoid duplicate delivery.
 >
-> **Hardened alert ingestion** — mandatory integration-key verification and
-> timing-safe HMAC checks across all 24 webhook routes, so unverified alerts are
-> rejected rather than trusted.
+> **Operational confidence** — the administrator Health Center consolidates
+> supported runtime checks, while the release contract validates installation,
+> upgrades, recovery, incident delivery, deployment rendering, and stable
+> AMD64/ARM64 images.
 >
-> [Release notes](https://github.com/opsknight-labs/OpsKnight/releases/tag/v1.3.1) ·
-> [Integrations](https://opsknight.com/docs/v1.3/integrations) ·
+> [Release notes](https://github.com/opsknight-labs/OpsKnight/releases/tag/v1.4.0) ·
+> [Integrations](https://opsknight.com/docs/v1.4/integrations) ·
 > [Changelog](CHANGELOG.md)
 >
 > _v1.2 added Slack ChatOps incident war rooms —
-> [setup guide](https://opsknight.com/docs/v1.3/integrations/communication/slack-chatops)._
+> [setup guide](https://opsknight.com/docs/v1.4/integrations/communication/slack-chatops)._
 
 ---
 
@@ -136,11 +136,11 @@ Whether you are an SRE team at a startup or a platform team at a larger organiza
 - **🔒 Secure**: Supports biometric authentication (FaceID/TouchID).
 
 <div align="center">
-  <img src="docs/v1.3/assets/mobile.png" alt="Mobile Dashboard" width="100%">
+  <img src="docs/v1.4/assets/mobile.png" alt="Mobile Dashboard" width="100%">
 </div>
 
 <div align="center">
-  <a href="docs/v1.3/mobile/setup.md"><strong>Explore Mobile Setup Guide →</strong></a>
+  <a href="docs/v1.4/mobile/setup.md"><strong>Explore Mobile Setup Guide →</strong></a>
 </div>
 
 ---
@@ -164,7 +164,7 @@ OpsKnight plays nicely with your entire observability and engineering stack.
   <img src="https://img.shields.io/badge/Generic_Webhooks-000000?style=for-the-badge&logo=webhook&logoColor=white" alt="Webhooks" />
 </div>
 
-[**View All 22+ Integrations →**](docs/v1.3/integrations/README.md)
+[**View All 22+ Integrations →**](docs/v1.4/integrations/README.md)
 
 ---
 
@@ -234,7 +234,7 @@ docker run -d --name opsknight -p 3000:3000 \
 ```
 
 PostgreSQL 14+ is required. See the
-[deployment guides](docs/v1.3/deployment/README.md) for TLS, connection pooling
+[deployment guides](docs/v1.4/deployment/README.md) for TLS, connection pooling
 and scaling.
 
 ---
@@ -246,12 +246,12 @@ authentication needed to pull**.
 
 | Image                                   | Channel                        | Tags                          |
 | :-------------------------------------- | :----------------------------- | :---------------------------- |
-| `ghcr.io/opsknight-labs/opsknight`      | Stable releases                | `1.3.1`, `1.3`, `1`, `latest` |
+| `ghcr.io/opsknight-labs/opsknight`      | Stable releases                | `1.4.0`, `1.4`, `1`, `latest` |
 | `ghcr.io/opsknight-labs/opsknight-test` | Pre-release, built from `main` | `latest`, `sha-<commit>`      |
 
 ```bash
 # Pin a release — recommended for production
-docker pull ghcr.io/opsknight-labs/opsknight:1.3.1
+docker pull ghcr.io/opsknight-labs/opsknight:1.4.0
 
 # Or track the latest stable release
 docker pull ghcr.io/opsknight-labs/opsknight:latest
@@ -270,9 +270,9 @@ We support multiple deployment strategies to fit your infrastructure needs.
 
 | Method                                                                                                        | Best For                            | Guide                                            |
 | :------------------------------------------------------------------------------------------------------------ | :---------------------------------- | :----------------------------------------------- |
-| ![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white) **Docker Compose**     | Local Development, small teams      | [Read Guide](docs/v1.3/deployment/docker.md)     |
-| ![](https://img.shields.io/badge/Kubernetes-326CE5?style=flat&logo=kubernetes&logoColor=white) **Helm Chart** | Production Kubernetes (Recommended) | [Read Guide](docs/v1.3/deployment/helm.md)       |
-| ![](https://img.shields.io/badge/-GitOps-black?style=flat&logo=git&logoColor=white) **Kustomize**             | GitOps (ArgoCD/Flux)                | [Read Guide](docs/v1.3/deployment/kubernetes.md) |
+| ![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white) **Docker Compose**     | Local Development, small teams      | [Read Guide](docs/v1.4/deployment/docker.md)     |
+| ![](https://img.shields.io/badge/Kubernetes-326CE5?style=flat&logo=kubernetes&logoColor=white) **Helm Chart** | Production Kubernetes (Recommended) | [Read Guide](docs/v1.4/deployment/helm.md)       |
+| ![](https://img.shields.io/badge/-GitOps-black?style=flat&logo=git&logoColor=white) **Kustomize**             | GitOps (ArgoCD/Flux)                | [Read Guide](docs/v1.4/deployment/kubernetes.md) |
 
 > **Note:** For production, we recommend using an external managed PostgreSQL database.
 
@@ -283,11 +283,11 @@ We support multiple deployment strategies to fit your infrastructure needs.
 OpsKnight runs as a single Next.js application (UI + API routes + server actions) with an internal DB-backed scheduler and a Postgres-backed job queue.
 
 <div align="center">
-  <img src="docs/v1.3/assets/images/opsknight-architecture.svg" alt="OpsKnight architecture diagram" width="100%">
+  <img src="docs/v1.4/assets/images/opsknight-architecture.svg" alt="OpsKnight architecture diagram" width="100%">
   <sub><em>High-level architecture: clients → app (Next.js) → PostgreSQL (Prisma) → outbound channels.</em></sub>
 </div>
 
-- Full details: [Architecture docs](docs/v1.3/architecture/README.md)
+- Full details: [Architecture docs](docs/v1.4/architecture/README.md)
 
 ---
 
@@ -297,12 +297,12 @@ Everything you need to configure and extend OpsKnight.
 
 - **[Hosted Documentation](https://opsknight.com/docs)** (Recommended)
 - **In-Repo Guides (v1.2)**:
-  - [⚡ Getting Started](docs/v1.3/getting-started/README.md)
-  - [🧩 Core Concepts](docs/v1.3/core-concepts/README.md)
-  - [🔌 Integrations](docs/v1.3/integrations/README.md)
-  - [🛡️ Security](docs/v1.3/security/README.md)
-  - [📡 API Reference](docs/v1.3/api/README.md)
-  - [🔧 Administration](docs/v1.3/administration/README.md)
+  - [⚡ Getting Started](docs/v1.4/getting-started/README.md)
+  - [🧩 Core Concepts](docs/v1.4/core-concepts/README.md)
+  - [🔌 Integrations](docs/v1.4/integrations/README.md)
+  - [🛡️ Security](docs/v1.4/security/README.md)
+  - [📡 API Reference](docs/v1.4/api/README.md)
+  - [🔧 Administration](docs/v1.4/administration/README.md)
 
 ---
 
@@ -319,13 +319,13 @@ security is treated as a first-class concern:
 Found a vulnerability? Please **do not** open a public issue — see
 [SECURITY.md](SECURITY.md) for private disclosure.
 
-Hardening guidance: [Security documentation](docs/v1.3/security/README.md)
+Hardening guidance: [Security documentation](docs/v1.4/security/README.md)
 
 ---
 
 ## 🗺️ Roadmap
 
-We are proud to announce **Version 1.3.1 (August 2026)**! 🚀
+We are preparing **Version 1.4.0 (August 2026)**! 🚀
 
 - [x] Core Incident Management & On-Call Schedules
 - [x] **Slack ChatOps Incident War Rooms & Interactive Cards**
@@ -336,6 +336,8 @@ We are proud to announce **Version 1.3.1 (August 2026)**! 🚀
 - [x] **Jira Cloud Bi-Directional Synchronization & Real-Time Note Sync**
 - [x] **Public Status Pages with Subscriber Notifications**
 - [x] **Mobile PWA with Biometric Security & Push Notifications**
+- [x] **Administrator Health Center & Release-Quality Contract**
+- [x] **Reliable Delayed Escalation Recovery & Multi-Architecture Releases**
 
 See the full [ROADMAP.md](ROADMAP.md)
 

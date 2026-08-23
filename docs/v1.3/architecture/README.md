@@ -1,33 +1,64 @@
 ---
 order: 8
-title: Internals
-description: Source-aligned design notes for the OpsKnight v1.3 runtime and major subsystems
+title: Architecture
+description: System design, high-availability architecture, deduplication, and circuit breakers.
 ---
 
-# Internals
+# System Architecture
 
-OpsKnight v1.3 is a Next.js application backed by PostgreSQL. The web routes and internal scheduler run within the application deployment. PostgreSQL provides durable product state, job state, retry records, rate-limit counters, and scheduler coordination; Redis and a separate worker deployment are not required.
+OpsKnight is engineered as a high-performance Next.js application with modular services, background queue workers, state-machine-driven circuit breakers, and sub-millisecond deduplication.
 
-Start with these two guides:
+---
 
-- [Technical architecture](../core-concepts/technical-architecture) — deployment boundary, event processing, queues, consistency, availability, and failure modes.
-- [Architecture diagrams](./diagrams) — runtime, event, scheduler, notification, and PWA flows.
+## High-Level Architectural Flow
 
-## Subsystem guides
+```mermaid
+flowchart LR
+    %% Styles
+    classDef client fill:#f9f9f9,stroke:#333,stroke-width:2px,rx:10;
+    classDef service fill:#e3f2fd,stroke:#2196f3,stroke-width:2px,rx:5;
+    classDef db fill:#fff3e0,stroke:#ff9800,stroke-width:2px,rx:5;
+    classDef ext fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,rx:5;
 
-- [Circuit breakers](./circuit-breakers) — outbound failure isolation and state transitions.
-- [Deduplication engine](./deduplication-engine) — event correlation and noise reduction.
-- [Operational data flow and diagnostics](./enterprise-observability) — integration normalization, analytics, logging, and operational signals.
-- [Dashboard](./dashboard) — dashboard rendering and interaction design.
-- [System settings](./settings) — settings boundaries, roles, API keys, and secret handling.
-- [Analytics surface matrix](./analytics-parity-audit) — desktop, mobile, executive, and export behavior.
+    subgraph Ingestion
+        Monitor[Monitoring Sources]:::client
+        Webhook[Webhook Ingress]:::service
+        CB[Circuit Breaker]:::service
+        Dedup[Dedup Engine]:::service
+    end
 
-## Important boundaries
+    subgraph Core
+        API[API / Next.js]:::service
+        Worker[Queue Worker]:::service
+    end
 
-- A successful incident transaction and an external notification delivery are separate outcomes.
-- PostgreSQL-backed jobs survive application restarts; the bounded immediate notification queue is per process.
-- Scheduler ownership is coordinated through PostgreSQL and requires at least one instance with internal cron enabled.
-- Incident timeline events are not a substitute for a comprehensive immutable compliance ledger.
-- The PWA caches selected data and queues selected actions; it is not a complete offline application.
+    subgraph Data
+        PG[(PostgreSQL)]:::db
+        Redis[(Redis Cache)]:::db
+    end
 
-Use the deployment, security, API, and troubleshooting sections for supported operator procedures. The files in this section explain implementation behavior and should not be read as availability or compliance guarantees.
+    subgraph Dispatch
+        Slack[Slack War Room]:::ext
+        SMS[Twilio SMS]:::ext
+        Email[Email / Push]:::ext
+        Jira[Jira Sync]:::ext
+    end
+
+    Monitor --> Webhook --> CB --> Dedup --> API
+    API --> PG & Redis
+    API --> Worker
+    Worker --> Slack & SMS & Email & Jira
+```
+
+---
+
+## 📚 Deep Dive Architecture Specifications
+
+| Architecture Topic | Key Components & Focus | Guide Link |
+| :--- | :--- | :--- |
+| **Circuit Breakers** | Cascading failure prevention, state machine transitions (`CLOSED`, `OPEN`, `HALF_OPEN`), and exponential backoff | [Circuit Breakers Specification](./architecture/circuit-breakers) |
+| **Deduplication Engine** | SHA-256 event fingerprinting, sliding window correlation, and noise suppression | [Deduplication Engine Guide](./architecture/deduplication-engine) |
+| **Enterprise Observability** | 24+ integration architecture, payload normalization pipelines, and dispatch routing | [Enterprise Observability](./architecture/enterprise-observability) |
+| **Dashboard Architecture** | Real-time incident command center, keyboard hotkeys, and server component design | [Dashboard Architecture](./architecture/dashboard) |
+| **System Settings** | Role-based access control (RBAC), API key hashing, and credential isolation | [Settings Architecture](./architecture/settings) |
+| **System Flow Diagrams** | Sequence diagrams for incident lifecycle, escalation triggers, and postmortem loops | [Architecture Diagrams](./architecture/diagrams) |

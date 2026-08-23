@@ -13,7 +13,7 @@ Receive alerts from Grafana (Legacy Alerting or Unified Alerting) and create inc
 ## Endpoint
 
 ```
-POST /api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
+POST /api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID
 ```
 
 ---
@@ -37,11 +37,11 @@ POST /api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID&integrationKey=
 2. Click **+ Add contact point**
 3. Configure:
 
-| Field           | Value                                                                                                                       |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Name**        | `OpsKnight`                                                                                                                 |
-| **Integration** | Webhook                                                                                                                     |
-| **URL**         | `https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
+| Field           | Value                                                                                   |
+| --------------- | --------------------------------------------------------------------------------------- |
+| **Name**        | `OpsKnight`                                                                             |
+| **Integration** | Webhook                                                                                 |
+| **URL**         | `https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID` |
 
 4. Click **Save contact point**
 5. Click **Test** to verify
@@ -52,11 +52,11 @@ POST /api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID&integrationKey=
 2. Click **Add channel**
 3. Configure:
 
-| Field    | Value                                                                                                                       |
-| -------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Name** | `OpsKnight`                                                                                                                 |
-| **Type** | webhook                                                                                                                     |
-| **URL**  | `https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
+| Field    | Value                                                                                   |
+| -------- | --------------------------------------------------------------------------------------- |
+| **Name** | `OpsKnight`                                                                             |
+| **Type** | webhook                                                                                 |
+| **URL**  | `https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_INTEGRATION_ID` |
 
 4. Click **Save**
 
@@ -182,12 +182,9 @@ The incident title is extracted in this order:
 
 Dedup keys are generated as:
 
-- **Unified Alerting**: `grafana-{ruleId}` when present, otherwise a normalized rule name/title.
-- **Alertmanager format**: `grafana-{labels.alertname}-{labels.instance}` when instance is present, otherwise `grafana-{labels.alertname}`.
-- **Empty alert array**: `grafana-empty-{receiver-or-groupKey}` and an acknowledge action.
-- **Unknown format**: `grafana-unknown-{title-or-ruleName}` and an acknowledge action.
-
-Trigger and recovery must produce the same rule ID or alertname/instance combination. The fallback is stable; it does not use a timestamp.
+- **Unified Alerting**: `grafana-{ruleId}`
+- **Alertmanager format**: `grafana-{labels.alertname}`
+- **Fallback**: `grafana-{timestamp}`
 
 ---
 
@@ -205,7 +202,7 @@ Trigger and recovery must produce the same rule ID or alertname/instance combina
 Send a test payload directly:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/grafana?integrationId=YOUR_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Test Alert from Grafana",

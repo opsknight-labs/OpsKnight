@@ -115,7 +115,8 @@ SLACK_BOT_TOKEN=xoxb-your-bot-token-here
 ### 6. Generate Encryption Key
 
 `ENCRYPTION_KEY` is **required in production** — it encrypts the stored bot token
-and signing secret. A fixed development-only fallback is used automatically when it is unset in development.
+and signing secret. A development fallback is used automatically when it is unset
+outside production.
 
 Generate one with:
 
