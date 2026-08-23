@@ -540,24 +540,6 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     action: { label: 'Encryption guide', href: 'https://opsknight.com/docs/v1.3/security/encryption' },
   });
 
-  const memory = process.memoryUsage();
-  const heapUtilization = (memory.heapUsed / Math.max(1, memory.heapTotal)) * 100;
-  checks.push({
-    id: 'runtime',
-    label: 'Application runtime',
-    status: heapUtilization >= 95 ? 'unhealthy' : heapUtilization >= 85 ? 'degraded' : 'healthy',
-    summary: `This process has been running for ${Math.floor(process.uptime() / 60)} minutes; heap utilization is ${Math.round(heapUtilization)}%.`,
-    details: [
-      `Heap used: ${byteLabel(memory.heapUsed)} of ${byteLabel(memory.heapTotal)}`,
-      `Resident memory: ${byteLabel(memory.rss)}`,
-      'This is the current application process only; aggregate replica and host metrics externally.',
-    ],
-    action: {
-      label: 'Monitoring guide',
-      href: 'https://opsknight.com/docs/v1.3/deployment/monitoring',
-    },
-  });
-
   const latest = await latestRelease();
   const comparison = latest ? compareVersions(APP_VERSION, latest) : 0;
   checks.push({

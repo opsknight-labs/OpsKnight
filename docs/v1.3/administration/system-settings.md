@@ -32,7 +32,7 @@ Retention controls are system-wide and destructive when cleanup executes. The Sy
 
 ## Administrator Health Center
 
-The System page links to **Administrator Health Center**, an Admin-only on-demand summary of database connectivity and capacity, migrations, scheduler and job health, paging configuration and backlog, notification and integration failures, SLA-query performance, current-process runtime, public URL consistency, encryption configuration, and release availability. The former Performance Monitoring route redirects here so administrators have one operational destination.
+The System page links to **Administrator Health Center**, an Admin-only on-demand summary of database connectivity and capacity, migrations, scheduler and job health, paging configuration and backlog, notification and integration failures, SLA-query performance, public URL consistency, encryption configuration, and release availability. The former Performance Monitoring route redirects here so administrators have one operational destination.
 
 Unknown evidence is not reported as healthy. The Health Center complements the incident timeline and external infrastructure, database, backup, and provider monitoring; see the [Health Center guide](./health-center.md) for thresholds and boundaries.
 

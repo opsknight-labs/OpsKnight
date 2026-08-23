@@ -33,7 +33,6 @@ Refresh after corrective work. The report is generated on demand and is not a du
 | Inbound integrations | Enabled integrations and process-local webhook error metrics. | Metrics reset on process restart and do not aggregate every replica; durable logs are authoritative. |
 | Public URL | Database, `NEXT_PUBLIC_APP_URL`, and `NEXTAUTH_URL` origins and production HTTPS. | Reverse-proxy routing, DNS, certificates, and external reachability still need external probes. |
 | Encryption | Presence and format of `ENCRYPTION_KEY`. | The page never displays the key or proves that every stored ciphertext can be decrypted. |
-| Application runtime | Uptime and memory utilization for the process rendering the page. | Multi-replica and host/container resource health require external telemetry. |
 | Version and upgrades | Current version compared with the public latest GitHub release. | Restricted networks can make the result unknown; review release notes before upgrading. |
 
 ## Backup boundary
