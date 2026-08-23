@@ -150,19 +150,13 @@ Dedup keys are generated as follows:
 1. **Fingerprint** (preferred): Uses Alertmanager's `fingerprint` field
 2. **Label hash**: If no fingerprint, creates SHA-256 hash from sorted labels
 
-This ensures identical alerts map to the same incident, preventing duplicates during alert storms.
+An alert with no fingerprint or labels falls back to a normalized alert name or summary. Trigger and resolved payloads must produce the same key; verify this with a real Alertmanager lifecycle test.
 
 ---
 
 ## Security
 
-### Signature Verification (Optional)
-
-You can secure the webhook with HMAC signature verification:
-
-1. In OpsKnight, set a **Signing Secret** on the integration
-2. Configure Alertmanager to send the signature (requires custom webhook or proxy)
-3. Include header: `X-Signature: sha256=<hmac_signature>`
+The v1.3 Prometheus route authenticates with the integration ID and integration key. It does not verify the integration's optional signature secret or an `X-Signature` header. Keep the generated URL/key secret and place a trusted signing/authentication gateway in front of the route if your policy requires another sender-verification layer.
 
 ---
 

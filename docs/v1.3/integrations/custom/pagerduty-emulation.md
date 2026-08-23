@@ -96,7 +96,7 @@ curl -X POST https://your-opsknight.com/api/integrations/pagerduty/v2/enqueue \
 
 ## ⚡ Response Codes
 
-- `202 Accepted`: Event successfully parsed, validated, and queued into the incident pipeline.
+- `202 Accepted`: Event parsed, validated, and processed by the incident transaction. Escalation and notification delivery continue as separate downstream work.
   ```json
   {
     "status": "success",

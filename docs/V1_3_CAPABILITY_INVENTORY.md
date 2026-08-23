@@ -1,6 +1,6 @@
 # OpsKnight v1.3 documentation capability inventory
 
-This maintainer-only inventory is the completeness gate for the v1.3 documentation work in PR #327. It intentionally lives outside `docs/v1.3`, so docs-sync does not publish it as an end-user page.
+This maintainer-only inventory is the completeness gate for the v1.3 documentation work begun in PR #327 and finally reconciled in PR #342 after intermediate phase batches merged. It intentionally lives outside `docs/v1.3`, so docs-sync does not publish it as an end-user page.
 
 ## How to use this inventory
 
@@ -15,18 +15,18 @@ Evidence is based on v1.3 application routes, components, Prisma schema, deploym
 
 ## Accountability and verification
 
-The documentation maintainer owns inventory state and link/navigation quality on #327. The product-area reviewer owns behavioral acceptance for the phase they approve; the release owner owns the final clean-install, upgrade, recovery, and docs-sync checks. Record reviewer names in the PR description rather than hard-coding people in this long-lived file.
+The documentation maintainer owns inventory state and link/navigation quality on #342. The product-area reviewer owns behavioral acceptance for the phase they approve; the release owner owns the final clean-install, upgrade, recovery, and docs-sync checks. Record reviewer names in the PR description rather than hard-coding people in this long-lived file.
 
 | Phase area                          | Required reviewer                    | Verification record                                                                         |
 | ----------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Getting started and core response   | Product/incident-response maintainer | Clean Compose run plus routing/lifecycle acceptance evidence in #327.                       |
+| Getting started and core response   | Product/incident-response maintainer | Clean Compose run plus routing/lifecycle acceptance evidence in the final delivery PR.      |
 | Integrations and notifications      | Integration/provider owner           | Signed trigger/resolve fixtures and controlled outbound delivery evidence.                  |
 | Deployment and maintenance          | Platform/database owner              | Render/dry-run, backup/restore, migration, readiness, and scheduler evidence.               |
 | Administration and security         | Security/auth owner                  | Role matrix, OIDC/local login, session, encryption, audit, and recovery evidence.           |
 | API and CLI                         | API maintainer                       | Copy-paste requests, 4xx/429 cases, scope checks, and recovery-CLI evidence.                |
 | Architecture, mobile, accessibility | Frontend/platform owner              | Diagram source review, device/browser matrix, offline boundary, and keyboard/a11y evidence. |
 
-`Complete` in the tables means the source-verified documentation destination is written. It does not replace the runtime and reviewer evidence required by the final gate. Until that evidence is attached to #327, the PR must remain open.
+`Complete` in the tables means the source-verified documentation destination is written. It does not replace the runtime and reviewer evidence required by the final gate. Attach the applicable CI and acceptance evidence to #342 before merge.
 
 ## Product workflows
 
@@ -117,13 +117,13 @@ The documentation maintainer owns inventory state and link/navigation quality on
 
 | Capability                                           | Audience              | Evidence                                     | State       | Documentation destination                      | Depth                | Phase |
 | ---------------------------------------------------- | --------------------- | -------------------------------------------- | ----------- | ---------------------------------------------- | -------------------- | ----- |
-| Runtime and data-flow architecture                   | Operator, contributor | Next.js app, PostgreSQL, job/queue libraries | Revise      | `v1.3/core-concepts/technical-architecture.md` | Architecture         | 7     |
-| Architecture diagrams                                | Operator, contributor | current deployment implementation            | Revise      | `v1.3/architecture/diagrams.md`                | Diagrams             | 7     |
-| Responsive/mobile routes                             | Mobile user           | `src/app/mobile`; mobile components          | Revise      | mobile guide                                   | Task guide           | 7     |
-| PWA installation and service worker                  | Mobile user, admin    | manifest and service-worker code             | Revise      | mobile guide                                   | Setup/limits         | 7     |
-| Selected offline action queue                        | Mobile responder      | service worker and offline queue             | Revise      | mobile guide                                   | Exact support matrix | 7     |
-| Keyboard shortcuts                                   | Keyboard user         | shortcuts page and event handlers            | Add         | accessibility/shortcuts guide                  | Reference            | 7     |
-| Accessibility behavior                               | All users             | semantic UI and interaction tests            | Add         | accessibility guide                            | Support matrix       | 7     |
+| Runtime and data-flow architecture                   | Operator, contributor | Next.js app, PostgreSQL, job/queue libraries | Complete    | `v1.3/core-concepts/technical-architecture.md` | Architecture         | 7     |
+| Architecture diagrams                                | Operator, contributor | current deployment implementation            | Complete    | `v1.3/architecture/diagrams.md`                | Diagrams             | 7     |
+| Responsive/mobile routes                             | Mobile user           | `src/app/(mobile)/m`; mobile components      | Complete    | `v1.3/mobile/README.md`                        | Task guide           | 7     |
+| PWA installation and service worker                  | Mobile user, admin    | manifest and service-worker code             | Complete    | `v1.3/deployment/mobile-pwa.md`                | Setup/limits         | 7     |
+| Selected offline action queue                        | Mobile responder      | service worker and offline queue             | Complete    | `v1.3/mobile/README.md`                        | Exact support matrix | 7     |
+| Keyboard shortcuts                                   | Keyboard user         | shortcuts page and event handlers            | Complete    | `v1.3/accessibility/shortcuts.md`              | Reference            | 7     |
+| Accessibility behavior                               | All users             | semantic UI and interaction tests            | Complete    | `v1.3/accessibility/README.md`                 | Support matrix       | 7     |
 | Redis-backed architecture                            | Operator              | no Redis runtime dependency in v1.3          | Unsupported | Remove architecture claims                     | Limitation           | 7     |
 | Postmortem API, approvals, custom templates, exports | API consumer, manager | no matching v1.3 implementation              | Unsupported | postmortem limitation section                  | Explicit boundary    | 2, 7  |
 | Analytics API, PDF/JSON export, scheduled reports    | Manager, API consumer | no matching v1.3 implementation              | Unsupported | analytics limitation section                   | Explicit boundary    | 2, 7  |
@@ -137,4 +137,4 @@ The documentation maintainer owns inventory state and link/navigation quality on
 - [ ] `node scripts/check-docs-links.cjs` passes.
 - [ ] Commands, payloads, permissions, defaults, limits, and failure modes have been verified.
 - [ ] The PR description records tests and evidence for every phase batch.
-- [ ] The website is updated only by docs-sync after #327 merges.
+- [ ] The website is updated only by docs-sync after the current application docs PR merges.
