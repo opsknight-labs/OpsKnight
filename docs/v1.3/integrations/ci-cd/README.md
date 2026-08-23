@@ -12,9 +12,9 @@ Detect failed deployments and pipeline issues before they impact users.
 
 <!-- integrations-list:start -->
 
-- [GitHub Actions](./github) — Receive GitHub Actions workflow run failures and repository security alerts.
+- [GitHub Actions](./github) — Correlate workflow and check failures with later recovery.
 - [GitLab CI/CD](./gitlab) — Process pipelines, jobs, merge requests, deployments, issues, incidents, and alerts.
-- [Bitbucket Pipelines](./bitbucket) — Receive Bitbucket Pipeline failure alerts in OpsKnight.
+- [Bitbucket Pipelines](./bitbucket) — Receive build failures with an explicit native recovery boundary.
 - [Vercel Deployments](./vercel) — Monitor production deployments, build errors, and preview deployment failures.
 
 <!-- integrations-list:end -->
@@ -23,9 +23,9 @@ Detect failed deployments and pipeline issues before they impact users.
 
 ## Capabilities Comparison
 
-| Platform           | Event Triggers                          | Auto-Resolve Supported |        Signature Verification        |
-| :----------------- | :-------------------------------------- | :--------------------: | :----------------------------------: |
-| **GitHub Actions** | `workflow_run.completed` (`failure`)    |          Yes           | SHA-256 HMAC (`X-Hub-Signature-256`) |
-| **GitLab CI/CD**   | `Pipeline Hook` (`failed`)              |          Yes           |   Secret Token (`X-Gitlab-Token`)    |
-| **Bitbucket**      | `repo:commit_status_updated`            |          Yes           |         Token Header / HMAC          |
-| **Vercel**         | `deployment.error`, `deployment.failed` |          Yes           |  SHA-1 HMAC (`x-vercel-signature`)   |
+| Platform           | Event Triggers                          | Recovery behavior                                               | Signature verification                               |
+| :----------------- | :-------------------------------------- | :-------------------------------------------------------------- | :--------------------------------------------------- |
+| **GitHub Actions** | Workflow runs and check runs            | Yes, when repository/name/branch correlation matches            | SHA-256 HMAC (`X-Hub-Signature-256`)                 |
+| **GitLab CI/CD**   | Pipelines, jobs, MRs, deployments, more | Event-specific; see the exact key/action matrix                 | Secret token (`X-Gitlab-Token`)                      |
+| **Bitbucket**      | Build-status events                     | Native success payload does not auto-resolve in v1.3            | Integration key; native Bitbucket HMAC is mismatched |
+| **Vercel**         | `deployment.error`, `deployment.failed` | Yes only when a recovery event has the same derived project key | SHA-1 HMAC (`x-vercel-signature`)                    |

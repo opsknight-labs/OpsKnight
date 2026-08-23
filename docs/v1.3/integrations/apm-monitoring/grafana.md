@@ -182,9 +182,12 @@ The incident title is extracted in this order:
 
 Dedup keys are generated as:
 
-- **Unified Alerting**: `grafana-{ruleId}`
-- **Alertmanager format**: `grafana-{labels.alertname}`
-- **Fallback**: `grafana-{timestamp}`
+- **Unified Alerting**: `grafana-{ruleId}` when present, otherwise a normalized rule name/title.
+- **Alertmanager format**: `grafana-{labels.alertname}-{labels.instance}` when instance is present, otherwise `grafana-{labels.alertname}`.
+- **Empty alert array**: `grafana-empty-{receiver-or-groupKey}` and an acknowledge action.
+- **Unknown format**: `grafana-unknown-{title-or-ruleName}` and an acknowledge action.
+
+Trigger and recovery must produce the same rule ID or alertname/instance combination. The fallback is stable; it does not use a timestamp.
 
 ---
 

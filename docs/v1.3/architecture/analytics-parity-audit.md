@@ -1,5 +1,5 @@
 ---
-order: 4
+order: 5
 title: Analytics surface matrix
 description: Compare desktop, mobile, executive-report, and CSV-export analytics behavior and access boundaries.
 ---

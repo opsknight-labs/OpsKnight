@@ -125,3 +125,8 @@ Check HTTPS, browser and OS permission, `/sw.js`, VAPID configuration, the devic
 - [Incidents](../core-concepts/incidents)
 - [On-call schedules](../core-concepts/schedules)
 - [Notification providers](../administration/notifications)
+
+Contributor documentation:
+
+- [Mobile development](./development)
+- [Mobile status resonance](./status-resonance)

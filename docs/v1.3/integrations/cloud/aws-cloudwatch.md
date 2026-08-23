@@ -141,9 +141,9 @@ The source is formatted as: `AWS CloudWatch ({Region})`
 
 ## Deduplication
 
-Dedup key format: `cloudwatch-{Region}-{AlarmName}`
+Dedup key format: `cloudwatch-{AWSAccountId}-{Region}-{AlarmName}` when `AWSAccountId` is present, otherwise `cloudwatch-{Region}-{AlarmName}`.
 
-This ensures the same alarm in the same region maps to the same incident.
+This keeps identically named alarms in different AWS accounts or regions separate. Opening and recovery must carry the same account, region, and alarm name.
 
 ---
 

@@ -1,264 +1,144 @@
 ---
 order: 1
-title: GitHub
-description: Receive GitHub Actions and deployment failure alerts in OpsKnight
+title: GitHub Actions
+description: Send GitHub workflow and check state changes to OpsKnight with exact correlation, signature, and recovery behavior
 ---
 
-# GitHub Integration
+# GitHub Actions
 
-Receive alerts from GitHub Actions workflow failures, check failures, and deployment failures.
+Use the native GitHub endpoint to open, acknowledge, and resolve OpsKnight incidents from workflow runs and check runs. The integration is scoped to the OpsKnight service on which you create it.
 
----
+## Before you begin
 
-## Endpoint
+You need:
 
-```
-POST /api/integrations/github?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
-```
+- Admin access to the OpsKnight service;
+- repository Admin access in GitHub;
+- an HTTPS OpsKnight URL reachable by GitHub; and
+- a workflow or check that can be failed safely for end-to-end testing.
 
----
+## Create the integration
 
-## Setup
+1. In OpsKnight, open **Services**, select the service, and open **Integrations**.
+2. Add a **GitHub** integration.
+3. Copy the generated webhook URL. It has this shape:
 
-### Step 1: Create Integration in OpsKnight
-
-1. Go to **Services** and select your service
-2. Click **Integrations** tab
-3. Click **Add Integration**
-4. Select **GitHub**
-5. Copy the **Integration ID**
-6. (Optional) Generate a **Signing Secret** for security
-
-### Step 2: Configure GitHub Webhook
-
-1. Go to your GitHub repository **Settings** → **Webhooks**
-2. Click **Add webhook**
-3. Configure:
-
-| Field            | Value                                                                                                                      |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Payload URL**  | `https://YOUR_OPSKNIGHT_URL/api/integrations/github?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
-| **Content type** | `application/json`                                                                                                         |
-| **Secret**       | Your signing secret (if using)                                                                                             |
-
-4. Select **Let me select individual events**
-5. Check the events you want:
-   - **Workflow runs** — GitHub Actions failures
-   - **Check runs** — Check failures
-   - **Deployment statuses** — Deployment failures
-6. Click **Add webhook**
-
----
-
-## Security
-
-> **Strict Security Enforcement**: If you generate a Signing Secret in OpsKnight, you **MUST** configure the same secret in GitHub webhook settings. OpsKnight will reject any requests without a valid signature if a secret exists.
-
-GitHub signs webhooks using HMAC-SHA256 with the secret you provide.
-
----
-
-## Supported Events
-
-### Workflow Runs
-
-Triggers when GitHub Actions workflows complete.
-
-```json
-{
-  "action": "completed",
-  "repository": {
-    "name": "my-repo",
-    "full_name": "myorg/my-repo",
-    "html_url": "https://github.com/myorg/my-repo"
-  },
-  "workflow_run": {
-    "id": 12345,
-    "name": "CI Pipeline",
-    "status": "completed",
-    "conclusion": "failure",
-    "html_url": "https://github.com/myorg/my-repo/actions/runs/12345"
-  }
-}
+```text
+https://OPSKNIGHT_HOST/api/integrations/github?integrationId=INTEGRATION_ID&integrationKey=INTEGRATION_KEY
 ```
 
-### Check Runs
+4. Generate a signing secret and copy it once. Treat both the URL and secret as credentials.
 
-Triggers when checks complete.
+Do not remove `integrationId` or `integrationKey`. OpsKnight validates the integration key even when signature verification is enabled.
 
-```json
-{
-  "action": "completed",
-  "repository": {
-    "name": "my-repo",
-    "full_name": "myorg/my-repo"
-  },
-  "check_run": {
-    "id": 67890,
-    "name": "Build",
-    "status": "completed",
-    "conclusion": "failure",
-    "html_url": "https://github.com/myorg/my-repo/runs/67890"
-  }
-}
-```
+## Configure GitHub
 
-### Deployment Statuses
+In the repository, open **Settings → Webhooks → Add webhook** and set:
 
-Triggers when deployments fail.
+| GitHub field | Value                                   |
+| ------------ | --------------------------------------- |
+| Payload URL  | The complete OpsKnight webhook URL      |
+| Content type | `application/json`                      |
+| Secret       | The OpsKnight signing secret            |
+| Events       | **Workflow runs** and/or **Check runs** |
+| Active       | Enabled                                 |
 
-```json
-{
-  "deployment": {
-    "id": 11111,
-    "environment": "production",
-    "state": "failure"
-  },
-  "repository": {
-    "name": "my-repo",
-    "full_name": "myorg/my-repo"
-  }
-}
-```
+Subscribe only to the event types you use. The endpoint accepts a GitHub JSON body; form-encoded `payload=` delivery is not supported.
 
----
+GitHub sends `X-Hub-Signature-256: sha256=…`. If an OpsKnight signing secret exists and `INTEGRATION_VERIFY_SIGNATURES` has not been disabled, a missing or invalid signature is rejected with `401`.
 
-## Event Mapping
+## State and correlation contract
 
-| GitHub Event                 | OpsKnight Action              |
-| ---------------------------- | ----------------------------- |
-| `conclusion: failure`        | Trigger incident              |
-| `conclusion: timed_out`      | Trigger incident              |
-| `conclusion: cancelled`      | Trigger incident              |
-| `conclusion: success`        | Resolve incident              |
-| `status: queued/in_progress` | Acknowledge (no new incident) |
+### Workflow runs
 
-### Pending State Handling
+| GitHub state                                         | OpsKnight action                                                              |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `queued`, `requested`, or `in_progress`              | Acknowledge the matching incident if one exists; do not create a new incident |
+| `completed` + `failure`, `cancelled`, or `timed_out` | Trigger                                                                       |
+| `completed` + `success`                              | Resolve                                                                       |
 
-When workflows or checks are pending/in-progress:
+Workflow correlation uses repository full name + workflow name + optional head branch, normalized to lowercase. It deliberately does **not** use the run ID. A later successful run resolves an earlier failure only when repository, workflow name, and branch produce the same key.
 
-- If an incident exists, it's acknowledged (retry is in progress)
-- No new incident is created for pending states
+Renaming a workflow, changing the branch, or omitting `head_branch` changes the key. Resolve the old incident manually if the success event cannot match it.
 
----
+### Check runs
 
-## Severity Mapping
+| GitHub state                                         | OpsKnight action                                |
+| ---------------------------------------------------- | ----------------------------------------------- |
+| `queued` or `in_progress`                            | Acknowledge the matching incident if one exists |
+| `completed` + `failure`, `cancelled`, or `timed_out` | Trigger                                         |
+| `completed` + `success`                              | Resolve                                         |
 
-| Conclusion                          | OpsKnight Severity |
-| ----------------------------------- | ------------------ |
-| `failure`, `timed_out`, `cancelled` | critical           |
-| Others                              | info               |
+Check correlation uses repository full name + check name. The run ID is retained as incident context, but is not part of the key.
 
----
+### Deployment payload boundary
 
-## Incident Title
+The v1.3 transformer can process a normalized `deployment` object containing `id`, `environment`, and `state`, with the deployment ID as its key. GitHub's native `deployment_status` payload places state in a separate `deployment_status` object, so do not select native deployment-status events and assume they are supported. Use workflow/check events, the [Events API](../../api/events), or a tested intermediary that emits the normalized shape.
 
-Titles are generated based on event type:
+Other GitHub event types fall back to an acknowledge event keyed to the repository. They are not feature-specific incident integrations.
 
-- **Workflow failure**: `Workflow failed: {workflow_name}`
-- **Check failure**: `Check failed: {check_name}`
-- **Deployment failure**: `Deployment failure: {environment}`
+## Test the integration
 
-Source is formatted as: `GitHub - {repository.full_name}`
+1. Save the GitHub webhook and confirm its initial delivery receives a response.
+2. Run a controlled workflow or check that fails.
+3. Confirm GitHub records HTTP `202` and OpsKnight creates one incident on the intended service.
+4. Capture its deduplication key from the incident/event detail.
+5. Rerun the same workflow/check successfully on the same branch.
+6. Confirm the same incident resolves and no second incident is created.
 
----
+GitHub's **Recent deliveries** view can redeliver an unchanged payload. Redelivery tests deduplication, but redelivering an old failure after recovery can trigger the correlated incident again. Use a disposable service or resolve it afterward.
 
-## Deduplication
+## Controlled request
 
-Dedup keys are generated as:
-
-- **Workflow runs**: `github-{workflow_run.id}`
-- **Check runs**: `github-{check_run.id}`
-- **Deployments**: `github-deployment-{deployment.id}`
-
----
-
-## GitLab Support
-
-This integration also supports GitLab CI/CD webhooks:
-
-```json
-{
-  "object_kind": "build",
-  "build_status": "failed",
-  "ref": "main",
-  "project": {
-    "name": "my-project",
-    "path_with_namespace": "mygroup/my-project",
-    "web_url": "https://gitlab.com/mygroup/my-project"
-  },
-  "commit": {
-    "message": "Fix bug"
-  }
-}
-```
-
----
-
-## Testing
-
-### Using GitHub UI
-
-1. Go to repository **Settings** → **Webhooks**
-2. Click on your webhook
-3. Scroll to **Recent Deliveries**
-4. Click **Redeliver** on a previous delivery
-5. Or trigger a workflow failure manually
-
-### Using cURL
-
-Send a test payload directly:
+This request tests parsing and incident creation but is not signed like GitHub. Use it only when the OpsKnight integration has no signing secret, or generate the correct HMAC over the exact body and send `X-Hub-Signature-256`.
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/github?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+curl --fail-with-body --request POST \
+  "https://OPSKNIGHT_HOST/api/integrations/github?integrationId=INTEGRATION_ID&integrationKey=INTEGRATION_KEY" \
+  --header "Content-Type: application/json" \
+  --data '{
     "action": "completed",
     "repository": {
-      "name": "test-repo",
-      "full_name": "myorg/test-repo",
-      "html_url": "https://github.com/myorg/test-repo"
+      "name": "payments",
+      "full_name": "example/payments",
+      "html_url": "https://github.com/example/payments"
     },
     "workflow_run": {
-      "id": 999999,
-      "name": "Test Workflow",
+      "id": 1001,
+      "name": "Production checks",
+      "head_branch": "main",
       "status": "completed",
       "conclusion": "failure",
-      "html_url": "https://github.com/myorg/test-repo/actions/runs/999999"
+      "html_url": "https://github.com/example/payments/actions/runs/1001"
     }
   }'
 ```
 
----
-
 ## Troubleshooting
 
-### Webhooks Not Received
+**GitHub receives `401`**
 
-1. **Check webhook deliveries** in GitHub settings
-2. **Verify URL** is correct and accessible
-3. **Check for network/firewall** issues
+Confirm the URL still contains the current integration key. If a signing secret is configured, confirm GitHub uses the same secret and sends `X-Hub-Signature-256`. Do not copy the `sha256=` digest into the secret field.
 
-### 401 Unauthorized Error
+**GitHub receives `400`**
 
-1. **Check signing secret** matches in both OpsKnight and GitHub
-2. **Remove secret** from OpsKnight if not using signature verification
+Use JSON content type and inspect the response body. Unsupported conclusions or a native deployment-status payload do not match the v1.3 schema.
 
-### No Incident for Failures
+**GitHub receives `429`**
 
-1. **Verify events** are selected in webhook configuration
-2. **Check conclusion** is `failure`, `timed_out`, or `cancelled`
-3. **Ensure workflow/check** has actually completed
+The default integration limit is 100 requests per 60 seconds per integration. Honor the reset/retry headers and reduce event subscriptions or delivery bursts.
 
-### Incidents Not Resolving
+**A success did not resolve a failure**
 
-1. Successful runs should automatically resolve incidents
-2. **Verify webhook** receives success events
+Compare repository full name, workflow/check name, and workflow branch between the two deliveries. Those fields—not run ID—control correlation.
 
----
+**No one was paged**
 
-## Related Topics
+Confirm the incident was created on the expected service, then verify service urgency rules, escalation policy, schedule coverage, user notification preferences, and provider delivery history. A received webhook does not by itself prove outbound paging.
 
-- [Bitbucket Integration](./bitbucket) — Bitbucket Pipelines
-- [Events API](../../api/events) — Programmatic event submission
-- [Integrations Overview](.) — All integrations
+## Related topics
+
+- [Inbound webhook reference](../inbound-webhook-reference)
+- [Urgency mapping](../../core-concepts/urgency-mapping)
+- [Events API](../../api/events)
+- [Troubleshooting](../../troubleshooting)

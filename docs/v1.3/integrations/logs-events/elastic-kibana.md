@@ -1,7 +1,7 @@
 ---
 order: 1
-title: Elastic / Kibana
-description: Integrate Elastic Watcher alerts with OpsKnight.
+title: Elastic and Kibana
+description: Send Elastic or Kibana alert and recovery actions to OpsKnight with stable alert correlation
 ---
 
 # Elastic / Kibana Integration
@@ -55,7 +55,13 @@ Configure your Connector to send:
 
 ## Deduplication
 
-Dedup key is generated from `elastic-{alert.id}` or `elastic-{rule.id}`.
+The key is raw `alert.id`, falling back to raw `rule.id`. Only when both are absent does OpsKnight use `elastic-<normalized rule name>`. Ensure recovery repeats the same highest-priority ID.
+
+## Security and lifecycle boundary
+
+The complete URL contains the required integration key. The optional generic signature requires an unprefixed raw-body HMAC-SHA256 digest in `X-Signature` or `X-Webhook-Signature`. Leave the OpsKnight signing secret unset for a direct Kibana connector unless the connector or a trusted gateway emits that exact contract.
+
+OpsKnight checks `alert.status`, then `event.action`, then top-level `status`. Values containing `resolved`, `closed`, `recovered`, `ok`, or `up` resolve; values containing `ack` acknowledge; everything else triggers. Configure a recovery action in the rule—an active-only connector cannot resolve its incident.
 
 ## Testing
 
@@ -79,3 +85,11 @@ OpsKnight extracts fields in this priority order:
 3. **Status**: `alert.status` or `event.action` (maps to Trigger/Resolve)
 
 Tip: Ensure your Connector payload maps these standard Elastic fields.
+
+Test one real active/recovered pair and confirm both receive HTTP `202` and update the same incident. The default integration limit is 100 requests per 60 seconds per integration. If recovery misses, compare selected ID and status precedence in the two raw deliveries.
+
+## Related topics
+
+- [Inbound webhook reference](../inbound-webhook-reference)
+- [Urgency mapping](../../core-concepts/urgency-mapping)
+- [Troubleshooting](../../troubleshooting)

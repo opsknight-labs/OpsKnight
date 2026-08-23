@@ -1,7 +1,7 @@
 ---
 order: 4
 title: AppDynamics
-description: Integrate AppDynamics with OpsKnight.
+description: Send AppDynamics policy open and close events to OpsKnight with stable incident correlation
 ---
 
 # AppDynamics Integration
@@ -53,15 +53,21 @@ Template your AppDynamics HTTP Request with JSON:
 
 ## Event Mapping
 
-| AppDynamics Event | OpsKnight Action |
-| ----------------- | ---------------- |
-| `POLICY_OPEN`     | Trigger incident |
-| `POLICY_CLOSE`    | Resolve incident |
-| `POLICY_UPGRADED` | Trigger (Update) |
+| AppDynamics event type                                           | OpsKnight action              |
+| ---------------------------------------------------------------- | ----------------------------- |
+| Value containing `CLOSE`, `RESOLVED`, `RECOVERED`, `OK`, or `UP` | Resolve                       |
+| Value containing `ACK`/`ACKNOWLEDGE`                             | Acknowledge an existing match |
+| Every other value, including open/upgraded violations            | Trigger                       |
 
 ## Deduplication
 
-Dedup key is generated from `appdynamics-{incidentId}`.
+The key is the raw `incidentId`, falling back to raw `eventId`. If neither exists, OpsKnight uses `appdynamics-<normalized application-or-summary>`. The opening and closing templates must send the same `incidentId`; do not use a per-notification event ID if it changes on close.
+
+## Security and operating boundary
+
+The complete URL contains the required integration key. The optional generic signature requires an unprefixed raw-body HMAC-SHA256 digest in `X-Signature` or `X-Webhook-Signature`. AppDynamics HTTP templates do not automatically generate that OpsKnight digest; leave the signing secret unset for direct delivery or use a trusted signing gateway.
+
+After a controlled open/close test, confirm both deliveries receive HTTP `202`, update the same incident, and then verify the service's urgency mapping and outbound page separately. The default integration limit is 100 requests per 60 seconds per integration.
 
 ## Testing
 
@@ -90,3 +96,11 @@ Ensure you are using the correct `${variable}` syntax in the AppDynamics HTTP Te
 - **Summary**: Derived from `summary`, `eventMessage`, or `eventType`.
 - **Urgency**: Maps `severity` or `eventSeverity` to OpsKnight urgency (automatically normalized).
 - **Deduplication**: Uses `incidentId` or `eventId` to group updates.
+
+If a close does not resolve, compare the rendered `eventType` and selected ID in both raw payloads. A missing/changed ID or a close token not recognized by the table above prevents the expected update.
+
+## Related topics
+
+- [Inbound webhook reference](../inbound-webhook-reference)
+- [Urgency mapping](../../core-concepts/urgency-mapping)
+- [Troubleshooting](../../troubleshooting)
