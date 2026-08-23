@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Rate Limit Admin Actions (Prevent mass generation)
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const rawIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const ip = rawIp.split(',')[0].trim();
     const { checkRateLimit } = await import('@/lib/password-reset');
     try {
       // Use Admin's email to limit *their* activity
@@ -66,6 +67,9 @@ export async function POST(req: NextRequest) {
         metadata: { generatedBy: sessionUser.id },
       },
     });
+
+    // Revoke active sessions for target user to prevent hijacked sessions from persisting
+    await revokeUserSessions(user.id);
 
     // 4. Construct Link
     const appUrl = await getAppUrl();

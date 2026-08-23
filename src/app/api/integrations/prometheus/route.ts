@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         return jsonError('Invalid Prometheus Alertmanager payload', 400);
       }
 
-      const events = transformPrometheusToEvent(body as PrometheusAlert);
+      const events = transformPrometheusToEvent((validation.data || body) as PrometheusAlert);
 
       const results = [];
       for (const event of events) {

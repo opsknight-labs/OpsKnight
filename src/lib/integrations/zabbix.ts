@@ -97,11 +97,12 @@ export function transformZabbixToEvent(data: ZabbixPayload): {
     'unknown-host'
   );
 
-  // Prioritize event_id over trigger_id — Zabbix triggers can generate multiple
-  // independent problem events, and recovery events reference the original EVENT.ID
+  // Prioritize event_id over trigger_id — recovery events reference original event/problem ID
   const eventOrTriggerId = firstString(
     data.event_id,
     data.eventId,
+    (data as any).r_event_id, // eslint-disable-line @typescript-eslint/no-explicit-any
+    (data as any).problem_id, // eslint-disable-line @typescript-eslint/no-explicit-any
     data.trigger_id,
     data.triggerId
   );

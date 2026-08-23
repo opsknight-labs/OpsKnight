@@ -2,11 +2,11 @@ import crypto from 'crypto';
 import type { NextRequest } from 'next/server';
 
 function safeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const aBuf = Buffer.from(a, 'utf8');
+  const bBuf = Buffer.from(b, 'utf8');
   if (aBuf.length !== bBuf.length) {
-    // Perform dummy comparison to prevent timing attack on length check
-    crypto.timingSafeEqual(Buffer.alloc(32), Buffer.alloc(32));
+    crypto.timingSafeEqual(aBuf, aBuf);
     return false;
   }
   return crypto.timingSafeEqual(aBuf, bBuf);

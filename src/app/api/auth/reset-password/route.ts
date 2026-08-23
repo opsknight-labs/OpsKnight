@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
     const { token, password } = body;
 
     // Get IP for rate limiting
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const rawIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const ip = rawIp.split(',')[0].trim();
 
     // Call shared logic which handles validation, rate limiting, hashing, and logging
     const { completePasswordReset } = await import('@/lib/password-reset');

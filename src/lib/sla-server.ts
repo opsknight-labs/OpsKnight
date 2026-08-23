@@ -1587,8 +1587,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       highUrg,
       mediumUrg,
       lowUrg,
-      mtta: ackCount ? ackSum / ackCount : 0,
-      mttr: resolveCount ? resolveSum / resolveCount : 0,
+      mtta: ackCount > 0 ? ackSum / ackCount : null,
+      mttr: resolveCount > 0 ? resolveSum / resolveCount : null,
       ackRate: incidents.length ? (ackCount / incidents.length) * 100 : 0,
       resolveRate: incidents.length ? (resolveCount / incidents.length) * 100 : 0,
     };
@@ -1603,8 +1603,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       highUrg: dbAggMetrics.highUrgencyCount,
       mediumUrg: dbAggMetrics.mediumUrgencyCount,
       lowUrg: dbAggMetrics.lowUrgencyCount,
-      mtta: dbAggMetrics.avgMttaMs ?? 0,
-      mttr: dbAggMetrics.avgMttrMs ?? 0,
+      mtta: dbAggMetrics.avgMttaMs ?? null,
+      mttr: dbAggMetrics.avgMttrMs ?? null,
       ackRate:
         dbAggMetrics.totalIncidents > 0
           ? ((dbAggMetrics.ackSlaMet + dbAggMetrics.ackSlaBreached) / dbAggMetrics.totalIncidents) *
@@ -1655,12 +1655,22 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     });
   }
 
-  if (currentStats.mtta < prevStatsDetailed.mtta && prevStatsDetailed.mtta > 0) {
+  if (
+    currentStats.mtta !== null &&
+    prevStatsDetailed.mtta !== null &&
+    currentStats.mtta < prevStatsDetailed.mtta &&
+    prevStatsDetailed.mtta > 0
+  ) {
     insights.push({
       type: 'positive',
       text: `Response time improved by ${Math.round((1 - currentStats.mtta / prevStatsDetailed.mtta) * 100)}%`,
     });
-  } else if (currentStats.mtta > prevStatsDetailed.mtta && prevStatsDetailed.mtta > 0) {
+  } else if (
+    currentStats.mtta !== null &&
+    prevStatsDetailed.mtta !== null &&
+    currentStats.mtta > prevStatsDetailed.mtta &&
+    prevStatsDetailed.mtta > 0
+  ) {
     insights.push({
       type: 'negative',
       text: `Response time slower by ${Math.round((currentStats.mtta / prevStatsDetailed.mtta - 1) * 100)}%`,
@@ -2726,9 +2736,32 @@ export async function calculateSLAMetricsFromRollups(
     return out.size > 0 ? out : null;
   })();
 
+  const rollupQueryStart = new Date(
+    Date.UTC(
+      effectiveStart.getUTCFullYear(),
+      effectiveStart.getUTCMonth(),
+      effectiveStart.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
+  );
+  const rollupQueryEnd = new Date(
+    Date.UTC(
+      effectiveEnd.getUTCFullYear(),
+      effectiveEnd.getUTCMonth(),
+      effectiveEnd.getUTCDate(),
+      23,
+      59,
+      59,
+      999
+    )
+  );
+
   const rollups = await prisma.incidentMetricRollup.findMany({
     where: {
-      date: { gte: effectiveStart, lte: effectiveEnd },
+      date: { gte: rollupQueryStart, lte: rollupQueryEnd },
       granularity: 'daily',
       ...(filters.serviceId
         ? Array.isArray(filters.serviceId)

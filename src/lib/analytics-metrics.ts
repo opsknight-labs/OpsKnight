@@ -57,7 +57,15 @@ export function calculateMtbfMs(
       ? Math.max(...validTimes)
       : null;
 
-  if (startTime === null || endTime === null || endTime <= startTime) return null;
+  if (
+    startTime === null ||
+    endTime === null ||
+    !Number.isFinite(startTime) ||
+    !Number.isFinite(endTime) ||
+    endTime <= startTime
+  ) {
+    return null;
+  }
   const totalOperatingTimeMs = endTime - startTime;
   const failureCount = validTimes.length;
 

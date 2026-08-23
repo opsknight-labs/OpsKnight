@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { redirect } from 'next/navigation';
 import { logAudit, getDefaultActorId } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 
 const BOOTSTRAP_TRANSACTION_ATTEMPTS = 3;
@@ -63,13 +64,17 @@ export async function bootstrapAdmin(formData: FormData) {
 
   if (!user) throw new Error('Failed to initialize the system safely. Please retry.');
 
-  await logAudit({
-    action: 'user.bootstrap',
-    entityType: 'USER',
-    entityId: user.id,
-    actorId: defaultActorId,
-    details: { email },
-  });
+  try {
+    await logAudit({
+      action: 'user.bootstrap',
+      entityType: 'USER',
+      entityId: user.id,
+      actorId: defaultActorId,
+      details: { email },
+    });
+  } catch (err) {
+    logger.warn('[Setup] Non-fatal audit log failure during admin bootstrap', { err });
+  }
 
   return { success: true, password, email };
 }

@@ -337,7 +337,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
 }
 
 export async function addUserToTeam(userId: string, formData: FormData) {
-  let currentUser: { id: string } | null = null;
+  let currentUser: { id: string; role?: string } | null = null;
   try {
     currentUser = await assertAdminOrResponder();
   } catch (error) {
@@ -349,9 +349,14 @@ export async function addUserToTeam(userId: string, formData: FormData) {
     };
   }
   const teamId = formData.get('teamId') as string;
-  const role = (formData.get('role') as string) || 'MEMBER';
+  let role = (formData.get('role') as string) || 'MEMBER';
 
   if (!teamId) return;
+
+  // Only administrators can grant OWNER role in a team
+  if (role === 'OWNER' && currentUser?.role !== 'ADMIN') {
+    role = 'MEMBER';
+  }
 
   const existing = await prisma.teamMember.findFirst({
     where: { teamId, userId },

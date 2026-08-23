@@ -71,7 +71,11 @@ export function transformDatadogToEvent(data: DatadogEvent): Array<{
     const isResolved = status === 'resolved' || status === 'ok' || alertType === 'success';
     // Build stable dedup key - avoid Date.now() which defeats deduplication
     // Priority: aggregation_key > alert.id > monitor.id > title-based hash
-    const titleKey = (title || 'unknown').replace(/\s+/g, '-').toLowerCase();
+    const cleanTitle = (title || 'unknown').replace(
+      /^\[(Triggered|Recovered|OK|Warn|Warning|Alert|Renotified|No Data)\]\s*/i,
+      ''
+    );
+    const titleKey = cleanTitle.replace(/\s+/g, '-').toLowerCase();
     const titleHash = createHash('sha256').update(titleKey).digest('hex').slice(0, 32);
 
     const dedupKey =

@@ -4,7 +4,9 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const inventoryPath = path.join(root, 'docs', 'V1_4_CAPABILITY_INVENTORY.md');
+const inventoryPath = fs.existsSync(path.join(root, 'docs', 'V1_5_CAPABILITY_INVENTORY.md'))
+  ? path.join(root, 'docs', 'V1_5_CAPABILITY_INVENTORY.md')
+  : path.join(root, 'docs', 'V1_4_CAPABILITY_INVENTORY.md');
 const inventory = fs.readFileSync(inventoryPath, 'utf8');
 const failures = [];
 
@@ -36,7 +38,7 @@ for (const capability of requiredCapabilities) {
   }
 }
 
-const destinationPattern = /`(v1\.4\/[^`#]+)(?:#[^`]*)?`/g;
+const destinationPattern = /`(v1\.[45]\/[^`#]+)(?:#[^`]*)?`/g;
 const destinations = new Set();
 let match;
 while ((match = destinationPattern.exec(inventory))) destinations.add(match[1]);

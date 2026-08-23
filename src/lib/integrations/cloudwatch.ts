@@ -5,18 +5,18 @@
 
 export type CloudWatchAlarmMessage = {
   AlarmName: string;
-  AlarmDescription?: string;
-  AWSAccountId?: string;
+  AlarmDescription?: string | null;
+  AWSAccountId?: string | null;
   NewStateValue: 'OK' | 'ALARM' | 'INSUFFICIENT_DATA';
-  NewStateReason?: string;
+  NewStateReason?: string | null;
   StateChangeTime: string;
-  Region: string;
+  Region?: string;
   Trigger?: {
     MetricName?: string;
     Namespace?: string;
     Statistic?: string;
     Threshold?: number;
-  };
+  } | null;
 };
 
 export function transformCloudWatchToEvent(message: CloudWatchAlarmMessage): {
@@ -31,7 +31,8 @@ export function transformCloudWatchToEvent(message: CloudWatchAlarmMessage): {
 } {
   const isOk = message.NewStateValue === 'OK';
   const accountPart = message.AWSAccountId ? `${message.AWSAccountId}-` : '';
-  const dedupKey = `cloudwatch-${accountPart}${message.Region}-${message.AlarmName}`;
+  const region = message.Region || 'global';
+  const dedupKey = `cloudwatch-${accountPart}${region}-${message.AlarmName}`;
 
   return {
     event_action: isOk ? 'resolve' : 'trigger',

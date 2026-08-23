@@ -949,6 +949,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               }
             }
 
+            if (updateData.role && updateData.role !== targetUser.role) {
+              updateData.tokenVersion = { increment: 1 };
+            }
+
             if (Object.keys(updateData).length > 0) {
               await prisma.user.update({
                 where: { id: targetUser.id },
