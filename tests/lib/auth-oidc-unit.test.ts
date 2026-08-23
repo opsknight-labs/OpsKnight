@@ -24,6 +24,9 @@ vi.mock('@/lib/prisma', () => {
       create: vi.fn(),
       update: vi.fn(),
     },
+    userToken: {
+      findFirst: vi.fn(),
+    },
     oidcIdentity: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -51,6 +54,7 @@ describe('Auth JWT + OIDC (unit)', () => {
     (prisma.user.findUnique as any).mockResolvedValue(null);
     (prisma.user.create as any).mockResolvedValue({ id: 'u1' });
     (prisma.user.update as any).mockResolvedValue({});
+    (prisma.userToken.findFirst as any).mockResolvedValue(null);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
     (prisma.oidcIdentity.create as any).mockResolvedValue({ id: 'id1' });
   });
@@ -107,6 +111,67 @@ describe('Auth JWT + OIDC (unit)', () => {
       user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
       account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
       profile: { email_verified: true, sub: 'oidc-sub' },
+    });
+
+    expect(result).toBe(false);
+    expect(prisma.userToken.findFirst).toHaveBeenCalledWith({
+      where: { identifier: 'user@example.com', type: 'INVITE' },
+      select: { id: true },
+    });
+    expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
+  });
+
+  it('links an ACTIVE admin-provisioned user on first OIDC login when email is verified', async () => {
+    const authOptions = await getAuthOptions();
+    const signIn = authOptions.callbacks?.signIn as unknown as (args: any) => Promise<boolean>;
+
+    (prisma.user.findUnique as any).mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      name: 'User',
+      role: 'USER',
+      status: 'ACTIVE',
+    });
+    (prisma.userToken.findFirst as any).mockResolvedValue({ id: 'invite-token-record' });
+    (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
+
+    const user = { email: 'user@example.com', name: 'User', id: 'oidc-sub' };
+    const result = await signIn({
+      user,
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
+      profile: { email_verified: true, sub: 'oidc-sub' },
+    });
+
+    expect(result).toBe(true);
+    expect(prisma.oidcIdentity.create).toHaveBeenCalledWith({
+      data: {
+        issuer: 'https://login.example.com',
+        subject: 'oidc-sub',
+        email: 'user@example.com',
+        userId: 'u1',
+      },
+    });
+    expect(user.id).toBe('u1');
+  });
+
+  it('does not link an existing provisioned user when email_verified is missing', async () => {
+    const authOptions = await getAuthOptions();
+    const signIn = authOptions.callbacks?.signIn as unknown as (args: any) => Promise<boolean>;
+
+    (prisma.user.findUnique as any).mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      name: 'User',
+      role: 'USER',
+      status: 'ACTIVE',
+    });
+    (prisma.userToken.findFirst as any).mockResolvedValue({ id: 'invite-token-record' });
+    (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
+
+    const result = await signIn({
+      user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
+      profile: { sub: 'oidc-sub' },
     });
 
     expect(result).toBe(false);
