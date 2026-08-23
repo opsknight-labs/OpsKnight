@@ -6,7 +6,7 @@ metadata:
   labels:
     app: opsknight-postgres
 spec:
-  type: ClusterIP
+  clusterIP: None
   ports:
     - port: 5432
       targetPort: 5432
