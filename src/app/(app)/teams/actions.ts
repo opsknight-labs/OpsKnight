@@ -286,8 +286,8 @@ export async function updateTeamMemberRole(
     return { error: 'Member not found.' };
   }
 
-  // Only admins or team owners can assign OWNER/ADMIN roles
-  if (role === 'OWNER' || role === 'ADMIN') {
+  // Only admins or team owners can assign or modify OWNER/ADMIN roles
+  if (role === 'OWNER' || role === 'ADMIN' || member.role === 'OWNER' || member.role === 'ADMIN') {
     const isAdmin = currentUser.role === 'ADMIN';
     const isTeamOwner = await prisma.teamMember.findFirst({
       where: {
@@ -298,7 +298,7 @@ export async function updateTeamMemberRole(
     });
 
     if (!isAdmin && !isTeamOwner) {
-      return { error: 'Only admins or team owners can assign OWNER or ADMIN roles.' };
+      return { error: 'Only admins or team owners can modify OWNER or ADMIN roles.' };
     }
   }
 

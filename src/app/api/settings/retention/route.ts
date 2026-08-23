@@ -8,6 +8,7 @@ import {
   type RetentionPolicy,
 } from '@/lib/retention-policy';
 import { getStorageStats, performDataCleanup } from '@/lib/data-cleanup';
+import { logAudit } from '@/lib/audit';
 
 /**
  * GET /api/settings/retention
@@ -125,6 +126,14 @@ export async function PUT(request: NextRequest) {
 
     const updatedPolicy = await updateRetentionPolicy(updates);
 
+    await logAudit({
+      action: 'retention.policy.updated',
+      entityType: 'USER',
+      entityId: session.user.id,
+      actorId: session.user.id,
+      details: updates,
+    });
+
     logger.info('[API] Retention policy updated', {
       userId: session.user.id,
       updates,
@@ -160,12 +169,22 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const dryRun = body.dryRun !== false; // Default to dry run for safety
 
+    const result = await performDataCleanup(dryRun);
+
+    if (!dryRun) {
+      await logAudit({
+        action: 'retention.data.purged',
+        entityType: 'USER',
+        entityId: session.user.id,
+        actorId: session.user.id,
+        details: JSON.parse(JSON.stringify(result)),
+      });
+    }
+
     logger.info('[API] Data cleanup triggered', {
       userId: session.user.id,
       dryRun,
     });
-
-    const result = await performDataCleanup(dryRun);
 
     return NextResponse.json({
       success: true,

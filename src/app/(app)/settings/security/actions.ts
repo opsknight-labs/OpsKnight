@@ -216,6 +216,9 @@ export async function saveOidcConfig(
     },
   });
 
+  const { resetAuthOptionsCache } = await import('@/lib/auth');
+  resetAuthOptionsCache();
+
   revalidatePath('/settings/security');
   revalidatePath('/login');
 

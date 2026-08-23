@@ -38,11 +38,22 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
 
   const authenticate = async () => {
     try {
-      // Create a dummy challenge for "re-authentication" / "unlock"
-      // We are not actually validating against a server, just asking the OS
-      // to verify the user is present and authorized (Biometrics/PIN).
       const challenge = new Uint8Array(32);
       window.crypto.getRandomValues(challenge);
+      const storedCredId = window.localStorage.getItem('opsknight_biometric_credential_id');
+
+      let allowCredentials: PublicKeyCredentialDescriptor[] | undefined = undefined;
+      if (storedCredId) {
+        try {
+          const rawId = Uint8Array.from(
+            atob(storedCredId.replace(/-/g, '+').replace(/_/g, '/')),
+            c => c.charCodeAt(0)
+          );
+          allowCredentials = [{ id: rawId, type: 'public-key' }];
+        } catch {
+          // Ignore conversion error and fall back to broad search
+        }
+      }
 
       await navigator.credentials.get({
         publicKey: {
@@ -50,6 +61,7 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
           timeout: 60000,
           rpId: window.location.hostname,
           userVerification: 'required', // This forces FaceID/TouchID/PIN
+          ...(allowCredentials ? { allowCredentials } : {}),
         },
       });
 

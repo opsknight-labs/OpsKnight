@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
-
-function escapeCsv(value: string) {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
+import { buildCsv } from '@/lib/csv';
 
 function escapePdf(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
@@ -65,8 +59,15 @@ export async function GET(req: NextRequest) {
     const monthParam = searchParams.get('month');
     const monthMatch = monthParam?.match(/^(\d{4})-(\d{2})$/);
     const now = new Date();
-    const year = monthMatch ? Number(monthMatch[1]) : now.getUTCFullYear();
-    const monthIndex = monthMatch ? Number(monthMatch[2]) - 1 : now.getUTCMonth();
+    let year = monthMatch ? Number(monthMatch[1]) : now.getUTCFullYear();
+    let monthIndex = monthMatch ? Number(monthMatch[2]) - 1 : now.getUTCMonth();
+
+    if (isNaN(year) || year < 2000 || year > 2100) {
+      year = now.getUTCFullYear();
+    }
+    if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+      monthIndex = now.getUTCMonth();
+    }
 
     const periodStart = new Date(Date.UTC(year, monthIndex, 1));
     const periodEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
@@ -121,13 +122,17 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const header = ['Service ID', 'Service Name', 'Uptime %'];
-    const csv = [
-      header.map(escapeCsv).join(','),
-      ...uptimeRows.map(row =>
-        [escapeCsv(row.id), escapeCsv(row.name), row.uptime.toFixed(3)].join(',')
-      ),
-    ].join('\n');
+    const csvData = uptimeRows.map(row => ({
+      serviceId: row.id,
+      serviceName: row.name,
+      uptimePercentage: row.uptime.toFixed(3),
+    }));
+
+    const csv = buildCsv(csvData, [
+      { key: 'serviceId', header: 'Service ID' },
+      { key: 'serviceName', header: 'Service Name' },
+      { key: 'uptimePercentage', header: 'Uptime %' },
+    ]);
 
     return new NextResponse(csv, {
       headers: {

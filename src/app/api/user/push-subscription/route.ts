@@ -13,8 +13,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const subscription = await req.json();
-    if (!subscription || !subscription.endpoint) {
-      return new NextResponse('Invalid subscription', { status: 400 });
+    const { endpoint, keys } = subscription || {};
+    if (!endpoint || typeof endpoint !== 'string' || !keys?.p256dh || !keys?.auth) {
+      return new NextResponse(
+        'Invalid PushSubscription payload: missing endpoint or cryptographic keys',
+        { status: 400 }
+      );
     }
 
     // Store subscription

@@ -47,12 +47,30 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
       return NextResponse.json({ error: 'Invalid logo data.' }, { status: 400 });
     }
 
-    const body = new Uint8Array(parsed.buffer);
+    let buffer = parsed.buffer;
+    const isSvg = parsed.mime.includes('svg');
+
+    if (isSvg) {
+      const svgText = buffer.toString('utf8');
+      // Basic SVG sanitization against stored XSS
+      const sanitizedSvg = svgText
+        .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+        .replace(/on\w+\s*=\s*(["']).*?\1/gi, '')
+        .replace(/on\w+\s*=\s*[^>\s]+/gi, '')
+        .replace(/javascript:/gi, '');
+      buffer = Buffer.from(sanitizedSvg, 'utf8');
+    }
+
+    const body = new Uint8Array(buffer);
     return new NextResponse(body, {
       status: 200,
       headers: {
         'Content-Type': parsed.mime,
         'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        ...(isSvg
+          ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" }
+          : {}),
       },
     });
   } catch (error) {

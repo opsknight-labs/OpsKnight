@@ -43,7 +43,7 @@ export default function MobileBiometricToggle() {
         const challenge = new Uint8Array(32);
         window.crypto.getRandomValues(challenge);
 
-        await navigator.credentials.create({
+        const cred = (await navigator.credentials.create({
           publicKey: {
             challenge,
             rp: { name: 'OpsKnight Mobile' },
@@ -52,7 +52,10 @@ export default function MobileBiometricToggle() {
               name: 'mobile-user',
               displayName: 'Mobile User',
             },
-            pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+            pubKeyCredParams: [
+              { alg: -7, type: 'public-key' },
+              { alg: -257, type: 'public-key' },
+            ],
             authenticatorSelection: {
               authenticatorAttachment: 'platform',
               userVerification: 'required',
@@ -60,9 +63,12 @@ export default function MobileBiometricToggle() {
             timeout: 60000,
             attestation: 'none',
           },
-        });
+        })) as PublicKeyCredential | null;
 
         // Success
+        if (cred?.id) {
+          window.localStorage.setItem('opsknight_biometric_credential_id', cred.id);
+        }
         window.localStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true');
         setIsEnabled(true);
       } catch (error) {
@@ -72,6 +78,7 @@ export default function MobileBiometricToggle() {
     } else {
       // Disabling: Just disable
       window.localStorage.removeItem(BIOMETRIC_ENABLED_KEY);
+      window.localStorage.removeItem('opsknight_biometric_credential_id');
       setIsEnabled(false);
     }
   };

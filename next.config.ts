@@ -16,6 +16,14 @@ const withPWA = require('@ducanh2912/next-pwa').default({
     // Add custom runtime caching and handlers
     runtimeCaching: [
       {
+        urlPattern:
+          /^\/api\/(auth|user|notifications|incidents|admin|settings|teams|schedules|services)\/.*/i,
+        handler: 'NetworkOnly',
+        options: {
+          cacheName: 'no-cache-authenticated-apis',
+        },
+      },
+      {
         urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
         handler: 'CacheFirst',
         options: {

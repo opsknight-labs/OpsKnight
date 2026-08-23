@@ -1,10 +1,9 @@
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
-import { assertResponderOrAbove } from '@/lib/rbac';
+import { assertCanModifyIncident } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { IncidentCustomFieldSchema } from '@/lib/validation';
+import { validateCustomFieldValue } from '@/lib/custom-fields';
 import { logger } from '@/lib/logger';
 
 /**
@@ -13,14 +12,17 @@ import { logger } from '@/lib/logger';
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session) {
-      return jsonError('Unauthorized', 401);
+    const { id: incidentId } = await params;
+
+    try {
+      await assertCanModifyIncident(incidentId);
+    } catch (error) {
+      return jsonError(
+        error instanceof Error ? error.message : 'Unauthorized to modify incident',
+        403
+      );
     }
 
-    await assertResponderOrAbove();
-
-    const { id: incidentId } = await params;
     let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     try {
       body = await req.json();
@@ -32,8 +34,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
     }
     const { customFieldId, value } = parsed.data;
-    const normalizedValue = value === null || value === undefined ? null : String(value);
-    const trimmedValue = normalizedValue === null ? null : normalizedValue.trim();
 
     // Verify incident exists
     const incident = await prisma.incident.findUnique({
@@ -53,9 +53,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return jsonError('Custom field not found', 404);
     }
 
-    // Validate required fields
-    if (customField.required && (!trimmedValue || trimmedValue === '')) {
-      return jsonError(`${customField.name} is required`, 400);
+    // Validate and normalize custom field value
+    const validation = validateCustomFieldValue(customField, value);
+    if (!validation.valid) {
+      return jsonError(validation.error || 'Invalid custom field value', 400);
     }
 
     // Upsert custom field value
@@ -67,19 +68,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         },
       },
       update: {
-        value: trimmedValue || null,
+        value: validation.normalizedValue,
       },
       create: {
         incidentId,
         customFieldId,
-        value: trimmedValue || null,
+        value: validation.normalizedValue,
       },
     });
 
     logger.info('api.incident.custom_field.updated', { incidentId, customFieldId });
     return jsonOk({ success: true }, 200);
   } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('api.incident.custom_field.update_error', {
       error: error instanceof Error ? error.message : String(error),
     });

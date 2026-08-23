@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { getCurrentUser } from '@/lib/rbac';
 import { revalidatePath } from 'next/cache';
+import { logAudit } from '@/lib/audit';
 
 /**
  * Get all notification provider configurations
@@ -76,6 +77,14 @@ export async function updateNotificationProvider(
     });
   }
 
+  await logAudit({
+    action: 'notification_provider.updated',
+    entityType: 'USER',
+    entityId: user.id,
+    actorId: user.id,
+    details: { provider, enabled },
+  });
+
   revalidatePath('/settings/system');
   return { success: true };
 }
@@ -147,6 +156,14 @@ export async function generateVapidKeys(options?: {
       config: nextConfig,
       updatedBy: user.id,
     },
+  });
+
+  await logAudit({
+    action: 'vapid_keys.rotated',
+    entityType: 'USER',
+    entityId: user.id,
+    actorId: user.id,
+    details: { subject, rotated: shouldRotate },
   });
 
   revalidatePath('/settings/notifications');

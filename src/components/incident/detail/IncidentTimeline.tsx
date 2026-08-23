@@ -48,8 +48,12 @@ export default function IncidentTimeline({
     sortPriority: number;
   }> = [];
 
+  const hasCreatedDbEvent = events.some(e => /triggered|created/i.test(e.message));
+  const hasAckDbEvent = events.some(e => /acknowledged/i.test(e.message));
+  const hasResolveDbEvent = events.some(e => /resolved/i.test(e.message));
+
   // Add incident creation
-  if (incidentCreatedAt) {
+  if (incidentCreatedAt && !hasCreatedDbEvent) {
     timelineEvents.push({
       id: 'incident-created',
       message: 'Incident triggered and created',
@@ -60,7 +64,7 @@ export default function IncidentTimeline({
   }
 
   // Add acknowledgment
-  if (incidentAcknowledgedAt) {
+  if (incidentAcknowledgedAt && !hasAckDbEvent) {
     timelineEvents.push({
       id: 'incident-acknowledged',
       message: 'Incident acknowledged by responder',
@@ -71,7 +75,7 @@ export default function IncidentTimeline({
   }
 
   // Add resolution
-  if (incidentResolvedAt) {
+  if (incidentResolvedAt && !hasResolveDbEvent) {
     timelineEvents.push({
       id: 'incident-resolved',
       message: 'Incident marked as resolved',

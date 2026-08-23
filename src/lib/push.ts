@@ -135,7 +135,18 @@ export async function sendPush(
         return;
       }
 
-      const subscription = JSON.parse(device.token);
+      let subscription: any;
+      try {
+        subscription = JSON.parse(device.token);
+        if (!subscription?.endpoint) {
+          throw new Error('Malformed subscription object');
+        }
+      } catch {
+        await prisma.userDevice.delete({ where: { id: device.id } });
+        errorMessages.push(`Device ${device.deviceId}: Corrupted token purged`);
+        return;
+      }
+
       try {
         const payload = JSON.stringify({
           title: options.title,
@@ -172,6 +183,15 @@ export async function sendPush(
 
             if (statusCode === 410 || statusCode === 404) {
               await prisma.userDevice.delete({ where: { id: device.id } });
+              const remaining = await prisma.userDevice.count({
+                where: { userId: options.userId },
+              });
+              if (remaining === 0) {
+                await prisma.user.update({
+                  where: { id: options.userId },
+                  data: { pushNotificationsEnabled: false },
+                });
+              }
               errorMessages.push(`Device ${device.deviceId}: Subscription expired (removed)`);
               return;
             }
@@ -204,6 +224,13 @@ export async function sendPush(
 
         if (statusCode === 410 || statusCode === 404) {
           await prisma.userDevice.delete({ where: { id: device.id } });
+          const remaining = await prisma.userDevice.count({ where: { userId: options.userId } });
+          if (remaining === 0) {
+            await prisma.user.update({
+              where: { id: options.userId },
+              data: { pushNotificationsEnabled: false },
+            });
+          }
           errorMessages.push(`Device ${device.deviceId}: Subscription expired (removed)`);
         } else {
           errorMessages.push(`Device ${device.deviceId}: ${errorMessage}`);
@@ -226,14 +253,6 @@ export async function sendPush(
 
     for (const device of webDevices) {
       await sendWebPush(device);
-    }
-
-    // Update lastUsed for successful devices
-    if (successCount > 0) {
-      await prisma.userDevice.updateMany({
-        where: { userId: options.userId },
-        data: { lastUsed: new Date() },
-      });
     }
 
     if (successCount > 0) {

@@ -443,6 +443,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             token.sub = user.id ?? (user as AugmentedUser).id ?? token.sub;
             token.name = user.name;
             token.email = user.email;
+            (token as AugmentedJWT).tokenVersion = (user as AugmentedUser).tokenVersion ?? 0;
           }
 
           // Handle client-side update() calls
@@ -715,16 +716,19 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             // If user exists by email but isn't linked, we MUST BLOCK the login to prevent Account Takeover.
             // An attacker could simply create an OIDC account with the same email to hijack the admin account.
             if (!existingIdentity && targetUser) {
-              // Allow if we just created the user (auto-provision case) or if the user is in INVITED status
+              // Allow if we just created the user (auto-provision case) or if the user is in INVITED status with a verified email
               const isInvitedUser = targetUser.status === 'INVITED';
-              if (existing && !isInvitedUser) {
+              const isEmailVerified = emailVerifiedClaim === true;
+              if (existing && (!isInvitedUser || !isEmailVerified)) {
                 logger.warn(
-                  '[Auth] OIDC sign-in blocked: Account Takeover Attempt - Email exists but not linked',
+                  '[Auth] OIDC sign-in blocked: Account Takeover Attempt - Email exists but not linked or unverified',
                   {
                     component: 'auth:signIn',
                     email,
                     issuer,
                     subject,
+                    isInvitedUser,
+                    isEmailVerified,
                   }
                 );
                 return false;

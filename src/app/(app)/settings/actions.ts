@@ -389,7 +389,7 @@ export async function createApiKey(
 
     const { token, prefix, tokenHash } = generateApiKey();
 
-    await prisma.apiKey.create({
+    const key = await prisma.apiKey.create({
       data: {
         name,
         prefix,
@@ -397,6 +397,14 @@ export async function createApiKey(
         scopes: finalScopes,
         userId: user.id,
       },
+    });
+
+    await logAudit({
+      action: 'api_key.created',
+      entityType: 'USER',
+      entityId: user.id,
+      actorId: user.id,
+      details: { keyId: key.id, name, prefix, scopes: finalScopes },
     });
 
     revalidatePath('/settings/api-keys');
@@ -422,6 +430,14 @@ export async function revokeApiKey(formData: FormData) {
     data: {
       revokedAt: new Date(),
     },
+  });
+
+  await logAudit({
+    action: 'api_key.revoked',
+    entityType: 'USER',
+    entityId: user.id,
+    actorId: user.id,
+    details: { keyId },
   });
 
   revalidatePath('/settings/api-keys');

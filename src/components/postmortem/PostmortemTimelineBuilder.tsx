@@ -33,6 +33,28 @@ interface PostmortemTimelineBuilderProps {
   onChange: (events: TimelineEvent[]) => void;
 }
 
+const toLocalInputValue = (isoStr: string) => {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+};
+
+const fromLocalInputValue = (localStr: string) => {
+  if (!localStr) return new Date().toISOString();
+  const d = new Date(localStr);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+};
+
+const sortEvents = (items: TimelineEvent[]) => {
+  return [...items].sort((a, b) => {
+    const diff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+    if (diff !== 0) return diff;
+    return (a.id || '').localeCompare(b.id || '');
+  });
+};
+
 export default function PostmortemTimelineBuilder({
   events,
   onChange,
@@ -41,7 +63,7 @@ export default function PostmortemTimelineBuilder({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newEvent, setNewEvent] = useState<Partial<TimelineEvent>>({
     type: 'DETECTION',
-    timestamp: new Date().toISOString().slice(0, 16),
+    timestamp: toLocalInputValue(new Date().toISOString()),
   });
 
   const addEvent = () => {
@@ -49,26 +71,24 @@ export default function PostmortemTimelineBuilder({
 
     const event: TimelineEvent = {
       id: `event-${Date.now()}`,
-      timestamp: newEvent.timestamp,
+      timestamp: fromLocalInputValue(newEvent.timestamp),
       type: newEvent.type || 'DETECTION',
       title: newEvent.title,
       description: newEvent.description || '',
       actor: newEvent.actor,
     };
 
-    const updated = [...events, event].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
+    const updated = sortEvents([...events, event]);
     onChange(updated);
     setNewEvent({
       type: 'DETECTION',
-      timestamp: new Date().toISOString().slice(0, 16),
+      timestamp: toLocalInputValue(new Date().toISOString()),
     });
   };
 
   const updateEvent = (id: string, updates: Partial<TimelineEvent>) => {
     const updated = events.map(e => (e.id === id ? { ...e, ...updates } : e));
-    onChange(updated);
+    onChange(sortEvents(updated));
   };
 
   const deleteEvent = (id: string) => {
@@ -225,8 +245,12 @@ export default function PostmortemTimelineBuilder({
                         <Label>Timestamp</Label>
                         <Input
                           type="datetime-local"
-                          value={new Date(event.timestamp).toISOString().slice(0, 16)}
-                          onChange={e => updateEvent(event.id, { timestamp: e.target.value })}
+                          value={toLocalInputValue(event.timestamp)}
+                          onChange={e =>
+                            updateEvent(event.id, {
+                              timestamp: fromLocalInputValue(e.target.value),
+                            })
+                          }
                         />
                       </div>
                       <div className="space-y-1.5">

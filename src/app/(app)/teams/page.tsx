@@ -243,6 +243,7 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
           },
         },
         orderBy: { createdAt: 'desc' },
+        take: 100,
       });
 
       // Count logs per team using aggregation

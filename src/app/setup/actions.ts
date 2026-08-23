@@ -14,34 +14,42 @@ export async function bootstrapAdmin(formData: FormData) {
     return { error: 'Name and email are required.' };
   }
 
-  const existing = await prisma.user.count();
-  if (existing > 0) {
-    redirect('/login');
-  }
-
-  const password = randomBytes(8)
-    .toString('base64')
-    .replace(/[^a-zA-Z0-9]/g, '')
-    .slice(0, 12);
+  const password = randomBytes(12).toString('hex').slice(0, 16);
   const passwordHash = await bcrypt.hash(password, 12);
+  const defaultActorId = await getDefaultActorId();
 
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email,
-      role: 'ADMIN',
-      status: 'ACTIVE',
-      passwordHash,
-      invitedAt: null,
-      deactivatedAt: null,
-    },
-  });
+  let user;
+  try {
+    user = await prisma.$transaction(async tx => {
+      const existing = await tx.user.count();
+      if (existing > 0) {
+        throw new Error('SYSTEM_ALREADY_INITIALIZED');
+      }
+
+      return tx.user.create({
+        data: {
+          name,
+          email,
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          passwordHash,
+          invitedAt: null,
+          deactivatedAt: null,
+        },
+      });
+    });
+  } catch (err: any) {
+    if (err?.message === 'SYSTEM_ALREADY_INITIALIZED') {
+      redirect('/login');
+    }
+    throw err;
+  }
 
   await logAudit({
     action: 'user.bootstrap',
     entityType: 'USER',
     entityId: user.id,
-    actorId: await getDefaultActorId(),
+    actorId: defaultActorId,
     details: { email },
   });
 

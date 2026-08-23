@@ -10,7 +10,7 @@ export type CsvColumn<T> = {
 export function sanitizeCsvCell(value: unknown): unknown {
   if (typeof value === 'string') {
     const trimmed = value.trim();
-    if (/^[=\+\-@\t\r]/.test(trimmed)) {
+    if (/^[=+\-@\t\r|%]/.test(trimmed)) {
       return `'${value}`;
     }
   }

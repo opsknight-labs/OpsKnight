@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
-import { triggerStatusPageWebhooks } from '@/lib/status-page-webhooks';
+import { deliverWebhook } from '@/lib/status-page-webhooks';
 
 /**
  * Test webhook endpoint
@@ -59,7 +59,13 @@ export async function POST(req: NextRequest) {
 
     const results = await Promise.allSettled(
       validWebhooks.map(async webhook => {
-        await triggerStatusPageWebhooks(statusPageId, 'incident.created', testPayload);
+        const payload = {
+          event: 'incident.created',
+          timestamp: new Date().toISOString(),
+          data: testPayload,
+        };
+        const ok = await deliverWebhook(webhook!.url, webhook!.secret, payload);
+        if (!ok) throw new Error(`Failed delivery to ${webhook!.url}`);
         return { webhookId: webhook!.id, url: webhook!.url, success: true };
       })
     );
@@ -87,7 +93,6 @@ export async function POST(req: NextRequest) {
       200
     );
   } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('api.status_page.webhook.test_error', {
       error: error instanceof Error ? error.message : String(error),
     });

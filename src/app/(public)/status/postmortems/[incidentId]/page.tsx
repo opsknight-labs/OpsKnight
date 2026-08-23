@@ -38,6 +38,14 @@ export default async function PublicPostmortemPage({
     notFound();
   }
 
+  const sanitizedPostmortem = {
+    ...postmortem,
+    createdBy: {
+      ...postmortem.createdBy,
+      email: '',
+    },
+  };
+
   return (
     <main style={{ padding: 'var(--spacing-6)' }}>
       <div style={{ marginBottom: 'var(--spacing-6)' }}>
@@ -55,7 +63,7 @@ export default async function PublicPostmortemPage({
         </Link>
       </div>
       <PostmortemDetailView
-        postmortem={postmortem}
+        postmortem={sanitizedPostmortem}
         users={[]}
         canEdit={false}
         incidentId={incidentId}
