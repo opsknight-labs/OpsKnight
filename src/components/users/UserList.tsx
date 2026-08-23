@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { UserCard } from './UserCard';
-import OidcLinkingApprovalButton from './OidcLinkingApprovalButton';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import type { UserFormState } from '@/app/(app)/users/actions';
@@ -215,27 +214,21 @@ export default function UserList({
           };
 
           return (
-            <div key={user.id} className="space-y-1.5">
-              <UserCard
-                user={user}
-                selected={selectedIds.has(user.id)}
-                onSelect={() => toggleUser(user.id)}
-                isCurrentUser={user.id === currentUserId}
-                isAdmin={isAdmin}
-                teams={teams}
-                onActivate={user.status === 'DISABLED' ? handleReactivate : undefined}
-                onDeactivate={user.status === 'ACTIVE' ? handleDeactivate : undefined}
-                onDelete={handleDelete}
-                onGenerateInvite={user.status === 'INVITED' ? handleGenerateInvite : undefined}
-                onUpdateRole={handleUpdateRole}
-                onAddToTeam={handleAddToTeam}
-              />
-              {isAdmin && user.status === 'ACTIVE' && user.id !== currentUserId && (
-                <div className="flex justify-end px-1">
-                  <OidcLinkingApprovalButton userId={user.id} userName={user.name} />
-                </div>
-              )}
-            </div>
+            <UserCard
+              key={user.id}
+              user={user}
+              selected={selectedIds.has(user.id)}
+              onSelect={() => toggleUser(user.id)}
+              isCurrentUser={user.id === currentUserId}
+              isAdmin={isAdmin}
+              teams={teams}
+              onActivate={user.status === 'DISABLED' ? handleReactivate : undefined}
+              onDeactivate={user.status === 'ACTIVE' ? handleDeactivate : undefined}
+              onDelete={handleDelete}
+              onGenerateInvite={user.status === 'INVITED' ? handleGenerateInvite : undefined}
+              onUpdateRole={handleUpdateRole}
+              onAddToTeam={handleAddToTeam}
+            />
           );
         })}
       </div>

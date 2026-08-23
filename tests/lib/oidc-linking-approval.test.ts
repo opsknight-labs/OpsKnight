@@ -20,14 +20,18 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     user: { findUnique: vi.fn() },
     oidcIdentity: { findFirst: vi.fn() },
-    userToken: { findFirst: vi.fn(), create: vi.fn() },
+    userToken: { findFirst: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
   },
 }));
 
 import prisma from '@/lib/prisma';
-import { allowOidcLinking } from '@/app/(app)/users/oidc-actions';
+import {
+  allowOidcLinking,
+  getOidcLinkingState,
+  revokeOidcLinking,
+} from '@/app/(app)/users/oidc-actions';
 
-describe('allowOidcLinking', () => {
+describe('OIDC linking approval management', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.user.findUnique as any).mockResolvedValue({
@@ -38,12 +42,18 @@ describe('allowOidcLinking', () => {
     (prisma.oidcIdentity.findFirst as any).mockResolvedValue(null);
     (prisma.userToken.findFirst as any).mockResolvedValue(null);
     (prisma.userToken.create as any).mockResolvedValue({ id: 'marker-1' });
+    (prisma.userToken.deleteMany as any).mockResolvedValue({ count: 1 });
+  });
+
+  it('reports not-approved when an active user has no identity or provisioning evidence', async () => {
+    const result = await getOidcLinkingState('user-1');
+    expect(result).toEqual({ success: true, state: 'not-approved', alreadyLinked: false });
   });
 
   it('records non-redeemable provisioning evidence without changing user status', async () => {
     const result = await allowOidcLinking('user-1');
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, state: 'approved' });
     expect(prisma.userToken.create).toHaveBeenCalledTimes(1);
     expect(prisma.userToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -57,12 +67,14 @@ describe('allowOidcLinking', () => {
     expect(prisma.user.update).toBeUndefined();
   });
 
-  it('does not create duplicate evidence when provisioning evidence already exists', async () => {
+  it('reports approved when provisioning evidence already exists', async () => {
     (prisma.userToken.findFirst as any).mockResolvedValue({ id: 'existing-invite' });
 
-    const result = await allowOidcLinking('user-1');
+    const state = await getOidcLinkingState('user-1');
+    const allowResult = await allowOidcLinking('user-1');
 
-    expect(result).toEqual({ success: true });
+    expect(state).toEqual({ success: true, state: 'approved', alreadyLinked: false });
+    expect(allowResult).toEqual({ success: true, alreadyApproved: true, state: 'approved' });
     expect(prisma.userToken.create).not.toHaveBeenCalled();
   });
 
@@ -71,21 +83,53 @@ describe('allowOidcLinking', () => {
 
     const result = await allowOidcLinking('user-1');
 
-    expect(result).toEqual({ success: true, alreadyLinked: true });
+    expect(result).toEqual({ success: true, alreadyLinked: true, state: 'linked' });
     expect(prisma.userToken.findFirst).not.toHaveBeenCalled();
     expect(prisma.userToken.create).not.toHaveBeenCalled();
   });
 
-  it('rejects disabled users', async () => {
+  it('revokes pending first-link eligibility without changing credentials or status', async () => {
+    (prisma.userToken.findFirst as any).mockResolvedValue({ id: 'existing-invite' });
+
+    const result = await revokeOidcLinking('user-1');
+
+    expect(result).toEqual({ success: true, state: 'not-approved' });
+    expect(prisma.userToken.deleteMany).toHaveBeenCalledWith({
+      where: { identifier: 'user@example.com', type: 'INVITE' },
+    });
+    expect(prisma.user.update).toBeUndefined();
+  });
+
+  it('does not use revoke approval to unlink an established identity', async () => {
+    (prisma.oidcIdentity.findFirst as any).mockResolvedValue({ id: 'identity-1' });
+
+    const result = await revokeOidcLinking('user-1');
+
+    expect(result).toEqual({
+      error: 'This user already has an OIDC identity linked. Revoking approval does not unlink identities.',
+      alreadyLinked: true,
+      state: 'linked',
+    });
+    expect(prisma.userToken.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects approval management for disabled users', async () => {
     (prisma.user.findUnique as any).mockResolvedValue({
       id: 'user-1',
       email: 'user@example.com',
       status: 'DISABLED',
     });
 
-    const result = await allowOidcLinking('user-1');
+    const allowResult = await allowOidcLinking('user-1');
+    const revokeResult = await revokeOidcLinking('user-1');
 
-    expect(result).toEqual({ error: 'Reactivate the user before allowing OIDC linking.' });
+    expect(allowResult).toEqual({
+      error: 'OIDC linking approval can only be managed for active users.',
+    });
+    expect(revokeResult).toEqual({
+      error: 'OIDC linking approval can only be managed for active users.',
+    });
     expect(prisma.userToken.create).not.toHaveBeenCalled();
+    expect(prisma.userToken.deleteMany).not.toHaveBeenCalled();
   });
 });

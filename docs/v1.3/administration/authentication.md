@@ -71,27 +71,30 @@ For an existing account that does not yet have an OIDC identity, first-time link
 
 - the configured OIDC provider returns a stable subject;
 - the provider explicitly returns `email_verified: true`;
-- the OpsKnight account has administrator-provisioning evidence, either from the normal invite flow or from an Admin explicitly allowing OIDC linking for that user;
+- the OpsKnight account has administrator-provisioning evidence from the invite flow or from an Admin allowing OIDC linking;
 - the issuer-plus-subject identity is not already linked to another OpsKnight user.
 
 After the first successful link, later sign-ins use the stored issuer-plus-subject identity rather than email-only matching.
 
-### Allow OIDC linking for an existing user
+### Manage OIDC linking for an existing user
 
-Use this when an existing **Active** user must start using OIDC but does not already have an OIDC identity link.
+Use this workflow for an existing **Active** account that needs to establish its first OIDC identity link.
 
-1. Sign in as an Admin.
-2. Open **Users**.
-3. Find the existing Active user.
-4. Select **Allow OIDC linking** for that user.
+1. Sign in as an Admin and open **Users**.
+2. Open the user's **⋯** actions menu.
+3. Select **Allow OIDC linking**.
+4. Review the confirmation and select **Allow linking**.
 5. Ask the user to sign in through the configured OIDC provider.
-6. Confirm the identity provider returns the same account email and `email_verified: true`.
 
-The action does not change the user's application role or account status and does not create a usable invitation link. It records administrator-provisioning evidence that the authentication flow can use for the next safe first-time link. If the user already has an OIDC identity, OpsKnight reports that no additional linking approval is required.
+The approval does not change the user's role, status, password, or existing sessions. The next first-time OIDC link is still accepted only when the provider returns the same account email, a stable subject, and `email_verified: true`, and the external identity is not linked elsewhere.
 
-Do not use this control to work around an email mismatch, an unverified email claim, a missing subject, or an identity already linked to another user. Correct the identity-provider configuration instead.
+Until an OIDC identity is established, the same **⋯** menu shows **Revoke OIDC linking approval**. Revoking removes the stored first-link provisioning evidence for that Active user. It does not disable the account or affect password authentication.
 
-Users still in **Invited** status already have administrator-provisioning evidence from the supported invite workflow and do not need this additional action.
+Once an OIDC identity has been established, the menu shows **OIDC linked**. Approval revocation is intentionally not used as an unlink operation; removing an established external identity is a separate security-sensitive lifecycle operation.
+
+Users still in **Invited** status already have administrator-provisioning evidence from the supported invite workflow. The explicit allow/revoke control is therefore limited to Active accounts.
+
+Do not use approval to work around an email mismatch, an unverified email claim, a missing subject, or an identity already linked to another user. Correct the identity-provider configuration instead.
 
 ### Auto-provisioning and domains
 
@@ -130,20 +133,21 @@ Cookies are HTTP-only where appropriate and use `SameSite=Lax`. `NEXTAUTH_URL` b
 - Restrict auto-provision domains before enabling it.
 - Test normal, denied-domain, missing-claim, disabled-user, and Admin-group cases.
 - Confirm role mapping cannot grant Admin through a user-controlled claim.
-- Verify first-time linking for an explicitly approved existing test user before migrating production accounts.
+- Verify allow, revoke, and first-link behavior with a non-Admin test account before migrating production accounts.
 - Verify revoke-all and IdP disable behavior.
 - Record the rollback: disable OIDC using the retained local Admin session.
 
 ## Troubleshooting
 
-| Symptom                       | Check                                                                                                           |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Redirect/cookie loop          | Exact HTTPS `NEXTAUTH_URL`, forwarded host/scheme, and browser cookie policy.                                   |
-| Discovery test fails          | Issuer is HTTPS and exposes valid OIDC discovery metadata from the app network.                                 |
-| Existing local user is denied | User is invited or explicitly approved for OIDC linking, email is verified, subject exists, and identity is free. |
-| New user is denied            | Auto-provision setting, exact allowed domain, email and verification claims.                                    |
-| Role does not update          | Requested custom scope, actual ID-token/profile claim, JSON rule order and exact value.                         |
-| Secret cannot decrypt         | Restore the matching `ENCRYPTION_KEY` or enter a new client secret.                                             |
+| Symptom                       | Check                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Redirect/cookie loop          | Exact HTTPS `NEXTAUTH_URL`, forwarded host/scheme, and browser cookie policy.                                      |
+| Discovery test fails          | Issuer is HTTPS and exposes valid OIDC discovery metadata from the app network.                                    |
+| Existing local user is denied | Approval/invite evidence, verified email, stable subject, allowed domain, and whether the identity is already used. |
+| Approval shows OIDC linked    | The user already has a stored issuer-plus-subject identity; approval revoke is not an unlink operation.            |
+| New user is denied            | Auto-provision setting, exact allowed domain, email and verification claims.                                       |
+| Role does not update          | Requested custom scope, actual ID-token/profile claim, JSON rule order and exact value.                            |
+| Secret cannot decrypt         | Restore the matching `ENCRYPTION_KEY` or enter a new client secret.                                                |
 
 ## Related topics
 
