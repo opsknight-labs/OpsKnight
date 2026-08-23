@@ -115,9 +115,15 @@ jobs:
       - name: Backup and restore contract
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          pg_dump -h localhost -U postgres -Fc opsknight_release > /tmp/opsknight-release.dump
-          createdb -h localhost -U postgres opsknight_restore
-          pg_restore -h localhost -U postgres --no-owner -d opsknight_restore /tmp/opsknight-release.dump
+          POSTGRES_CONTAINER="$(docker ps --filter ancestor=postgres:16-alpine --format '{{.ID}}' | head -n 1)"
+          test -n "$POSTGRES_CONTAINER"
+          # Use the service image's matching PostgreSQL client. The Ubuntu
+          # runner's older pg_dump refuses to dump a PostgreSQL 16 server.
+          docker exec "$POSTGRES_CONTAINER" pg_dump -U postgres -Fc \
+            -f /tmp/opsknight-release.dump opsknight_release
+          docker exec "$POSTGRES_CONTAINER" createdb -U postgres opsknight_restore
+          docker exec "$POSTGRES_CONTAINER" pg_restore -U postgres --no-owner \
+            -d opsknight_restore /tmp/opsknight-release.dump
           DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_restore?schema=public' npm run prisma:health
           DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_restore?schema=public' node scripts/ci-db-smoke.cjs
 
