@@ -101,7 +101,7 @@ This should match `NEXTAUTH_URL` in most deployments. It is exposed to the brows
 
 ## Notification providers
 
-Configure Resend, SendGrid, SMTP, Amazon SES, Twilio, AWS SNS, WhatsApp, and Web Push in **Settings → Notification Providers**. Those credentials are encrypted in the database; v1.3 does not read `SMTP_*`, `TWILIO_*`, or AWS SNS credentials from environment variables.
+Configure Resend, SendGrid, SMTP, Amazon SES, Twilio, AWS SNS, WhatsApp, and Web Push in **Settings → Notification Providers**. v1.3 does not read `SMTP_*`, `TWILIO_*`, or AWS SNS credentials from environment variables. Configure a valid `ENCRYPTION_KEY` before entering provider credentials; see [Encryption](../security/encryption) for the protected-field and recovery boundaries.
 
 `AWS_ACCESS_KEY_ID` is only a fallback for the SES client after an enabled SES record supplies the remaining provider configuration. Prefer storing the full, dedicated SES credential set in the SES provider form so behavior is explicit.
 
