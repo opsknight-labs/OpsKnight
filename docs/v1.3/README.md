@@ -6,7 +6,7 @@ order: 1
 
 # Documentation
 
-OpsKnight is a self-hosted incident product: on-call, paging, incidents, status, and postmortems on your machines.
+OpsKnight is a transparent, self-hosted incident-operations platform. It connects alert ingestion, on-call routing, response coordination, customer communication, and learning on infrastructure you control.
 
 This tree is **v1.3**. Switch versions in the sidebar for older releases.
 

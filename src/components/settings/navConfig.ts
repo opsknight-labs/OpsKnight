@@ -75,6 +75,15 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         keywords: ['public', 'status', 'branding'],
       },
       {
+        id: 'health-center',
+        label: 'Health Center',
+        description: 'Database, workers, paging, providers, backups, and upgrades',
+        href: '/settings/system/health',
+        icon: 'activity',
+        requiresAdmin: true,
+        keywords: ['health', 'database', 'scheduler', 'backup', 'migration', 'upgrade'],
+      },
+      {
         id: 'performance',
         label: 'Performance Monitoring',
         description: 'Monitor SLA query performance and system metrics.',

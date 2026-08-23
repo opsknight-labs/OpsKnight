@@ -13,8 +13,9 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: 'OpsKnight | Incident Management',
-  description: 'Enterprise incident management and response platform',
+  title: 'OpsKnight | Self-hosted incident operations',
+  description:
+    'Transparent incident operations from alert ingestion and on-call routing through response, customer communication, and learning.',
   icons: {
     icon: [
       { url: '/logo.svg', type: 'image/svg+xml' },

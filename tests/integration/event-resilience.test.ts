@@ -81,6 +81,49 @@ describeIfRealDB('Event Ingestion Resilience Tests', { timeout: 30000 }, () => {
   });
 
   describe('Auto-Resolution Resilience', () => {
+    it('completes the published trigger, acknowledge, and resolve lifecycle', async () => {
+      const service = await createTestService('Release Lifecycle Service');
+      const dedupKey = `release-lifecycle-${Date.now()}`;
+      const basePayload = {
+        dedup_key: dedupKey,
+        payload: {
+          summary: 'Release contract incident',
+          source: 'release-quality',
+          severity: 'critical' as const,
+        },
+      };
+
+      const triggered = await processEvent(
+        { ...basePayload, event_action: 'trigger' },
+        service.id,
+        'release-quality'
+      );
+      expect(triggered.action).toBe('triggered');
+
+      const acknowledged = await processEvent(
+        { ...basePayload, event_action: 'acknowledge' },
+        service.id,
+        'release-quality'
+      );
+      expect(acknowledged.action).toBe('acknowledged');
+
+      const resolved = await processEvent(
+        { ...basePayload, event_action: 'resolve' },
+        service.id,
+        'release-quality'
+      );
+      expect(resolved.action).toBe('resolved');
+
+      const incident = await testPrisma.incident.findFirst({ where: { serviceId: service.id, dedupKey } });
+      expect(incident?.status).toBe('RESOLVED');
+      expect(incident?.acknowledgedAt).not.toBeNull();
+      expect(incident?.resolvedAt).not.toBeNull();
+
+      const timeline = await testPrisma.incidentEvent.findMany({ where: { incidentId: incident!.id } });
+      expect(timeline.some(event => event.message.includes('Acknowledged via API event'))).toBe(true);
+      expect(timeline.some(event => event.message.includes('Auto-resolved'))).toBe(true);
+    });
+
     it('should resolve incident exactly once when receiving multiple resolve events', async () => {
       const service = await createTestService('Resolution Service');
       const dedupKey = `test-resolve-${Date.now()}`;

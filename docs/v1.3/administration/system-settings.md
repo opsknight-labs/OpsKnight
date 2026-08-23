@@ -36,6 +36,12 @@ The System page links to **Performance Monitoring**, an admin-only view of recen
 
 Use this view to investigate query behavior, not as an availability or security monitoring system. If it reports no table or no data, check database migrations and whether relevant queries have run before treating the result as a performance conclusion.
 
+## Administrator Health Center
+
+The System page links to **Administrator Health Center**, an Admin-only on-demand summary of database and migration state, scheduler and job health, escalation backlog, notification and integration failures, public URL consistency, encryption configuration, reported backup freshness, and release availability.
+
+Unknown evidence is not reported as healthy. The Health Center complements the incident timeline and external infrastructure/provider monitoring; see the [Health Center guide](./health-center.md) for thresholds and boundaries.
+
 ## Safe change procedure
 
 1. Record the current value, deployment version, and a rollback owner.
@@ -55,3 +61,4 @@ The browser settings endpoints are internal UI implementation details, not publi
 - [Data retention](./data-retention)
 - [Configuration reference](../getting-started/configuration)
 - [Maintenance](../deployment/maintenance)
+- [Administrator Health Center](./health-center)
