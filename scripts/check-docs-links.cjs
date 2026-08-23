@@ -6,7 +6,9 @@
 const fs = require("fs");
 const path = require("path");
 
-const ROOT = path.join(__dirname, "..", "docs", "v1.4");
+const ROOT = fs.existsSync(path.join(__dirname, "..", "docs", "v1.5"))
+  ? path.join(__dirname, "..", "docs", "v1.5")
+  : path.join(__dirname, "..", "docs", "v1.4");
 const LINK_RE = /\[[^\]]*]\(([^)]+)\)/g;
 
 function walk(dir, acc = []) {
@@ -59,4 +61,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Checked ${files.length} files in docs/v1.4 — relative links resolve.`);
+console.log(`Checked ${files.length} files in docs/${path.basename(ROOT)} — relative links resolve.`);
