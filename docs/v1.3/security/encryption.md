@@ -1,219 +1,87 @@
 ---
 order: 2
 title: Encryption
-description: How OpsKnight encrypts sensitive credentials and how to configure the master key
+description: Configure, protect, and recover the key that encrypts supported stored credentials
 ---
 
 # Encryption
 
-OpsKnight encrypts sensitive secrets — SSO client secrets, Slack tokens, VAPID keys, SMTP passwords, and API keys — at rest using AES-256-CBC **Envelope Encryption**.
+OpsKnight encrypts selected integration and notification-provider credentials at rest. Configure `ENCRYPTION_KEY` before storing real secrets. Treat this key as production-critical: losing it can make existing encrypted values unreadable.
 
+## Configure the master key
 
----
-
-## How It Works
-
-OpsKnight uses a two-layer **Envelope Encryption** model (V2):
-
-```
-ENCRYPTION_KEY (Master Key — from env var)
-        │
-        ▼
-  Encrypt a unique DEK (Data Encryption Key) per secret
-        │
-        ▼
-    DEK encrypts the actual secret
-        │
-        ▼
-  Stored in database: v2:<dekIv>:<encryptedDek>:<payloadIv>:<encryptedPayload>
-```
-
-**Why Envelope Encryption?**
-
-- The master key only ever encrypts small DEKs, not the raw secrets directly.
-- Each secret has its own unique DEK — compromising one ciphertext does not expose others.
-- Fast key rotation: only DEKs need re-encryption, not the entire dataset.
-
----
-
-## Setting the Encryption Key
-
-The master encryption key is configured **entirely through the `ENCRYPTION_KEY` environment variable**. There is no UI for key management — this is intentional and follows [12-factor app](https://12factor.net/config) security best practices: credentials belong in the environment, not in the database.
-
-### Generating a Key
+Generate a 32-byte key encoded as 64 hexadecimal characters:
 
 ```bash
-# Generate a cryptographically secure 32-byte (256-bit) hex key
 openssl rand -hex 32
 ```
 
-This outputs a 64-character hex string, for example:
+Set the generated value in your deployment's secret store, then inject it into the application:
 
-```
-a3f1c2e4b5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2
-```
-
-### Setting the Variable
-
-**Docker Compose / `.env` file**:
-
-```bash
-# .env
-ENCRYPTION_KEY=a3f1c2e4b5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2
+```dotenv
+# .env (do not commit this file)
+ENCRYPTION_KEY=replace-with-a-64-character-hex-key
 ```
 
-**Kubernetes Secret**:
+For Docker Compose, load the value from the environment or an untracked `.env` file. For Kubernetes, store it in a Kubernetes Secret or an external secret manager and reference it from the container environment.
 
-```bash
-kubectl create secret generic opsknight-secrets \
-  --from-literal=ENCRYPTION_KEY=$(openssl rand -hex 32)
-```
+| Environment | Missing or invalid key behavior                                                                             |
+| ----------- | ----------------------------------------------------------------------------------------------------------- |
+| Development | OpsKnight uses a fixed development-only fallback and logs a warning.                                        |
+| Production  | Credential encryption and decryption are unavailable. Do not configure integrations until the key is valid. |
 
-Then reference it in your deployment:
+The key must be exactly 64 hexadecimal characters. Use a different key for each environment.
 
-```yaml
-env:
-  - name: ENCRYPTION_KEY
-    valueFrom:
-      secretKeyRef:
-        name: opsknight-secrets
-        key: ENCRYPTION_KEY
-```
+## What OpsKnight protects
 
-**Helm values**:
+OpsKnight uses AES-256-CBC envelope encryption for supported stored credentials. The current protected values include:
 
-```yaml
-secrets:
-  ENCRYPTION_KEY: 'your-64-char-hex-key'
-```
+- OIDC client secrets.
+- Slack bot tokens, signing secrets, and Slack OAuth client secrets.
+- Jira API tokens and webhook secrets.
+- Notification-provider credential fields, including SMTP passwords, Twilio credentials, AWS SNS/SES credentials, Resend and SendGrid API keys, and Web Push private VAPID keys.
 
-> **Security**: Never commit the `ENCRYPTION_KEY` value to source control. Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager) in production.
+API keys are different: OpsKnight displays the raw `ok_…` key only when it is created, then stores a one-way scrypt hash. API keys cannot be recovered from the database and are not encrypted with `ENCRYPTION_KEY`.
 
----
+Provider configuration supports an `enc:` marker for encrypted values. If the application cannot obtain a valid encryption key, do not assume a configuration save is safe: inspect server logs and correct the key configuration before entering credentials.
 
-## Development Mode
+## Back up and recover
 
-When `NODE_ENV=development` and `ENCRYPTION_KEY` is not set, OpsKnight automatically falls back to a stable, well-known developer key. This means:
+Back up the exact production key in an access-controlled recovery system separate from the application database. Limit read access to the deployment identity and a small emergency recovery group.
 
-- Local development works out of the box with **zero configuration**.
-- No secrets are at risk — the dev key is not secret and is only used for local testing.
-- A warning is printed to the server console so you know it's active.
+If the key is lost:
 
-> **Do not use the development fallback in production.** Always set `ENCRYPTION_KEY` explicitly in any environment that stores real credentials.
+1. Existing encrypted credentials cannot be decrypted.
+2. Create and securely store a new key.
+3. Deploy it to every application instance.
+4. Re-enter affected OIDC, Slack, Jira, and notification-provider credentials.
+5. Test each integration after saving it.
 
----
+Do not copy a development key into production, place keys in repository files, browser-visible configuration, incident tickets, or ordinary application logs.
 
-## What Gets Encrypted
+## Rotate with a maintenance plan
 
-The following fields are encrypted at rest before being written to the database:
+Key rotation is not a single configuration change. A newly configured key cannot decrypt credentials written with the old key unless the old key remains available during a supported migration path.
 
-| Integration       | Field(s) Encrypted               |
-| ----------------- | -------------------------------- |
-| **Jira Cloud**    | `apiToken`, `webhookSecret`      |
-| **SSO / OIDC**    | `clientSecret`                   |
-| **Slack**         | `botToken`, `signingSecret`      |
-| **Slack OAuth**   | `clientSecret`                   |
-| **Twilio**        | `authToken`, `whatsappAuthToken` |
-| **AWS SNS / SES** | `secretAccessKey`                |
-| **Resend**        | `apiKey`                         |
-| **SendGrid**      | `apiKey`                         |
-| **SMTP**          | `password`                       |
-| **Web Push**      | `vapidPrivateKey`                |
+OpsKnight has compatibility handling for a limited set of legacy system-stored values. It is not a complete, general-purpose key-rotation service for every encrypted record or provider configuration. Before rotating a production key:
 
-Fields not in this list (e.g., public keys, provider names, account SIDs) are stored in plaintext.
+1. Take a tested database backup and record the current key's secure recovery location.
+2. Rehearse the change in an environment with representative encrypted credentials.
+3. Identify every configured integration and notification provider.
+4. Plan how to validate or re-enter each credential if it cannot be migrated.
+5. Roll out the new key consistently to all replicas; mixed keys can produce intermittent failures.
 
----
+For a suspected compromise, revoke or rotate the upstream provider credentials as well as the OpsKnight key. Re-encrypting local storage alone does not invalidate a leaked Slack token, SMTP password, or provider API key.
 
-## Key Rotation
+## Operational checks
 
-Key rotation is the process of replacing your master key with a new one. Since OpsKnight uses envelope encryption, rotation requires re-encrypting the per-secret DEKs — the raw secrets themselves do not change.
+After initial setup, restart an application instance and test one non-production credential flow. After a deployment or rotation, test each configured integration and inspect server logs for decryption errors.
 
-### Steps
+Use TLS at the reverse proxy or load balancer for data in transit. Encryption at rest does not replace HTTPS, access control, database backups, or secrets-manager permissions.
 
-1. **Generate a new key**:
+## Related topics
 
-   ```bash
-   openssl rand -hex 32
-   ```
-
-2. **Decrypt existing secrets** with the old key (using your own tooling or a migration script that calls `decryptWithKey(ciphertext, oldKey)`).
-
-3. **Re-encrypt each secret** with the new key (`encryptWithKey(plaintext, newKey)`).
-
-4. **Update `ENCRYPTION_KEY`** in your deployment environment or secrets manager.
-
-5. **Redeploy** the application.
-
-> If you use a secrets manager that supports automatic secret rotation (e.g., AWS Secrets Manager), point `ENCRYPTION_KEY` to the latest version and redeploy. No data migration is needed if you manage rotation at the secrets manager level with version-aware decryption.
-
-### Rotation Frequency
-
-We recommend rotating the encryption key:
-
-- Every 90 days as a baseline cadence
-- Immediately after a suspected key compromise
-- When an admin with key access leaves the organization
-
----
-
-## Migrating from v1.0.0
-
-In OpsKnight `v1.0.0`, the encryption key could be stored directly in the `SystemSettings` database table via the System Settings UI. That feature has been removed in `v1.1.0`.
-
-**If you previously set a key via the UI**, here's how to migrate without losing data:
-
-1. Retrieve the key that was stored in the database:
-
-   ```sql
-   SELECT "encryptionKey" FROM "SystemSettings" WHERE id = 'default';
-   ```
-
-2. Set it as the `ENCRYPTION_KEY` environment variable in your deployment.
-
-3. Redeploy. All existing encrypted data will continue to decrypt correctly — the cryptographic format is unchanged.
-
-> **There is no need to re-encrypt existing data.** The underlying AES-256-CBC envelope encryption format is identical. Only the source of the key has changed (from DB → env var).
-
----
-
-## Security Considerations
-
-| Concern                  | Recommendation                                                 |
-| ------------------------ | -------------------------------------------------------------- |
-| Key storage              | Use a secrets manager; never hardcode in source control        |
-| Key backup               | Keep at least one encrypted backup of the key in a safe place  |
-| Key access               | Restrict who can read `ENCRYPTION_KEY` in your secrets manager |
-| Loss of key              | Encrypted data is permanently unrecoverable without the key    |
-| Same key in dev and prod | Use distinct keys per environment                              |
-
----
-
-## FAQ
-
-**Q: What happens if `ENCRYPTION_KEY` is not set in production?**
-
-The application starts normally, but any attempt to save an encrypted secret (SSO client secret, Slack token, etc.) will fail with an error. Existing encrypted data cannot be read. The rest of the application continues to function.
-
-**Q: Can I use a key shorter than 64 hex characters?**
-
-No. The key must be exactly 64 hexadecimal characters (representing 32 bytes / 256 bits). Any other format is rejected at startup.
-
-**Q: What if I lost the key?**
-
-Encrypted data is permanently unrecoverable without the master key. You will need to set a new key and manually re-enter all integration secrets (SSO, Slack, notification providers) through the UI.
-
-**Q: Is data encrypted in transit as well?**
-
-Encryption at rest (this feature) is separate from encryption in transit (TLS/HTTPS). Always run OpsKnight behind HTTPS in production.
-
-**Q: Can I verify that the correct key is configured?**
-
-If your SSO or Slack integrations are functioning correctly, the key is working. You can also attempt to save and load an integration credential — a decryption error in the server logs indicates a key mismatch.
-
----
-
-## Related Topics
-
-- [OIDC SSO Setup](./oidc-setup) — Single sign-on configuration
-- [Configuration Reference](../getting-started/configuration) — All environment variables
-- [Authentication](../administration/authentication) — Authentication methods and session management
+- [OIDC SSO setup](./oidc-setup)
+- [Authentication](../administration/authentication)
+- [Configuration reference](../getting-started/configuration)
+- [Docker deployment](../deployment/docker)
