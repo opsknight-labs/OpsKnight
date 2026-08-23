@@ -118,22 +118,31 @@ export async function processAutoUnsnooze() {
       const delayMinutes = policyData?.service?.policy?.steps?.[stepIndex]?.delayMinutes ?? 0;
       const nextEscalationAt = new Date(Date.now() + delayMinutes * 60 * 1000);
 
-      await prisma.incident.update({
-        where: { id: incident.id },
+      const claim = await prisma.incident.updateMany({
+        where: {
+          id: incident.id,
+          status: 'SNOOZED',
+          snoozedUntil: { lte: now },
+        },
         data: {
           status: 'OPEN',
           snoozedUntil: null,
           snoozeReason: null,
           escalationStatus: 'ESCALATING',
           nextEscalationAt,
-          events: {
-            create: {
-              type: 'STATUS_CHANGE',
-              message: 'Incident auto-unsnoozed (snooze duration expired)',
-            },
-          },
         },
       });
+
+      if (claim.count === 0) continue;
+
+      await prisma.incidentEvent.create({
+        data: {
+          incidentId: incident.id,
+          type: 'STATUS_CHANGE',
+          message: 'Incident auto-unsnoozed (snooze duration expired)',
+        },
+      });
+      processedCount++;
     } catch (error) {
       logger.error('Failed to unsnooze incident', {
         component: 'snooze-actions',

@@ -56,6 +56,8 @@ export function useEventStream(options: EventStreamOptions = {}) {
 
     const url = `/api/events/stream?${params.toString()}`;
 
+    const reconnectAttemptsRef = { current: 0 };
+
     const setupConnection = () => {
       if (!isMountedRef.current) return;
       if (eventSourceRef.current) {
@@ -70,6 +72,7 @@ export function useEventStream(options: EventStreamOptions = {}) {
         if (!isMountedRef.current) return;
         setIsConnected(true);
         setError(null);
+        reconnectAttemptsRef.current = 0;
       };
 
       eventSource.onmessage = event => {
@@ -91,13 +94,21 @@ export function useEventStream(options: EventStreamOptions = {}) {
         onErrorRef.current?.(connectionError);
         eventSource.close();
 
-        // Attempt to reconnect after 3 seconds
+        // Attempt to reconnect with exponential backoff and jitter (1s to 30s)
+        const delay = Math.min(
+          30000,
+          Math.floor(
+            1000 * Math.pow(1.5, reconnectAttemptsRef.current) * (0.8 + Math.random() * 0.4)
+          )
+        );
+        reconnectAttemptsRef.current++;
+
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = setTimeout(() => {
           if (isMountedRef.current) {
             setupConnection();
           }
-        }, 3000);
+        }, delay);
       };
     };
 

@@ -37,6 +37,7 @@ export async function bulkAcknowledge(incidentIds: string[]) {
     await prisma.incidentEvent.createMany({
       data: incidentIds.map(incidentId => ({
         incidentId,
+        type: 'ACKNOWLEDGED',
         message: `Bulk acknowledged${user ? ` by ${user.name}` : ''}`,
       })),
     });
@@ -126,6 +127,7 @@ export async function bulkResolve(incidentIds: string[]) {
     await prisma.incidentEvent.createMany({
       data: incidentIds.map(incidentId => ({
         incidentId,
+        type: 'MANUAL_RESOLVED',
         message: `Bulk resolved${user ? ` by ${user.name}` : ''}`,
       })),
     });

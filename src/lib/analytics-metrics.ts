@@ -66,7 +66,7 @@ export function calculateMtbfMs(
 }
 
 export function smoothSeries(values: number[], windowSize: number): number[] {
-  if (windowSize <= 1 || values.length <= 1) {
+  if (!Number.isFinite(windowSize) || windowSize <= 1 || values.length <= 1) {
     return values;
   }
 

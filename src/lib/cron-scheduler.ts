@@ -256,7 +256,10 @@ function scheduleNextRun(targetTime: Date) {
 async function runOnce() {
   const isLeader = await acquireLock();
   if (!isLeader) {
-    logger.debug('[Cron] Not the leader, skipping tick');
+    logger.debug('[Cron] Not the leader, scheduling standby check');
+    // Standby replicas must schedule next tick with randomized jitter (15s - 30s) to monitor leader health
+    const standbyDelay = MIN_DELAY_MS + Math.floor(Math.random() * 15000);
+    scheduleNextRun(new Date(Date.now() + standbyDelay));
     return;
   }
 

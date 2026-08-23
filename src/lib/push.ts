@@ -53,20 +53,16 @@ export async function sendPush(
       return { success: false, error: 'No device tokens found for user' };
     }
 
-    // If provider is not enabled, log and return (mock mode)
-    // Note: In development, we still want to send if enabled to test functionality
+    // If provider is not enabled, log and return failure
     if (!pushConfig.enabled) {
-      logger.info('Push notification (mock)', {
+      logger.warn('Push notification skipped - provider not configured', {
         userId: options.userId,
         title: options.title,
         body: options.body,
         provider: pushConfig.provider,
       });
 
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      return { success: true };
+      return { success: false, error: 'Push notifications are not enabled or configured' };
     }
 
     // Production: Use configured provider

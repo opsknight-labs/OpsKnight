@@ -54,6 +54,11 @@ export async function updateIncidentStatus(id: string, status: IncidentStatus) {
             resolvedAt: new Date(),
           }
         : {}),
+      ...(incident.status === 'RESOLVED' && status !== 'RESOLVED'
+        ? {
+            resolvedAt: null,
+          }
+        : {}),
       events: {
         create: {
           type:

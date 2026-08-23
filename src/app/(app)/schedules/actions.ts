@@ -572,6 +572,20 @@ export async function removeLayerUser(
       where: { layerId_userId: { layerId, userId } },
     });
 
+    const remaining = await prisma.onCallLayerUser.findMany({
+      where: { layerId },
+      orderBy: { position: 'asc' },
+    });
+
+    await prisma.$transaction(
+      remaining.map((entry, index) =>
+        prisma.onCallLayerUser.update({
+          where: { id: entry.id },
+          data: { position: index + 1 },
+        })
+      )
+    );
+
     const scheduleName = await getScheduleName(layer.scheduleId);
     await notifyScheduleMembers(
       layer.scheduleId,
