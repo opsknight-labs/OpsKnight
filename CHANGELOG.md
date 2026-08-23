@@ -7,20 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added & Enhanced
+
+- **Modern In-Process Avatar Ecosystem**: Migrated to local in-process `@dicebear/core` and `@dicebear/collection` rendering (eliminating external HTTP calls to `api.dicebear.com`); added professional vector styles (`bottts`, `shapes`, `initials`, `pixel-art`, `avataaars`, `lorelei`, `micah`, `identicon`) with gender-based selection, SVG XML entity sanitization, and strict CSP headers.
+- **Admin-Controlled OIDC Account Linking**: Added explicit, reversible admin controls in user management to approve or revoke OIDC account linking, preventing account takeovers while allowing secure initial sign-in for invited team members.
+- **Comprehensive Documentation & Operations Runbooks**: Published complete v1.3 capability inventory (`docs/V1_3_CAPABILITY_INVENTORY.md`), 15-minute golden path getting-started guide, production deployment runbooks for Docker, Kubernetes & Helm, database backup & disaster recovery procedures, and updated container registries to `ghcr.io/opsknight-labs/opsknight`.
+
 ### Security & Hardening
 
-- **Authentication & Sessions**: Added OIDC nonce state validation and strict email verification check on invited user linking to prevent account takeovers; enforced `tokenVersion` check in JWT fallback path for immediate session revocation; wrapped bootstrap admin initialization in an atomic transaction; protected last admin from demotion/deletion.
-- **CSV Injection Mitigation**: Implemented strict sanitization (`buildCsv` / `sanitizeCsvCell`) across uptime exports and analytics reports against CSV formula injection (CWE-1236).
-- **Status Page Protection**: Replaced automatic GET-based unsubscribe mutation with an explicit confirmation form; added SVG script sanitization and strict CSP headers on logo routes; prevented private incident leaks across status page feeds and subscriber broadcasts.
-- **Custom Fields Validation**: Added strict type validation and regex parsing for all custom field types (`NUMBER`, `BOOLEAN`, `DATE`, `SELECT`, `EMAIL`, `URL`) and enforced `assertCanModifyIncident` RBAC.
-- **Template IDOR**: Enforced author and admin role checks before deleting incident templates.
+- **Authentication & Sessions**: Added OIDC nonce state validation and strict email verification check on invited user linking; enforced `tokenVersion` check in JWT fallback path for immediate session revocation on role changes or password resets; wrapped bootstrap admin initialization in an atomic transaction; protected last active administrator from demotion/deletion; prevented responders from demoting team owners.
+- **CSV Formula Injection Mitigation (CWE-1236)**: Implemented strict sanitization (`buildCsv` / `sanitizeCsvCell`) prepending quotes to formula triggers (`=`, `+`, `-`, `@`, `\t`, `\r`, `|`, `%`) across uptime reports and analytics exports.
+- **Status Page & Subscriber Protection**: Replaced automatic GET-based unsubscribe mutation with an explicit confirmation form to block anti-spam scanner unsubscriptions; added SVG script/event-handler sanitization and strict CSP on logo endpoints; enforced private incident visibility filtering (`visibility !== 'PUBLIC'`) across status page notifications, webhooks, and RSS feeds.
+- **Custom Fields Validation & RBAC**: Added strict type validation and regex parsing for custom field types (`NUMBER`, `BOOLEAN`, `DATE`, `SELECT`, `EMAIL`, `URL`) and enforced `assertCanModifyIncident` RBAC.
+- **Template IDOR Mitigation**: Enforced author and admin role checks before deleting incident templates.
 
 ### Fixed
 
-- **Mobile PWA & UI Controls**: Resolved swipe conflicts between `MobileSwipeNavigator` and modal/sheet controls; fixed iOS Safari background rubber-band scrolling; added fallback WebAuthn biometric credential resolution; disabled push flags on 410/404 Gone endpoints.
-- **Postmortems & Timelines**: Preserved `publishedAt` on updates; deduplicated synthetic incident lifecycle markers; fixed timezone offset drift on datetime-local inputs; auto-completed Action Items on Jira ticket resolution.
-- **Real-Time Streaming**: Scoped notification streams by user ID; prevented memory leaks in `WidgetProvider` by hoisting callbacks.
-- **Audit Logs & Export**: Added audit logging for API keys, notification providers, VAPID rotation, and data retention policies; added safety query limit to team audit logs.
+- **Mobile PWA, Web Push & Touch UX**: Resolved swipe conflicts between `MobileSwipeNavigator` and modal/sheet controls; fixed iOS Safari background rubber-band scrolling via `.mobile-content` container lock; added fallback WebAuthn biometric credential resolution; automatically disabled push notifications on 410/404 Gone device endpoints.
+- **Postmortems & Timelines**: Preserved `publishedAt` timestamp on edits and cleared on `DRAFT`; deduplicated synthetic lifecycle markers when database events exist; fixed timezone offset drift on datetime-local inputs; auto-completed Action Items on Jira ticket resolution.
+- **Real-Time Streaming & Cron Stability**: Scoped notification streams by user ID; prevented memory leaks in `WidgetProvider` by hoisting callbacks; added distributed cron lock heartbeat to prevent duplicate execution across multi-replica deployments.
+- **Scheduling & SLA Metrics**: Resolved timezone offset shifts on DST boundary crossings, overnight shift day-of-week indexing, and interval-merged uptime calculation for overlapping incident downtime.
+- **Audit Logs & Export**: Added structured audit logging for API key creation/revocation, notification provider updates, VAPID rotation, retention policies, and manual data purges; added safety query limit (`take: 100`) to team audit logs.
 
 ## [1.3.1] - 2026-08-18
 
