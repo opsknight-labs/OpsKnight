@@ -45,7 +45,7 @@
     "test:all": "npm run lint:check && npm run test:run",
     "OpsKnight": "node ./scripts/OpsKnight.mjs",
     "ops": "node ./scripts/OpsKnight.mjs",
-    "build:scripts": "tsc scripts/auto-recover-migrations.ts --outDir scripts/dist --module commonjs --target es2020 --esModuleInterop --skipLibCheck",
+    "build:scripts": "tsc scripts/auto-recover-migrations.ts --rootDir . --outDir scripts/dist --module commonjs --target es2020 --esModuleInterop --skipLibCheck",
     "backfill:action-items": "ts-node --project tsconfig.script.json scripts/backfill-action-items.ts",
     "prisma:validate": "node scripts/validate-migrations.cjs",
     "prisma:health": "node scripts/check-migration-health.cjs",

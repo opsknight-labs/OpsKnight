@@ -288,7 +288,7 @@ docker exec -it opsknight_app npx prisma migrate deploy
 ```bash
 # Update image tag in deployment
 kubectl set image deployment/opsknight \
-  opsknight=opsknight/opsknight:v1.1.0 \
+  opsknight=ghcr.io/opsknight-labs/opsknight:1.2.0 \
   -n opsknight
 
 # Or apply updated manifests

@@ -13,8 +13,12 @@ spec:
       {{- include "opsknight.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if not .Values.secrets.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
@@ -25,13 +29,14 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "opsknight.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "opsknight.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -40,11 +45,24 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "opsknight.fullname" . }}-config
-            - secretRef:
-                name: {{ include "opsknight.fullname" . }}-secrets
           env:
             - name: DATABASE_URL
-              value: {{ include "opsknight.databaseUrl" . | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.databaseUrl }}
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.nextauthSecret }}
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.encryptionKey }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:

@@ -7,12 +7,13 @@ metadata:
 data:
   NODE_ENV: {{ .Values.config.nodeEnv | quote }}
   NEXTAUTH_URL: {{ .Values.config.nextauthUrl | quote }}
+  NEXT_PUBLIC_APP_URL: {{ .Values.config.nextPublicAppUrl | quote }}
   PORT: {{ .Values.config.port | quote }}
   HOSTNAME: {{ .Values.config.hostname | quote }}
   NEXT_TELEMETRY_DISABLED: {{ .Values.config.nextTelemetryDisabled | quote }}
   POSTGRES_DB: {{ .Values.postgresql.database | quote }}
   {{- if .Values.postgresql.enabled }}
-  POSTGRES_HOST: {{ printf "%s-postgresql" (include "opsknight.fullname" .) | quote }}
+  POSTGRES_HOST: {{ include "opsknight.postgresql.serviceName" . | quote }}
   {{- else }}
   POSTGRES_HOST: {{ .Values.postgresql.host | quote }}
   {{- end }}

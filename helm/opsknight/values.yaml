@@ -1,43 +1,32 @@
 # Default values for opsknight
 # This is a YAML-formatted file.
 
-# -- Number of replicas for the application deployment
 replicaCount: 2
 
-# -- Image configuration
 image:
   repository: ghcr.io/opsknight-labs/opsknight
   pullPolicy: IfNotPresent
-  # -- Overrides the image tag whose default is the chart appVersion
   tag: ''
+  # When set, digest takes precedence over tag and renders repository@digest.
+  digest: ''
 
-# -- Image pull secrets for private registries
 imagePullSecrets: []
-# -- Override the name of the chart
 nameOverride: ''
-# -- Override the full name of the release
 fullnameOverride: ''
 
-# -- Service account configuration
 serviceAccount:
-  # -- Specifies whether a service account should be created
   create: true
-  # -- Annotations to add to the service account
   annotations: {}
-  # -- The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
   name: ''
+  automount: false
 
-# -- Pod annotations
 podAnnotations: {}
 
-# -- Pod security context
 podSecurityContext:
   runAsUser: 1001
   runAsGroup: 1001
   fsGroup: 1001
 
-# -- Container security context
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
@@ -47,33 +36,22 @@ securityContext:
   runAsNonRoot: true
   runAsUser: 1001
 
-# -- Service configuration
 service:
   type: ClusterIP
   port: 80
   targetPort: 3000
 
-# -- Ingress configuration
 ingress:
-  # -- Enable ingress controller resource
   enabled: false
-  # -- Ingress class name (e.g., nginx, traefik, alb, azure-application-gateway, gce)
   className: ''
-  # -- Ingress annotations - see examples/ folder for controller-specific configs
   annotations: {}
-  # -- Ingress hosts configuration
   hosts:
     - host: opsknight.example.com
       paths:
         - path: /
           pathType: Prefix
-  # -- Ingress TLS configuration
   tls: []
-  #  - secretName: opsknight-tls
-  #    hosts:
-  #      - opsknight.example.com
 
-# -- Resource requests and limits
 resources:
   requests:
     cpu: 100m
@@ -82,107 +60,113 @@ resources:
     cpu: 500m
     memory: 1Gi
 
-# -- Horizontal Pod Autoscaler configuration
+# Disabled by default so a basic install does not depend on metrics-server.
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 
-# -- Pod Disruption Budget configuration
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
 
-# -- Node selector
 nodeSelector: {}
-
-# -- Tolerations
 tolerations: []
-
-# -- Affinity rules
 affinity: {}
 
-# -- Liveness probe configuration
+startupProbe:
+  httpGet:
+    path: /api/health?mode=readiness
+    port: http
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 livenessProbe:
   httpGet:
     path: /api/health
     port: http
-  initialDelaySeconds: 30
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
 
-# -- Readiness probe configuration
 readinessProbe:
   httpGet:
     path: /api/health?mode=readiness
     port: http
-  initialDelaySeconds: 10
   periodSeconds: 10
   timeoutSeconds: 5
   successThreshold: 1
   failureThreshold: 3
 
-# -- Application secrets
 secrets:
-  # -- NextAuth secret for session encryption (generate with: openssl rand -base64 32)
+  # Use a pre-created Secret instead of rendering secret values into the Helm release.
+  # External Secrets/CSI operators should keep the required keys synchronized.
+  existingSecret: ''
+  keys:
+    databaseUrl: DATABASE_URL
+    nextauthSecret: NEXTAUTH_SECRET
+    encryptionKey: ENCRYPTION_KEY
+    postgresUser: POSTGRES_USER
+    postgresPassword: POSTGRES_PASSWORD
   nextauthSecret: 'change_this_to_a_random_secret_in_production'
-  # -- Encryption key for integration secrets (must be 64-char hex, generate with: openssl rand -hex 32)
   encryptionKey: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
-  # -- Cron job authentication secret
-  cronSecret: 'change_me_to_a_secure_token'
 
-# -- Network Policy configuration
 networkPolicy:
-  # -- Enable network policies
   enabled: false
+  ingressNamespaceLabels:
+    kubernetes.io/metadata.name: ingress-nginx
 
-# -- Application configuration (non-sensitive)
 config:
-  # -- Node environment
   nodeEnv: production
-  # -- NextAuth URL (your application URL)
   nextauthUrl: 'http://localhost:3000'
-  # -- Application port
+  nextPublicAppUrl: 'http://localhost:3000'
   port: '3000'
-  # -- Hostname to bind to
   hostname: '0.0.0.0'
-  # -- Disable Next.js telemetry
   nextTelemetryDisabled: '1'
 
-# -- PostgreSQL configuration
+# Full DATABASE_URL override. Prefer this for managed PostgreSQL, TLS parameters,
+# PgBouncer, or credentials containing characters that require URI encoding.
+database:
+  url: ''
+  # NetworkPolicy cannot infer a port reliably from a URL. Keep this aligned
+  # with database.url when using an external database on a non-default port.
+  port: 5432
+
 postgresql:
-  # -- Enable built-in PostgreSQL. Set to false to use an external database
   enabled: true
-  # -- Database name
   database: opsknight_db
-  # -- Database host (only used when postgresql.enabled=false)
   host: ''
-  # -- Database port
   port: '5432'
-  # -- Database user
   username: opsknight
-  # -- Database password (generate a secure password for production)
   password: 'opsknight_secure_password_change_me'
-  # -- Connection pool limit (Prisma connection pool size)
-  # Higher values allow more concurrent database connections for better scalability
-  # Recommended: 40 for standard deployments, 80-100 for high-traffic
   connectionLimit: 40
-  # -- Pool timeout in seconds (max wait time for available connection)
-  # Prevents requests from hanging indefinitely when pool is exhausted
   poolTimeout: 30
-  # -- Storage size for PostgreSQL PVC
   storage: 10Gi
-  # -- Storage class for PostgreSQL PVC (leave empty for default)
   storageClass: ''
-  # -- PostgreSQL image
   image:
     repository: postgres
     tag: '15-alpine'
-    pullPolicy: Always
-  # -- PostgreSQL resources
+    pullPolicy: IfNotPresent
+  # postgres:15-alpine uses uid/gid 70 for the postgres user.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 70
+    runAsGroup: 70
+    fsGroup: 70
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 70
+    runAsGroup: 70
   resources:
     requests:
       memory: 512Mi

@@ -13,7 +13,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { logger } from '../src/lib/logger';
 
 const prisma = new PrismaClient();
@@ -60,6 +60,14 @@ function formatExecError(error: unknown): string {
     }
 
     return String(error);
+}
+
+function runPrisma(args: string[]) {
+    return execFileSync(
+        process.execPath,
+        ['node_modules/prisma/build/index.js', ...args],
+        { stdio: 'pipe', encoding: 'utf-8' }
+    );
 }
 
 /**
@@ -116,10 +124,7 @@ async function autoResolveMigration(migration: MigrationRecord): Promise<Recover
             logger.info('Resolving migration as applied', { component: 'auto-recover-migrations', migration: migrationName });
 
             try {
-                execSync(
-                    `npx prisma migrate resolve --applied ${migrationName}`,
-                    { stdio: 'pipe', encoding: 'utf-8' }
-                );
+                runPrisma(['migrate', 'resolve', '--applied', migrationName]);
 
                 return {
                     success: true,
@@ -144,10 +149,7 @@ async function autoResolveMigration(migration: MigrationRecord): Promise<Recover
           ALTER TYPE "AuditEntityType" ADD VALUE IF NOT EXISTS 'ESCALATION_POLICY'
         `;
 
-            execSync(
-                `npx prisma migrate resolve --applied ${migrationName}`,
-                { stdio: 'pipe', encoding: 'utf-8' }
-            );
+            runPrisma(['migrate', 'resolve', '--applied', migrationName]);
 
             return {
                 success: true,
@@ -178,10 +180,7 @@ async function autoResolveMigration(migration: MigrationRecord): Promise<Recover
             migration: migrationName
         });
         try {
-            execSync(
-                `npx prisma migrate resolve --rolled-back ${migrationName}`,
-                { stdio: 'pipe', encoding: 'utf-8' }
-            );
+            runPrisma(['migrate', 'resolve', '--rolled-back', migrationName]);
             return {
                 success: true,
                 action: 'resolved',
@@ -272,7 +271,7 @@ export async function autoRecoverMigrations(): Promise<boolean> {
 
             try {
                 logger.info('Applying pending migrations', { component: 'auto-recover-migrations' });
-                execSync('npx prisma migrate deploy', { stdio: 'pipe', encoding: 'utf-8' });
+                runPrisma(['migrate', 'deploy']);
             } catch (error) {
                 logger.error('Failed to apply pending migrations', {
                     component: 'auto-recover-migrations',

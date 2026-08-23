@@ -1,0 +1,11 @@
+# Overlay for managed/external PostgreSQL. Apply after docker-compose.yml:
+# docker compose -f docker-compose.yml -f docker-compose.external-db.yml up -d
+services:
+  opsknight-db:
+    profiles:
+      - bundled-database
+
+  opsknight-app:
+    depends_on: !reset {}
+    environment:
+      DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:?Set OPSKNIGHT_DATABASE_URL to the complete external PostgreSQL URI}

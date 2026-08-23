@@ -35,19 +35,23 @@ Validate rendered API versions and admission/security policies against the actua
 
 - Namespace, ServiceAccount, application Deployment, Service, Ingress, HPA, PodDisruptionBudget, and NetworkPolicy;
 - Secret and ConfigMap examples; and
-- a single PostgreSQL StatefulSet, Service, and persistent-volume resources.
+- a single PostgreSQL StatefulSet, governing ClusterIP Service, and StatefulSet volume claim template.
 
 The checked-in base is an example, not a production release:
 
 - `secret.yaml` contains known placeholder values;
-- the application URL is localhost;
-- the application image uses the floating `latest` tag;
+- both public application URLs are localhost;
+- the application image is pinned to the current `1.3.1` release, which may not be the release you have qualified;
 - `DATABASE_URL` contains a fixed per-process pool setting;
 - ingress host/class, timeouts, rate controls, and TLS assumptions are nginx-specific examples;
-- NetworkPolicy selectors/namespaces require cluster-specific review; and
+- NetworkPolicy ingress selectors and broad external database/HTTPS egress require cluster-specific review; and
 - the included PostgreSQL is a single instance, not an HA, backup, or managed-database service.
 
 Never apply the base unchanged to production and never commit real Secret values. Build an overlay or use the Helm production-values process.
+
+The published `1.3.1` image is amd64-only and predates the fail-closed migration entrypoint in this source revision. The raw manifests gain their configuration hardening immediately, but the new runtime behavior and multi-architecture output require the next stable image release.
+
+The application ServiceAccount token is not mounted by default because OpsKnight does not require Kubernetes API access. Keep it disabled unless a deliberate extension needs that credential.
 
 ## Configure the shared runtime
 
@@ -112,7 +116,7 @@ kubectl -n opsknight logs deployment/opsknight-app --tail=200
 
 Helm's generated Deployment is normally `opsknight`; confirm with `helm status` when name overrides are used.
 
-The container attempts `prisma migrate deploy` up to three times and can start the server after all attempts fail. A Ready pod is therefore necessary but not sufficient migration evidence. Inspect startup logs, call readiness, then exercise a database write:
+Images built after `1.3.1` from this revision attempt `prisma migrate deploy` up to three times and can run the packaged recovery helper between attempts. If migration still fails, the container exits non-zero rather than serving against an unknown schema. A startup probe gives migration and cold start up to five minutes before liveness restarts can begin. Confirm the selected release behavior, inspect startup logs, call readiness, then exercise a database write:
 
 ```bash
 kubectl -n opsknight port-forward service/opsknight-service 3000:80
@@ -137,7 +141,13 @@ The shipped PDB limits voluntary disruption but cannot protect against node, zon
 
 ## PostgreSQL and recovery
 
-The bundled PostgreSQL StatefulSet has one replica. A PVC and PDB do not create database failover or backups. For production, either operate that database with an explicit single-instance risk acceptance and recovery plan, or replace it with a managed/operator-owned topology.
+The bundled PostgreSQL StatefulSet has one replica. Storage is created by its `volumeClaimTemplates`; the base no longer creates an unused standalone PVC. Its governing Service remains a normal ClusterIP because changing an existing allocated Service to headless is immutable and would break in-place upgrades.
+
+The bundled `postgres:15-alpine` container runs as that image's `postgres` uid/gid (`70`) and receives writable mounts for its data, runtime socket, and temporary files. Revalidate the security context before substituting a different PostgreSQL image.
+
+The bundled PostgreSQL NetworkPolicy allows application ingress and denies new outbound connections from the database pod. Add narrowly scoped egress only if a deliberate extension requires it.
+
+A PVC and PDB do not create database failover or backups. For production, either operate that database with an explicit single-instance risk acceptance and recovery plan, or replace it with a managed/operator-owned topology.
 
 Back up PostgreSQL outside the cluster failure domain and rehearse restore with the matching `ENCRYPTION_KEY`. Monitor connections, locks, query latency, storage, WAL/replication where applicable, and backup success.
 

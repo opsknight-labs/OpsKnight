@@ -1,0 +1,113 @@
+name: Deployment manifests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-entrypoint.sh'
+      - 'scripts/auto-recover-migrations.ts'
+      - 'scripts/validate-release-tag.cjs'
+      - 'docker-compose.yml'
+      - 'docker-compose.external-db.yml'
+      - 'env.example'
+      - 'helm/**'
+      - 'k8s/**'
+      - 'docs/v1.3/deployment/**'
+      - 'tests/lib/deployment-config-unit.test.ts'
+      - '.github/workflows/docker-image.yml'
+      - '.github/workflows/deployment-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-entrypoint.sh'
+      - 'scripts/auto-recover-migrations.ts'
+      - 'scripts/validate-release-tag.cjs'
+      - 'docker-compose.yml'
+      - 'docker-compose.external-db.yml'
+      - 'env.example'
+      - 'helm/**'
+      - 'k8s/**'
+      - '.github/workflows/docker-image.yml'
+      - '.github/workflows/deployment-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate entrypoint shell syntax
+        run: sh -n docker-entrypoint.sh
+
+      - name: Validate Docker Compose configuration
+        run: |
+          cp env.example .env
+          docker compose config > /tmp/opsknight-compose.yaml
+          OPSKNIGHT_DATABASE_URL='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
+            docker compose -f docker-compose.yml -f docker-compose.external-db.yml \
+            config > /tmp/opsknight-compose-external-db.yaml
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Lint Helm chart
+        run: helm lint helm/opsknight
+
+      - name: Render Helm defaults
+        run: helm template opsknight helm/opsknight --namespace opsknight > /tmp/opsknight-helm.yaml
+
+      - name: Render Helm external database configuration
+        run: |
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            --set postgresql.enabled=false \
+            --set-string database.url='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
+            --set database.port=6432 \
+            --set networkPolicy.enabled=true \
+            > /tmp/opsknight-helm-external-db.yaml
+
+      - name: Render Helm digest and external Secret configuration
+        run: |
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            --set-string image.digest='sha256:0000000000000000000000000000000000000000000000000000000000000000' \
+            --set postgresql.enabled=false \
+            --set-string secrets.existingSecret='opsknight-runtime' \
+            > /tmp/opsknight-helm-external-secret.yaml
+
+      - name: Render Kustomize base
+        run: kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+
+      - name: Validate rendered invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'ghcr.io/opsknight-labs/opsknight:' /tmp/opsknight-helm.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
+          grep -q 'checksum/config:' /tmp/opsknight-helm.yaml
+          grep -q 'checksum/secret:' /tmp/opsknight-helm.yaml
+          grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-helm.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
+          grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
+          grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
+          grep -q 'db.example.com:6432' /tmp/opsknight-compose-external-db.yaml
+          grep -q 'port: 6432' /tmp/opsknight-helm-external-db.yaml
+          grep -q 'ghcr.io/opsknight-labs/opsknight@sha256:0000000000000000000000000000000000000000000000000000000000000000' /tmp/opsknight-helm-external-secret.yaml
+          grep -q 'name: opsknight-runtime' /tmp/opsknight-helm-external-secret.yaml
+          if grep -q '^kind: Secret$' /tmp/opsknight-helm-external-secret.yaml; then
+            echo 'chart rendered a Secret even though secrets.existingSecret is configured'
+            exit 1
+          fi
+          if grep -q 'runAsUser: 999' /tmp/opsknight-helm.yaml /tmp/opsknight-kustomize.yaml; then
+            echo 'obsolete PostgreSQL uid 999 found'
+            exit 1
+          fi

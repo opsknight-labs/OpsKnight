@@ -7,7 +7,7 @@ metadata:
     app: opsknight-postgres
     version: v1
 spec:
-  serviceName: 'opsknight-postgres-service' # Headless service needed for StatefulSet
+  serviceName: 'opsknight-postgres-service'
   replicas: 1
   selector:
     matchLabels:
@@ -20,14 +20,15 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 999
-        fsGroup: 999
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: postgres
           image: postgres:15-alpine
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -35,7 +36,8 @@ spec:
                 - ALL
             readOnlyRootFilesystem: true
             runAsNonRoot: true
-            runAsUser: 999
+            runAsUser: 70
+            runAsGroup: 70
           ports:
             - containerPort: 5432
               name: postgres
