@@ -33,17 +33,17 @@ services:
     ports:
       - '${APP_PORT:-3000}:3000'
     environment:
-      - NODE_ENV=production
+      NODE_ENV: production
       # Set OPSKNIGHT_DATABASE_URL for managed PostgreSQL, TLS/PgBouncer options,
       # or URI-encoded credentials. The fallback targets the bundled database.
-      - DATABASE_URL=${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}
-      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-${NEXTAUTH_URL:-http://localhost:3000}}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
-      - PORT=3000
-      - HOSTNAME=0.0.0.0
-      - NEXT_TELEMETRY_DISABLED=1
+      DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
     depends_on:
       opsknight-db:
         condition: service_healthy
@@ -66,6 +66,3 @@ volumes:
 networks:
   opsknight-network:
     driver: bridge
-    driver_opts:
-      com.docker.network.bridge.name: opsknight-br0
-      com.docker.network.driver.mtu: 1500
