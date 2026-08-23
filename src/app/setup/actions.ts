@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { redirect } from 'next/navigation';
 import { logAudit, getDefaultActorId } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 
 const BOOTSTRAP_TRANSACTION_ATTEMPTS = 3;
