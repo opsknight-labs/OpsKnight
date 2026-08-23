@@ -1,152 +1,508 @@
 ---
-title: Command Center
-description: Triage active work, service risk, on-call coverage, and incident trends from the main dashboard
 order: 1
+title: Dashboard
+description: Command Center overview with real-time system health, smart insights, and operational widgets
 ---
 
-# Command Center
+# Command Center Dashboard
 
-The Command Center at `/` is the shared operational landing page. It combines current incident pressure with a filtered incident preview, service risk, on-call coverage, SLA warnings, action items, and recent trends.
+The **Command Center** is your operational headquarters — a real-time executive summary of your organization's incident health. While individual incident pages focus on specific issues, the Dashboard reveals the big picture: systemic risks, workload bottlenecks, and patterns that are invisible when looking at single tickets.
 
-For user-owned executive or role-specific layouts, use [Reports and Dashboards](./reports-dashboards). For deeper metric definitions and exports, use [Analytics](./analytics).
+![Command Center Dashboard](/dashboard-command-center-1200.jpg)
 
-## Read system status
+---
 
-The top-level status is calculated from active incidents:
+## Why the Dashboard Matters
 
-| Status      | Condition                                        |
-| ----------- | ------------------------------------------------ |
-| Critical    | At least one active High-urgency incident        |
-| Degraded    | Active incidents exist, but none is High urgency |
-| Operational | No active incidents                              |
+| Without Dashboard             | With Dashboard                       |
+| ----------------------------- | ------------------------------------ |
+| Only see individual incidents | See the "forest fire" not just trees |
+| Manual health checks          | Real-time system status              |
+| Missed patterns               | AI-powered insights                  |
+| Scattered metrics             | Unified operational view             |
 
-“Active” refers to incident work that has not been resolved and excludes states that the current metric explicitly omits. Always open the filtered incident list before treating the badge as a full service-health diagnosis.
+---
 
-## Command Center summary
+## Dashboard Layout
 
-The header summarizes the selected range and current workload, including total incidents, active/open work, resolved and acknowledged counts, unassigned incidents, and High-urgency active incidents. A retention indicator appears when the requested history is clipped by the installation's retention policy.
+The Command Center is organized into distinct sections:
 
-Selecting a summary link opens the corresponding incident view.
+---
 
-## Filter the incident preview
+## System Status
 
-Use quick filters for:
+The **System Status** badge in the top-left provides an at-a-glance health indicator for your entire organization.
 
-- all incidents;
-- incidents assigned to you;
-- unassigned Open incidents;
-- High, Medium, or Low urgency.
+### Status States
 
-Advanced filters support:
+| Status          | Visual    | Condition                                              |
+| --------------- | --------- | ------------------------------------------------------ |
+| **CRITICAL**    | 🔴 Red    | Any active HIGH urgency incident exists                |
+| **DEGRADED**    | 🟡 Yellow | No HIGH urgency, but active MEDIUM/LOW incidents exist |
+| **OPERATIONAL** | 🟢 Green  | No active incidents                                    |
 
-| Filter   | Supported values                                          |
-| -------- | --------------------------------------------------------- |
-| Search   | Incident text supported by the dashboard query            |
-| Service  | One service or all services                               |
-| Status   | Open, Acknowledged, Resolved, Snoozed, Suppressed, or all |
-| Assignee | One user, unassigned, or all                              |
-| Urgency  | High, Medium, Low, or all                                 |
-| Range    | Preset range or custom start/end dates                    |
-| Sort     | Newest, oldest, status, urgency, or title                 |
+### Status Logic
 
-The dashboard incident preview is limited to 20 matching records. Open **Incidents** for the full paginated list.
+```
+IF (active incidents with urgency = HIGH) > 0:
+    status = CRITICAL
+ELSE IF (active incidents) > 0:
+    status = DEGRADED
+ELSE:
+    status = OPERATIONAL
+```
 
-## Ops Pulse
+### Real-Time Updates
 
-Ops Pulse highlights three current queues:
+- Status recalculates immediately when incidents change
+- Resolving the last HIGH incident downgrades from CRITICAL
+- Creating a new HIGH incident upgrades to CRITICAL instantly
+- No manual refresh needed
 
-- **My Queue** — active incidents directly assigned to the signed-in user;
-- **Critical Focus** — up to three active High-urgency incidents;
-- **Services at Risk** — services with active incidents, including critical counts.
+---
 
-These cards are shortcuts into the underlying incidents and services. They do not replace escalation ownership or a schedule coverage check.
+## Metric Cards
 
-## Smart Insights
+The four hero cards provide immediate quantification of your current operational state.
 
-The Command Center applies deterministic rules to the current data and can show:
+### TOTAL
 
-- a workload warning when more than 30% of active incidents are unassigned;
-- a critical spike when three or more High-urgency incidents are active;
-- service concentration when one service contributes at least three incidents and 40% or more of the selected volume;
-- an unusual-volume message when the current count exceeds the comparison baseline used by the component;
-- a positive “all clear” message when no incidents are open.
+| Metric            | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| **Scope**         | All incidents within selected time range          |
+| **Default Range** | Last 30 days                                      |
+| **Includes**      | All statuses (OPEN, ACKNOWLEDGED, RESOLVED, etc.) |
 
-These are rule-based hints, not AI root-cause analysis. Dismissing a hint hides it in the current client state; it does not change incidents.
+### OPEN
 
-## Operational widgets
+| Metric       | Description                         |
+| ------------ | ----------------------------------- |
+| **Scope**    | Incidents with status `OPEN` only   |
+| **Excludes** | ACKNOWLEDGED, SNOOZED, SUPPRESSED   |
+| **Purpose**  | Shows "To-Do" pile requiring action |
 
-Depending on the available data, the page includes widgets for:
+### UNASSIGNED
 
-- on-call now and schedule coverage;
-- incidents approaching or breaching service SLA targets;
-- action-item progress and overdue work;
-- incident heatmap and recent incidents;
-- service health and active incident distribution;
-- response metrics derived from the same analytics engine used by Analytics.
+| Metric         | Description                                   |
+| -------------- | --------------------------------------------- |
+| **Scope**      | Incidents with no assignee                    |
+| **Time Range** | **All time** (not filtered by range selector) |
+| **Rationale**  | Ensures old unassigned tickets aren't hidden  |
 
-Open the linked guide when a widget identifies a problem:
+> **Note**: A retention warning badge appears if your query exceeds the data retention limit.
 
-- [Schedules](./schedules) for coverage;
-- [Incidents](./incidents) for response;
-- [Services](./services) for routing and targets;
-- [Action Items](./action-items) for corrective work;
-- [Analytics](./analytics) for metric definitions.
+### CRITICAL
 
-## Live updates and refresh
+| Metric          | Description                             |
+| --------------- | --------------------------------------- |
+| **Scope**       | Active incidents with HIGH urgency      |
+| **Purpose**     | Immediate attention counter             |
+| **Alert Level** | Most urgent issues in your organization |
 
-The dashboard is server-rendered and wrapped by a real-time client that listens to `/api/realtime/stream`. A live event refreshes dashboard data. Network interruptions can delay updates; verify a critical change on the incident page or refresh the browser if the dashboard looks stale.
+### Card Interactions
 
-## Export
+- **Click any card** to navigate to filtered incident list
+- **Hover** shows tooltip with additional context
+- **Color coding** indicates health (green/yellow/red)
 
-The Command Center can export its current incident data and summary metrics to CSV in the browser. The file includes the active filters, headline counts, and incident rows loaded by the view. For the richer server-generated export and larger result set, use [Analytics](./analytics#export-csv).
+---
 
-Review exported incident titles, services, and assignees before sharing the file outside the organization.
+## AI Smart Insights
 
-## Search
+The dashboard runs a rules engine against your live incident data to surface actionable insights. These appear as colored banners below the metrics.
 
-The sidebar and mobile experiences also expose application search backed by `/api/search`. Search results are navigational and permission-aware according to the underlying pages. Do not treat search as an audit or export interface.
+### Insight Types
 
-## Keyboard navigation
+#### Workload Risk (Yellow Banner)
 
-Shortcuts are ignored while typing in an input, text area, or editable field.
+**Trigger**: `Unassigned Incidents / Total Open Incidents > 30%`
 
-| Keys          | Action                                                |
-| ------------- | ----------------------------------------------------- |
-| `?`           | Open shortcut help                                    |
-| `G`, then `D` | Dashboard                                             |
-| `G`, then `I` | Incidents                                             |
-| `G`, then `S` | Services                                              |
-| `G`, then `T` | Teams                                                 |
-| `G`, then `U` | Users                                                 |
-| `G`, then `C` | Schedules                                             |
-| `G`, then `P` | Escalation Policies                                   |
-| `G`, then `A` | Analytics                                             |
-| `C`           | Open Quick Create                                     |
-| `N`           | Create an incident when already in the Incidents area |
-| `Esc`         | Close a modal or dialog where supported               |
+```
+⚠️ Workload Risk: 25% of open incidents are unassigned
+```
 
-The shortcut overlay in some v1.3 builds also lists Command/Ctrl combinations that are not wired by the global handler. Use the verified shortcuts above until that product inconsistency is fixed.
+**What it means**: Too many issues sitting without an owner.
 
-## Accessibility
+**Action**: Assign incidents to appropriate responders or teams.
 
-The application includes skip links, visible focus handling, semantic controls, and keyboard-accessible dialogs. Use the browser's normal zoom rather than relying on a wall-display mode. Report any control that cannot be reached or identified with a keyboard or screen reader as an accessibility defect.
+#### Critical Spike (Red Banner)
+
+**Trigger**: `Active HIGH Urgency Incidents >= 3`
+
+```
+🔴 Critical Spike: 3 active HIGH urgency incidents detected
+```
+
+**What it means**: Potential major outage or cascading failure.
+
+**Action**: Assess if incidents are related; consider incident commander.
+
+#### Root Cause Hint / Concentration (Blue Banner)
+
+**Trigger**: Single service accounts for `>= 40%` of active incidents (minimum 3 incidents)
+
+```
+💡 Root Cause Hint: 40% of alerts are from 'API Gateway'
+```
+
+**What it means**: Dependent service may be failing, causing cascading alerts.
+
+**Action**: Prioritize the concentrated service; may resolve multiple incidents.
+
+#### Volume Anomaly (Blue Banner)
+
+**Trigger**: Today's incident count > `1.5x` the 30-day daily average
+
+```
+📊 Volume Anomaly: Today's incidents are 2.1x above average
+```
+
+**What it means**: Unusual noise level; "death by 1000 cuts" scenario.
+
+**Action**: Investigate for deployment issues, infrastructure problems, or external factors.
+
+### Insight Priority
+
+Insights display in priority order:
+
+1. **Critical Spike** (most urgent)
+2. **Workload Risk**
+3. **Root Cause Hint**
+4. **Volume Anomaly**
+
+Maximum of 3 insights shown at once to avoid information overload.
+
+---
+
+## Ops Pulse Widget
+
+The **Ops Pulse** is a unified feed showing your most relevant operational information.
+
+### My Queue
+
+Your personal incident workload:
+
+| Item                | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| **Assigned to you** | Incidents where you're the assignee                 |
+| **Your teams**      | Incidents assigned to teams you belong to           |
+| **On-call now**     | Incidents routed via schedules where you're on-call |
+
+### Critical Focus
+
+High-priority items needing immediate attention:
+
+| Item              | Criteria                          |
+| ----------------- | --------------------------------- |
+| **HIGH urgency**  | All active HIGH urgency incidents |
+| **SLA breaching** | Incidents approaching or past SLA |
+| **Long-running**  | OPEN incidents older than 4 hours |
+
+### Services at Risk
+
+Services currently experiencing issues:
+
+| Status       | Description                          |
+| ------------ | ------------------------------------ |
+| **Critical** | Services with HIGH urgency incidents |
+| **Degraded** | Services with any active incidents   |
+| **Count**    | Number of affected services          |
+
+### Ops Pulse Interactions
+
+- **Click incident** → Opens incident detail page
+- **Click service** → Opens service detail page
+- **Click "View All"** → Opens filtered incident list
+
+---
+
+## Activity Heatmap
+
+The heatmap visualizes incident density over the past **365 days** to identify patterns.
+
+### Reading the Heatmap
+
+```
+     Mon Tue Wed Thu Fri Sat Sun
+Week 1: ░░░ ░░░ ██░ ░░░ ░░░ ░░░ ░░░
+Week 2: ░░░ ██░ ███ ██░ ░░░ ░░░ ░░░
+Week 3: ░░░ ░░░ ░░░ ░░░ ███ ░░░ ░░░
+...
+```
+
+| Intensity | Meaning           |
+| --------- | ----------------- |
+| Empty     | No incidents      |
+| Light     | Below average     |
+| Medium    | Average           |
+| Dark      | Above average     |
+| Darkest   | High incident day |
+
+### Pattern Recognition
+
+Use the heatmap to identify:
+
+| Pattern              | What It Reveals              |
+| -------------------- | ---------------------------- |
+| **Wednesday spikes** | Release day issues           |
+| **Weekend quiet**    | Business hours correlation   |
+| **Monthly clusters** | Month-end processing issues  |
+| **Holiday dips**     | Traffic-correlated incidents |
+
+### Heatmap Interactions
+
+- **Hover on cell** → Shows date and incident count
+- **Click on cell** → Opens incidents for that day
+- **Scroll** → Navigate through the year
+
+---
+
+## Time Range Selector
+
+Filter dashboard data by time period.
+
+### Available Ranges
+
+| Range             | Description            |
+| ----------------- | ---------------------- |
+| **Last 24 hours** | Today's activity       |
+| **Last 7 days**   | Weekly view            |
+| **Last 30 days**  | Monthly view (default) |
+| **Last 90 days**  | Quarterly view         |
+| **Custom**        | Specific date range    |
+
+### What's Affected
+
+| Component         |    Time-Filtered     |
+| ----------------- | :------------------: |
+| TOTAL metric      |          ✅          |
+| OPEN metric       |          ✅          |
+| UNASSIGNED metric | ❌ (always all-time) |
+| CRITICAL metric   |          ✅          |
+| Smart Insights    |          ✅          |
+| Ops Pulse         | ❌ (always current)  |
+| Heatmap           | ❌ (always 365 days) |
+
+### Retention Warning
+
+If your selected range exceeds the data retention limit:
+
+```
+⚠️ Retention Limit: Data older than 90 days may be incomplete
+```
+
+---
+
+## Auto-Refresh / Kiosk Mode
+
+Keep the dashboard current without manual refresh.
+
+### Enabling Auto-Refresh
+
+1. Click the **Auto** toggle in the top-right
+2. Select refresh interval:
+   - **30 seconds** — High activity monitoring
+   - **60 seconds** — Standard (default)
+   - **5 minutes** — Low activity periods
+
+### Kiosk Mode
+
+Perfect for NOC displays or wall monitors:
+
+1. Enable Auto-Refresh
+2. Press **F11** for fullscreen (browser)
+3. Dashboard updates continuously
+
+### Auto-Refresh Behavior
+
+| Event                    | Behavior                         |
+| ------------------------ | -------------------------------- |
+| **Refresh tick**         | All metrics and insights update  |
+| **User interaction**     | Timer resets                     |
+| **Browser tab inactive** | Pauses to save resources         |
+| **Tab becomes active**   | Immediate refresh, timer resumes |
+
+---
+
+## Quick Actions
+
+### From Dashboard
+
+| Action                  | How                       |
+| ----------------------- | ------------------------- |
+| **View all incidents**  | Click TOTAL card          |
+| **View open incidents** | Click OPEN card           |
+| **View unassigned**     | Click UNASSIGNED card     |
+| **View critical**       | Click CRITICAL card       |
+| **Create incident**     | Click **+ Create** button |
+
+### Keyboard Shortcuts
+
+| Shortcut | Action             |
+| -------- | ------------------ |
+| `R`      | Refresh dashboard  |
+| `N`      | New incident       |
+| `I`      | Go to incidents    |
+| `S`      | Go to services     |
+| `?`      | Show keyboard help |
+
+---
+
+## Filtering
+
+### Team Filter
+
+View data for specific teams:
+
+1. Click **Team** dropdown
+2. Select one or more teams
+3. Dashboard filters to those teams' services
+
+### Service Filter
+
+Focus on specific services:
+
+1. Click **Service** dropdown
+2. Select services
+3. Dashboard shows only selected services
+
+### Combining Filters
+
+Filters can be combined:
+
+- Team: "Platform Engineering" AND Service: "Payment API"
+- Results show only matching data
+
+---
+
+## Dashboard Permissions
+
+| Role          | Can View Dashboard |
+| ------------- | :----------------: |
+| **ADMIN**     |    ✅ Full data    |
+| **RESPONDER** |    ✅ Full data    |
+| **USER**      |    ✅ Full data    |
+
+All users can view the dashboard. Data visibility depends on team memberships when team filtering is applied.
+
+---
+
+## Dashboard vs. Other Views
+
+| Need                           | Use               |
+| ------------------------------ | ----------------- |
+| **Executive overview**         | Dashboard         |
+| **Work on specific incidents** | Incident List     |
+| **Service health details**     | Service Directory |
+| **Historical metrics**         | Analytics         |
+| **On-call information**        | Schedules         |
+
+---
+
+## Customization
+
+### Future Customization (Roadmap)
+
+Planned enhancements:
+
+- Drag-and-drop widget arrangement
+- Custom metric cards
+- Saved dashboard layouts
+- Per-team dashboards
+
+### Current Workarounds
+
+- Use **bookmarked URLs** with filters applied
+- Create **separate browser tabs** for different views
+- Use **Analytics** for custom reporting
+
+---
+
+## Mobile Dashboard
+
+The dashboard is responsive and mobile-friendly:
+
+### Mobile Layout
+
+- Cards stack vertically
+- Heatmap scrolls horizontally
+- Ops Pulse collapses to tabs
+- Touch-friendly interactions
+
+### PWA Support
+
+- Add to home screen for app-like experience
+- Works offline (shows cached data)
+- Push notifications for critical changes
+
+---
 
 ## Troubleshooting
 
-| Problem                                    | Check                                                                                                   |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Counts differ from the incident list       | Match status, urgency, service, assignee, range, and retention scope. The dashboard preview is limited. |
-| A card is empty                            | Clear filters and confirm qualifying data exists. Empty data is not necessarily an error.               |
-| My Queue is empty                          | It shows incidents directly assigned to your user, not every incident owned by your teams or schedules. |
-| Status looks stale                         | Open the incident, verify connectivity to the real-time stream, and refresh.                            |
-| Historical range is shorter than requested | Read the retention notice and ask an administrator to review data-retention settings.                   |
-| Export omits older matches                 | The Command Center exports rows loaded by its view; use Analytics export for a larger filtered set.     |
+### Dashboard Not Loading
 
-## Related guides
+1. Check internet connection
+2. Clear browser cache
+3. Try incognito/private window
+4. Check for browser console errors
 
-- [Incidents](./incidents)
-- [Services](./services)
-- [Schedules](./schedules)
-- [Analytics and SLA](./analytics)
-- [Reports and Dashboards](./reports-dashboards)
-- [Troubleshooting](../troubleshooting)
+### Metrics Seem Wrong
+
+1. Check time range selection
+2. Verify team/service filters
+3. Understand what's included (e.g., UNASSIGNED is all-time)
+4. Check for data retention limits
+
+### Auto-Refresh Not Working
+
+1. Verify toggle is enabled
+2. Check if browser tab is active
+3. Try disabling browser extensions
+4. Check for JavaScript errors
+
+### Insights Not Showing
+
+1. Insights appear only when thresholds are met
+2. Check if you have enough incidents
+3. Verify filters aren't excluding relevant data
+
+---
+
+## Best Practices
+
+### Daily Operations
+
+- **Start your day** with the Dashboard
+- **Check System Status** before major changes
+- **Review Smart Insights** for emerging patterns
+- **Monitor Critical Focus** throughout the day
+
+### Team Standups
+
+- **Share Dashboard** on standup screen
+- **Review Ops Pulse** for current workload
+- **Discuss Insights** for systemic issues
+- **Check Heatmap** for recent trends
+
+### NOC/On-Call
+
+- **Use Kiosk Mode** on wall displays
+- **Enable Auto-Refresh** at 30-60 seconds
+- **Monitor Critical Spike** alerts
+- **Track Unassigned** to prevent backlog
+
+### Incident Commander
+
+- **Dashboard is your war room view**
+- **System Status** shows overall impact
+- **Services at Risk** identifies affected systems
+- **Critical Focus** prioritizes response
+
+---
+
+## Related Topics
+
+- [Incidents](./incidents) — Incident management
+- [Services](./services) — Service directory
+- [Analytics](./analytics) — Detailed metrics
+- [Schedules](./schedules) — On-call management

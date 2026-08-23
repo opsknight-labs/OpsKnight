@@ -1,125 +1,253 @@
----
-order: 3
-title: API Rate Limiting
-description: Understand v1.3 API-key, event, integration, status API, and subscription limits and their exact client-visible behavior.
----
-
 # API Rate Limiting
 
-OpsKnight uses PostgreSQL counters for the published API and standard integration limits. Counters coordinate across application replicas that share a database and are removed by scheduled maintenance after expiration.
+OpsKnight implements rate limiting to protect the service from abuse and ensure fair resource allocation. This document describes the rate limiting implementation, default limits, and how to customize them.
 
-Limits are route-specific. There is no single middleware that adds rate-limit headers to every `/api/*` response.
+## Overview
 
-## Published limits
+Rate limiting is implemented at the API layer using a distributed rate limiter backed by PostgreSQL. This allows rate limits to be enforced across multiple application instances without requiring additional infrastructure like Redis.
 
-| Surface                               | Key/bucket                                        |                                                                                                  Default limit |
-| ------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------: |
-| Events API                            | Integration ID or API-key identity, Events bucket |                                                                                    120 requests per 60 seconds |
-| Incidents list/detail                 | API key, shared `get` bucket                      |                                                                                     60 requests per 60 seconds |
-| Incidents create                      | API key, `post` bucket                            |                                                                                     60 requests per 60 seconds |
-| Incidents patch                       | API key, `patch` bucket                           |                                                                                     60 requests per 60 seconds |
-| Standard provider integration handler | Integration ID                                    |                                                                                    100 requests per 60 seconds |
-| Status-page subscribe                 | Source IP                                         |                                                                                     10 requests per 60 seconds |
-| Status-page subscribe                 | Status page plus normalized email                 |                                                                                      3 requests per 60 seconds |
-| Public status JSON API                | Valid token hash, otherwise source IP             | Disabled by default; when enabled, defaults to 120 requests per 60 seconds and is configurable per status page |
+## Rate Limit Types
 
-Provider-specific/legacy integration routes can have their own handler behavior. Load-test the exact endpoint you deploy; do not assume the standard 100/minute value applies to every adapter.
+### 1. Per-Client Rate Limiting
 
-## Fixed-window behavior
+Requests are rate-limited based on the client identifier:
 
-The database key includes the current fixed time window. Every accepted or rejected check increments the counter. `resetAt` is the beginning of the next window.
+- **Authenticated requests:** Rate limited by user ID
+- **Unauthenticated requests:** Rate limited by IP address (via `X-Forwarded-For` or `X-Real-IP` headers)
 
-This is not a queue and it does not smooth traffic. A burst at a window boundary can produce a different traffic shape than a rolling-window limiter. Clients should still pace requests.
+### 2. Per-Endpoint Rate Limiting
 
-If the database rate-limit check throws, v1.3 logs the error and fails open so the limiter does not create an additional outage. Database readiness and 429 monitoring therefore both matter.
+Different endpoints have different rate limits based on their resource consumption and sensitivity:
 
-## HTTP 429 contract
+| Endpoint Category                      | Limit        | Window   |
+| -------------------------------------- | ------------ | -------- |
+| Authentication (`/api/auth/*`)         | 10 requests  | 1 minute |
+| Integrations (`/api/integrations/*`)   | 100 requests | 1 minute |
+| General API (`/api/*`)                 | 60 requests  | 1 minute |
+| Status Page API (`/api/status-page/*`) | 120 requests | 1 minute |
+| Webhook endpoints                      | 200 requests | 1 minute |
 
-Events and Incidents return:
+## Response Headers
+
+When rate limiting is active, the following headers are included in responses:
+
+| Header                  | Description                                                 |
+| ----------------------- | ----------------------------------------------------------- |
+| `X-RateLimit-Limit`     | Maximum requests allowed in the window                      |
+| `X-RateLimit-Remaining` | Remaining requests in the current window                    |
+| `X-RateLimit-Reset`     | Unix timestamp when the rate limit resets                   |
+| `Retry-After`           | Seconds until the rate limit resets (only on 429 responses) |
+
+### Example Response Headers
+
+```http
+HTTP/1.1 200 OK
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 57
+X-RateLimit-Reset: 1706793600
+```
+
+### Rate Limit Exceeded Response
+
+When the rate limit is exceeded, the API returns a `429 Too Many Requests` response:
 
 ```http
 HTTP/1.1 429 Too Many Requests
-Retry-After: 17
 Content-Type: application/json
+Retry-After: 45
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1706793600
+
+{
+  "error": "Too many requests",
+  "message": "Rate limit exceeded. Please try again in 45 seconds.",
+  "retryAfter": 45
+}
 ```
 
-```json
-{ "error": "Rate limit exceeded." }
+## Distributed Rate Limiting
+
+OpsKnight uses a PostgreSQL-backed distributed rate limiter that works across multiple instances:
+
+### How It Works
+
+1. Each request increments a counter in the database
+2. Counters are keyed by `{endpoint}:{clientId}:{windowStart}`
+3. Old counters are periodically cleaned up
+4. Uses optimistic locking to handle concurrent requests
+
+### Benefits
+
+- **No additional infrastructure:** Uses existing PostgreSQL database
+- **Consistent across instances:** Works correctly with horizontal scaling
+- **Persistent:** Rate limits survive application restarts
+- **Accurate:** Uses database transactions for atomic operations
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Disable rate limiting (not recommended for production)
+INTEGRATION_RATE_LIMIT=false
+
+# Configure CORS allowed origins (affects rate limit identification)
+CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
 ```
 
-`Retry-After` is the ceiling of seconds until the fixed window resets.
+### Customizing Rate Limits
 
-The standard integration handler additionally returns:
+Rate limits can be customized by modifying the rate limiter configuration in `src/lib/rate-limiter.ts`:
+
+```typescript
+// Example: Increase general API limit
+const RATE_LIMITS = {
+  default: {
+    maxRequests: 120, // Increased from 60
+    windowMs: 60000, // 1 minute
+  },
+  // ... other limits
+};
+```
+
+### Per-Integration Rate Limits
+
+Integration endpoints support custom rate limits per integration type:
+
+```typescript
+// Example: Higher limit for specific integration
+const INTEGRATION_LIMITS = {
+  datadog: { maxRequests: 200, windowMs: 60000 },
+  prometheus: { maxRequests: 500, windowMs: 60000 },
+  // ... other integrations use default
+};
+```
+
+## Best Practices
+
+### For API Consumers
+
+1. **Implement exponential backoff:**
+
+   ```javascript
+   async function fetchWithRetry(url, options, maxRetries = 3) {
+     for (let i = 0; i < maxRetries; i++) {
+       const response = await fetch(url, options);
+       if (response.status !== 429) return response;
+
+       const retryAfter = response.headers.get('Retry-After') || 30;
+       await new Promise(r => setTimeout(r, retryAfter * 1000));
+     }
+     throw new Error('Max retries exceeded');
+   }
+   ```
+
+2. **Monitor rate limit headers:** Check `X-RateLimit-Remaining` before making requests
+
+3. **Batch requests when possible:** Combine multiple operations into single API calls
+
+4. **Use webhooks:** Instead of polling, subscribe to webhooks for real-time updates
+
+### For Operators
+
+1. **Monitor rate limit violations:** Set up alerts for high 429 response rates
+
+2. **Adjust limits based on usage:** Review logs to find appropriate limits for your workload
+
+3. **Consider API keys:** For high-volume integrations, use dedicated API keys with custom limits
+
+## API Key Rate Limiting
+
+API keys have their own rate limits that can be configured per key:
+
+### Creating an API Key with Custom Limits
 
 ```http
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: UNIX_SECONDS
-Retry-After: SECONDS
-```
+POST /api/settings/api-keys
+Content-Type: application/json
 
-with:
-
-```json
-{ "error": "RATE_LIMITED", "message": "Rate limit exceeded" }
-```
-
-Successful published API responses do not universally include limit/remaining/reset headers. Do not build a client that requires those headers before every request.
-
-## Client behavior
-
-1. Stop sending to the affected bucket when HTTP 429 is received.
-2. Parse `Retry-After` as seconds and wait at least that long.
-3. Add jitter before retrying a fleet of workers.
-4. Bound retries and surface permanent failure to the owning team.
-5. Retry only idempotent operations automatically.
-
-For alert lifecycle delivery, the Events API is idempotent around a stable `dedup_key`. The Incidents create endpoint has no deduplication key; blindly retrying it can create duplicate incidents.
-
-```javascript
-async function requestWithRateLimitRetry(url, options, attempts = 3) {
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const response = await fetch(url, options);
-    if (response.status !== 429 || attempt === attempts) return response;
-
-    const seconds = Number(response.headers.get('retry-after') || '1');
-    const jitterMs = Math.floor(Math.random() * 500);
-    await new Promise(resolve => setTimeout(resolve, seconds * 1000 + jitterMs));
+{
+  "name": "Monitoring Integration",
+  "rateLimit": {
+    "maxRequests": 1000,
+    "windowMs": 60000
   }
 }
 ```
 
-## Operator controls
+### API Key Rate Limit Headers
 
-`INTEGRATION_RATE_LIMIT=false` disables rate limiting in the standard integration handler only. It does not disable Events, Incidents, subscription, or status API limits. Disabling it on an internet-facing deployment removes an abuse control and should be limited to a controlled diagnostic window.
+API key requests include additional headers:
 
-Status API limits and windows are configured on the status page. There is no per-API-key custom-limit form or published API for creating keys with a custom limit.
+```http
+X-API-RateLimit-Limit: 1000
+X-API-RateLimit-Remaining: 950
+X-API-RateLimit-Reset: 1706793600
+```
 
-Application API and standard integration constants are code-defined in v1.3. Changing them requires maintaining a custom application build and updating this public contract; prefer pacing and workload design first.
+## Monitoring Rate Limits
 
-## Operations
+### Logs
 
-- Keep the internal scheduler enabled on at least one healthy application process so expired counter records are cleaned up.
-- Monitor 429 response volume by route/integration without logging secrets.
-- Monitor PostgreSQL availability and growth of the rate-limit table.
-- Use distinct integration/API keys per producer so one producer cannot consume another's bucket.
-- Preserve correct client IP forwarding for IP-keyed status and subscription paths; trust only your configured proxies.
+Rate limit events are logged with the following format:
 
-There is no published Prometheus metrics endpoint for rate-limit counters in v1.3, and internal requests do not receive a documented universal bypass header.
+```json
+{
+  "level": "warn",
+  "message": "Rate limit exceeded",
+  "component": "rate-limiter",
+  "clientId": "ip:192.168.1.1",
+  "endpoint": "/api/incidents",
+  "limit": 60,
+  "window": "60000ms"
+}
+```
+
+### Metrics
+
+Rate limiting metrics are available via the internal metrics endpoint:
+
+- `opsknight_rate_limit_requests_total` - Total requests processed
+- `opsknight_rate_limit_exceeded_total` - Total rate limit violations
+- `opsknight_rate_limit_remaining` - Current remaining requests per client
+
+## Bypassing Rate Limits
+
+### Internal Requests
+
+Internal requests (from the same host) bypass rate limiting:
+
+```http
+GET /api/status-page/domains
+X-Internal-Request: status-domain-check
+```
+
+### Trusted Proxies
+
+When running behind a load balancer, ensure proper header forwarding:
+
+```nginx
+# nginx configuration
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
 
 ## Troubleshooting
 
-| Symptom                                      | Check                                                                                          |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 429 sooner than expected                     | Shared key/integration across workers, shared `get` bucket, retries, or a boundary-time burst. |
-| Every producer throttles together            | Producers reuse one API or integration key; issue separate least-privilege keys.               |
-| Counters accumulate                          | Internal scheduler disabled/failing or PostgreSQL cleanup errors.                              |
-| No rate limiting during database outage      | Expected fail-open behavior; restore the database and protect the edge independently.          |
-| Integration ignores `INTEGRATION_RATE_LIMIT` | It may use a legacy/provider-specific handler rather than the standard handler.                |
-| Status JSON limit differs                    | Status-page owner configured a custom maximum/window or disabled it.                           |
+### "Rate limit exceeded" when limit shouldn't apply
 
-## Related topics
+1. **Check client identification:** Ensure `X-Forwarded-For` is properly set
+2. **Verify timestamp sync:** Database and application servers should have synchronized clocks
+3. **Check for shared IP:** Multiple users behind NAT share rate limits
 
-- [API Reference](./README)
-- [Events API](./events)
-- [Incidents API](./incidents)
-- [Maintenance](../deployment/maintenance)
+### Rate limits not working across instances
+
+1. **Verify database connectivity:** All instances must connect to the same database
+2. **Check for connection pooling issues:** Ensure connections are properly released
+
+### High database load from rate limiting
+
+1. **Increase cleanup interval:** Reduce frequency of old counter cleanup
+2. **Add database indexes:** Ensure proper indexing on rate limit table
+3. **Consider caching:** Add in-memory cache for frequent rate limit checks

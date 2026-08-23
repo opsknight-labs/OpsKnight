@@ -14,7 +14,7 @@ Every stable `vMAJOR.MINOR.PATCH` release must pass:
 6. **Escalation and notification delivery** — execute user/team escalation flows with deterministic provider doubles and verify persisted notification records.
 7. **Deployment rendering** — lint/render Helm, render Kustomize, and validate Compose plus security/startup invariants.
 8. **Published architectures** — build the stable image for `linux/amd64` and `linux/arm64`; PR and main test images may remain AMD64-only for speed.
-9. **Documentation coverage** — resolve v1.3 relative links and verify the capability inventory has destinations for the required product workflows.
+9. **Documentation coverage** — resolve v1.4 relative links and verify the capability inventory has destinations for the required product workflows.
 10. **Security and general regression** — the normal test and security workflows must also pass for the release commit.
 
 The `release-quality` job in `.github/workflows/docker-image.yml` runs before stable image publication. If any gate fails, the release image job does not start. Main and pull-request image validation still use a lightweight no-release path.

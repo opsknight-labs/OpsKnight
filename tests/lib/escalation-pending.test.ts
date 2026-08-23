@@ -8,6 +8,7 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     incident: {
       findMany: vi.fn().mockResolvedValue([]),
+      updateMany: vi.fn(),
       update: vi.fn().mockResolvedValue({}),
     },
   },
@@ -60,6 +61,7 @@ describe('processPendingEscalations', () => {
     expect(executor).toHaveBeenCalledTimes(2);
     expect(executor).toHaveBeenNthCalledWith(1, 'inc-1', 0);
     expect(executor).toHaveBeenNthCalledWith(2, 'inc-2', 2);
+    expect(prisma.incident.updateMany).not.toHaveBeenCalled();
     expect(prisma.incident.update).toHaveBeenCalledWith({
       where: { id: 'inc-2' },
       data: {

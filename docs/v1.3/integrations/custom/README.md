@@ -1,28 +1,27 @@
 ---
 order: 8
 title: Custom Integrations
-description: Webhooks, generic JSON adapters, and Events API v2 ingest.
+description: Webhooks, generic JSON adapters, and PagerDuty emulation endpoints.
 ---
 
 # Custom Integrations
 
-Connect custom scripts, internal microservices, or proprietary alerting systems into OpsKnight using generic webhooks or an Events API v2 ingest adapter.
+Connect custom scripts, internal microservices, or proprietary alerting systems into OpsKnight using generic webhooks or drop-in emulation endpoints.
 
 ## Available Integrations
 
 <!-- integrations-list:start -->
 
-- [Generic Webhooks](./webhooks) — Receive alerts from any external system via customizable JSON payloads and HMAC signatures.
-- [PagerDuty Events API v2 ingest](./pagerduty-emulation) — Accept Events API v2 payloads at `/api/integrations/pagerduty` (and related routes). Change the destination URL; test your tool. Not affiliated with PagerDuty.
-
+- [Generic Webhooks](./custom/webhooks) — Receive alerts from any external system via customizable JSON payloads and HMAC signatures.
+- [PagerDuty Emulation (Events API v2)](./custom/pagerduty-emulation) — Drop-in replacement for PagerDuty Events API v2 (`/api/integrations/pagerduty` and `/api/events/v2`). Connect any tool with native PagerDuty support with 0 code changes.
 <!-- integrations-list:end -->
 
 ---
 
 ## Capabilities Comparison
 
-| Integration              | Endpoint                      | Supported Actions                   | Authentication                                                    |
-| :----------------------- | :---------------------------- | :---------------------------------- | :---------------------------------------------------------------- |
-| **Generic Webhooks**     | `/api/integrations/webhook`   | `trigger`, `resolve`                | Routing Key, HMAC Signature                                       |
-| **Events API v2 ingest** | `/api/integrations/pagerduty` | `trigger`, `acknowledge`, `resolve` | `routing_key` payload, Bearer, `X-Routing-Key`, `key`, or `token` |
-| **Events API**           | `/api/events`                 | `trigger`, `acknowledge`, `resolve` | API Token, Routing Key                                            |
+| Integration | Endpoint | Supported Actions | Authentication |
+| :--- | :--- | :--- | :--- |
+| **Generic Webhooks** | `/api/integrations/webhook` | `trigger`, `resolve` | Routing Key, HMAC Signature |
+| **PagerDuty Emulation** | `/api/integrations/pagerduty` | `trigger`, `acknowledge`, `resolve` | `routing_key` payload or header |
+| **Events API** | `/api/events` | `trigger`, `acknowledge`, `resolve` | API Token, Routing Key |

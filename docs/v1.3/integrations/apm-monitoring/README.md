@@ -12,13 +12,12 @@ Connect OpsKnight to your APM and observability stack to turn signals into incid
 
 <!-- integrations-list:start -->
 
-- [Datadog](./datadog) — Receive Datadog monitor alerts in OpsKnight
-- [New Relic](./new-relic) — Receive New Relic alerts and incidents in OpsKnight
-- [Dynatrace](./dynatrace) — Integrate Dynatrace problems with OpsKnight.
-- [AppDynamics](./appdynamics) — Integrate AppDynamics with OpsKnight.
-- [Grafana](./grafana) — Receive Grafana alerts in OpsKnight
-- [Honeycomb](./honeycomb) — Integrate Honeycomb triggers with OpsKnight.
-- [Sentry](./sentry) — Receive Sentry issue alerts in OpsKnight
-- [Splunk Observability](./splunk-observability) — Integrate Splunk (SignalFx) detectors.
-
+- [Datadog](./apm-monitoring/datadog) — Receive Datadog monitor alerts in OpsKnight
+- [New Relic](./apm-monitoring/new-relic) — Receive New Relic alerts and incidents in OpsKnight
+- [Dynatrace](./apm-monitoring/dynatrace) — Integrate Dynatrace problems with OpsKnight.
+- [AppDynamics](./apm-monitoring/appdynamics) — Integrate AppDynamics with OpsKnight.
+- [Grafana](./apm-monitoring/grafana) — Receive Grafana alerts in OpsKnight
+- [Honeycomb](./apm-monitoring/honeycomb) — Integrate Honeycomb triggers with OpsKnight.
+- [Sentry](./apm-monitoring/sentry) — Receive Sentry issue alerts in OpsKnight
+- [Splunk Observability](./apm-monitoring/splunk-observability) — Integrate Splunk (SignalFx) detectors.
 <!-- integrations-list:end -->

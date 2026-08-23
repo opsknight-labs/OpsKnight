@@ -1,124 +1,351 @@
 ---
 order: 6
 title: Deployment
-description: Choose and operate the Compose, Kubernetes/Kustomize, or Helm deployment supplied with OpsKnight v1.3.
+description: Deploy OpsKnight with Docker, Kubernetes, or Helm for production use
 ---
 
-# Deployment
+# Deployment Guide
 
-OpsKnight v1.3 ships one Next.js application and PostgreSQL-backed state. Choose a deployment path based on who owns the database, ingress, secrets, upgrades, backups, and background jobs.
+This section covers production deployment of OpsKnight. Choose the deployment method that best fits your infrastructure and operational needs.
 
-## Choose a path
+---
 
-| Path                                 | Use when                                                           | Important boundary                                                          |
-| ------------------------------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| [Docker Compose](./docker)           | Evaluation, development, or a deliberate single-host installation. | One host and one PostgreSQL container are not highly available.             |
-| [Kubernetes/Kustomize](./kubernetes) | Your platform team owns raw manifests/overlays.                    | The supplied PostgreSQL StatefulSet is a single-instance starting topology. |
-| [Helm](./helm)                       | Your platform team wants a values-driven Kubernetes release.       | Render and validate chart values against cluster policy before install.     |
+## Deployment Options
 
-`k8s/kustomization.yaml` is the raw-manifest entry point. [Mobile/PWA](./mobile-pwa) is a client-access guide, not a server deployment method.
+| Method                                | Best For                  | Complexity | HA Support |
+| ------------------------------------- | ------------------------- | ---------- | ---------- |
+| [Docker Compose](./deployment/docker) | Small teams, dev/staging  | Low        | No         |
+| [Kubernetes](./deployment/kubernetes) | Production, enterprise    | Medium     | Yes        |
+| [Helm](./deployment/helm)             | Templated K8s deployments | Medium     | Yes        |
+| [Mobile PWA](./deployment/mobile-pwa) | Mobile access             | N/A        | N/A        |
 
-## Shared production requirements
+---
 
-- Supported PostgreSQL with durable storage, backups, and tested recovery.
-- Stable public HTTPS origin used consistently for `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL`.
-- Strong, backed-up `NEXTAUTH_SECRET` and 64-hex-character `ENCRYPTION_KEY`.
-- Ingress/reverse-proxy forwarding of the original host and scheme.
-- Restricted database/admin network access.
-- Monitoring for readiness, restarts, migration failures, database capacity, and integration/notification failures.
-- An immutable image release process with an explicit schema/data rollback decision.
+## Quick Comparison
 
-Notification credentials are configured in the application UI and encrypted in PostgreSQL. A working recovery therefore requires both the database backup and the matching `ENCRYPTION_KEY`.
+| Feature                | Docker Compose | Kubernetes         | Helm               |
+| ---------------------- | -------------- | ------------------ | ------------------ |
+| **Setup Time**         | 5 minutes      | 30 minutes         | 15 minutes         |
+| **Scaling**            | Manual         | Auto (HPA)         | Auto (HPA)         |
+| **High Availability**  | No             | Yes                | Yes                |
+| **Rolling Updates**    | Limited        | Yes                | Yes                |
+| **Resource Limits**    | Basic          | Advanced           | Advanced           |
+| **Secrets Management** | Env files      | K8s Secrets        | Values/Secrets     |
+| **Ingress/TLS**        | Manual         | Ingress Controller | Ingress Controller |
+| **Monitoring**         | Manual         | Built-in           | Built-in           |
 
-## Runtime model
+---
 
-```text
-users and integrations
-        │ HTTPS
-        ▼
-ingress / reverse proxy
-        │
-        ▼
-OpsKnight Next.js application
-        │
-        ▼
-PostgreSQL
+## Prerequisites
+
+### All Deployments
+
+| Requirement                | Notes                   |
+| -------------------------- | ----------------------- |
+| **PostgreSQL 14+**         | Primary database        |
+| **Domain name**            | For production access   |
+| **SSL certificate**        | HTTPS required for auth |
+| **SMTP server** (optional) | For email notifications |
+
+### Docker Compose
+
+- Docker Engine 20.10+
+- Docker Compose 2.0+
+- 4GB RAM minimum
+- 10GB disk space
+
+### Kubernetes
+
+- Kubernetes 1.24+
+- kubectl configured
+- Ingress Controller (nginx, traefik, etc.)
+- Persistent Volume provisioner
+- 8GB RAM cluster minimum
+
+### Helm
+
+- Helm 3.10+
+- All Kubernetes prerequisites
+
+---
+
+## Architecture Overview
+
+### Single-Node (Docker Compose)
+
+```
+┌─────────────────────────────────────────────┐
+│                  Host Server                │
+│  ┌─────────────┐  ┌─────────────────────┐   │
+│  │  OpsKnight  │  │    PostgreSQL       │   │
+│  │   (Next.js) │  │    (Database)       │   │
+│  │   Port 3000 │  │    Port 5432        │   │
+│  └─────────────┘  └─────────────────────┘   │
+│         │                   │               │
+│         └───────────────────┘               │
+│                    │                        │
+│  ┌─────────────────┴────────────────────┐   │
+│  │           Docker Network             │   │
+│  └──────────────────────────────────────┘   │
+└─────────────────────────────────────────────┘
 ```
 
-The application also performs internal scheduled work by default. Set `ENABLE_INTERNAL_CRON=false` only when another designated process owns those jobs. When running several replicas, validate job locking and database connection capacity under the exact topology.
+### Multi-Node (Kubernetes)
 
-Redis is not a required v1.3 runtime dependency.
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Kubernetes Cluster                           │
+│                                                                     │
+│  ┌─────────────┐    ┌─────────────────────────────────────────┐    │
+│  │   Ingress   │───▶│            OpsKnight Pods               │    │
+│  │  Controller │    │  ┌─────────┐ ┌─────────┐ ┌─────────┐   │    │
+│  └─────────────┘    │  │ Pod 1   │ │ Pod 2   │ │ Pod 3   │   │    │
+│                     │  └─────────┘ └─────────┘ └─────────┘   │    │
+│                     └─────────────────┬───────────────────────┘    │
+│                                       │                            │
+│                     ┌─────────────────┴───────────────────┐        │
+│                     │     PostgreSQL (StatefulSet)        │        │
+│                     │  ┌─────────────────────────────┐    │        │
+│                     │  │   Primary    │   Replica    │    │        │
+│                     │  └─────────────────────────────┘    │        │
+│                     └─────────────────────────────────────┘        │
+│                                       │                            │
+│                     ┌─────────────────┴───────────────────┐        │
+│                     │      Persistent Volume Claims        │        │
+│                     └─────────────────────────────────────┘        │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-## Core configuration
+---
 
-| Variable              | Requirement                                                               |
-| --------------------- | ------------------------------------------------------------------------- |
-| `DATABASE_URL`        | Complete PostgreSQL URI reachable from the application process.           |
-| `NEXTAUTH_URL`        | Exact public authentication origin.                                       |
-| `NEXT_PUBLIC_APP_URL` | Public origin used in user-facing links; normally matches `NEXTAUTH_URL`. |
-| `NEXTAUTH_SECRET`     | Stable high-entropy session/token secret.                                 |
-| `ENCRYPTION_KEY`      | Stable 32-byte hex key for encrypted stored credentials.                  |
+## Quick Start: Docker Compose
 
-For managed PostgreSQL, TLS/PgBouncer options, or credentials containing reserved URI characters, use the deployment method's complete database-URL override instead of reconstructing the URI from unencoded components.
+Fastest way to get started:
 
-See the [Configuration reference](../getting-started/configuration) for advanced settings. Notification-provider credentials are normally entered under **Settings → Notification Providers** rather than invented environment variables.
+```bash
+# Clone repository
+git clone https://github.com/opsknight-labs/opsknight.git
+cd opsknight
 
-## Published image compatibility
+# Configure environment
+cp env.example .env
+# Edit .env with your settings
 
-Stable images are published only at `ghcr.io/opsknight-labs/opsknight`; main-branch validation images use `ghcr.io/opsknight-labs/opsknight-test`. Do not substitute the test channel in production.
+# Start services
+docker compose up -d
+```
 
-Source changes do not modify an image that was already published. In particular, the immutable `1.3.1` release predates the fail-closed migration entrypoint and multi-architecture publishing changes in this repository revision and is an amd64 image. Tagged stable releases are built for amd64 and arm64, while the continuously updated test image from `main` is amd64-only to keep feedback fast. Those runtime changes take effect in the next stable release built after this work. Inspect the selected image manifest and release notes rather than inferring capabilities from the checked-in deployment YAML.
+Access at `http://localhost:3000` — you'll be directed to `/setup` to create your admin account.
 
-## Release workflow
+[Full Docker Guide →](./deployment/docker)
 
-Use the same gates for every deployment method:
+---
 
-1. Pin the intended application image tag/digest.
-2. Review release notes and Prisma migrations.
-3. Back up PostgreSQL and critical secrets; keep a recent restore drill.
-4. Render/validate deployment configuration.
-5. Roll out while watching migration/startup logs.
-6. Verify readiness, login, a database write, an inbound test event, and intended notification providers.
-7. Observe for a defined soak period before deleting the prior recovery point.
+## Quick Start: Kubernetes
 
-Images built from this repository revision run `prisma migrate deploy` before starting the server. The entrypoint retries/recovery-attempts migration failures, but if the schema still cannot be migrated the container exits non-zero. Verify the release notes before assuming an older image has this behavior.
+Using raw manifests:
 
-Kubernetes deployments include a startup probe budget so legitimate migration/cold-start time is not mistaken for a liveness failure.
+```bash
+# Clone repository
+git clone https://github.com/opsknight-labs/opsknight.git
+cd opsknight/k8s
 
-## Backup and recovery standard
+# Create namespace
+kubectl create namespace opsknight
 
-Back up:
+# Apply configs (edit first!)
+kubectl apply -f configmap.yaml
+kubectl apply -f secret.yaml
 
-- complete PostgreSQL data;
-- `NEXTAUTH_SECRET`, `ENCRYPTION_KEY`, and secrets managed outside the database;
-- Compose environment, Kubernetes overlays, Helm values, ingress/network policy configuration;
-- the exact application image reference.
+# Deploy PostgreSQL
+kubectl apply -f postgres/
 
-Restore into an isolated environment with the original encryption key, then verify authentication, integrations, status configuration, and a controlled incident.
+# Deploy OpsKnight
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+kubectl apply -f ingress.yaml
+```
 
-## Production acceptance checklist
+[Full Kubernetes Guide →](./deployment/kubernetes)
 
-- [ ] Public URL is HTTPS and matches both application URL settings.
-- [ ] Database is not exposed publicly and uses encrypted transport where supported.
-- [ ] Persistent storage and automated backups are in place.
-- [ ] A restore drill succeeded with the backed-up encryption key.
-- [ ] Health/readiness and database capacity are monitored externally.
-- [ ] Migration/application logs reach durable log storage.
-- [ ] Resource requests/limits or host capacity are based on a load test.
-- [ ] Notification/inbound-integration synthetic tests are monitored.
-- [ ] Upgrade and data-rollback ownership is documented.
-- [ ] Destructive reset commands are excluded from routine runbooks.
+---
 
-## Next steps
+## Quick Start: Helm
 
-- [Docker Compose](./docker)
-- [Kubernetes](./kubernetes)
-- [Kustomize](./kustomize)
-- [Helm](./helm)
-- [Monitoring](./monitoring)
-- [Maintenance](./maintenance)
-- [Database migrations](./database-migrations)
-- [Backup and restore](./backup-restore)
-- [Upgrade and rollback](./upgrade-rollback)
-- [Configuration Reference](../getting-started/configuration)
-- [Security](../security/README)
+Using Helm charts:
+
+```bash
+# Add OpsKnight Helm repo (if published)
+# helm repo add opsknight https://charts.opsknight.com
+
+# Or use local chart
+cd opsknight/helm
+
+# Install with values
+helm install opsknight ./opsknight \
+  --namespace opsknight \
+  --create-namespace \
+  --values values.yaml
+```
+
+[Full Helm Guide →](./deployment/helm)
+
+---
+
+## Environment Variables
+
+### Required Variables
+
+| Variable          | Description                 | Example                                 |
+| ----------------- | --------------------------- | --------------------------------------- |
+| `DATABASE_URL`    | PostgreSQL connection       | `postgresql://user:pass@host:5432/db`   |
+| `NEXTAUTH_URL`    | Application base URL        | `https://opsknight.yourco.com`          |
+| `NEXTAUTH_SECRET` | Session secret (32+ chars)  | Generate with `openssl rand -base64 32` |
+| `APP_URL`         | Application URL (for links) | `https://opsknight.yourco.com`          |
+
+### Optional Variables
+
+| Variable         | Description                      | Default        |
+| ---------------- | -------------------------------- | -------------- |
+| `ENCRYPTION_KEY` | Secrets encryption (32-byte hex) | Auto-generated |
+
+| `LOG_LEVEL` | Logging verbosity | `info` |
+
+### Notification Providers
+
+Configure in UI or via environment:
+
+| Variable             | Description         |
+| -------------------- | ------------------- |
+| `SMTP_HOST`          | SMTP server host    |
+| `SMTP_PORT`          | SMTP server port    |
+| `SMTP_USER`          | SMTP username       |
+| `SMTP_PASS`          | SMTP password       |
+| `TWILIO_ACCOUNT_SID` | Twilio account SID  |
+| `TWILIO_AUTH_TOKEN`  | Twilio auth token   |
+| `TWILIO_PHONE`       | Twilio phone number |
+
+---
+
+## Production Checklist
+
+### Security
+
+- [ ] HTTPS enabled with valid SSL certificate
+- [ ] Strong `NEXTAUTH_SECRET` (32+ characters)
+- [ ] Database credentials secured
+- [ ] Encryption key configured
+- [ ] Network policies in place (K8s)
+- [ ] Pod security policies applied (K8s)
+
+### High Availability
+
+- [ ] Multiple OpsKnight replicas (K8s)
+- [ ] PostgreSQL replication
+- [ ] Load balancer configured
+- [ ] Health checks enabled
+- [ ] Persistent storage for database
+
+### Monitoring
+
+- [ ] Health endpoint monitored (`/api/health`)
+- [ ] Resource limits configured
+- [ ] Logging aggregation set up
+- [ ] Alerting on OpsKnight itself
+
+### Backups
+
+- [ ] Database backup schedule
+- [ ] Configuration backup (secrets, configmaps)
+- [ ] Disaster recovery plan tested
+
+### Performance
+
+- [ ] Resource requests/limits tuned
+- [ ] Database connection pooling
+- [ ] CDN for static assets (optional)
+- [ ] Horizontal Pod Autoscaler configured (K8s)
+
+---
+
+## Upgrading OpsKnight
+
+### Docker Compose
+
+```bash
+# Pull latest image
+docker compose pull
+
+# Restart with new image
+docker compose up -d
+
+# Run migrations (if needed)
+docker exec -it opsknight_app npx prisma migrate deploy
+```
+
+### Kubernetes
+
+```bash
+# Update image tag in deployment
+kubectl set image deployment/opsknight \
+  opsknight=opsknight/opsknight:v1.1.0 \
+  -n opsknight
+
+# Or apply updated manifests
+kubectl apply -f deployment.yaml
+```
+
+### Helm
+
+```bash
+# Update values.yaml with new image tag
+# Then upgrade release
+helm upgrade opsknight ./opsknight \
+  --namespace opsknight \
+  --values values.yaml
+```
+
+---
+
+## Troubleshooting
+
+### Application Won't Start
+
+1. Check logs: `docker compose logs` or `kubectl logs`
+2. Verify DATABASE_URL is correct
+3. Ensure database is accessible
+4. Check NEXTAUTH_URL matches actual URL
+
+### Database Connection Errors
+
+```bash
+# Test connection
+docker exec -it opsknight_app npx prisma db pull
+
+# Check PostgreSQL logs
+docker compose logs postgres
+# or
+kubectl logs -l app=postgres
+```
+
+### SSL/TLS Issues
+
+1. Verify certificate is valid
+2. Check NEXTAUTH_URL uses https://
+3. Ensure ingress TLS is configured
+
+### Performance Issues
+
+1. Check resource limits
+2. Monitor database queries
+3. Review connection pool settings
+4. Scale horizontally if needed
+
+---
+
+## Related Topics
+
+- [Getting Started](./getting-started) — Initial setup
+- [Configuration](./getting-started/configuration) — Environment reference
+- [Architecture](./architecture) — System design
+- [Security](./security) — Security configuration

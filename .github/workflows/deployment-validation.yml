@@ -13,7 +13,7 @@ on:
       - 'env.example'
       - 'helm/**'
       - 'k8s/**'
-      - 'docs/v1.3/deployment/**'
+      - 'docs/v1.4/deployment/**'
       - 'tests/lib/deployment-config-unit.test.ts'
       - '.github/workflows/docker-image.yml'
       - '.github/workflows/deployment-validation.yml'

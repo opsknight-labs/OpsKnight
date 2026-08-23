@@ -1,21 +1,21 @@
-name: Docs links (v1.3)
+name: Docs links (v1.4)
 
 on:
   pull_request:
     branches: [main]
     paths:
-      - 'docs/v1.3/**'
+      - 'docs/v1.4/**'
       - 'scripts/check-docs-links.cjs'
       - 'scripts/check-docs-capabilities.cjs'
-      - 'docs/V1_3_CAPABILITY_INVENTORY.md'
+      - 'docs/V1_4_CAPABILITY_INVENTORY.md'
       - '.github/workflows/docs-links.yml'
   push:
     branches: [main]
     paths:
-      - 'docs/v1.3/**'
+      - 'docs/v1.4/**'
       - 'scripts/check-docs-links.cjs'
       - 'scripts/check-docs-capabilities.cjs'
-      - 'docs/V1_3_CAPABILITY_INVENTORY.md'
+      - 'docs/V1_4_CAPABILITY_INVENTORY.md'
       - '.github/workflows/docs-links.yml'
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Check relative markdown links in docs/v1.3
+      - name: Check relative markdown links in docs/v1.4
         run: node scripts/check-docs-links.cjs
       - name: Check code-to-doc capability coverage
         run: node scripts/check-docs-capabilities.cjs

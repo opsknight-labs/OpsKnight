@@ -13,7 +13,7 @@ Receive alerts from Prometheus Alertmanager and create incidents automatically.
 ## Endpoint
 
 ```
-POST /api/integrations/prometheus?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
+POST /api/integrations/prometheus?integrationId=YOUR_INTEGRATION_ID
 ```
 
 ---
@@ -36,7 +36,7 @@ Add OpsKnight as a receiver in your `alertmanager.yml`:
 receivers:
   - name: 'opsknight'
     webhook_configs:
-      - url: 'https://YOUR_OPSKNIGHT_URL/api/integrations/prometheus?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY'
+      - url: 'https://YOUR_OPSKNIGHT_URL/api/integrations/prometheus?integrationId=YOUR_INTEGRATION_ID'
         send_resolved: true
 
 route:
@@ -150,13 +150,19 @@ Dedup keys are generated as follows:
 1. **Fingerprint** (preferred): Uses Alertmanager's `fingerprint` field
 2. **Label hash**: If no fingerprint, creates SHA-256 hash from sorted labels
 
-An alert with no fingerprint or labels falls back to a normalized alert name or summary. Trigger and resolved payloads must produce the same key; verify this with a real Alertmanager lifecycle test.
+This ensures identical alerts map to the same incident, preventing duplicates during alert storms.
 
 ---
 
 ## Security
 
-The v1.3 Prometheus route authenticates with the integration ID and integration key. It does not verify the integration's optional signature secret or an `X-Signature` header. Keep the generated URL/key secret and place a trusted signing/authentication gateway in front of the route if your policy requires another sender-verification layer.
+### Signature Verification (Optional)
+
+You can secure the webhook with HMAC signature verification:
+
+1. In OpsKnight, set a **Signing Secret** on the integration
+2. Configure Alertmanager to send the signature (requires custom webhook or proxy)
+3. Include header: `X-Signature: sha256=<hmac_signature>`
 
 ---
 
@@ -186,7 +192,7 @@ curl -X POST http://alertmanager:9093/api/v2/alerts \
 Send a test payload directly to OpsKnight:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/prometheus?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/prometheus?integrationId=YOUR_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "version": "4",

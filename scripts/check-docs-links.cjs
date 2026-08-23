@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Fail if relative markdown links in docs/v1.3 do not resolve to a file.
+ * Fail if relative markdown links in docs/v1.4 do not resolve to a file.
  * Skips http(s), mailto, and in-page hashes.
  */
 const fs = require("fs");
 const path = require("path");
 
-const ROOT = path.join(__dirname, "..", "docs", "v1.3");
+const ROOT = path.join(__dirname, "..", "docs", "v1.4");
 const LINK_RE = /\[[^\]]*]\(([^)]+)\)/g;
 
 function walk(dir, acc = []) {
@@ -59,4 +59,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Checked ${files.length} files in docs/v1.3 — relative links resolve.`);
+console.log(`Checked ${files.length} files in docs/v1.4 — relative links resolve.`);

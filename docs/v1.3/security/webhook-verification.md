@@ -1,132 +1,102 @@
 ---
-title: Webhook authentication and signatures
-description: Exact inbound integration authentication, optional provider signatures, Slack verification, and outbound signature formats
+title: Webhook Authentication & Signature Verification
+description: Cryptographic signature verification, constant-time HMAC checks, and anti-replay protection.
 version: v1.3
-order: 4
+order: 2
 ---
 
-# Webhook authentication and signatures
+# Webhook Authentication & Signature Verification
 
-OpsKnight has several webhook systems with different credentials and signature formats. Do not copy a header from one system into another. This page separates provider-native inbound integration routes, the published Events API, Slack callbacks, service webhooks, and status-page webhooks.
+OpsKnight implements a **zero-trust, fail-closed** security model for all inbound and outbound webhook traffic.
 
-## Provider-native inbound routes
+---
 
-Routes under `/api/integrations/<provider>` use an integration ID plus integration key. The shared form is:
+## 🔒 Inbound Webhook Authentication
 
-```text
-POST /api/integrations/PROVIDER?integrationId=INTEGRATION_ID
+Every inbound integration route enforces a mandatory two-stage security boundary before payloads reach business logic:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Provider as Alerting Provider (e.g. Datadog, Zabbix, GitLab)
+    participant Middleware as Webhook Ingestion Middleware
+    participant Security as Cryptographic Security Layer
+    participant Engine as Incident Core Engine
+
+    Provider->>Middleware: POST /api/integrations/:type (Payload + Headers)
+    Middleware->>Security: 1. Extract Integration Key (Bearer, Token, x-key, Query)
+    Security-->>Middleware: Integration Key Validated (Constant-time check)
+
+    alt Secret Configured
+        Middleware->>Security: 2. Verify Cryptographic Signature (HMAC-SHA256, HMAC-SHA1)
+        Security-->>Middleware: Signature Validated
+    end
+
+    Middleware->>Engine: Process Event & Trigger Escalation
+    Engine-->>Provider: HTTP 202 Accepted (dedup_key)
 ```
 
-Send the matching integration key with one of these methods:
+---
 
-```http
-Authorization: Bearer INTEGRATION_KEY
+## 🔑 Key Extraction & Constant-Time Verification
+
+OpsKnight extracts integration keys across standard headers and fallbacks:
+
+1. `Authorization: Bearer <KEY>`
+2. `Authorization: Token token=<KEY>` (PagerDuty v2 standard)
+3. `x-integration-key: <KEY>` or `x-api-key: <KEY>`
+4. `?integrationKey=<KEY>` or `?key=<KEY>`
+
+### Timing-Safe Equality
+
+To prevent timing-based side-channel attacks on secret keys and signatures, OpsKnight employs `crypto.timingSafeEqual`:
+
+```typescript
+function safeEqual(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) {
+    // Dummy constant-time comparison prevents leaking length
+    crypto.timingSafeEqual(Buffer.alloc(32), Buffer.alloc(32));
+    return false;
+  }
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
 ```
 
-```http
-X-Integration-Key: INTEGRATION_KEY
+---
+
+## 🛡️ Supported Signature Providers
+
+OpsKnight provides built-in cryptographic verifiers for all major webhook protocols:
+
+| Provider | Signature Header | Algorithm | Signature Format |
+| :--- | :--- | :--- | :--- |
+| **GitHub** | `x-hub-signature-256` | HMAC-SHA256 | `sha256=<hex_digest>` |
+| **GitLab** | `x-gitlab-token` | Constant-time string | `<secret_token>` |
+| **Sentry** | `sentry-hook-signature` | HMAC-SHA256 | `<hex_digest>` |
+| **Slack ChatOps** | `x-slack-signature` | HMAC-SHA256 | `v0=<hex_digest>` (with timestamp) |
+| **Grafana** | `x-grafana-signature` | HMAC-SHA256 | `<hex_digest>` |
+| **Vercel** | `x-vercel-signature` | HMAC-SHA1 | `<hex_digest>` |
+| **Generic Webhooks** | `x-signature` / `x-webhook-signature` | HMAC-SHA256 | `<hex_digest>` |
+
+---
+
+## ⏱️ Outbound Anti-Replay Protection
+
+When OpsKnight sends outbound webhooks (e.g. status page notifications, third-party dispatchers), signatures are bound to the delivery timestamp to prevent replay attacks:
+
+```typescript
+const timestamp = Math.floor(Date.now() / 1000).toString();
+const signedPayload = `${timestamp}.${payloadString}`;
+const hmac = crypto
+  .createHmac('sha256', secret)
+  .update(signedPayload)
+  .digest('hex');
+
+// Sent as:
+// X-OpsKnight-Timestamp: 1786973846
+// X-OpsKnight-Signature: sha256=abcdef12345...
 ```
 
-The shared middleware also accepts `Authorization: Token token=…`, `X-API-Key`, or query key `integrationKey`, `integration_key`, or `key`. Headers are safer because query strings commonly appear in logs. Key equality uses a timing-safe comparison.
-
-The integration must exist and be enabled. The route validates against the route's provider schema, but v1.3 does not separately enforce that the stored integration `type` equals the provider path segment. Keep each integration ID/key pair secret, configure only its intended upstream sender, and test the exact route shown in the service UI.
-
-The PagerDuty-compatible adapter has different key locations. The published `/api/events` endpoint also has a different authentication contract. Use [Inbound webhook reference](../integrations/inbound-webhook-reference) and [Events API](../api/events) instead of assuming the shared middleware rules apply.
-
-## Optional provider signatures
-
-The integration key is always required by the shared provider middleware. A second provider signature is verified only when all of these are true:
-
-- the route has a signature mode;
-- the integration has `signatureSecret` configured;
-- the route does not explicitly skip signature verification; and
-- `INTEGRATION_VERIFY_SIGNATURES` is not set to `false`.
-
-Signature verification is enabled by default. Setting `INTEGRATION_VERIFY_SIGNATURES=false` weakens the boundary for every route using the shared handler and should be limited to controlled diagnosis.
-
-| Mode         | Routes                                          | Expected signature                                                                              |
-| ------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| GitHub       | GitHub                                          | `X-Hub-Signature-256: sha256=<HMAC-SHA256 of raw body>`                                         |
-| GitLab token | GitLab and, currently, Zabbix                   | `X-Gitlab-Token` exactly matches the configured signature secret                                |
-| Sentry       | Sentry                                          | `Sentry-Hook-Signature: <hex HMAC-SHA256 of raw body>`                                          |
-| Grafana      | Grafana                                         | `X-Grafana-Signature: <hex HMAC-SHA256 of raw body>`                                            |
-| Vercel       | Vercel                                          | `X-Vercel-Signature: <hex HMAC-SHA1 of raw body>`                                               |
-| Generic      | Provider routes listed in the inbound reference | `X-Signature` or `X-Webhook-Signature` with hex HMAC-SHA256 of raw body and no `sha256=` prefix |
-
-CloudWatch, Azure Monitor, New Relic, and Prometheus currently rely on the integration key in their provider route rather than an additional signature mode. CloudWatch SNS subscription confirmation separately validates the confirmation URL before fetching it.
-
-Provider signatures are computed over the raw request body. Any proxy or middleware that reformats JSON before OpsKnight receives it will change the bytes and invalidate HMAC verification.
-
-## Slack callbacks
-
-Slack actions, commands, and events use Slack request signing rather than an integration key. OpsKnight reads `X-Slack-Request-Timestamp` and `X-Slack-Signature`, rejects timestamps outside the five-minute window, calculates Slack's `v0` HMAC-SHA256 base string over the raw body, and compares the signature safely.
-
-Signing-secret lookup uses the configured Slack workspace secret with `SLACK_SIGNING_SECRET` as an optional environment override. Keep the Slack OAuth routes and callback URLs exactly as documented in [Slack OAuth setup](../integrations/communication/slack-oauth-setup) and [Slack ChatOps](../integrations/communication/slack-chatops).
-
-## Outbound service webhooks
-
-When a service webhook has a secret, OpsKnight sends:
-
-```http
-X-OpsKnight-Timestamp: 1786973846000
-X-OpsKnight-Signature: sha256=HEX_HMAC
-```
-
-The timestamp is Unix time in **milliseconds**. The signed bytes are:
-
-```text
-TIMESTAMP + "." + EXACT_JSON_BODY
-```
-
-Receiver verification procedure:
-
-1. Read the request body as raw bytes/text before JSON reserialization.
-2. Parse `X-OpsKnight-Timestamp` as milliseconds and enforce the freshness window required by your organization.
-3. Calculate HMAC-SHA256 over `timestamp + "." + rawBody` with the shared secret.
-4. Add the `sha256=` prefix and compare without timing leaks.
-5. Reject missing, stale, or mismatched requests before processing the event.
-
-OpsKnight signs the timestamp but the receiving system decides how much clock skew and replay age to allow.
-
-## Outbound status-page webhooks
-
-Status-page webhooks use a different contract:
-
-```http
-X-Webhook-Signature: sha256=HEX_HMAC
-X-Webhook-Event: incident.created
-```
-
-The HMAC-SHA256 input is the exact JSON body only. This path does not include a signed timestamp header in v1.3, so receivers cannot enforce freshness from an OpsKnight-signed delivery time. Use TLS, keep the secret unique, make event handling idempotent, and apply receiver-side network and replay controls where possible.
-
-## Secret rotation
-
-Inbound provider signature secrets and keys do not support a documented two-key overlap in one integration. Coordinate rotation with the sender, update the OpsKnight integration, immediately update the upstream destination/header, and run failure and recovery tests.
-
-For outbound webhooks, update both OpsKnight and the receiver in a controlled window. If the receiver supports multiple verification secrets, accept old and new briefly, then remove the old value after observing successful signed deliveries.
-
-## Troubleshooting
-
-**Integration key is rejected**
-
-Confirm the ID and key come from the same enabled integration. Check for whitespace and confirm a proxy did not remove `Authorization` or custom headers.
-
-**Signature is missing after adding a signature secret**
-
-The sender must generate the exact header required by the route. Remove the signature secret only if your security policy accepts integration-key-only authentication.
-
-**Signature mismatches**
-
-Capture a sanitized raw-body hash and header names at both sides. Check HMAC algorithm, prefix, hexadecimal encoding, body bytes, timestamp units, proxy transformations, and secret version. Never log the secret or complete authenticated query URL.
-
-**Slack reports retries or timeouts**
-
-Verify the public URL, proxy body handling, timestamp clock skew, signing secret, and route path. Slack requires a timely acknowledgment even when longer processing continues separately.
-
-## Related topics
-
-- [Inbound webhook reference](../integrations/inbound-webhook-reference)
-- [Custom webhooks](../integrations/custom/webhooks)
-- [Status page](../core-concepts/status-page)
-- [Slack ChatOps](../integrations/communication/slack-chatops)
-- [Secrets and encryption](./encryption)
+Receivers can verify the signature and reject any requests with timestamps older than 300 seconds.

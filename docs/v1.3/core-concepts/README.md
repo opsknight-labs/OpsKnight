@@ -8,6 +8,9 @@ description: Master the fundamental building blocks of OpsKnight incident manage
 
 Understanding OpsKnight's core concepts is essential for building an effective incident management workflow. This section explains how each component works, why it exists, and how they connect to form a complete system.
 
+<!-- placeholder:core-concepts-overview -->
+<!-- Add: Visual diagram showing how all concepts interconnect -->
+
 ---
 
 ## The Big Picture
@@ -18,7 +21,7 @@ OpsKnight is built around a simple but powerful model: **Alerts become Incidents
                     YOUR MONITORING STACK
     ┌─────────────────────────────────────────────────┐
     │  Datadog • Prometheus • CloudWatch • Sentry     │
-    │  CI/CD • uptime • cloud • custom webhooks       │
+    │  GitHub Actions • Custom Webhooks • 20+ more    │
     └─────────────────────────┬───────────────────────┘
                               │
                               ▼
@@ -39,7 +42,7 @@ OpsKnight is built around a simple but powerful model: **Alerts become Incidents
     ┌─────────────────────────────────────────────────┐
     │              ESCALATION POLICIES                 │
     │  Multi-step notification chains with delays      │
-    │  Step 1 → Step 2 → Step 3 → Complete             │
+    │  Step 1 → Step 2 → Step 3 → Repeat               │
     └─────────────────────────┬───────────────────────┘
                               │
                               ▼
@@ -52,8 +55,8 @@ OpsKnight is built around a simple but powerful model: **Alerts become Incidents
                               ▼
     ┌─────────────────────────────────────────────────┐
     │              NOTIFICATIONS                       │
-    │  User fallback plus service-level delivery        │
-    │  In-app • Email • SMS • Push • Slack • WhatsApp │
+    │  Multi-channel delivery until acknowledged       │
+    │  Email • SMS • Push • Slack • WhatsApp          │
     └─────────────────────────────────────────────────┘
 ```
 
@@ -61,25 +64,20 @@ OpsKnight is built around a simple but powerful model: **Alerts become Incidents
 
 ## Concepts at a Glance
 
-| Concept                                        | What It Is                              | Why It Matters                          |
-| ---------------------------------------------- | --------------------------------------- | --------------------------------------- |
-| [Dashboard](./dashboard)                       | Command center for real-time visibility | See the forest, not just the trees      |
-| [Navigation, Search, and Alerts](./navigation-search-notifications) | Desktop navigation, global search, and the personal inbox | Find records and separate in-app awareness from paging |
-| [Services](./services)                         | Systems you monitor with ownership      | Alerts need context and routing         |
-| [Incidents](./incidents)                       | Actionable work items from alerts       | Track resolution from trigger to close  |
-| [Incident Templates](./incident-templates)     | Reusable defaults for manual incidents  | Standardize recurring response patterns |
-| [Escalation Policies](./escalation-policies)   | Who gets notified and when              | Define primary and fallback routing     |
-| [Schedules](./schedules)                       | On-call rotations and shifts            | Fair distribution of on-call duty       |
-| [Teams](./teams)                               | User groups with shared responsibility  | Organize people and permissions         |
-| [Users](./users)                               | Individuals with roles and preferences  | Authentication and personalization      |
-| [Analytics](./analytics)                       | Metrics, SLAs, and trends               | Measure and improve performance         |
-| [Postmortems](./postmortems)                   | Incident retrospectives                 | Learn from failures                     |
-| [Action Items](./action-items)                 | Owned corrective work from postmortems  | Turn lessons into accountable changes   |
-| [Event Logs](./event-logs)                     | Cross-incident lifecycle history        | Review and test incident activity       |
-| [Reports and Dashboards](./reports-dashboards) | User-owned metric layouts               | Build role-focused operational views    |
-| [Status Pages](./status-page)                  | Public service health communication     | Transparency with customers             |
-| [Integrations](./integrations)                 | Connections to monitoring tools         | Route alerts from your stack            |
-| [Scalability](./scalability)                   | Capacity planning and safe scaling      | Prove limits for your own deployment    |
+| Concept                                                    | What It Is                              | Why It Matters                            |
+| ---------------------------------------------------------- | --------------------------------------- | ----------------------------------------- |
+| [Dashboard](./core-concepts/dashboard)                     | Command center for real-time visibility | See the forest, not just the trees        |
+| [Services](./core-concepts/services)                       | Systems you monitor with ownership      | Alerts need context and routing           |
+| [Incidents](./core-concepts/incidents)                     | Actionable work items from alerts       | Track resolution from trigger to close    |
+| [Escalation Policies](./core-concepts/escalation-policies) | Who gets notified and when              | Ensure issues never fall through cracks   |
+| [Schedules](./core-concepts/schedules)                     | On-call rotations and shifts            | Fair distribution of on-call duty         |
+| [Teams](./core-concepts/teams)                             | User groups with shared responsibility  | Organize people and permissions           |
+| [Users](./core-concepts/users)                             | Individuals with roles and preferences  | Authentication and personalization        |
+| [Analytics](./core-concepts/analytics)                     | Metrics, SLAs, and trends               | Measure and improve performance           |
+| [Postmortems](./core-concepts/postmortems)                 | Incident retrospectives                 | Learn from failures                       |
+| [Status Pages](./core-concepts/status-page)                | Public service health communication     | Transparency with customers               |
+| [Integrations](./core-concepts/integrations)               | Connections to monitoring tools         | Route alerts from your stack              |
+| [Scalability](./core-concepts/scalability)                 | Capacity targets and tuning             | Understand scale limits and optimizations |
 
 ---
 
@@ -136,15 +134,13 @@ Service ──────────────────┐
 
 If you're new to OpsKnight, we recommend reading the concepts in this order:
 
-1. **[Services](./services)** — Start here to understand the foundation
-2. **[Incidents](./incidents)** — Learn the core workflow
-3. **[Escalation Policies](./escalation-policies)** — Understand notification routing
-4. **[Schedules](./schedules)** — Configure on-call rotations
-5. **[Teams](./teams)** — Organize your responders
-6. **[Dashboard](./dashboard)** — Master the command center
-7. **[Analytics](./analytics)** — Track and improve performance
-8. **[Postmortems](./postmortems)** and **[Action Items](./action-items)** — Turn incidents into owned improvements
-9. **[Reports and Dashboards](./reports-dashboards)** — Build SRE, team, SLA, and executive views
+1. **[Services](./core-concepts/services)** — Start here to understand the foundation
+2. **[Incidents](./core-concepts/incidents)** — Learn the core workflow
+3. **[Escalation Policies](./core-concepts/escalation-policies)** — Understand notification routing
+4. **[Schedules](./core-concepts/schedules)** — Configure on-call rotations
+5. **[Teams](./core-concepts/teams)** — Organize your responders
+6. **[Dashboard](./core-concepts/dashboard)** — Master the command center
+7. **[Analytics](./core-concepts/analytics)** — Track and improve performance
 
 ---
 
@@ -152,29 +148,28 @@ If you're new to OpsKnight, we recommend reading the concepts in this order:
 
 ### For Incident Responders
 
-- [Navigation, search, and alerts](./navigation-search-notifications) — Find records and triage the in-app inbox
-- [Incident Lifecycle](./incidents#incident-lifecycle) — Understand statuses and actions
-- [Bulk triage](./incidents#find-and-triage-incidents) — Manage alert storms efficiently
-- [Mobile Access](../mobile) — Respond from anywhere
+- [Incident Lifecycle](./core-concepts/incidents#incident-lifecycle) — Understand statuses and actions
+- [Bulk Actions](./core-concepts/incidents#bulk-actions) — Manage alert storms efficiently
+- [Mobile Access](./mobile) — Respond from anywhere
 
 ### For On-Call Managers
 
-- [Schedule layers](./schedules#add-a-rotation-layer) — Build coverage patterns
-- [Overrides](./schedules#overrides) — Handle vacations and swaps
-- [Fair Rotation](./schedules#fair-rotation) — Balance on-call burden
+- [Schedule Layers](./core-concepts/schedules#layers) — Build complex coverage patterns
+- [Overrides](./core-concepts/schedules#overrides) — Handle vacations and swaps
+- [Fair Rotation](./core-concepts/schedules#fair-rotation) — Balance on-call burden
 
 ### For Operations Teams
 
-- [SLA Configuration](./analytics#sla-tracking) — Set response time targets
-- [Custom Fields](../administration/custom-fields) — Track additional metadata
+- [SLA Configuration](./core-concepts/analytics#sla-tracking) — Set response time targets
+- [Custom Fields](./administration/custom-fields) — Track additional metadata
 - [Integrations](./integrations) — Connect your monitoring stack
 
 ### For Leadership
 
-- [Analytics Dashboard](./analytics#dashboard) — Executive metrics
-- [Status Pages](./status-page) — Customer communication
-- [Postmortems](./postmortems) — Organizational learning
-- [Scalability](./scalability) — Capacity planning and growth readiness
+- [Analytics Dashboard](./core-concepts/analytics#dashboard) — Executive metrics
+- [Status Pages](./core-concepts/status-page) — Customer communication
+- [Postmortems](./core-concepts/postmortems) — Organizational learning
+- [Scalability](./core-concepts/scalability) — Capacity planning and growth readiness
 
 ---
 
@@ -217,7 +212,7 @@ For global teams:
 
 Choose your path:
 
-- **New to incident management?** Start with [Services](./services)
-- **Setting up on-call?** Jump to [Schedules](./schedules)
+- **New to incident management?** Start with [Services](./core-concepts/services)
+- **Setting up on-call?** Jump to [Schedules](./core-concepts/schedules)
 - **Connecting tools?** See [Integrations](./integrations)
-- **Measuring performance?** Explore [Analytics](./analytics)
+- **Measuring performance?** Explore [Analytics](./core-concepts/analytics)

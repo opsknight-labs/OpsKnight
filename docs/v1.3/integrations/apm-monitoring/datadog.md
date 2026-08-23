@@ -13,7 +13,7 @@ Receive alerts from Datadog monitors and create incidents automatically.
 ## Endpoint
 
 ```
-POST /api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY
+POST /api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID
 ```
 
 ---
@@ -34,12 +34,12 @@ POST /api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID&integrationKey=
 2. Click **+ New Webhook**
 3. Configure:
 
-| Field              | Value                                                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| **Name**           | `OpsKnight`                                                                                                                 |
-| **URL**            | `https://YOUR_OPSKNIGHT_URL/api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID&integrationKey=YOUR_INTEGRATION_KEY` |
-| **Payload**        | Use default (leave empty)                                                                                                   |
-| **Custom Headers** | Optional                                                                                                                    |
+| Field              | Value                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| **Name**           | `OpsKnight`                                                                             |
+| **URL**            | `https://YOUR_OPSKNIGHT_URL/api/integrations/datadog?integrationId=YOUR_INTEGRATION_ID` |
+| **Payload**        | Use default (leave empty)                                                               |
+| **Custom Headers** | Optional                                                                                |
 
 4. Click **Save**
 
@@ -138,7 +138,7 @@ Dedup keys are generated in this order:
 1. `aggregation_key` (if provided)
 2. `datadog-alert-{alert.id}` (if alert format)
 3. `datadog-monitor-{monitor.id}` (if monitor format)
-4. `datadog-{32-character SHA-256 title hash}` (fallback)
+4. `datadog-{timestamp}` (fallback)
 
 ### Best Practice
 
@@ -159,10 +159,7 @@ Use the `aggregation_key` in your Datadog webhook payload for consistent dedupli
 You can secure the webhook with HMAC signature verification:
 
 1. In OpsKnight, set a **Signing Secret** on the integration
-2. Calculate the hexadecimal HMAC-SHA256 of the exact raw request body.
-3. Include the digest without an algorithm prefix: `X-Signature: <hex_hmac_signature>`.
-
-Datadog does not generate this custom header by default. Use a trusted signing proxy only if your security design requires the second signature; the integration ID and key remain mandatory.
+2. Include header: `X-Signature: sha256=<hmac_signature>`
 
 ---
 
@@ -180,7 +177,7 @@ Datadog does not generate this custom header by default. Use a trusted signing p
 Send a test payload directly:
 
 ```bash
-curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/datadog?integrationId=YOUR_ID&integrationKey=YOUR_KEY" \
+curl -X POST "https://YOUR_OPSKNIGHT_URL/api/integrations/datadog?integrationId=YOUR_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "event_type": "alert",

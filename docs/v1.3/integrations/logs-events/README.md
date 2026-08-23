@@ -12,7 +12,6 @@ Route log alerts and event analytics into OpsKnight to centralize incident respo
 
 <!-- integrations-list:start -->
 
-- [Elastic / Kibana](./elastic-kibana) — Integrate Elastic Watcher alerts with OpsKnight.
-- [Splunk On-Call (VictorOps)](./splunk-oncall) — Migrate alerts from Splunk On-Call to OpsKnight.
-
+- [Elastic / Kibana](./logs-events/elastic-kibana) — Integrate Elastic Watcher alerts with OpsKnight.
+- [Splunk On-Call (VictorOps)](./logs-events/splunk-oncall) — Migrate alerts from Splunk On-Call to OpsKnight.
 <!-- integrations-list:end -->

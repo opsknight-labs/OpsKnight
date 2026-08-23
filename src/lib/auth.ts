@@ -701,6 +701,18 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return false;
             }
 
+            // Administrative disable is authoritative. OIDC must never create a
+            // new identity link or reactivate a disabled account, even when a
+            // historical invite record exists for that email address.
+            if (targetUser.status === 'DISABLED') {
+              logger.warn('[Auth] OIDC sign-in rejected: user is disabled', {
+                component: 'auth:signIn',
+                userId: targetUser.id,
+                email,
+              });
+              return false;
+            }
+
             // Create/validate stable issuer+subject identity link to avoid unsafe email-only linking.
             const issuer = normalizeIssuer(activeConfig.issuer);
             const subject =
@@ -762,12 +774,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   userId: targetUser.id,
                 },
               });
-              if (isInvitedUser) {
-                await prisma.user.update({
-                  where: { id: targetUser.id },
-                  data: { status: 'ACTIVE' },
-                });
-              }
               logger.info('[Auth] Linked OIDC identity to user', {
                 component: 'auth:signIn',
                 issuer,
@@ -791,12 +797,13 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             // Ensure user object has correct ID for JWT
             user.id = targetUser.id;
 
-            // Reactivate if disabled
-            if (targetUser.status !== 'ACTIVE') {
+            // First successful SSO completes an outstanding invitation. A
+            // DISABLED account was rejected above and is never reactivated.
+            if (targetUser.status === 'INVITED') {
               updateData.status = 'ACTIVE';
               updateData.invitedAt = null;
               updateData.deactivatedAt = null;
-              logger.info('[Auth] Reactivating user via OIDC', {
+              logger.info('[Auth] Activating invited user via OIDC', {
                 component: 'auth:signIn',
                 userId: targetUser.id,
                 previousStatus: targetUser.status,

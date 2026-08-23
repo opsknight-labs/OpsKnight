@@ -1,90 +1,75 @@
 ---
-title: Circuit breakers and outbound failure handling
-description: Process-local circuit states, channel thresholds, retries, persistence boundaries, and operator response
+title: Circuit Breakers & Outbound Reliability
+description: Fault tolerance patterns, exponential backoff with jitter, and thundering herd prevention.
 version: v1.3
 order: 3
 ---
 
-# Circuit breakers and outbound failure handling
+# Circuit Breakers & Outbound Reliability
 
-OpsKnight wraps selected outbound email, SMS, web push, WhatsApp, and webhook calls in process-local circuit breakers. A circuit reduces repeated calls to a failing provider; it does not deliver the message, move traffic to another replica, or guarantee an automatic fallback channel.
+OpsKnight employs the **Circuit Breaker Pattern** across all outbound communication channels (Email, SMS, WhatsApp, Webhooks, and Slack) to prevent cascading failures when external providers experience degradation.
 
-Slack uses its own retry path in v1.3. Although a Slack breaker factory exists in source, the active Slack send paths do not use it, so do not assume Slack circuit state follows this page.
+---
 
-## State model
+## ⚡ State Machine Architecture
 
 ```mermaid
 stateDiagram-v2
-  [*] --> CLOSED
-  CLOSED --> OPEN: consecutive failures reach threshold
-  OPEN --> HALF_OPEN: reset interval elapsed and a caller executes
-  HALF_OPEN --> OPEN: probe fails
-  HALF_OPEN --> CLOSED: required probes succeed
+    [*] --> CLOSED: Initial State
+
+    CLOSED --> OPEN: Failures >= failureThreshold (5 failures)
+    note right of CLOSED
+      Normal Operation
+      All outbound requests flow through
+    end note
+
+    OPEN --> HALF_OPEN: resetTimeout elapsed (30 seconds)
+    note right of OPEN
+      Fail-Fast Mode
+      Outbound calls immediately fail without network I/O
+    end note
+
+    HALF_OPEN --> CLOSED: Test request succeeds (>= successThreshold)
+    HALF_OPEN --> OPEN: Test request fails
+    note right of HALF_OPEN
+      Single-Flight Probe
+      Only 1 test request allowed through
+      (halfOpenRequestInFlight lock)
+    end note
 ```
 
-- **CLOSED:** calls run with the configured breaker timeout. A success resets the consecutive failure count.
-- **OPEN:** calls fail immediately with a circuit-breaker error until the reset interval has elapsed.
-- **HALF_OPEN:** one probe can be in flight. Concurrent calls fail fast. A failed probe reopens the circuit; two successful probes close it with the current default success threshold.
+---
 
-The timeout wrapper rejects the OpsKnight operation after its limit. It does not universally abort the underlying provider request; webhook callers also supply an abort signal, while channel implementations have their own network behavior.
+## 🛡️ Thundering Herd Prevention in `HALF_OPEN`
 
-## Active channel configuration
+When a circuit breaker transitions from `OPEN` to `HALF_OPEN`, traditional implementations allow all queued concurrent requests to flood the recovering service simultaneously.
 
-| Protected path         | Failure threshold | Reset interval | Breaker timeout | State key            |
-| ---------------------- | ----------------: | -------------: | --------------: | -------------------- |
-| Email                  |                 5 |     60 seconds |      15 seconds | `email`              |
-| SMS                    |                 3 |     30 seconds |      10 seconds | `sms`                |
-| Web push               |                10 |     30 seconds |       5 seconds | `push`               |
-| WhatsApp               |                 3 |     30 seconds |      10 seconds | `whatsapp`           |
-| Service/status webhook |                 3 |     60 seconds |      10 seconds | destination hostname |
+OpsKnight eliminates this with an atomic single-flight lock:
 
-Failures are consecutive within the life of that circuit object because a successful call in `CLOSED` resets its counter. Webhook destinations on the same hostname share a circuit in one process even when their paths differ.
+```typescript
+if (this.state.state === 'HALF_OPEN') {
+  if (this.state.halfOpenRequestInFlight) {
+    // Reject concurrent requests while the single probe is in flight
+    throw new Error(`[CircuitBreaker:${this.config.name}] Probe in progress, circuit temporarily open`);
+  }
+  this.state.halfOpenRequestInFlight = true;
+}
+```
 
-## Persistence and replicas
+- If the probe **succeeds**, the circuit resets to `CLOSED`, clearing the queue.
+- If the probe **fails**, the circuit immediately trips back to `OPEN` for another full `resetTimeout` cycle.
 
-Circuit state lives in a module-level memory map:
+---
 
-- it resets when the application process restarts;
-- it is not stored in PostgreSQL;
-- it is not shared between replicas; and
-- there is no published v1.3 admin API for inspecting or resetting it.
+## 🔄 Exponential Backoff & HTTP 429 Handling
 
-Consequently, one replica can be open while another still calls the provider. Use provider telemetry, OpsKnight logs, and notification history for the deployment-wide view.
+The retry engine wraps outbound calls with full jitter to avoid synchronous request spikes:
 
-## Relationship to retries
+$$t_{\text{backoff}} = \min(t_{\text{max}}, t_{\text{base}} \times 2^{\text{attempt}}) \pm \text{jitter}$$
 
-Circuit breakers and retries are separate controls.
+### `Retry-After` Header Respect
 
-- Generic service webhooks and status-page webhooks retry selected network, timeout, HTTP 429, and HTTP 5xx failures up to their configured attempt limit.
-- Slack send paths use the shared retry-fetch helper and can honor `Retry-After` for HTTP 429 responses, capped by implementation limits.
-- Failed notification records can be selected later by the internal scheduler, subject to their attempt state.
-- A circuit-open notification result is recorded as failed but does not increment the notification's ordinary attempt count at that point.
-
-There is no universal sequential fallback such as push → SMS → WhatsApp → email. Delivery channels come from escalation rules, service settings, and user/provider configuration.
-
-## What operators should expect
-
-A circuit-open error means OpsKnight deliberately did not begin another provider call in that process. Wait for the reset interval or restore the provider/configuration, then verify recovery with a controlled test. Do not restart replicas merely to clear circuit state: that removes the protective history and can create another burst against an unhealthy provider.
-
-When paging is impaired:
-
-1. Confirm whether the failure affects one channel, hostname, or all providers.
-2. Inspect notification history and system logs for timeout, provider response, circuit-open, and retry evidence.
-3. Check provider status, quota, credentials, sender identity, and network egress.
-4. Use an independently configured response channel for active incidents.
-5. After remediation and the reset interval, send a test and then a synthetic incident.
-6. Verify the notification is recorded as delivered and reaches the target device/account.
-
-## Contributor guidance
-
-Use a stable breaker key at the intended isolation boundary. A key that is too broad lets one tenant or destination suppress unrelated delivery; a key that is too narrow defeats failure aggregation.
-
-Do not describe a channel as protected until its active call path invokes the breaker. Tests should cover timeout, threshold transition, open fail-fast, one half-open probe, failed probe, two successful recovery probes, and process-local state.
-
-## Implementation map
-
-- `src/lib/circuit-breaker.ts` — state machine and configured factories.
-- `src/lib/notifications.ts` — email, SMS, push, and WhatsApp use.
-- `src/lib/webhooks.ts` — service webhook retry and breaker use.
-- `src/lib/status-page-webhooks.ts` — status webhook retry and breaker use.
-- `src/lib/slack.ts` and `src/lib/retry.ts` — Slack's separate retry path.
+When an external provider (such as Slack or Twilio) returns an `HTTP 429 Too Many Requests`:
+1. OpsKnight parses the `Retry-After` header (handling both seconds integers and HTTP-date strings).
+2. The retry engine yields execution for the requested duration without double-sleeping in outer loops.
+3. If rate limits persist past maximum retry attempts, the notification drops gracefully to the sequential fallback channel (`push -> sms -> whatsapp -> email`).

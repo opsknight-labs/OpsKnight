@@ -1,164 +1,505 @@
 ---
 order: 1
 title: Authentication
-description: Operate local credentials, OIDC, password recovery, and JWT session revocation safely.
+description: Configure local authentication, SSO/OIDC, session management, and security settings
 ---
 
 # Authentication
 
-OpsKnight v1.3 supports local email/password authentication and one workspace OIDC provider. Both can be available on the login page. Authentication proves identity; [authorization](../security/authorization.md) determines what the signed-in user may do.
+Authentication controls how users prove their identity to access OpsKnight. This guide covers local authentication, SSO integration, session management, and security best practices.
 
-## Production prerequisites
+<!-- placeholder:authentication-overview -->
+<!-- Add: Screenshot of the Authentication settings page -->
 
-Set a stable public HTTPS origin and preserve the authentication secrets:
+---
 
-| Setting               | Purpose                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------ |
-| `NEXTAUTH_URL`        | Exact public origin used for callbacks and secure-cookie selection.                              |
-| `NEXTAUTH_SECRET`     | Signs/encrypts session tokens; changing it invalidates existing sessions.                        |
-| `ENCRYPTION_KEY`      | Stable 64-hex-character key used to encrypt the OIDC client secret and other stored credentials. |
-| `NEXT_PUBLIC_APP_URL` | Public origin used in user-facing links; normally matches `NEXTAUTH_URL`.                        |
+## Authentication Methods
 
-The reverse proxy must forward the original host and scheme. Back up secrets outside PostgreSQL; restoring the database without the matching encryption key does not restore usable OIDC credentials.
+OpsKnight supports two authentication methods:
 
-## Bootstrap the first Admin
+| Method       | Best For                            | Features                          |
+| ------------ | ----------------------------------- | --------------------------------- |
+| **Local**    | Small teams, development, testing   | Email/password, simple setup      |
+| **SSO/OIDC** | Enterprise, compliance requirements | Centralized identity, MFA via IdP |
 
-When no user exists, open `/setup`, enter the Admin name and email, and create the account. OpsKnight displays a generated password once. Store it securely, sign in, change it immediately, and create a second Admin. Setup stops accepting another bootstrap after a user exists.
+You can enable both methods simultaneously, allowing users to choose their preferred login method.
 
-## Local accounts
+---
 
-Admins invite subsequent users from **Users**. An invitation is valid for seven days and earlier unused invite tokens are invalidated when a replacement is generated. Treat the link as a credential.
+## Local Authentication
 
-Passwords must be 10–128 characters and contain lowercase, uppercase, numeric, and special characters. These rules are fixed in v1.3; there is no configurable expiry, history, or complexity policy.
+Local authentication uses email and password credentials stored in OpsKnight.
 
-After five failed local logins for one normalized email/client-IP key, v1.3 applies progressive process-local lockouts of approximately 1, 5, 15, then 60 minutes for repeated groups. The state is not shared across application replicas and is cleared by a process restart. Configure trusted proxy forwarding and an independent edge/identity-provider throttle for internet-facing deployments.
+### How It Works
 
-### Password recovery
+```
+User enters email + password
+        ↓
+OpsKnight validates credentials
+        ↓
+Session created, user logged in
+```
 
-The login page's **Forgot password** flow returns the same message for registered and unknown addresses. A reset token:
+### First-Time Setup
 
-- expires after one hour;
-- invalidates earlier unused reset tokens for the address;
-- is delivered by configured email, with SMS fallback only when the user and provider permit it;
-- increments the user's token version after use, revoking existing sessions.
+When OpsKnight starts with no users, the first admin must be created via the `/setup` page:
 
-If no delivery provider is available, an Admin can generate a reset link from the supported user-management workflow. Share any reset link only through an approved secret channel.
+1. Navigate to your OpsKnight URL (e.g., `https://ops.yourcompany.com`)
+2. You'll be automatically redirected to `/setup`
+3. Enter your details:
+   - **Name**: Your display name
+   - **Email**: Your email address
+4. Click **Create Admin Account**
+5. **Save the generated password immediately** — it's shown only once
 
-## Configure OIDC
+<!-- placeholder:setup-page -->
+<!-- Add: Screenshot of the /setup page -->
 
-You need `ADMIN` and a working `ENCRYPTION_KEY`.
+> **Security Note**: The `/setup` page is only accessible when no users exist. After the first admin is created, this page becomes unavailable.
 
-1. Register a confidential OIDC web application at the identity provider.
-2. Add this exact callback URL:
+### Adding Users via Invitation
 
-   ```text
-   https://YOUR_OPSKNIGHT_URL/api/auth/callback/oidc
-   ```
+The recommended way to add users after initial setup:
 
-3. Go to **Settings** → **System** → **Single Sign-On (OIDC)**.
-4. Enter the HTTPS issuer, client ID, client secret, and optional provider label/scopes.
-5. Select **Test connection** to validate issuer discovery.
-6. Configure provisioning restrictions and mappings before enabling OIDC.
-7. Save, then test with a non-Admin account in a private browser session while retaining a working local Admin session.
+1. Go to **Settings** → **Users**
+2. Click **Invite User**
+3. Enter user details:
+   - **Email**: User's email address
+   - **Name**: Display name
+   - **Role**: ADMIN, RESPONDER, or USER
+4. Click **Send Invitation**
 
-Default scopes are `openid email profile`; custom scopes are appended. The provider's claims—not its brand—determine whether domain, role, and profile rules work. See [OIDC setup](../security/oidc-setup.md) for registration examples.
+**Invitation Flow**:
 
-### Email and identity safety
+```
+Admin sends invite
+        ↓
+User receives email with link
+        ↓
+User clicks link (valid 7 days)
+        ↓
+User sets their password
+        ↓
+Account activated
+```
 
-OpsKnight requires an email. An explicit `email_verified: false` is rejected. Set `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT=true` to also reject a missing claim for all OIDC sign-ins.
+### Password Requirements
 
-An OIDC identity is bound to the normalized issuer plus the provider subject (`sub`). OpsKnight does not treat an email address by itself as a stable external identity. This prevents an unrelated OIDC identity that happens to present the same email from silently taking over an existing OpsKnight account.
+| Requirement    | Value                                         |
+| -------------- | --------------------------------------------- |
+| Minimum length | 8 characters                                  |
+| Complexity     | Recommended: mix of letters, numbers, symbols |
+| Expiration     | None (configurable via policy)                |
 
-For an existing account that does not yet have an OIDC identity, first-time linking requires all of the following:
+### Password Reset
 
-- the configured OIDC provider returns a stable subject;
-- the provider explicitly returns `email_verified: true`;
-- the OpsKnight account has administrator-provisioning evidence from the invite flow or from an Admin allowing OIDC linking;
-- the issuer-plus-subject identity is not already linked to another OpsKnight user.
+**User-initiated reset**:
 
-After the first successful link, later sign-ins use the stored issuer-plus-subject identity rather than email-only matching.
+1. Go to login page
+2. Click **Forgot Password**
+3. Enter email address
+4. Check email for reset link
+5. Click link and set new password
 
-### Manage OIDC linking for an existing user
+Reset links expire after **1 hour**.
 
-Use this workflow for an existing **Active** account that needs to establish its first OIDC identity link.
+**Admin-initiated reset**:
 
-1. Sign in as an Admin and open **Users**.
-2. Open the user's **⋯** actions menu.
-3. Select **Allow OIDC linking**.
-4. Review the confirmation and select **Allow linking**.
-5. Ask the user to sign in through the configured OIDC provider.
+1. Go to **Settings** → **Users**
+2. Click on the user
+3. Click **Reset Password**
+4. User receives email with reset link
 
-The approval does not change the user's role, status, password, or existing sessions. The next first-time OIDC link is still accepted only when the provider returns the same account email, a stable subject, and `email_verified: true`, and the external identity is not linked elsewhere.
+---
 
-Until an OIDC identity is established, the same **⋯** menu shows **Revoke OIDC linking approval**. Revoking removes the stored first-link provisioning evidence for that Active user. It does not disable the account or affect password authentication.
+## SSO / OIDC Authentication
 
-Once an OIDC identity has been established, the menu shows **OIDC linked**. Approval revocation is intentionally not used as an unlink operation; removing an established external identity is a separate security-sensitive lifecycle operation.
+Single Sign-On (SSO) via OIDC is recommended for production environments.
 
-Users still in **Invited** status already have administrator-provisioning evidence from the supported invite workflow. The explicit allow/revoke control is therefore limited to Active accounts.
+### Benefits of SSO
 
-Do not use approval to work around an email mismatch, an unverified email claim, a missing subject, or an identity already linked to another user. Correct the identity-provider configuration instead.
+| Benefit                  | Description                           |
+| ------------------------ | ------------------------------------- |
+| **Centralized identity** | Manage users in your IdP              |
+| **MFA support**          | Leverage IdP's MFA capabilities       |
+| **Auto-provisioning**    | Create users on first login           |
+| **Role mapping**         | Sync roles from IdP groups            |
+| **Compliance**           | Meet enterprise security requirements |
 
-### Auto-provisioning and domains
+### Supported Identity Providers
 
-When auto-provisioning is disabled, an unknown OIDC user is denied. When enabled, an eligible first login creates an active `USER` account. A non-empty allowed-domain list requires an exact lower-case email-domain match.
+| Provider               | Tested | Notes                         |
+| ---------------------- | :----: | ----------------------------- |
+| **Google Workspace**   |   ✅   | OAuth consent screen required |
+| **Microsoft Entra ID** |   ✅   | Formerly Azure AD             |
+| **Okta**               |   ✅   | OIDC Web App integration      |
+| **Auth0**              |   ✅   | Regular Web Application       |
+| **Keycloak**           |   ✅   | OpenID Connect client         |
+| **OneLogin**           |   ✅   | OIDC connector                |
+| **Any OIDC Provider**  |   ✅   | Standard OIDC compliance      |
 
-OIDC sign-in can reactivate an existing linked disabled user. If deactivation must remain authoritative, remove or block the identity at the IdP as part of offboarding.
+### SSO Configuration
 
-### Role mapping
+1. Go to **Settings** → **System Settings** → **Single Sign-On (OIDC)**
+2. Enable SSO toggle
+3. Configure provider settings:
 
-Rules are evaluated in order; the first exact scalar or array-value match wins:
+| Field             | Description     | Example                             |
+| ----------------- | --------------- | ----------------------------------- |
+| **Issuer URL**    | OIDC issuer URL | `https://accounts.google.com`       |
+| **Client ID**     | From your IdP   | `abc123.apps.googleusercontent.com` |
+| **Client Secret** | From your IdP   | `GOCSPX-xxxxx`                      |
+| **Scopes**        | OIDC scopes     | `openid email profile` (default)    |
+
+4. Save configuration
+5. Test with **Test SSO** button
+
+### Callback URL
+
+Configure this URL in your identity provider:
+
+```
+https://YOUR_OPSKNIGHT_URL/api/auth/callback/oidc
+```
+
+### Provider-Specific Guides
+
+See [OIDC SSO Setup](../security/oidc-setup) for detailed guides on:
+
+- Google Workspace
+- Microsoft Entra ID (Azure AD)
+- Okta
+- Auth0
+- Keycloak
+
+---
+
+## Role Mapping
+
+Map identity provider claims to OpsKnight roles automatically.
+
+### How Role Mapping Works
+
+```
+User logs in via SSO
+        ↓
+IdP returns claims (groups, roles, etc.)
+        ↓
+OpsKnight matches claims against rules
+        ↓
+User assigned matching role
+```
+
+### Configuring Role Mapping
+
+1. Go to **Settings** → **System Settings** → **Single Sign-On (OIDC)**
+2. Scroll to **Role Mapping**
+3. Add mapping rules as JSON:
 
 ```json
 [
-  { "claim": "groups", "value": "opsknight-admins", "role": "ADMIN" },
-  { "claim": "groups", "value": "on-call", "role": "RESPONDER" }
+  { "claim": "groups", "value": "admins", "role": "ADMIN" },
+  { "claim": "groups", "value": "oncall-team", "role": "RESPONDER" },
+  { "claim": "department", "value": "engineering", "role": "RESPONDER" }
 ]
 ```
 
-Valid targets are `USER`, `RESPONDER`, and `ADMIN`. A newly provisioned user begins as `USER`; if no rule matches, an existing user's current role is retained. Mapping can both promote and demote on later login, so use a dedicated, tightly governed Admin group.
+### Mapping Rule Format
 
-### Profile mapping
+| Field   | Description                                     |
+| ------- | ----------------------------------------------- |
+| `claim` | The IdP claim to check                          |
+| `value` | The value to match                              |
+| `role`  | OpsKnight role: `ADMIN`, `RESPONDER`, or `USER` |
 
-Map IdP claim names to `department`, `jobTitle`, and `avatarUrl`. Non-empty values synchronize on login. An avatar uploaded locally under `/uploads/` is not overwritten by OIDC profile synchronization.
+### Role Mapping Priority
 
-## Sessions
+Rules are evaluated in order. First match wins:
 
-Sessions are JWT based. Web login without **Remember me** has a seven-day ceiling; remembered web sessions and mobile sessions have a one-year ceiling. Activity refreshes session state at most hourly, but there is no separate configurable idle-timeout control in v1.3.
+1. If user matches "admins" group → ADMIN
+2. Else if user matches "oncall-team" → RESPONDER
+3. Else → Default role (USER)
 
-Cookies are HTTP-only where appropriate and use `SameSite=Lax`. `NEXTAUTH_URL` beginning with `https://` enables Secure cookies and secure name prefixes; an origin mismatch commonly causes login loops.
+### Default Role
 
-**Settings** → **Security** offers **Revoke all sessions**. It increments the user's token version; v1.3 does not list or revoke individual devices. Role/status changes may take effect after the authentication user-cache refresh, so use session revocation for urgent access removal and remove access at the IdP too.
+Users who don't match any rule receive the default role:
 
-## Unsupported authentication methods
+- **Default**: `USER`
+- **Configurable**: Set in SSO settings
 
-v1.3 does not provide native MFA, passkey/WebAuthn login, SAML, or email magic-link authentication. Enforce MFA at the OIDC provider or a trusted access proxy when required. The optional mobile platform-authenticator prompt is a client-side privacy overlay, not server authentication or a second factor.
+---
 
-## Failure-safe rollout
+## Profile Mapping
 
-- Keep a tested local break-glass Admin while introducing OIDC.
-- Restrict auto-provision domains before enabling it.
-- Test normal, denied-domain, missing-claim, disabled-user, and Admin-group cases.
-- Confirm role mapping cannot grant Admin through a user-controlled claim.
-- Verify allow, revoke, and first-link behavior with a non-Admin test account before migrating production accounts.
-- Verify revoke-all and IdP disable behavior.
-- Record the rollback: disable OIDC using the retained local Admin session.
+Sync user profile fields from identity provider claims.
+
+### Supported Fields
+
+| OpsKnight Field | Common Claim Names           |
+| --------------- | ---------------------------- |
+| **Name**        | `name`, `preferred_username` |
+| **Email**       | `email`                      |
+| **Department**  | `department`                 |
+| **Job Title**   | `jobTitle`, `title`          |
+| **Avatar URL**  | `picture`, `avatar_url`      |
+
+### Configuring Profile Mapping
+
+1. Go to **Settings** → **Security** → **Single Sign-On**
+2. Scroll to **Profile Mapping**
+3. Map claim names to fields:
+
+| Field      | Claim Name   |
+| ---------- | ------------ |
+| Department | `department` |
+| Job Title  | `title`      |
+| Avatar URL | `picture`    |
+
+### Sync Behavior
+
+- Profile fields update on each login
+- Empty claims don't overwrite existing values
+- Manual edits preserved if claim is empty
+
+---
+
+## User Auto-Provisioning
+
+Automatically create users on first SSO login.
+
+### Enabling Auto-Provisioning
+
+1. Go to **Settings** → **System Settings** → **Single Sign-On (OIDC)**
+2. Enable **Auto-provision users**
+
+### Provisioning Behavior
+
+| Setting                 | Enabled                       | Disabled       |
+| ----------------------- | ----------------------------- | -------------- |
+| New user SSO login      | Account created automatically | Login denied   |
+| Existing user SSO login | Login succeeds                | Login succeeds |
+| Default role            | Applied from role mapping     | N/A            |
+
+### Domain Restrictions
+
+Limit auto-provisioning to specific email domains:
+
+1. Go to SSO settings
+2. Set **Allowed Domains**: `yourcompany.com, subsidiary.com`
+3. Only users with matching email domains can auto-provision
+
+---
+
+## Session Management
+
+Control how user sessions are handled.
+
+### Session Duration
+
+| Setting             | Default | Description              |
+| ------------------- | ------- | ------------------------ |
+| **Session timeout** | 30 days | Maximum session duration |
+| **Idle timeout**    | 7 days  | Timeout after inactivity |
+
+### Viewing Active Sessions
+
+Users can view their sessions:
+
+1. Go to **Profile** → **Security**
+2. Scroll to **Active Sessions**
+3. See all logged-in devices:
+   - Device/browser type
+   - IP address
+   - Last activity
+   - Location (approximate)
+
+### Ending Sessions
+
+**End specific session**:
+
+1. Find session in list
+2. Click **Revoke**
+
+**End all sessions**:
+
+1. Click **Revoke All Sessions**
+2. Confirm action
+3. You'll be logged out everywhere
+
+**Admin force logout**:
+Admins can end all sessions for any user:
+
+1. Go to **Settings** → **Users**
+2. Click on user
+3. Click **Revoke All Sessions**
+
+### Session Security
+
+| Feature            | Description                          |
+| ------------------ | ------------------------------------ |
+| **Secure cookies** | HTTPS-only in production             |
+| **HTTP-only**      | Not accessible via JavaScript        |
+| **SameSite**       | Protection against CSRF              |
+| **Rotation**       | Session rotated on privilege changes |
+
+---
+
+## Security Settings
+
+### Password Policy
+
+Configure password requirements:
+
+| Setting               | Options                           |
+| --------------------- | --------------------------------- |
+| **Minimum length**    | 8-128 characters                  |
+| **Require uppercase** | Yes/No                            |
+| **Require numbers**   | Yes/No                            |
+| **Require symbols**   | Yes/No                            |
+| **Password history**  | Prevent reuse of last N passwords |
+
+### Login Security
+
+| Setting                  | Description                          |
+| ------------------------ | ------------------------------------ |
+| **Failed login lockout** | Lock account after N failed attempts |
+| **Lockout duration**     | Minutes until auto-unlock            |
+| **CAPTCHA**              | Show CAPTCHA after N failures        |
+
+---
+
+## Environment Variables
+
+Authentication-related environment variables:
+
+| Variable          | Required | Description                                 |
+| ----------------- | :------: | ------------------------------------------- |
+| `NEXTAUTH_SECRET` |   Yes    | Secret for signing tokens                   |
+| `NEXTAUTH_URL`    |   Yes    | Base URL for callbacks                      |
+| `ENCRYPTION_KEY`  |   Yes    | Encryption for secrets (OIDC client secret) |
+
+### Generating Secrets
+
+```bash
+# Generate NEXTAUTH_SECRET
+openssl rand -base64 32
+
+# Generate ENCRYPTION_KEY (32 bytes for AES-256)
+openssl rand -hex 32
+```
+
+> **Security**: Never commit these values to version control.
+
+---
+
+## Hybrid Authentication
+
+Using both local and SSO authentication simultaneously.
+
+### Configuration
+
+1. Set up local authentication (always available)
+2. Configure SSO as described above
+3. Both options appear on login page
+
+### Login Page Behavior
+
+```
+┌─────────────────────────────┐
+│        OpsKnight Login       │
+├─────────────────────────────┤
+│  [Sign in with SSO]          │
+│                              │
+│  ─────── or ───────          │
+│                              │
+│  Email: [_____________]      │
+│  Password: [_____________]   │
+│  [Sign In]                   │
+└─────────────────────────────┘
+```
+
+### Use Cases
+
+| Scenario                       | Method |
+| ------------------------------ | ------ |
+| Regular employees              | SSO    |
+| Contractors without IdP access | Local  |
+| Emergency admin access         | Local  |
+| Development/testing            | Local  |
+
+---
 
 ## Troubleshooting
 
-| Symptom                       | Check                                                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Redirect/cookie loop          | Exact HTTPS `NEXTAUTH_URL`, forwarded host/scheme, and browser cookie policy.                                       |
-| Discovery test fails          | Issuer is HTTPS and exposes valid OIDC discovery metadata from the app network.                                     |
-| Existing local user is denied | Approval/invite evidence, verified email, stable subject, allowed domain, and whether the identity is already used. |
-| Approval shows OIDC linked    | The user already has a stored issuer-plus-subject identity; approval revoke is not an unlink operation.             |
-| New user is denied            | Auto-provision setting, exact allowed domain, email and verification claims.                                        |
-| Role does not update          | Requested custom scope, actual ID-token/profile claim, JSON rule order and exact value.                             |
-| Secret cannot decrypt         | Restore the matching `ENCRYPTION_KEY` or enter a new client secret.                                                 |
+### Can't Log In (Local)
 
-## Related topics
+1. Verify email is correct
+2. Check account status (not DISABLED)
+3. Try password reset
+4. Check for account lockout
+5. Contact admin
 
-- [Authorization](../security/authorization.md)
-- [OIDC setup](../security/oidc-setup.md)
-- [Users](../core-concepts/users.md)
-- [Configuration](../getting-started/configuration.md)
-- [Troubleshooting](../troubleshooting.md)
+### SSO Not Working
+
+1. Verify SSO is enabled
+2. Check issuer URL is correct
+3. Verify client ID/secret
+4. Check callback URL in IdP
+5. Test with **Test SSO** button
+6. Check browser console for errors
+
+### SSO Button Not Showing
+
+1. Verify SSO is enabled in settings
+2. Check `ENCRYPTION_KEY` is configured
+3. Ensure configuration was saved successfully
+
+### Role Mapping Not Working
+
+1. Check claim names match exactly
+2. Verify IdP sends the expected claims
+3. Check role mapping JSON syntax
+4. Test with IdP's token debugger
+
+### Session Issues
+
+1. Clear browser cookies
+2. Try incognito/private window
+3. Check session hasn't expired
+4. Verify HTTPS is working
+
+---
+
+## Best Practices
+
+### For Local Auth
+
+- Use strong, unique passwords
+
+- Regular access reviews
+- Prompt password resets for departures
+
+### For SSO
+
+- Use SSO for all regular access
+- Keep local admin as emergency backup
+- Configure role mapping
+- Enable auto-provisioning with domain restrictions
+- Review SSO logs regularly
+
+### General Security
+
+- Use HTTPS in production
+- Protect `NEXTAUTH_SECRET` and `ENCRYPTION_KEY`
+- Regular security audits
+- Monitor failed login attempts
+- Document authentication procedures
+
+---
+
+## Related Topics
+
+- [OIDC SSO Setup](../security/oidc-setup) — Provider-specific guides
+- [Users](../core-concepts/users) — User management
+- [Audit Logs](./audit-logs) — Authentication event logging
+- [Security Overview](../security) — Security best practices

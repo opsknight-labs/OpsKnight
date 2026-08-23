@@ -1,172 +1,513 @@
 ---
+order: 2
 title: Services
-description: Model service ownership, incident routing, health, SLAs, notifications, and integrations.
-order: 3
+description: Centralized service registry for health monitoring, ownership, and incident routing
 ---
 
 # Services
 
-A service is the routing and reporting boundary for incidents. It joins an owning team, escalation policy, integration keys, notification behavior, SLA targets, Jira mapping, Slack war-room behavior, status-page visibility, and incident history.
+Services are the foundation of OpsKnight's incident management model. They represent the components of your infrastructure — APIs, databases, microservices, and applications — that can experience incidents. Every incident is linked to a service, enabling clear ownership, proper routing, and meaningful analytics.
 
-## Permissions
+![Service Directory Overview](/service-directory.png)
 
-- Signed-in users can view the service directory and service details.
-- **Responders** and **Admins** can create services and manage settings and integrations.
-- Only an **Admin** can delete a service.
+---
 
-## Create a service
+## Why Services Matter
 
-1. Open **Services**.
-2. Select **Create New Service**.
-3. Enter a unique service name.
-4. Optionally select an owning team, SLA tier, and escalation policy.
-5. Create the service, then open its **Settings** and **Integrations** tabs to finish routing.
+| Without Services                    | With Services                      |
+| ----------------------------------- | ---------------------------------- |
+| Alerts are orphaned with no context | Every incident has a home          |
+| Unclear who owns what               | Clear team ownership               |
+| No way to prioritize                | SLA tiers guide response           |
+| Incidents go to everyone            | Targeted escalation routing        |
+| No health visibility                | Real-time service health dashboard |
 
-A usable paging setup needs both an integration that can create the incident and an escalation policy with a resolvable target. A service without a policy supports manual assignment but does not automatically page through policy steps.
+---
 
-## Service fields
+## Service Directory
 
-| Field                  | Purpose                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| Name                   | Unique product or system name shown throughout OpsKnight.                                   |
-| Description            | Human-readable responsibility and scope.                                                    |
-| Region                 | Optional deployment or business region label.                                               |
-| SLA tier               | Optional Platinum, Gold, Silver, Bronze, or Internal classification.                        |
-| Owning team            | Team accountable for the service.                                                           |
-| Escalation policy      | Policy used when a new incident needs paging.                                               |
-| Acknowledgement target | Default minutes used for acknowledgement SLA calculations. The model default is 15 minutes. |
-| Resolution target      | Default minutes used for resolution SLA calculations. The model default is 120 minutes.     |
+The Service Directory is your centralized registry of all monitored components.
 
-The tier label does not by itself configure acknowledgement or resolution targets. The v1.3 service settings page does not expose the model's default target-minute fields, so do not treat changing the tier label as an SLA-target change.
+### Accessing the Directory
 
-## Understand service health
+1. Click **Services** in the sidebar
+2. View the service list with health indicators
+3. Use filters to find specific services
 
-The service directory calculates a live health state from incidents:
+### Directory Overview
 
-| Health          | Calculation                                                                               |
-| --------------- | ----------------------------------------------------------------------------------------- |
-| **Operational** | No active incidents.                                                                      |
-| **Degraded**    | One or more active incidents, with none classified as critical by the health calculation. |
-| **Critical**    | At least one active critical incident.                                                    |
+The top panel provides an immediate SITREP (Situation Report):
 
-Resolved, snoozed, and suppressed incidents are excluded from the active count. This calculated display is distinct from the broader stored status values used by status-page configuration.
+| Metric             | Description                                 |
+| ------------------ | ------------------------------------------- |
+| **Total Services** | Complete count of registered services       |
+| **Operational**    | Services with no active incidents           |
+| **Degraded**       | Services with non-critical active incidents |
+| **Critical**       | Services with HIGH urgency active incidents |
 
-Use directory search and the team, health, tier, and sort controls to find a service. The service detail page shows active incidents, resolved history, and 30-day operational metrics. The **Dependencies** tab is visible but disabled in v1.3; do not rely on dependency mapping for routing or impact analysis.
+<!-- Add: Screenshot of the Service Directory header with health metrics -->
 
-## Configure ownership and escalation
+---
 
-Open **Service → Settings** and select:
+## Service Health Status
 
-- an owning team for accountability and filtering;
-- an escalation policy for automated paging.
+Service health is calculated dynamically based on active incidents.
 
-Policy changes apply immediately to new incidents. Existing incidents resolve the current policy as escalation advances, so review active incidents before changing or removing a target.
+### Health States
 
-After saving, trigger a test event and verify the incident is attached to this service and the expected first policy target receives it.
+| Status          | Visual    | Condition                    | Action             |
+| --------------- | --------- | ---------------------------- | ------------------ |
+| **Operational** | 🟢 Green  | No active incidents          | None needed        |
+| **Degraded**    | 🟡 Yellow | Active LOW/MEDIUM incidents  | Monitor closely    |
+| **Critical**    | 🔴 Red    | Active HIGH urgency incident | Immediate response |
 
-## Add inbound integrations
+### Health Calculation Logic
 
-Open **Service → Integrations** to add one or more supported monitoring sources. Each integration has its own generated routing key. Depending on the selected type, OpsKnight normalizes the provider payload into Events API actions and fields.
+```
+IF any active HIGH urgency incident → CRITICAL
+ELSE IF any active incident → DEGRADED
+ELSE → OPERATIONAL
+```
 
-For an integration you can:
+**Notes**:
 
-- copy its routing key;
-- enable or disable it;
-- rotate or clear its optional HMAC signature secret;
-- delete it when it is no longer used.
+- **Snoozed** incidents don't affect health status
+- **Suppressed** incidents don't affect health status
+- Health updates in real-time as incidents change
 
-Treat keys and signature secrets as credentials. Store them in the source system's secret manager, never in a repository or screenshot. Rotating or deleting an integration breaks senders that still use the previous value.
+### Status on Service Cards
 
-See the [integration directory](../integrations/README.md) for provider-specific payloads and verification steps.
+Each service card displays:
 
-## Configure service notifications
+- **Left border color** — Quick visual health indicator
+- **Status badge** — Current health state
+- **Incident count** — Number of active incidents
+- **Region** — Deployment region (if configured)
+- **SLA Tier** — Service criticality level
 
-Service notifications are independent of escalation-step notifications. In **Service → Settings**, select channels from Slack, webhook, email, SMS, push, and WhatsApp, then choose which lifecycle events send service-level messages:
+---
 
-- incident triggered;
-- incident acknowledged;
-- incident resolved;
-- SLA breach.
+## Service Fields
 
-A selected channel still needs a valid workspace-level provider and any required recipient or service configuration. Test each channel before production. Use notification history and system logs to diagnose delivery failures.
+### Required Fields
 
-### Slack and ChatOps
+| Field          | Description                       | Example                |
+| -------------- | --------------------------------- | ---------------------- |
+| **Name**       | Unique service identifier         | `payment-api`          |
+| **Owner Team** | Team responsible for this service | `Platform Engineering` |
 
-A service can use the active workspace Slack connection or a legacy incoming webhook/channel configuration. When ChatOps is enabled, it can inherit global war-room settings or override automatic channel creation and the video bridge with Jitsi, Zoom, Google Meet, none, or a custom URL.
+### Optional Fields
 
-See [Slack notifications](../integrations/communication/slack.md) and [Slack ChatOps](../integrations/communication/slack-chatops.md).
+| Field                 | Description                                | Example                                  |
+| --------------------- | ------------------------------------------ | ---------------------------------------- |
+| **Description**       | Brief explanation of the service's purpose | `Handles all payment processing`         |
+| **Region**            | Deployment location                        | `us-east-1`, `eu-west-1`                 |
+| **SLA Tier**          | Criticality/SLA level                      | `Platinum 99.99%`, `Gold 99.9%`          |
+| **Escalation Policy** | Policy for incident routing                | `Payment API Escalation`                 |
+| **Slack Channel**     | Channel for this service's alerts          | `#payment-alerts`                        |
+| **Runbook URL**       | Link to operational documentation          | `https://wiki.example.com/payment-api`   |
+| **Repository URL**    | Link to source code                        | `https://github.com/company/payment-api` |
+| **Dashboard URL**     | Link to monitoring dashboard               | `https://grafana.example.com/payment`    |
 
-### Outbound webhooks
+---
 
-Service webhooks send lifecycle updates to external systems. Configure the endpoint, event selection, authentication/signing options exposed by the form, and enabled state. Use the built-in test before enabling it for real incidents. See [Custom webhooks](../integrations/custom/webhooks.md).
+## Creating a Service
 
-### Jira mapping
+### Via Web UI
 
-When workspace Jira is enabled, map the service to a project and configure:
+1. Go to **Services** in the sidebar
+2. Click **Create Service**
+3. Fill in the required fields:
+   - **Name**: Unique, descriptive name
+   - **Owner Team**: Select from existing teams
+4. Configure optional fields as needed
+5. Click **Create**
 
-- incident and action-item issue types;
-- default labels and optional component;
-- incident auto-creation and the eligible urgency levels;
-- synchronization state.
+<!-- placeholder:create-service-form -->
+<!-- Add: Screenshot of the service creation form -->
 
-If auto-create is enabled, select at least one urgency. Validate that the Jira token can access the project, issue types, and component. See [Jira](../integrations/issue-tracking/jira.md).
+### Service Naming Best Practices
 
-## SLA and incident history
+| Pattern                  | Example                       | Why                        |
+| ------------------------ | ----------------------------- | -------------------------- |
+| **Component-based**      | `payment-api`, `user-service` | Clear purpose              |
+| **Environment-prefixed** | `prod-payment-api`            | Distinguishes environments |
+| **Team-prefixed**        | `platform-kafka`              | Shows ownership            |
 
-The service page reports active incidents, total history, acknowledgement/resolution performance, and SLA compliance for the displayed 30-day window. Priority-specific SLA targets take precedence when configured; otherwise OpsKnight uses the service acknowledgement and resolution targets.
+**Avoid**:
 
-Snoozed and suppressed incidents are excluded from active impact. Review those queues separately so muting does not hide unfinished work.
+- Generic names (`api`, `service`)
+- Abbreviations that aren't universal (`pmt-svc`)
+- Special characters (stick to letters, numbers, hyphens)
 
-## Put a service on a status page
+### Initial Setup Checklist
 
-Adding a service to a public status page is a separate administrator action. Status-page settings control display name, grouping, visibility, metrics, and privacy. Service ownership or a public incident does not automatically expose the service. See [Status page](status-page.md).
+After creating a service:
 
-## Delete a service
+- [ ] Assign escalation policy
+- [ ] Set SLA tier (if applicable)
+- [ ] Add integrations (monitoring tools)
+- [ ] Configure Slack channel (if using Slack)
+- [ ] Add runbook URL
+- [ ] Link to dashboards/repositories
 
-Only an Admin can delete a service. Deletion is destructive and cascades through related service data, including incidents, alerts, and integrations.
+---
 
-Before deleting:
+## Service Detail Page
 
-1. Confirm the exact service and incident count in the deletion dialog.
-2. Resolve or transfer operational work and preserve any records required by policy.
-3. Remove or reconfigure monitoring senders.
-4. Export required evidence and confirm backup retention.
+Click any service to open its detail page with full information and actions.
 
-Do not use deletion as an archival workflow.
+### Header Section
 
-## Production-readiness check
+- **Service name** and description
+- **Health status** badge
+- **Quick actions**: Edit, View Incidents, Settings
 
-- [ ] Name, description, region, tier, and owner are accurate.
-- [ ] An escalation policy is attached and every target resolves.
-- [ ] Each inbound integration creates the expected deduplicated incident.
-- [ ] A responder receives and acknowledges a test page.
-- [ ] Service-level notification events and channels are intentional.
-- [ ] Slack, webhook, Jira, and war-room settings are tested if enabled.
-- [ ] SLA targets and priority overrides reflect the service objective.
-- [ ] Status-page inclusion and privacy are correct.
+### Properties Panel
+
+| Property              | Description                           |
+| --------------------- | ------------------------------------- |
+| **Owner Team**        | Team responsible (links to team page) |
+| **Escalation Policy** | Active policy (links to policy page)  |
+| **Region**            | Deployment region                     |
+| **SLA Tier**          | Service tier with uptime target       |
+| **Created**           | When the service was created          |
+| **Last Incident**     | Most recent incident timestamp        |
+
+### Active Incidents
+
+List of currently open incidents for this service:
+
+- Incident title and urgency
+- Current status
+- Assignee
+- Time since triggered
+
+### Recent Incidents
+
+Historical incidents with:
+
+- Incident title
+- Resolution status
+- MTTR for this incident
+- When it occurred
+
+### Metrics
+
+Service-level metrics over time:
+
+- **Incident count** (30/60/90 days)
+- **MTTA** (Mean Time to Acknowledge)
+- **MTTR** (Mean Time to Resolve)
+- **Uptime percentage**
+
+---
+
+## Service Configuration
+
+### Escalation Policy Assignment
+
+Link an escalation policy to determine who gets notified:
+
+1. Open service detail page
+2. Click **Edit** or go to **Settings**
+3. Select **Escalation Policy** from dropdown
+4. Save changes
+
+**What happens**:
+
+- New incidents trigger this policy
+- Existing incidents continue with their assigned policy
+
+### SLA Tier Configuration
+
+Set the service's SLA tier for reporting and prioritization:
+
+| Tier         | Typical Uptime | Use Case                         |
+| ------------ | -------------- | -------------------------------- |
+| **Platinum** | 99.99%         | Customer-facing critical systems |
+| **Gold**     | 99.9%          | Important production services    |
+| **Silver**   | 99.5%          | Internal tools, non-critical     |
+| **Bronze**   | 99.0%          | Development, low-priority        |
+
+1. Open service settings
+2. Select **SLA Tier**
+3. Save
+
+SLA tiers affect:
+
+- SLA breach calculations
+- Reporting categorization
+- Prioritization suggestions
+
+### Slack Channel Routing
+
+Route this service's alerts to a specific Slack channel:
+
+1. Open service settings
+2. Enter **Slack Channel** name (e.g., `#payment-alerts`)
+3. Save
+
+**Behavior**:
+
+- Incidents for this service post to this channel
+- If not set, uses organization default channel
+
+---
+
+## Service Integrations
+
+Services connect to monitoring tools via integrations.
+
+### Linking an Integration
+
+1. Open the service
+2. Go to **Integrations** tab
+3. Click **Add Integration**
+4. Select integration type (Datadog, Prometheus, etc.)
+5. Configure integration settings
+6. Save
+
+### Integration Types
+
+| Type               | Purpose                              |
+| ------------------ | ------------------------------------ |
+| **Datadog**        | Receive alerts from Datadog monitors |
+| **Prometheus**     | Receive alerts from Alertmanager     |
+| **Grafana**        | Receive alerts from Grafana alerts   |
+| **Custom Webhook** | Generic HTTP integration             |
+
+Each integration gets a unique **routing key** that directs incoming alerts to this service.
+
+### Multiple Integrations
+
+A service can have multiple integrations:
+
+- Different monitoring tools
+- Different alert sources
+- Test vs. production alerts
+
+---
+
+## Service Ownership
+
+### Team Ownership
+
+Every service must have an owner team:
+
+- **Single owner** — One team per service (no shared ownership)
+- **Clear accountability** — Team receives escalations
+- **Team page shows services** — Team members see their services
+
+### Transferring Ownership
+
+To change a service's owner:
+
+1. Open service settings
+2. Change **Owner Team** dropdown
+3. Save
+
+**Considerations**:
+
+- New team takes over future incidents
+- Historical incidents retain original team context
+- Ensure new team has appropriate escalation policy
+
+### Orphaned Services
+
+Services without valid teams (team deleted):
+
+- Show warning indicator
+- Should be reassigned immediately
+- May affect incident routing
+
+---
+
+## Filtering & Search
+
+### Search
+
+Type in the search box to filter by:
+
+- Service name
+- Description text
+
+### Team Filter
+
+Filter services by owner team:
+
+1. Click **Team** dropdown
+2. Select one or more teams
+3. View only their services
+
+### Status Filter
+
+Filter by health status:
+
+- **All** — Show all services
+- **Critical** — Only critical services
+- **Degraded** — Only degraded services
+- **Operational** — Only healthy services
+
+### Sorting Options
+
+| Sort                 | Description                       |
+| -------------------- | --------------------------------- |
+| **Name (A-Z)**       | Alphabetical order                |
+| **Name (Z-A)**       | Reverse alphabetical              |
+| **Status (Health)**  | Critical → Degraded → Operational |
+| **Most Incidents**   | Noisiest services first           |
+| **Recently Created** | Newest services first             |
+
+---
+
+## Service Cards
+
+The list view uses cards optimized for quick scanning.
+
+### Card Elements
+
+```
+┌────────────────────────────────────────────────┐
+│ 🟢 Payment API                         us-east-1 │
+│    Handles payment processing                    │
+│    ─────────────────────────────────────────────│
+│    Platform Engineering  │  Gold  │  0 incidents │
+└────────────────────────────────────────────────┘
+```
+
+| Element            | Description                  |
+| ------------------ | ---------------------------- |
+| **Color bar**      | Left border indicates health |
+| **Name**           | Service name (bold)          |
+| **Region**         | Deployment region badge      |
+| **Description**    | Service purpose              |
+| **Team**           | Owner team                   |
+| **SLA Tier**       | Service tier badge           |
+| **Incident count** | Active incident count        |
+
+### Card Interactions
+
+- **Click card** — Open service detail page
+- **Hover** — Shows loading state before navigation
+
+---
+
+## Service Metrics
+
+### Uptime Calculation
+
+Uptime is calculated based on incident duration:
+
+```
+Uptime % = (Total Minutes - Incident Minutes) / Total Minutes × 100
+```
+
+**What counts as downtime**:
+
+- Active incidents (OPEN, ACKNOWLEDGED)
+- Does NOT count: SNOOZED, SUPPRESSED, RESOLVED
+
+### MTTA (Mean Time to Acknowledge)
+
+Average time from incident creation to acknowledgment:
+
+```
+MTTA = Sum(Ack Time - Create Time) / Count of Acknowledged Incidents
+```
+
+### MTTR (Mean Time to Resolve)
+
+Average time from incident creation to resolution:
+
+```
+MTTR = Sum(Resolve Time - Create Time) / Count of Resolved Incidents
+```
+
+### Viewing Metrics
+
+1. Open service detail page
+2. Scroll to **Metrics** section
+3. Select time range (7d, 30d, 90d)
+
+Metrics are also available via:
+
+- **Analytics** dashboard (filtered by service)
+- **API** (`/api/services/{id}/metrics`)
+
+---
+
+## API Access
+
+### List Services
+
+```bash
+GET /api/services
+```
+
+### Get Service
+
+```bash
+GET /api/services/{id}
+```
+
+### Create Service
+
+```bash
+POST /api/services
+Content-Type: application/json
+
+{
+  "name": "payment-api",
+  "description": "Payment processing service",
+  "teamId": "team_123",
+  "region": "us-east-1",
+  "slaTier": "GOLD"
+}
+```
+
+### Update Service
+
+```bash
+PATCH /api/services/{id}
+Content-Type: application/json
+
+{
+  "description": "Updated description",
+  "escalationPolicyId": "policy_456"
+}
+```
+
+---
 
 ## Troubleshooting
 
-### Incidents are attached to the wrong service
+### Incidents Not Routing to Service
 
-Verify the sender uses the integration key from this service. Integration names are descriptive; the key determines routing.
+1. Verify integration is linked to service
+2. Check integration routing key is correct
+3. Verify escalation policy is assigned
+4. Test with a manual incident
 
-### No one is paged
+### Service Showing Wrong Status
 
-Confirm a policy is attached, its targets are active, schedules have coverage, and notification providers are configured. Then inspect the incident timeline and notification history.
+1. Check for active incidents (including snoozed)
+2. Verify incident urgency levels
+3. Refresh the page
+4. Check for stale cached data
 
-### Health looks wrong
+### Can't Delete Service
 
-Review active Open and Acknowledged incidents and confirm urgency/priority. Snoozed, suppressed, and resolved incidents do not count as active service impact.
+1. Check for active incidents (must be resolved)
+2. Verify you have admin permissions
+3. Check for dependent configurations
 
-### Jira creation fails
+---
 
-Check workspace Jira configuration, project key, issue type, component, token permissions, and auto-create urgency selection.
+## Related Topics
 
-## Related topics
-
-- [Incidents](incidents.md)
-- [Teams](teams.md)
-- [Escalation policies](escalation-policies.md)
-- [Analytics](analytics.md)
-- [Status page](status-page.md)
+- [Incidents](./incidents) — Incident management
+- [Teams](./teams) — Team ownership
+- [Escalation Policies](./escalation-policies) — Alert routing
+- [Integrations](./integrations) — Connecting monitoring tools
+- [Analytics](./analytics) — Service-level metrics
