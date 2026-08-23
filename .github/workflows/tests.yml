@@ -99,7 +99,7 @@ jobs:
 
       - name: Publish test results to GitHub Checks
         if: always()
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@v3
         with:
           name: '✅ Tests: Unit (Vitest)'
           path: reports/*.xml
