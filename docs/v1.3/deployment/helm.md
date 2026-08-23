@@ -8,13 +8,13 @@ description: Deploy the OpsKnight Helm chart with safe database, networking, sec
 
 The chart is shipped at `helm/opsknight`. The chart version and default application image version track the OpsKnight application release; production deployments should still pin a tested immutable image tag or digest explicitly.
 
-The chart creates the application Deployment, Service, ConfigMap, Secret, optional Ingress, HPA, PodDisruptionBudget, optional NetworkPolicy, and optionally a single PostgreSQL StatefulSet.
+The chart creates the application Deployment, Service, ConfigMap, Secret, optional Ingress, optional HPA, PodDisruptionBudget, optional NetworkPolicy, and optionally a single PostgreSQL StatefulSet.
 
 ## Prerequisites
 
 - Kubernetes and Helm 3.
 - An ingress/TLS strategy if the service is public.
-- metrics-server if the default HPA remains enabled.
+- metrics-server if you enable the chart HPA.
 - A PostgreSQL plan: bundled single-instance PostgreSQL or an external/managed service.
 - Stable, backed-up `NEXTAUTH_SECRET` and 64-hex-character `ENCRYPTION_KEY` values.
 
@@ -138,7 +138,7 @@ The chart currently performs migrations in the application startup path rather t
 
 ## Scaling
 
-HPA is enabled by default with two to ten replicas and CPU/memory targets. Disable it if the cluster does not expose the required metrics or if another autoscaler owns the Deployment.
+The chart defaults to two fixed replicas (`replicaCount: 2`) so a basic install does not depend on metrics-server. HPA is disabled by default. Enable `autoscaling.enabled` only when the cluster exposes the required resource metrics (or adapt the chart for your autoscaler); its configured range is two to ten replicas.
 
 Connection limits are per application process. Size PostgreSQL capacity for the aggregate number of replicas, and validate scheduled/background work under the chosen topology.
 
