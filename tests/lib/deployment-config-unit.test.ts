@@ -105,12 +105,24 @@ describe('deployment configuration invariants', () => {
     expect(compose).not.toContain('com.docker.network.bridge.name');
   });
 
-  it('publishes future images for amd64 and arm64 with supply-chain attestations', () => {
+  it('keeps main builds fast and publishes multi-arch tagged releases with attestations', () => {
     const workflow = read('.github/workflows/docker-image.yml');
-    expect(workflow).toContain('docker/setup-qemu-action@v3');
-    expect(workflow).toContain('platforms: linux/amd64,linux/arm64');
-    expect(workflow).toContain('provenance: mode=max');
-    expect(workflow).toContain('sbom: true');
+    const mainBuild = workflow.slice(
+      workflow.indexOf('- name: Build + push (test channel - main)'),
+      workflow.indexOf('- name: Build + push (release channel - version tag)')
+    );
+    const releaseBuild = workflow.slice(
+      workflow.indexOf('- name: Build + push (release channel - version tag)')
+    );
+    expect(workflow).toContain(
+      "if: startsWith(github.ref, 'refs/tags/v')\n        uses: docker/setup-qemu-action@v3"
+    );
+    expect(mainBuild).toContain('platforms: linux/amd64');
+    expect(mainBuild).toContain('provenance: false');
+    expect(mainBuild).toContain('sbom: false');
+    expect(releaseBuild).toContain('platforms: linux/amd64,linux/arm64');
+    expect(releaseBuild).toContain('provenance: mode=max');
+    expect(releaseBuild).toContain('sbom: true');
     expect(workflow).toContain('scripts/validate-release-tag.cjs');
   });
 

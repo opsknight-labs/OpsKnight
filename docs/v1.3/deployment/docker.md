@@ -39,7 +39,7 @@ APP_PORT=3000
 OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:1.3.1
 ```
 
-Pin `OPSKNIGHT_IMAGE` to the immutable version or digest you tested. The default remains `latest` for convenience and should not be the production release policy. The published `1.3.1` image is amd64-only and predates the fail-closed migration change; select a newer stable release once one containing this revision is published.
+Pin `OPSKNIGHT_IMAGE` to the immutable version or digest you tested. The default remains `latest` for convenience and should not be the production release policy. The published `1.3.1` image is amd64-only and predates the fail-closed migration change; select a newer stable release once one containing this revision is published. Tagged stable images are published for amd64 and arm64; the test image built from `main` is amd64-only.
 
 The checked-in fallbacks are development values, not production secrets. Keep `ENCRYPTION_KEY` stable and backed up with the database; losing it means re-entering encrypted provider/integration credentials.
 

@@ -8,7 +8,7 @@ description: Deploy the OpsKnight Helm chart with safe database, networking, sec
 
 The chart is shipped at `helm/opsknight`. The chart version and default application image version track the OpsKnight application release; production deployments should still pin a tested immutable image tag or digest explicitly.
 
-The published `1.3.1` image is amd64-only and predates the fail-closed migration entrypoint in this source revision. Chart and manifest hardening applies immediately, but the new container runtime behavior and multi-architecture output require the next stable image release.
+The published `1.3.1` image is amd64-only and predates the fail-closed migration entrypoint in this source revision. Chart and manifest hardening applies immediately, but the new container runtime behavior and multi-architecture output require the next tagged stable image release. The continuously updated test image from `main` remains amd64-only.
 
 The chart creates the application Deployment, Service, ConfigMap, Secret, optional Ingress, optional HPA, PodDisruptionBudget, optional NetworkPolicy, and optionally a single PostgreSQL StatefulSet.
 

@@ -67,7 +67,7 @@ See the [Configuration reference](../getting-started/configuration) for advanced
 
 Stable images are published only at `ghcr.io/opsknight-labs/opsknight`; main-branch validation images use `ghcr.io/opsknight-labs/opsknight-test`. Do not substitute the test channel in production.
 
-Source changes do not modify an image that was already published. In particular, the immutable `1.3.1` release predates the fail-closed migration entrypoint and multi-architecture publishing changes in this repository revision and is an amd64 image. Those runtime changes take effect in the next stable release built after this work. Inspect the selected image manifest and release notes rather than inferring capabilities from the checked-in deployment YAML.
+Source changes do not modify an image that was already published. In particular, the immutable `1.3.1` release predates the fail-closed migration entrypoint and multi-architecture publishing changes in this repository revision and is an amd64 image. Tagged stable releases are built for amd64 and arm64, while the continuously updated test image from `main` is amd64-only to keep feedback fast. Those runtime changes take effect in the next stable release built after this work. Inspect the selected image manifest and release notes rather than inferring capabilities from the checked-in deployment YAML.
 
 ## Release workflow
 

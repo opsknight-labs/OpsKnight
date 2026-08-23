@@ -49,7 +49,7 @@ The checked-in base is an example, not a production release:
 
 Never apply the base unchanged to production and never commit real Secret values. Build an overlay or use the Helm production-values process.
 
-The published `1.3.1` image is amd64-only and predates the fail-closed migration entrypoint in this source revision. The raw manifests gain their configuration hardening immediately, but the new runtime behavior and multi-architecture output require the next stable image release.
+The published `1.3.1` image is amd64-only and predates the fail-closed migration entrypoint in this source revision. The raw manifests gain their configuration hardening immediately, but the new runtime behavior and multi-architecture output require the next tagged stable image release. The continuously updated test image from `main` remains amd64-only.
 
 The application ServiceAccount token is not mounted by default because OpsKnight does not require Kubernetes API access. Keep it disabled unless a deliberate extension needs that credential.
 
