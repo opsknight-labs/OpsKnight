@@ -30,14 +30,17 @@ type MigrationRow = {
   rolled_back_at: Date | null;
 };
 
+type DatabaseCapacityRow = {
+  databaseName: string;
+  sizeBytes: string;
+  maxConnections: number;
+  usedConnections: number;
+  activeConnections: number;
+  longTransactions: number;
+};
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-
-function parseDate(value: string | undefined): Date | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
 
 function ageLabel(date: Date | null): string {
   if (!date) return 'never';
@@ -71,6 +74,12 @@ function compareVersions(current: string, latest: string): number {
     if (difference !== 0) return difference;
   }
   return 0;
+}
+
+function byteLabel(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GiB`;
 }
 
 async function latestRelease(): Promise<string | null> {
@@ -127,6 +136,62 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
   }
 
   if (databaseAvailable) {
+    try {
+      const [capacity] = await prisma.$queryRaw<DatabaseCapacityRow[]>`
+        SELECT
+          current_database() AS "databaseName",
+          pg_database_size(current_database())::bigint::text AS "sizeBytes",
+          current_setting('max_connections')::int AS "maxConnections",
+          (SELECT count(*)::int FROM pg_stat_activity)
+            AS "usedConnections",
+          (SELECT count(*)::int FROM pg_stat_activity WHERE state = 'active')
+            AS "activeConnections",
+          (SELECT count(*)::int FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND xact_start IS NOT NULL
+              AND xact_start < NOW() - INTERVAL '5 minutes')
+            AS "longTransactions"
+      `;
+      const utilization = capacity
+        ? (capacity.usedConnections / Math.max(1, capacity.maxConnections)) * 100
+        : 0;
+      checks.push({
+        id: 'database-capacity',
+        label: 'Database capacity',
+        status:
+          !capacity
+            ? 'unknown'
+            : utilization >= 95 || capacity.longTransactions > 0
+              ? 'unhealthy'
+              : utilization >= 80
+                ? 'degraded'
+                : 'healthy',
+        summary: capacity
+          ? `${capacity.usedConnections} of ${capacity.maxConnections} connections in use (${Math.round(utilization)}%).`
+          : 'Database capacity could not be measured.',
+        details: capacity
+          ? [
+              `Active connections: ${capacity.activeConnections}`,
+              `Transactions open longer than 5 minutes: ${capacity.longTransactions}`,
+              `Database size: ${byteLabel(Number(capacity.sizeBytes))}`,
+              'Host CPU, memory, storage capacity, replicas, and pool wait require external telemetry.',
+            ]
+          : ['Check PostgreSQL statistics permissions.'],
+        action: {
+          label: 'Capacity guide',
+          href: 'https://opsknight.com/docs/v1.3/core-concepts/scalability',
+        },
+      });
+    } catch {
+      checks.push({
+        id: 'database-capacity',
+        label: 'Database capacity',
+        status: 'unknown',
+        summary: 'Database capacity statistics could not be read.',
+        details: ['The application remains usable; inspect PostgreSQL and platform telemetry directly.'],
+      });
+    }
+
     try {
       const rows = await prisma.$queryRaw<MigrationRow[]>`
         SELECT migration_name, started_at, finished_at, rolled_back_at
@@ -233,6 +298,64 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     }
 
     try {
+      const since = new Date(now.getTime() - 24 * HOUR);
+      const logs = await prisma.$queryRaw<Array<{ durationMs: number; incidentCount: number }>>`
+        SELECT "durationMs", "incidentCount"
+        FROM sla_performance_logs
+        WHERE timestamp >= ${since}
+        ORDER BY timestamp DESC
+      `;
+      const durations = logs.map(log => log.durationMs).sort((left, right) => left - right);
+      const percentile = (fraction: number) =>
+        durations.length > 0
+          ? durations[Math.min(durations.length - 1, Math.floor(durations.length * fraction))]
+          : null;
+      const average =
+        durations.length > 0
+          ? durations.reduce((total, duration) => total + duration, 0) / durations.length
+          : null;
+      const p50 = percentile(0.5);
+      const p95 = percentile(0.95);
+      const slow = durations.filter(duration => duration > 10_000).length;
+      const averageIncidents =
+        logs.length > 0
+          ? logs.reduce((total, log) => total + log.incidentCount, 0) / logs.length
+          : null;
+
+      checks.push({
+        id: 'sla-performance',
+        label: 'SLA query performance',
+        status:
+          logs.length === 0
+            ? 'unknown'
+            : slow > 0 || (p95 !== null && p95 > 10_000)
+              ? 'degraded'
+              : 'healthy',
+        summary:
+          logs.length === 0
+            ? 'No SLA queries were recorded in the last 24 hours.'
+            : `${logs.length} queries in 24 hours; p95 ${Math.round(p95 || 0)} ms.`,
+        details: [
+          `Average: ${average === null ? 'not available' : `${Math.round(average)} ms`}`,
+          `p50: ${p50 === null ? 'not available' : `${Math.round(p50)} ms`}`,
+          `Queries slower than 10 seconds: ${slow}`,
+          `Average incidents evaluated: ${averageIncidents === null ? 'not available' : Math.round(averageIncidents)}`,
+        ],
+        action: { label: 'SLA analytics', href: '/analytics' },
+      });
+    } catch {
+      checks.push({
+        id: 'sla-performance',
+        label: 'SLA query performance',
+        status: 'unknown',
+        summary: 'SLA query performance could not be measured.',
+        details: [
+          'Confirm the performance-log migration is applied and the application role can read it.',
+        ],
+      });
+    }
+
+    try {
       const [due, locked] = await Promise.all([
         prisma.incident.count({
           where: { escalationStatus: 'ESCALATING', nextEscalationAt: { lte: now } },
@@ -259,6 +382,47 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         status: 'unknown',
         summary: 'Escalation backlog could not be measured.',
         details: ['Check incidents and scheduler health directly.'],
+      });
+    }
+
+    try {
+      const services = await prisma.service.findMany({
+        select: {
+          name: true,
+          escalationPolicyId: true,
+          policy: { select: { steps: { select: { id: true }, take: 1 } } },
+        },
+        orderBy: { name: 'asc' },
+      });
+      const withoutPolicy = services.filter(service => !service.escalationPolicyId);
+      const withoutSteps = services.filter(
+        service => service.escalationPolicyId && service.policy?.steps.length === 0
+      );
+      const gaps = withoutPolicy.length + withoutSteps.length;
+      checks.push({
+        id: 'paging-configuration',
+        label: 'Paging configuration coverage',
+        status: services.length === 0 ? 'unknown' : gaps > 0 ? 'degraded' : 'healthy',
+        summary:
+          services.length === 0
+            ? 'No services exist yet.'
+            : gaps === 0
+              ? `All ${services.length} services have an escalation policy with at least one step.`
+              : `${gaps} of ${services.length} services cannot start policy-based paging.`,
+        details: [
+          `Without an escalation policy: ${withoutPolicy.map(service => service.name).join(', ') || 'none'}`,
+          `Policy has no steps: ${withoutSteps.map(service => service.name).join(', ') || 'none'}`,
+          'Run a controlled test incident to verify current schedule coverage and provider delivery.',
+        ],
+        action: { label: 'Services', href: '/services' },
+      });
+    } catch {
+      checks.push({
+        id: 'paging-configuration',
+        label: 'Paging configuration coverage',
+        status: 'unknown',
+        summary: 'Service paging configuration could not be inspected.',
+        details: ['Review service escalation policies directly.'],
       });
     }
 
@@ -376,19 +540,22 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     action: { label: 'Encryption guide', href: 'https://opsknight.com/docs/v1.3/security/encryption' },
   });
 
-  const backupAt = parseDate(process.env.OPSKNIGHT_BACKUP_LAST_SUCCESS_AT);
-  const restoreAt = parseDate(process.env.OPSKNIGHT_RESTORE_TEST_LAST_SUCCESS_AT);
-  const backupAge = backupAt ? now.getTime() - backupAt.getTime() : null;
+  const memory = process.memoryUsage();
+  const heapUtilization = (memory.heapUsed / Math.max(1, memory.heapTotal)) * 100;
   checks.push({
-    id: 'backup',
-    label: 'Backup and restore evidence',
-    status: backupAge === null ? 'unknown' : backupAge > 72 * HOUR ? 'unhealthy' : backupAge > 24 * HOUR ? 'degraded' : 'healthy',
-    summary: backupAt ? `Last reported successful backup: ${ageLabel(backupAt)}.` : 'Backup freshness is not reported to OpsKnight.',
+    id: 'runtime',
+    label: 'Application runtime',
+    status: heapUtilization >= 95 ? 'unhealthy' : heapUtilization >= 85 ? 'degraded' : 'healthy',
+    summary: `This process has been running for ${Math.floor(process.uptime() / 60)} minutes; heap utilization is ${Math.round(heapUtilization)}%.`,
     details: [
-      `Last restore test: ${restoreAt ? ageLabel(restoreAt) : 'not reported'}`,
-      'These timestamps are operator attestations; verify the backup system and restore logs directly.',
+      `Heap used: ${byteLabel(memory.heapUsed)} of ${byteLabel(memory.heapTotal)}`,
+      `Resident memory: ${byteLabel(memory.rss)}`,
+      'This is the current application process only; aggregate replica and host metrics externally.',
     ],
-    action: { label: 'Backup runbook', href: 'https://opsknight.com/docs/v1.3/deployment/backup-restore' },
+    action: {
+      label: 'Monitoring guide',
+      href: 'https://opsknight.com/docs/v1.3/deployment/monitoring',
+    },
   });
 
   const latest = await latestRelease();

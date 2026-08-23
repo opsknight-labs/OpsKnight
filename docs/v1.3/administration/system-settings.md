@@ -30,17 +30,11 @@ Do not rotate the application URL, OIDC configuration, and encryption key in one
 
 Retention controls are system-wide and destructive when cleanup executes. The System page opens the retention workflow, but its policy, preview, and recovery boundaries are documented separately in [Data retention](./data-retention). Take a tested database backup before reducing a window.
 
-## Performance monitoring
-
-The System page links to **Performance Monitoring**, an admin-only view of recent SLA-query performance records. It reports a rolling 24-hour query count, duration percentiles, slow-query count, and incident-count context when the performance table is available.
-
-Use this view to investigate query behavior, not as an availability or security monitoring system. If it reports no table or no data, check database migrations and whether relevant queries have run before treating the result as a performance conclusion.
-
 ## Administrator Health Center
 
-The System page links to **Administrator Health Center**, an Admin-only on-demand summary of database and migration state, scheduler and job health, escalation backlog, notification and integration failures, public URL consistency, encryption configuration, reported backup freshness, and release availability.
+The System page links to **Administrator Health Center**, an Admin-only on-demand summary of database connectivity and capacity, migrations, scheduler and job health, paging configuration and backlog, notification and integration failures, SLA-query performance, current-process runtime, public URL consistency, encryption configuration, and release availability. The former Performance Monitoring route redirects here so administrators have one operational destination.
 
-Unknown evidence is not reported as healthy. The Health Center complements the incident timeline and external infrastructure/provider monitoring; see the [Health Center guide](./health-center.md) for thresholds and boundaries.
+Unknown evidence is not reported as healthy. The Health Center complements the incident timeline and external infrastructure, database, backup, and provider monitoring; see the [Health Center guide](./health-center.md) for thresholds and boundaries.
 
 ## Safe change procedure
 

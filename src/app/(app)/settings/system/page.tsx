@@ -273,10 +273,10 @@ export default async function SystemSettingsPage() {
           <RetentionPolicySettings />
         </SettingsSection>
 
-        {/* Performance Monitoring */}
+        {/* Administrator Health Center */}
         <SettingsSection
           title="Administrator Health Center"
-          description="Review database, migrations, workers, escalations, delivery, backups, and version status"
+          description="Review database, migrations, workers, escalations, delivery, performance, and version status"
           action={
             <Link href="/settings/system/health">
               <Button variant="outline">
@@ -291,23 +291,6 @@ export default async function SystemSettingsPage() {
           </p>
         </SettingsSection>
 
-        {/* Performance Monitoring */}
-        <SettingsSection
-          title="Performance Monitoring"
-          description="Monitor SLA query performance and system metrics"
-          action={
-            <Link href="/settings/system/performance">
-              <Button variant="outline">
-                View Metrics
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          }
-        >
-          <p className="text-sm text-muted-foreground">
-            Track query durations, slow queries, and optimization opportunities.
-          </p>
-        </SettingsSection>
       </div>
     );
   } catch (error) {

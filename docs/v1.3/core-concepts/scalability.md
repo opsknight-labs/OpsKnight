@@ -159,7 +159,7 @@ Do not disable rate limits or raise queue/database limits as a first response wi
 - `src/lib/realtime-cache.ts` — process-local cache TTLs and bound.
 - `src/app/api/realtime/stream/route.ts` — authenticated dashboard SSE polling.
 - `src/lib/rate-limit.ts` and `src/lib/integrations/rate-limiter.ts` — database-backed request limits.
-- `src/app/(app)/settings/system/performance/page.tsx` — administrator SLA-query observations.
+- `src/lib/admin-health.ts` — administrator health checks and SLA-query observations.
 
 ## Related topics
 
