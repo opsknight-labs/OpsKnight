@@ -82,7 +82,11 @@ export async function getActiveOnCallShifts(
         priority: (layer as { priority?: number }).priority,
         users: layer.users.map(lu => ({
           userId: lu.userId,
-          user: { name: lu.user.name, avatarUrl: lu.user.avatarUrl, gender: lu.user.gender },
+          user: {
+            name: lu.user?.name ?? 'Unknown User',
+            avatarUrl: lu.user?.avatarUrl ?? null,
+            gender: lu.user?.gender ?? null,
+          },
           position: lu.position,
         })),
       })),
@@ -90,9 +94,9 @@ export async function getActiveOnCallShifts(
         id: override.id,
         userId: override.userId,
         user: {
-          name: override.user.name,
-          avatarUrl: override.user.avatarUrl,
-          gender: override.user.gender,
+          name: override.user?.name ?? 'Unknown User',
+          avatarUrl: override.user?.avatarUrl ?? null,
+          gender: override.user?.gender ?? null,
         },
         start: override.start,
         end: override.end,
@@ -152,6 +156,9 @@ export async function getWindowOnCallShifts(
       layers: {
         include: {
           users: {
+            where: {
+              user: { status: 'ACTIVE' },
+            },
             include: {
               user: {
                 select: { id: true, name: true, avatarUrl: true, gender: true },
@@ -166,6 +173,7 @@ export async function getWindowOnCallShifts(
         where: {
           start: { lte: windowEnd },
           end: { gte: windowStart },
+          user: { status: 'ACTIVE' },
         },
         include: {
           user: {
@@ -193,7 +201,11 @@ export async function getWindowOnCallShifts(
         priority: (layer as { priority?: number }).priority,
         users: layer.users.map(lu => ({
           userId: lu.userId,
-          user: { name: lu.user.name, avatarUrl: lu.user.avatarUrl, gender: lu.user.gender },
+          user: {
+            name: lu.user?.name ?? 'Unknown User',
+            avatarUrl: lu.user?.avatarUrl ?? null,
+            gender: lu.user?.gender ?? null,
+          },
           position: lu.position,
         })),
       })),
@@ -201,9 +213,9 @@ export async function getWindowOnCallShifts(
         id: override.id,
         userId: override.userId,
         user: {
-          name: override.user.name,
-          avatarUrl: override.user.avatarUrl,
-          gender: override.user.gender,
+          name: override.user?.name ?? 'Unknown User',
+          avatarUrl: override.user?.avatarUrl ?? null,
+          gender: override.user?.gender ?? null,
         },
         start: override.start,
         end: override.end,

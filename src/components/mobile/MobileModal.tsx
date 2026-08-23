@@ -39,6 +39,8 @@ export default function MobileModal({
     <>
       {/* Backdrop */}
       <div
+        data-swipe-ignore="true"
+        onPointerDown={e => e.stopPropagation()}
         style={{
           position: 'fixed',
           inset: 0,

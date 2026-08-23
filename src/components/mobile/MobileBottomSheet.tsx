@@ -89,6 +89,8 @@ export default function MobileBottomSheet({
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm animate-in fade-in"
+        data-swipe-ignore="true"
+        onPointerDown={e => e.stopPropagation()}
         onClick={onClose}
       />
 

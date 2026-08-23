@@ -20,6 +20,15 @@ body {
     overscroll-behavior-y: none;
 }
 
+/* iOS Safari Viewport Auto-Zoom Mitigation: Inputs must have at least 16px font size */
+@media screen and (max-width: 768px) {
+    .mobile-shell input,
+    .mobile-shell textarea,
+    .mobile-shell select {
+        font-size: 16px;
+    }
+}
+
 .mobile-shell[data-status='warning'] {
     --status-bg-1: rgba(245, 158, 11, 0.18);
     --status-bg-2: rgba(234, 179, 8, 0.12);

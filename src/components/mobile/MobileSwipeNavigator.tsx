@@ -140,13 +140,19 @@ export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorP
     }
   };
 
+  const handlePointerCancel = () => {
+    tracking.current = false;
+    cancelled.current = true;
+    setSnapDirection(null);
+  };
+
   return (
     <div
       className="relative"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
     >
       {[
         <div

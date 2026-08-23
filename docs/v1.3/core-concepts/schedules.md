@@ -35,8 +35,6 @@ A schedule is a container that defines on-call coverage for a specific purpose (
 
 ### Layer
 
-A layer represents a rotation pattern within a schedule. Schedules can have multiple layers for complex coverage scenarios.
-
 **Why multiple layers?**
 
 - **Primary/Secondary** — Different responders for initial vs. backup
@@ -49,7 +47,7 @@ A layer represents a rotation pattern within a schedule. Schedules can have mult
 
 A rotation defines how users cycle through on-call duty within a layer:
 
-- **Rotation Length** — How long each person is on-call (24h, 168h, etc.)
+- **Rotation Length** — How long each person is on-call (24h, 168h, etc.). Sub-daily integer divisors of 24h (12h, 8h, 6h) are automatically calendar-anchored to the schedule timezone to eliminate wall-clock drift across Daylight Saving Time transitions.
 - **Rotation Order** — The sequence of users in the rotation
 
 ### Override
