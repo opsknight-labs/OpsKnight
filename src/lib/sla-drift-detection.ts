@@ -158,7 +158,7 @@ export async function runSLADriftDetection(options?: {
       // Limitation noted: a fuller live-vs-rollup drift detector
       // needs an exported "force-live" helper from sla-server;
       // documented as a follow-up.
-      calculateSLAMetrics({ startDate: start, endDate: end }),
+      calculateSLAMetrics({ startDate: start, endDate: end, _forceLive: true }),
       calculateSLAMetricsFromRollups(start, end, start, end, false, {}),
     ]);
 

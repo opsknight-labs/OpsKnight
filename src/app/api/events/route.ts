@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
       if (!integration) {
         return jsonError('Invalid Integration Key', 403);
       }
+      if (!integration.enabled) {
+        return jsonError('Integration is disabled', 403);
+      }
       integrationId = integration.id;
       serviceId = integration.serviceId;
     } else {
@@ -123,7 +126,6 @@ export async function POST(req: NextRequest) {
     logger.info('api.event.processed', { action: result.action, serviceId, integrationId });
     return jsonOk({ status: 'success', result }, 202);
   } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('api.event.error', {
       error: error instanceof Error ? error.message : String(error),
     });

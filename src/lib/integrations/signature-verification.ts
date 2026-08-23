@@ -10,16 +10,11 @@ import crypto from 'crypto';
 /**
  * Timing-safe string comparison to prevent timing attacks
  */
-function safeCompare(a: string, b: string): boolean {
+export function safeCompare(a: string, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
-  if (aBuf.length !== bBuf.length) {
-    // Perform dummy timingSafeEqual comparison to mitigate timing attacks
-    crypto.timingSafeEqual(Buffer.alloc(32), Buffer.alloc(32));
-    return false;
-  }
-  return crypto.timingSafeEqual(aBuf, bBuf);
+  const hashA = crypto.createHash('sha256').update(a).digest();
+  const hashB = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
 }
 
 /**

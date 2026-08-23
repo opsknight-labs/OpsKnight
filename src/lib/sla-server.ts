@@ -175,6 +175,10 @@ export type SLAMetricsFilter = {
    * when the requester has elevated read access.
    */
   includeDescription?: boolean;
+  /**
+   * Bypass historical rollup path and force live database queries (used for drift detection)
+   */
+  _forceLive?: boolean;
 };
 
 const allowedStatus = ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED', 'RESOLVED'] as const;
@@ -407,6 +411,8 @@ async function calculateDbAggregateMetrics(
         ${serviceFilterSql}
         ${urgencyFilterSql}
         ${statusFilterSql}
+        ${assigneeFilterSql}
+        ${visibilityFilterSql}
     `;
 
     // Percentile query - separate for cleaner code and optional optimization
@@ -437,6 +443,8 @@ async function calculateDbAggregateMetrics(
         ${serviceFilterSql}
         ${urgencyFilterSql}
         ${statusFilterSql}
+        ${assigneeFilterSql}
+        ${visibilityFilterSql}
     `;
 
     // Event counts query — for escalation, reopen, auto-resolve rates.
@@ -468,6 +476,8 @@ async function calculateDbAggregateMetrics(
         ${serviceFilterSqlAliased}
         ${urgencyFilterSqlAliased}
         ${statusFilterSqlAliased}
+        ${assigneeFilterSqlAliased}
+        ${visibilityFilterSqlAliased}
     `;
 
     const agg = aggregateResult[0];
@@ -744,7 +754,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   //   enforces this.
   const hasIncompatibleFilters =
     filters.urgency || filters.assigneeId || filters.status || filters.visibility === 'PRIVATE';
-  const useRollups = !hasIncompatibleFilters && (await shouldUseRollups(finalStart, finalEnd));
+  const useRollups =
+    !filters._forceLive &&
+    !hasIncompatibleFilters &&
+    (await shouldUseRollups(finalStart, finalEnd));
 
   // Hybrid path: requested range straddles the real-time / rollup
   // boundary. Fan out to the rollup function for the historical
@@ -2220,8 +2233,14 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     retentionDays: retentionPolicy.incidentRetentionDays,
 
     // Lifecycle - NOTE: mttd is actually MTTA (Mean Time To Acknowledge)
-    mttr: currentStats.mttr ? currentStats.mttr / 60000 : null,
-    mttd: currentStats.mtta ? currentStats.mtta / 60000 : null, // This is MTTA, kept as mttd for backward compat
+    mttr:
+      currentStats.mttr !== null && Number.isFinite(currentStats.mttr)
+        ? currentStats.mttr / 60000
+        : null,
+    mttd:
+      currentStats.mtta !== null && Number.isFinite(currentStats.mtta)
+        ? currentStats.mtta / 60000
+        : null, // This is MTTA, kept as mttd for backward compat
     mtti: mttiMs === null ? null : mttiMs / 60000,
     mttk: mttkMs === null ? null : mttkMs / 60000,
     mttaP50: mttaP50Ms === null ? null : mttaP50Ms / 60000,
@@ -2273,8 +2292,14 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       // full breakdown.
       mediumUrgencyCount: prevStatsDetailed.mediumUrg,
       lowUrgencyCount: prevStatsDetailed.lowUrg,
-      mtta: prevStatsDetailed.mtta ? prevStatsDetailed.mtta / 60000 : null,
-      mttr: prevStatsDetailed.mttr ? prevStatsDetailed.mttr / 60000 : null,
+      mtta:
+        prevStatsDetailed.mtta !== null && Number.isFinite(prevStatsDetailed.mtta)
+          ? prevStatsDetailed.mtta / 60000
+          : null,
+      mttr:
+        prevStatsDetailed.mttr !== null && Number.isFinite(prevStatsDetailed.mttr)
+          ? prevStatsDetailed.mttr / 60000
+          : null,
       ackRate: Math.round(prevStatsDetailed.ackRate * 100) / 100,
       resolveRate: Math.round(prevStatsDetailed.resolveRate * 100) / 100,
     },
@@ -2701,7 +2726,9 @@ export async function calculateSLAMetricsFromRollups(
         ? Array.isArray(filters.serviceId)
           ? { serviceId: { in: filters.serviceId } }
           : { serviceId: filters.serviceId }
-        : { serviceId: null }),
+        : filters.teamId
+          ? {}
+          : { serviceId: null }),
       ...(filters.teamId
         ? Array.isArray(filters.teamId)
           ? { teamId: { in: filters.teamId } }

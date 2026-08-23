@@ -106,36 +106,47 @@ export async function checkSLABreaches(
     timestamp: now.toISOString(),
   });
 
+  const incidentIds = incidents.map(i => i.id);
+
+  // Batch pre-fetch all snooze events to eliminate N+1 database queries
+  const allSnoozeEvents =
+    incidentIds.length > 0 && prisma.incidentEvent?.findMany
+      ? await prisma.incidentEvent.findMany({
+          where: {
+            incidentId: { in: incidentIds },
+            message: {
+              contains: 'snooz',
+              mode: 'insensitive',
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [];
+
+  const snoozeMap = new Map<string, typeof allSnoozeEvents>();
+  for (const ev of allSnoozeEvents) {
+    const list = snoozeMap.get(ev.incidentId) || [];
+    list.push(ev);
+    snoozeMap.set(ev.incidentId, list);
+  }
+
   for (const incident of incidents) {
     // Calculate total time spent in SNOOZED state to deduct from elapsedMs
     let snoozedMs = 0;
-    try {
-      const snoozeEvents = await prisma.incidentEvent.findMany({
-        where: {
-          incidentId: incident.id,
-          message: {
-            contains: 'snooz',
-            mode: 'insensitive',
-          },
-        },
-        orderBy: { createdAt: 'asc' },
-      });
+    const snoozeEvents = snoozeMap.get(incident.id) || [];
 
-      let currentSnoozeStart: Date | null = null;
-      for (const ev of snoozeEvents) {
-        const msg = ev.message.toLowerCase();
-        if (msg.includes('snoozed') && !msg.includes('unsnoozed') && !currentSnoozeStart) {
-          currentSnoozeStart = ev.createdAt;
-        } else if (msg.includes('unsnoozed') && currentSnoozeStart) {
-          snoozedMs += ev.createdAt.getTime() - currentSnoozeStart.getTime();
-          currentSnoozeStart = null;
-        }
+    let currentSnoozeStart: Date | null = null;
+    for (const ev of snoozeEvents) {
+      const msg = ev.message.toLowerCase();
+      if (msg.includes('snoozed') && !msg.includes('unsnoozed') && !currentSnoozeStart) {
+        currentSnoozeStart = ev.createdAt;
+      } else if (msg.includes('unsnoozed') && currentSnoozeStart) {
+        snoozedMs += ev.createdAt.getTime() - currentSnoozeStart.getTime();
+        currentSnoozeStart = null;
       }
-      if (currentSnoozeStart) {
-        snoozedMs += now.getTime() - currentSnoozeStart.getTime();
-      }
-    } catch {
-      // Fallback if event query fails
+    }
+    if (currentSnoozeStart) {
+      snoozedMs += now.getTime() - currentSnoozeStart.getTime();
     }
 
     const elapsedMs = Math.max(0, now.getTime() - incident.createdAt.getTime() - snoozedMs);
@@ -156,13 +167,16 @@ export async function checkSLABreaches(
     if (!incident.acknowledgedAt) {
       const ackRemainingMs = ackTargetMs - elapsedMs;
 
-      // Warning: within threshold but not yet breached
-      if (ackRemainingMs > 0 && ackRemainingMs < ackWarningThreshold) {
-        // Check if we already warned about this recently
+      // Warning or breach
+      if (ackRemainingMs < ackWarningThreshold) {
+        const isBreached = ackRemainingMs <= 0;
+        const eventPrefix = isBreached ? '🚨 SLA ACK Breached' : '⏰ SLA ACK Warning';
+
+        // Check if we already warned/alerted about this recently
         const recentWarning = await prisma.incidentEvent.findFirst({
           where: {
             incidentId: incident.id,
-            message: { startsWith: '⏰ SLA ACK Warning' },
+            message: { startsWith: eventPrefix },
             createdAt: {
               gte: new Date(now.getTime() - ackWarningThreshold - 30000),
             },
@@ -175,7 +189,9 @@ export async function checkSLABreaches(
             await prisma.incidentEvent.create({
               data: {
                 incidentId: incident.id,
-                message: `⏰ SLA ACK Warning: ${Math.max(1, Math.round(ackRemainingMs / 60000))} min remaining`,
+                message: isBreached
+                  ? `🚨 SLA ACK Breached: target was ${ackTargetMinutes} min`
+                  : `⏰ SLA ACK Warning: ${Math.max(1, Math.round(ackRemainingMs / 60000))} min remaining`,
               },
             });
           } catch {
@@ -206,13 +222,16 @@ export async function checkSLABreaches(
     // Check resolve SLA
     const resolveRemainingMs = resolveTargetMs - elapsedMs;
 
-    // Warning: within threshold but not yet breached
-    if (resolveRemainingMs > 0 && resolveRemainingMs < resolveWarningThreshold) {
-      // Check if we already warned about this recently
+    // Warning or breach
+    if (resolveRemainingMs < resolveWarningThreshold) {
+      const isBreached = resolveRemainingMs <= 0;
+      const eventPrefix = isBreached ? '🚨 SLA RESOLVE Breached' : '⚠️ SLA RESOLVE Warning';
+
+      // Check if we already warned/alerted about this recently
       const recentWarning = await prisma.incidentEvent.findFirst({
         where: {
           incidentId: incident.id,
-          message: { startsWith: '⚠️ SLA RESOLVE Warning' },
+          message: { startsWith: eventPrefix },
           createdAt: {
             gte: new Date(now.getTime() - resolveWarningThreshold - 30000),
           },
@@ -225,7 +244,9 @@ export async function checkSLABreaches(
           await prisma.incidentEvent.create({
             data: {
               incidentId: incident.id,
-              message: `⚠️ SLA RESOLVE Warning: ${Math.max(1, Math.round(resolveRemainingMs / 60000))} min remaining`,
+              message: isBreached
+                ? `🚨 SLA RESOLVE Breached: target was ${resolveTargetMinutes} min`
+                : `⚠️ SLA RESOLVE Warning: ${Math.max(1, Math.round(resolveRemainingMs / 60000))} min remaining`,
             },
           });
         } catch {

@@ -25,6 +25,7 @@ export async function createPolicy(formData: FormData) {
     targetType: 'USER' | 'TEAM' | 'SCHEDULE';
     targetUserId?: string;
     targetTeamId?: string;
+    targetScheduleId?: string;
     delayMinutes: number;
     stepOrder: number;
   }> = [];
@@ -49,6 +50,13 @@ export async function createPolicy(formData: FormData) {
       steps.push({
         targetType: 'TEAM',
         targetTeamId: id,
+        delayMinutes: parseInt((delay as string) || '0'),
+        stepOrder: stepIndex,
+      });
+    } else if (type === 'schedule') {
+      steps.push({
+        targetType: 'SCHEDULE',
+        targetScheduleId: id,
         delayMinutes: parseInt((delay as string) || '0'),
         stepOrder: stepIndex,
       });

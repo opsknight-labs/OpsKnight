@@ -78,10 +78,11 @@ export async function POST(req: NextRequest) {
           errors: validation.errors,
           integrationId,
         });
+        return jsonError('Invalid GitHub webhook payload', 400, { errors: validation.errors });
       }
 
       // Transform to standard event format
-      const event = transformGitHubToEvent(body as GitHubEvent);
+      const event = transformGitHubToEvent(validation.data as GitHubEvent);
 
       // Process the event
       const result = await processEvent(event, integration.serviceId, integration.id);

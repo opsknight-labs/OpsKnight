@@ -76,9 +76,9 @@ export function transformPrometheusToEvent(payload: PrometheusAlert): Array<{
       const sortedKeys = Object.keys(labels).sort();
       const signature = sortedKeys.map(k => `${k}=${labels[k]}`).join(',');
 
-      // Hash the signature to create a shorter, database-safe dedup key
+      // Hash the signature to create a database-safe dedup key
       if (signature) {
-        const hash = crypto.createHash('sha256').update(signature).digest('hex').slice(0, 16);
+        const hash = crypto.createHash('sha256').update(signature).digest('hex');
         dedupKey = `prometheus-${hash}`;
       } else {
         // Fallback: use alertname or summary for stable key

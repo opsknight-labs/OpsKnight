@@ -3,6 +3,8 @@
  * Transforms Grafana alert webhooks to standard event format
  */
 
+import crypto from 'crypto';
+
 export type GrafanaAlert = {
   title?: string;
   message?: string;
@@ -116,8 +118,10 @@ export function transformGrafanaToEvent(
         'Grafana Alert';
 
       const alertName = alert.labels?.alertname || 'alert';
-      const instance = alert.labels?.instance || 'default';
-      const dedupKey = `grafana-${alertName}-${instance}`.slice(0, 512);
+      const instance = alert.labels?.instance;
+      const dedupKey = instance
+        ? `grafana-${alertName}-${instance}`.slice(0, 512)
+        : `grafana-${alertName}`.slice(0, 512);
 
       return {
         event_action: isResolved ? ('resolve' as const) : ('trigger' as const),

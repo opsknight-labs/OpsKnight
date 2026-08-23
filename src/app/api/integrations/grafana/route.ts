@@ -67,9 +67,10 @@ export async function POST(req: NextRequest) {
           errors: validation.errors,
           integrationId,
         });
+        return jsonError('Invalid Grafana webhook payload', 400, { errors: validation.errors });
       }
 
-      const events = transformGrafanaToEvents(body as GrafanaAlert);
+      const events = transformGrafanaToEvents(validation.data as GrafanaAlert);
       const results = [];
       for (const event of events) {
         const result = await processEvent(event, integration.serviceId, integration.id);

@@ -22,13 +22,14 @@ export function transformHoneycombToEvent(data: HoneycombEvent): {
     custom_details: Record<string, unknown>;
   };
 } {
-  const summary = firstString(data.alert_name, data.trigger_reason) || 'Honeycomb Alert';
-  const status = firstString(data.status, data.event_type);
-  const severity = normalizeSeverity(data.alert_severity, 'warning');
+  const safeData = data && typeof data === 'object' ? data : {};
+  const summary = firstString(safeData.alert_name, safeData.trigger_reason) || 'Honeycomb Alert';
+  const status = firstString(safeData.status, safeData.event_type);
+  const severity = normalizeSeverity(safeData.alert_severity, 'warning');
   // Use alert_id or create stable key from alert_name (avoids Date.now() which defeats dedup)
   const dedupKey =
-    firstString(data.alert_id) ||
-    `honeycomb-${(data.alert_name || 'alert').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
+    firstString(safeData.alert_id) ||
+    `honeycomb-${(safeData.alert_name || 'alert').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
 
   return {
     event_action: normalizeEventAction(status, 'trigger'),

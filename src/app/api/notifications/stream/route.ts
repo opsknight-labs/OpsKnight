@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
 
   const userTimeZone = getUserTimeZone(user ?? undefined);
 
+  let cleanup: () => void = () => {};
+
   // Create a readable stream for SSE
   const stream = new ReadableStream({
     async start(controller) {
@@ -34,7 +36,7 @@ export async function GET(req: NextRequest) {
       let pollInterval: NodeJS.Timeout | null = null;
       let isPolling = false;
 
-      const cleanup = () => {
+      cleanup = () => {
         isClosed = true;
         if (pollInterval) {
           clearInterval(pollInterval);
@@ -185,7 +187,7 @@ export async function GET(req: NextRequest) {
       });
     },
     cancel() {
-      // Stream canceled by consumer
+      cleanup();
     },
   });
 

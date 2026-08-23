@@ -227,9 +227,10 @@ export async function processJob(job: any): Promise<boolean> {
           benignReason.includes('completed') ||
           benignReason.includes('exhausted') ||
           benignReason.includes('already in progress') ||
+          benignReason.includes('scheduled') ||
           benignReason.includes('no escalation policy') ||
           benignReason.includes('no users to notify') ||
-          benignReason.includes('invalid target configuration');
+          benignReason.includes('invalid target');
 
         if (shouldComplete) {
           await markJobCompleted(job.id);

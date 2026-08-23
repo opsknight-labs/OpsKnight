@@ -21,16 +21,18 @@ export function transformDynatraceToEvent(data: DynatraceEvent): {
     custom_details: Record<string, unknown>;
   };
 } {
-  const summary = firstString(data.ProblemTitle, data.ProblemDetailsText) || 'Dynatrace Problem';
-  const status = firstString(data.State);
+  const safeData = data && typeof data === 'object' ? data : {};
+  const summary =
+    firstString(safeData.ProblemTitle, safeData.ProblemDetailsText) || 'Dynatrace Problem';
+  const status = firstString(safeData.State);
   const severity = normalizeSeverity(
-    firstString(data.SeverityLevel, data.ProblemImpact),
+    firstString(safeData.SeverityLevel, safeData.ProblemImpact),
     'warning'
   );
   // Use ProblemID or create stable key from ProblemTitle (avoids Date.now() which defeats dedup)
   const dedupKey =
-    firstString(data.ProblemID) ||
-    `dynatrace-${(data.ProblemTitle || 'unknown').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
+    firstString(safeData.ProblemID) ||
+    `dynatrace-${(safeData.ProblemTitle || 'unknown').replace(/\s+/g, '-').toLowerCase().slice(0, 100)}`;
 
   return {
     event_action: normalizeEventAction(status, 'trigger'),

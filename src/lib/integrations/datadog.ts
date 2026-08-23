@@ -44,7 +44,22 @@ export function transformDatadogToEvent(data: DatadogEvent): Array<{
     custom_details: Record<string, unknown>;
   };
 }> {
-  const events = Array.isArray(data) ? data : [data];
+  if (!data || typeof data !== 'object') {
+    return [
+      {
+        event_action: 'trigger' as const,
+        dedup_key: 'datadog-invalid-payload',
+        payload: {
+          summary: 'Invalid Datadog payload received',
+          source: 'Datadog',
+          severity: 'info' as const,
+          custom_details: { raw: data },
+        },
+      },
+    ];
+  }
+
+  const events = (Array.isArray(data) ? data : [data]).filter(Boolean);
 
   return events.map(eventData => {
     const title =

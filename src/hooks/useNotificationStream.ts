@@ -17,6 +17,9 @@ export function useNotificationStream<T = any>({
   onError,
 }: NotificationStreamHandlers<T>) {
   const [isConnected, setIsConnected] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
   const handlersRef = useRef({ onNotifications, onUnreadCount, onError });
 
   useEffect(() => {
@@ -24,44 +27,77 @@ export function useNotificationStream<T = any>({
   }, [onNotifications, onUnreadCount, onError]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     if (!enabled) return;
     if (typeof EventSource === 'undefined') {
       handlersRef.current.onError?.(new Error('EventSource not supported'));
       return;
     }
 
-    const eventSource = new EventSource('/api/notifications/stream');
+    let retryDelay = 2000;
 
-    eventSource.onopen = () => {
-      setIsConnected(true);
-    };
-
-    eventSource.onmessage = event => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'notifications' && Array.isArray(data.notifications)) {
-          handlersRef.current.onNotifications?.(data.notifications);
-        }
-        if (data.type === 'unread_count') {
-          handlersRef.current.onUnreadCount?.(data.count || 0);
-        }
-      } catch (error) {
-        logger.error('useNotificationStream.parse', {
-          component: 'useNotificationStream',
-          error,
-        });
+    const setupConnection = () => {
+      if (!isMountedRef.current) return;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
+
+      const eventSource = new EventSource('/api/notifications/stream');
+      eventSourceRef.current = eventSource;
+
+      eventSource.onopen = () => {
+        if (!isMountedRef.current) return;
+        setIsConnected(true);
+        retryDelay = 2000;
+      };
+
+      eventSource.onmessage = event => {
+        if (!isMountedRef.current) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'notifications' && Array.isArray(data.notifications)) {
+            handlersRef.current.onNotifications?.(data.notifications);
+          }
+          if (data.type === 'unread_count') {
+            handlersRef.current.onUnreadCount?.(data.count || 0);
+          }
+        } catch (error) {
+          logger.error('useNotificationStream.parse', {
+            component: 'useNotificationStream',
+            error,
+          });
+        }
+      };
+
+      eventSource.onerror = () => {
+        if (!isMountedRef.current) return;
+        setIsConnected(false);
+        const error = new Error('Notification stream connection error');
+        handlersRef.current.onError?.(error);
+        eventSource.close();
+
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            retryDelay = Math.min(retryDelay * 1.5, 30000);
+            setupConnection();
+          }
+        }, retryDelay);
+      };
     };
 
-    eventSource.onerror = () => {
-      setIsConnected(false);
-      const error = new Error('Notification stream connection error');
-      handlersRef.current.onError?.(error);
-      eventSource.close();
-    };
+    setupConnection();
 
     return () => {
-      eventSource.close();
+      isMountedRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
   }, [enabled]);
 

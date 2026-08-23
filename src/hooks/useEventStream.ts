@@ -26,6 +26,8 @@ export function useEventStream(options: EventStreamOptions = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
 
   // Use refs for callbacks to avoid re-creating EventSource on callback changes
   const onMessageRef = useRef(onMessage);
@@ -41,6 +43,8 @@ export function useEventStream(options: EventStreamOptions = {}) {
   }, [onError]);
 
   useEffect(() => {
+    isMountedRef.current = true;
+
     if (!enabled) {
       return;
     }
@@ -52,45 +56,66 @@ export function useEventStream(options: EventStreamOptions = {}) {
 
     const url = `/api/events/stream?${params.toString()}`;
 
-    // Create EventSource connection
-    const eventSource = new EventSource(url);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => {
-      setIsConnected(true);
-      setError(null);
-    };
-
-    eventSource.onmessage = event => {
-      try {
-        const parsed = JSON.parse(event.data);
-        setData(parsed);
-        onMessageRef.current?.(parsed);
-      } catch (err) {
-        logger.error('Failed to parse SSE message', { component: 'useEventStream', error: err });
+    const setupConnection = () => {
+      if (!isMountedRef.current) return;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
-    };
 
-    eventSource.onerror = _err => {
-      setIsConnected(false);
-      const connectionError = new Error('Event stream connection error');
-      setError(connectionError);
-      onErrorRef.current?.(connectionError);
+      // Create EventSource connection
+      const eventSource = new EventSource(url);
+      eventSourceRef.current = eventSource;
 
-      // Attempt to reconnect after 3 seconds
-      setTimeout(() => {
-        if (eventSourceRef.current?.readyState === EventSource.CLOSED) {
-          eventSourceRef.current = new EventSource(url);
+      eventSource.onopen = () => {
+        if (!isMountedRef.current) return;
+        setIsConnected(true);
+        setError(null);
+      };
+
+      eventSource.onmessage = event => {
+        if (!isMountedRef.current) return;
+        try {
+          const parsed = JSON.parse(event.data);
+          setData(parsed);
+          onMessageRef.current?.(parsed);
+        } catch (err) {
+          logger.error('Failed to parse SSE message', { component: 'useEventStream', error: err });
         }
-      }, 3000);
+      };
+
+      eventSource.onerror = _err => {
+        if (!isMountedRef.current) return;
+        setIsConnected(false);
+        const connectionError = new Error('Event stream connection error');
+        setError(connectionError);
+        onErrorRef.current?.(connectionError);
+        eventSource.close();
+
+        // Attempt to reconnect after 3 seconds
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setupConnection();
+          }
+        }, 3000);
+      };
     };
+
+    setupConnection();
 
     // Cleanup on unmount
     return () => {
-      eventSource.close();
-      eventSourceRef.current = null;
+      isMountedRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
-  }, [incidentId, serviceId, enabled]); // Removed onMessage, onError from deps
+  }, [incidentId, serviceId, enabled]);
 
   return { data, isConnected, error };
 }

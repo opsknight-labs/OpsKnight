@@ -67,9 +67,10 @@ export async function POST(req: NextRequest) {
           errors: validation.errors,
           integrationId,
         });
+        return jsonError('Invalid Sentry webhook payload', 400, { errors: validation.errors });
       }
 
-      const event = transformSentryToEvent(body as SentryEvent);
+      const event = transformSentryToEvent(validation.data as SentryEvent);
       const result = await processEvent(event, integration.serviceId, integration.id);
 
       logger.info('api.integration.sentry_success', {
