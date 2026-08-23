@@ -20,23 +20,13 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 999
-        fsGroup: 999
-        seccompProfile:
-          type: RuntimeDefault
+        {{- toYaml .Values.postgresql.podSecurityContext | nindent 8 }}
       containers:
         - name: postgres
           image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
           imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 999
+            {{- toYaml .Values.postgresql.securityContext | nindent 12 }}
           ports:
             - containerPort: 5432
               name: postgres
