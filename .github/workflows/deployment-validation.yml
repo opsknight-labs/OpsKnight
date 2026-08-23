@@ -34,6 +34,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Validate entrypoint shell syntax
+        run: sh -n docker-entrypoint.sh
+
+      - name: Validate Docker Compose configuration
+        run: |
+          cp env.example .env
+          docker compose config > /tmp/opsknight-compose.yaml
+
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
@@ -67,6 +75,7 @@ jobs:
           grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
           grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
+          grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
           if grep -q 'runAsUser: 999' /tmp/opsknight-helm.yaml /tmp/opsknight-kustomize.yaml; then
             echo 'obsolete PostgreSQL uid 999 found'
             exit 1
