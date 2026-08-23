@@ -6,7 +6,6 @@ resources:
   - secret.yaml
   - configmap.yaml
   - service-account.yaml
-  - postgres-pvc.yaml
   - postgres-service.yaml
   - postgres-statefulset.yaml
   - deployment.yaml

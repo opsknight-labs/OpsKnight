@@ -20,23 +20,13 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 999
-        fsGroup: 999
-        seccompProfile:
-          type: RuntimeDefault
+        {{- toYaml .Values.postgresql.podSecurityContext | nindent 8 }}
       containers:
         - name: postgres
           image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
           imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 999
+            {{- toYaml .Values.postgresql.securityContext | nindent 12 }}
           ports:
             - containerPort: 5432
               name: postgres
@@ -47,13 +37,13 @@ spec:
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "opsknight.fullname" . }}-secrets
-                  key: POSTGRES_USER
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.postgresUser }}
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "opsknight.fullname" . }}-secrets
-                  key: POSTGRES_PASSWORD
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.postgresPassword }}
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_INITDB_ARGS

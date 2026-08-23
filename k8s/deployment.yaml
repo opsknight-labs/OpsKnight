@@ -16,13 +16,14 @@ spec:
         app: opsknight-app
     spec:
       serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
       securityContext:
         runAsUser: 1001
         runAsGroup: 1001
         fsGroup: 1001
       containers:
         - name: opsknight-app
-          image: ghcr.io/opsknight-labs/opsknight:latest
+          image: ghcr.io/opsknight-labs/opsknight:1.3.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
@@ -33,11 +34,8 @@ spec:
             - secretRef:
                 name: opsknight-secrets
           env:
-            # Database connection pool settings for scale (40 connections, 30s timeout)
-            # See coreconcepts/SCALABILITY.md for capacity details
             - name: DATABASE_URL
               value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30'
-
           resources:
             requests:
               cpu: '100m'
@@ -45,11 +43,17 @@ spec:
             limits:
               cpu: '500m'
               memory: '1Gi'
+          startupProbe:
+            httpGet:
+              path: /api/health?mode=readiness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
           livenessProbe:
             httpGet:
               path: /api/health
               port: http
-            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -57,7 +61,6 @@ spec:
             httpGet:
               path: /api/health?mode=readiness
               port: http
-            initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
             successThreshold: 1

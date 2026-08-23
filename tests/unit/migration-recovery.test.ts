@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 // Mock child_process
 vi.mock('child_process', () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 // Create mock Prisma object
@@ -64,8 +64,9 @@ describe('Auto Recovery Migration System', () => {
     const result = await autoRecoverMigrations();
 
     expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(2);
-    expect(execSync).toHaveBeenCalledWith(
-      expect.stringContaining('resolve --applied'),
+    expect(execFileSync).toHaveBeenCalledWith(
+      process.execPath,
+      expect.arrayContaining(['migrate', 'resolve', '--applied']),
       expect.anything()
     );
     expect(result).toBe(true);
@@ -87,8 +88,9 @@ describe('Auto Recovery Migration System', () => {
     const result = await autoRecoverMigrations();
 
     expect(mockPrisma.$executeRaw).toHaveBeenCalled(); // Should ALTER TYPE
-    expect(execSync).toHaveBeenCalledWith(
-      expect.stringContaining('resolve --applied'),
+    expect(execFileSync).toHaveBeenCalledWith(
+      process.execPath,
+      expect.arrayContaining(['migrate', 'resolve', '--applied']),
       expect.anything()
     );
     expect(result).toBe(true);
@@ -100,7 +102,7 @@ describe('Auto Recovery Migration System', () => {
     const result = await autoRecoverMigrations();
 
     // Expect NO deploy call because auto-recovery returns successfully early if no failures
-    expect(execSync).not.toHaveBeenCalled();
+    expect(execFileSync).not.toHaveBeenCalled();
     expect(result).toBe(true);
   });
 });

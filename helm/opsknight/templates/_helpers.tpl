@@ -1,15 +1,9 @@
-{{/*
-Expand the name of the chart.
-*/}}
+{{/* Expand the name of the chart. */}}
 {{- define "opsknight.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{/*
-Create a default fully qualified app name.
-We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
-If release name contains chart name it will be used as a full name.
-*/}}
+{{/* Create a default fully qualified app name. */}}
 {{- define "opsknight.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
@@ -23,16 +17,10 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 {{- end }}
 
-{{/*
-Create chart name and version as used by the chart label.
-*/}}
 {{- define "opsknight.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{/*
-Common labels
-*/}}
 {{- define "opsknight.labels" -}}
 helm.sh/chart: {{ include "opsknight.chart" . }}
 {{ include "opsknight.selectorLabels" . }}
@@ -42,17 +30,11 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
-{{/*
-Selector labels
-*/}}
 {{- define "opsknight.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "opsknight.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-{{/*
-Create the name of the service account to use
-*/}}
 {{- define "opsknight.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
 {{- default (include "opsknight.fullname" .) .Values.serviceAccount.name }}
@@ -61,32 +43,42 @@ Create the name of the service account to use
 {{- end }}
 {{- end }}
 
-{{/*
-PostgreSQL fullname
-*/}}
+{{/* Resolve an immutable digest when supplied, otherwise use tag/appVersion. */}}
+{{- define "opsknight.image" -}}
+{{- if .Values.image.digest -}}
+{{- printf "%s@%s" .Values.image.repository (.Values.image.digest | trimPrefix "@") -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) -}}
+{{- end -}}
+{{- end }}
+
+{{/* Use an externally managed Secret when configured. */}}
+{{- define "opsknight.secretName" -}}
+{{- default (printf "%s-secrets" (include "opsknight.fullname" .)) .Values.secrets.existingSecret | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
 {{- define "opsknight.postgresql.fullname" -}}
 {{- printf "%s-postgresql" (include "opsknight.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{/*
-PostgreSQL service name
-*/}}
 {{- define "opsknight.postgresql.serviceName" -}}
 {{- printf "%s-postgresql" (include "opsknight.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
-Database URL
-Includes connection pool settings for scale:
-- connection_limit: Max concurrent connections per Prisma client instance
-- pool_timeout: Seconds to wait for available connection before timeout
+Database URL. A complete database.url takes precedence so managed PostgreSQL,
+TLS options, PgBouncer, and URI-encoded credentials can be supplied safely.
 */}}
 {{- define "opsknight.databaseUrl" -}}
+{{- if .Values.database.url }}
+{{- .Values.database.url }}
+{{- else }}
 {{- $connLimit := default 40 .Values.postgresql.connectionLimit }}
 {{- $poolTimeout := default 30 .Values.postgresql.poolTimeout }}
+{{- $host := .Values.postgresql.host }}
 {{- if .Values.postgresql.enabled }}
-{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d" .Values.postgresql.username .Values.postgresql.password (include "opsknight.postgresql.serviceName" .) .Values.postgresql.port .Values.postgresql.database (int $connLimit) (int $poolTimeout) }}
-{{- else }}
-{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d" .Values.postgresql.username .Values.postgresql.password .Values.postgresql.host .Values.postgresql.port .Values.postgresql.database (int $connLimit) (int $poolTimeout) }}
+{{- $host = include "opsknight.postgresql.serviceName" . }}
+{{- end }}
+{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int $connLimit) (int $poolTimeout) }}
 {{- end }}
 {{- end }}
