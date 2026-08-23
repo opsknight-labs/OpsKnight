@@ -1,30 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createAvatar } from '@dicebear/core';
+import {
+  initials,
+  shapes,
+  personas,
+  identicon,
+  avataaars,
+  bottts,
+  thumbs,
+  lorelei,
+  notionists,
+  openPeeps,
+  micah,
+  miniavs,
+  pixelArt,
+  rings,
+  glass,
+} from '@dicebear/collection';
 import { logger } from '@/lib/logger';
 
-// Whitelist allowed styles and formats to prevent injection attacks
-const ALLOWED_STYLES = [
-  'big-smile',
-  'avataaars',
-  'bottts',
-  'identicon',
-  'initials',
-  'lorelei',
-  'micah',
-  'miniavs',
-  'notionists',
-  'open-peeps',
-  'personas',
-  'pixel-art',
-  'shapes',
-  'thumbs',
-] as const;
+// Map of locally compiled DiceBear style engines (0ms in-process generation, 0 external network calls)
+const STYLE_ENGINES: Record<string, any> = {
+  // eslint-disable-line @typescript-eslint/no-explicit-any
+  initials,
+  shapes,
+  personas,
+  identicon,
+  avataaars,
+  bottts,
+  thumbs,
+  lorelei,
+  notionists,
+  'open-peeps': openPeeps,
+  micah,
+  miniavs,
+  'pixel-art': pixelArt,
+  rings,
+  glass,
+};
 
-const ALLOWED_FORMATS = ['png', 'svg', 'jpg'] as const;
-
-function generateFallbackSvg(seed: string, bgColor: string, radius: string): string {
+function generateFallbackSvg(seed: string, bgColor: string, radius: number): string {
   const cleanSeed = decodeURIComponent(seed).replace(/-(male|female|nb|other|neutral)$/, '');
   const initial = cleanSeed.trim().slice(0, 2).toUpperCase() || 'U';
-  const rx = radius === '0' ? '0' : '50';
+  const rx = radius === 0 ? 0 : 50;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
     <rect width="100" height="100" fill="#${bgColor}" rx="${rx}"/>
@@ -35,72 +53,51 @@ function generateFallbackSvg(seed: string, bgColor: string, radius: string): str
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
-  const styleParam = searchParams.get('style') || 'personas';
+  const styleParam = searchParams.get('style') || 'initials';
   const seed = searchParams.get('seed') || 'default';
   const backgroundColor = searchParams.get('backgroundColor') || '6366f1';
   const radiusParam = searchParams.get('radius') || '50';
-  const formatParam = searchParams.get('format') || 'svg';
-
-  // Validate style against whitelist
-  const style = ALLOWED_STYLES.includes(styleParam as (typeof ALLOWED_STYLES)[number])
-    ? styleParam
-    : 'personas';
-
-  // Validate format against whitelist
-  const format = ALLOWED_FORMATS.includes(formatParam as (typeof ALLOWED_FORMATS)[number])
-    ? formatParam
-    : 'svg';
 
   // Validate radius is a number between 0-50
   const parsedRadius = parseInt(radiusParam, 10);
-  const radius = (
-    Number.isNaN(parsedRadius) ? 50 : Math.min(50, Math.max(0, parsedRadius))
-  ).toString();
+  const radius = Number.isNaN(parsedRadius) ? 50 : Math.min(50, Math.max(0, parsedRadius));
 
   // Validate backgroundColor is a valid hex color (6 chars, alphanumeric only)
   const bgColor = /^[a-fA-F0-9]{6}$/.test(backgroundColor) ? backgroundColor : '6366f1';
 
-  // Construct the DiceBear URL with validated parameters
-  const dicebearUrl = `https://api.dicebear.com/9.x/${style}/${format}?seed=${encodeURIComponent(seed)}&backgroundColor=${bgColor}&radius=${radius}`;
+  // Resolve style engine
+  const styleEngine = STYLE_ENGINES[styleParam] || STYLE_ENGINES.initials;
 
   try {
-    const response = await fetch(dicebearUrl, {
-      headers: {
-        Accept: 'image/*',
-      },
-      signal: AbortSignal.timeout(6000),
-      // Cache for 1 day
-      next: { revalidate: 86400 },
+    const avatar = createAvatar(styleEngine, {
+      seed: decodeURIComponent(seed),
+      backgroundColor: [bgColor],
+      radius,
     });
 
-    if (response.ok) {
-      const contentType =
-        response.headers.get('content-type') || (format === 'svg' ? 'image/svg+xml' : 'image/png');
-      const buffer = await response.arrayBuffer();
+    const svg = avatar.toString();
 
-      return new NextResponse(buffer, {
-        headers: {
-          'Content-Type': contentType,
-          'Cache-Control': 'public, max-age=31536000, immutable',
-          'X-Content-Type-Options': 'nosniff',
-        },
-      });
-    }
+    return new NextResponse(svg, {
+      headers: {
+        'Content-Type': 'image/svg+xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
   } catch (error) {
-    logger.warn('DiceBear upstream fetch failed, using local SVG fallback', {
+    logger.warn('Local avatar generation error, using fallback SVG', {
       error: error instanceof Error ? error.message : String(error),
-      style,
+      style: styleParam,
       seed,
     });
-  }
 
-  // Graceful local fallback: return crisp deterministic SVG
-  const fallbackSvg = generateFallbackSvg(seed, bgColor, radius);
-  return new NextResponse(fallbackSvg, {
-    headers: {
-      'Content-Type': 'image/svg+xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
+    const fallbackSvg = generateFallbackSvg(seed, bgColor, radius);
+    return new NextResponse(fallbackSvg, {
+      headers: {
+        'Content-Type': 'image/svg+xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  }
 }

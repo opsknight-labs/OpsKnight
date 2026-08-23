@@ -32,6 +32,29 @@ const STATIC_AVATARS = [
   { id: 'custom-15', src: '/avatars/avatar-15.png', label: 'Agent Lime' },
 ];
 
+// Executive Monograms (Initial Monograms with SRE brand palettes)
+const INITIALS_PRESETS = [
+  { id: 'ini-1', style: 'initials', seed: 'OP', bg: '6366f1', label: 'Ops' },
+  { id: 'ini-2', style: 'initials', seed: 'SR', bg: '3b82f6', label: 'SRE' },
+  { id: 'ini-3', style: 'initials', seed: 'DO', bg: '8b5cf6', label: 'DevOps' },
+  { id: 'ini-4', style: 'initials', seed: 'TL', bg: '0d9488', label: 'Tech Lead' },
+  { id: 'ini-5', style: 'initials', seed: 'SE', bg: '0284c7', label: 'Security' },
+  { id: 'ini-6', style: 'initials', seed: 'EM', bg: '10b981', label: 'Engineering' },
+  { id: 'ini-7', style: 'initials', seed: 'AR', bg: 'f59e0b', label: 'Architect' },
+  { id: 'ini-8', style: 'initials', seed: 'AD', bg: '64748b', label: 'Admin' },
+  { id: 'ini-9', style: 'initials', seed: 'OC', bg: 'ec4899', label: 'On-Call' },
+  { id: 'ini-10', style: 'initials', seed: 'PR', bg: '4f46e5', label: 'Primary' },
+];
+
+// Abstract Geometric Badges (Shapes)
+const SHAPES_PRESETS = [
+  { id: 'shp-1', style: 'shapes', seed: 'Alpha', bg: '6366f1', label: 'Alpha' },
+  { id: 'shp-2', style: 'shapes', seed: 'Beta', bg: '3b82f6', label: 'Beta' },
+  { id: 'shp-3', style: 'shapes', seed: 'Gamma', bg: '8b5cf6', label: 'Gamma' },
+  { id: 'shp-4', style: 'shapes', seed: 'Delta', bg: '0d9488', label: 'Delta' },
+  { id: 'shp-5', style: 'shapes', seed: 'Epsilon', bg: '0284c7', label: 'Epsilon' },
+];
+
 // Flat Tech Personas (Clean professional vector illustrations)
 const PERSONAS_AVATARS = [
   { id: 'per-1', style: 'personas', seed: 'Alex', bg: '6366f1', label: 'Alex' },
@@ -169,6 +192,90 @@ export function AvatarPicker({ currentAvatarUrl, onSelect, userName }: AvatarPic
                     >
                       <Avatar className="h-14 w-14">
                         <AvatarImage src={avatar.src} alt={avatar.label} className="object-cover" />
+                        <AvatarFallback className="text-xs font-semibold bg-muted">
+                          {getInitials(userName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {isSelected && (
+                        <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary flex items-center justify-center">
+                          <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                      {avatar.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Executive Monograms */}
+          <div className="space-y-3 pt-2">
+            <h4 className="text-sm font-medium text-foreground">Executive Monograms</h4>
+            <div className="grid grid-cols-5 gap-3">
+              {INITIALS_PRESETS.map(avatar => {
+                const isSelected = isDiceBearSelected(avatar);
+                const url = getDiceBearUrl(avatar.style, avatar.seed, avatar.bg);
+                return (
+                  <button
+                    key={avatar.id}
+                    onClick={() => handleDiceBearSelect(avatar)}
+                    className="group relative flex flex-col items-center gap-1.5"
+                  >
+                    <div
+                      className={cn(
+                        'relative rounded-full p-0.5 transition-all duration-200',
+                        isSelected
+                          ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                          : 'hover:ring-2 hover:ring-primary/50 hover:ring-offset-2 hover:ring-offset-background'
+                      )}
+                    >
+                      <Avatar className="h-14 w-14">
+                        <AvatarImage src={url} alt={avatar.label} className="object-cover" />
+                        <AvatarFallback className="text-xs font-semibold bg-muted">
+                          {getInitials(userName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {isSelected && (
+                        <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary flex items-center justify-center">
+                          <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                      {avatar.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Abstract Geometric Badges */}
+          <div className="space-y-3 pt-2">
+            <h4 className="text-sm font-medium text-foreground">Abstract Tech Badges</h4>
+            <div className="grid grid-cols-5 gap-3">
+              {SHAPES_PRESETS.map(avatar => {
+                const isSelected = isDiceBearSelected(avatar);
+                const url = getDiceBearUrl(avatar.style, avatar.seed, avatar.bg);
+                return (
+                  <button
+                    key={avatar.id}
+                    onClick={() => handleDiceBearSelect(avatar)}
+                    className="group relative flex flex-col items-center gap-1.5"
+                  >
+                    <div
+                      className={cn(
+                        'relative rounded-full p-0.5 transition-all duration-200',
+                        isSelected
+                          ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                          : 'hover:ring-2 hover:ring-primary/50 hover:ring-offset-2 hover:ring-offset-background'
+                      )}
+                    >
+                      <Avatar className="h-14 w-14">
+                        <AvatarImage src={url} alt={avatar.label} className="object-cover" />
                         <AvatarFallback className="text-xs font-semibold bg-muted">
                           {getInitials(userName)}
                         </AvatarFallback>

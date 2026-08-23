@@ -59,6 +59,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.971.0",
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.3",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -85,6 +87,7 @@
     "@vvo/tzdb": "^6.198.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
+    "boring-avatars": "^2.0.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
