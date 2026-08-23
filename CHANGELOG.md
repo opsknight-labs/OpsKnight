@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security & Hardening
+
+- **Authentication & Sessions**: Added OIDC nonce state validation and strict email verification check on invited user linking to prevent account takeovers; enforced `tokenVersion` check in JWT fallback path for immediate session revocation; wrapped bootstrap admin initialization in an atomic transaction; protected last admin from demotion/deletion.
+- **CSV Injection Mitigation**: Implemented strict sanitization (`buildCsv` / `sanitizeCsvCell`) across uptime exports and analytics reports against CSV formula injection (CWE-1236).
+- **Status Page Protection**: Replaced automatic GET-based unsubscribe mutation with an explicit confirmation form; added SVG script sanitization and strict CSP headers on logo routes; prevented private incident leaks across status page feeds and subscriber broadcasts.
+- **Custom Fields Validation**: Added strict type validation and regex parsing for all custom field types (`NUMBER`, `BOOLEAN`, `DATE`, `SELECT`, `EMAIL`, `URL`) and enforced `assertCanModifyIncident` RBAC.
+- **Template IDOR**: Enforced author and admin role checks before deleting incident templates.
+
+### Fixed
+
+- **Mobile PWA & UI Controls**: Resolved swipe conflicts between `MobileSwipeNavigator` and modal/sheet controls; fixed iOS Safari background rubber-band scrolling; added fallback WebAuthn biometric credential resolution; disabled push flags on 410/404 Gone endpoints.
+- **Postmortems & Timelines**: Preserved `publishedAt` on updates; deduplicated synthetic incident lifecycle markers; fixed timezone offset drift on datetime-local inputs; auto-completed Action Items on Jira ticket resolution.
+- **Real-Time Streaming**: Scoped notification streams by user ID; prevented memory leaks in `WidgetProvider` by hoisting callbacks.
+- **Audit Logs & Export**: Added audit logging for API keys, notification providers, VAPID rotation, and data retention policies; added safety query limit to team audit logs.
+
 ## [1.3.1] - 2026-08-18
 
 ### Added
