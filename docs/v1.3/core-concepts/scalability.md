@@ -1,205 +1,172 @@
 ---
 order: 14
-title: Scalability
-description: Capacity targets, performance optimizations, and production tuning guidance
+title: Scalability and capacity planning
+description: Measure OpsKnight capacity, scale the shipped runtime safely, and prove workload limits before production.
 ---
 
-# Scalability
+# Scalability and capacity planning
 
-This guide summarizes OpsKnight's capacity targets, real-world load scenarios, and the configuration knobs that unlock higher scale. Numbers below assume recommended database pooling and sensible infrastructure sizing.
+OpsKnight v1.3 does not publish a universal user, incident, notification, or streaming-connection capacity. Throughput depends on application and PostgreSQL resources, replica count, incident fan-out, query history, external-provider latency, and the traffic shape. Treat any capacity number that was not measured on your deployment as an assumption, not a product guarantee.
 
----
+This guide separates code-defined protective limits from measured capacity and provides a repeatable way to establish safe operating limits for your environment.
 
-## System Capacity Overview
+## Model the workload
 
-### User Capacity
+Build a representative workload before choosing infrastructure. Record at least:
 
-| Metric                      | Capacity | Notes                           |
-| --------------------------- | -------- | ------------------------------- |
-| **Total Registered Users**  | 10,000+  | Database can handle this easily |
-| **Concurrent Active Users** | 200-300  | With SSE streams open           |
-| **Peak Concurrent Users**   | 400-500  | With proper DB pool config      |
+| Workload dimension   | Include in the model                                                                                  |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| Inbound events       | Sustained and burst rate, payload size, producer count, stable versus high-cardinality deduplication. |
+| Incident processing  | Trigger/acknowledge/resolve mix, new versus correlated events, notes, watchers, and bulk actions.     |
+| Notification fan-out | Recipients and channels per incident, escalation depth, retry rate, and provider response latency.    |
+| Interactive use      | Concurrent desktop/mobile users, dashboard refreshes, analytics range, exports, and SSE connections.  |
+| Scheduled work       | Due escalations, unsnoozes, failed-delivery retries, SLA checks, rollups, and retention cleanup.      |
+| Stored data          | Incident/event history, notification history, audit/system logs, rollups, indexes, and growth rate.   |
+| Failure recovery     | Producer retries, provider outages, database slowdown, replica restarts, and the resulting backlog.   |
 
-### Incident Handling
+Average traffic is insufficient for incident-management capacity planning. Test the alert storm, notification fan-out, and recovery burst you need to survive.
 
-| Metric                                | Per Minute | Per Hour | Notes                              |
-| ------------------------------------- | ---------- | -------- | ---------------------------------- |
-| **New Incidents Created**             | 200-300    | 12,000+  | Via API or integrations            |
-| **Incidents Processed (Escalations)** | 150-200    | 9,000+   | Parallel processing (5 concurrent) |
-| **Incident Updates**                  | 500+       | 30,000+  | Status changes, notes, etc.        |
+## Distinguish limits from capacity
 
-### Notification Capacity
+The following v1.3 values are implementation guardrails. They prevent one path from consuming unlimited resources; they are not benchmark results or service-level objectives.
 
-| Channel            | Per Minute | Per Hour | Notes                            |
-| ------------------ | ---------- | -------- | -------------------------------- |
-| **Email**          | 100        | 6,000    | Rate limited to avoid spam flags |
-| **SMS**            | 50         | 3,000    | Twilio rate limits               |
-| **Push**           | 200        | 12,000   | Web push is fast                 |
-| **Slack**          | 100        | 6,000    | Slack API limits                 |
-| **Webhooks**       | 100        | 6,000    | Per destination                  |
-| **Total Combined** | 500-600    | 30,000+  | Across all channels              |
+| Path                                  | Shipped behavior                                                                                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Published Events API                  | 120 requests per 60-second fixed window for the route's integration/API-key bucket.                                                                   |
+| Standard provider-integration handler | 100 requests per 60 seconds per integration by default; some provider-specific or legacy routes differ.                                               |
+| PostgreSQL background jobs            | A scheduler cycle claims at most 100 due rows and processes them with concurrency 15. The dynamic scheduler normally runs every 15 seconds–2 minutes. |
+| Immediate notification queue          | Each application process holds at most 5,000 pending items, takes batches of 50, and uses per-channel concurrency 10. A full queue drops new items.   |
+| Notification channel guards           | Per process and per minute: email 100, SMS 50, push 200, Slack 100, webhook 100, WhatsApp 30. Provider quotas can be lower.                           |
+| Real-time dashboard stream            | Each connected client polls cached incident/metric functions every five seconds and receives a heartbeat about every 30 seconds.                      |
+| Real-time cache                       | Process-local entries use short TTLs and a 5,000-entry bound. Replicas do not share this cache.                                                       |
 
-### Real-Time Streams (SSE)
+See [API rate limiting](../api/rate-limiting) for the complete client-visible contract. Do not add the values above together to infer total notification or incident throughput. A slow provider, expensive query, or wide escalation fan-out can lower observed capacity significantly.
 
-| Metric                         | Capacity                |
-| ------------------------------ | ----------------------- |
-| **Concurrent SSE Connections** | 400-500                 |
-| **DB Queries (with caching)**  | 20-30/sec (was 200-300) |
-| **Data Freshness**             | 3-5 seconds             |
+## Understand the scaling topology
 
-### Background Job Processing
+One Next.js application serves the UI, API routes, provider webhooks, real-time streams, and the internal scheduler. PostgreSQL stores product state, rate-limit counters, scheduler coordination, and durable background jobs. Redis and a separately deployed worker service are not part of the v1.3 runtime.
 
-| Job Type              | Per Minute | Notes                        |
-| --------------------- | ---------- | ---------------------------- |
-| **Escalation Jobs**   | 200+       | Parallel batches of 5        |
-| **Notification Jobs** | 300+       | Parallel batches of 10       |
-| **Total Jobs**        | 500+       | With 100 job limit per cycle |
+Multiple application replicas can use the same PostgreSQL database. For every replica:
 
----
+1. Deploy the same application version and runtime configuration.
+2. Use the same `NEXTAUTH_SECRET`, `ENCRYPTION_KEY`, public URL, and provider settings.
+3. Connect to the same migrated PostgreSQL database.
+4. Keep the scheduler enabled on at least one healthy instance. PostgreSQL coordinates scheduler ownership.
+5. Allow long-lived SSE responses at the load balancer or reverse proxy and disable response buffering for them.
+6. Drain traffic and in-flight work before stopping the process.
 
-## Real-World Scenarios
+Horizontal application scaling does not turn process-local state into shared state. Each replica has its own immediate notification queue, real-time cache, and circuit-breaker state. A process exit can lose items that have not reached durable storage. Review [Technical architecture](./technical-architecture) before choosing a high-availability topology.
 
-### Scenario 1: Normal Operations
+## Budget PostgreSQL connections
 
-```
-50 concurrent users
-10 incidents/hour
-~100 notifications/hour
-System runs at <10% capacity
-```
+Do not copy a fixed `connection_limit`, `max_connections`, or memory setting from another deployment. Budget connections across the entire database environment:
 
-### Scenario 2: Busy Day
-
-```
-150 concurrent users
-50 incidents/hour
-~500 notifications/hour
-System runs at ~30% capacity
+```text
+(application replicas × maximum application pool per replica)
++ migration and administrative reserve
++ monitoring, backup, and other client connections
+≤ PostgreSQL connection capacity
 ```
 
-### Scenario 3: Major Outage
+Choose the application pool and database limit together. Leave reserve for migrations, health checks, recovery access, and expected failover behavior. Increasing a connection limit without sufficient PostgreSQL CPU, memory, I/O, and query capacity can increase contention instead of throughput.
 
-```
-300 concurrent users
-200 incidents in 10 minutes
-~2000 notifications in 10 minutes
-System handles it (may see 5-10 sec delays)
-```
+During a load test, monitor active/waiting connections, pool wait time, transaction/query latency, locks, deadlocks, CPU, memory, storage latency, and WAL/replication lag where applicable. Change one variable at a time and retain the before/after evidence.
 
-### Scenario 4: Stress Test
+## Establish a capacity envelope
 
-```
-500 concurrent users
-500 incidents/minute
-5000 notifications/minute
-System at capacity, some queuing
-```
+### 1. Define measurable objectives
 
----
+Set objectives for the workflows users depend on, for example:
 
-## Quick Reference Card
+- accepted-event rate and HTTP p50/p95/p99 latency;
+- time from accepted trigger to committed incident;
+- time from trigger to first attempted and first successful notification;
+- acknowledge/resolve success and latency during an alert storm;
+- maximum age and count of due background jobs;
+- interactive/API error rate and latency with concurrent SSE users;
+- PostgreSQL utilization, connection headroom, lock time, and storage growth; and
+- recovery time after a provider, database, or application fault.
 
-```
-┌─────────────────────────────────────────┐
-│         OpsKnight Capacity              │
-├─────────────────────────────────────────┤
-│ Concurrent Users:     200-500           │
-│ Incidents/min:        200-300           │
-│ Notifications/min:    500-600           │
-│ Escalations/min:      150-200           │
-│ SSE Connections:      400-500           │
-│ DB Queries/sec:       50-100 (cached)   │
-└─────────────────────────────────────────┘
-```
+Define an error budget and a minimum headroom target before testing. A test does not pass merely because requests eventually complete.
 
----
+### 2. Build a production-like test environment
 
-## Critical Configuration
+Use the intended application image, replica topology, PostgreSQL major version, connection path, proxy timeouts, and realistic data volume. Use synthetic or properly sanitized data. Never direct a capacity test at real responders, customer webhooks, or paid messaging channels without explicit safeguards.
 
-### Database Connection Pool
+Replace external providers with controlled test endpoints that can reproduce normal latency, throttling, timeouts, and failures. Preserve realistic notification fan-out and payload sizes.
 
-The database connection pool is **critical** for handling concurrent users. Without proper configuration, the system will fail at ~50 concurrent users.
+### 3. Run progressive and failure tests
 
-#### Why Connection Pooling Matters
+Run each test long enough to expose queue growth, cleanup, connection pressure, and storage effects:
 
-- **Default pool size is 10** - This is insufficient for production
-- Each SSE stream, API request, and background job needs a connection
-- Without pooling: 50 concurrent users = connection exhaustion
-- With pooling: 500+ concurrent users possible
+1. Establish an idle and normal-traffic baseline.
+2. Increase one workload dimension in steps and hold each step at steady state.
+3. Test bursts at and beyond the expected peak without bypassing route rate limits accidentally.
+4. Combine inbound load, responder activity, SSE connections, and scheduled work.
+5. Add slow/throttled providers and confirm backlogs and retries remain bounded.
+6. Restart and drain application replicas; verify the process-local queue boundary is understood.
+7. Introduce PostgreSQL latency or a controlled disconnect; verify readiness, recovery, and producer behavior.
+8. Exercise scheduler-owner loss and confirm another eligible process advances scheduled work after ownership becomes available.
+9. Stop new load and measure backlog drain time and final delivery/error state.
 
-#### Configuration
+Use stable `dedup_key` values when measuring correlation and unique keys when measuring incident creation. Mixing the two produces a misleading result.
 
-Add these parameters to your `DATABASE_URL`:
+### 4. Record the safe operating limit
 
-```bash
-# Production (200-500 concurrent users)
-DATABASE_URL="postgresql://user:pass@host:5432/db?connection_limit=40&pool_timeout=30"
+The capacity envelope is the highest tested workload that meets every objective with the required headroom and without an unbounded queue, connection, latency, error, memory, or storage trend. Record:
 
-# High-scale (500+ concurrent users)
-DATABASE_URL="postgresql://user:pass@host:5432/db?connection_limit=80&pool_timeout=30"
-```
+- application/database/proxy versions and exact resources;
+- replica and connection-pool settings;
+- dataset size and retention configuration;
+- workload generator, payload mix, fan-out, duration, and provider behavior;
+- results, bottleneck, headroom, and failure/recovery observations; and
+- the date, owner, and conditions that require a retest.
 
-| Parameter          | Value | Description                              |
-| ------------------ | ----- | ---------------------------------------- |
-| `connection_limit` | 40    | Max connections per app instance         |
-| `pool_timeout`     | 30    | Seconds to wait for available connection |
+Retest after material changes to the application, schema/indexes, PostgreSQL, proxy, replicas, notification providers, retention, or expected traffic.
 
-### PostgreSQL Server Tuning
+## Monitor saturation in production
 
-For the database server itself, ensure these settings in `postgresql.conf`:
+Alert on trends before users experience an incident-delivery failure:
 
-```conf
-# Connection Settings
-max_connections = 200          # Total connections across all clients
-shared_buffers = 256MB         # 25% of available RAM (for 1GB system)
-effective_cache_size = 768MB   # 75% of available RAM
+| Layer         | Watch                                                                                                                 |
+| ------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Application   | Readiness, restarts, CPU/memory, request errors/latency, event 429s, SSE disconnects, and instance churn.             |
+| PostgreSQL    | Connections/pool waits, query latency, locks/deadlocks, CPU, storage/I/O, table/index growth, and backup/replication. |
+| Scheduler     | Lock ownership/heartbeat, tick errors, oldest due job, pending/processing/failed counts, and retry exhaustion.        |
+| Integrations  | Accepted/rejected requests, signature/auth failures, 429s, processing latency, and retry storms.                      |
+| Notifications | Pending work, dropped/full-queue messages, failed history, retry age, provider latency/quotas, and circuit state.     |
+| User paths    | Synthetic trigger-to-notification-to-resolve timing plus representative login, incident, and status-page checks.      |
 
-# For small systems (1-2 CPU cores)
-work_mem = 16MB
-maintenance_work_mem = 128MB
+The application includes health/readiness output, system logs, notification history, integration health, and an admin SLA-query performance page. These are useful evidence, but v1.3 does not publish a complete Prometheus-compatible capacity metrics endpoint. Collect platform and PostgreSQL telemetry independently.
 
-# Connection handling
-tcp_keepalives_idle = 600
-tcp_keepalives_interval = 30
-tcp_keepalives_count = 10
-```
+## Respond to saturation
 
----
+1. Identify whether ingress, application CPU/memory, PostgreSQL, scheduled work, or a provider is the first constrained layer.
+2. Protect incident writes and acknowledgement/resolve paths before analytics, exports, or other expensive non-critical work.
+3. Pace producers and respect `Retry-After`; use stable deduplication keys for idempotent event retries.
+4. Reduce accidental fan-out or noisy-source traffic at its owner while preserving required alerts.
+5. Scale or tune the constrained layer using a tested change. Adding application replicas cannot fix a saturated database or provider quota.
+6. Confirm queues drain, latency returns to baseline, and synthetic delivery succeeds.
+7. Preserve evidence, update the capacity envelope, and correct the monitoring threshold or architecture that allowed the surprise.
 
-## Performance Optimizations Implemented
+Do not disable rate limits or raise queue/database limits as a first response without understanding the next bottleneck and failure mode.
 
-### 1. SSE Caching Layer
+## Implementation map
 
-- **File**: `src/lib/realtime-cache.ts`
-- **Impact**: 10x reduction in database queries
-- **How**: Caches dashboard metrics and incident lists for 3-5 seconds
+- `src/lib/cron-scheduler.ts` — scheduler cadence, ownership, and job-cycle limits.
+- `src/lib/jobs/queue.ts` — durable job claims, concurrency, retry, and statistics.
+- `src/lib/notification-queue.ts` — process-local queue limits and channel guards.
+- `src/lib/realtime-cache.ts` — process-local cache TTLs and bound.
+- `src/app/api/realtime/stream/route.ts` — authenticated dashboard SSE polling.
+- `src/lib/rate-limit.ts` and `src/lib/integrations/rate-limiter.ts` — database-backed request limits.
+- `src/app/(app)/settings/system/performance/page.tsx` — administrator SLA-query observations.
 
-### 2. Transaction Isolation Optimization
+## Related topics
 
-- **File**: `src/lib/db-utils.ts`
-- **Impact**: 10x less contention, fewer deadlocks
-- **How**: Uses `ReadCommitted` for event ingestion, `Serializable` only for critical updates
-
-### 3. Parallel Job Processing
-
-- **Files**: `src/lib/cron-scheduler.ts`, `src/lib/jobs/queue.ts`
-- **Impact**: 5x faster job processing
-- **How**: Processes jobs in parallel batches of 10-15
-
-### 4. Circuit Breaker Pattern
-
-- **File**: `src/lib/circuit-breaker.ts`
-- **Impact**: Prevents cascade failures
-- **How**: Fails fast when external services (email, SMS) are down
-
-### 5. Notification Queue with Batching
-
-- **File**: `src/lib/notification-queue.ts`
-- **Impact**: 1000+ notifications/min capacity
-- **How**: Batches notifications, deduplicates, and rate limits per channel
-
-### 6. Rate Limiter with TTL Cleanup
-
-- **File**: `src/lib/rate-limit.ts`
-- **Impact**: Prevents memory leaks
-- **How**: Cleans expired entries every 60 seconds
+- [Technical architecture](./technical-architecture)
+- [Architecture diagrams](../architecture/diagrams)
+- [Monitoring](../deployment/monitoring)
+- [Maintenance](../deployment/maintenance)
+- [API rate limiting](../api/rate-limiting)
+- [Kubernetes deployment](../deployment/kubernetes)
+- [Troubleshooting](../troubleshooting)

@@ -13,7 +13,7 @@ Detect failed deployments and pipeline issues before they impact users.
 <!-- integrations-list:start -->
 
 - [GitHub Actions](./github) — Receive GitHub Actions workflow run failures and repository security alerts.
-- [GitLab CI/CD](./gitlab) — Track GitLab pipeline errors and auto-resolve upon successful subsequent builds.
+- [GitLab CI/CD](./gitlab) — Process pipelines, jobs, merge requests, deployments, issues, incidents, and alerts.
 - [Bitbucket Pipelines](./bitbucket) — Receive Bitbucket Pipeline failure alerts in OpsKnight.
 - [Vercel Deployments](./vercel) — Monitor production deployments, build errors, and preview deployment failures.
 
