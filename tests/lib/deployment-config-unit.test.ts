@@ -129,7 +129,7 @@ describe('deployment configuration invariants', () => {
     expect(workflow).toContain('Upgrade from previous stable release');
     expect(workflow).toContain('Backup and restore contract');
     expect(workflow).toContain('docker exec "$POSTGRES_CONTAINER" pg_dump');
-    expect(workflow).toContain('ancestor=postgres:16-alpine');
+    expect(workflow).toContain('POSTGRES_CONTAINER="${{ job.services.postgres.id }}"');
     expect(workflow).toContain('Event, escalation, and notification contract');
   });
 

@@ -115,7 +115,7 @@ jobs:
       - name: Backup and restore contract
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          POSTGRES_CONTAINER="$(docker ps --filter ancestor=postgres:16-alpine --format '{{.ID}}' | head -n 1)"
+          POSTGRES_CONTAINER="${{ job.services.postgres.id }}"
           test -n "$POSTGRES_CONTAINER"
           # Use the service image's matching PostgreSQL client. The Ubuntu
           # runner's older pg_dump refuses to dump a PostgreSQL 16 server.
