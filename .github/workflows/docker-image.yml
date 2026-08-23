@@ -22,7 +22,126 @@ env:
   IMAGE_NAME_RELEASE: ghcr.io/${{ github.repository_owner }}/opsknight
 
 jobs:
+  release-quality:
+    runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_release
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opsknight_release?schema=public
+      PGPASSWORD: postgres
+    steps:
+      - name: Checkout release history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Non-release image validation path
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: echo 'Stable release-quality contract is enforced for version tags.'
+
+      - name: Set up Node
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install candidate dependencies
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          HUSKY: '0'
+        run: npm ci --legacy-peer-deps
+
+      - name: Clean-install and migration contract
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mkdir -p reports
+          npx prisma migrate deploy
+          npx prisma generate
+          npm run prisma:validate
+          npm run prisma:health
+          node scripts/ci-db-smoke.cjs
+          npm run docs:links
+          npm run docs:capabilities
+          npx vitest run -c vitest.unit.config.ts \
+            tests/unit/migration-recovery.test.ts \
+            tests/lib/deployment-config-unit.test.ts
+
+      - name: Event, escalation, and notification contract
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          VITEST_USE_REAL_DB: '1'
+        run: |
+          npx vitest run -c vitest.int.config.ts --no-file-parallelism \
+            tests/integration/event-resilience.test.ts \
+            tests/integration/notification-flow.test.ts \
+            tests/integration/job-queue.test.ts
+
+      - name: Upgrade from previous stable release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREVIOUS_TAG="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -Fvx "$CURRENT_TAG" | head -n 1 || true)"
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo 'No previous stable tag exists; upgrade gate is not applicable.'
+            exit 0
+          fi
+          echo "Testing upgrade from $PREVIOUS_TAG to $CURRENT_TAG"
+          createdb -h localhost -U postgres opsknight_upgrade
+          git worktree add /tmp/opsknight-previous "$PREVIOUS_TAG"
+          (
+            cd /tmp/opsknight-previous
+            HUSKY=0 npm ci --legacy-peer-deps
+            DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_upgrade?schema=public' npx prisma migrate deploy
+          )
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_upgrade?schema=public' npx prisma migrate deploy
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_upgrade?schema=public' npm run prisma:health
+
+      - name: Backup and restore contract
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          pg_dump -h localhost -U postgres -Fc opsknight_release > /tmp/opsknight-release.dump
+          createdb -h localhost -U postgres opsknight_restore
+          pg_restore -h localhost -U postgres --no-owner -d opsknight_restore /tmp/opsknight-release.dump
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_restore?schema=public' npm run prisma:health
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_restore?schema=public' node scripts/ci-db-smoke.cjs
+
+      - name: Set up Helm
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: azure/setup-helm@v4
+
+      - name: Set up kubectl
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: azure/setup-kubectl@v4
+
+      - name: Render release deployment contract
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          cp env.example .env
+          docker compose config > /tmp/opsknight-compose.yaml
+          helm lint helm/opsknight
+          helm template opsknight helm/opsknight --namespace opsknight > /tmp/opsknight-helm.yaml
+          kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
+
   build:
+    needs: release-quality
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout

@@ -4,8 +4,8 @@
 
 # OpsKnight
 
-**The Open Source Incident Command Center.**<br>
-_Your entire incident lifecycle, on-call schedules, and status pages in one powerful platform._
+**Transparent, self-hosted incident operations.**<br>
+_From alert ingestion and on-call routing through response, customer communication, and learning._
 
 [**opsknight.com**](https://opsknight.com)
 
@@ -65,11 +65,11 @@ _Your entire incident lifecycle, on-call schedules, and status pages in one powe
 
 ## ⚡ Why OpsKnight?
 
-**Stop paying per-seat for reliability.**
+**Own the incident loop, the operational evidence, and the data.**
 
 OpsKnight is an open-source, self-hosted alternative to per-seat on-call SaaS (including PagerDuty and Opsgenie). It is not affiliated with those companies. Designed for teams that want incident data on their own machines.
 
-Whether you are an SRE team at a startup or a platform team at a larger org, OpsKnight is the software that runs detect → page → talk → write it down — on your network.
+Whether you are an SRE team at a startup or a platform team at a larger organization, OpsKnight connects detect → route → respond → communicate → learn on infrastructure you control. Reliability and transparent operational evidence—not raw feature count—are the product contract.
 
 | Feature             | OpsKnight                         | Typical per-seat SaaS        |
 | :------------------ | :-------------------------------- | :--------------------------- |

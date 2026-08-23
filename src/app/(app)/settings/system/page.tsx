@@ -275,6 +275,24 @@ export default async function SystemSettingsPage() {
 
         {/* Performance Monitoring */}
         <SettingsSection
+          title="Administrator Health Center"
+          description="Review database, migrations, workers, escalations, delivery, backups, and version status"
+          action={
+            <Link href="/settings/system/health">
+              <Button variant="outline">
+                Open Health Center
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          }
+        >
+          <p className="text-sm text-muted-foreground">
+            Unknown signals remain visible rather than being reported as healthy.
+          </p>
+        </SettingsSection>
+
+        {/* Performance Monitoring */}
+        <SettingsSection
           title="Performance Monitoring"
           description="Monitor SLA query performance and system metrics"
           action={
