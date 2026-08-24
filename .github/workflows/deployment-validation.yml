@@ -7,6 +7,8 @@ on:
       - 'Dockerfile'
       - 'docker-entrypoint.sh'
       - 'scripts/auto-recover-migrations.ts'
+      - 'scripts/verify-backup-restore.sh'
+      - 'scripts/verify-k8s-failover.sh'
       - 'scripts/validate-release-tag.cjs'
       - 'docker-compose.yml'
       - 'docker-compose.external-db.yml'
@@ -23,6 +25,8 @@ on:
       - 'Dockerfile'
       - 'docker-entrypoint.sh'
       - 'scripts/auto-recover-migrations.ts'
+      - 'scripts/verify-backup-restore.sh'
+      - 'scripts/verify-k8s-failover.sh'
       - 'scripts/validate-release-tag.cjs'
       - 'docker-compose.yml'
       - 'docker-compose.external-db.yml'
@@ -43,7 +47,10 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Validate entrypoint shell syntax
-        run: sh -n docker-entrypoint.sh
+        run: |
+          sh -n docker-entrypoint.sh
+          bash -n scripts/verify-backup-restore.sh
+          bash -n scripts/verify-k8s-failover.sh
 
       - name: Validate Docker Compose configuration
         run: |
@@ -93,6 +100,8 @@ jobs:
           set -euo pipefail
           grep -q 'ghcr.io/opsknight-labs/opsknight:' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
+          grep -q 'maxUnavailable: 0' /tmp/opsknight-helm.yaml
+          grep -q 'topologySpreadConstraints:' /tmp/opsknight-helm.yaml
           grep -q 'checksum/config:' /tmp/opsknight-helm.yaml
           grep -q 'checksum/secret:' /tmp/opsknight-helm.yaml
           grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-helm.yaml
@@ -103,6 +112,12 @@ jobs:
           grep -q 'port: 6432' /tmp/opsknight-helm-external-db.yaml
           grep -q 'ghcr.io/opsknight-labs/opsknight@sha256:0000000000000000000000000000000000000000000000000000000000000000' /tmp/opsknight-helm-external-secret.yaml
           grep -q 'name: opsknight-runtime' /tmp/opsknight-helm-external-secret.yaml
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            -f helm/opsknight/examples/values-enterprise-ha.yaml \
+            > /tmp/opsknight-helm-enterprise.yaml
+          grep -q 'minReplicas: 3' /tmp/opsknight-helm-enterprise.yaml
+          grep -q 'minAvailable: 2' /tmp/opsknight-helm-enterprise.yaml
           if grep -q '^kind: Secret$' /tmp/opsknight-helm-external-secret.yaml; then
             echo 'chart rendered a Secret even though secrets.existingSecret is configured'
             exit 1

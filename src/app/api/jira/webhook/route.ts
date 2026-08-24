@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { processJiraWebhookEvent, type JiraWebhookPayload } from '@/lib/jira-sync';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { logger } from '@/lib/logger';
+import { logger, withRequestContext } from '@/lib/logger';
 
 const JiraWebhookSchema = z
   .object({
@@ -68,7 +68,7 @@ async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
 
 const HANDLED_EVENTS = new Set(['jira:issue_updated', 'jira:issue_deleted']);
 
-export async function POST(request: NextRequest) {
+async function postJiraWebhook(request: NextRequest) {
   try {
     const forwardedFor = request.headers.get('x-forwarded-for');
     const clientIp =
@@ -126,3 +126,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestContext(postJiraWebhook, 'api.jira.webhook');

@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-product-notification';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
@@ -15,6 +15,7 @@ import {
 import { AlertTriangle, Loader2, UserPlus } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { Input } from '@/components/ui/shadcn/input';
 
 type User = {
   id: string;
@@ -38,12 +39,51 @@ export default function TeamMemberForm({
   canManageMembers,
   canAssignOwnerAdmin,
   addMember,
-  teamId: _teamId,
+  teamId,
 }: TeamMemberFormProps) {
   const [isPending, startTransition] = useTransition();
   const { showToast } = useToast();
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<string>('MEMBER');
+  const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>(availableUsers.slice(0, 20));
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasMore, setHasMore] = useState(availableUsers.length > 20);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await fetch(
+          `/api/teams/${encodeURIComponent(teamId)}/available-users?q=${encodeURIComponent(search)}&limit=30`,
+          { signal: controller.signal, cache: 'no-store' }
+        );
+        if (!response.ok) throw new Error('Search failed');
+        const data = (await response.json()) as { users?: User[]; hasMore?: boolean };
+        setSearchResults(data.users || []);
+        setHasMore(Boolean(data.hasMore));
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          showToast('Unable to search the user directory', 'error');
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsSearching(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [search, showToast, teamId]);
+
+  const selectableUsers = useMemo(() => {
+    const selected = availableUsers.find(user => user.id === selectedUserId);
+    return selected && !searchResults.some(user => user.id === selected.id)
+      ? [selected, ...searchResults]
+      : searchResults;
+  }, [availableUsers, searchResults, selectedUserId]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -52,7 +92,7 @@ export default function TeamMemberForm({
     const formData = new FormData();
     formData.set('userId', selectedUserId);
     formData.set('role', selectedRole);
-    const userName = availableUsers.find(u => u.id === selectedUserId)?.name || 'User';
+    const userName = selectableUsers.find(u => u.id === selectedUserId)?.name || 'User';
 
     startTransition(async () => {
       const result = await addMember(formData);
@@ -60,6 +100,7 @@ export default function TeamMemberForm({
         showToast(result.error, 'error');
       } else {
         showToast(`${userName} added as ${selectedRole}`, 'success');
+        setSearchResults(current => current.filter(user => user.id !== selectedUserId));
         setSelectedUserId('');
         setSelectedRole('MEMBER');
       }
@@ -86,20 +127,31 @@ export default function TeamMemberForm({
         <Label htmlFor="userId" className="text-xs">
           Select User
         </Label>
+        <div className="relative">
+          <Input
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+            placeholder="Search by name or email…"
+            aria-label="Search available users"
+          />
+          {isSearching && (
+            <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
         <Select
           value={selectedUserId}
           onValueChange={setSelectedUserId}
-          disabled={isPending || availableUsers.length === 0}
+          disabled={isPending || isSearching || selectableUsers.length === 0}
         >
           <SelectTrigger>
             <SelectValue
               placeholder={
-                availableUsers.length === 0 ? 'All users are members' : 'Choose a user...'
+                selectableUsers.length === 0 ? 'No matching users' : 'Choose a user...'
               }
             />
           </SelectTrigger>
           <SelectContent className="max-h-[200px]">
-            {availableUsers.map(user => (
+            {selectableUsers.map(user => (
               <SelectItem key={user.id} value={user.id}>
                 <div className="flex items-center gap-2">
                   <UserAvatar userId={user.id} name={user.name} gender={user.gender} size="xs" />
@@ -114,6 +166,11 @@ export default function TeamMemberForm({
             ))}
           </SelectContent>
         </Select>
+        {hasMore && (
+          <p className="text-xs text-muted-foreground">
+            More matches are available. Refine the search to find a specific user.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -151,7 +208,7 @@ export default function TeamMemberForm({
       <Button
         type="submit"
         className="w-full gap-2"
-        disabled={availableUsers.length === 0 || !selectedUserId || isPending}
+        disabled={selectableUsers.length === 0 || !selectedUserId || isPending}
       >
         {isPending ? (
           <>

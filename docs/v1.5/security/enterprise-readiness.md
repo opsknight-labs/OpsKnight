@@ -68,6 +68,11 @@ Before promoting a release, retain evidence that all required checks passed for 
 7. Manual smoke tests for login, incident creation, acknowledgement, escalation, resolution,
    status-page visibility, notifications, schedules, and administrative changes.
 
+Use the [enterprise validation drills](../deployment/enterprise-validation.md) to produce repeatable
+load, restore, and application-pod failover evidence. Use the
+[audit evidence checklist](./audit-evidence-checklist.md) to assign and retain the remaining
+technical and organizational evidence.
+
 ## Shared-responsibility boundary
 
 OpsKnight supplies application controls. The operator remains responsible for identity-provider

@@ -116,6 +116,7 @@ Restore into an isolated environment with the original encryption key, then veri
 - [Kustomize](./kustomize)
 - [Helm](./helm)
 - [Monitoring](./monitoring)
+- [Enterprise validation drills](./enterprise-validation)
 - [Maintenance](./maintenance)
 - [Database migrations](./database-migrations)
 - [Backup and restore](./backup-restore)

@@ -1,8 +1,9 @@
 import prisma from '@/lib/prisma';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
+import { withRequestContext } from '@/lib/logger';
 
-export async function GET(req: Request) {
+async function getMetrics(req: Request) {
   // Allow Prometheus scraping via Bearer token OR admin session
   const authHeader = req.headers.get('authorization');
   const prometheusToken = process.env.PROMETHEUS_SCRAPE_TOKEN;
@@ -57,3 +58,5 @@ export async function GET(req: Request) {
     headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
   });
 }
+
+export const GET = withRequestContext(getMetrics, 'api.metrics');

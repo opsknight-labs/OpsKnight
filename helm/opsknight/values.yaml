@@ -76,6 +76,15 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# Spread replicas across nodes by default. Enterprise deployments should use
+# three or more nodes and may change ScheduleAnyway to DoNotSchedule.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+
+terminationGracePeriodSeconds: 30
+
 startupProbe:
   httpGet:
     path: /api/health?mode=readiness
