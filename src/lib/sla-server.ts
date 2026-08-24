@@ -1983,10 +1983,20 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   );
 
   // Coverage & Others
+  const mtbfDowntimeMs = calculateMergedDuration(
+    recentIncidents
+      .map(incident => ({
+        start: incident.createdAt > finalStart ? incident.createdAt : finalStart,
+        end:
+          incident.resolvedAt && incident.resolvedAt < finalEnd ? incident.resolvedAt : finalEnd,
+      }))
+      .filter(interval => interval.start < interval.end)
+  );
   const mtbfMs = calculateMtbfMs(
     recentIncidents.map(i => i.createdAt),
     finalStart,
-    finalEnd
+    finalEnd,
+    mtbfDowntimeMs
   );
 
   // Resolved tenant business-hours TZ. The same value flows into the

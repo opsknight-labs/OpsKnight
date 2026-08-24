@@ -347,7 +347,7 @@ export default async function MobileIncidentDetailPage({ params }: PageProps) {
                     {n.content}
                   </div>
                   <div className="text-xs text-[color:var(--text-muted)] mt-1">
-                    {n.user.name || n.user.email} •{' '}
+                    {n.user?.name || n.user?.email || 'Deleted user'} •{' '}
                     <MobileTime value={n.createdAt} format="relative-short" />
                   </div>
                 </div>

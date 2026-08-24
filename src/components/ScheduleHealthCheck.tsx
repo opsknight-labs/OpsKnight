@@ -94,8 +94,8 @@ export default function ScheduleHealthCheck({
     const next7Days = new Date(now);
     next7Days.setDate(next7Days.getDate() + 7);
 
-    // Sum up covered minutes per day
-    const dayCoverages = new Map<string, number>();
+    // Track unique covered minutes per day so overlapping shifts cannot hide gaps.
+    const dayCoverages = new Map<string, Set<number>>();
 
     let formatter: Intl.DateTimeFormat;
     try {
@@ -127,17 +127,28 @@ export default function ScheduleHealthCheck({
       let currentMs = startMs;
       while (currentMs < endMs) {
         const key = getLocalDateKey(new Date(currentMs));
-        dayCoverages.set(key, (dayCoverages.get(key) || 0) + 1);
+        const covered = dayCoverages.get(key) ?? new Set<number>();
+        covered.add(currentMs);
+        dayCoverages.set(key, covered);
         currentMs += 60000; // 1 minute
       }
     });
+
+    // Expected minutes are limited to the actual seven-day inspection window.
+    // This handles the partial first/last day and 23/25-hour DST days correctly.
+    const expectedMinutes = new Map<string, number>();
+    for (let currentMs = now.getTime(); currentMs < next7Days.getTime(); currentMs += 60000) {
+      const key = getLocalDateKey(new Date(currentMs));
+      expectedMinutes.set(key, (expectedMinutes.get(key) ?? 0) + 1);
+    }
 
     for (let i = 0; i < 7; i++) {
       const d = new Date(now);
       d.setDate(d.getDate() + i);
       const key = getLocalDateKey(d);
 
-      const coveredMins = dayCoverages.get(key) || 0;
+      const coveredMins = dayCoverages.get(key)?.size ?? 0;
+      const requiredMins = expectedMinutes.get(key) ?? 0;
       if (coveredMins === 0 && layers.length > 0 && layers.some(l => l.users.length > 0)) {
         problems.push({
           type: 'error',
@@ -146,7 +157,11 @@ export default function ScheduleHealthCheck({
           icon: AlertTriangle,
         });
         break; // Only show first gap
-      } else if (coveredMins < 1440 && layers.length > 0 && layers.some(l => l.users.length > 0)) {
+      } else if (
+        coveredMins < requiredMins &&
+        layers.length > 0 &&
+        layers.some(l => l.users.length > 0)
+      ) {
         problems.push({
           type: 'warning',
           title: `Partial coverage on ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,

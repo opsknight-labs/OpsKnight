@@ -356,9 +356,14 @@ export async function deleteService(serviceId: string) {
   }
   if (!serviceId) return;
 
-  // Cascade delete is configured in schema, so deleting the service will automatically
-  // delete related incidents, alerts, integrations, etc.
-  // No need to manually delete them
+  // Incident history is an audit record and must never be erased as a side effect of
+  // deleting a service. Require explicit archival/reassignment before deletion.
+  const incidentCount = await prisma.incident.count({ where: { serviceId } });
+  if (incidentCount > 0) {
+    throw new Error(
+      `Cannot delete this service while it has ${incidentCount} incident(s). Preserve or reassign the incident history first.`
+    );
+  }
 
   // Now delete the service
   await prisma.service.delete({

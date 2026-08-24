@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from '@/app/api/sla/stream/route';
 import { NextRequest } from 'next/server';
+import type { Session } from 'next-auth';
+
+const session: Session = {
+  user: { email: 'test@example.com' },
+  expires: new Date(Date.now() + 3600000).toISOString(),
+};
 
 // Mock next-auth
 vi.mock('next-auth', () => ({
@@ -55,9 +61,7 @@ describe('SLA Streaming API', () => {
 
   it('returns streaming response with correct headers', async () => {
     const { getServerSession } = await import('next-auth');
-    vi.mocked(getServerSession).mockResolvedValue({
-      user: { email: 'test@example.com' },
-    } as any);
+    vi.mocked(getServerSession).mockResolvedValue(session);
 
     const { default: prisma } = await import('@/lib/prisma');
     vi.mocked(prisma.incident.count).mockResolvedValue(0);
@@ -74,9 +78,7 @@ describe('SLA Streaming API', () => {
 
   it('streams incidents in batches', async () => {
     const { getServerSession } = await import('next-auth');
-    vi.mocked(getServerSession).mockResolvedValue({
-      user: { email: 'test@example.com' },
-    } as any);
+    vi.mocked(getServerSession).mockResolvedValue(session);
 
     const { default: prisma } = await import('@/lib/prisma');
     vi.mocked(prisma.incident.count).mockResolvedValue(2);
@@ -87,7 +89,9 @@ describe('SLA Streaming API', () => {
     ];
 
     vi.mocked(prisma.incident.findMany)
-      .mockResolvedValueOnce(mockIncidents as any)
+      .mockResolvedValueOnce(
+        mockIncidents as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>
+      )
       .mockResolvedValueOnce([]);
 
     const req = new NextRequest('http://localhost:3000/api/sla/stream');
@@ -116,9 +120,7 @@ describe('SLA Streaming API', () => {
 
   it('respects serviceId query parameter for filtering', async () => {
     const { getServerSession } = await import('next-auth');
-    vi.mocked(getServerSession).mockResolvedValue({
-      user: { email: 'test@example.com' },
-    } as any);
+    vi.mocked(getServerSession).mockResolvedValue(session);
 
     const { default: prisma } = await import('@/lib/prisma');
     vi.mocked(prisma.incident.count).mockResolvedValue(0);

@@ -15,7 +15,7 @@ type Note = {
     email: string;
     avatarUrl?: string | null;
     gender?: string | null;
-  };
+  } | null;
   createdAt: Date;
 };
 
@@ -83,10 +83,10 @@ export default function IncidentNotes({ notes, canManage, onAddNote }: IncidentN
             <NoteCard
               key={note.id}
               content={note.content}
-              userId={note.user.id}
-              userName={note.user.name}
-              userAvatar={note.user.avatarUrl}
-              userGender={note.user.gender}
+              userId={note.user?.id}
+              userName={note.user?.name ?? 'Deleted user'}
+              userAvatar={note.user?.avatarUrl}
+              userGender={note.user?.gender}
               createdAt={note.createdAt}
               isResolution={note.content.startsWith('Resolution:')}
             />

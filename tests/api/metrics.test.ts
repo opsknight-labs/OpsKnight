@@ -54,7 +54,7 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
     vi.mocked(prisma.backgroundJob.groupBy).mockResolvedValue([
       { status: 'PENDING', _count: { id: 5 } },
       { status: 'PROCESSING', _count: { id: 2 } },
-    ] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    ] as unknown as Awaited<ReturnType<typeof prisma.backgroundJob.groupBy>>);
     vi.mocked(prisma.incident.count).mockResolvedValue(3);
     vi.mocked(prisma.user.count).mockResolvedValue(10);
 

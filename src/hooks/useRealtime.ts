@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 
 export type RealtimeEvent =
   | { type: 'connected'; timestamp: string }
-  | { type: 'incidents_updated'; incidents: any[]; timestamp: string } // eslint-disable-line @typescript-eslint/no-explicit-any
+  | { type: 'incidents_updated'; incidents: RealtimeIncident[]; timestamp: string }
   | {
       type: 'metrics_updated';
       metrics: { open: number; acknowledged: number; resolved24h: number; highUrgency: number };
@@ -21,16 +21,17 @@ export type RealtimeMetrics = {
   highUrgency: number;
 };
 
+export type RealtimeIncident = Record<string, unknown>;
+
 export function useRealtime() {
   const [isConnected, setIsConnected] = useState(false);
   const [metrics, setMetrics] = useState<RealtimeMetrics | null>(null);
-  const [recentIncidents, setRecentIncidents] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [recentIncidents, setRecentIncidents] = useState<RealtimeIncident[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 100;
 
   useEffect(() => {
     const handleOnline = () => {
@@ -103,18 +104,11 @@ export function useRealtime() {
           eventSource.close();
 
           // Attempt to reconnect with exponential backoff
-          if (reconnectAttempts.current < maxReconnectAttempts) {
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-            reconnectAttempts.current++;
-
-            reconnectTimeoutRef.current = setTimeout(() => {
-              if (mounted) {
-                connect();
-              }
-            }, delay);
-          } else {
-            setError('Failed to connect to real-time updates. Please refresh the page.');
-          }
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+          reconnectAttempts.current++;
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (mounted) connect();
+          }, delay);
         };
       } catch (err) {
         logger.error('Failed to create EventSource', { component: 'useRealtime', error: err });

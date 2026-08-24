@@ -675,7 +675,9 @@ export async function bulkUpdateUsers(
     });
 
     // Cannot use deleteMany due to complex cascade logic (needs deleteUserInternal)
-    await Promise.allSettled(userIds.map(id => deleteUserInternal(id)));
+    const deletionResults = await Promise.allSettled(userIds.map(id => deleteUserInternal(id)));
+    const deletedIds = userIds.filter((_, index) => deletionResults[index].status === 'fulfilled');
+    const failedCount = userIds.length - deletedIds.length;
 
     await logAudit({
       action: 'user.deleted.bulk',
@@ -683,14 +685,22 @@ export async function bulkUpdateUsers(
       entityId: 'bulk',
       actorId: admin?.id || null,
       details: {
-        userIds,
-        count: userIds.length,
-        users: usersToDelete.map(u => ({ email: u.email, name: u.name, role: u.role })),
+        userIds: deletedIds,
+        count: deletedIds.length,
+        failedCount,
+        users: usersToDelete
+          .filter(user => deletedIds.includes(user.id))
+          .map(u => ({ email: u.email, name: u.name, role: u.role })),
       },
     });
 
     revalidatePath('/users');
-    return { success: true, message: `Deleted ${userIds.length} user(s)` };
+    if (failedCount > 0) {
+      return {
+        error: `Deleted ${deletedIds.length} user(s), but ${failedCount} deletion(s) failed. Review the audit log and retry.`,
+      };
+    }
+    return { success: true, message: `Deleted ${deletedIds.length} user(s)` };
   } else if (action === 'setRole') {
     const role = formData.get('role') as string;
     if (!role) {
