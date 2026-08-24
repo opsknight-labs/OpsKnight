@@ -2,7 +2,7 @@
 
 import { useTransition, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import LayerEditSheet from './LayerEditSheet';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import UserAvatar from '@/components/UserAvatar';
@@ -37,6 +37,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { notify } from '@/lib/toast';
 
 type LayerRestrictions = {
   daysOfWeek?: number[];
@@ -204,7 +205,7 @@ export default function LayerCard({
       startTransition(async () => {
         const result = await addLayerUser(layer.id, formData);
         if (result?.error) {
-          showToast(result.error, 'error');
+          notify.error('Responder could not be added', { description: result.error });
         } else {
           showToast('Responder added', 'success');
           router.refresh();

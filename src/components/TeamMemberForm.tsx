@@ -1,7 +1,7 @@
 'use client';
 
 import { useTransition, useState } from 'react';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
 import { Card, CardContent } from '@/components/ui/shadcn/card';

@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { SaveIndicator } from '../feedback/SaveIndicator';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+import { notify as toast } from '@/lib/toast';
 
 interface AutosaveFormProps<T extends FieldValues> {
   defaultValues: T;

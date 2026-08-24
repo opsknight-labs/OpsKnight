@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 
 import { formatDateForInput } from '@/lib/timezone';
 import {

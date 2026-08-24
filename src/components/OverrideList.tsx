@@ -2,7 +2,7 @@
 
 import { useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import ConfirmDialog from './ConfirmDialog';
 import { formatDateTime } from '@/lib/timezone';
 import { Card } from '@/components/ui/shadcn/card';
