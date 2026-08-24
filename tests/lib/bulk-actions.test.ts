@@ -64,7 +64,11 @@ describe('Bulk Actions', () => {
       vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 2 });
       vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 2 });
       vi.mocked(prisma.incident.findMany)
-        .mockResolvedValueOnce(incidentIds.map(id => ({ id })) as any)
+        .mockResolvedValueOnce(
+          incidentIds.map(id => ({ id })) as unknown as Awaited<
+            ReturnType<typeof prisma.incident.findMany>
+          >
+        )
         .mockResolvedValueOnce([]);
 
       const result = await bulkAcknowledge(incidentIds);
