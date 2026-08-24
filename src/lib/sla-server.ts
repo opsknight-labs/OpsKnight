@@ -3067,6 +3067,83 @@ export async function calculateSLAMetricsFromRollups(
   }
   const manualResolvedCount = Math.max(0, rawManualResolved);
 
+  const dailyTrend = new Map<
+    string,
+    {
+      count: number;
+      mttaSum: bigint;
+      mttaCount: number;
+      mttrSum: bigint;
+      mttrCount: number;
+      ackMet: number;
+      ackBreached: number;
+      resolveMet: number;
+      resolveBreached: number;
+      resolved: number;
+      escalations: number;
+    }
+  >();
+  for (const rollup of rollups) {
+    const key = rollup.date.toISOString().split('T')[0];
+    const current = dailyTrend.get(key) || {
+      count: 0,
+      mttaSum: BigInt(0),
+      mttaCount: 0,
+      mttrSum: BigInt(0),
+      mttrCount: 0,
+      ackMet: 0,
+      ackBreached: 0,
+      resolveMet: 0,
+      resolveBreached: 0,
+      resolved: 0,
+      escalations: 0,
+    };
+    if (priorityFilter && perPriorityAvailable) {
+      for (const row of perPriorityRows.filter(row => row.rollupId === rollup.id)) {
+        current.count += row.incidents;
+        current.mttaSum += row.mttaSum;
+        current.mttaCount += row.mttaCount;
+        current.mttrSum += row.mttrSum;
+        current.mttrCount += row.mttrCount;
+        current.ackMet += row.ackSlaMet;
+        current.ackBreached += row.ackSlaBreached;
+        current.resolveMet += row.resolveSlaMet;
+        current.resolveBreached += row.resolveSlaBreached;
+        current.resolved += row.mttrCount;
+      }
+    } else if (!priorityFilter) {
+      current.count += rollup.totalIncidents;
+      current.mttaSum += rollup.mttaSum;
+      current.mttaCount += rollup.mttaCount;
+      current.mttrSum += rollup.mttrSum;
+      current.mttrCount += rollup.mttrCount;
+      current.ackMet += rollup.ackSlaMet;
+      current.ackBreached += rollup.ackSlaBreached;
+      current.resolveMet += rollup.resolveSlaMet;
+      current.resolveBreached += rollup.resolveSlaBreached;
+      current.resolved += rollup.resolvedIncidents;
+      current.escalations += rollup.escalationCount;
+    }
+    dailyTrend.set(key, current);
+  }
+  const trendSeries = Array.from(dailyTrend.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, day]) => {
+      const ackEvaluated = day.ackMet + day.ackBreached;
+      return {
+        key,
+        label: key,
+        count: day.count,
+        mtta: day.mttaCount > 0 ? Number(day.mttaSum) / day.mttaCount / 60_000 : 0,
+        mttr: day.mttrCount > 0 ? Number(day.mttrSum) / day.mttrCount / 60_000 : 0,
+        ackRate: day.count > 0 ? (day.mttaCount / day.count) * 100 : 0,
+        resolveRate: day.count > 0 ? (day.resolved / day.count) * 100 : 0,
+        ackCompliance: ackEvaluated > 0 ? (day.ackMet / ackEvaluated) * 100 : 0,
+        resolveCount: day.resolved,
+        escalationRate: day.count > 0 ? (day.escalations / day.count) * 100 : 0,
+      };
+    });
+
   logger.info('[SLA] Calculated metrics from rollups', {
     requested: { start: requestedStart.toISOString(), end: requestedEnd.toISOString() },
     effective: { start: effectiveStart.toISOString(), end: effectiveEnd.toISOString() },
@@ -3175,7 +3252,7 @@ export async function calculateSLAMetricsFromRollups(
       resolveRate: 0,
     },
 
-    trendSeries: [],
+    trendSeries,
     statusMix: [],
     urgencyMix: [],
     topServices: [],

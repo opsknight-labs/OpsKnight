@@ -22,6 +22,7 @@ import { createHash } from 'crypto';
 import { runSerializableTransaction } from './db-utils';
 
 const MAX_DEDUP_KEY_LENGTH = 512;
+const MAX_STORED_ALERT_PAYLOAD_BYTES = 64 * 1024;
 
 // Centralized severity → urgency mapping for consistency
 // Critical = HIGH (P1 - immediate response needed)
@@ -69,11 +70,54 @@ function truncateString(str: string, maxLength: number): string {
 }
 
 function truncateDedupKey(key: unknown): string {
-  const str = typeof key === 'string' ? key : String(key || 'default');
+  const str = typeof key === 'string' ? key : String(key || '');
   if (str.length <= MAX_DEDUP_KEY_LENGTH) return str;
   const hash = createHash('sha256').update(str).digest('hex').slice(0, 32);
   const prefixLength = MAX_DEDUP_KEY_LENGTH - 33; // 32 hex chars + 1 underscore
   return `${str.slice(0, prefixLength)}_${hash}`;
+}
+
+function normalizeDedupKeys(
+  key: unknown,
+  integrationId: string,
+  eventData: EventPayload['payload']
+): { primary: string; legacy?: string } {
+  const supplied = typeof key === 'string' ? key.trim() : String(key ?? '').trim();
+  const stableRaw =
+    supplied ||
+    `unkeyed-${createHash('sha256')
+      .update(
+        JSON.stringify({
+          source: eventData.source,
+          summary: eventData.summary,
+          details: eventData.custom_details ?? null,
+        })
+      )
+      .digest('hex')}`;
+
+  return {
+    primary: truncateDedupKey(`${integrationId}:${stableRaw}`),
+    legacy: supplied ? truncateDedupKey(supplied) : undefined,
+  };
+}
+
+function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJsonValue {
+  const serialized = JSON.stringify(eventData);
+  if (Buffer.byteLength(serialized, 'utf8') <= MAX_STORED_ALERT_PAYLOAD_BYTES) {
+    return eventData as Prisma.InputJsonValue;
+  }
+
+  const detailsPreview = eventData.custom_details
+    ? truncateString(JSON.stringify(eventData.custom_details), 8_000)
+    : undefined;
+  return {
+    summary: truncateString(eventData.summary, 2_000),
+    source: truncateString(eventData.source, 500),
+    severity: eventData.severity,
+    custom_details: detailsPreview,
+    _truncated: true,
+    _originalBytes: Buffer.byteLength(serialized, 'utf8'),
+  };
 }
 
 export async function processEvent(
@@ -82,7 +126,11 @@ export async function processEvent(
   integrationId: string
 ) {
   const { event_action, dedup_key: rawDedupKey, payload: eventData } = payload;
-  const dedup_key = truncateDedupKey(rawDedupKey);
+  const dedupKeys = normalizeDedupKeys(rawDedupKey, integrationId, eventData);
+  const dedup_key = dedupKeys.primary;
+  const candidateDedupKeys = dedupKeys.legacy
+    ? [dedupKeys.primary, dedupKeys.legacy]
+    : [dedupKeys.primary];
 
   // Validate summary is not empty (prevents generic incident titles)
   if (!eventData.summary || eventData.summary.trim().length === 0) {
@@ -115,11 +163,21 @@ export async function processEvent(
     // This prevents alert orphaning when resolve/acknowledge has no matching incident
     const existingIncident = await tx.incident.findFirst({
       where: {
-        dedupKey: dedup_key,
+        dedupKey: { in: candidateDedupKeys },
         serviceId,
         status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] },
       },
     });
+
+    // Rolling-upgrade compatibility: move an open incident created with an
+    // older, unscoped key to the integration-scoped key on first contact.
+    if (existingIncident && existingIncident.dedupKey !== dedup_key) {
+      await tx.incident.update({
+        where: { id: existingIncident.id },
+        data: { dedupKey: dedup_key },
+      });
+      existingIncident.dedupKey = dedup_key;
+    }
 
     // 3. For acknowledge, skip alert creation if no matching incident
     if (event_action === 'acknowledge' && !existingIncident) {
@@ -140,7 +198,7 @@ export async function processEvent(
       data: {
         dedupKey: dedup_key,
         status: event_action === 'resolve' ? 'RESOLVED' : 'TRIGGERED',
-        payload: eventData as object,
+        payload: boundedAlertPayload(eventData),
         serviceId,
       },
     });
@@ -189,7 +247,7 @@ export async function processEvent(
       // Check if an out-of-order resolve event arrived recently (< 5 minutes ago) for this dedupKey
       const recentResolveAlert = await tx.alert.findFirst({
         where: {
-          dedupKey: dedup_key,
+          dedupKey: { in: candidateDedupKeys },
           serviceId,
           status: 'RESOLVED',
           incidentId: null,

@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto';
+import { normalizeSeverity } from './normalization';
 
 export type GrafanaAlert = {
   title?: string;
@@ -129,7 +130,7 @@ export function transformGrafanaToEvent(
         payload: {
           summary,
           source: 'Grafana',
-          severity: 'critical' as const,
+          severity: normalizeSeverity(alert.labels?.severity, 'warning'),
           custom_details: {
             status: payload.status,
             labels: alert.labels,

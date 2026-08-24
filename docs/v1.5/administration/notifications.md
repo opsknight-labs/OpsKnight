@@ -94,6 +94,10 @@ Choose either Twilio or AWS SNS in the SMS settings. Only the selected, enabled 
 
 Twilio trial accounts can generally send only to verified recipients. Regional permissions, sender registration, and carrier filtering can reject an otherwise valid request.
 
+OpsKnight requires an explicit international prefix (`+` or `00`) and 7–15 digits. It does not guess a country code from a national number. Store extensions separately; extensions are not valid SMS or WhatsApp destinations.
+
+Twilio SMS and WhatsApp sends register a signed delivery-status callback at `/api/webhooks/notifications/twilio`. Set the public application URL to the externally reachable HTTPS origin so Twilio can call it. Carrier `failed` or `undelivered` receipts update Notification History and make the record eligible for the configured retry workflow.
+
 ### AWS SNS
 
 1. Create a least-privilege IAM principal permitted to publish SMS messages.
@@ -169,7 +173,7 @@ Notification History displays records in pages of 50 with:
 - attempt count, latency/pending duration, and error message;
 - search, channel/status/date filters, totals, and manual refresh.
 
-`SENT` means the configured sender returned success; it does not prove a human read the message. Some downstream providers do not supply a delivered receipt, so `deliveredAt` can remain empty.
+`SENT` means the configured sender accepted the request; it does not prove a human read the message. Twilio SMS/WhatsApp callbacks can advance records to delivered or failed. Providers without a receipt can leave `deliveredAt` empty.
 
 There is no manual Retry button in the history page. Correct the provider or recipient, then use a controlled new notification/incident workflow. Do not repeatedly retrigger a live incident without incident-commander approval.
 

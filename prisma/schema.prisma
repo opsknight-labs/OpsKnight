@@ -76,6 +76,7 @@ enum InAppNotificationType {
   SCHEDULE
   TEAM
   SERVICE
+  ACTION_ITEM
 }
 
 enum IncidentUrgency {
@@ -286,7 +287,7 @@ model Service {
   slackWebhookUrl             String? // Per-service Slack Webhook URL (only notification config at service level)
   slackChannel                String? // Slack channel name (e.g., #incidents)
   slackWorkspaceId            String? // Slack workspace ID for future multi-workspace support
-  slackIntegrationId          String?               @unique // Reference to SlackIntegration (OAuth-based)
+  slackIntegrationId          String? // Reference to workspace-level SlackIntegration (shared by services)
   webhookUrl                  String? // Per-service generic webhook URL
   serviceNotificationChannels NotificationChannel[] @default([]) // Service-level notification channels (isolated from escalation)
   serviceNotifyOnTriggered    Boolean               @default(true)
@@ -310,11 +311,12 @@ model Service {
   incidentTemplates   IncidentTemplate[]
   statusPageServices  StatusPageService[]
   webhookIntegrations WebhookIntegration[]
-  slackIntegration    SlackIntegration?    @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: Cascade)
+  slackIntegration    SlackIntegration?    @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
   jiraServiceMapping  JiraServiceMapping?
 
   @@index([teamId])
   @@index([escalationPolicyId])
+  @@index([slackIntegrationId])
 }
 
 // Enhanced Escalation Policy
@@ -335,7 +337,7 @@ model EscalationPolicy {
 model EscalationRule {
   id       String           @id @default(cuid())
   policyId String
-  policy   EscalationPolicy @relation(fields: [policyId], references: [id])
+  policy   EscalationPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
 
   delayMinutes Int @default(0) // Time to wait before escalating to next step
   stepOrder    Int // 0, 1, 2...
@@ -446,8 +448,8 @@ model SlackIntegration {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  service   Service? @relation("ServiceSlackIntegration")
-  installer User     @relation(fields: [installedBy], references: [id])
+  services  Service[] @relation("ServiceSlackIntegration")
+  installer User      @relation(fields: [installedBy], references: [id])
 
   @@unique([workspaceId]) // One integration per workspace (can be global or service-specific)
   @@index([workspaceId])
@@ -825,18 +827,19 @@ model OnCallShift {
 
 // Notification model for contact attempts
 model Notification {
-  id          String              @id @default(cuid())
-  incidentId  String
-  userId      String
-  channel     NotificationChannel
-  status      NotificationStatus  @default(PENDING)
-  message     String?
-  sentAt      DateTime?
-  deliveredAt DateTime?
-  failedAt    DateTime?
-  errorMsg    String?
-  attempts    Int                 @default(0) // Retry attempt count
-  createdAt   DateTime            @default(now())
+  id                String              @id @default(cuid())
+  incidentId        String
+  userId            String
+  channel           NotificationChannel
+  status            NotificationStatus  @default(PENDING)
+  message           String?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  failedAt          DateTime?
+  errorMsg          String?
+  providerMessageId String?             @unique
+  attempts          Int                 @default(0) // Retry attempt count
+  createdAt         DateTime            @default(now())
 
   incident Incident @relation(fields: [incidentId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
@@ -865,6 +868,7 @@ model InAppNotification {
   @@index([userId, createdAt]) // For chronological queries
   @@index([userId, readAt]) // For unread count queries
   @@index([userId, readAt, createdAt]) // Optomized for "Unread" queries (readAt: null)
+  @@index([createdAt]) // Retention cleanup
 }
 
 // User device tokens for push notifications
@@ -961,6 +965,7 @@ enum JobType {
   NOTIFICATION
   AUTO_UNSNOOZE
   SCHEDULED_TASK
+  STATUS_PAGE_NOTIFICATION
 }
 
 enum JobStatus {
@@ -1428,15 +1433,16 @@ model SLAPerformanceLog {
 
 // Distributed cron scheduler state for production multi-worker environments
 model CronSchedulerState {
-  id             String    @id @default("singleton") // Only one row exists
-  lastRunAt      DateTime?
-  lastSuccessAt  DateTime?
-  lastError      String?
-  nextRunAt      DateTime?
-  lastRollupDate String? // "YYYY-MM-DD" format
-  lockedBy       String? // Worker instance ID holding the lock
-  lockedAt       DateTime? // When lock was acquired
-  updatedAt      DateTime  @updatedAt
+  id                  String    @id @default("singleton") // Only one row exists
+  lastRunAt           DateTime?
+  lastSuccessAt       DateTime?
+  lastError           String?
+  nextRunAt           DateTime?
+  lastRollupDate      String? // "YYYY-MM-DD" format
+  lastRollupRefreshAt DateTime? // Watermark for late incident updates that invalidate old rollups
+  lockedBy            String? // Worker instance ID holding the lock
+  lockedAt            DateTime? // When lock was acquired
+  updatedAt           DateTime  @updatedAt
 
   @@map("cron_scheduler_state")
 }

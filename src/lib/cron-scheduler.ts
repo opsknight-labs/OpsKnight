@@ -31,6 +31,48 @@ let timer: NodeJS.Timeout | null = null;
 let initialized = false;
 let lastJobCleanup = 0;
 
+async function notifyOverdueActionItems(now: Date): Promise<number> {
+  const { default: prisma } = await import('./prisma');
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const [items, admins] = await Promise.all([
+    prisma.actionItem.findMany({
+      where: { status: 'OPEN', dueDate: { lt: now } },
+      select: { id: true, title: true, ownerId: true },
+      orderBy: { dueDate: 'asc' },
+      take: 500,
+    }),
+    prisma.user.findMany({
+      where: { role: 'ADMIN', status: 'ACTIVE' },
+      select: { id: true },
+    }),
+  ]);
+  if (items.length === 0) return 0;
+  const existing = await prisma.inAppNotification.findMany({
+    where: {
+      entityType: 'ACTION_ITEM',
+      entityId: { in: items.map(item => item.id) },
+      createdAt: { gte: since },
+    },
+    select: { userId: true, entityId: true },
+  });
+  const existingKeys = new Set(existing.map(row => `${row.userId}:${row.entityId}`));
+  const rows = items.flatMap(item => {
+    const recipients = new Set([...(item.ownerId ? [item.ownerId] : []), ...admins.map(a => a.id)]);
+    return Array.from(recipients)
+      .filter(userId => !existingKeys.has(`${userId}:${item.id}`))
+      .map(userId => ({
+        userId,
+        type: 'ACTION_ITEM' as const,
+        title: 'Overdue postmortem action item',
+        message: item.title,
+        entityType: 'ACTION_ITEM',
+        entityId: item.id,
+      }));
+  });
+  if (rows.length === 0) return 0;
+  return (await prisma.inAppNotification.createMany({ data: rows })).count;
+}
+
 /**
  * Get or create the singleton scheduler state from database
  * Uses upsert to avoid race conditions on initial creation
@@ -123,6 +165,7 @@ async function updateState(data: {
   lastError?: string | null;
   nextRunAt?: Date | null;
   lastRollupDate?: string | null;
+  lastRollupRefreshAt?: Date | null;
 }): Promise<void> {
   const { default: prisma } = await import('./prisma');
 
@@ -347,7 +390,7 @@ async function runOnce() {
 
     if (isNewDay && isAfter1AM) {
       try {
-        const { generateAllDailyRollups, cleanupOldRollups } = await import('./metric-rollup');
+        const { generateAllDailyRollups } = await import('./metric-rollup');
         const { performDataCleanup } = await import('./data-cleanup');
         const { getRetentionPolicy } = await import('./retention-policy');
         const { default: prisma } = await import('./prisma');
@@ -357,6 +400,7 @@ async function runOnce() {
         await performDataCleanup(false).catch(cleanupErr => {
           logger.warn('[Cron] Daily data cleanup completed with warnings', { error: cleanupErr });
         });
+        const overdueNotifications = await notifyOverdueActionItems(now);
 
         // Window of days that should have a rollup: yesterday back to
         // `metricsRetentionDays` ago (computed in pure UTC).
@@ -410,6 +454,27 @@ async function runOnce() {
         const MAX_BACKFILL_PER_RUN = 30;
         const toGenerate = missingDays.slice(0, MAX_BACKFILL_PER_RUN);
 
+        // Reconcile historical days affected by late acknowledgements,
+        // resolutions, reopens, or edits. Missing-row backfill alone cannot
+        // repair a rollup whose source incident changed after generation.
+        const refreshSince = state.lastRollupRefreshAt || new Date(now.getTime() - 7 * 86400_000);
+        const changedIncidents = await prisma.incident.findMany({
+          where: {
+            updatedAt: { gt: refreshSince },
+            createdAt: { gte: oldestNeeded, lte: yesterday },
+          },
+          select: { createdAt: true },
+          orderBy: { updatedAt: 'asc' },
+          take: 5000,
+        });
+        const dirtyDayKeys = new Set(
+          changedIncidents.map(incident => incident.createdAt.toISOString().split('T')[0])
+        );
+        const dirtyDays = Array.from(dirtyDayKeys).map(key => new Date(`${key}T00:00:00.000Z`));
+        for (const day of dirtyDays) {
+          await generateAllDailyRollups(day);
+        }
+
         if (toGenerate.length > 0) {
           logger.info('[Cron] Backfilling missing daily metric rollups', {
             missingTotal: missingDays.length,
@@ -422,18 +487,19 @@ async function runOnce() {
           }
         }
 
-        // Cleanup old data based on retention policy.
-        const deletedRollups = await cleanupOldRollups();
-
         // Only advance lastRollupDate when the backlog is fully
         // drained. Otherwise the next tick will pick up the rest.
         if (missingDays.length <= MAX_BACKFILL_PER_RUN) {
-          await updateState({ lastRollupDate: todayKey });
+          await updateState({ lastRollupDate: todayKey, lastRollupRefreshAt: now });
+        } else if (changedIncidents.length < 5000) {
+          await updateState({ lastRollupRefreshAt: now });
         }
         logger.info('[Cron] Daily rollup maintenance complete', {
           generated: toGenerate.length,
           stillMissing: Math.max(0, missingDays.length - toGenerate.length),
-          rollupsDeleted: deletedRollups,
+          reconciled: dirtyDays.length,
+          overdueNotifications,
+          rollupsDeleted: 'handled-by-data-cleanup',
         });
       } catch (error) {
         logger.error('[Cron] Failed to generate daily rollups', {

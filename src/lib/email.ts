@@ -14,6 +14,7 @@
  */
 
 import { createRequire } from 'module';
+import { createHash } from 'crypto';
 import prisma from './prisma';
 import { getBaseUrl } from './env-validation';
 import { getUserTimeZone, formatDateTime } from './timezone';
@@ -48,6 +49,46 @@ type EmailConfig = {
   password?: string;
   secure?: boolean;
 };
+
+type SmtpTransporter = {
+  sendMail(options: Record<string, unknown>): Promise<{ messageId?: string }>;
+  close?: () => void;
+};
+
+let cachedSmtpTransport: { key: string; transporter: SmtpTransporter } | null = null;
+
+function getSmtpTransport(emailConfig: EmailConfig): SmtpTransporter {
+  const key = createHash('sha256')
+    .update(
+      JSON.stringify({
+        host: emailConfig.host,
+        port: emailConfig.port,
+        user: emailConfig.user,
+        password: emailConfig.password,
+        secure: emailConfig.secure,
+      })
+    )
+    .digest('hex');
+  if (cachedSmtpTransport?.key === key) return cachedSmtpTransport.transporter;
+
+  cachedSmtpTransport?.transporter.close?.();
+  const require = createRequire(import.meta.url);
+  const nodemailer = require('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host: emailConfig.host,
+    port: parseInt(String(emailConfig.port), 10),
+    secure: emailConfig.secure || false,
+    auth: { user: emailConfig.user, pass: emailConfig.password },
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+  }) as SmtpTransporter;
+  cachedSmtpTransport = { key, transporter };
+  return transporter;
+}
 
 /**
  * Send email notification
@@ -240,10 +281,6 @@ export async function sendEmail(
 
     if (emailConfig.provider === 'smtp') {
       try {
-        // Use standard require via createRequire
-        const require = createRequire(import.meta.url);
-        const nodemailer = require('nodemailer');
-
         // Validate required SMTP config
         if (!emailConfig.host || !emailConfig.port || !emailConfig.user || !emailConfig.password) {
           return {
@@ -253,16 +290,7 @@ export async function sendEmail(
           };
         }
 
-        // Create transporter
-        const transporter = nodemailer.createTransport({
-          host: emailConfig.host,
-          port: parseInt(emailConfig.port.toString()),
-          secure: emailConfig.secure || false, // true for 465, false for other ports
-          auth: {
-            user: emailConfig.user,
-            pass: emailConfig.password,
-          },
-        });
+        const transporter = getSmtpTransport(emailConfig);
 
         // Send email
         const info = await transporter.sendMail({

@@ -257,9 +257,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             const rememberMe = credentials?.rememberMe === 'true' || isMobileClient;
 
             // Get IP from request headers (best effort)
-            const forwardedFor = req?.headers?.['x-forwarded-for'];
-            const ip =
-              typeof forwardedFor === 'string' ? forwardedFor.split(',')[0].trim() : '0.0.0.0';
+            const { getClientIp } = await import('@/lib/client-ip');
+            const ip = getClientIp(req?.headers);
             const userAgent = userAgentHeader || 'Unknown';
 
             logger.warn('[Auth-Debug] Authorize started', {
@@ -287,13 +286,21 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               20,
               15 * 60 * 1000
             );
-            if (!distributedAttempt.allowed) {
+            const accountAttempt = await checkRateLimit(
+              `auth:credentials:account:${email}`,
+              10,
+              15 * 60 * 1000
+            );
+            if (!distributedAttempt.allowed || !accountAttempt.allowed) {
               await logLoginBlocked(
                 email,
                 ip,
                 userAgent,
                 'RATE_LIMITED',
-                Math.max(0, distributedAttempt.resetAt - Date.now())
+                Math.max(
+                  0,
+                  Math.max(distributedAttempt.resetAt, accountAttempt.resetAt) - Date.now()
+                )
               );
               return null;
             }

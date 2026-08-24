@@ -19,6 +19,8 @@ export interface CleanupResult {
   logs: number;
   metrics: number;
   events: number;
+  inAppNotifications: number;
+  slaPerformanceLogs: number;
   executionTimeMs: number;
   dryRun: boolean;
 }
@@ -55,6 +57,8 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
   let logCount = 0;
   let metricsCount = 0;
   let eventCount = 0;
+  let inAppNotificationCount = 0;
+  let slaPerformanceLogCount = 0;
 
   try {
     // 1. Count what would be deleted
@@ -91,6 +95,8 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
         logs: logsToDelete,
         metrics: 0,
         events: 0,
+        inAppNotifications: 0,
+        slaPerformanceLogs: 0,
         executionTimeMs: Date.now() - startTime,
         dryRun: true,
       };
@@ -98,78 +104,109 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
 
     // 2. Delete in order (events/notes first due to foreign keys)
 
-    // Get incident IDs to delete
-    const incidentIds = await prisma.incident.findMany({
-      where: {
-        createdAt: { lt: incidentCutoff },
-        status: 'RESOLVED',
-      },
-      select: { id: true },
-    });
-    const idsToDelete = incidentIds.map(i => i.id);
-
-    if (idsToDelete.length > 0) {
-      const BATCH_SIZE = 1000;
-      for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
-        const batch = idsToDelete.slice(i, i + BATCH_SIZE);
-
+    const BATCH_SIZE = 500;
+    while (true) {
+      const incidentIds = await prisma.incident.findMany({
+        where: { createdAt: { lt: incidentCutoff }, status: 'RESOLVED' },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: BATCH_SIZE,
+      });
+      const batch = incidentIds.map(i => i.id);
+      if (batch.length === 0) break;
+      await prisma.$transaction(async tx => {
         // Delete incident events
-        const eventsDeleted = await prisma.incidentEvent.deleteMany({
+        const eventsDeleted = await tx.incidentEvent.deleteMany({
           where: { incidentId: { in: batch } },
         });
         eventCount += eventsDeleted.count;
 
         // Delete incident notes
-        await prisma.incidentNote.deleteMany({
+        await tx.incidentNote.deleteMany({
           where: { incidentId: { in: batch } },
         });
 
         // Delete custom field values
-        await prisma.customFieldValue.deleteMany({
+        await tx.customFieldValue.deleteMany({
           where: { incidentId: { in: batch } },
         });
 
         // Delete related notifications
-        if (prisma.notification?.deleteMany) {
-          await prisma.notification.deleteMany({
+        if (tx.notification?.deleteMany) {
+          await tx.notification.deleteMany({
             where: { incidentId: { in: batch } },
           });
         }
 
         // Delete related alerts (set incidentId to null instead of deleting)
-        await prisma.alert.updateMany({
+        await tx.alert.updateMany({
           where: { incidentId: { in: batch } },
           data: { incidentId: null },
         });
 
         // Delete incidents
-        const incidentsDeleted = await prisma.incident.deleteMany({
+        const incidentsDeleted = await tx.incident.deleteMany({
           where: { id: { in: batch } },
         });
         incidentCount += incidentsDeleted.count;
-      }
+      });
     }
 
-    // Delete old alerts (those not linked to incidents)
-    const alertsDeleted = await prisma.alert.deleteMany({
-      where: {
-        createdAt: { lt: alertCutoff },
-        incidentId: null,
-      },
-    });
-    alertCount = alertsDeleted.count;
+    const deleteInBatches = async (
+      findIds: () => Promise<Array<{ id: string }>>,
+      deleteIds: (ids: string[]) => Promise<{ count: number }>
+    ) => {
+      let deleted = 0;
+      while (true) {
+        const rows = await findIds();
+        if (rows.length === 0) return deleted;
+        deleted += (await deleteIds(rows.map(row => row.id))).count;
+      }
+    };
 
-    // Delete old logs
-    const logsDeleted = await prisma.logEntry.deleteMany({
-      where: { timestamp: { lt: logCutoff } },
-    });
-    logCount = logsDeleted.count;
+    alertCount = await deleteInBatches(
+      () =>
+        prisma.alert.findMany({
+          where: { createdAt: { lt: alertCutoff }, incidentId: null },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+          take: BATCH_SIZE,
+        }),
+      ids => prisma.alert.deleteMany({ where: { id: { in: ids } } })
+    );
+    logCount = await deleteInBatches(
+      () =>
+        prisma.logEntry.findMany({
+          where: { timestamp: { lt: logCutoff } },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+          take: BATCH_SIZE,
+        }),
+      ids => prisma.logEntry.deleteMany({ where: { id: { in: ids } } })
+    );
+    inAppNotificationCount = await deleteInBatches(
+      () =>
+        prisma.inAppNotification.findMany({
+          where: { createdAt: { lt: logCutoff } },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+          take: BATCH_SIZE,
+        }),
+      ids => prisma.inAppNotification.deleteMany({ where: { id: { in: ids } } })
+    );
+    slaPerformanceLogCount = await deleteInBatches(
+      () =>
+        prisma.sLAPerformanceLog.findMany({
+          where: { timestamp: { lt: logCutoff } },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+          take: BATCH_SIZE,
+        }),
+      ids => prisma.sLAPerformanceLog.deleteMany({ where: { id: { in: ids } } })
+    );
 
     // Cleanup old metric rollups (telemetry)
     metricsCount = await cleanupOldRollups();
-
-    // Cleanup old SLA performance rollups
-    const slaRollupsDeleted = await cleanupOldSLARollups();
 
     const executionTimeMs = Date.now() - startTime;
 
@@ -179,7 +216,8 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
       alerts: alertCount,
       logs: logCount,
       metrics: metricsCount,
-      slaRollups: slaRollupsDeleted,
+      inAppNotifications: inAppNotificationCount,
+      slaPerformanceLogs: slaPerformanceLogCount,
       executionTimeMs,
     });
 
@@ -189,47 +227,14 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
       logs: logCount,
       metrics: metricsCount,
       events: eventCount,
+      inAppNotifications: inAppNotificationCount,
+      slaPerformanceLogs: slaPerformanceLogCount,
       executionTimeMs,
       dryRun: false,
     };
   } catch (error) {
     logger.error('[DataCleanup] Cleanup failed', { error });
     throw error;
-  }
-}
-
-/**
- * Cleanup old SLA metric rollups based on retention policy
- */
-export async function cleanupOldSLARollups(): Promise<number> {
-  const { default: prisma } = await import('./prisma');
-  const { acquireAdvisoryLock, LOCK_KEYS } = await import('./db-locks');
-  const policy = await getRetentionPolicy();
-
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - policy.metricsRetentionDays);
-
-  try {
-    // Acquire the rollup-write lock so a concurrent rollup generator
-    // can't have a partial upsert killed mid-flight.
-    const deletedCount = await prisma.$transaction(async tx => {
-      await acquireAdvisoryLock(tx, LOCK_KEYS.ROLLUP_WRITE);
-      const result = await tx.incidentMetricRollup.deleteMany({
-        where: { date: { lt: cutoffDate } },
-      });
-      return result.count;
-    });
-
-    logger.info('[DataCleanup] Old SLA rollups deleted', {
-      count: deletedCount,
-      cutoffDate: cutoffDate.toISOString(),
-      retentionDays: policy.metricsRetentionDays,
-    });
-
-    return deletedCount;
-  } catch (error) {
-    logger.error('[DataCleanup] Failed to cleanup old SLA rollups', { error });
-    return 0;
   }
 }
 

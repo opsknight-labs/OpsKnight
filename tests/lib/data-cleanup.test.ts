@@ -10,11 +10,13 @@ const mockPrisma = {
   },
   alert: {
     count: vi.fn(),
+    findMany: vi.fn(),
     deleteMany: vi.fn(),
     updateMany: vi.fn(),
   },
   logEntry: {
     count: vi.fn(),
+    findMany: vi.fn(),
     deleteMany: vi.fn(),
   },
   incidentEvent: {
@@ -26,9 +28,18 @@ const mockPrisma = {
   customFieldValue: {
     deleteMany: vi.fn(),
   },
+  inAppNotification: {
+    findMany: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  sLAPerformanceLog: {
+    findMany: vi.fn(),
+    deleteMany: vi.fn(),
+  },
   incidentMetricRollup: {
     deleteMany: vi.fn().mockResolvedValue({ count: 5 }),
   },
+  $transaction: vi.fn(async (callback: (tx: any) => unknown) => callback(mockPrisma)),
 };
 
 vi.mock('@/lib/prisma', () => ({
@@ -74,21 +85,27 @@ describe('Data Cleanup Service', () => {
 
   it('should delete data when dryRun is false', async () => {
     // Setup for execution flow
-    mockPrisma.incident.findMany.mockResolvedValue([{ id: 'inc-1' }, { id: 'inc-2' }]);
+    mockPrisma.incident.findMany
+      .mockResolvedValueOnce([{ id: 'inc-1' }, { id: 'inc-2' }])
+      .mockResolvedValueOnce([]);
     mockPrisma.incidentEvent.deleteMany.mockResolvedValue({ count: 10 });
     mockPrisma.incidentNote.deleteMany.mockResolvedValue({ count: 2 });
     mockPrisma.customFieldValue.deleteMany.mockResolvedValue({ count: 0 });
     mockPrisma.alert.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma.incident.deleteMany.mockResolvedValue({ count: 2 });
-    mockPrisma.alert.deleteMany.mockResolvedValue({ count: 8 }); // Alerts not linked to incidents
-    mockPrisma.logEntry.deleteMany.mockResolvedValue({ count: 20 });
+    mockPrisma.alert.findMany.mockResolvedValueOnce([{ id: 'alert-1' }]).mockResolvedValueOnce([]);
+    mockPrisma.alert.deleteMany.mockResolvedValue({ count: 1 });
+    mockPrisma.logEntry.findMany.mockResolvedValueOnce([{ id: 'log-1' }]).mockResolvedValueOnce([]);
+    mockPrisma.logEntry.deleteMany.mockResolvedValue({ count: 1 });
+    mockPrisma.inAppNotification.findMany.mockResolvedValue([]);
+    mockPrisma.sLAPerformanceLog.findMany.mockResolvedValue([]);
 
     const result = await performDataCleanup(false);
 
     expect(result.dryRun).toBe(false);
     expect(result.incidents).toBe(2);
     expect(result.events).toBe(10);
-    expect(result.logs).toBe(20);
+    expect(result.logs).toBe(1);
 
     // Verify delete WAS called
     expect(mockPrisma.incident.deleteMany).toHaveBeenCalled();

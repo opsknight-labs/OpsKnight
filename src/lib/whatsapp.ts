@@ -24,8 +24,9 @@ const normalizeWhatsAppNumber = (value: string) => formatToE164(value.replace(/^
 export async function sendIncidentWhatsApp(
   userId: string,
   incidentId: string,
-  eventType: 'triggered' | 'acknowledged' | 'resolved'
-): Promise<{ success: boolean; error?: string }> {
+  eventType: 'triggered' | 'acknowledged' | 'resolved',
+  notificationId?: string
+): Promise<{ success: boolean; error?: string; messageSid?: string }> {
   try {
     // Get user and incident
     const [user, incident] = await Promise.all([
@@ -55,6 +56,9 @@ export async function sendIncidentWhatsApp(
 
     // Format phone number for WhatsApp (must be E.164 format)
     const phoneNumber = formatToE164(user.phoneNumber);
+    if (!phoneNumber) {
+      return { success: false, error: 'Phone number must include an international country code' };
+    }
     const whatsappNumber = `whatsapp:${phoneNumber}`;
     // Get WhatsApp from number from database config
     const whatsappFromNumber = whatsappConfig.whatsappNumber;
@@ -132,6 +136,11 @@ export async function sendIncidentWhatsApp(
           to: whatsappNumber,
           contentSid: whatsappConfig.whatsappContentSid,
           contentVariables: JSON.stringify(variables),
+          ...(notificationId
+            ? {
+                statusCallback: `${getBaseUrl()}/api/webhooks/notifications/twilio?notificationId=${encodeURIComponent(notificationId)}`,
+              }
+            : {}),
         });
 
         logger.info('WhatsApp notification sent via Template', {
@@ -147,6 +156,11 @@ export async function sendIncidentWhatsApp(
           from: fromNumber,
           to: whatsappNumber,
           body,
+          ...(notificationId
+            ? {
+                statusCallback: `${getBaseUrl()}/api/webhooks/notifications/twilio?notificationId=${encodeURIComponent(notificationId)}`,
+              }
+            : {}),
         });
 
         logger.info('WhatsApp notification sent via Session Text', {
@@ -156,7 +170,7 @@ export async function sendIncidentWhatsApp(
         });
       }
 
-      return { success: true };
+      return { success: true, messageSid: messageResult.sid };
     } catch (twilioError: unknown) {
       const err = twilioError as { message?: string; code?: string | number };
       const isWindowExpired = err.code === 63016 || err.code === '63016';
@@ -201,6 +215,9 @@ export async function sendWhatsApp(
 
     // Format phone numbers
     const toNumber = formatToE164(to);
+    if (!toNumber) {
+      return { success: false, error: 'Phone number must include an international country code' };
+    }
     const whatsappTo = `whatsapp:${toNumber}`;
     // Get WhatsApp from number from database config
     const whatsappFromNumber = whatsappConfig.whatsappNumber;

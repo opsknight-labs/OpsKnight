@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLogBuffer } from '@/lib/logger';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { assertAdmin } from '@/lib/rbac';
 
 function toNumber(value: string | null, fallback: number) {
   if (!value) return fallback;
@@ -10,9 +9,9 @@ function toNumber(value: string | null, fallback: number) {
 }
 
 export async function GET(request: NextRequest) {
-  // Require ADMIN authentication to view logs
-  const session = await getServerSession(await getAuthOptions());
-  if (!session?.user || (session.user as { role?: string }).role !== 'ADMIN') {
+  try {
+    await assertAdmin();
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { DirectUserAvatar } from '@/components/UserAvatar';
@@ -27,34 +27,38 @@ function NoteCard({
 }: NoteCardProps) {
   const { userTimeZone } = useTimezone();
 
-  // Memoize markdown formatting to avoid recalculation
+  // Render links as React elements so React performs attribute escaping.
+  // Never pass note content through dangerouslySetInnerHTML.
   const formattedContent = useMemo(() => {
-    const formatMarkdown = (input: string) => {
-      let output = input
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-
-      output = output.replace(/`([^`]+)`/g, '<code>$1</code>');
-      output = output.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-      output = output.replace(/\*(?!\*)([^*]+)\*(?!\*)/g, '<em>$1</em>');
-      output = output.replace(
-        /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
-      );
-      output = output.replace(/\n/g, '<br />');
-
-      return { __html: output };
-    };
-
     const displayContent =
       isResolution && content.startsWith('Resolution:')
         ? content.replace(/^Resolution:\s*/i, '')
         : content;
-
-    return formatMarkdown(displayContent);
+    const nodes: ReactNode[] = [];
+    const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    let cursor = 0;
+    for (const match of displayContent.matchAll(linkPattern)) {
+      const index = match.index ?? 0;
+      nodes.push(displayContent.slice(cursor, index));
+      let safeUrl: string | null = null;
+      try {
+        safeUrl = new URL(match[2]).href;
+      } catch {
+        // Invalid markdown URLs stay plain text.
+      }
+      if (safeUrl) {
+        nodes.push(
+          <a key={`${index}-${safeUrl}`} href={safeUrl} target="_blank" rel="noopener noreferrer">
+            {match[1]}
+          </a>
+        );
+      } else {
+        nodes.push(match[0]);
+      }
+      cursor = index + match[0].length;
+    }
+    nodes.push(displayContent.slice(cursor));
+    return nodes;
   }, [content, isResolution]);
 
   return (
@@ -110,9 +114,11 @@ function NoteCard({
             border: isResolution ? '1px solid #fed7aa' : '1px solid var(--border)',
             lineHeight: 1.6,
             color: 'var(--text-primary)',
+            whiteSpace: 'pre-wrap',
           }}
-          dangerouslySetInnerHTML={formattedContent}
-        />
+        >
+          {formattedContent}
+        </div>
       </div>
     </div>
   );

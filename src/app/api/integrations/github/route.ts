@@ -8,6 +8,11 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import { validatePayload, GitHubEventSchema } from '@/lib/integrations/schemas';
+import {
+  IntegrationBodyTooLargeError,
+  readIntegrationBody,
+  rejectWebhookReplay,
+} from '@/lib/integrations/request-security';
 
 const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
 
@@ -34,7 +39,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Get raw body for signature verification
-      const rawBody = await req.text();
+      const rawBody = await readIntegrationBody(req);
 
       // Verify integration exists and get service
       const integration = await prisma.integration.findUnique({
@@ -61,6 +66,16 @@ export async function POST(req: NextRequest) {
         if (!verifyGitHubSignature(rawBody, signature, integration.signatureSecret)) {
           logger.warn('api.integration.github_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
+        }
+        if (
+          await rejectWebhookReplay(
+            integration.id,
+            rawBody,
+            signature,
+            req.headers.get('x-github-delivery')
+          )
+        ) {
+          return jsonError('Duplicate webhook delivery', 409);
         }
       }
 
@@ -95,6 +110,9 @@ export async function POST(req: NextRequest) {
 
       return jsonOk({ status: 'success', result }, 202);
     } catch (error: unknown) {
+      if (error instanceof IntegrationBodyTooLargeError) {
+        return jsonError(error.message, 413);
+      }
       logger.error('api.integration.github_error', {
         error: error instanceof Error ? error.message : String(error),
       });

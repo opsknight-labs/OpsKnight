@@ -153,7 +153,7 @@ describe('Notification System Tests', () => {
           start: new Date('2024-01-01'),
           rotationLengthHours: 24,
           priority: layer1Priority,
-          users: [{ userId: user1Id, position: 0, user: { name: 'User 1' } }],
+          users: [{ userId: user1Id, position: 0, user: { name: 'User 1', status: 'ACTIVE' } }],
         },
         {
           id: 'layer-2',
@@ -161,7 +161,7 @@ describe('Notification System Tests', () => {
           start: new Date('2024-01-01'),
           rotationLengthHours: 24,
           priority: layer2Priority,
-          users: [{ userId: user2Id, position: 0, user: { name: 'User 2' } }],
+          users: [{ userId: user2Id, position: 0, user: { name: 'User 2', status: 'ACTIVE' } }],
         },
       ],
       overrides: [],

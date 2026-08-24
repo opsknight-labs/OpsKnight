@@ -22,10 +22,10 @@ const mockPrisma = vi.hoisted(() => ({
     findFirst: vi.fn(),
   },
 }));
+const mockAssertAdmin = vi.hoisted(() => vi.fn());
 
-// Mock next-auth
-vi.mock('next-auth', () => ({
-  getServerSession: vi.fn(),
+vi.mock('@/lib/rbac', () => ({
+  assertAdmin: mockAssertAdmin,
 }));
 
 // Mock Prisma
@@ -40,40 +40,36 @@ vi.mock('@/lib/app-url', () => ({
 }));
 
 import { POST } from '@/app/api/admin/generate-reset-link/route';
-import { getServerSession } from 'next-auth';
 
 describe('API: Admin Generate Reset Link', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssertAdmin.mockResolvedValue({
+      id: 'admin-id',
+      email: 'admin@example.com',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+    });
   });
 
   it('generates a reset link for a valid user when called by an admin', async () => {
-    // 1. Mock Session as Admin
-    vi.mocked(getServerSession).mockResolvedValue({
-      user: {
-        id: 'admin-id',
-        email: 'admin@example.com',
-        role: 'ADMIN',
-      },
-    });
-
-    // 2. Mock User Found
+    // 1. Mock User Found
     mockPrisma.user.findUnique.mockResolvedValue({
       id: 'target-id',
       email: 'target@example.com',
     });
 
-    // 3. Create Request
+    // 2. Create Request
     const req = new NextRequest('http://localhost:3000/api/admin/generate-reset-link', {
       method: 'POST',
       body: JSON.stringify({ userId: 'target-id' }),
     });
 
-    // 4. Call API
+    // 3. Call API
     const res = await POST(req);
     const data = await res.json();
 
-    // 5. Assertions
+    // 4. Assertions
     expect(res.status).toBe(200);
     expect(data.link).toBeDefined();
     expect(data.link).toContain('/reset-password?token=');
@@ -87,13 +83,7 @@ describe('API: Admin Generate Reset Link', () => {
   });
 
   it('rejects non-admin users', async () => {
-    vi.mocked(getServerSession).mockResolvedValue({
-      user: {
-        id: 'user-id',
-        email: 'user@example.com',
-        role: 'USER',
-      },
-    });
+    mockAssertAdmin.mockRejectedValue(new Error('Unauthorized. Admin access required.'));
 
     const req = new NextRequest('http://localhost:3000/api/admin/generate-reset-link', {
       method: 'POST',

@@ -43,6 +43,14 @@ vi.mock('@/lib/retry', () => ({
 describe('ChatOps Slash Command Dispatcher', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(retryModule.retryFetch).mockResolvedValue({
+      json: async () => ({ ok: true, user: { profile: { email: 'alice@test.com' } } }),
+    } as any);
+    vi.mocked(prisma.user.findFirst).mockResolvedValue({
+      id: 'usr-alice',
+      name: 'Alice',
+      email: 'alice@test.com',
+    } as any);
   });
 
   const basePayload: SlashCommandPayload = {
@@ -118,7 +126,10 @@ describe('ChatOps Slash Command Dispatcher', () => {
 
     vi.mocked(prisma.incidentNote.create).mockResolvedValue({} as any);
 
-    const result = await handleSlashCommand({ ...basePayload, text: 'resolve Restarted service pods' });
+    const result = await handleSlashCommand({
+      ...basePayload,
+      text: 'resolve Restarted service pods',
+    });
     expect(result.response_type).toBe('in_channel');
     expect(result.text).toContain('Incident Resolved');
     expect(result.text).toContain('Restarted service pods');
@@ -151,7 +162,10 @@ describe('ChatOps Slash Command Dispatcher', () => {
     vi.mocked(prisma.incidentNote.create).mockResolvedValue({} as any);
     vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
 
-    const result = await handleSlashCommand({ ...basePayload, text: 'note Checking DB connection pool' });
+    const result = await handleSlashCommand({
+      ...basePayload,
+      text: 'note Checking DB connection pool',
+    });
     expect(result.response_type).toBe('in_channel');
     expect(result.text).toContain('Note added');
     expect(prisma.incidentNote.create).toHaveBeenCalledWith(

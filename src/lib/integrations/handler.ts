@@ -20,6 +20,11 @@ import { IntegrationErrors, isIntegrationError } from './errors';
 import { validatePayload, IntegrationSchemas } from './schemas';
 import { extractIntegrationKey, isIntegrationAuthorized } from './auth';
 import type { z } from 'zod';
+import {
+  IntegrationBodyTooLargeError,
+  readIntegrationBody,
+  rejectWebhookReplay,
+} from './request-security';
 
 // Environment configuration
 const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
@@ -137,7 +142,7 @@ export function createIntegrationHandler<T>(
       integrationType = integration.type;
 
       // 4. Get raw body for signature verification
-      const rawPayload = await req.text();
+      const rawPayload = await readIntegrationBody(req);
 
       // 6. Collect headers for signature verification
       const headers: Record<string, string | null> = {
@@ -176,6 +181,18 @@ export function createIntegrationHandler<T>(
           } else {
             throw IntegrationErrors.invalidSignature();
           }
+        }
+
+        const signature = Object.values(headers).find(Boolean);
+        if (
+          await rejectWebhookReplay(
+            integration.id,
+            rawPayload,
+            signature,
+            req.headers.get('x-github-delivery') || req.headers.get('x-request-id')
+          )
+        ) {
+          throw IntegrationErrors.invalidSignature({ reason: 'Duplicate webhook delivery' });
         }
       }
 
@@ -222,6 +239,9 @@ export function createIntegrationHandler<T>(
 
       return jsonOk({ status: 'success', result }, 202);
     } catch (error) {
+      if (error instanceof IntegrationBodyTooLargeError) {
+        return jsonError(error.message, 413);
+      }
       const latency = performance.now() - startTime;
 
       // Handle known integration errors
@@ -275,6 +295,11 @@ export async function withIntegrationMiddleware(
   const startTime = performance.now();
   const { searchParams } = new URL(req.url);
   const integrationId = searchParams.get('integrationId');
+
+  const declaredLength = Number(req.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > 1024 * 1024) {
+    return jsonError('Webhook body exceeds 1048576 bytes', 413);
+  }
 
   // 1. Require integrationId
   if (!integrationId) {
@@ -354,6 +379,9 @@ export async function withIntegrationMiddleware(
     recordWebhookReceived(integrationType, integrationId, success, performance.now() - startTime);
     return response;
   } catch (error) {
+    if (error instanceof IntegrationBodyTooLargeError) {
+      return jsonError(error.message, 413);
+    }
     logger.error('integration.handler_error', {
       integrationId,
       integrationType,

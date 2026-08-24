@@ -35,6 +35,7 @@ describe('incident flow safeguards', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.customField = { findMany: vi.fn().mockResolvedValue([]) };
     prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
     prismaMock.incident.findMany.mockReset().mockResolvedValue([]);
     prismaMock.incidentEvent.createMany = vi.fn().mockResolvedValue({ count: 0 });

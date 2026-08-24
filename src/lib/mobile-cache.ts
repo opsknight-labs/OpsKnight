@@ -15,9 +15,17 @@ const textEncoder = typeof window !== 'undefined' ? new TextEncoder() : null;
 const textDecoder = typeof window !== 'undefined' ? new TextDecoder() : null;
 
 const CACHE_KEY_PASSPHRASE = 'mobile-cache-key-v1';
+const CACHE_PREFIX = 'opsknight:mobile-cache:';
 
-const base64Encode = (bytes: ArrayBuffer): string =>
-  typeof window === 'undefined' ? '' : window.btoa(String.fromCharCode(...new Uint8Array(bytes)));
+const base64Encode = (bytes: ArrayBuffer): string => {
+  if (typeof window === 'undefined') return '';
+  const view = new Uint8Array(bytes);
+  const chunks: string[] = [];
+  for (let offset = 0; offset < view.length; offset += 0x8000) {
+    chunks.push(String.fromCharCode(...view.subarray(offset, offset + 0x8000)));
+  }
+  return window.btoa(chunks.join(''));
+};
 
 const base64Decode = (value: string): ArrayBuffer => {
   if (typeof window === 'undefined') return new ArrayBuffer(0);
@@ -97,7 +105,7 @@ const decryptEnvelope = async <T>(value: string | null): Promise<CacheEnvelope<T
 
 export const readCache = async <T>(key: string, maxAgeMs?: number): Promise<T | null> => {
   if (typeof window === 'undefined') return null;
-  const raw = window.localStorage.getItem(key);
+  const raw = window.localStorage.getItem(`${CACHE_PREFIX}${key}`);
   const envelope = await decryptEnvelope<T>(raw);
   if (!envelope) return null;
   if (maxAgeMs) {
@@ -120,11 +128,11 @@ export const writeCache = async <T>(key: string, data: T): Promise<void> => {
     if (!encrypted) {
       return;
     }
-    window.localStorage.setItem(key, JSON.stringify(encrypted));
+    window.localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(encrypted));
   } catch (error: any) {
     if (error?.name === 'QuotaExceededError') {
       try {
-        const keys = Object.keys(window.localStorage);
+        const keys = Object.keys(window.localStorage).filter(k => k.startsWith(CACHE_PREFIX));
         const entries: { key: string; savedAt: number }[] = [];
         for (const k of keys) {
           try {
@@ -145,7 +153,7 @@ export const writeCache = async <T>(key: string, data: T): Promise<void> => {
         // Retry the write once
         const encrypted = await encryptEnvelope(payload);
         if (encrypted) {
-          window.localStorage.setItem(key, JSON.stringify(encrypted));
+          window.localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(encrypted));
         }
       } catch (retryError) {
         console.warn('Mobile cache is full and eviction failed');

@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { sendSMS, sendIncidentSMS } from '@/lib/sms';
+import { formatToE164, sendSMS, sendIncidentSMS } from '@/lib/sms';
 
 // Mock notification providers
 vi.mock('@/lib/notification-providers', () => ({
@@ -167,7 +167,7 @@ describe('sendSMS', () => {
   });
 
   describe('Phone Number Formatting', () => {
-    it('formats US numbers without country code', async () => {
+    it('rejects ambiguous numbers without a country code', async () => {
       vi.mocked(getSMSConfig).mockResolvedValueOnce({
         enabled: true,
         provider: 'twilio',
@@ -184,6 +184,15 @@ describe('sendSMS', () => {
 
       // The function should have attempted to format the number
       expect(result.success).toBe(false);
+      expect(result.error).toBe('Invalid phone number format');
+    });
+
+    it('preserves international country codes and strips extensions safely', () => {
+      expect(formatToE164('+44 7123 456789')).toBe('+447123456789');
+      expect(formatToE164('00 91 98765 43210')).toBe('+919876543210');
+      expect(formatToE164('+1 (555) 019-9000 ext 42')).toBe('+15550199000');
+      expect(formatToE164('9876543210')).toBe('');
+      expect(formatToE164('07123456789')).toBe('');
     });
 
     it('rejects numbers that are too short', async () => {

@@ -38,9 +38,6 @@ export default function MobileNetworkBanner() {
     const handleOnline = () => {
       updateOnline();
       void flushQueuedRequests();
-      if (navigator.serviceWorker?.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'SYNC_OFFLINE_QUEUE' });
-      }
     };
 
     window.addEventListener('online', handleOnline);

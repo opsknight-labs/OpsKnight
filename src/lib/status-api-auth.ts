@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashTokenV1, hashTokenV2 } from '@/lib/api-keys';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 
 type StatusApiAuthResult = {
   allowed: boolean;
@@ -30,9 +31,7 @@ function getRateLimitKey(req: NextRequest, tokenHash?: string | null) {
   if (tokenHash) {
     return `status-api:token:${tokenHash}`;
   }
-  const forwardedFor = req.headers.get('x-forwarded-for');
-  const ip = forwardedFor?.split(',')[0]?.trim();
-  return `status-api:ip:${ip || 'unknown'}`;
+  return `status-api:ip:${getClientIp(req.headers)}`;
 }
 
 export async function authorizeStatusApiRequest(

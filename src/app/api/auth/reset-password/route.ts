@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import bcrypt from 'bcryptjs';
 import { createHash } from 'crypto';
 import { revokeUserSessions } from '@/lib/auth';
+import { getClientIp } from '@/lib/client-ip';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,8 +12,7 @@ export async function POST(req: NextRequest) {
     const { token, password } = body;
 
     // Get IP for rate limiting
-    const rawIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-    const ip = rawIp.split(',')[0].trim();
+    const ip = getClientIp(req.headers);
 
     // Call shared logic which handles validation, rate limiting, hashing, and logging
     const { completePasswordReset } = await import('@/lib/password-reset');

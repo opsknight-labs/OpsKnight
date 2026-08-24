@@ -156,6 +156,7 @@ OpenTelemetry variables are not consumed by the v1.4 application code and are th
 | Variable                                                       | Purpose                                                                                                           |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `AUTH_TRUST_HOST`                                              | Explicitly enables Auth.js host trust; setting `NEXTAUTH_URL` also enables it.                                    |
+| `TRUSTED_PROXY_HOPS`                                           | Number of trusted proxy entries read from the right side of `X-Forwarded-For`; defaults to `1`.                   |
 | `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`                           | Requires a verified-email claim from OIDC when `true`.                                                            |
 | `OIDC_CONFIG_CACHE_TTL_MS`, `OIDC_CONFIG_RECORD_CACHE_TTL_MS`  | Advanced OIDC cache TTLs.                                                                                         |
 | `AUTH_OPTIONS_CACHE_TTL_MS`, `JWT_USER_REFRESH_TTL_MS`         | Advanced authentication/session cache timing.                                                                     |

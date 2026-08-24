@@ -72,7 +72,7 @@ export async function getSlackBotToken(serviceId?: string): Promise<string | nul
   const globalIntegration = await prisma.slackIntegration.findFirst({
     where: {
       enabled: true,
-      service: null, // Not linked to any service
+      services: { none: {} }, // Not linked to any service
     },
   });
 

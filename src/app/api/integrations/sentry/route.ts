@@ -8,6 +8,11 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import { validatePayload, SentryEventSchema } from '@/lib/integrations/schemas';
+import {
+  IntegrationBodyTooLargeError,
+  readIntegrationBody,
+  rejectWebhookReplay,
+} from '@/lib/integrations/request-security';
 
 const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
 
@@ -27,7 +32,7 @@ export async function POST(req: NextRequest) {
         return jsonError('integrationId is required', 400);
       }
 
-      const rawBody = await req.text();
+      const rawBody = await readIntegrationBody(req);
 
       const integration = await prisma.integration.findUnique({
         where: { id: integrationId },
@@ -51,6 +56,9 @@ export async function POST(req: NextRequest) {
         if (!verifySentrySignature(rawBody, signature, integration.signatureSecret)) {
           logger.warn('api.integration.sentry_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
+        }
+        if (await rejectWebhookReplay(integration.id, rawBody, signature)) {
+          return jsonError('Duplicate webhook delivery', 409);
         }
       }
 
@@ -80,6 +88,9 @@ export async function POST(req: NextRequest) {
       });
       return jsonOk({ status: 'success', result }, 202);
     } catch (error: unknown) {
+      if (error instanceof IntegrationBodyTooLargeError) {
+        return jsonError(error.message, 413);
+      }
       logger.error('api.integration.sentry_error', {
         error: error instanceof Error ? error.message : String(error),
       });

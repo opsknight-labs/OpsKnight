@@ -28,30 +28,20 @@ interface PerformanceMetrics {
 }
 
 export async function GET(req: NextRequest) {
-  const { getServerSession } = await import('next-auth');
-  const { getAuthOptions } = await import('@/lib/auth');
-
-  // Authenticate and check admin role
-  const authOptions = await getAuthOptions();
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { assertAdmin } = await import('@/lib/rbac');
+  let user;
+  try {
+    user = await assertAdmin();
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unauthorized' },
+      { status: 403 }
+    );
   }
-
-  // Check for admin role
   const { default: prisma } = await import('@/lib/prisma');
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email as string },
-    select: { role: true },
-  });
-
-  if (user?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-  }
 
   // Rate limiting
-  const rateLimitKey = `sla-performance:${session.user.email}`;
+  const rateLimitKey = `sla-performance:${user.email}`;
   const rateLimit = await checkRateLimit(rateLimitKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
   if (!rateLimit.allowed) {
     const retryAfter = Math.ceil((rateLimit.resetAt - Date.now()) / 1000);

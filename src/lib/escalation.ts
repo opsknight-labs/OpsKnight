@@ -21,9 +21,6 @@ async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Prom
       layers: {
         include: {
           users: {
-            where: {
-              user: { status: 'ACTIVE' },
-            },
             include: { user: true },
             orderBy: { position: 'asc' },
           },
@@ -55,6 +52,11 @@ async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Prom
       layer.id,
       (layer as { priority?: number }).priority ?? 100 - ((layer as { order?: number }).order ?? 0),
     ])
+  );
+  const activeUserIds = new Set(
+    schedule.layers.flatMap(layer =>
+      layer.users.filter(member => member.user.status === 'ACTIVE').map(member => member.userId)
+    )
   );
 
   const blocks = buildScheduleBlocks(
@@ -110,25 +112,16 @@ async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Prom
 
   // Find blocks active at atTime
   const activeBlocks = finalBlocks.filter(
-    b => b.start.getTime() <= atTime.getTime() && b.end.getTime() > atTime.getTime()
+    b =>
+      b.start.getTime() <= atTime.getTime() &&
+      b.end.getTime() > atTime.getTime() &&
+      (b.source === 'override' || activeUserIds.has(b.userId))
   );
 
   const userIds = new Set<string>();
   for (const block of activeBlocks) {
     if (block.userId) {
       userIds.add(block.userId);
-    }
-  }
-
-  // Standalone overrides (replacesUserId === null) are additive — they ADD an on-call slot
-  // rather than replacing an existing user. Include all active standalone override users.
-  for (const override of schedule.overrides) {
-    if (
-      override.replacesUserId === null &&
-      override.start.getTime() <= atTime.getTime() &&
-      override.end.getTime() > atTime.getTime()
-    ) {
-      userIds.add(override.userId);
     }
   }
 
@@ -384,6 +377,7 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
   const claim = await prisma.incident.updateMany({
     where: {
       id: incidentId,
+      status: 'OPEN',
       AND: [
         stepMatch,
         statusMatch,
@@ -440,7 +434,8 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
         data: {
           incidentId,
           message:
-            errorMessage + (isLastStep ? ' Escalation complete.' : ' Skipping to next step.'),
+            errorMessage +
+            (isLastStep ? ' Escalation failed: target is unavailable.' : ' Skipping to next step.'),
         },
       });
 
@@ -448,7 +443,7 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
         await tx.incident.update({
           where: { id: incidentId },
           data: {
-            escalationStatus: 'COMPLETED',
+            escalationStatus: 'FAILED',
             nextEscalationAt: null,
             escalationProcessingAt: null,
             currentEscalationStep: null,
@@ -468,7 +463,9 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
 
     // Try next step
     if (!isLastStep) {
-      return executeEscalation(incidentId, currentStepIndex + 1);
+      const { scheduleEscalation } = await import('./jobs/queue');
+      await scheduleEscalation(incidentId, currentStepIndex + 1, 0);
+      return { escalated: false, reason: 'Escalation scheduled' };
     }
     return { escalated: false, reason: 'Invalid target configuration' };
   }
@@ -538,7 +535,10 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
         data: {
           incidentId,
           message:
-            errorMessage + (isLastStep ? ' Escalation complete.' : ' Skipping to next step.'),
+            errorMessage +
+            (isLastStep
+              ? ' Escalation failed: no reachable responders.'
+              : ' Skipping to next step.'),
         },
       });
 
@@ -546,7 +546,7 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
         await tx.incident.update({
           where: { id: incidentId },
           data: {
-            escalationStatus: 'COMPLETED',
+            escalationStatus: 'FAILED',
             nextEscalationAt: null,
             escalationProcessingAt: null,
             currentEscalationStep: null,
@@ -566,7 +566,9 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
 
     // Try next step
     if (!isLastStep) {
-      return executeEscalation(incidentId, currentStepIndex + 1);
+      const { scheduleEscalation } = await import('./jobs/queue');
+      await scheduleEscalation(incidentId, currentStepIndex + 1, 0);
+      return { escalated: false, reason: 'Escalation scheduled' };
     }
     return { escalated: false, reason: 'No users to notify' };
   }
@@ -681,7 +683,14 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
         updateData.assignee = { disconnect: true };
       } else {
         // Assign to first user (for USER or SCHEDULE target types)
-        updateData.assignee = { connect: { id: targetUserIds[0] } };
+        const selectedIndex =
+          step.targetType === 'SCHEDULE'
+            ? Array.from(`${incidentId}:${currentStepIndex}`).reduce(
+                (sum, char) => sum + char.charCodeAt(0),
+                0
+              ) % targetUserIds.length
+            : 0;
+        updateData.assignee = { connect: { id: targetUserIds[selectedIndex] } };
         // Clear any team assignment
         updateData.team = { disconnect: true };
       }
@@ -692,13 +701,15 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
       data: updateData,
     });
 
-    await tx.incidentEvent.create({
-      data: {
-        incidentId,
-        type: 'ESCALATED',
-        message: `Escalated to ${targetDescription} (Level ${currentStepIndex + 1}${step.delayMinutes > 0 ? `, after ${step.delayMinutes} minute delay` : ''})`,
-      },
-    });
+    if (!isStopped && !isPaused) {
+      await tx.incidentEvent.create({
+        data: {
+          incidentId,
+          type: 'ESCALATED',
+          message: `Escalated to ${targetDescription} (Level ${currentStepIndex + 1}${step.delayMinutes > 0 ? `, after ${step.delayMinutes} minute delay` : ''})`,
+        },
+      });
+    }
 
     if (nextStepMessage && !isStopped && !isPaused) {
       await tx.incidentEvent.create({
@@ -715,8 +726,17 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
   if (shouldScheduleNextJob && nextStep && nextEscalationAt) {
     const delayMs = (nextStep.delayMinutes || 0) * 60 * 1000;
     if (delayMs === 0) {
-      // Execute 0-delay step synchronously without waiting for background cron tick
-      return await executeEscalation(incidentId, nextStepIndex);
+      const { scheduleEscalation } = await import('./jobs/queue');
+      await scheduleEscalation(incidentId, nextStepIndex, 0);
+      return {
+        escalated: true,
+        targetName,
+        targetType: step.targetType,
+        targetCount: targetUserIds.length,
+        stepIndex: currentStepIndex,
+        notifications: notificationsSent,
+        nextStepScheduled: true,
+      };
     }
     try {
       const { scheduleEscalation } = await import('./jobs/queue');

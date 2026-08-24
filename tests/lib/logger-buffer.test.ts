@@ -9,16 +9,10 @@ import {
 } from '@/lib/logger';
 import * as publicLogsRoute from '@/app/api/public-logs/route';
 import { createMockRequest, parseResponse } from '../helpers/api-test';
-import { getServerSession } from 'next-auth';
 
-// Mock next-auth
-vi.mock('next-auth', () => ({
-  getServerSession: vi.fn(),
-}));
-
-// Mock the auth lib
-vi.mock('@/lib/auth', () => ({
-  getAuthOptions: vi.fn().mockResolvedValue({}),
+const mockAssertAdmin = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/rbac', () => ({
+  assertAdmin: mockAssertAdmin,
 }));
 
 describe('Logger Buffer', () => {
@@ -78,8 +72,7 @@ describe('String Sanitization & ReDoS Defense', () => {
 
 describe('Public Logs API', () => {
   it('returns log entries without stack traces', async () => {
-    // Mock authenticated session as ADMIN
-    vi.mocked(getServerSession).mockResolvedValue({ user: { name: 'Test User', role: 'ADMIN' } });
+    mockAssertAdmin.mockResolvedValue({ id: 'admin-1', role: 'ADMIN', status: 'ACTIVE' });
 
     const message = `public-logs-${Date.now()}`;
     logger.error(message, { error: new Error('kaboom') });

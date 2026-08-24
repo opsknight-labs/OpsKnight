@@ -1,7 +1,7 @@
 type Severity = 'critical' | 'error' | 'warning' | 'info';
 type EventAction = 'trigger' | 'resolve' | 'acknowledge';
 
-const CRITICAL_KEYS = ['critical', 'crit', 'p1', 'sev0', 'sev1', 'high', 'fatal', 'down'];
+const CRITICAL_KEYS = ['critical', 'crit', 'p1', 'sev0', 'sev1', 'high', 'fatal', 'down', 'page'];
 const ERROR_KEYS = ['error', 'err', 'p2', 'sev2'];
 const WARNING_KEYS = ['warning', 'warn', 'p3', 'sev3', 'degraded', 'medium'];
 const INFO_KEYS = ['info', 'informational', 'p4', 'p5', 'low', 'ok', 'normal'];

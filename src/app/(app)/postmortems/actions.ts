@@ -514,6 +514,7 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
       description: 'Incident marked as resolved.',
     });
   }
+  timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   return {
     summary,

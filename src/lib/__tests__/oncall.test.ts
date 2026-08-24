@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildScheduleBlocks } from '../oncall';
+import { buildScheduleBlocks, getFinalScheduleBlocks } from '../oncall';
 
 const baseDate = new Date('2025-12-01T00:00:00Z');
 
@@ -50,6 +50,36 @@ describe('buildScheduleBlocks', () => {
     expect(overrideBlock?.userId).toBe('user-c');
     expect(overrideBlock?.start.getTime()).toBe(hoursFromBase(30).getTime());
     expect(overrideBlock?.end.getTime()).toBe(hoursFromBase(42).getTime());
+  });
+
+  it('emits one additive override across multiple layers without suppressing rotation', () => {
+    const secondary = { ...layer, id: 'layer-2', name: 'Secondary' };
+    const overrides = [
+      {
+        id: 'override-add',
+        userId: 'user-c',
+        user: { name: 'Charlie' },
+        start: hoursFromBase(30),
+        end: hoursFromBase(42),
+        replacesUserId: null,
+      },
+    ];
+    const blocks = buildScheduleBlocks(
+      [layer, secondary],
+      overrides,
+      hoursFromBase(24),
+      hoursFromBase(48)
+    );
+    expect(blocks.filter(block => block.isAdditiveOverride)).toHaveLength(1);
+    const final = getFinalScheduleBlocks(
+      blocks,
+      new Map([
+        ['layer-1', 2],
+        ['layer-2', 1],
+      ])
+    );
+    expect(final.some(block => block.isAdditiveOverride && block.userId === 'user-c')).toBe(true);
+    expect(final.some(block => block.source === 'rotation')).toBe(true);
   });
 
   it('creates gaps when shiftLengthHours is less than rotationLengthHours', () => {

@@ -12,6 +12,10 @@ import {
   CloudWatchAlarmSchema,
   SNSNotificationSchema,
 } from '@/lib/integrations/schemas';
+import {
+  IntegrationBodyTooLargeError,
+  readIntegrationBody,
+} from '@/lib/integrations/request-security';
 
 /**
  * AWS CloudWatch Webhook Endpoint
@@ -59,7 +63,7 @@ export async function POST(req: NextRequest) {
       // Parse request body
       let body: SNSMessage;
       try {
-        body = (await req.json()) as SNSMessage;
+        body = JSON.parse(await readIntegrationBody(req)) as SNSMessage;
       } catch (_error) {
         return jsonError('Invalid JSON in request body.', 400);
       }
@@ -186,6 +190,7 @@ export async function POST(req: NextRequest) {
 
       return jsonOk({ status: 'success', result }, 202);
     } catch (error: unknown) {
+      if (error instanceof IntegrationBodyTooLargeError) return jsonError(error.message, 413);
       logger.error('api.integration.cloudwatch_error', {
         error: error instanceof Error ? error.message : String(error),
       });

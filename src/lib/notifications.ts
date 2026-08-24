@@ -32,7 +32,7 @@ export async function sendNotification(
   });
 
   try {
-    let result: { success: boolean; error?: string };
+    let result: { success: boolean; error?: string; messageSid?: string };
 
     // Route to appropriate notification service with circuit breaker protection
     // Circuit breakers prevent cascade failures when external services are slow/down
@@ -69,7 +69,7 @@ export async function sendNotification(
               ? 'acknowledged'
               : 'triggered';
         result = await CircuitBreakers.sms().execute(async () => {
-          const res = await sendIncidentSMS(userId, incidentId, eventTypeSMS);
+          const res = await sendIncidentSMS(userId, incidentId, eventTypeSMS, notification.id);
           if (!res.success) {
             throw new Error(res.error || 'SMS delivery failed');
           }
@@ -164,7 +164,12 @@ export async function sendNotification(
               ? 'acknowledged'
               : 'triggered';
         result = await CircuitBreakers.whatsapp().execute(async () => {
-          const res = await sendIncidentWhatsApp(userId, incidentId, eventTypeWhatsApp);
+          const res = await sendIncidentWhatsApp(
+            userId,
+            incidentId,
+            eventTypeWhatsApp,
+            notification.id
+          );
           if (!res.success) {
             throw new Error(res.error || 'WhatsApp delivery failed');
           }
@@ -182,6 +187,7 @@ export async function sendNotification(
         data: {
           status: 'SENT',
           sentAt: new Date(),
+          providerMessageId: result.messageSid,
         },
       });
 

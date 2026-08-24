@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto';
+import { normalizeSeverity } from './normalization';
 
 export type PrometheusAlert = {
   version: string;
@@ -86,14 +87,7 @@ export function transformPrometheusToEvent(payload: PrometheusAlert): Array<{
       }
     }
 
-    // Determine severity from labels
-    let severity: 'critical' | 'error' | 'warning' | 'info' = 'warning';
-    const severityLabel = alert.labels?.severity?.toLowerCase();
-    if (severityLabel === 'critical' || severityLabel === 'page') {
-      severity = 'critical';
-    } else if (severityLabel === 'error' || severityLabel === 'warning') {
-      severity = severityLabel === 'error' ? 'error' : 'warning';
-    }
+    const severity = normalizeSeverity(alert.labels?.severity, 'warning');
 
     return {
       event_action: isResolved ? 'resolve' : 'trigger',

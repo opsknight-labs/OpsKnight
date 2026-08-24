@@ -14,7 +14,7 @@ export default async function GlobalSlackIntegrationPage() {
   // Get global Slack integration (not tied to any service)
   const globalIntegration = await prisma.slackIntegration.findFirst({
     where: {
-      service: null, // Global integration
+      services: { none: {} }, // Global integration
     },
     select: {
       id: true,
