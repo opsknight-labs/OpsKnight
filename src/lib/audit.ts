@@ -1,11 +1,11 @@
 import prisma from './prisma';
 import { Prisma } from '@prisma/client';
+import { sanitizeContext } from './logger';
 
 export type AuditDetails = Prisma.InputJsonValue;
 
 export async function getDefaultActorId() {
-  const user = await prisma.user.findFirst({ select: { id: true } });
-  return user?.id ?? null;
+  return null;
 }
 
 export async function logAudit(params: {
@@ -35,13 +35,15 @@ export async function logAudit(params: {
     }
   }
 
+  const safeDetails = details ? (sanitizeContext(details) as Prisma.InputJsonValue) : Prisma.DbNull;
+
   await prisma.auditLog.create({
     data: {
       action,
       entityType,
       entityId: entityId || null,
       actorId: actorId || null,
-      details: details ?? Prisma.DbNull,
+      details: safeDetails,
       targetEmail: resolvedEmail ? resolvedEmail.toLowerCase().trim() : null,
       ip: resolvedIp || null,
     },

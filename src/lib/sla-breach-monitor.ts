@@ -136,12 +136,19 @@ export async function checkSLABreaches(
       ? await prisma.incidentEvent.findMany({
           where: {
             incidentId: { in: incidentIds },
-            createdAt: { gte: new Date(now.getTime() - maxThreshold) },
             OR: [
+              // Breach events are deduplicated for the full lifetime of the open incident
               { message: { startsWith: '🚨 SLA ACK Breached' } },
-              { message: { startsWith: '⏰ SLA ACK Warning' } },
               { message: { startsWith: '🚨 SLA RESOLVE Breached' } },
-              { message: { startsWith: '⚠️ SLA RESOLVE Warning' } },
+              // Warning events are deduplicated within the recent threshold window
+              {
+                message: { startsWith: '⏰ SLA ACK Warning' },
+                createdAt: { gte: new Date(now.getTime() - maxThreshold) },
+              },
+              {
+                message: { startsWith: '⚠️ SLA RESOLVE Warning' },
+                createdAt: { gte: new Date(now.getTime() - maxThreshold) },
+              },
             ],
           },
           select: { incidentId: true, message: true },

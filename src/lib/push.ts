@@ -178,9 +178,17 @@ export async function sendPush(
         let sent = false;
         let lastErrorMessage = 'Unknown error';
 
+        const isHighUrgency = options.data?.urgency === 'HIGH';
         for (const vapidDetails of vapidDetailsList) {
           try {
-            await webpush.sendNotification(subscription, payload, { vapidDetails });
+            await webpush.sendNotification(subscription, payload, {
+              vapidDetails,
+              TTL: isHighUrgency ? 3600 * 4 : 86400,
+              urgency: isHighUrgency ? 'high' : 'normal',
+              headers: {
+                Urgency: isHighUrgency ? 'high' : 'normal',
+              },
+            });
             await prisma.userDevice.update({
               where: { id: device.id },
               data: { lastUsed: new Date() },
@@ -199,7 +207,15 @@ export async function sendPush(
                 : 'Unknown error';
             lastErrorMessage = errorMessage;
 
-            if (statusCode === 410 || statusCode === 404) {
+            const isExpiredOrRevoked =
+              statusCode === 410 ||
+              statusCode === 404 ||
+              (statusCode === 400 &&
+                /baddevicetoken|notregistered|invalidregistration|unregistered|devicetokennotfortopic/i.test(
+                  errorMessage
+                ));
+
+            if (isExpiredOrRevoked) {
               await prisma.userDevice.deleteMany({ where: { id: device.id } });
               const remaining = await prisma.userDevice.count({
                 where: { userId: options.userId },
@@ -240,7 +256,15 @@ export async function sendPush(
             ? String((error as { message?: unknown }).message ?? '')
             : 'Unknown error';
 
-        if (statusCode === 410 || statusCode === 404) {
+        const isExpiredOrRevoked =
+          statusCode === 410 ||
+          statusCode === 404 ||
+          (statusCode === 400 &&
+            /baddevicetoken|notregistered|invalidregistration|unregistered|devicetokennotfortopic/i.test(
+              errorMessage
+            ));
+
+        if (isExpiredOrRevoked) {
           await prisma.userDevice.deleteMany({ where: { id: device.id } });
           const remaining = await prisma.userDevice.count({ where: { userId: options.userId } });
           if (remaining === 0) {
@@ -269,9 +293,7 @@ export async function sendPush(
       return { success: false, error: 'VAPID keys not configured' };
     }
 
-    for (const device of webDevices) {
-      await sendWebPush(device);
-    }
+    await Promise.allSettled(webDevices.map(device => sendWebPush(device)));
 
     if (successCount > 0) {
       return { success: true };
@@ -395,6 +417,8 @@ export async function sendIncidentPush(
         eventType,
         urgency: incident.urgency,
         status: incident.status,
+        badge,
+        tag: `incident-${incidentId}`,
         url: `/m/incidents/${incidentId}`,
         actions: JSON.stringify(actions),
       },

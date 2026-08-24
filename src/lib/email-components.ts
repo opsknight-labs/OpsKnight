@@ -16,13 +16,24 @@ export interface EmailStyles {
   buttonShadow?: string;
 }
 
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
+export function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  return str
+    .replace(/&(?!amp;|lt;|gt;|quot;|#39;|#x2F;)/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+export function sanitizeUrl(url: string | null | undefined): string {
+  if (!url) return '#';
+  const trimmed = url.trim();
+  if (/^(https?:\/\/|mailto:|tel:)/i.test(trimmed)) {
+    return escapeHtml(trimmed);
+  }
+  return '#';
 }
 
 /**
@@ -58,44 +69,42 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
             .mobile-padding { padding: 20px !important; }
             .mobile-text-center { text-align: center !important; }
             .mobile-full-width { width: 100% !important; max-width: 100% !important; }
-            .mobile-hide { display: none !important; }
-            .mobile-font-large { font-size: 24px !important; line-height: 1.3 !important; }
+            .mobile-font-large { font-size: 24px !important; }
             .mobile-font-medium { font-size: 16px !important; }
             .mobile-font-small { font-size: 14px !important; }
             .mobile-button { width: 100% !important; display: block !important; }
-            .mobile-button a { width: 100% !important; display: block !important; box-sizing: border-box !important; }
+            .mobile-button a { width: 100% !important; box-sizing: border-box !important; }
+            .mobile-hide { display: none !important; }
             .mobile-header-padding { padding: 32px 20px !important; }
-            .mobile-logo-name { font-size: 24px !important; }
-            .wrapper { padding: 20px !important; }
+            .mobile-logo-name { font-size: 20px !important; }
+            .mobile-spacing { margin: 16px 0 !important; }
         }
     </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: ${outerBackground}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1f2937;">
-    <center>
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="width: 100%; background-color: ${outerBackground};">
-            <tr>
-                <td align="center" style="padding: 40px 20px;" class="wrapper">
-                    <!--[if mso]>
-                    <table role="presentation" width="900" align="center" style="width:900px;">
+<body style="margin: 0; padding: 0; background-color: ${outerBackground}; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; color: #1e293b;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${outerBackground};">
+        <tr>
+            <td align="center" style="padding: 40px 10px;">
+                <!--[if mso]>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" align="center">
+                <tr>
+                <td>
+                <![endif]-->
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: ${backgroundColor}; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #e5e7eb;">
                     <tr>
-                    <td style="padding:0;">
-                    <![endif]-->
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" class="mobile-full-width" style="max-width: 900px; width: 100%; margin: 0 auto; background-color: ${backgroundColor}; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);">
-                        <tr>
-                            <td style="padding: 0;">
-                                ${content}
-                            </td>
-                        </tr>
-                    </table>
-                    <!--[if mso]>
-                    </td>
+                        <td style="padding: 0;">
+                            ${content}
+                        </td>
                     </tr>
-                    </table>
-                    <![endif]-->
+                </table>
+                <!--[if mso]>
                 </td>
-            </tr>
-        </table>
-    </center>
+                </tr>
+                </table>
+                <![endif]-->
+            </td>
+        </tr>
+    </table>
 </body>
 </html>`.trim();
 }
@@ -107,7 +116,9 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
 export function EmailHeader(title: string, subtitle?: string, styles: EmailStyles = {}): string {
   const headerGradient =
     styles.headerGradient || 'linear-gradient(135deg, #1e293b 0%, #334155 40%, #475569 100%)';
-  const brandName = styles.brandName || 'OpsKnight';
+  const brandName = escapeHtml(styles.brandName || 'OpsKnight');
+  const safeTitle = escapeHtml(title);
+  const safeSubtitle = subtitle ? escapeHtml(subtitle) : undefined;
 
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
@@ -135,16 +146,16 @@ export function EmailHeader(title: string, subtitle?: string, styles: EmailStyle
             </div>
             
             <!-- Title -->
-            <h1 class="mobile-font-large" style="margin: 0 0 ${subtitle ? '10px' : '0'} 0; color: #ffffff !important; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25;">
-                ${title}
+            <h1 class="mobile-font-large" style="margin: 0 0 ${safeSubtitle ? '10px' : '0'} 0; color: #ffffff !important; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25;">
+                ${safeTitle}
             </h1>
             
             ${
-              subtitle
+              safeSubtitle
                 ? `
             <!-- Subtitle -->
             <p class="mobile-font-small" style="margin: 0; color: rgba(255, 255, 255, 0.85) !important; font-size: 15px; font-weight: 500;">
-                ${subtitle}
+                ${safeSubtitle}
             </p>
             `
                 : ''
@@ -203,11 +214,12 @@ export function StatusBadge(
   };
 
   const color = colors[type];
+  const safeStatus = escapeHtml(status);
 
   return `
 <div style="display: inline-flex; align-items: center; gap: 10px; background: ${color.bg}; color: ${color.text}; padding: 12px 24px; border-radius: 999px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; box-shadow: 0 4px 14px ${color.shadow}, 0 0 0 1px rgba(255, 255, 255, 0.1) inset;">
     <span style="width: 8px; height: 8px; border-radius: 50%; background: #ffffff; box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);"></span>
-    <span>${status}</span>
+    <span>${safeStatus}</span>
 </div>`.trim();
 }
 
@@ -220,13 +232,15 @@ export function EmailButton(text: string, url: string, _styles: EmailStyles = {}
     _styles.buttonBackground || 'linear-gradient(135deg, #1e293b 0%, #334155 100%)';
   const buttonShadow = _styles.buttonShadow || '0 8px 20px rgba(30, 41, 59, 0.25)';
   const buttonTextColor = _styles.buttonTextColor || '#ffffff';
+  const safeText = escapeHtml(text);
+  const safeUrl = sanitizeUrl(url);
 
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" class="mobile-full-width mobile-spacing" style="margin: 32px auto; width: auto;">
     <tr>
         <td class="mobile-button" style="border-radius: 10px; background: ${buttonBackground}; text-align: center; box-shadow: ${buttonShadow};">
-            <a href="${url}" target="_blank" style="display: inline-block; padding: 14px 32px; color: ${buttonTextColor} !important; text-decoration: none; font-weight: 600; font-size: 15px; line-height: 1.5; border-radius: 10px; min-width: 220px; text-align: center;">
-                ${text}
+            <a href="${safeUrl}" target="_blank" style="display: inline-block; padding: 14px 32px; color: ${buttonTextColor} !important; text-decoration: none; font-weight: 600; font-size: 15px; line-height: 1.5; border-radius: 10px; min-width: 220px; text-align: center;">
+                ${safeText}
             </a>
         </td>
     </tr>
@@ -246,10 +260,10 @@ export function InfoCard(
       item => `
         <tr>
             <td style="padding: 12px 20px; border-bottom: 1px solid #e5e7eb; font-size: 14px; font-weight: 600; color: #6b7280; width: 140px;">
-                ${item.label}
+                ${escapeHtml(item.label)}
             </td>
             <td style="padding: 12px 20px; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: #1f2937; ${item.highlight ? 'font-weight: 600;' : ''}">
-                ${item.value}
+                ${escapeHtml(item.value)}
             </td>
         </tr>
     `
@@ -278,14 +292,16 @@ export function AlertBox(
   };
 
   const color = colors[type];
+  const safeTitle = escapeHtml(title);
+  const safeMessage = escapeHtml(message);
 
   return `
 <div style="background: ${color.bg}; border-left: 4px solid ${color.border}; padding: 24px; border-radius: 12px; margin: 24px 0;">
     <h3 style="margin: 0 0 12px 0; color: ${color.title}; font-size: 18px; font-weight: 700; letter-spacing: -0.01em;">
-        ${title}
+        ${safeTitle}
     </h3>
     <p style="margin: 0; color: ${color.text}; font-size: 15px; line-height: 1.7;">
-        ${message}
+        ${safeMessage}
     </p>
 </div>`.trim();
 }
@@ -294,6 +310,7 @@ export function AlertBox(
  * Footer with OpsKnight branding
  */
 export function EmailFooter(unsubscribeUrl?: string): string {
+  const safeUnsubscribe = unsubscribeUrl ? sanitizeUrl(unsubscribeUrl) : undefined;
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
@@ -302,10 +319,10 @@ export function EmailFooter(unsubscribeUrl?: string): string {
                 This is an automated notification from <strong style="color: #1e293b;">OpsKnight</strong> Incident Management.
             </p>
             ${
-              unsubscribeUrl
+              safeUnsubscribe && safeUnsubscribe !== '#'
                 ? `
             <p style="margin: 12px 0 0 0; font-size: 13px;">
-                <a href="${unsubscribeUrl}" style="color: #1e293b; text-decoration: none; font-weight: 600;">Unsubscribe from these emails</a>
+                <a href="${safeUnsubscribe}" style="color: #1e293b; text-decoration: none; font-weight: 600;">Unsubscribe from these emails</a>
             </p>
             `
                 : ''
@@ -332,12 +349,14 @@ export function SubscriberEmailHeader(
 ): string {
   const headerGradient =
     styles.headerGradient || 'linear-gradient(135deg, #1e293b 0%, #334155 40%, #475569 100%)';
-  const displayName = styles.brandName || pageName;
-  const logoAlt = styles.logoAlt || displayName;
+  const displayName = escapeHtml(styles.brandName || pageName);
+  const logoAlt = escapeHtml(styles.logoAlt || displayName);
   const brandLogo = getOpsKnightLogo(52, {
     ...styles,
     logoAlt,
   });
+  const safeTitle = escapeHtml(title);
+  const safeSubtitle = subtitle ? escapeHtml(subtitle) : undefined;
 
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
@@ -374,15 +393,15 @@ export function SubscriberEmailHeader(
             <!-- Update Type Badge -->
             <div style="margin-bottom: 24px;">
                 <span style="display: inline-block; padding: 6px 14px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 10px; color: #ffffff !important; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">
-                    ${title}
+                    ${safeTitle}
                 </span>
             </div>
 
             ${
-              subtitle
+              safeSubtitle
                 ? `
             <p class="mobile-font-medium" style="margin: 0; color: rgba(255, 255, 255, 0.9) !important; font-size: 16px; font-weight: 500; line-height: 1.5;">
-                ${subtitle}
+                ${safeSubtitle}
             </p>
             `
                 : ''
@@ -396,16 +415,19 @@ export function SubscriberEmailHeader(
  * Footer providing "Powered by" marketing while handling Unsubscribe
  */
 export function SubscriberEmailFooter(unsubscribeUrl: string, pageName: string): string {
+  const safeUnsubscribe = sanitizeUrl(unsubscribeUrl);
+  const safePageName = escapeHtml(pageName);
+
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
         <td style="padding: 36px 20px; background: #f8fafc; border-top: 1px solid #e5e7eb; text-align: center;">
             <p style="margin: 0 0 16px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
-                You received this email because you are subscribed to <strong>${pageName}</strong> updates.
+                You received this email because you are subscribed to <strong>${safePageName}</strong> updates.
             </p>
             
             <p style="margin: 0 0 32px 0; font-size: 13px;">
-                <a href="${unsubscribeUrl}" style="color: #6b7280; text-decoration: underline;">Unsubscribe from updates</a>
+                <a href="${safeUnsubscribe}" style="color: #6b7280; text-decoration: underline;">Unsubscribe from updates</a>
             </p>
 
             <!-- OpsKnight Marketing -->
@@ -431,9 +453,12 @@ export function SubscriberEmailFooter(unsubscribeUrl: string, pageName: string):
 
 function getOpsKnightLogo(width: number, styles: EmailStyles = {}): string {
   const logoUrl = styles.logoUrl || getDefaultLogoUrl();
-  const logoAlt = styles.logoAlt || 'OpsKnight';
+  const logoAlt = escapeHtml(styles.logoAlt || 'OpsKnight');
   if (logoUrl) {
-    return `<img src="${logoUrl}" width="${width}" height="${width}" alt="${logoAlt}" style="display: block; border-radius: 12px;" />`;
+    const safeLogoUrl = sanitizeUrl(logoUrl);
+    if (safeLogoUrl !== '#') {
+      return `<img src="${safeLogoUrl}" width="${width}" height="${width}" alt="${logoAlt}" style="display: block; border-radius: 12px;" />`;
+    }
   }
 
   // Inline SVG logo fallback for email compatibility

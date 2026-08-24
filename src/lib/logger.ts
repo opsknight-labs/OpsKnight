@@ -66,6 +66,8 @@ const SENSITIVE_KEYS = [
 const SECRET_PATTERNS = [
   /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/g, // Email (strictly disjoint domain labels)
   /Bearer\s+[A-Za-z0-9\-_.]+/gi, // Bearer tokens
+  /Basic\s+[A-Za-z0-9+/=]{16,}/gi, // Basic Auth tokens
+  /\bok_[A-Za-z0-9_-]{20,}\b/g, // OpsKnight API Keys
   /xox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*/g, // Slack tokens
   /AKIA[0-9A-Z]{16}/g, // AWS Access Keys
   /(?:https?:\/\/[^\s?#]+\?[^\s#]*(?:token|secret|key|sig|signature|api_key)=)[^&\s]+/gi, // URL query tokens (bounded by ? and #)
@@ -88,6 +90,14 @@ export function sanitizeContext(context: unknown, seen = new WeakSet<object>()):
       return sanitizeString(context);
     }
     return context;
+  }
+
+  if (context instanceof Error) {
+    return {
+      name: context.name,
+      message: sanitizeString(context.message),
+      stack: context.stack ? sanitizeString(context.stack) : undefined,
+    };
   }
 
   if (seen.has(context)) {

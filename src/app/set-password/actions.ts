@@ -98,6 +98,7 @@ export async function setPassword(formData: FormData) {
       data: {
         passwordHash,
         status: 'ACTIVE',
+        tokenVersion: { increment: 1 },
         invitedAt: null,
         deactivatedAt: null,
       },

@@ -24,7 +24,8 @@ export interface DynamicOnCallShift {
  * Replaces legacy queries to the empty `OnCallShift` table with dynamic schedule rotation math.
  */
 export async function getActiveOnCallShifts(
-  atTime: Date = new Date()
+  atTime: Date = new Date(),
+  scheduleId?: string
 ): Promise<DynamicOnCallShift[]> {
   if (!prisma?.onCallSchedule?.findMany) {
     return [];
@@ -33,6 +34,7 @@ export async function getActiveOnCallShifts(
   const windowEnd = new Date(atTime.getTime() + 48 * 60 * 60 * 1000);
 
   const schedules = await prisma.onCallSchedule.findMany({
+    where: scheduleId ? { id: scheduleId } : undefined,
     include: {
       layers: {
         include: {
@@ -54,6 +56,7 @@ export async function getActiveOnCallShifts(
         where: {
           start: { lte: windowEnd },
           end: { gte: windowStart },
+          user: { status: 'ACTIVE' },
         },
         include: {
           user: {

@@ -94,44 +94,78 @@ export async function sendIncidentWhatsApp(
     const client = twilio(whatsappConfig.accountSid, whatsappConfig.authToken);
 
     try {
-      if (!whatsappConfig.whatsappContentSid) {
-        return { success: false, error: 'WhatsApp template (contentSid) not configured' };
+      let messageResult: { sid: string };
+
+      if (whatsappConfig.whatsappContentSid) {
+        // Use Twilio Content API (Templates) - Required for 24h window
+        // Variables: 1: Title, 2: Service, 3: Status, 4: Link
+        const cleanTitle = title
+          .replace(/[\r\n\t]+/g, ' ')
+          .trim()
+          .slice(0, 120);
+        const cleanService = (incident.service?.name || 'Service')
+          .replace(/[\r\n\t]+/g, ' ')
+          .trim()
+          .slice(0, 80);
+        const cleanStatus = statusLine
+          .replace(/[\*\_]/g, '')
+          .replace(/[\r\n\t]+/g, ' ')
+          .trim();
+        const cleanUrl = incidentUrl.replace(/[\r\n\t\s]+/g, '').trim();
+
+        const variables = {
+          '1': cleanTitle,
+          '2': cleanService,
+          '3': cleanStatus,
+          '4': cleanUrl,
+        };
+
+        messageResult = await client.messages.create({
+          from: fromNumber,
+          to: whatsappNumber,
+          contentSid: whatsappConfig.whatsappContentSid,
+          contentVariables: JSON.stringify(variables),
+        });
+
+        logger.info('WhatsApp notification sent via Template', {
+          userId,
+          incidentId,
+          contentSid: whatsappConfig.whatsappContentSid,
+          messageSid: messageResult.sid,
+        });
+      } else {
+        // Fallback to plain text message within session window
+        const body = `${statusLine}\n*${title}*\nService: ${incident.service?.name || 'Unknown'}\nDetails: ${incidentUrl}`;
+        messageResult = await client.messages.create({
+          from: fromNumber,
+          to: whatsappNumber,
+          body,
+        });
+
+        logger.info('WhatsApp notification sent via Session Text', {
+          userId,
+          incidentId,
+          messageSid: messageResult.sid,
+        });
       }
-
-      // Use Twilio Content API (Templates) - Required for 24h window
-      // Variables: 1: Title, 2: Service, 3: Status, 4: Link
-      const variables = {
-        '1': title,
-        '2': incident.service.name,
-        '3': statusLine.replace(/[\*\_]/g, ''), // Remove markdown for plain text template
-        '4': incidentUrl,
-      };
-
-      const messageResult = await client.messages.create({
-        from: fromNumber,
-        to: whatsappNumber,
-        contentSid: whatsappConfig.whatsappContentSid,
-        contentVariables: JSON.stringify(variables),
-      });
-
-      logger.info('WhatsApp notification sent via Template', {
-        userId,
-        incidentId,
-        contentSid: whatsappConfig.whatsappContentSid,
-        messageSid: messageResult.sid,
-      });
 
       return { success: true };
     } catch (twilioError: unknown) {
       const err = twilioError as { message?: string; code?: string | number };
+      const isWindowExpired = err.code === 63016 || err.code === '63016';
+      const errorMessage = isWindowExpired
+        ? 'WhatsApp 24-hour session window expired (Twilio Error 63016). Ensure an approved Content Template SID is configured.'
+        : err.message || 'WhatsApp send failed';
+
       logger.error('WhatsApp send error', {
         userId,
         incidentId,
         error: err.message,
         code: err.code,
+        isWindowExpired,
       });
 
-      return { success: false, error: err.message || 'WhatsApp send failed' };
+      return { success: false, error: errorMessage };
     }
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));

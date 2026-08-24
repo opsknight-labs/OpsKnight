@@ -90,6 +90,15 @@ export async function sendNotification(
         result = await CircuitBreakers.push().execute(async () => {
           const res = await sendIncidentPush(userId, incidentId, eventTypePush);
           if (!res.success) {
+            const err = (res.error || '').toLowerCase();
+            if (
+              err.includes('no web push subscriptions') ||
+              err.includes('no device tokens') ||
+              err.includes('disabled by user') ||
+              err.includes('user has no phone')
+            ) {
+              return { success: false, skipped: true, error: res.error };
+            }
             throw new Error(res.error || 'Push delivery failed');
           }
           return res;

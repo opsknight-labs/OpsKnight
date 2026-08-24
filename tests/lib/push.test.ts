@@ -64,13 +64,17 @@ describe('sendPush', () => {
 
     expect(result.success).toBe(true);
     expect(webpush.sendNotification).toHaveBeenCalledTimes(1);
-    expect(webpush.sendNotification).toHaveBeenCalledWith(expect.any(Object), expect.any(String), {
-      vapidDetails: {
-        subject: 'mailto:test@example.com',
-        publicKey: 'public-key',
-        privateKey: 'private-key',
-      },
-    });
+    expect(webpush.sendNotification).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.any(String),
+      expect.objectContaining({
+        vapidDetails: {
+          subject: 'mailto:test@example.com',
+          publicKey: 'public-key',
+          privateKey: 'private-key',
+        },
+      })
+    );
     expect(prisma.userDevice.update).toHaveBeenCalledWith({
       where: { id: 'device-1' },
       data: { lastUsed: expect.any(Date) },

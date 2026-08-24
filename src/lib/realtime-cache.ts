@@ -200,11 +200,13 @@ export async function getCachedRecentIncidents(
   teamIds: string[],
   lastHash?: string
 ): Promise<{ data: any; changed: boolean; hash: string } | null> {
-  const key = CacheKeys.recentIncidents(teamIds.join(',') || userId);
+  const isPrivileged = role === 'ADMIN' || role === 'RESPONDER';
+  const key = isPrivileged
+    ? CacheKeys.recentIncidents(teamIds.join(',') || 'global')
+    : `recent-incidents:${userId}:${teamIds.slice().sort().join(',')}`;
 
   const fetcher = async () => {
     const tenSecondsAgo = new Date(Date.now() - 10000);
-    const isPrivileged = role === 'ADMIN' || role === 'RESPONDER';
 
     const whereClause: any = {
       updatedAt: { gte: tenSecondsAgo },

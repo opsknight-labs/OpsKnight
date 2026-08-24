@@ -57,12 +57,7 @@ async function resolveSlackActor(
   for (const candidate of [slackRealName, slackUserName]) {
     if (opsUser || !candidate) continue;
     opsUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { name: { equals: candidate, mode: 'insensitive' } },
-          { name: { contains: candidate, mode: 'insensitive' } },
-        ],
-      },
+      where: { name: { equals: candidate, mode: 'insensitive' } },
       select: { id: true, name: true },
     });
   }

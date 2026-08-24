@@ -56,7 +56,7 @@ export function getPasswordResetEmailTemplate(data: PasswordResetEmailData): {
                     Click the button below to create a new password for your account:
                 </p>
                 
-                ${EmailButton('Reset Password →', data.resetLink, {
+                ${EmailButton('Reset Password →', safeResetLink, {
                   buttonBackground: 'linear-gradient(135deg, #10b981 0%, #22c55e 100%)',
                   buttonShadow: '0 10px 24px rgba(16, 185, 129, 0.35)',
                 })}

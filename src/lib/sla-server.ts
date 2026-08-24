@@ -2601,7 +2601,8 @@ function calculateMergedDuration(intervals: Array<{ start: Date; end: Date }>): 
 export async function calculateMultiServiceUptime(
   serviceIds: string[],
   startDate: Date,
-  endDate: Date = new Date()
+  endDate: Date = new Date(),
+  visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL'
 ): Promise<Record<string, number>> {
   const { default: prisma } = await import('./prisma');
 
@@ -2611,20 +2612,26 @@ export async function calculateMultiServiceUptime(
     'incident'
   );
 
+  const whereClause: any = {
+    serviceId: { in: serviceIds },
+    AND: [
+      { createdAt: { lt: effectiveEnd } },
+      {
+        OR: [
+          { resolvedAt: { gte: effectiveStart } },
+          { updatedAt: { gte: effectiveStart } },
+          { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
+        ],
+      },
+    ],
+  };
+
+  if (visibility && visibility !== 'ALL') {
+    whereClause.visibility = visibility;
+  }
+
   const incidents = await prisma.incident.findMany({
-    where: {
-      serviceId: { in: serviceIds },
-      AND: [
-        { createdAt: { lt: effectiveEnd } },
-        {
-          OR: [
-            { resolvedAt: { gte: effectiveStart } },
-            { updatedAt: { gte: effectiveStart } },
-            { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
-          ],
-        },
-      ],
-    },
+    where: whereClause,
     select: {
       serviceId: true,
       createdAt: true,

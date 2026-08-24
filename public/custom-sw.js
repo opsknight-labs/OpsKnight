@@ -133,7 +133,7 @@ self.addEventListener('push', function (event) {
             url: data.url || data.data?.url || '/m/notifications',
             ...data.data
         },
-        tag: data.tag || 'opsknight-notification',
+        tag: data.tag || data.data?.tag || (data.data?.incidentId ? `incident-${data.data.incidentId}` : 'opsknight-notification-' + Date.now()),
         requireInteraction: true, // Keep notification visible on mobile
         vibrate: [200, 100, 200] // Vibration pattern
     };
@@ -153,7 +153,29 @@ self.addEventListener('notificationclick', function (event) {
 
     event.notification.close();
 
-    const urlToOpen = event.notification.data?.url || '/m/notifications';
+    const incidentId = event.notification.data?.incidentId;
+    const urlToOpen = event.notification.data?.url || (incidentId ? `/m/incidents/${incidentId}` : '/m/notifications');
+
+    if (event.action === 'acknowledge' && incidentId) {
+        event.waitUntil(
+            fetch(`/api/mobile/incidents/${incidentId}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
+                credentials: 'include'
+            }).then(() => {
+                return self.registration.showNotification('Incident Acknowledged', {
+                    body: `Incident #${incidentId} acknowledged.`,
+                    icon: '/icons/app-icon-192.png',
+                    tag: `incident-${incidentId}`,
+                    requireInteraction: false
+                });
+            }).catch((err) => {
+                console.error('Failed to acknowledge from notification', err);
+            })
+        );
+        return;
+    }
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })

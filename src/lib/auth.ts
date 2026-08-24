@@ -10,6 +10,9 @@ import {
   SESSION_TOKEN_COOKIE_NAME,
   CALLBACK_URL_COOKIE_NAME,
   CSRF_TOKEN_COOKIE_NAME,
+  PKCE_CODE_VERIFIER_COOKIE_NAME,
+  STATE_COOKIE_NAME,
+  NONCE_COOKIE_NAME,
   useSecureCookies,
 } from '@/lib/auth-cookies';
 
@@ -180,6 +183,36 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             sameSite: 'lax',
             path: '/',
             secure: useSecureCookies,
+          },
+        },
+        pkceCodeVerifier: {
+          name: PKCE_CODE_VERIFIER_COOKIE_NAME,
+          options: {
+            httpOnly: true,
+            sameSite: 'lax',
+            path: '/',
+            secure: useSecureCookies,
+            maxAge: 900,
+          },
+        },
+        state: {
+          name: STATE_COOKIE_NAME,
+          options: {
+            httpOnly: true,
+            sameSite: 'lax',
+            path: '/',
+            secure: useSecureCookies,
+            maxAge: 900,
+          },
+        },
+        nonce: {
+          name: NONCE_COOKIE_NAME,
+          options: {
+            httpOnly: true,
+            sameSite: 'lax',
+            path: '/',
+            secure: useSecureCookies,
+            maxAge: 900,
           },
         },
       },
@@ -496,14 +529,13 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     return clearSessionToken(token as AugmentedJWT, 'USER_DISABLED');
                   }
 
-                  if (
-                    typeof currentTokenVersion === 'number' &&
-                    dbTokenVersion !== currentTokenVersion
-                  ) {
+                  const effectiveTokenVersion =
+                    typeof currentTokenVersion === 'number' ? currentTokenVersion : -1;
+                  if (dbTokenVersion !== effectiveTokenVersion) {
                     logger.warn('[Auth-Debug] REVOKING SESSION: Version Mismatch', {
                       component: 'auth:jwt',
                       db: dbTokenVersion,
-                      token: currentTokenVersion,
+                      token: effectiveTokenVersion,
                     });
                     return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
                   }
@@ -628,15 +660,18 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             }
 
             if (activeConfig.allowedDomains.length > 0) {
-              const domain = email.split('@')[1] || '';
-              if (!domain) {
+              const domain = email.split('@').pop()?.toLowerCase().trim() || '';
+              if (!domain || domain === email) {
                 logger.warn('[Auth] OIDC sign-in rejected: invalid email domain', {
                   component: 'auth:signIn',
                   email,
                 });
                 return false;
               }
-              if (!activeConfig.allowedDomains.includes(domain)) {
+              const normalizedAllowed = activeConfig.allowedDomains.map(d =>
+                d.toLowerCase().trim()
+              );
+              if (!normalizedAllowed.includes(domain)) {
                 logger.warn('[Auth] OIDC sign-in rejected: domain not allowed', {
                   component: 'auth:signIn',
                   email,
