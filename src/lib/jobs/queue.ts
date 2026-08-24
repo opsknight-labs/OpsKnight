@@ -129,7 +129,8 @@ export async function claimPendingJobs(limit: number = 50, type?: JobType): Prom
       Prisma.sql`
       UPDATE "BackgroundJob"
       SET "status" = 'FAILED',
-          "lastError" = 'Job timed out in PROCESSING state after exceeding maxAttempts'
+          "error" = 'Job timed out in PROCESSING state after exceeding maxAttempts',
+          "failedAt" = NOW()
       WHERE "status" = 'PROCESSING'
         AND "startedAt" < NOW() - INTERVAL '10 minutes'
         AND "attempts" >= "maxAttempts";

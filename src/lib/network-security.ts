@@ -1,8 +1,5 @@
 import { logger } from '@/lib/logger';
 import dns from 'dns';
-import { promisify } from 'util';
-
-const lookup = promisify(dns.lookup);
 
 /**
  * Validates a webhook URL to prevent SSRF attacks.
@@ -18,15 +15,18 @@ export async function validateWebhookUrl(urlString: string): Promise<boolean> {
       return false;
     }
 
-    // Resolve hostname to IP
-    const { address } = await lookup(url.hostname);
+    // Validate every answer, not only the resolver's first address. This closes
+    // mixed public/private DNS-answer bypasses. Redirects are separately
+    // disabled by the webhook sender.
+    const addresses = await dns.promises.lookup(url.hostname, { all: true, verbatim: true });
+    if (addresses.length === 0) return false;
 
-    // Block private IP ranges
-    if (isPrivateIp(address)) {
+    const blockedAddress = addresses.find(({ address }) => isPrivateIp(address));
+    if (blockedAddress) {
       logger.warn('Webhook blocked: resolved to private IP', {
         url: urlString,
         hostname: url.hostname,
-        resolvedIp: address,
+        resolvedIp: blockedAddress.address,
       });
       return false;
     }

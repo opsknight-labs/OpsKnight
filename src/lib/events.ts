@@ -123,7 +123,7 @@ export async function processEvent(
 
     // 3. For acknowledge, skip alert creation if no matching incident
     if (event_action === 'acknowledge' && !existingIncident) {
-      logger.warn(`event.${event_action}_no_match`, {
+      logger.info(`event.${event_action}_no_match`, {
         dedupKey: dedup_key,
         serviceId,
         source: eventData.source,
@@ -382,10 +382,10 @@ export async function processEvent(
       });
 
       if (incidentWithService) {
-        // PERF: Fire-and-forget status webhooks to avoid blocking response
-        // Catch errors locally to prevent unhandled promise rejections
+        // Await externally visible side effects so process teardown cannot
+        // silently discard them after the response is returned.
         const webhookStart = performance.now();
-        triggerWebhooksForService(result.incident.serviceId, 'incident.created', {
+        await triggerWebhooksForService(result.incident.serviceId, 'incident.created', {
           id: incidentWithService.id,
           title: incidentWithService.title,
           description: incidentWithService.description,
@@ -419,16 +419,15 @@ export async function processEvent(
     }
 
     // Execute escalation policy, then choose the correct notification path.
-    // PERF: Async dispatch (no await) prevents blocking the webhook response
     const notifyStart = performance.now();
-    executeEscalation(result.incident.id)
+    await executeEscalation(result.incident.id)
       .then(escalationResult => {
         const route = escalationNotificationRoute(escalationResult || {});
 
         if (route === 'service') {
-          import('./service-notifications')
+          return import('./service-notifications')
             .then(({ sendServiceNotifications }) => {
-              sendServiceNotifications(result.incident.id, 'triggered')
+              return sendServiceNotifications(result.incident.id, 'triggered')
                 .then(() => {
                   logger.info('api.event.notifications_sent', {
                     latencyMs: performance.now() - notifyStart,
@@ -447,9 +446,9 @@ export async function processEvent(
         } else {
           // Fallback only when the policy cannot provide responders. Scheduled
           // steps retain their configured delay and do not page the whole team.
-          import('./user-notifications')
+          return import('./user-notifications')
             .then(({ sendIncidentNotifications }) => {
-              sendIncidentNotifications(result.incident.id, 'triggered')
+              return sendIncidentNotifications(result.incident.id, 'triggered')
                 .then(() => {
                   logger.info('api.event.user_notifications_sent', {
                     latencyMs: performance.now() - notifyStart,
@@ -473,9 +472,9 @@ export async function processEvent(
           error: error instanceof Error ? error.message : 'Unknown error',
         });
 
-        import('./service-notifications')
+        return import('./service-notifications')
           .then(({ sendServiceNotifications }) => {
-            sendServiceNotifications(result.incident.id, 'triggered').catch(err => {
+            return sendServiceNotifications(result.incident.id, 'triggered').catch(err => {
               logger.error('Service notification failed', {
                 incidentId: result.incident.id,
                 error: err instanceof Error ? err.message : 'Unknown error',
@@ -486,10 +485,10 @@ export async function processEvent(
           .catch(e => logger.error('Failed to load service-notifications', { error: e }));
       });
 
-    // ChatOps: Auto-create war-room channel for qualifying incidents (fire-and-forget)
-    import('./chatops/war-room')
+    // ChatOps: Auto-create war-room channel for qualifying incidents.
+    await import('./chatops/war-room')
       .then(({ createIncidentWarRoom }) => {
-        createIncidentWarRoom(result.incident.id)
+        return createIncidentWarRoom(result.incident.id)
           .then(warRoomResult => {
             if (warRoomResult.success) {
               logger.info('chatops.war_room_created', {
@@ -523,7 +522,7 @@ export async function processEvent(
       });
 
       if (incidentWithService) {
-        triggerWebhooksForService(result.incident.serviceId, 'incident.resolved', {
+        await triggerWebhooksForService(result.incident.serviceId, 'incident.resolved', {
           id: incidentWithService.id,
           title: incidentWithService.title,
           description: incidentWithService.description,
@@ -550,17 +549,17 @@ export async function processEvent(
       });
     }
 
-    notifySlackForIncident(result.incident.id, 'resolved').catch(error => {
+    await notifySlackForIncident(result.incident.id, 'resolved').catch(error => {
       logger.error('Slack notification failed', {
         incidentId: result.incident.id,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     });
 
-    // ChatOps: Archive war-room channel on resolve (fire-and-forget)
-    import('./chatops/war-room')
+    // ChatOps: Archive war-room channel on resolve.
+    await import('./chatops/war-room')
       .then(({ archiveWarRoomChannel }) => {
-        archiveWarRoomChannel(result.incident.id).catch(err => {
+        return archiveWarRoomChannel(result.incident.id).catch(err => {
           logger.error('chatops.war_room_archive_failed', {
             incidentId: result.incident.id,
             error: err instanceof Error ? err.message : String(err),
@@ -571,7 +570,7 @@ export async function processEvent(
   }
 
   if (result.action === 'acknowledged' && result.incident) {
-    notifySlackForIncident(result.incident.id, 'acknowledged').catch(error => {
+    await notifySlackForIncident(result.incident.id, 'acknowledged').catch(error => {
       logger.error('Slack notification failed', {
         incidentId: result.incident.id,
         error: error instanceof Error ? error.message : 'Unknown error',

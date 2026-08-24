@@ -499,7 +499,7 @@ model Incident {
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
-  service                 Service                  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  service                 Service                  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   assignee                User?                    @relation(fields: [assigneeId], references: [id])
   team                    Team?                    @relation(fields: [teamId], references: [id])
   events                  IncidentEvent[]

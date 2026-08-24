@@ -71,15 +71,15 @@ function buildIncidentFilterSql(filters: SLAMetricsFilter, tableAlias: string = 
   }
 
   if (filters.urgency) {
-    fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"urgency"`)} = ${filters.urgency}`);
+    fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"urgency"`)} = ${filters.urgency}::"IncidentUrgency"`);
   }
 
   if (filters.status) {
-    fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"status"`)} = ${filters.status}`);
+    fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"status"`)} = ${filters.status}::"IncidentStatus"`);
   }
 
   if (filters.visibility && filters.visibility !== 'ALL') {
-    fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"visibility"`)} = ${filters.visibility}`);
+    fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"visibility"`)} = ${filters.visibility}::"IncidentVisibility"`);
   }
 
   if (filters.assigneeId !== undefined) {
@@ -302,7 +302,7 @@ async function calculateDbAggregateMetrics(
   const visibilityFilter = (whereClause as { visibility?: string }).visibility;
   const visibilityFilterSql =
     visibilityFilter && visibilityFilter !== 'ALL'
-      ? Prisma.sql`AND "visibility" = ${visibilityFilter}`
+      ? Prisma.sql`AND "visibility" = ${visibilityFilter}::"IncidentVisibility"`
       : Prisma.empty;
 
   // Build aliased filter conditions for JOIN queries (using i. prefix for incident table)
@@ -313,11 +313,11 @@ async function calculateDbAggregateMetrics(
     : Prisma.empty;
 
   const urgencyFilterSqlAliased = urgencyFilter
-    ? Prisma.sql`AND i."urgency" = ${urgencyFilter}`
+    ? Prisma.sql`AND i."urgency" = ${urgencyFilter}::"IncidentUrgency"`
     : Prisma.empty;
 
   const statusFilterSqlAliased = statusFilter
-    ? Prisma.sql`AND i."status" = ${statusFilter}`
+    ? Prisma.sql`AND i."status" = ${statusFilter}::"IncidentStatus"`
     : Prisma.empty;
 
   const assigneeFilterSqlAliased =
@@ -329,7 +329,7 @@ async function calculateDbAggregateMetrics(
 
   const visibilityFilterSqlAliased =
     visibilityFilter && visibilityFilter !== 'ALL'
-      ? Prisma.sql`AND i."visibility" = ${visibilityFilter}`
+      ? Prisma.sql`AND i."visibility" = ${visibilityFilter}::"IncidentVisibility"`
       : Prisma.empty;
 
   // Calculate business hours for after-hours detection

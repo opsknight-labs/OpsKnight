@@ -71,11 +71,18 @@ export async function encryptProviderConfig(
   // Check if encryption is available
   const key = await getEncryptionKey();
   if (!key) {
-    logger.warn('Encryption key not configured, storing provider config unencrypted', {
+    logger.error('Encryption key not configured; refusing to store provider secrets', {
       component: 'encrypted-provider-config',
       provider,
     });
-    return config;
+    const containsSecret = Object.entries(config).some(
+      ([field, value]) =>
+        sensitiveFields.includes(field) && typeof value === 'string' && value.length > 0
+    );
+    if (containsSecret) {
+      throw new Error('Provider secrets cannot be stored because encryption is unavailable.');
+    }
+    return { ...config };
   }
 
   const encryptedConfig = { ...config };
@@ -92,7 +99,7 @@ export async function encryptProviderConfig(
           field,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
-        // Continue with unencrypted value rather than failing
+        throw new Error(`Failed to encrypt provider config field: ${field}`);
       }
     }
   }

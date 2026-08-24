@@ -124,6 +124,12 @@ export function createIntegrationHandler<T>(
         throw IntegrationErrors.unauthorized('Integration is disabled');
       }
 
+      if (integration.type !== options.integrationType) {
+        throw IntegrationErrors.unauthorized(
+          `Integration type mismatch: expected ${options.integrationType}`
+        );
+      }
+
       if (!isIntegrationAuthorized(req, integration.key)) {
         throw IntegrationErrors.invalidPayload('Invalid integration key');
       }
