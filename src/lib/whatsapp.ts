@@ -91,8 +91,8 @@ export async function sendIncidentWhatsApp(
     // Send via Twilio WhatsApp API
     const twilioModule = await import('twilio');
     const twilio = (twilioModule.default || twilioModule) as unknown as (
-      sid: string,
-      token: string
+      sid?: string,
+      token?: string
     ) => {
       messages: {
         create: (opts: Record<string, unknown>) => Promise<{ sid: string }>;
@@ -218,8 +218,8 @@ export async function sendWhatsApp(
     // Send via Twilio WhatsApp API
     const twilioModule = await import('twilio');
     const twilio = (twilioModule.default || twilioModule) as unknown as (
-      sid: string,
-      token: string
+      sid?: string,
+      token?: string
     ) => {
       messages: {
         create: (opts: Record<string, unknown>) => Promise<{ sid: string }>;
