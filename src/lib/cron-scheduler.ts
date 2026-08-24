@@ -2,7 +2,7 @@ import { processPendingEscalations } from './escalation';
 import { processPendingJobs, cleanupOldJobs } from './jobs/queue';
 import { logger } from './logger';
 import { retryFailedNotifications } from './notification-retry';
-import { processAutoUnsnooze } from '@/app/(app)/incidents/snooze-actions';
+import { processAutoUnsnoozeInternal } from '@/lib/unsnooze';
 import { cleanupUserTokens } from '@/lib/user-tokens';
 import { cleanupExpiredRateLimits } from '@/lib/rate-limit';
 import { checkSLABreaches } from './sla-breach-monitor';
@@ -299,7 +299,7 @@ async function runOnce() {
     // Group 2: Secondary tasks (can run in parallel)
     const [retryResult, autoUnsnoozeResult, breachResult] = await Promise.all([
       retryFailedNotifications(),
-      processAutoUnsnooze(),
+      processAutoUnsnoozeInternal(),
       checkSLABreaches(),
     ]);
 

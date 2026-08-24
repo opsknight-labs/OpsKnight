@@ -49,6 +49,7 @@ export async function deliverWebhook(
             },
             body: payloadString,
             signal: AbortSignal.timeout(10000), // 10 second timeout
+            redirect: 'error',
           })
         );
 
@@ -215,32 +216,23 @@ export async function triggerWebhooksForService(
   incidentData: any // eslint-disable-line @typescript-eslint/no-explicit-any
 ): Promise<void> {
   try {
-    if (incidentData?.visibility) {
-      if (incidentData.visibility !== 'PUBLIC') {
-        return;
-      }
-    } else if (incidentData?.id) {
+    // Incident visibility is security-sensitive: load it from the database
+    // instead of trusting an optional caller-supplied payload field.
+    if (incidentData?.id) {
       const inc = await prisma.incident.findUnique({
         where: { id: incidentData.id },
         select: { visibility: true },
       });
-      if (inc && inc.visibility !== 'PUBLIC') {
-        return;
-      }
+      if (!inc || inc.visibility !== 'PUBLIC') return;
+    } else if (incidentData?.visibility !== 'PUBLIC') {
+      return;
     }
 
     const statusPageIds = await getStatusPagesForService(serviceId);
 
-    // If no status pages are associated, try to trigger for the default enabled status page
+    // No explicit mapping means no public delivery. This prevents unrelated
+    // services from leaking into an arbitrary default status page.
     if (statusPageIds.length === 0) {
-      const defaultStatusPage = await prisma.statusPage.findFirst({
-        where: { enabled: true, showIncidents: true },
-        select: { id: true },
-      });
-
-      if (defaultStatusPage) {
-        await triggerStatusPageWebhooks(defaultStatusPage.id, event, incidentData);
-      }
       return;
     }
 

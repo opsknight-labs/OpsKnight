@@ -580,6 +580,17 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
 
   for (const userId of targetUserIds) {
     try {
+      const latestState = await prisma.incident.findUnique({
+        where: { id: incidentId },
+        select: { status: true, escalationStatus: true },
+      });
+      if (
+        !latestState ||
+        !['OPEN'].includes(latestState.status) ||
+        latestState.escalationStatus === 'COMPLETED'
+      ) {
+        break;
+      }
       const message = `[OpsKnight] Incident: ${incident.title}${currentStepIndex > 0 ? ` (Escalation Level ${currentStepIndex + 1})` : ''}`;
       const result = await sendUserNotification(incidentId, userId, message, escalationChannels);
       notificationsSent.push({ userId, result });

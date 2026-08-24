@@ -80,9 +80,20 @@ export async function POST(req: NextRequest) {
             verified: false,
           },
         });
-      } else {
-        // Already subscribed - return success but don't send another email
+      } else if (existing.verified) {
         return jsonOk({ success: true, message: 'Already subscribed' }, 200);
+      } else if (Date.now() - existing.subscribedAt.getTime() < 60_000) {
+        return jsonOk(
+          { success: true, message: 'Verification email was recently sent. Please try again shortly.' },
+          200
+        );
+      } else {
+        // Rotate stale verification credentials and resend so an attacker cannot
+        // permanently reserve somebody else's email address.
+        await prisma.statusPageSubscription.update({
+          where: { id: existing.id },
+          data: { token, verificationToken },
+        });
       }
     } else {
       // Create new subscription

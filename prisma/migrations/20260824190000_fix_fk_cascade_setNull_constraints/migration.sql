@@ -1,6 +1,6 @@
 -- Fix foreign key cascade and SetNull constraints for enterprise data integrity.
 -- This migration ensures:
---   1. Deleting a Service cascades to Incidents, Alerts, and Integrations (instead of crashing).
+--   1. Services with incident history cannot be deleted; auxiliary service data cascades.
 --   2. Deleting a User does NOT destroy historical IncidentNotes (userId is nullified instead).
 --   3. Deleting a User nullifies team lead, postmortem author, template author, action item owner, etc.
 
@@ -18,10 +18,10 @@ ALTER TABLE "SlackOAuthConfig" ALTER COLUMN "updatedBy" DROP NOT NULL;
 
 -- Drop existing FK constraints so we can re-add with onDelete rules
 
--- Incident → Service: Cascade (was no onDelete)
+-- Incident → Service: Restrict to preserve incident and audit history
 ALTER TABLE "Incident" DROP CONSTRAINT IF EXISTS "Incident_serviceId_fkey";
 ALTER TABLE "Incident" ADD CONSTRAINT "Incident_serviceId_fkey"
-  FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- Alert → Service: Cascade
 ALTER TABLE "Alert" DROP CONSTRAINT IF EXISTS "Alert_serviceId_fkey";

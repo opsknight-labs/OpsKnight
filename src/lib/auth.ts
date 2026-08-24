@@ -279,6 +279,25 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return null;
             }
 
+            // Shared across application instances; the progressive local
+            // lockout below remains useful for its user-facing lockout timing.
+            const { checkRateLimit } = await import('@/lib/rate-limit');
+            const distributedAttempt = await checkRateLimit(
+              `auth:credentials:${email}:${ip}`,
+              20,
+              15 * 60 * 1000
+            );
+            if (!distributedAttempt.allowed) {
+              await logLoginBlocked(
+                email,
+                ip,
+                userAgent,
+                'RATE_LIMITED',
+                Math.max(0, distributedAttempt.resetAt - Date.now())
+              );
+              return null;
+            }
+
             // Check rate limiting / lockout
             const attemptCheck = checkLoginAttempt(email, ip);
             if (!attemptCheck.allowed) {
