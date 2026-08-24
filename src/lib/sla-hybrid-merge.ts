@@ -146,10 +146,14 @@ export function mergeHybridMetrics(
     (historical.escalationRate / 100) * historical.totalIncidents +
       (live.escalationRate / 100) * live.totalIncidents
   );
-  const reopenCount = Math.round(
-    (historical.reopenRate / 100) * historical.totalIncidents +
-      (live.reopenRate / 100) * live.totalIncidents
+  // live.reopenRate was computed as (reopenCount / resolvedCount) * 100
+  const liveReopenCount = Math.round(
+    (live.reopenRate / 100) * (live.resolvedIncidents ?? live.totalIncidents)
   );
+  // historical.reopenRate was computed as (reopenCount / totalIncidents) * 100
+  const histReopenCount = Math.round((historical.reopenRate / 100) * historical.totalIncidents);
+  const reopenCount = liveReopenCount + histReopenCount;
+
   const autoResolveCount = historical.autoResolvedCount + live.autoResolvedCount;
   const afterHoursCount = Math.round(
     (historical.afterHoursRate / 100) * historical.totalIncidents +
@@ -180,6 +184,7 @@ export function mergeHybridMetrics(
 
     // Counts (summed across partitions).
     totalIncidents,
+    resolvedIncidents: resolvedTotal,
     activeIncidents: live.activeIncidents, // "active" is current-state
     openCount: live.openCount,
     acknowledgedCount: live.acknowledgedCount,

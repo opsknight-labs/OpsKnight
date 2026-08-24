@@ -46,17 +46,6 @@ async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Prom
     return [];
   }
 
-  // If there are standalone active overrides, page all active override users
-  const activeOverrides = schedule.overrides.filter(
-    o => o.start.getTime() <= atTime.getTime() && o.end.getTime() > atTime.getTime()
-  );
-  if (activeOverrides.length > 0) {
-    const standalone = activeOverrides.filter(o => !o.replacesUserId);
-    if (standalone.length > 0) {
-      return Array.from(new Set(standalone.map(o => o.userId)));
-    }
-  }
-
   // Build schedule blocks to find who's on-call
   const windowStart = startOfDayInTimeZone(atTime, schedule.timeZone);
   const windowEnd = startOfNextDayInTimeZone(atTime, schedule.timeZone);
@@ -128,6 +117,18 @@ async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Prom
   for (const block of activeBlocks) {
     if (block.userId) {
       userIds.add(block.userId);
+    }
+  }
+
+  // Standalone overrides (replacesUserId === null) are additive — they ADD an on-call slot
+  // rather than replacing an existing user. Include all active standalone override users.
+  for (const override of schedule.overrides) {
+    if (
+      override.replacesUserId === null &&
+      override.start.getTime() <= atTime.getTime() &&
+      override.end.getTime() > atTime.getTime()
+    ) {
+      userIds.add(override.userId);
     }
   }
 

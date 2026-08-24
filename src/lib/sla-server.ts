@@ -2273,11 +2273,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
     // Counts - use actual total from database, not limited count
     totalIncidents: totalIncidentCount,
+    resolvedIncidents: resolvedCountForCalc,
     activeIncidents,
     unassignedActive,
     highUrgencyCount: currentStats.highUrg,
-    mediumUrgencyCount: mediumActiveIncidents,
-    lowUrgencyCount: lowActiveIncidents,
+    mediumUrgencyCount: currentStats.mediumUrg,
+    lowUrgencyCount: currentStats.lowUrg,
     alertsCount,
     openCount: activeStatusFinalMap.get('OPEN') ?? 0,
     acknowledgedCount: activeStatusFinalMap.get('ACKNOWLEDGED') ?? 0,
@@ -3074,6 +3075,7 @@ export async function calculateSLAMetricsFromRollups(
     activeIncidents: openIncidents + acknowledgedIncidents,
     openCount: openIncidents,
     acknowledgedCount: acknowledgedIncidents,
+    resolvedIncidents,
     highUrgencyCount: highUrgencyIncidents,
     mediumUrgencyCount: mediumUrgencyIncidents,
     lowUrgencyCount: lowUrgencyIncidents,

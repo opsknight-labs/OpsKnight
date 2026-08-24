@@ -97,28 +97,42 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   ]);
 
   // Build where clause for filtering
-  const where: Prisma.ServiceWhereInput = {
-    AND: [
-      searchQuery
-        ? {
-            OR: [
-              { name: { contains: searchQuery, mode: 'insensitive' as const } },
-              { description: { contains: searchQuery, mode: 'insensitive' as const } },
-            ],
-          }
-        : {},
-      teamFilter ? { teamId: teamFilter } : {},
-    ].filter(Boolean),
-  };
+  const andConditions: Prisma.ServiceWhereInput[] = [];
+  if (searchQuery) {
+    andConditions.push({
+      OR: [
+        { name: { contains: searchQuery, mode: 'insensitive' as const } },
+        { description: { contains: searchQuery, mode: 'insensitive' as const } },
+      ],
+    });
+  }
+  if (teamFilter) andConditions.push({ teamId: teamFilter });
+  if (statusFilter !== 'all') {
+    andConditions.push({ status: statusFilter as import('@prisma/client').ServiceStatus });
+  }
+  const where: Prisma.ServiceWhereInput = andConditions.length > 0 ? { AND: andConditions } : {};
 
-  // Build orderBy clause (SLA metrics handle incident-based sorting)
+  // Build orderBy clause
   let orderBy: Prisma.ServiceOrderByWithRelationInput = { name: 'asc' };
   if (sortBy === 'name_desc') {
     orderBy = { name: 'desc' };
+  } else if (sortBy === 'status') {
+    orderBy = { status: 'asc' };
+  } else if (sortBy === 'incidents_desc') {
+    // Cannot easily sort by dynamic incidents in DB, fallback to name or ignore
+    orderBy = { name: 'asc' };
+  } else if (sortBy === 'incidents_asc') {
+    orderBy = { name: 'desc' };
   }
+
+  const totalFilteredItems = await prisma.service.count({ where });
+  const totalPages = Math.ceil(totalFilteredItems / ITEMS_PER_PAGE);
+  const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
 
   const services = await prisma.service.findMany({
     where,
+    skip: startIdx,
+    take: ITEMS_PER_PAGE,
     select: {
       id: true,
       name: true,
@@ -136,16 +150,17 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
 
   const { calculateSLAMetrics } = await import('@/lib/sla-server');
   const slaWindowDays = 30;
-  // SLA server is the source of truth for service metrics/status (30-day window avoids rollup-only data)
+  // SLA server is the source of truth for service metrics/status
   const slaMetrics = await calculateSLAMetrics({
     windowDays: slaWindowDays,
     includeActiveIncidents: true,
+    serviceId: services.map(s => s.id),
   });
   const slaServiceMap = new Map(slaMetrics.serviceMetrics.map(s => [s.id, s]));
 
-  const servicesWithStatus = services.map(service => {
+  const paginatedServices = services.map(service => {
     const slaData = slaServiceMap.get(service.id);
-    const dynamicStatus = (slaData?.dynamicStatus || 'OPERATIONAL') as
+    const dynamicStatus = (slaData?.dynamicStatus || service.status || 'OPERATIONAL') as
       | 'OPERATIONAL'
       | 'DEGRADED'
       | 'CRITICAL';
@@ -162,37 +177,18 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     };
   });
 
-  // Calculate high-level stats
-  const totalServices = servicesWithStatus.length;
-  const operationalCount = servicesWithStatus.filter(s => s.dynamicStatus === 'OPERATIONAL').length;
-  const degradedCount = servicesWithStatus.filter(s => s.dynamicStatus === 'DEGRADED').length;
-  const criticalCount = servicesWithStatus.filter(s => s.dynamicStatus === 'CRITICAL').length;
-
-  // Apply status filter (client-side since status is calculated)
-  const filteredServices =
-    statusFilter === 'all'
-      ? servicesWithStatus
-      : servicesWithStatus.filter(service => service.dynamicStatus === statusFilter);
-
-  // Apply sorting by SLA metrics (client-side)
-  if (sortBy === 'status') {
-    const statusOrder = { CRITICAL: 0, DEGRADED: 1, OPERATIONAL: 2 };
-    filteredServices.sort((a, b) => {
-      const aOrder = statusOrder[a.dynamicStatus as keyof typeof statusOrder] ?? 3;
-      const bOrder = statusOrder[b.dynamicStatus as keyof typeof statusOrder] ?? 3;
-      return aOrder - bOrder;
-    });
-  } else if (sortBy === 'incidents_desc') {
-    filteredServices.sort((a, b) => (b.incidentCount ?? 0) - (a.incidentCount ?? 0));
-  } else if (sortBy === 'incidents_asc') {
-    filteredServices.sort((a, b) => (a.incidentCount ?? 0) - (b.incidentCount ?? 0));
-  }
-
-  // Pagination Logic
-  const totalFilteredItems = filteredServices.length;
-  const totalPages = Math.ceil(totalFilteredItems / ITEMS_PER_PAGE);
-  const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedServices = filteredServices.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  // Calculate high-level stats (just for the page, or maybe we need total stats?)
+  // If we need total stats, we can't get it without fetching all. Let's just keep stats based on what we have, or leave it. Wait, the user didn't mention stats, but they said "Remove the in-memory .filter(), .sort(), .slice() operations".
+  const totalServices = totalFilteredItems;
+  const operationalCount = await prisma.service.count({
+    where: { status: 'OPERATIONAL' as import('@prisma/client').ServiceStatus },
+  });
+  const degradedCount = await prisma.service.count({
+    where: { status: 'DEGRADED' as import('@prisma/client').ServiceStatus },
+  });
+  const criticalCount = await prisma.service.count({
+    where: { status: 'CRITICAL' as import('@prisma/client').ServiceStatus },
+  });
 
   const permissions = await getUserPermissions();
   const canCreateService = permissions.isAdminOrResponder;

@@ -1,131 +1,214 @@
 import { describe, it, expect } from 'vitest';
+import {
+  calculateMTTA,
+  calculateMTTR,
+  checkAckSLA,
+  checkResolveSLA,
+  serializeSlaMetrics,
+  SLAMetrics,
+} from '@/lib/sla';
 
 describe('SLA (Service Level Agreement) Tracking', () => {
-  describe('SLA Definitions', () => {
-    it('should define SLA targets by urgency', () => {
-      const slaTargets = {
-        CRITICAL: { responseTime: 15, resolutionTime: 240 }, // minutes
-        HIGH: { responseTime: 60, resolutionTime: 480 },
-        MEDIUM: { responseTime: 240, resolutionTime: 1440 },
-        LOW: { responseTime: 1440, resolutionTime: 4320 },
-      };
+  describe('calculateMTTA', () => {
+    it('should calculate Mean Time To Acknowledge in milliseconds', () => {
+      const createdAt = new Date('2024-01-01T10:00:00.000Z');
+      const acknowledgedAt = new Date('2024-01-01T10:15:00.000Z');
 
-      expect(slaTargets.CRITICAL.responseTime).toBe(15);
-      expect(slaTargets.HIGH.resolutionTime).toBe(480);
+      const mtta = calculateMTTA({ createdAt, acknowledgedAt });
+
+      expect(mtta).toBe(15 * 60 * 1000); // 15 minutes in ms
     });
 
-    it('should calculate SLA deadline', () => {
-      const calculateDeadline = (startTime: Date, targetMinutes: number) => {
-        return new Date(startTime.getTime() + targetMinutes * 60000);
-      };
+    it('should return null when incident is not acknowledged', () => {
+      const createdAt = new Date('2024-01-01T10:00:00.000Z');
 
-      const start = new Date('2024-01-01T12:00:00Z');
-      const deadline = calculateDeadline(start, 60);
+      const mtta = calculateMTTA({ createdAt, acknowledgedAt: null });
 
-      expect(deadline.getTime() - start.getTime()).toBe(60 * 60000);
+      expect(mtta).toBeNull();
     });
   });
 
-  describe('SLA Compliance', () => {
-    it('should check if SLA is met', () => {
-      const isSLAMet = (actualTime: number, targetTime: number) => {
-        return actualTime <= targetTime;
-      };
+  describe('calculateMTTR', () => {
+    it('should calculate Mean Time To Resolve in milliseconds', () => {
+      const createdAt = new Date('2024-01-01T10:00:00.000Z');
+      const resolvedAt = new Date('2024-01-01T11:30:00.000Z');
 
-      expect(isSLAMet(30, 60)).toBe(true);
-      expect(isSLAMet(90, 60)).toBe(false);
+      const mttr = calculateMTTR({ createdAt, resolvedAt });
+
+      expect(mttr).toBe(90 * 60 * 1000); // 90 minutes in ms
     });
 
-    it('should calculate SLA breach time', () => {
-      const calculateBreachTime = (actualTime: number, targetTime: number) => {
-        return Math.max(0, actualTime - targetTime);
-      };
+    it('should return null when incident is unresolved', () => {
+      const createdAt = new Date('2024-01-01T10:00:00.000Z');
 
-      expect(calculateBreachTime(90, 60)).toBe(30);
-      expect(calculateBreachTime(30, 60)).toBe(0);
-    });
+      const mttr = calculateMTTR({ createdAt, resolvedAt: null });
 
-    it('should calculate SLA compliance percentage', () => {
-      const incidents = [{ slaMet: true }, { slaMet: true }, { slaMet: false }, { slaMet: true }];
-
-      const metCount = incidents.filter(i => i.slaMet).length;
-      const percentage = (metCount / incidents.length) * 100;
-
-      expect(percentage).toBe(75);
+      expect(mttr).toBeNull();
     });
   });
 
-  describe('Response Time Tracking', () => {
-    it('should calculate response time', () => {
-      const calculateResponseTime = (createdAt: Date, firstResponseAt: Date) => {
-        return (firstResponseAt.getTime() - createdAt.getTime()) / 60000;
-      };
+  describe('checkAckSLA', () => {
+    it('should return true when acknowledgement is within target SLA', () => {
+      const createdAt = new Date('2024-01-01T12:00:00.000Z');
+      const acknowledgedAt = new Date('2024-01-01T12:10:00.000Z'); // 10 mins
 
-      const created = new Date('2024-01-01T12:00:00Z');
-      const responded = new Date('2024-01-01T12:30:00Z');
+      const metCustom = checkAckSLA({ createdAt, acknowledgedAt }, { targetAckMinutes: 20 });
+      const metDefault = checkAckSLA(
+        { createdAt, acknowledgedAt },
+        {} // default 15 mins
+      );
 
-      expect(calculateResponseTime(created, responded)).toBe(30);
+      expect(metCustom).toBe(true);
+      expect(metDefault).toBe(true);
     });
 
-    it('should calculate resolution time', () => {
-      const calculateResolutionTime = (createdAt: Date, resolvedAt: Date) => {
-        return (resolvedAt.getTime() - createdAt.getTime()) / 60000;
-      };
+    it('should return false when acknowledgement breaches SLA or is unacknowledged', () => {
+      const createdAt = new Date('2024-01-01T12:00:00.000Z');
+      const lateAckAt = new Date('2024-01-01T12:30:00.000Z'); // 30 mins
 
-      const created = new Date('2024-01-01T12:00:00Z');
-      const resolved = new Date('2024-01-01T16:00:00Z');
+      const breached = checkAckSLA(
+        { createdAt, acknowledgedAt: lateAckAt },
+        { targetAckMinutes: 15 }
+      );
+      const unacked = checkAckSLA({ createdAt, acknowledgedAt: null }, { targetAckMinutes: 15 });
 
-      expect(calculateResolutionTime(created, resolved)).toBe(240);
-    });
-  });
-
-  describe('SLA Reporting', () => {
-    it('should generate SLA summary', () => {
-      const incidents = [
-        { urgency: 'CRITICAL', slaMet: true, responseTime: 10 },
-        { urgency: 'CRITICAL', slaMet: false, responseTime: 20 },
-        { urgency: 'HIGH', slaMet: true, responseTime: 45 },
-      ];
-
-      const summary = {
-        total: incidents.length,
-        met: incidents.filter(i => i.slaMet).length,
-        breached: incidents.filter(i => !i.slaMet).length,
-        complianceRate: (incidents.filter(i => i.slaMet).length / incidents.length) * 100,
-      };
-
-      expect(summary.total).toBe(3);
-      expect(summary.met).toBe(2);
-      expect(summary.breached).toBe(1);
-      expect(summary.complianceRate).toBeCloseTo(66.67, 2);
-    });
-
-    it('should calculate average response time', () => {
-      const responseTimes = [10, 20, 30, 40];
-      const average = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
-
-      expect(average).toBe(25);
+      expect(breached).toBe(false);
+      expect(unacked).toBe(false);
     });
   });
 
-  describe('SLA Alerts', () => {
-    it('should trigger alert on SLA breach', () => {
-      const shouldAlert = (actualTime: number, targetTime: number) => {
-        return actualTime > targetTime;
-      };
+  describe('checkResolveSLA', () => {
+    it('should return true when resolution is within target SLA', () => {
+      const createdAt = new Date('2024-01-01T12:00:00.000Z');
+      const resolvedAt = new Date('2024-01-01T13:00:00.000Z'); // 60 mins
 
-      expect(shouldAlert(90, 60)).toBe(true);
-      expect(shouldAlert(30, 60)).toBe(false);
+      const met = checkResolveSLA({ createdAt, resolvedAt }, { targetResolveMinutes: 120 });
+
+      expect(met).toBe(true);
     });
 
-    it('should trigger warning before SLA breach', () => {
-      const shouldWarn = (elapsedTime: number, targetTime: number, threshold: number) => {
-        const percentElapsed = (elapsedTime / targetTime) * 100;
-        return percentElapsed >= threshold;
+    it('should return false when resolution exceeds target SLA or is unresolved', () => {
+      const createdAt = new Date('2024-01-01T12:00:00.000Z');
+      const lateResolvedAt = new Date('2024-01-01T15:00:00.000Z'); // 180 mins
+
+      const breached = checkResolveSLA(
+        { createdAt, resolvedAt: lateResolvedAt },
+        { targetResolveMinutes: 120 }
+      );
+      const unresolved = checkResolveSLA(
+        { createdAt, resolvedAt: null },
+        { targetResolveMinutes: 120 }
+      );
+
+      expect(breached).toBe(false);
+      expect(unresolved).toBe(false);
+    });
+  });
+
+  describe('serializeSlaMetrics', () => {
+    it('should convert all Date objects to ISO strings for API serialization', () => {
+      const mockMetrics: SLAMetrics = {
+        effectiveStart: new Date('2024-01-01T00:00:00.000Z'),
+        effectiveEnd: new Date('2024-01-31T23:59:59.999Z'),
+        requestedStart: new Date('2024-01-01T00:00:00.000Z'),
+        requestedEnd: new Date('2024-01-31T23:59:59.999Z'),
+        isClipped: false,
+        retentionDays: 30,
+        mttr: 45,
+        mttd: null,
+        mtti: null,
+        mttk: null,
+        mttaP50: 5,
+        mttaP95: 12,
+        mttrP50: 30,
+        mttrP95: 90,
+        mtbfMs: 86400000,
+        ackCompliance: 98.5,
+        resolveCompliance: 95.0,
+        ackBreaches: 1,
+        resolveBreaches: 2,
+        totalIncidents: 20,
+        resolvedIncidents: 18,
+        activeIncidents: 2,
+        unassignedActive: 0,
+        highUrgencyCount: 4,
+        mediumUrgencyCount: 10,
+        lowUrgencyCount: 6,
+        alertsCount: 45,
+        openCount: 1,
+        acknowledgedCount: 1,
+        snoozedCount: 0,
+        suppressedCount: 0,
+        resolved24h: 3,
+        dynamicStatus: 'OPERATIONAL',
+        activeCount: 2,
+        criticalCount: 0,
+        ackRate: 95.0,
+        resolveRate: 90.0,
+        highUrgencyRate: 20.0,
+        afterHoursRate: 10.0,
+        alertsPerIncident: 2.25,
+        escalationRate: 5.0,
+        reopenRate: 0,
+        autoResolveRate: 10.0,
+        previousPeriod: {
+          totalIncidents: 15,
+          highUrgencyCount: 3,
+          mtta: 6,
+          mttr: 50,
+          ackRate: 93.3,
+          resolveRate: 86.6,
+        },
+        coveragePercent: 100,
+        coverageGapDays: 0,
+        onCallHoursMs: 744 * 3600 * 1000,
+        onCallUsersCount: 4,
+        activeOverrides: 0,
+        autoResolvedCount: 2,
+        manualResolvedCount: 16,
+        eventsCount: 80,
+        avgLatencyP99: 120,
+        errorRate: 0.01,
+        totalRequests: 100000,
+        saturation: 45.2,
+        trendSeries: [],
+        statusMix: [{ status: 'RESOLVED', count: 18 }],
+        urgencyMix: [{ urgency: 'HIGH', count: 4 }],
+        topServices: [{ id: 'svc-1', name: 'API Gateway', count: 12 }],
+        assigneeLoad: [{ id: 'user-1', name: 'Alice', count: 10 }],
+        statusAges: [{ status: 'RESOLVED', avgMs: 2700000 }],
+        onCallLoad: [],
+        serviceSlaTable: [],
+        recurringTitles: [],
+        eventsPerIncident: 4,
+        heatmapData: [],
+        serviceMetrics: [],
+        insights: [{ type: 'positive', text: 'MTTR improved by 10%' }],
+        currentShifts: [],
+        recentIncidents: [
+          {
+            id: 'inc-1',
+            title: 'High latency on checkout',
+            description: 'Database query slow',
+            status: 'RESOLVED',
+            urgency: 'HIGH',
+            createdAt: new Date('2024-01-15T08:00:00.000Z'),
+            resolvedAt: new Date('2024-01-15T08:45:00.000Z'),
+            service: { id: 'svc-1', name: 'Checkout' },
+          },
+        ],
       };
 
-      expect(shouldWarn(45, 60, 75)).toBe(true); // 75% elapsed
-      expect(shouldWarn(30, 60, 75)).toBe(false); // 50% elapsed
+      const serialized = serializeSlaMetrics(mockMetrics);
+
+      expect(serialized.effectiveStart).toBe('2024-01-01T00:00:00.000Z');
+      expect(serialized.effectiveEnd).toBe('2024-01-31T23:59:59.999Z');
+      expect(serialized.requestedStart).toBe('2024-01-01T00:00:00.000Z');
+      expect(serialized.requestedEnd).toBe('2024-01-31T23:59:59.999Z');
+      expect(serialized.recentIncidents?.[0].createdAt).toBe('2024-01-15T08:00:00.000Z');
+      expect(serialized.recentIncidents?.[0].resolvedAt).toBe('2024-01-15T08:45:00.000Z');
+      expect(serialized.ackCompliance).toBe(98.5);
+      expect(serialized.totalIncidents).toBe(20);
     });
   });
 });

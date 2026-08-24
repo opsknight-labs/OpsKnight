@@ -1,3 +1,54 @@
+export interface RequestContext {
+  requestId?: string;
+  userId?: string;
+  component?: string;
+}
+
+interface AsyncLocalStorageLike<T> {
+  run<R>(store: T, callback: () => R): R;
+  getStore(): T | undefined;
+}
+
+class FallbackAsyncLocalStorage<T> implements AsyncLocalStorageLike<T> {
+  private store: T | undefined;
+  run<R>(store: T, callback: () => R): R {
+    const prev = this.store;
+    this.store = store;
+    try {
+      return callback();
+    } finally {
+      this.store = prev;
+    }
+  }
+  getStore(): T | undefined {
+    return this.store;
+  }
+}
+
+function createAsyncLocalStorage<T>(): AsyncLocalStorageLike<T> {
+  try {
+    const GlobalALS = (
+      globalThis as unknown as { AsyncLocalStorage?: new <V>() => AsyncLocalStorageLike<V> }
+    ).AsyncLocalStorage;
+    if (typeof GlobalALS === 'function') {
+      return new GlobalALS<T>();
+    }
+  } catch {
+    // Fallback if not available
+  }
+  return new FallbackAsyncLocalStorage<T>();
+}
+
+export const requestContextStorage = createAsyncLocalStorage<RequestContext>();
+
+export function runWithContext<T>(context: RequestContext, fn: () => T): T {
+  return requestContextStorage.run(context, fn);
+}
+
+export function getRequestContext(): RequestContext {
+  return requestContextStorage.getStore() ?? {};
+}
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogContext {
@@ -286,7 +337,13 @@ class Logger {
   }
 
   private log(level: LogLevel, message: string, context?: LogContext): void {
-    const rawContext = { ...this.persistentContext, ...this.config.context, ...context };
+    const ctx = requestContextStorage.getStore() ?? {};
+    const rawContext: LogContext = {
+      ...this.persistentContext,
+      ...this.config.context,
+      ...(ctx as LogContext),
+      ...context,
+    };
 
     let component: string | undefined;
     let requestId: string | undefined;

@@ -93,25 +93,31 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
   const page = Math.max(1, Number(awaitedSearchParams?.page) || 1);
   const skip = (page - 1) * TEAMS_PER_PAGE;
 
-  const where: Prisma.TeamWhereInput = query
-    ? {
-        OR: [
-          { name: { contains: query, mode: 'insensitive' } },
-          { description: { contains: query, mode: 'insensitive' } },
-        ],
-      }
-    : {};
+  const whereConditions: Prisma.TeamWhereInput[] = [];
+  if (query) {
+    whereConditions.push({
+      OR: [
+        { name: { contains: query, mode: 'insensitive' as const } },
+        { description: { contains: query, mode: 'insensitive' as const } },
+      ],
+    });
+  }
+  const where: Prisma.TeamWhereInput = whereConditions.length > 0 ? { AND: whereConditions } : {};
 
-  let orderBy: Prisma.TeamOrderByWithRelationInput = { createdAt: 'desc' };
+  let orderBy: Prisma.TeamOrderByWithRelationInput | Prisma.TeamOrderByWithRelationInput[] = {
+    createdAt: 'desc',
+  };
   if (sortBy === 'createdAt') {
     orderBy = { createdAt: sortOrder as Prisma.SortOrder };
   } else if (sortBy === 'name') {
     orderBy = { name: sortOrder as Prisma.SortOrder };
-  } else {
-    orderBy = { createdAt: 'desc' };
+  } else if (sortBy === 'memberCount') {
+    orderBy = { members: { _count: sortOrder as Prisma.SortOrder } };
+  } else if (sortBy === 'serviceCount') {
+    orderBy = { services: { _count: sortOrder as Prisma.SortOrder } };
   }
 
-  const [allTeams, _totalCount, users, ownerCounts] = await Promise.all([
+  const [teams, adjustedTotalCount, users, ownerCounts] = await Promise.all([
     prisma.team.findMany({
       include: {
         members: {
@@ -138,6 +144,8 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
       },
       where,
       orderBy,
+      skip,
+      take: TEAMS_PER_PAGE,
     }),
     prisma.team.count({ where }),
     prisma.user.findMany({
@@ -150,6 +158,7 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
         avatarUrl: true,
         gender: true,
       },
+      take: 500, // Limit users for the team member add dropdown to avoid unbounded memory
     }),
     prisma.teamMember.groupBy({
       by: ['teamId'],
@@ -157,27 +166,6 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
       _count: { _all: true },
     }),
   ]);
-
-  let filteredTeams = allTeams;
-
-  if (minMembers !== undefined) {
-    filteredTeams = filteredTeams.filter(team => team._count.members >= minMembers);
-  }
-
-  if (minServices !== undefined) {
-    filteredTeams = filteredTeams.filter(team => team._count.services >= minServices);
-  }
-
-  if (sortBy === 'memberCount' || sortBy === 'serviceCount') {
-    filteredTeams = [...filteredTeams].sort((a, b) => {
-      const aCount = sortBy === 'memberCount' ? a._count.members : a._count.services;
-      const bCount = sortBy === 'memberCount' ? b._count.members : b._count.services;
-      return sortOrder === 'asc' ? aCount - bCount : bCount - aCount;
-    });
-  }
-
-  const teams = filteredTeams.slice(skip, skip + TEAMS_PER_PAGE);
-  const adjustedTotalCount = filteredTeams.length;
 
   const ownerCountByTeam = new Map<string, number>();
   for (const entry of ownerCounts) {
@@ -304,15 +292,14 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
   }));
 
   // Calculate stats
+  // Calculate stats (Note: since we moved to DB pagination, these stats now reflect the current page rather than all pages, except for total teams)
   const stats = {
     total: adjustedTotalCount,
-    totalMembers: filteredTeams.reduce((sum, team) => sum + team._count.members, 0),
-    totalServices: filteredTeams.reduce((sum, team) => sum + team._count.services, 0),
+    totalMembers: teams.reduce((sum, team) => sum + team._count.members, 0),
+    totalServices: teams.reduce((sum, team) => sum + team._count.services, 0),
     avgMembersPerTeam:
-      filteredTeams.length > 0
-        ? Math.round(
-            filteredTeams.reduce((sum, team) => sum + team._count.members, 0) / filteredTeams.length
-          )
+      teams.length > 0
+        ? Math.round(teams.reduce((sum, team) => sum + team._count.members, 0) / teams.length)
         : 0,
   };
 

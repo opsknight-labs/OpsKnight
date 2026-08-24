@@ -31,6 +31,7 @@ export type SLAMetrics = {
 
   // Counts
   totalIncidents: number;
+  resolvedIncidents?: number;
   activeIncidents: number;
   unassignedActive: number;
   highUrgencyCount: number;

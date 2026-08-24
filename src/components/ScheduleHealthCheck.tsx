@@ -94,33 +94,63 @@ export default function ScheduleHealthCheck({
     const next7Days = new Date(now);
     next7Days.setDate(next7Days.getDate() + 7);
 
-    // Simple gap detection - check if there are any shifts covering each day
-    const coveredDays = new Set<string>();
+    // Sum up covered minutes per day
+    const dayCoverages = new Map<string, number>();
+
+    let formatter: Intl.DateTimeFormat;
+    try {
+      formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timeZone || 'UTC',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+    } catch {
+      formatter = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: 'UTC',
+      });
+    }
+    const getLocalDateKey = (d: Date) => formatter.format(d);
+
     shifts.forEach(shift => {
-      const startDate = new Date(shift.start);
-      const endDate = new Date(shift.end);
-      const currentDate = new Date(startDate);
-      while (currentDate <= endDate && currentDate <= next7Days) {
-        coveredDays.add(currentDate.toISOString().split('T')[0]);
-        currentDate.setDate(currentDate.getDate() + 1);
+      const shiftStart = new Date(shift.start);
+      const shiftEnd = new Date(shift.end);
+
+      const startMs = Math.max(shiftStart.getTime(), now.getTime());
+      const endMs = Math.min(shiftEnd.getTime(), next7Days.getTime());
+
+      if (startMs >= endMs) return;
+
+      let currentMs = startMs;
+      while (currentMs < endMs) {
+        const key = getLocalDateKey(new Date(currentMs));
+        dayCoverages.set(key, (dayCoverages.get(key) || 0) + 1);
+        currentMs += 60000; // 1 minute
       }
     });
 
-    // Check each of the next 7 days
     for (let i = 0; i < 7; i++) {
-      const checkDate = new Date(now);
-      checkDate.setDate(checkDate.getDate() + i);
-      const dateStr = checkDate.toISOString().split('T')[0];
-      if (!coveredDays.has(dateStr) && layers.length > 0 && layers.some(l => l.users.length > 0)) {
-        const dayName = checkDate.toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
+      const d = new Date(now);
+      d.setDate(d.getDate() + i);
+      const key = getLocalDateKey(d);
+
+      const coveredMins = dayCoverages.get(key) || 0;
+      if (coveredMins === 0 && layers.length > 0 && layers.some(l => l.users.length > 0)) {
+        problems.push({
+          type: 'error',
+          title: `No coverage on ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
+          description: 'Zero coverage configured for this day',
+          icon: AlertTriangle,
         });
+        break; // Only show first gap
+      } else if (coveredMins < 1440 && layers.length > 0 && layers.some(l => l.users.length > 0)) {
         problems.push({
           type: 'warning',
-          title: `Possible gap on ${dayName}`,
-          description: 'Verify coverage is configured for this day',
+          title: `Partial coverage on ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
+          description: `Only ${Math.floor(coveredMins / 60)}h ${coveredMins % 60}m covered`,
           icon: AlertCircle,
         });
         break; // Only show first gap
@@ -128,9 +158,8 @@ export default function ScheduleHealthCheck({
     }
 
     return problems;
-  }, [layers, shifts]);
+  }, [layers, shifts, timeZone]);
 
-  // If no issues, show healthy status
   if (issues.length === 0) {
     return (
       <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50/50 rounded-lg px-3 py-2 border border-emerald-100">

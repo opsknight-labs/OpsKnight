@@ -139,9 +139,17 @@ export async function GET(request: NextRequest) {
           // Calculate trend (compare to previous period)
           let trend: 'up' | 'down' | 'stable' = 'stable';
           if (def.metricType === 'UPTIME' || def.metricType === 'AVAILABILITY') {
-            // For uptime, higher is better
-            if (metrics.previousPeriod.resolveRate < metrics.resolveRate) trend = 'up';
-            else if (metrics.previousPeriod.resolveRate > metrics.resolveRate) trend = 'down';
+            const previousPeriod = metrics.previousPeriod as any;
+            const currentMetrics = metrics as any;
+            if (
+              previousPeriod.uptimePercentage != null &&
+              currentMetrics.uptimePercentage != null
+            ) {
+              trend =
+                currentMetrics.uptimePercentage >= previousPeriod.uptimePercentage ? 'up' : 'down';
+            } else {
+              trend = 'stable';
+            }
           } else if (def.metricType === 'MTTA') {
             // For MTTA, lower is better
             const prev = metrics.previousPeriod.mtta;

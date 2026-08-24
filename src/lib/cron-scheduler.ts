@@ -1,5 +1,5 @@
 import { processPendingEscalations } from './escalation';
-import { processPendingJobs } from './jobs/queue';
+import { processPendingJobs, cleanupOldJobs } from './jobs/queue';
 import { logger } from './logger';
 import { retryFailedNotifications } from './notification-retry';
 import { processAutoUnsnooze } from '@/app/(app)/incidents/snooze-actions';
@@ -29,6 +29,7 @@ const SINGLETON_ID = 'singleton';
 // Local state for timer management (not persisted)
 let timer: NodeJS.Timeout | null = null;
 let initialized = false;
+let lastJobCleanup = 0;
 
 /**
  * Get or create the singleton scheduler state from database
@@ -314,7 +315,17 @@ async function runOnce() {
     // Group 3: Maintenance tasks (low priority, run last)
     const tokenCleanup = await cleanupUserTokens();
     const rateLimitCleanup = await cleanupExpiredRateLimits();
-    logger.info('[Cron] Maintenance tasks processed', { tokenCleanup, rateLimitCleanup });
+    let jobsCleaned = false;
+    if (Date.now() - lastJobCleanup > 24 * 60 * 60 * 1000) {
+      await cleanupOldJobs(7);
+      lastJobCleanup = Date.now();
+      jobsCleaned = true;
+    }
+    logger.info('[Cron] Maintenance tasks processed', {
+      tokenCleanup,
+      rateLimitCleanup,
+      jobsCleaned,
+    });
 
     // Daily rollup generation (once per day at/after 1 AM UTC).
     //

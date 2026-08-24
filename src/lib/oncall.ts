@@ -185,6 +185,11 @@ function generateLayerBlocks(
   timeZone: string
 ): OnCallBlock[] {
   const sortedUsers = [...layer.users].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+  if (!sortedUsers || sortedUsers.length === 0) {
+    return [];
+  }
+
   const rotationMs = layer.rotationLengthHours * 60 * 60 * 1000;
   const shiftMs = (layer.shiftLengthHours || layer.rotationLengthHours) * 60 * 60 * 1000;
 

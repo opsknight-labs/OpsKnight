@@ -163,18 +163,18 @@ export async function deleteTeam(teamId: string) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  await prisma.teamMember.deleteMany({
-    where: { teamId },
-  });
-
-  await prisma.service.updateMany({
-    where: { teamId },
-    data: { teamId: null },
-  });
-
-  await prisma.team.delete({
-    where: { id: teamId },
-  });
+  await prisma.$transaction([
+    prisma.teamMember.deleteMany({
+      where: { teamId },
+    }),
+    prisma.service.updateMany({
+      where: { teamId },
+      data: { teamId: null },
+    }),
+    prisma.team.delete({
+      where: { id: teamId },
+    }),
+  ]);
 
   const actorId = currentUser.id;
   await logAudit({

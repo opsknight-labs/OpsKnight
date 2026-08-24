@@ -40,37 +40,24 @@ export function calculatePercentile(values: number[], percentileValue: number): 
 export function calculateMtbfMs(
   dates: Date[],
   windowStart?: Date,
-  windowEnd?: Date
-): number | null {
-  const validTimes = dates
-    .map(d => (d instanceof Date ? d.getTime() : new Date(d).getTime()))
-    .filter(t => Number.isFinite(t));
-
-  const startTime = windowStart
-    ? windowStart.getTime()
-    : validTimes.length > 0
-      ? Math.min(...validTimes)
-      : null;
-  const endTime = windowEnd
-    ? windowEnd.getTime()
-    : validTimes.length > 0
-      ? Math.max(...validTimes)
-      : null;
-
-  if (
-    startTime === null ||
-    endTime === null ||
-    !Number.isFinite(startTime) ||
-    !Number.isFinite(endTime) ||
-    endTime <= startTime
-  ) {
-    return null;
+  windowEnd?: Date,
+  downtimeMs: number = 0
+): number {
+  const failureCount = dates.length;
+  if (failureCount === 0) {
+    if (!windowStart || !windowEnd) return 0;
+    return windowEnd.getTime() - windowStart.getTime();
   }
-  const totalOperatingTimeMs = endTime - startTime;
-  const failureCount = validTimes.length;
-
-  if (failureCount === 0) return totalOperatingTimeMs;
-  return totalOperatingTimeMs / failureCount;
+  if (!windowStart || !windowEnd) {
+    // Legacy behaviour: total span / failure count (original formula)
+    if (dates.length === 0) return 0;
+    if (dates.length === 1) return 0;
+    const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+    const totalSpan = sorted[sorted.length - 1].getTime() - sorted[0].getTime();
+    return totalSpan / dates.length;
+  }
+  const totalOperatingTimeMs = windowEnd.getTime() - windowStart.getTime() - downtimeMs;
+  return Math.max(0, totalOperatingTimeMs) / failureCount;
 }
 
 export function smoothSeries(values: number[], windowSize: number): number[] {
