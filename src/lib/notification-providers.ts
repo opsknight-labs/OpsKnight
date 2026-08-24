@@ -77,8 +77,23 @@ export interface EmailConfig {
 
 export type NotificationChannelType = 'EMAIL' | 'SMS' | 'PUSH' | 'WHATSAPP';
 
+function getAppHostname(): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
+  if (appUrl) {
+    try {
+      const parsed = new URL(appUrl.startsWith('http') ? appUrl : `https://${appUrl}`);
+      if (parsed.hostname && parsed.hostname !== 'localhost') {
+        return parsed.hostname;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return 'opsknight.internal';
+}
+
 export async function getEmailConfig(): Promise<EmailConfig> {
-  const defaultFromEmail = `noreply@${process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '') || 'OpsKnight.com'}`;
+  const defaultFromEmail = `noreply@${getAppHostname()}`;
 
   try {
     // Check Resend first
@@ -178,7 +193,7 @@ export async function getEmailConfig(): Promise<EmailConfig> {
  * Respects the emailProvider setting from StatusPage
  */
 export async function getStatusPageEmailConfig(statusPageId?: string): Promise<EmailConfig> {
-  const defaultFromEmail = `noreply@${process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '') || 'OpsKnight.com'}`;
+  const defaultFromEmail = `noreply@${getAppHostname()}`;
 
   try {
     // Get status page email provider preference

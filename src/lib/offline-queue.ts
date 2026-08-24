@@ -57,10 +57,16 @@ export const enqueueRequest = async (request: Omit<QueuedRequest, 'id' | 'create
   if (!hasIndexedDb()) {
     return '';
   }
+  const id = generateId();
+  const headers = {
+    ...request.headers,
+    'Idempotency-Key': id,
+  };
   const payload: QueuedRequest = {
-    id: generateId(),
+    id,
     createdAt: Date.now(),
     ...request,
+    headers,
   };
 
   await withStore('readwrite', store => {
@@ -112,7 +118,7 @@ export const removeQueuedRequest = async (id: string) => {
 
 const isRetryableStatus = (status: number) => {
   if (status >= 500) return true;
-  if (status === 408 || status === 429 || status === 401) return true;
+  if (status === 408 || status === 429) return true;
   return false;
 };
 
@@ -127,33 +133,27 @@ export const flushQueuedRequests = async () => {
   const queue = await listQueuedRequests();
   let flushed = 0;
 
-  // Process in batches of 5 to avoid browser/network limits
-  const BATCH_SIZE = 5;
-  for (let i = 0; i < queue.length; i += BATCH_SIZE) {
-    const batch = queue.slice(i, i + BATCH_SIZE);
+  // Process sequentially (FIFO) to preserve ordering of dependent actions (e.g. Ack -> Resolve)
+  for (const item of queue) {
+    try {
+      const response = await fetch(item.url, {
+        method: item.method,
+        headers: item.headers,
+        body: item.body ?? undefined,
+        credentials: 'include',
+      });
 
-    await Promise.all(
-      batch.map(async item => {
-        try {
-          const response = await fetch(item.url, {
-            method: item.method,
-            headers: item.headers,
-            body: item.body ?? undefined,
-            credentials: 'include',
-          });
-
-          if (response.ok) {
-            await removeQueuedRequest(item.id);
-            flushed += 1;
-          } else if (!isRetryableStatus(response.status)) {
-            // Permanent failure (e.g., 400 Bad Request), remove it
-            await removeQueuedRequest(item.id);
-          }
-        } catch {
-          // Network error, leave in queue
-        }
-      })
-    );
+      if (response.ok) {
+        await removeQueuedRequest(item.id);
+        flushed += 1;
+      } else if (!isRetryableStatus(response.status)) {
+        // Permanent failure (e.g., 400 Bad Request, 401 Unauthorized, 404 Not Found), remove it
+        await removeQueuedRequest(item.id);
+      }
+    } catch {
+      // Network error, leave in queue
+      break;
+    }
   }
 
   return { flushed, remaining: (await listQueuedRequests()).length };

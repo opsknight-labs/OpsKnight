@@ -15,7 +15,10 @@
  * name, so they both import from this module.
  */
 
-export const useSecureCookies = (process.env.NEXTAUTH_URL ?? '').startsWith('https://');
+export const useSecureCookies =
+  (process.env.NEXTAUTH_URL ?? '').startsWith('https://') ||
+  (process.env.NODE_ENV === 'production' &&
+    !(process.env.NEXTAUTH_URL ?? '').startsWith('http://'));
 
 const cookiePrefix = useSecureCookies ? '__Secure-' : '';
 const hostCookiePrefix = useSecureCookies ? '__Host-' : '';
@@ -23,3 +26,6 @@ const hostCookiePrefix = useSecureCookies ? '__Host-' : '';
 export const SESSION_TOKEN_COOKIE_NAME = `${cookiePrefix}next-auth.session-token`;
 export const CALLBACK_URL_COOKIE_NAME = `${cookiePrefix}next-auth.callback-url`;
 export const CSRF_TOKEN_COOKIE_NAME = `${hostCookiePrefix}next-auth.csrf-token`;
+export const PKCE_CODE_VERIFIER_COOKIE_NAME = `${cookiePrefix}next-auth.pkce.code_verifier`;
+export const STATE_COOKIE_NAME = `${cookiePrefix}next-auth.state`;
+export const NONCE_COOKIE_NAME = `${cookiePrefix}next-auth.nonce`;

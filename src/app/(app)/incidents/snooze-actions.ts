@@ -80,6 +80,12 @@ export async function snoozeIncidentWithDuration(
 }
 
 export async function processAutoUnsnooze() {
+  try {
+    await assertResponderOrAbove();
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'Unauthorized');
+  }
+
   const now = new Date();
   const incidentsToUnsnooze = await prisma.incident.findMany({
     where: {
@@ -188,7 +194,6 @@ export async function processAutoUnsnooze() {
         error,
       });
     }
-    processedCount++;
   }
 
   return { processed: processedCount };

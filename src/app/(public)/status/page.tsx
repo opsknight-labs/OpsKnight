@@ -290,6 +290,7 @@ async function renderStatusPage(statusPage: any) {
             incidents: {
               where: {
                 status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+                visibility: 'PUBLIC',
               },
             },
           },
@@ -297,6 +298,7 @@ async function renderStatusPage(statusPage: any) {
         incidents: {
           where: {
             status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+            visibility: 'PUBLIC',
           },
           select: {
             urgency: true,
@@ -353,8 +355,8 @@ async function renderStatusPage(statusPage: any) {
 
   // Optimized: Single call to get metrics for all services
   const [uptime90, metrics] = await Promise.all([
-    calculateMultiServiceUptime(serviceIdsForSLA, ninetyDaysAgo, now),
-    calculateSLAMetrics({ serviceId: serviceIdsForSLA }),
+    calculateMultiServiceUptime(serviceIdsForSLA, ninetyDaysAgo, now, 'PUBLIC'),
+    calculateSLAMetrics({ serviceId: serviceIdsForSLA, visibility: 'PUBLIC' }),
   ]);
 
   const serviceStatusMap = new Map<string, string>();

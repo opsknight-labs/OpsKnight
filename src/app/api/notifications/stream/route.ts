@@ -16,11 +16,15 @@ export async function GET(req: NextRequest) {
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, timeZone: true },
+    select: { id: true, timeZone: true, status: true },
   });
 
   if (!user) {
     return new Response('User not found', { status: 404 });
+  }
+
+  if (user.status === 'DISABLED') {
+    return new Response('Forbidden', { status: 403 });
   }
 
   const userTimeZone = getUserTimeZone(user ?? undefined);
@@ -196,6 +200,7 @@ export async function GET(req: NextRequest) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-store',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   });
 }

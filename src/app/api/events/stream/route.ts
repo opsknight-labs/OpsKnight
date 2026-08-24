@@ -46,8 +46,8 @@ export async function GET(req: NextRequest) {
 
   const isPrivileged = user.role === 'ADMIN' || user.role === 'RESPONDER';
   const hasTeamAccess = (teamId?: string | null) => {
-    if (!teamId) return true;
     if (isPrivileged) return true;
+    if (!teamId) return false;
     return user.teamMemberships.some(membership => membership.teamId === teamId);
   };
 
@@ -81,62 +81,41 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  let cleanup: () => void = () => {};
+  const encoder = new TextEncoder();
+  let interval: NodeJS.Timeout | null = null;
+  let isClosed = false;
+
+  const cleanup = () => {
+    if (isClosed) return;
+    isClosed = true;
+    if (interval) {
+      clearInterval(interval);
+      interval = null;
+    }
+  };
 
   // Create a ReadableStream for SSE with change detection
   const stream = new ReadableStream({
     async start(controller) {
-      const encoder = new TextEncoder();
+      if (req.signal.aborted) {
+        return;
+      }
 
-      // Track last sent data hash for change detection
-      let isClosed = false;
-      let interval: NodeJS.Timeout | null = null;
+      let lastDataHash: string | undefined;
       let isChecking = false;
+      let tickCount = 0;
 
-      cleanup = () => {
-        isClosed = true;
-        if (interval) {
-          clearInterval(interval);
-          interval = null;
-        }
+      const send = (data: Record<string, unknown>) => {
+        if (isClosed) return;
         try {
-          controller.close();
-        } catch (_error) {
-          // Already closed
+          const payload = `data: ${JSON.stringify(data)}\n\n`;
+          controller.enqueue(encoder.encode(payload));
+        } catch (_e) {
+          cleanup();
         }
-      };
-
-      let lastDataHash = '';
-
-      // Simple hash function for change detection
-      const hashData = (data: any): string => {
-        return JSON.stringify(data);
       };
 
       // Send initial connection message
-      const send = (data: any) => {
-        if (!isClosed) {
-          try {
-            const message = `data: ${JSON.stringify(data)}\n\n`;
-            controller.enqueue(encoder.encode(message));
-          } catch (error) {
-            cleanup();
-          }
-        }
-      };
-
-      // Send only if data has changed (for non-critical updates)
-      const sendIfChanged = (data: any): boolean => {
-        const currentHash = hashData(data);
-        if (currentHash !== lastDataHash) {
-          lastDataHash = currentHash;
-          send(data);
-          return true;
-        }
-        return false;
-      };
-
-      // Send connection confirmation
       send({ type: 'connected', timestamp: new Date().toISOString() });
 
       // Set up interval to check for updates
@@ -144,7 +123,9 @@ export async function GET(req: NextRequest) {
       interval = setInterval(async () => {
         if (isClosed || isChecking) return;
         isChecking = true;
+        tickCount++;
         try {
+          let sentUpdate = false;
           if (incidentId) {
             // Stream updates for a specific incident using cache
             const result = await getCachedIncidentDetails(incidentId, lastDataHash);
@@ -166,6 +147,7 @@ export async function GET(req: NextRequest) {
               };
               lastDataHash = result.hash;
               send(updateData);
+              sentUpdate = true;
             }
           } else if (serviceId) {
             // Stream updates for incidents in a service using cache
@@ -179,6 +161,7 @@ export async function GET(req: NextRequest) {
               };
               lastDataHash = result.hash;
               send(updateData);
+              sentUpdate = true;
             }
           } else {
             // Stream dashboard updates using cached metrics
@@ -204,6 +187,16 @@ export async function GET(req: NextRequest) {
               };
               lastDataHash = result.hash;
               send(updateData);
+              sentUpdate = true;
+            }
+          }
+
+          // Emit keepalive every 15s if no update was sent
+          if (!sentUpdate && tickCount % 3 === 0 && !isClosed) {
+            try {
+              controller.enqueue(encoder.encode(': keepalive\n\n'));
+            } catch {
+              cleanup();
             }
           }
         } catch (_error) {
@@ -216,9 +209,14 @@ export async function GET(req: NextRequest) {
       }, 5000); // Check every 5 seconds
 
       // Cleanup on client disconnect
-      req.signal.addEventListener('abort', () => {
+      const onAbort = () => {
         cleanup();
-      });
+        try {
+          controller.close();
+        } catch (_e) {}
+        req.signal.removeEventListener('abort', onAbort);
+      };
+      req.signal.addEventListener('abort', onAbort);
     },
     cancel() {
       cleanup();

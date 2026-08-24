@@ -215,8 +215,18 @@ export async function triggerWebhooksForService(
   incidentData: any // eslint-disable-line @typescript-eslint/no-explicit-any
 ): Promise<void> {
   try {
-    if (incidentData?.visibility && incidentData.visibility !== 'PUBLIC') {
-      return;
+    if (incidentData?.visibility) {
+      if (incidentData.visibility !== 'PUBLIC') {
+        return;
+      }
+    } else if (incidentData?.id) {
+      const inc = await prisma.incident.findUnique({
+        where: { id: incidentData.id },
+        select: { visibility: true },
+      });
+      if (inc && inc.visibility !== 'PUBLIC') {
+        return;
+      }
     }
 
     const statusPageIds = await getStatusPagesForService(serviceId);

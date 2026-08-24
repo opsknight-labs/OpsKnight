@@ -626,21 +626,23 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
       select: { assigneeId: true, teamId: true, status: true, escalationStatus: true },
     });
 
-    // Race condition guard: If the incident was acknowledged, resolved, or snoozed while notifications
+    // Race condition guard: If the incident was acknowledged, resolved, snoozed, or suppressed while notifications
     // were being dispatched, do NOT schedule further escalation steps or overwrite to ESCALATING.
-    const isInactive =
-      currentIncident?.status &&
-      (currentIncident.status === 'ACKNOWLEDGED' ||
-        currentIncident.status === 'RESOLVED' ||
-        currentIncident.status === 'SNOOZED');
-    const isAlreadyCompleted = currentIncident?.escalationStatus === 'COMPLETED';
+    const isStopped =
+      currentIncident?.status === 'ACKNOWLEDGED' ||
+      currentIncident?.status === 'RESOLVED' ||
+      currentIncident?.escalationStatus === 'COMPLETED';
 
-    const finalEscalationStatus = isInactive || isAlreadyCompleted ? 'COMPLETED' : escalationStatus;
-    const finalNextEscalationAt = isInactive || isAlreadyCompleted ? null : nextEscalationAt;
+    const isPaused =
+      currentIncident?.status === 'SNOOZED' ||
+      currentIncident?.status === 'SUPPRESSED' ||
+      currentIncident?.escalationStatus === 'PAUSED';
+
+    const finalEscalationStatus = isStopped ? 'COMPLETED' : isPaused ? 'PAUSED' : escalationStatus;
+
+    const finalNextEscalationAt = isStopped || isPaused ? null : nextEscalationAt;
     const finalStep =
-      isInactive || isAlreadyCompleted || nextStepIndex >= policySteps.length
-        ? null
-        : nextStepIndex;
+      isStopped || isPaused || nextStepIndex >= policySteps.length ? null : nextStepIndex;
 
     if (finalEscalationStatus !== 'ESCALATING' || !finalNextEscalationAt) {
       shouldScheduleNextJob = false;
@@ -682,7 +684,7 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
       },
     });
 
-    if (nextStepMessage && !isInactive && !isAlreadyCompleted) {
+    if (nextStepMessage && !isStopped && !isPaused) {
       await tx.incidentEvent.create({
         data: {
           incidentId,

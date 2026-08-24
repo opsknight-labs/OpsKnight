@@ -184,10 +184,7 @@ function generateLayerBlocks(
   windowEnd: Date,
   timeZone: string
 ): OnCallBlock[] {
-  if (layer.users.length === 0) {
-    return [];
-  }
-
+  const sortedUsers = [...layer.users].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const rotationMs = layer.rotationLengthHours * 60 * 60 * 1000;
   const shiftMs = (layer.shiftLengthHours || layer.rotationLengthHours) * 60 * 60 * 1000;
 
@@ -196,26 +193,31 @@ function generateLayerBlocks(
   }
 
   const layerStart = layer.start;
-  const layerEnd = layer.end ?? null;
-  const effectiveWindowStart = windowStart < layerStart ? layerStart : windowStart;
+  const layerEnd = layer.end ? new Date(layer.end) : null;
+  const maxShiftMs = Math.max(rotationMs, shiftMs);
+  const effectiveWindowStart = new Date(windowStart.getTime() - maxShiftMs);
 
   if (layerEnd && effectiveWindowStart >= layerEnd) {
     return [];
   }
 
-  // Calculate initial index (start at least 1 index earlier to account for DST fallback offsets)
-  const startOffsetMs = Math.max(0, effectiveWindowStart.getTime() - layerStart.getTime());
-  let index = Math.max(0, Math.floor(startOffsetMs / rotationMs) - 1);
-
-  // If we land inside a gap, we might need to check if we missed the duty period for this index
-  // But simpler to just start checking from this index.
-
   const blocks: OnCallBlock[] = [];
   let guard = 0;
-  // Support up to 1 year of 1-hour rotations (~8760 blocks). 10000 is safe.
-  const maxBlocks = 10000;
 
-  while (guard < maxBlocks) {
+  let index = 0;
+  // If layerStart is way in the past, skip to near effectiveWindowStart
+  if (layerStart < effectiveWindowStart) {
+    const elapsed = effectiveWindowStart.getTime() - layerStart.getTime();
+    index = Math.floor(elapsed / rotationMs);
+  }
+
+  // Safety break to prevent infinite loops (max 5 years of shifts or 5000 iterations)
+  const maxIterations = 5000;
+  let iterations = 0;
+
+  while (iterations < maxIterations) {
+    iterations++;
+
     let blockStart: Date;
     if (layer.rotationLengthHours % 24 === 0) {
       // Calendar-day math to avoid DST drift for daily/weekly/multi-day rotations
@@ -229,8 +231,39 @@ function generateLayerBlocks(
       const totalHours = index * layer.rotationLengthHours;
       const dayOffset = Math.floor(totalHours / 24);
       const hourOffset = totalHours % 24;
-      const dayBase = addCalendarDaysInTimeZone(layerStart, dayOffset, timeZone);
-      blockStart = new Date(dayBase.getTime() + hourOffset * 3600000);
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+      });
+      const parts = formatter.formatToParts(layerStart);
+      const get = (type: string) => Number(parts.find(p => p.type === type)?.value ?? '0');
+      const startLocalHour = get('hour') % 24;
+      const totalLocalHours = startLocalHour + hourOffset;
+      const additionalDays = dayOffset + Math.floor(totalLocalHours / 24);
+      const targetLocalHour = totalLocalHours % 24;
+
+      const baseUtc = Date.UTC(
+        get('year'),
+        get('month') - 1,
+        get('day') + additionalDays,
+        targetLocalHour,
+        get('minute'),
+        get('second'),
+        layerStart.getUTCMilliseconds()
+      );
+      const guessOffsetMs = getTimeZoneOffsetMs(new Date(baseUtc), timeZone);
+      let date = new Date(baseUtc - guessOffsetMs);
+      const actualOffsetMs = getTimeZoneOffsetMs(date, timeZone);
+      if (actualOffsetMs !== guessOffsetMs) {
+        date = new Date(baseUtc - actualOffsetMs);
+      }
+      blockStart = date;
     } else {
       const rotationStartTime = layerStart.getTime() + index * rotationMs;
       blockStart = new Date(rotationStartTime);
@@ -262,7 +295,7 @@ function generateLayerBlocks(
     }
 
     // Determine User
-    const user = layer.users[index % layer.users.length];
+    const user = sortedUsers[index % sortedUsers.length];
 
     // Clamping to visual window
     const clampedStart = blockStart < windowStart ? windowStart : blockStart;
@@ -340,7 +373,7 @@ function applyOverrides(blocks: OnCallBlock[], overrides: OverrideInput[]): OnCa
       const overrideEnd = override.end < block.end ? override.end : block.end;
 
       if (block.start < overrideStart) {
-        next.push({ ...block, end: overrideStart });
+        next.push({ ...block, id: `${block.id}-pre-split`, end: overrideStart });
       }
 
       next.push({
@@ -357,7 +390,7 @@ function applyOverrides(blocks: OnCallBlock[], overrides: OverrideInput[]): OnCa
       coveredIntervals.push({ start: overrideStart, end: overrideEnd });
 
       if (overrideEnd < block.end) {
-        next.push({ ...block, start: overrideEnd });
+        next.push({ ...block, id: `${block.id}-post-split`, start: overrideEnd });
       }
     }
 

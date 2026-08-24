@@ -260,7 +260,7 @@ export async function completePasswordReset(
     const user = await prisma.user.findUnique({ where: { email: record.identifier } });
     if (!user) return { success: false, error: 'User not found' };
 
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(password, salt);
 
     const result = await prisma.$transaction(async tx => {

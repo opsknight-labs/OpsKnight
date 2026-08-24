@@ -225,6 +225,23 @@ export async function generateDailyRollup(
           return m ? (`P${m[1]}` as keyof typeof perPriority) : null;
         };
 
+        const getPrioritySums = (bucket: keyof typeof perPriority | null) => {
+          switch (bucket) {
+            case 'P1':
+              return perPriority.P1;
+            case 'P2':
+              return perPriority.P2;
+            case 'P3':
+              return perPriority.P3;
+            case 'P4':
+              return perPriority.P4;
+            case 'P5':
+              return perPriority.P5;
+            default:
+              return null;
+          }
+        };
+
         for (const incident of incidents) {
           // Status counts
           switch (incident.status) {
@@ -260,9 +277,13 @@ export async function generateDailyRollup(
           else if (priorityBucket === 'P3') p3Incidents++;
           else if (priorityBucket === 'P4') p4Incidents++;
           else if (priorityBucket === 'P5') p5Incidents++;
-          if (priorityBucket) {
-            perPriority[priorityBucket].incidents++;
+          const priorityRecord = getPrioritySums(priorityBucket);
+          if (priorityRecord) {
+            priorityRecord.incidents++;
           }
+
+          const resolvedTime =
+            incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
 
           // MTTA calculation
           if (incident.acknowledgedAt) {
@@ -276,12 +297,24 @@ export async function generateDailyRollup(
               if (ackMet) ackSlaMet++;
               else ackSlaBreached++;
 
-              if (priorityBucket) {
-                const p = perPriority[priorityBucket];
-                p.mttaSum += BigInt(mtta);
-                p.mttaCount++;
-                if (ackMet) p.ackSlaMet++;
-                else p.ackSlaBreached++;
+              if (priorityRecord) {
+                priorityRecord.mttaSum += BigInt(mtta);
+                priorityRecord.mttaCount++;
+                if (ackMet) priorityRecord.ackSlaMet++;
+                else priorityRecord.ackSlaBreached++;
+              }
+            }
+          } else if (incident.status === 'RESOLVED' && resolvedTime) {
+            const mtta = resolvedTime.getTime() - incident.createdAt.getTime();
+            if (mtta >= 0) {
+              const targetAck = incident.service?.targetAckMinutes || DEFAULT_ACK_TARGET;
+              const ackMet = mtta / 60000 <= targetAck;
+              if (ackMet) ackSlaMet++;
+              else ackSlaBreached++;
+
+              if (priorityRecord) {
+                if (ackMet) priorityRecord.ackSlaMet++;
+                else priorityRecord.ackSlaBreached++;
               }
             }
           } else if (incident.status !== 'RESOLVED') {
@@ -290,13 +323,11 @@ export async function generateDailyRollup(
             const targetAck = incident.service?.targetAckMinutes || DEFAULT_ACK_TARGET;
             if (elapsedMin > targetAck) {
               ackSlaBreached++;
-              if (priorityBucket) perPriority[priorityBucket].ackSlaBreached++;
+              if (priorityRecord) priorityRecord.ackSlaBreached++;
             }
           }
 
           // MTTR calculation
-          const resolvedTime =
-            incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
           if (incident.status === 'RESOLVED' && resolvedTime) {
             const mttr = resolvedTime.getTime() - incident.createdAt.getTime();
             if (mttr >= 0) {
@@ -309,12 +340,11 @@ export async function generateDailyRollup(
               if (resolveMet) resolveSlaMet++;
               else resolveSlaBreached++;
 
-              if (priorityBucket) {
-                const p = perPriority[priorityBucket];
-                p.mttrSum += BigInt(mttr);
-                p.mttrCount++;
-                if (resolveMet) p.resolveSlaMet++;
-                else p.resolveSlaBreached++;
+              if (priorityRecord) {
+                priorityRecord.mttrSum += BigInt(mttr);
+                priorityRecord.mttrCount++;
+                if (resolveMet) priorityRecord.resolveSlaMet++;
+                else priorityRecord.resolveSlaBreached++;
               }
             }
           } else if (incident.status !== 'RESOLVED') {
@@ -323,7 +353,7 @@ export async function generateDailyRollup(
             const targetResolve = incident.service?.targetResolveMinutes || DEFAULT_RESOLVE_TARGET;
             if (elapsedMin > targetResolve) {
               resolveSlaBreached++;
-              if (priorityBucket) perPriority[priorityBucket].resolveSlaBreached++;
+              if (priorityRecord) priorityRecord.resolveSlaBreached++;
             }
           }
 
@@ -782,9 +812,14 @@ export async function queryRollupMetrics(
 
   const granularity = options.granularity || 'daily';
 
+  const normalizedStart = new Date(startDate);
+  normalizedStart.setUTCHours(0, 0, 0, 0);
+  const normalizedEnd = new Date(endDate);
+  normalizedEnd.setUTCHours(23, 59, 59, 999);
+
   const rollups = await prisma.incidentMetricRollup.findMany({
     where: {
-      date: { gte: startDate, lte: endDate },
+      date: { gte: normalizedStart, lte: normalizedEnd },
       granularity,
       serviceId: options.serviceId || null,
       teamId: options.teamId || null,

@@ -409,6 +409,7 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
   try {
     currentUser = await assertAdmin();
     assertNotSelf(currentUser.id, userId, 'deactivate');
+    await assertNotLastAdmin(userId);
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',

@@ -12,6 +12,7 @@ import {
   reassignIncident,
   resolveIncidentWithNote,
 } from '@/app/(app)/incidents/actions';
+import { snoozeIncidentWithDuration } from '@/app/(app)/incidents/snooze-actions';
 
 type User = { id: string; name: string; email: string };
 type Team = { id: string; name: string };
@@ -122,8 +123,7 @@ export default function MobileIncidentActions({
     setLoading(true);
     setErrorMessage('');
     try {
-      await updateIncidentStatus(incidentId, 'SNOOZED');
-      await addNote(incidentId, `Snoozed for ${hours}h`);
+      await snoozeIncidentWithDuration(incidentId, hours * 60, `Snoozed via mobile for ${hours}h`);
       closeSheet();
       router.refresh();
     } catch (error) {

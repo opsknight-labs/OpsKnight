@@ -75,7 +75,7 @@ Always verify in a private browser window. A privacy preset name alone is not an
 
 ### Incident and postmortem visibility
 
-An incident must be public, belong to an included service, fall within the applicable history/retention window, and pass the page's privacy controls before its details are eligible for display. A postmortem must also be published and marked public. See [Postmortems](postmortems.md).
+An incident must have `visibility: 'PUBLIC'`, belong to an included service, fall within the applicable history/retention window, and pass the page's privacy controls before its details and uptime impact are eligible for display. Internal/private incidents are strictly excluded from status page counts, RSS feeds, and public uptime calculations. A postmortem must also be published and marked public. See [Postmortems](postmortems.md).
 
 Never place secrets or regulated personal data in incident fields that might be allowed onto the page.
 

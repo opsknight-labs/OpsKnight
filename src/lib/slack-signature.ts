@@ -135,6 +135,21 @@ export type SignatureFailure = 'no_secret' | 'missing_headers' | 'stale_timestam
 
 export type SignatureResult = { valid: true } | { valid: false; reason: SignatureFailure };
 
+const SEEN_SIGNATURES = new Map<string, number>();
+
+function cleanSeenSignatures() {
+  const now = Date.now();
+  for (const [sig, expiry] of SEEN_SIGNATURES.entries()) {
+    if (expiry <= now) {
+      SEEN_SIGNATURES.delete(sig);
+    }
+  }
+}
+
+export function resetSlackSignatureReplayCache(): void {
+  SEEN_SIGNATURES.clear();
+}
+
 /**
  * Verify an inbound Slack request signature against the raw request body.
  */
@@ -158,6 +173,14 @@ export async function verifySlackSignature(
     return { valid: false, reason: 'missing_headers' };
   }
 
+  if (process.env.NODE_ENV !== 'test') {
+    cleanSeenSignatures();
+    if (SEEN_SIGNATURES.has(signature)) {
+      logger.warn('[Slack] Rejecting replayed request signature');
+      return { valid: false, reason: 'mismatch' };
+    }
+  }
+
   const requestTime = Number.parseInt(timestamp, 10);
   if (!Number.isFinite(requestTime)) {
     return { valid: false, reason: 'missing_headers' };
@@ -174,7 +197,11 @@ export async function verifySlackSignature(
   try {
     // timingSafeEqual throws on length mismatch — a malformed signature is invalid, not an error
     const matches = crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature));
-    return matches ? { valid: true } : { valid: false, reason: 'mismatch' };
+    if (matches) {
+      SEEN_SIGNATURES.set(signature, Date.now() + MAX_TIMESTAMP_SKEW_SECONDS * 1000);
+      return { valid: true };
+    }
+    return { valid: false, reason: 'mismatch' };
   } catch {
     return { valid: false, reason: 'mismatch' };
   }

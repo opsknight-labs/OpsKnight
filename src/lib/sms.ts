@@ -45,13 +45,19 @@ type AwsSnsModule = {
 };
 
 export function formatToE164(phone: string): string {
+  if (!phone || typeof phone !== 'string') return '';
   let cleaned = phone.replace(/^whatsapp:/i, '').trim();
+  if (!cleaned) return '';
+
   if (cleaned.startsWith('00')) {
-    cleaned = `+${cleaned.slice(2).replace(/\D/g, '')}`;
+    const digits = cleaned.slice(2).replace(/\D/g, '');
+    return digits ? `+${digits}` : '';
   } else if (cleaned.startsWith('+')) {
-    cleaned = `+${cleaned.slice(1).replace(/\D/g, '')}`;
+    const digits = cleaned.slice(1).replace(/\D/g, '');
+    return digits ? `+${digits}` : '';
   } else {
     let digits = cleaned.replace(/\D/g, '');
+    if (!digits) return '';
     if (digits.startsWith('0') && digits.length >= 10) {
       digits = digits.replace(/^0+/, '');
     }
@@ -60,8 +66,8 @@ export function formatToE164(phone: string): string {
     } else {
       cleaned = `+${digits}`;
     }
+    return cleaned;
   }
-  return cleaned;
 }
 
 /**

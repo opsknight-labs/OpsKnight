@@ -310,7 +310,8 @@ export function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
       // Defensive: any ICU build that still reports "24" for midnight
       Number(partMap.hour) % 24,
       Number(partMap.minute),
-      Number(partMap.second)
+      Number(partMap.second),
+      date.getUTCMilliseconds()
     );
     return asUtc - date.getTime();
   } catch {

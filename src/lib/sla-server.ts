@@ -2602,7 +2602,7 @@ export async function calculateMultiServiceUptime(
   serviceIds: string[],
   startDate: Date,
   endDate: Date = new Date(),
-  visibility?: 'PUBLIC' | 'PRIVATE'
+  visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL'
 ): Promise<Record<string, number>> {
   const { default: prisma } = await import('./prisma');
 
@@ -2612,10 +2612,12 @@ export async function calculateMultiServiceUptime(
     'incident'
   );
 
+  const visibilityFilter = visibility && visibility !== 'ALL' ? { visibility } : {};
+
   const incidents = await prisma.incident.findMany({
     where: {
       serviceId: { in: serviceIds },
-      ...(visibility ? { visibility } : {}),
+      ...visibilityFilter,
       AND: [
         { createdAt: { lt: effectiveEnd } },
         {

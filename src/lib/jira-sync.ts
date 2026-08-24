@@ -291,7 +291,7 @@ export async function processJiraWebhookEvent(
       String(data.externalStatus).toLowerCase()
     )
   ) {
-    const actionItemIds = links.map(l => l.actionItemId).filter(Boolean) as string[];
+    const actionItemIds = validLinks.map(l => l.actionItemId).filter(Boolean) as string[];
     if (actionItemIds.length > 0) {
       await prisma.actionItem.updateMany({
         where: { id: { in: actionItemIds }, status: { not: 'COMPLETED' } },
@@ -300,7 +300,7 @@ export async function processJiraWebhookEvent(
     }
   }
 
-  return { updated: links.length };
+  return { updated: validLinks.length };
 }
 
 /**

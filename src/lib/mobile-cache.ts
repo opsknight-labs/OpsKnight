@@ -33,8 +33,11 @@ const getCryptoKey = async (): Promise<CryptoKey | null> => {
   if (typeof window === 'undefined' || !window.crypto?.subtle || !textEncoder) {
     return null;
   }
-  const rawKey = textEncoder.encode(CACHE_KEY_PASSPHRASE);
-  return window.crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, [
+  const rawHash = await window.crypto.subtle.digest(
+    'SHA-256',
+    textEncoder.encode(CACHE_KEY_PASSPHRASE)
+  );
+  return window.crypto.subtle.importKey('raw', rawHash, { name: 'AES-GCM' }, false, [
     'encrypt',
     'decrypt',
   ]);

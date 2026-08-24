@@ -227,7 +227,7 @@ async function getNextScheduledTime(): Promise<Date> {
 /**
  * Schedule the next cron run
  */
-function scheduleNextRun(targetTime: Date) {
+function scheduleNextRun(targetTime: Date, persistToDb: boolean = true) {
   if (!initialized) return;
 
   const now = Date.now();
@@ -241,12 +241,15 @@ function scheduleNextRun(targetTime: Date) {
 
   timer = setTimeout(runOnce, delay);
 
-  // Update DB with next run time (fire and forget)
-  updateState({ nextRunAt }).catch(() => {});
+  // Update DB with next run time only if leader / active scheduler
+  if (persistToDb) {
+    updateState({ nextRunAt }).catch(() => {});
+  }
 
   logger.debug('[Cron] Next run scheduled', {
     nextRunAt: nextRunAt.toISOString(),
     delayMs: delay,
+    persisted: persistToDb,
   });
 }
 
@@ -259,7 +262,7 @@ async function runOnce() {
     logger.debug('[Cron] Not the leader, scheduling standby check');
     // Standby replicas must schedule next tick with randomized jitter (15s - 30s) to monitor leader health
     const standbyDelay = MIN_DELAY_MS + Math.floor(Math.random() * 15000);
-    scheduleNextRun(new Date(Date.now() + standbyDelay));
+    scheduleNextRun(new Date(Date.now() + standbyDelay), false);
     return;
   }
 

@@ -316,8 +316,11 @@ export async function getAllPostmortems(
   const skip = (page - 1) * limit;
 
   const permissions = await getUserPermissions();
-  const baseWhere = permissions.isResponderOrAbove ? {} : { status: 'PUBLISHED' as const };
-  const where = status ? { ...baseWhere, status } : baseWhere;
+  const where = permissions.isResponderOrAbove
+    ? status
+      ? { status }
+      : {}
+    : { status: 'PUBLISHED' as const };
 
   const [postmortems, total] = await Promise.all([
     prisma.postmortem.findMany({
@@ -526,9 +529,9 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
  * Bulk delete postmortems by IDs
  */
 export async function bulkDeletePostmortems(ids: string[]) {
-  let user: Awaited<ReturnType<typeof assertResponderOrAbove>>;
+  let currentUser: Awaited<ReturnType<typeof assertResponderOrAbove>>;
   try {
-    user = await assertResponderOrAbove();
+    currentUser = await assertResponderOrAbove();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -548,7 +551,10 @@ export async function bulkDeletePostmortems(ids: string[]) {
     return { success: false, error: 'No matching postmortems found' };
   }
 
-  if (user.role !== 'ADMIN' && selected.some(postmortem => postmortem.createdById !== user.id)) {
+  if (
+    currentUser.role !== 'ADMIN' &&
+    selected.some(postmortem => postmortem.createdById !== currentUser.id)
+  ) {
     return {
       success: false,
       error: 'Only administrators or the postmortem author can delete the selected records',

@@ -61,9 +61,15 @@ export async function createTemplateAction(_prevState: null, formData: FormData)
 }
 
 export async function getAllTemplates(userId?: string) {
-  const where = userId
+  let effectiveUserId = userId;
+  if (!effectiveUserId) {
+    const user = await getCurrentUser();
+    effectiveUserId = user?.id;
+  }
+
+  const where = effectiveUserId
     ? {
-        OR: [{ isPublic: true }, { createdById: userId }],
+        OR: [{ isPublic: true }, { createdById: effectiveUserId }],
       }
     : { isPublic: true };
 

@@ -310,7 +310,12 @@ export async function createIncidentWarRoom(
       // Collect user IDs from escalation policy steps (Schedules, Teams, Users)
       if (service?.policy?.steps) {
         for (const step of service.policy.steps) {
-          const targetId = step.targetUserId || step.targetTeamId || step.targetScheduleId;
+          const targetId =
+            step.targetType === 'USER'
+              ? step.targetUserId
+              : step.targetType === 'TEAM'
+                ? step.targetTeamId
+                : step.targetScheduleId;
           if (targetId) {
             try {
               const resolvedUserIds = await resolveEscalationTarget(
@@ -589,6 +594,7 @@ export async function archiveWarRoomChannel(
 
     if (!archiveResult.ok && archiveResult.error !== 'already_archived') {
       logger.warn('[ChatOps] Failed to archive channel', { error: archiveResult.error });
+      return { success: false, error: archiveResult.error || 'Failed to archive Slack channel' };
     }
 
     // Mark the war-room as archived. The channel id is kept so the incident

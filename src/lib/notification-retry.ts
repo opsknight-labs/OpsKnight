@@ -6,6 +6,7 @@
 import prisma from './prisma';
 import { sendNotification, NotificationChannel } from './notifications';
 import { logger } from './logger';
+import { CircuitBreakers } from './circuit-breaker';
 
 const _MAX_RETRY_ATTEMPTS = 3;
 const INITIAL_RETRY_DELAY_MS = 5000; // 5 seconds
@@ -99,55 +100,85 @@ export async function retryFailedNotifications(): Promise<{
 
           const eventType = getEventType(notification.incident?.status);
 
-          // Re-dispatch based on channel
-          switch (notification.channel) {
-            case 'EMAIL':
-              result = await emailModule.sendIncidentEmail(
-                notification.userId,
-                notification.incidentId,
-                eventType
-              );
-              break;
-            case 'SMS':
-              result = await smsModule.sendIncidentSMS(
-                notification.userId,
-                notification.incidentId,
-                eventType
-              );
-              break;
-            case 'PUSH':
-              result = await pushModule.sendIncidentPush(
-                notification.userId,
-                notification.incidentId,
-                eventType
-              );
-              break;
-            case 'WHATSAPP':
-              result = await whatsappModule.sendIncidentWhatsApp(
-                notification.userId,
-                notification.incidentId,
-                eventType
-              );
-              break;
-            case 'WEBHOOK':
-              if (notification.incident?.service?.webhookUrl) {
-                result = await webhooksModule.sendIncidentWebhook(
-                  notification.incident.service.webhookUrl,
-                  notification.incidentId,
-                  eventType
-                );
-              } else {
+          // Re-dispatch based on channel with circuit breaker protection
+          try {
+            switch (notification.channel) {
+              case 'EMAIL':
+                result = await CircuitBreakers.email().execute(async () => {
+                  const res = await emailModule.sendIncidentEmail(
+                    notification.userId,
+                    notification.incidentId,
+                    eventType
+                  );
+                  if (!res.success) throw new Error(res.error || 'Email retry delivery failed');
+                  return res;
+                });
+                break;
+              case 'SMS':
+                result = await CircuitBreakers.sms().execute(async () => {
+                  const res = await smsModule.sendIncidentSMS(
+                    notification.userId,
+                    notification.incidentId,
+                    eventType
+                  );
+                  if (!res.success) throw new Error(res.error || 'SMS retry delivery failed');
+                  return res;
+                });
+                break;
+              case 'PUSH':
+                result = await CircuitBreakers.push().execute(async () => {
+                  const res = await pushModule.sendIncidentPush(
+                    notification.userId,
+                    notification.incidentId,
+                    eventType
+                  );
+                  if (!res.success) throw new Error(res.error || 'Push retry delivery failed');
+                  return res;
+                });
+                break;
+              case 'WHATSAPP':
+                result = await CircuitBreakers.whatsapp().execute(async () => {
+                  const res = await whatsappModule.sendIncidentWhatsApp(
+                    notification.userId,
+                    notification.incidentId,
+                    eventType
+                  );
+                  if (!res.success) throw new Error(res.error || 'WhatsApp retry delivery failed');
+                  return res;
+                });
+                break;
+              case 'WEBHOOK':
+                if (notification.incident?.service?.webhookUrl) {
+                  result = await CircuitBreakers.webhook(
+                    notification.incident.service.webhookUrl
+                  ).execute(async () => {
+                    const res = await webhooksModule.sendIncidentWebhook(
+                      notification.incident!.service!.webhookUrl!,
+                      notification.incidentId,
+                      eventType
+                    );
+                    if (!res.success) throw new Error(res.error || 'Webhook retry delivery failed');
+                    return res;
+                  });
+                } else {
+                  result = {
+                    success: false,
+                    error: 'No webhook URL configured on incident service',
+                  };
+                }
+                break;
+              default:
                 result = {
                   success: false,
-                  error: 'No webhook URL configured on incident service',
+                  error: `Retry not implemented for channel: ${notification.channel}`,
                 };
-              }
-              break;
-            default:
-              result = {
-                success: false,
-                error: `Retry not implemented for channel: ${notification.channel}`,
-              };
+            }
+          } catch (cbError) {
+            result = {
+              success: false,
+              error:
+                cbError instanceof Error ? cbError.message : 'Circuit breaker / provider error',
+            };
           }
 
           if (result.success) {

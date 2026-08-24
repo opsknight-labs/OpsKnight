@@ -205,6 +205,18 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         slackUser: payload.user_name,
       });
 
+      // Dispatch incident notifications
+      import('@/lib/user-notifications')
+        .then(({ sendIncidentNotifications }) =>
+          sendIncidentNotifications(incident.id, 'acknowledged')
+        )
+        .catch(err =>
+          logger.error('[ChatOps] Failed to send ack notifications', {
+            error: err,
+            incidentId: incident.id,
+          })
+        );
+
       // Update channel topic to ACKNOWLEDGED
       try {
         const { updateWarRoomTopic } = await import('@/lib/chatops/war-room');
@@ -236,7 +248,6 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         data: {
           status: 'RESOLVED',
           resolvedAt: incident.resolvedAt ?? new Date(),
-          acknowledgedAt: incident.acknowledgedAt ?? new Date(),
           escalationStatus: 'COMPLETED',
           nextEscalationAt: null,
         },
@@ -275,6 +286,16 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         incidentId: incident.id,
         slackUser: payload.user_name,
       });
+
+      // Dispatch incident notifications
+      import('@/lib/user-notifications')
+        .then(({ sendIncidentNotifications }) => sendIncidentNotifications(incident.id, 'resolved'))
+        .catch(err =>
+          logger.error('[ChatOps] Failed to send resolve notifications', {
+            error: err,
+            incidentId: incident.id,
+          })
+        );
 
       // Archive war-room channel on resolve
       try {

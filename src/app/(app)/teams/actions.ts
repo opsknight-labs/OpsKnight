@@ -87,13 +87,13 @@ export async function createTeam(
 export async function updateTeam(teamId: string, formData: FormData) {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertAdminOrTeamOwner(teamId);
   } catch (error) {
     return {
       error:
         error instanceof Error
           ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
+          : 'Unauthorized. Admin or Team Owner access required.',
     };
   }
   const name = formData.get('name') as string;
