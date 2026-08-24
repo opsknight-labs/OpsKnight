@@ -187,6 +187,7 @@ function generateLayerBlocks(
   if (layer.users.length === 0) {
     return [];
   }
+  const sortedUsers = [...layer.users].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
   const rotationMs = layer.rotationLengthHours * 60 * 60 * 1000;
   const shiftMs = (layer.shiftLengthHours || layer.rotationLengthHours) * 60 * 60 * 1000;
@@ -262,7 +263,7 @@ function generateLayerBlocks(
     }
 
     // Determine User
-    const user = layer.users[index % layer.users.length];
+    const user = sortedUsers[index % sortedUsers.length];
 
     // Clamping to visual window
     const clampedStart = blockStart < windowStart ? windowStart : blockStart;
@@ -340,7 +341,7 @@ function applyOverrides(blocks: OnCallBlock[], overrides: OverrideInput[]): OnCa
       const overrideEnd = override.end < block.end ? override.end : block.end;
 
       if (block.start < overrideStart) {
-        next.push({ ...block, end: overrideStart });
+        next.push({ ...block, id: `${block.id}-pre-split`, end: overrideStart });
       }
 
       next.push({
@@ -357,7 +358,7 @@ function applyOverrides(blocks: OnCallBlock[], overrides: OverrideInput[]): OnCa
       coveredIntervals.push({ start: overrideStart, end: overrideEnd });
 
       if (overrideEnd < block.end) {
-        next.push({ ...block, start: overrideEnd });
+        next.push({ ...block, id: `${block.id}-post-split`, start: overrideEnd });
       }
     }
 

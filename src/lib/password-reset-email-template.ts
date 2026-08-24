@@ -9,6 +9,7 @@ import {
   EmailButton,
   AlertBox,
   EmailFooter,
+  escapeHtml,
 } from '@/lib/email-components';
 
 export interface PasswordResetEmailData {
@@ -28,6 +29,8 @@ export function getPasswordResetEmailTemplate(data: PasswordResetEmailData): {
 } {
   const subject = '🔐 Reset your OpsKnight password';
   const expiryText = data.expiryMinutes ? `${data.expiryMinutes} minutes` : '1 hour';
+  const safeUserName = escapeHtml(data.userName);
+  const safeResetLink = escapeHtml(data.resetLink);
 
   const content = `
         ${EmailHeader('Password Reset Request', 'OpsKnight Account Security', {
@@ -43,7 +46,7 @@ export function getPasswordResetEmailTemplate(data: PasswordResetEmailData): {
                     Reset Your Password
                 </h2>
                 <p style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
-                    Hello ${data.userName}, we received a request to reset your password.
+                    Hello ${safeUserName}, we received a request to reset your password.
                 </p>
             </div>
             
@@ -69,7 +72,7 @@ export function getPasswordResetEmailTemplate(data: PasswordResetEmailData): {
                     Button not working?
                 </p>
                 <p style="margin: 0; color: #9ca3af; font-size: 13px; line-height: 1.6; word-break: break-all;">
-                    Copy and paste this link: <a href="${data.resetLink}" style="color: #10b981; text-decoration: none;">${data.resetLink}</a>
+                    Copy and paste this link: <a href="${safeResetLink}" style="color: #10b981; text-decoration: none;">${safeResetLink}</a>
                 </p>
             </div>
             

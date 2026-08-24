@@ -75,6 +75,9 @@ export async function saveSlackOAuthConfig(
     },
   });
 
+  const { resetSigningSecretCache } = await import('@/lib/slack-signature');
+  resetSigningSecretCache();
+
   await logAudit({
     action: 'slack.oauth.config.updated',
     entityType: 'USER',

@@ -123,7 +123,7 @@ export async function getPendingJobs(limit: number = 50): Promise<any[]> {
  * Uses SKIP LOCKED to avoid concurrent workers claiming the same jobs.
  */
 export async function claimPendingJobs(limit: number = 50, type?: JobType): Promise<any[]> {
-  const typeFilter = type ? Prisma.sql`AND "type" = ${type}` : Prisma.empty;
+  const typeFilter = type ? Prisma.sql`AND "type" = ${type}::"JobType"` : Prisma.empty;
   const jobs = await prisma.$queryRaw<any[]>( // eslint-disable-line @typescript-eslint/no-explicit-any
     Prisma.sql`
       WITH cte AS (
@@ -293,6 +293,7 @@ export async function processJob(job: any): Promise<boolean> {
                 },
               },
             });
+
             try {
               const { sendIncidentNotifications } = await import('../user-notifications');
               await sendIncidentNotifications(job.payload.incidentId, 'updated');
@@ -351,6 +352,7 @@ export async function processJob(job: any): Promise<boolean> {
             where: { id: job.id },
             data: {
               status: 'CANCELLED',
+              completedAt: new Date(),
             },
           });
           return false;

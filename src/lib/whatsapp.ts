@@ -89,7 +89,8 @@ export async function sendIncidentWhatsApp(
         : incident.title;
 
     // Send via Twilio WhatsApp API
-    const twilio = (await import('twilio')).default as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const twilioModule = await import('twilio');
+    const twilio = ((twilioModule as any).default || twilioModule) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
     const client = twilio(whatsappConfig.accountSid, whatsappConfig.authToken);
 
     try {
@@ -174,7 +175,8 @@ export async function sendWhatsApp(
     }
 
     // Send via Twilio WhatsApp API
-    const twilio = (await import('twilio')).default as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const twilioModule = await import('twilio');
+    const twilio = ((twilioModule as any).default || twilioModule) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     const client = twilio(whatsappConfig.accountSid, whatsappConfig.authToken);
 

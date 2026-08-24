@@ -249,7 +249,7 @@ export default async function middleware(req: NextRequest) {
       }
       if (hostname && allowedHosts.has(hostname)) {
         const url = req.nextUrl.clone();
-        url.pathname = '/status';
+        url.pathname = pathname === '/' || pathname === '' ? '/status' : `/status${pathname}`;
         const rewriteResponse = NextResponse.rewrite(url);
         Object.entries(securityHeaders).forEach(([key, value]) => {
           rewriteResponse.headers.set(key, value);

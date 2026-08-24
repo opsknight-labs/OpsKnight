@@ -1,6 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import { NotificationChannel } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { assertAdmin } from '@/lib/rbac';
@@ -28,12 +29,18 @@ export async function createPolicy(formData: FormData) {
     targetScheduleId?: string;
     delayMinutes: number;
     stepOrder: number;
+    notificationChannels?: NotificationChannel[];
+    notifyOnlyTeamLead?: boolean;
   }> = [];
   let stepIndex = 0;
 
   while (true) {
     const targetValue = formData.get(`step-${stepIndex}-target`); // Changed from userId to target
     const delay = formData.get(`step-${stepIndex}-delayMinutes`);
+    const channels = formData.getAll(
+      `step-${stepIndex}-notificationChannels`
+    ) as NotificationChannel[];
+    const notifyOnlyTeamLead = formData.get(`step-${stepIndex}-notifyOnlyTeamLead`) === 'true';
 
     if (!targetValue) break;
 
@@ -45,6 +52,8 @@ export async function createPolicy(formData: FormData) {
         targetUserId: id,
         delayMinutes: parseInt((delay as string) || '0'),
         stepOrder: stepIndex,
+        notificationChannels: channels,
+        notifyOnlyTeamLead: false,
       });
     } else if (type === 'team') {
       steps.push({
@@ -52,6 +61,8 @@ export async function createPolicy(formData: FormData) {
         targetTeamId: id,
         delayMinutes: parseInt((delay as string) || '0'),
         stepOrder: stepIndex,
+        notificationChannels: channels,
+        notifyOnlyTeamLead,
       });
     } else if (type === 'schedule') {
       steps.push({
@@ -59,6 +70,8 @@ export async function createPolicy(formData: FormData) {
         targetScheduleId: id,
         delayMinutes: parseInt((delay as string) || '0'),
         stepOrder: stepIndex,
+        notificationChannels: channels,
+        notifyOnlyTeamLead: false,
       });
     }
 
@@ -306,15 +319,12 @@ export async function updatePolicyStep(
 
   // Validate that appropriate target ID is provided
   let targetId: string | null = null;
-  if (finalTargetType === 'USER' && targetUserId) {
-    targetId = targetUserId;
-  } else if (finalTargetType === 'TEAM' && targetTeamId) {
-    targetId = targetTeamId;
-  } else if (finalTargetType === 'SCHEDULE' && targetScheduleId) {
-    targetId = targetScheduleId;
-  } else {
-    // Fallback to existing values
-    targetId = step.targetUserId || step.targetTeamId || step.targetScheduleId || null;
+  if (finalTargetType === 'USER') {
+    targetId = targetUserId || (step.targetType === 'USER' ? step.targetUserId : null);
+  } else if (finalTargetType === 'TEAM') {
+    targetId = targetTeamId || (step.targetType === 'TEAM' ? step.targetTeamId : null);
+  } else if (finalTargetType === 'SCHEDULE') {
+    targetId = targetScheduleId || (step.targetType === 'SCHEDULE' ? step.targetScheduleId : null);
   }
 
   if (!targetId) {

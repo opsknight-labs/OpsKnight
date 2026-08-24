@@ -311,8 +311,11 @@ export async function getAllPostmortems(
   const skip = (page - 1) * limit;
 
   const permissions = await getUserPermissions();
-  const baseWhere = permissions.isResponderOrAbove ? {} : { status: 'PUBLISHED' as const };
-  const where = status ? { ...baseWhere, status } : baseWhere;
+  const where = permissions.isResponderOrAbove
+    ? status
+      ? { status }
+      : {}
+    : { status: 'PUBLISHED' as const };
 
   const [postmortems, total] = await Promise.all([
     prisma.postmortem.findMany({
@@ -521,8 +524,9 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
  * Bulk delete postmortems by IDs
  */
 export async function bulkDeletePostmortems(ids: string[]) {
+  let currentUser: { id: string; role: string };
   try {
-    await assertResponderOrAbove();
+    currentUser = await assertResponderOrAbove();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -531,12 +535,18 @@ export async function bulkDeletePostmortems(ids: string[]) {
     return { success: false, error: 'No postmortems selected' };
   }
 
-  await prisma.postmortem.deleteMany({
-    where: {
-      OR: [{ id: { in: ids } }, { incidentId: { in: ids } }],
-    },
+  const deleteFilter: any = {
+    OR: [{ id: { in: ids } }, { incidentId: { in: ids } }],
+  };
+
+  if (currentUser.role !== 'ADMIN') {
+    deleteFilter.createdById = currentUser.id;
+  }
+
+  const deleted = await prisma.postmortem.deleteMany({
+    where: deleteFilter,
   });
 
   revalidatePath('/postmortems');
-  return { success: true, count: ids.length };
+  return { success: true, count: deleted.count };
 }

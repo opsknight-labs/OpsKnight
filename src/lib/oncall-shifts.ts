@@ -29,6 +29,9 @@ export async function getActiveOnCallShifts(
   if (!prisma?.onCallSchedule?.findMany) {
     return [];
   }
+  const windowStart = new Date(atTime.getTime() - 24 * 60 * 60 * 1000);
+  const windowEnd = new Date(atTime.getTime() + 48 * 60 * 60 * 1000);
+
   const schedules = await prisma.onCallSchedule.findMany({
     include: {
       layers: {
@@ -49,8 +52,8 @@ export async function getActiveOnCallShifts(
       },
       overrides: {
         where: {
-          start: { lte: atTime },
-          end: { gte: atTime },
+          start: { lte: windowEnd },
+          end: { gte: windowStart },
         },
         include: {
           user: {
@@ -65,10 +68,6 @@ export async function getActiveOnCallShifts(
 
   for (const schedule of schedules) {
     if (!schedule.layers.length && !schedule.overrides.length) continue;
-
-    // Buffer window around atTime (-1 day to +2 days in schedule's timezone)
-    const windowStart = new Date(atTime.getTime() - 24 * 60 * 60 * 1000);
-    const windowEnd = new Date(atTime.getTime() + 48 * 60 * 60 * 1000);
 
     const blocks = buildScheduleBlocks(
       schedule.layers.map(layer => ({

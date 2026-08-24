@@ -104,6 +104,7 @@ export async function GET(req: NextRequest) {
             incidents: {
               where: {
                 status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+                visibility: 'PUBLIC',
               },
             },
           },
@@ -119,6 +120,7 @@ export async function GET(req: NextRequest) {
       serviceId: serviceIds,
       includeIncidents: true,
       incidentLimit: 20,
+      visibility: 'PUBLIC',
     });
 
     const recentIncidents = metrics.recentIncidents || [];

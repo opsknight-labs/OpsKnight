@@ -82,10 +82,21 @@ function buildSimplePdf(lines: string[]): Buffer {
 }
 
 export async function GET(req: NextRequest) {
+  let isAdmin = false;
   try {
     await assertAdmin();
+    isAdmin = true;
   } catch (_error) {
-    return new NextResponse('Unauthorized', { status: 403 });
+    isAdmin = false;
+  }
+
+  if (!isAdmin) {
+    const publicPage = await prisma.statusPage.findFirst({
+      where: { enabled: true, enableUptimeExports: true },
+    });
+    if (!publicPage) {
+      return new NextResponse('Unauthorized', { status: 403 });
+    }
   }
 
   try {

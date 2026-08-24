@@ -188,7 +188,6 @@ export async function processAutoUnsnooze() {
         error,
       });
     }
-    processedCount++;
   }
 
   return { processed: processedCount };

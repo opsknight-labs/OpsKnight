@@ -264,6 +264,9 @@ export async function generateDailyRollup(
             perPriority[priorityBucket].incidents++;
           }
 
+          const resolvedTime =
+            incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
+
           // MTTA calculation
           if (incident.acknowledgedAt) {
             const mtta = incident.acknowledgedAt.getTime() - incident.createdAt.getTime();
@@ -284,6 +287,20 @@ export async function generateDailyRollup(
                 else p.ackSlaBreached++;
               }
             }
+          } else if (incident.status === 'RESOLVED' && resolvedTime) {
+            const mtta = resolvedTime.getTime() - incident.createdAt.getTime();
+            if (mtta >= 0) {
+              const targetAck = incident.service?.targetAckMinutes || DEFAULT_ACK_TARGET;
+              const ackMet = mtta / 60000 <= targetAck;
+              if (ackMet) ackSlaMet++;
+              else ackSlaBreached++;
+
+              if (priorityBucket) {
+                const p = perPriority[priorityBucket];
+                if (ackMet) p.ackSlaMet++;
+                else p.ackSlaBreached++;
+              }
+            }
           } else if (incident.status !== 'RESOLVED') {
             const snapshotTime = Math.min(Date.now(), nextDayStart.getTime());
             const elapsedMin = (snapshotTime - incident.createdAt.getTime()) / 60000;
@@ -295,8 +312,6 @@ export async function generateDailyRollup(
           }
 
           // MTTR calculation
-          const resolvedTime =
-            incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
           if (incident.status === 'RESOLVED' && resolvedTime) {
             const mttr = resolvedTime.getTime() - incident.createdAt.getTime();
             if (mttr >= 0) {
@@ -782,9 +797,14 @@ export async function queryRollupMetrics(
 
   const granularity = options.granularity || 'daily';
 
+  const normalizedStart = new Date(startDate);
+  normalizedStart.setUTCHours(0, 0, 0, 0);
+  const normalizedEnd = new Date(endDate);
+  normalizedEnd.setUTCHours(23, 59, 59, 999);
+
   const rollups = await prisma.incidentMetricRollup.findMany({
     where: {
-      date: { gte: startDate, lte: endDate },
+      date: { gte: normalizedStart, lte: normalizedEnd },
       granularity,
       serviceId: options.serviceId || null,
       teamId: options.teamId || null,

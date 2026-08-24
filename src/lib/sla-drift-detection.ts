@@ -67,13 +67,14 @@ function compare(
   live: number | null,
   rollup: number | null,
   toleranceFraction = DEFAULT_TOLERANCE_FRACTION,
-  smallCountTolerance = DEFAULT_SMALL_COUNT_TOLERANCE
+  smallCountTolerance?: number
 ): DriftSample {
   const d = divergence(live, rollup);
-  // Tolerance: absolute fraction OR small-count absolute difference.
+  // Tolerance: absolute fraction OR small-count absolute difference (counts only).
   const absDiff =
     live !== null && rollup !== null ? Math.abs(live - rollup) : Number.POSITIVE_INFINITY;
-  const within = d <= toleranceFraction || absDiff <= smallCountTolerance;
+  const within =
+    d <= toleranceFraction || (smallCountTolerance !== undefined && absDiff <= smallCountTolerance);
   return { field, live, rollup, divergence: d, withinTolerance: within };
 }
 
@@ -163,14 +164,56 @@ export async function runSLADriftDetection(options?: {
     ]);
 
     const samples: DriftSample[] = [
-      compare('totalIncidents', liveResult.totalIncidents, rollupResult.totalIncidents),
-      compare('highUrgencyCount', liveResult.highUrgencyCount, rollupResult.highUrgencyCount),
-      compare('mediumUrgencyCount', liveResult.mediumUrgencyCount, rollupResult.mediumUrgencyCount),
-      compare('lowUrgencyCount', liveResult.lowUrgencyCount, rollupResult.lowUrgencyCount),
-      compare('ackBreaches', liveResult.ackBreaches, rollupResult.ackBreaches),
-      compare('resolveBreaches', liveResult.resolveBreaches, rollupResult.resolveBreaches),
+      compare(
+        'totalIncidents',
+        liveResult.totalIncidents,
+        rollupResult.totalIncidents,
+        DEFAULT_TOLERANCE_FRACTION,
+        DEFAULT_SMALL_COUNT_TOLERANCE
+      ),
+      compare(
+        'highUrgencyCount',
+        liveResult.highUrgencyCount,
+        rollupResult.highUrgencyCount,
+        DEFAULT_TOLERANCE_FRACTION,
+        DEFAULT_SMALL_COUNT_TOLERANCE
+      ),
+      compare(
+        'mediumUrgencyCount',
+        liveResult.mediumUrgencyCount,
+        rollupResult.mediumUrgencyCount,
+        DEFAULT_TOLERANCE_FRACTION,
+        DEFAULT_SMALL_COUNT_TOLERANCE
+      ),
+      compare(
+        'lowUrgencyCount',
+        liveResult.lowUrgencyCount,
+        rollupResult.lowUrgencyCount,
+        DEFAULT_TOLERANCE_FRACTION,
+        DEFAULT_SMALL_COUNT_TOLERANCE
+      ),
+      compare(
+        'ackBreaches',
+        liveResult.ackBreaches,
+        rollupResult.ackBreaches,
+        DEFAULT_TOLERANCE_FRACTION,
+        DEFAULT_SMALL_COUNT_TOLERANCE
+      ),
+      compare(
+        'resolveBreaches',
+        liveResult.resolveBreaches,
+        rollupResult.resolveBreaches,
+        DEFAULT_TOLERANCE_FRACTION,
+        DEFAULT_SMALL_COUNT_TOLERANCE
+      ),
       compare('mttr', liveResult.mttr, rollupResult.mttr, options?.toleranceFraction ?? 0.02),
-      compare('autoResolvedCount', liveResult.autoResolvedCount, rollupResult.autoResolvedCount),
+      compare(
+        'autoResolvedCount',
+        liveResult.autoResolvedCount,
+        rollupResult.autoResolvedCount,
+        DEFAULT_TOLERANCE_FRACTION,
+        DEFAULT_SMALL_COUNT_TOLERANCE
+      ),
     ];
 
     const withinTolerance = samples.every(s => s.withinTolerance);

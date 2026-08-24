@@ -8,9 +8,10 @@ import { logAudit } from '@/lib/audit';
 
 /**
  * Get all notification provider configurations
- * Note: Admin check is done at the page level, so this function doesn't need to check again
  */
 export async function getNotificationProviders() {
+  await assertAdmin();
+
   const providers = await prisma.notificationProvider.findMany({
     orderBy: { provider: 'asc' },
   });
@@ -366,6 +367,7 @@ export async function saveOidcConfig(
 }
 
 export async function validateOidcConnectionAction(issuer: string) {
+  await assertAdmin();
   if (!issuer) return { isValid: false, error: 'Issuer URL is missing' };
   const { validateOidcConnection } = await import('@/lib/oidc-validation');
   return await validateOidcConnection(issuer);
