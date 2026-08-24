@@ -87,9 +87,6 @@ jobs:
           VITEST_USE_REAL_DB: '1'
         run: npm run test:ci:db
 
-      - name: TypeScript typecheck
-        run: npx tsc --noEmit
-
       - name: Upload test report artifact (JUnit)
         if: always()
         uses: actions/upload-artifact@v4
@@ -205,3 +202,24 @@ jobs:
         with:
           header: vitest
           message: ${{ steps.junit_summary.outputs.markdown }}
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          HUSKY: '0'
+        run: npm ci --legacy-peer-deps
+
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
