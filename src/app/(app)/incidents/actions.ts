@@ -56,6 +56,11 @@ export async function updateIncidentStatus(
     if (!incident) {
       throw new Error(getUserFriendlyError('Incident not found.'));
     }
+    // A retry whose desired result already exists is successful even if its
+    // expected source state is now stale because the first attempt committed.
+    if (incident.status === status) {
+      return incident;
+    }
     if (expectedStatus && incident.status !== expectedStatus) {
       throw new Error(
         `Incident changed from ${expectedStatus} to ${incident.status}; refresh before applying this update.`
@@ -65,11 +70,6 @@ export async function updateIncidentStatus(
       throw new Error('A resolved incident cannot be acknowledged. Reopen it explicitly first.');
     }
     if (status === 'RESOLVED') await assertRequiredCustomFieldsPresent(tx, id);
-
-    // Idempotency: skip update if status is already set to target status (prevents race condition & duplicate events)
-    if (incident.status === status) {
-      return incident;
-    }
 
     // Build update data
     const updateData: any = {

@@ -57,7 +57,12 @@ export async function POST(req: NextRequest) {
           logger.warn('api.integration.grafana_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }
-        if (await rejectWebhookReplay(integration.id, rawBody, signature)) {
+        if (
+          await rejectWebhookReplay(
+            integration.id,
+            req.headers.get('x-request-id') || req.headers.get('x-grafana-delivery')
+          )
+        ) {
           return jsonError('Duplicate webhook delivery', 409);
         }
       }

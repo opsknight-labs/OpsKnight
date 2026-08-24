@@ -111,5 +111,7 @@ describe('Data Cleanup Service', () => {
     expect(mockPrisma.incident.deleteMany).toHaveBeenCalled();
     expect(mockPrisma.alert.deleteMany).toHaveBeenCalled();
     expect(mockPrisma.logEntry.deleteMany).toHaveBeenCalled();
+    const slaCutoff = mockPrisma.sLAPerformanceLog.findMany.mock.calls[0][0].where.timestamp.lt;
+    expect(Date.now() - slaCutoff.getTime()).toBeGreaterThan(360 * 24 * 60 * 60 * 1000);
   });
 });

@@ -39,6 +39,9 @@ export default async function UnsubscribePage({
 
     if (!sub) {
       status = 'invalid';
+    } else if (done === '1' && sub.unsubscribedAt) {
+      status = 'success';
+      subscription = sub;
     } else if (sub.unsubscribedAt) {
       status = 'already_unsubscribed';
       subscription = sub;

@@ -183,15 +183,21 @@ export function createIntegrationHandler<T>(
           }
         }
 
-        const signature = Object.values(headers).find(Boolean);
-        if (
-          await rejectWebhookReplay(
-            integration.id,
-            rawPayload,
-            signature,
-            req.headers.get('x-github-delivery') || req.headers.get('x-request-id')
-          )
-        ) {
+        let deliveryId = req.headers.get('x-github-delivery') || req.headers.get('x-request-id');
+        if (!deliveryId && provider === 'sentry') {
+          const timestamp = req.headers.get('sentry-hook-timestamp');
+          const signature = req.headers.get('sentry-hook-signature');
+          if (timestamp && signature) deliveryId = `${timestamp}:${signature}`;
+        }
+        if (!deliveryId && provider === 'vercel') {
+          try {
+            const eventId = (JSON.parse(rawPayload) as { id?: unknown }).id;
+            if (typeof eventId === 'string') deliveryId = eventId;
+          } catch {
+            // Payload parsing below returns the canonical invalid-payload error.
+          }
+        }
+        if (await rejectWebhookReplay(integration.id, deliveryId)) {
           throw IntegrationErrors.invalidSignature({ reason: 'Duplicate webhook delivery' });
         }
       }

@@ -69,6 +69,7 @@ const mockPrisma = {
   slackOAuthConfig: createMockModel(),
   apiKey: createMockModel(),
   userToken: createMockModel(),
+  rateLimit: createMockModel(),
   account: createMockModel(),
   session: createMockModel(),
 

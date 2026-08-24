@@ -51,6 +51,8 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
 
   const logCutoff = new Date(now);
   logCutoff.setDate(logCutoff.getDate() - policy.logRetentionDays);
+  const metricsCutoff = new Date(now);
+  metricsCutoff.setDate(metricsCutoff.getDate() - policy.metricsRetentionDays);
 
   let incidentCount = 0;
   let alertCount = 0;
@@ -197,7 +199,7 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
     slaPerformanceLogCount = await deleteInBatches(
       () =>
         prisma.sLAPerformanceLog.findMany({
-          where: { timestamp: { lt: logCutoff } },
+          where: { timestamp: { lt: metricsCutoff } },
           select: { id: true },
           orderBy: { id: 'asc' },
           take: BATCH_SIZE,

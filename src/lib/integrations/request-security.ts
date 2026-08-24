@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import type { NextRequest } from 'next/server';
-import { checkRateLimit } from '@/lib/rate-limit';
+import prisma from '@/lib/prisma';
 
 export const MAX_INTEGRATION_BODY_BYTES = 1024 * 1024;
 const REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -45,17 +45,27 @@ export async function readIntegrationBody(
 
 export async function rejectWebhookReplay(
   integrationId: string,
-  rawBody: string,
-  signature?: string | null,
   deliveryId?: string | null
 ): Promise<boolean> {
-  const fingerprint = createHash('sha256')
-    .update(deliveryId || signature || rawBody)
-    .digest('hex');
-  const result = await checkRateLimit(
-    `webhook-replay:${integrationId}:${fingerprint}`,
-    1,
-    REPLAY_WINDOW_MS
-  );
-  return !result.allowed;
+  // A body/signature is not a delivery nonce: providers legitimately resend
+  // identical state notifications. Only claim an explicit provider delivery
+  // ID (or a signed timestamp+signature tuple supplied by the caller).
+  const nonce = deliveryId?.trim();
+  if (!nonce) return false;
+  const fingerprint = createHash('sha256').update(`${integrationId}\0${nonce}`).digest('hex');
+  const key = `webhook-replay:${fingerprint}`;
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + REPLAY_WINDOW_MS);
+  try {
+    await prisma.rateLimit.create({ data: { key, count: 1, expiresAt } });
+    return false;
+  } catch {
+    // Reclaim an expired nonce atomically. If no expired row was reclaimed,
+    // another request owns an unexpired claim and this delivery is a replay.
+    const reclaimed = await prisma.rateLimit.updateMany({
+      where: { key, expiresAt: { lte: now } },
+      data: { count: 1, expiresAt },
+    });
+    return reclaimed.count === 0;
+  }
 }

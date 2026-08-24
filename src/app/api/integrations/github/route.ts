@@ -67,14 +67,7 @@ export async function POST(req: NextRequest) {
           logger.warn('api.integration.github_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }
-        if (
-          await rejectWebhookReplay(
-            integration.id,
-            rawBody,
-            signature,
-            req.headers.get('x-github-delivery')
-          )
-        ) {
+        if (await rejectWebhookReplay(integration.id, req.headers.get('x-github-delivery'))) {
           return jsonError('Duplicate webhook delivery', 409);
         }
       }
