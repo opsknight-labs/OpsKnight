@@ -529,13 +529,14 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     return clearSessionToken(token as AugmentedJWT, 'USER_DISABLED');
                   }
 
-                  const effectiveTokenVersion =
-                    typeof currentTokenVersion === 'number' ? currentTokenVersion : -1;
-                  if (dbTokenVersion !== effectiveTokenVersion) {
+                  if (
+                    typeof currentTokenVersion === 'number' &&
+                    dbTokenVersion !== currentTokenVersion
+                  ) {
                     logger.warn('[Auth-Debug] REVOKING SESSION: Version Mismatch', {
                       component: 'auth:jwt',
                       db: dbTokenVersion,
-                      token: effectiveTokenVersion,
+                      token: currentTokenVersion,
                     });
                     return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
                   }
