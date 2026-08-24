@@ -40,6 +40,9 @@ describe('incident flow safeguards', () => {
 
   it('bulk acknowledge stops escalation', async () => {
     prismaMock.incident.updateMany.mockResolvedValue({ count: 2 });
+    prismaMock.incident.findMany
+      .mockResolvedValueOnce([{ id: 'inc-1' }, { id: 'inc-2' }])
+      .mockResolvedValueOnce([]);
 
     await bulkAcknowledge(['inc-1', 'inc-2']);
 
