@@ -675,8 +675,15 @@ export async function bulkUpdateUsers(
     });
 
     // Cannot use deleteMany due to complex cascade logic (needs deleteUserInternal)
-    const deletionResults = await Promise.allSettled(userIds.map(id => deleteUserInternal(id)));
-    const deletedIds = userIds.filter((_, index) => deletionResults[index].status === 'fulfilled');
+    const deletionResults = await Promise.allSettled(
+      userIds.map(async id => {
+        await deleteUserInternal(id);
+        return id;
+      })
+    );
+    const deletedIds = deletionResults.flatMap(result =>
+      result.status === 'fulfilled' ? [result.value] : []
+    );
     const failedCount = userIds.length - deletedIds.length;
 
     await logAudit({
