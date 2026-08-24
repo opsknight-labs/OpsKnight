@@ -142,7 +142,9 @@ describeIfRealDB('Status Page Subscription Integration', () => {
         searchParams: Promise.resolve({ done: '1' }),
       });
 
-      expect(JSON.stringify(rendered)).toContain('Successfully Unsubscribed');
+      const successCard = rendered.props.children;
+      const successHeading = successCard.props.children[1];
+      expect(successHeading.props.children).toBe('Successfully Unsubscribed');
     });
   });
 
