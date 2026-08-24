@@ -142,7 +142,8 @@ import prisma from './prisma';
  * Cache key generators
  */
 export const CacheKeys = {
-  dashboardMetrics: (userId: string, scope: string) => `metrics:${userId}:${scope}`,
+  dashboardMetrics: (userId: string, scope: string) =>
+    scope === 'global' ? 'metrics:global' : `metrics:${userId}:${scope}`,
   incidentList: (scope: string, filters: string) => `incidents:${scope}:${filters}`,
   serviceIncidents: (serviceId: string) => `service-incidents:${serviceId}`,
   userIncidents: (userId: string) => `user-incidents:${userId}`,

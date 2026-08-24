@@ -16,6 +16,8 @@ import { Prisma } from '@prisma/client';
 import { logger } from '../logger';
 import prisma from '../prisma';
 
+const MAX_RETRY_BACKOFF_MS = 15 * 60 * 1000;
+
 export type JobType = 'ESCALATION' | 'NOTIFICATION' | 'AUTO_UNSNOOZE' | 'SCHEDULED_TASK';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
@@ -215,8 +217,11 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
       scheduledAt: shouldRetry
         ? new Date(
             Date.now() +
-              Math.pow(2, job.attempts) * 30000 + // 30s, 60s, 120s...
-              Math.floor(Math.random() * 10000) // +0-10s jitter
+              Math.min(
+                Math.pow(2, job.attempts) * 30000 + // 30s, 60s, 120s...
+                  Math.floor(Math.random() * 10000), // +0-10s jitter
+                MAX_RETRY_BACKOFF_MS
+              )
           )
         : job.scheduledAt,
     },
@@ -270,7 +275,9 @@ export async function processJob(job: any): Promise<boolean> {
 
         // Cap notification retries to avoid infinite loops on bad payloads or spamming users
         const cappedMaxAttempts = Math.min(job.maxAttempts, 3);
-        if (job.attempts + 1 >= cappedMaxAttempts) {
+        // claimPendingJobs already incremented attempts before returning the
+        // claimed row. Adding one here prematurely exhausts the retry budget.
+        if (job.attempts >= cappedMaxAttempts) {
           await prisma.backgroundJob.update({
             where: { id: job.id },
             data: {
@@ -293,21 +300,38 @@ export async function processJob(job: any): Promise<boolean> {
         if (incident && incident.status === 'SNOOZED' && incident.snoozedUntil) {
           const now = new Date();
           if (now >= incident.snoozedUntil) {
-            await prisma.incident.update({
-              where: { id: job.payload.incidentId },
-              data: {
-                status: 'OPEN',
-                snoozedUntil: null,
-                snoozeReason: null,
-                escalationStatus: 'ESCALATING',
-                nextEscalationAt: new Date(),
-                events: {
-                  create: {
-                    message: 'Incident auto-unsnoozed (snooze duration expired)',
-                  },
+            const unsnoozed = await prisma.$transaction(async tx => {
+              const changed = await tx.incident.updateMany({
+                where: {
+                  id: job.payload.incidentId,
+                  status: 'SNOOZED',
+                  snoozedUntil: { lte: now },
                 },
-              },
+                data: {
+                  status: 'OPEN',
+                  snoozedUntil: null,
+                  snoozeReason: null,
+                  escalationStatus: 'ESCALATING',
+                  nextEscalationAt: now,
+                },
+              });
+              if (changed.count === 0) return false;
+              await tx.incidentEvent.create({
+                data: {
+                  incidentId: job.payload.incidentId,
+                  message: 'Incident auto-unsnoozed (snooze duration expired)',
+                },
+              });
+              return true;
             });
+
+            if (!unsnoozed) {
+              await prisma.backgroundJob.update({
+                where: { id: job.id },
+                data: { status: 'CANCELLED', completedAt: new Date() },
+              });
+              return false;
+            }
 
             try {
               const { sendIncidentNotifications } = await import('../user-notifications');

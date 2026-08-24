@@ -198,8 +198,21 @@ export default function MobileNotificationsClient() {
     enabled: !usePolling,
     onNotifications: handleIncomingNotifications,
     onUnreadCount: count => setUnreadCount(count),
-    onError: () => setUsePolling(true),
+    // The stream hook already reconnects indefinitely with backoff. Only use
+    // polling when EventSource is genuinely unsupported, not after a single
+    // transient network failure.
+    onError: () => {
+      if (typeof EventSource === 'undefined') setUsePolling(true);
+    },
   });
+
+  useEffect(() => {
+    const resumeStreaming = () => {
+      if (typeof EventSource !== 'undefined') setUsePolling(false);
+    };
+    window.addEventListener('online', resumeStreaming);
+    return () => window.removeEventListener('online', resumeStreaming);
+  }, []);
 
   useEffect(() => {
     if (!usePolling) return;
@@ -444,9 +457,9 @@ export default function MobileNotificationsClient() {
                       onClick={
                         href
                           ? () => {
-                            haptics.soft();
-                            router.push(href);
-                          }
+                              haptics.soft();
+                              router.push(href);
+                            }
                           : undefined
                       }
                     >

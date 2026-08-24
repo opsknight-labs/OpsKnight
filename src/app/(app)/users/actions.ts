@@ -141,7 +141,7 @@ async function deleteUserInternal(userId: string) {
     prisma.onCallShift.deleteMany({ where: { userId } }),
     prisma.escalationRule.deleteMany({ where: { targetUserId: userId } }),
     // Preserve incident notes for audit trail — nullify userId so notes survive user deletion
-    prisma.incidentNote.updateMany({ where: { userId }, data: { userId: undefined } }),
+    prisma.incidentNote.updateMany({ where: { userId }, data: { userId: null } }),
     // Notifications are delivery receipts and less useful without the user
     prisma.notification.deleteMany({ where: { userId } }),
     prisma.incidentWatcher.deleteMany({ where: { userId } }),

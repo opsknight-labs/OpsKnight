@@ -71,15 +71,21 @@ function buildIncidentFilterSql(filters: SLAMetricsFilter, tableAlias: string = 
   }
 
   if (filters.urgency) {
-    fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"urgency"`)} = ${filters.urgency}::"IncidentUrgency"`);
+    fragments.push(
+      Prisma.sql`AND ${Prisma.raw(`${prefix}"urgency"`)} = ${filters.urgency}::"IncidentUrgency"`
+    );
   }
 
   if (filters.status) {
-    fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"status"`)} = ${filters.status}::"IncidentStatus"`);
+    fragments.push(
+      Prisma.sql`AND ${Prisma.raw(`${prefix}"status"`)} = ${filters.status}::"IncidentStatus"`
+    );
   }
 
   if (filters.visibility && filters.visibility !== 'ALL') {
-    fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"visibility"`)} = ${filters.visibility}::"IncidentVisibility"`);
+    fragments.push(
+      Prisma.sql`AND ${Prisma.raw(`${prefix}"visibility"`)} = ${filters.visibility}::"IncidentVisibility"`
+    );
   }
 
   if (filters.assigneeId !== undefined) {
@@ -1625,8 +1631,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     highUrg: prevHighUrgCount,
     mediumUrg: prevMediumUrgCount,
     lowUrg: prevLowUrgCount,
-    mtta: prevMttaMs ?? 0,
-    mttr: prevMttrMs ?? 0,
+    mtta: prevMttaMs ?? null,
+    mttr: prevMttrMs ?? null,
     ackRate: previousIncidentsCount > 0 ? (prevAckCount / previousIncidentsCount) * 100 : 0,
     resolveRate: previousIncidentsCount > 0 ? (prevResolveCount / previousIncidentsCount) * 100 : 0,
   };
@@ -1987,8 +1993,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     recentIncidents
       .map(incident => ({
         start: incident.createdAt > finalStart ? incident.createdAt : finalStart,
-        end:
-          incident.resolvedAt && incident.resolvedAt < finalEnd ? incident.resolvedAt : finalEnd,
+        end: incident.resolvedAt && incident.resolvedAt < finalEnd ? incident.resolvedAt : finalEnd,
       }))
       .filter(interval => interval.start < interval.end)
   );
@@ -2024,10 +2029,13 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       onCallHoursMs += shiftEnd.getTime() - shiftStart.getTime();
       let cursorMs = shiftStart.getTime();
       const endMs = shiftEnd.getTime();
-      while (cursorMs <= endMs) {
+      // Sample twice per day and add the exact endpoint. A 24-hour UTC step
+      // can skip the local end date for short overnight shifts and around DST.
+      while (cursorMs < endMs) {
         coverageDays.add(toDateKeyInTimeZone(new Date(cursorMs), tenantBusinessHoursTz));
-        cursorMs += 24 * 60 * 60 * 1000;
+        cursorMs += 12 * 60 * 60 * 1000;
       }
+      coverageDays.add(toDateKeyInTimeZone(shiftEnd, tenantBusinessHoursTz));
     }
   }
   const coveragePercent = Math.min(100, (coverageDays.size / coverageWindowDays) * 100);
@@ -3027,7 +3035,7 @@ export async function calculateSLAMetricsFromRollups(
   const escalationRate =
     !priorityFilter && totalIncidents > 0 ? (escalationCount / totalIncidents) * 100 : 0;
   const reopenRate =
-    !priorityFilter && totalIncidents > 0 ? (reopenCount / totalIncidents) * 100 : 0;
+    !priorityFilter && resolvedIncidents > 0 ? (reopenCount / resolvedIncidents) * 100 : 0;
   const autoResolveRate =
     !priorityFilter && resolvedIncidents > 0 ? (autoResolveCount / resolvedIncidents) * 100 : 0;
 

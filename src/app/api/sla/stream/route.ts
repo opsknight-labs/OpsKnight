@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { assertCanReadServiceMetrics } from '@/lib/rbac';
 
 /**
  * SLA Streaming API - Server-Sent Events Endpoint
@@ -54,47 +55,16 @@ export async function GET(req: NextRequest) {
   const serviceId = searchParams.get('serviceId');
   const windowDays = parseInt(searchParams.get('windowDays') || '7', 10);
 
-  // Authorization check for serviceId
-  if (serviceId && prisma.service?.findUnique) {
-    const user =
-      session.user.id && prisma.user?.findUnique
-        ? await prisma.user.findUnique({
-            where: { id: session.user.id },
-            select: {
-              id: true,
-              role: true,
-              teamMemberships: { select: { teamId: true } },
-            },
-          })
-        : session.user.email && prisma.user?.findFirst
-          ? await prisma.user.findFirst({
-              where: { email: session.user.email },
-              select: {
-                id: true,
-                role: true,
-                teamMemberships: { select: { teamId: true } },
-              },
-            })
-          : null;
-
-    const role = user?.role || (session.user as { role?: string }).role || 'RESPONDER';
-    const isPrivileged = role === 'ADMIN' || role === 'RESPONDER';
-
-    const service = await prisma.service.findUnique({
-      where: { id: serviceId },
-      select: { id: true, teamId: true },
-    });
-
-    if (!service) {
-      return NextResponse.json({ error: 'Service not found' }, { status: 404 });
-    }
-
-    if (!isPrivileged && service.teamId && user?.teamMemberships) {
-      const hasAccess = user.teamMemberships.some(m => m.teamId === service.teamId);
-      if (!hasAccess) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
+  // ADMIN/RESPONDER may request the global stream. Regular users must supply
+  // an explicit service they are entitled to read; omission must not widen
+  // their scope to the entire organization.
+  try {
+    await assertCanReadServiceMetrics({ serviceId });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Forbidden' },
+      { status: 403 }
+    );
   }
 
   // Calculate date range

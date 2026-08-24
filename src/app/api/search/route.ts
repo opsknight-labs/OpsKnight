@@ -73,9 +73,30 @@ type SearchResponses = [
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(await getAuthOptions());
-    if (!session) {
+    if (!session?.user?.email) {
       return jsonError('Unauthorized', 401);
     }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        teamMemberships: { select: { teamId: true } },
+      },
+    });
+    if (!currentUser || currentUser.status === 'DISABLED') {
+      return jsonError('Unauthorized', 401);
+    }
+
+    const isPrivileged = currentUser.role === 'ADMIN' || currentUser.role === 'RESPONDER';
+    const teamIds = currentUser.teamMemberships.map(membership => membership.teamId);
+    const incidentAccess = isPrivileged
+      ? {}
+      : {
+          OR: [{ assigneeId: currentUser.id }, { service: { teamId: { in: teamIds } } }],
+        };
 
     const searchParams = req.nextUrl.searchParams;
     const query = searchParams.get('q');
@@ -106,23 +127,24 @@ export async function GET(req: NextRequest) {
       // Search incidents - Enhanced with multiple search strategies
       prisma.incident.findMany({
         where: {
-          OR: [
-            // Exact match (highest priority)
-            { title: { equals: sanitizedTerm, mode: INSENSITIVE_MODE } },
-            // Contains match
-            { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-            { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-            // Word boundary matches (if multiple words, max 3 for performance)
-            ...(searchWords.length > 1
-              ? searchWords.slice(0, 3).map(word => ({
-                  OR: [
-                    { title: { contains: word, mode: INSENSITIVE_MODE } },
-                    { description: { contains: word, mode: INSENSITIVE_MODE } },
-                  ],
-                }))
-              : []),
-            // ID search
-            { id: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+          AND: [
+            incidentAccess,
+            {
+              OR: [
+                { title: { equals: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                ...(searchWords.length > 1
+                  ? searchWords.slice(0, 3).map(word => ({
+                      OR: [
+                        { title: { contains: word, mode: INSENSITIVE_MODE } },
+                        { description: { contains: word, mode: INSENSITIVE_MODE } },
+                      ],
+                    }))
+                  : []),
+                { id: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+              ],
+            },
           ],
         },
         take: 8, // Reduced for faster response on small systems
@@ -139,9 +161,14 @@ export async function GET(req: NextRequest) {
       // Search services
       prisma.service.findMany({
         where: {
-          OR: [
-            { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-            { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+          AND: [
+            isPrivileged ? {} : { teamId: { in: teamIds } },
+            {
+              OR: [
+                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+              ],
+            },
           ],
         },
         take: 5,
@@ -157,9 +184,14 @@ export async function GET(req: NextRequest) {
       // Search teams
       prisma.team.findMany({
         where: {
-          OR: [
-            { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-            { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+          AND: [
+            isPrivileged ? {} : { id: { in: teamIds } },
+            {
+              OR: [
+                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+              ],
+            },
           ],
         },
         take: 5,
@@ -174,9 +206,21 @@ export async function GET(req: NextRequest) {
       // Search users
       prisma.user.findMany({
         where: {
-          OR: [
-            { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-            { email: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+          AND: [
+            isPrivileged
+              ? {}
+              : {
+                  OR: [
+                    { id: currentUser.id },
+                    { teamMemberships: { some: { teamId: { in: teamIds } } } },
+                  ],
+                },
+            {
+              OR: [
+                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                { email: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+              ],
+            },
           ],
         },
         take: 5,
@@ -194,9 +238,14 @@ export async function GET(req: NextRequest) {
       // Search escalation policies
       prisma.escalationPolicy.findMany({
         where: {
-          OR: [
-            { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-            { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+          AND: [
+            isPrivileged ? {} : { services: { some: { teamId: { in: teamIds } } } },
+            {
+              OR: [
+                { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                { description: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+              ],
+            },
           ],
         },
         take: 5,
@@ -217,11 +266,25 @@ export async function GET(req: NextRequest) {
           }
           return await prisma.postmortem.findMany({
             where: {
-              OR: [
-                { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { summary: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { rootCause: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
-                { lessons: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+              AND: [
+                isPrivileged
+                  ? {}
+                  : {
+                      incident: {
+                        OR: [
+                          { assigneeId: currentUser.id },
+                          { service: { teamId: { in: teamIds } } },
+                        ],
+                      },
+                    },
+                {
+                  OR: [
+                    { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                    { summary: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                    { rootCause: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                    { lessons: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
+                  ],
+                },
               ],
               status: { not: 'ARCHIVED' }, // Don't show archived postmortems
             },

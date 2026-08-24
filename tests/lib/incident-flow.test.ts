@@ -107,7 +107,8 @@ describe('incident flow safeguards', () => {
       snoozedUntil,
       createdAt: new Date(),
     });
-    prismaMock.incident.update.mockResolvedValue({});
+    prismaMock.incident.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.incidentEvent.create.mockResolvedValue({});
 
     const job = {
       id: 'job-1',
@@ -118,8 +119,9 @@ describe('incident flow safeguards', () => {
 
     await processJob(job as any);
 
-    expect(prismaMock.incident.update).toHaveBeenCalledWith(
+    expect(prismaMock.incident.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: 'inc-9', status: 'SNOOZED' }),
         data: expect.objectContaining({
           escalationStatus: 'ESCALATING',
           nextEscalationAt: expect.any(Date),

@@ -269,6 +269,7 @@ model TeamMember {
   team Team @relation(fields: [teamId], references: [id])
 
   @@unique([userId, teamId])
+  @@index([teamId])
 }
 
 model Service {
@@ -373,6 +374,8 @@ model Integration {
   updatedAt       DateTime @updatedAt
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
 }
 
 model WebhookIntegration {
@@ -403,7 +406,7 @@ model SlackOAuthConfig {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   updatedBy     String? // User ID who last updated the config
-  updater       User?     @relation("SlackOAuthConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  updater       User?    @relation("SlackOAuthConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@unique([id]) // Only one config record
 }
@@ -579,7 +582,7 @@ model IncidentTemplate {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy      User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   defaultService Service? @relation(fields: [defaultServiceId], references: [id])
   Team           Team?    @relation(fields: [teamId], references: [id])
   teamId         String?
@@ -772,6 +775,8 @@ model OnCallLayer {
 
   schedule OnCallSchedule    @relation(fields: [scheduleId], references: [id])
   users    OnCallLayerUser[]
+
+  @@index([scheduleId])
 }
 
 model OnCallLayerUser {
@@ -814,6 +819,7 @@ model OnCallShift {
   user     User           @relation(fields: [userId], references: [id])
 
   @@index([start, end]) // For date range queries (active shifts)
+  @@index([scheduleId])
   @@index([userId, start, end]) // For user-specific shift queries
 }
 

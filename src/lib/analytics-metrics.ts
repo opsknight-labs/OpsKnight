@@ -179,7 +179,8 @@ export function buildServiceSlaTable(
   serviceNameMap: Map<string, string>,
   defaultAckMinutes: number = 15,
   defaultResolveMinutes: number = 120,
-  limit: number = 8
+  limit: number = 8,
+  now: Date = new Date()
 ): ServiceSlaEntry[] {
   const serviceSlaStats = new Map<
     string,
@@ -204,6 +205,12 @@ export function buildServiceSlaTable(
       if (diffMinutes <= ackTargetMinutes) {
         current.ackMet += 1;
       }
+    } else if (incident.status !== 'RESOLVED') {
+      // Active incidents become evaluated SLA breaches once their
+      // acknowledgement deadline passes. Omitting them from the denominator
+      // can otherwise report 100% compliance while incidents remain unacked.
+      const ageMinutes = (now.getTime() - incident.createdAt.getTime()) / 60000;
+      if (ageMinutes > ackTargetMinutes) current.ackTotal += 1;
     }
 
     if (incident.status === 'RESOLVED') {

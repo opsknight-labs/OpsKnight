@@ -104,7 +104,9 @@ describe('analytics-metrics utilities', () => {
     ]);
     const names = new Map<string, string>([['s1', 'Service One']]);
     const table = buildServiceSlaTable(incidents, ackMap, targets, names);
-    expect(table[0].ackRate).toBe(100);
+    // i2 is still open and well beyond the 15-minute acknowledgement target,
+    // so it belongs in the denominator as a breach rather than disappearing.
+    expect(table[0].ackRate).toBe(50);
     expect(table[0].resolveRate).toBe(100);
   });
 

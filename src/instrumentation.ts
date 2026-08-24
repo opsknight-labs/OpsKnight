@@ -7,6 +7,8 @@
  * @see https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
  */
 
+let shutdownHandlersRegistered = false;
+
 export async function register() {
   // Only run validation in Node.js runtime (not Edge)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
@@ -20,7 +22,18 @@ export async function register() {
     validateProductionEnv();
 
     // Start the cron scheduler for background jobs
-    const { startCronScheduler } = await import('./lib/cron-scheduler');
+    const { startCronScheduler, stopCronScheduler } = await import('./lib/cron-scheduler');
     startCronScheduler();
+
+    if (!shutdownHandlersRegistered) {
+      shutdownHandlersRegistered = true;
+      const stopScheduler = () => {
+        void stopCronScheduler().catch(error => {
+          console.error('[Cron] Graceful shutdown failed', error);
+        });
+      };
+      process.once('SIGTERM', stopScheduler);
+      process.once('SIGINT', stopScheduler);
+    }
   }
 }

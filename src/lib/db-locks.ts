@@ -63,12 +63,26 @@ export async function acquireAdvisoryLock(
   key: bigint
 ): Promise<void> {
   try {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(${key}::bigint)`;
+    // Do not return PostgreSQL's `void` pseudo-type to Prisma: it cannot be
+    // deserialized and makes a successfully acquired lock look like a query
+    // failure. The outer SELECT returns only a supported boolean value while
+    // still forcing the locking function to execute.
+    const rows = await tx.$queryRaw<Array<{ acquired: boolean }>>`
+      SELECT TRUE AS "acquired"
+      FROM (SELECT pg_advisory_xact_lock(${key}::bigint)) AS lock_result
+    `;
+    if (rows[0]?.acquired !== true) {
+      throw new Error(`PostgreSQL advisory lock ${key.toString()} was not acquired`);
+    }
   } catch (err) {
-    logger.warn(
-      '[DbLocks] pg_advisory_xact_lock failed (likely non-Postgres test env); proceeding without lock',
-      { key: key.toString(), error: err instanceof Error ? err.message : String(err) }
-    );
+    // Fail closed. A PostgreSQL statement error inside a transaction aborts
+    // that transaction; swallowing it only moves the failure to a later,
+    // unrelated query and hides the real cause.
+    logger.error('[DbLocks] pg_advisory_xact_lock failed; rolling back transaction', {
+      key: key.toString(),
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
   }
 }
 
@@ -78,20 +92,17 @@ export async function acquireAdvisoryLock(
  * holds it. Use for opportunistic jobs (e.g., drift detection) where
  * skipping a run is preferable to waiting.
  */
-export async function tryAdvisoryLock(
-  tx: Prisma.TransactionClient,
-  key: bigint
-): Promise<boolean> {
+export async function tryAdvisoryLock(tx: Prisma.TransactionClient, key: bigint): Promise<boolean> {
   try {
     const rows = await tx.$queryRaw<Array<{ pg_try_advisory_xact_lock: boolean }>>`
       SELECT pg_try_advisory_xact_lock(${key}::bigint)
     `;
     return rows[0]?.pg_try_advisory_xact_lock === true;
   } catch (err) {
-    logger.warn(
-      '[DbLocks] pg_try_advisory_xact_lock failed; treating as not-acquired',
-      { key: key.toString(), error: err instanceof Error ? err.message : String(err) }
-    );
+    logger.warn('[DbLocks] pg_try_advisory_xact_lock failed; treating as not-acquired', {
+      key: key.toString(),
+      error: err instanceof Error ? err.message : String(err),
+    });
     return false;
   }
 }

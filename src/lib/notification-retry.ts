@@ -4,7 +4,6 @@
  */
 
 import prisma from './prisma';
-import { sendNotification, NotificationChannel } from './notifications';
 import { logger } from './logger';
 import { CircuitBreakers } from './circuit-breaker';
 
@@ -52,6 +51,7 @@ export async function retryFailedNotifications(): Promise<{
 
   let succeeded = 0;
   let failed = 0;
+  let retried = 0;
 
   // Filter notifications that are ready to retry based on backoff delay
   const now = Date.now();
@@ -83,15 +83,24 @@ export async function retryFailedNotifications(): Promise<{
     const results = await Promise.allSettled(
       batch.map(async notification => {
         try {
-          // Update status to PENDING
-          await prisma.notification.update({
-            where: { id: notification.id },
+          // Atomically claim the failed notification. Another replica may
+          // have read the same batch; only the worker that changes FAILED to
+          // PENDING is allowed to contact the provider.
+          const claim = await prisma.notification.updateMany({
+            where: {
+              id: notification.id,
+              status: 'FAILED',
+              attempts: notification.attempts,
+            },
             data: {
               status: 'PENDING',
               failedAt: null,
               errorMsg: null,
             },
           });
+          if (claim.count === 0) {
+            return { success: false, claimed: false };
+          }
 
           let result: { success: boolean; error?: string } = {
             success: false,
@@ -193,7 +202,7 @@ export async function retryFailedNotifications(): Promise<{
               notificationId: notification.id,
               channel: notification.channel,
             });
-            return { success: true };
+            return { success: true, claimed: true };
           } else {
             await prisma.notification.update({
               where: { id: notification.id },
@@ -204,7 +213,7 @@ export async function retryFailedNotifications(): Promise<{
                 attempts: (notification.attempts || 0) + 1,
               },
             });
-            return { success: false };
+            return { success: false, claimed: true };
           }
         } catch (error: any) {
           logger.error('notification.retry.error', {
@@ -221,14 +230,16 @@ export async function retryFailedNotifications(): Promise<{
               attempts: (notification.attempts || 0) + 1,
             },
           });
-          return { success: false };
+          return { success: false, claimed: true };
         }
       })
     );
 
     // Count successes and failures from batch
     for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.success) {
+      if (result.status !== 'fulfilled' || !result.value.claimed) continue;
+      retried++;
+      if (result.value.success) {
         succeeded++;
       } else {
         failed++;
@@ -237,7 +248,7 @@ export async function retryFailedNotifications(): Promise<{
   }
 
   return {
-    retried: failedNotifications.length,
+    retried,
     succeeded,
     failed,
   };
