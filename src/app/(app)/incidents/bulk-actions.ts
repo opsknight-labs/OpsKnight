@@ -18,33 +18,40 @@ export async function bulkAcknowledge(incidentIds: string[]) {
   }
 
   try {
-    // Update all selected incidents to ACKNOWLEDGED
-    await prisma.incident.updateMany({
-      where: {
-        id: { in: incidentIds },
-        status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] }, // Only update non-resolved incidents
-      },
-      data: {
-        status: 'ACKNOWLEDGED',
-        acknowledgedAt: new Date(),
-        escalationStatus: 'COMPLETED',
-        nextEscalationAt: null,
-      },
-    });
-
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
-    await prisma.incidentEvent.createMany({
-      data: incidentIds.map(incidentId => ({
-        incidentId,
-        type: 'ACKNOWLEDGED',
-        message: `Bulk acknowledged${user ? ` by ${user.name}` : ''}`,
-      })),
+    const changedIncidentIds = await prisma.$transaction(async tx => {
+      const eligible = await tx.incident.findMany({
+        where: {
+          id: { in: incidentIds },
+          status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] },
+        },
+        select: { id: true },
+      });
+      const eligibleIds = eligible.map(incident => incident.id);
+      if (eligibleIds.length === 0) return [];
+
+      await tx.incident.updateMany({
+        where: { id: { in: eligibleIds } },
+        data: {
+          status: 'ACKNOWLEDGED',
+          acknowledgedAt: new Date(),
+          escalationStatus: 'COMPLETED',
+          nextEscalationAt: null,
+        },
+      });
+      await tx.incidentEvent.createMany({
+        data: eligibleIds.map(incidentId => ({
+          incidentId,
+          type: 'ACKNOWLEDGED',
+          message: `Bulk acknowledged${user ? ` by ${user.name}` : ''}`,
+        })),
+      });
+      return eligibleIds;
     });
 
-    // Fetch all incidents in a single query for notifications and webhooks
+    // Notify only incidents that were actually eligible and changed.
     const incidents = await prisma.incident.findMany({
-      where: { id: { in: incidentIds } },
+      where: { id: { in: changedIncidentIds } },
       include: {
         service: { select: { id: true, name: true } },
         assignee: {
@@ -90,7 +97,7 @@ export async function bulkAcknowledge(incidentIds: string[]) {
 
     revalidatePath('/incidents');
     revalidatePath('/');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: changedIncidentIds.length };
   } catch (error) {
     logger.error('Bulk acknowledge failed', { component: 'bulk-actions', error, incidentIds });
     return { success: false, error: 'Failed to acknowledge incidents' };

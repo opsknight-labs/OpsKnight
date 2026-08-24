@@ -216,8 +216,9 @@ describe('executeEscalation', () => {
 
     expect(result).toEqual({
       escalated: false,
-      reason: 'No escalation policy configured',
+      reason: 'Incident not found',
     });
+    expect(prisma.incident.update).not.toHaveBeenCalled();
   });
 
   it('returns early when no escalation policy configured', async () => {

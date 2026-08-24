@@ -9,18 +9,23 @@ import prisma from '@/lib/prisma';
 import { getCurrentUser, assertResponderOrAbove } from '@/lib/rbac';
 
 // Mock dependencies
-vi.mock('@/lib/prisma', () => ({
-  __esModule: true,
-  default: {
-    incident: {
-      updateMany: vi.fn(),
-      findUnique: vi.fn(),
-      findMany: vi.fn(),
-    },
-    incidentEvent: {
-      create: vi.fn(),
-      createMany: vi.fn(),
-    },
+vi.mock('@/lib/prisma', () => {
+  const incident = {
+    updateMany: vi.fn(),
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+  };
+  const incidentEvent = {
+    create: vi.fn(),
+    createMany: vi.fn(),
+  };
+  const client = {
+    incident,
+    incidentEvent,
+    $transaction: vi.fn(
+      async (callback: (tx: { incident: typeof incident; incidentEvent: typeof incidentEvent }) => unknown) =>
+        callback({ incident, incidentEvent })
+    ),
     auditLog: {
       create: vi.fn(),
     },
@@ -28,8 +33,9 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       upsert: vi.fn(),
     },
-  },
-}));
+  };
+  return { __esModule: true, default: client };
+});
 
 vi.mock('@/lib/rbac', () => ({
   getCurrentUser: vi.fn(),
@@ -57,17 +63,20 @@ describe('Bulk Actions', () => {
       const incidentIds = ['incident-1', 'incident-2'];
       vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 2 });
       vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 2 });
-      vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
+      vi.mocked(prisma.incident.findMany)
+        .mockResolvedValueOnce(
+          incidentIds.map(id => ({ id })) as unknown as Awaited<
+            ReturnType<typeof prisma.incident.findMany>
+          >
+        )
+        .mockResolvedValueOnce([]);
 
       const result = await bulkAcknowledge(incidentIds);
 
       expect(result.success).toBe(true);
       expect(result.count).toBe(2);
       expect(prisma.incident.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: { in: incidentIds },
-          status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] },
-        },
+        where: { id: { in: incidentIds } },
         data: {
           status: 'ACKNOWLEDGED',
           acknowledgedAt: expect.any(Date),
