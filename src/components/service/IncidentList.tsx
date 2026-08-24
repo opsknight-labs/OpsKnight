@@ -35,7 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { updateIncidentStatus } from '@/app/(app)/incidents/actions';
-import { useToast } from '@/components/ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 
 // Helper to format relative time
 function formatDistanceToNow(date: Date, timeZone: string): string {

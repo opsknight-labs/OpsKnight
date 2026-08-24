@@ -17,7 +17,7 @@ Every stable `vMAJOR.MINOR.PATCH` release must pass:
 9. **Documentation coverage** — resolve v1.4 relative links and verify the capability inventory has destinations for the required product workflows.
 10. **Security and general regression** — the normal test and security workflows must also pass for the release commit.
 
-The `release-quality` job in `.github/workflows/docker-image.yml` runs before stable image publication. If any gate fails, the release image job does not start. Main and pull-request image validation still use a lightweight no-release path.
+The `release-quality` job in `.github/workflows/docker-image.yml` runs only for stable version tags and must pass before stable image publication. If any gate fails, the release image job does not start. Main and pull-request image builds skip this job entirely so they do not start an unused PostgreSQL service.
 
 ## Evidence and exceptions
 

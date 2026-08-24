@@ -9,7 +9,7 @@ import {
   generatePostmortemDraft,
 } from '@/app/(app)/postmortems/actions';
 import { normalizeLegacyActionItems, type ActionItem } from '@/lib/action-items';
-import { toast } from 'sonner';
+import { notify as toast } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';

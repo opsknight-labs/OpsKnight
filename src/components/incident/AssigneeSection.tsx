@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { reassignIncident } from '@/app/(app)/incidents/actions';
-import { useToast } from '../ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import UserAvatar from '@/components/UserAvatar';
 import {
   Command,

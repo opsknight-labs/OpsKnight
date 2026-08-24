@@ -320,18 +320,34 @@ export async function addLayerUser(
 
   const layer = await prisma.onCallLayer.findUnique({
     where: { id: layerId },
-    select: { scheduleId: true },
+    select: { scheduleId: true, name: true },
   });
 
   if (!layer) {
     return { error: 'Layer not found.' };
   }
 
-  const existing = await prisma.onCallLayerUser.findUnique({
+  const existingAssignment = await prisma.onCallLayerUser.findFirst({
     where: {
-      layerId_userId: { layerId, userId },
+      userId,
+      layer: { scheduleId: layer.scheduleId },
+    },
+    select: {
+      layerId: true,
+      layer: { select: { name: true } },
+      user: { select: { name: true } },
     },
   });
+
+  if (existingAssignment) {
+    const responderName = existingAssignment.user.name || 'This responder';
+    if (existingAssignment.layerId === layerId) {
+      return { error: `${responderName} is already assigned to "${layer.name}".` };
+    }
+    return {
+      error: `${responderName} is already assigned to "${existingAssignment.layer.name}" in this schedule. Remove them from that layer before adding them to "${layer.name}".`,
+    };
+  }
 
   const maxPosition = await prisma.onCallLayerUser.aggregate({
     where: { layerId },
@@ -340,20 +356,13 @@ export async function addLayerUser(
   const nextPosition = (maxPosition._max.position ?? 0) + 1;
   const finalPosition = nextPosition;
 
-  if (existing) {
-    await prisma.onCallLayerUser.update({
-      where: { id: existing.id },
-      data: { position: finalPosition },
-    });
-  } else {
-    await prisma.onCallLayerUser.create({
-      data: {
-        layerId,
-        userId,
-        position: finalPosition,
-      },
-    });
-  }
+  await prisma.onCallLayerUser.create({
+    data: {
+      layerId,
+      userId,
+      position: finalPosition,
+    },
+  });
 
   const ordered = await prisma.onCallLayerUser.findMany({
     where: { layerId },
