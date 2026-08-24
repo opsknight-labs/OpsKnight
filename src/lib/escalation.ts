@@ -485,7 +485,6 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
   }
 
   // Assign the incident immediately when the escalation step runs (before notifications)
-  // Assign the incident immediately when the escalation step runs (before notifications)
   await runSerializableTransaction(async tx => {
     const currentIncident = await tx.incident.findUnique({
       where: { id: incidentId },

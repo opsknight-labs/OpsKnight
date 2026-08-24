@@ -14,7 +14,6 @@
  */
 
 import { createRequire } from 'module';
-import { createHash } from 'crypto';
 import prisma from './prisma';
 import { getBaseUrl } from './env-validation';
 import { getUserTimeZone, formatDateTime } from './timezone';
@@ -55,21 +54,31 @@ type SmtpTransporter = {
   close?: () => void;
 };
 
-let cachedSmtpTransport: { key: string; transporter: SmtpTransporter } | null = null;
+type SmtpTransportCache = {
+  config: Pick<EmailConfig, 'host' | 'port' | 'user' | 'password' | 'secure'>;
+  transporter: SmtpTransporter;
+};
+
+let cachedSmtpTransport: SmtpTransportCache | null = null;
 
 function getSmtpTransport(emailConfig: EmailConfig): SmtpTransporter {
-  const key = createHash('sha256')
-    .update(
-      JSON.stringify({
-        host: emailConfig.host,
-        port: emailConfig.port,
-        user: emailConfig.user,
-        password: emailConfig.password,
-        secure: emailConfig.secure,
-      })
-    )
-    .digest('hex');
-  if (cachedSmtpTransport?.key === key) return cachedSmtpTransport.transporter;
+  const config = {
+    host: emailConfig.host,
+    port: emailConfig.port,
+    user: emailConfig.user,
+    password: emailConfig.password,
+    secure: emailConfig.secure,
+  };
+  if (
+    cachedSmtpTransport &&
+    cachedSmtpTransport.config.host === config.host &&
+    cachedSmtpTransport.config.port === config.port &&
+    cachedSmtpTransport.config.user === config.user &&
+    cachedSmtpTransport.config.password === config.password &&
+    cachedSmtpTransport.config.secure === config.secure
+  ) {
+    return cachedSmtpTransport.transporter;
+  }
 
   cachedSmtpTransport?.transporter.close?.();
   const require = createRequire(import.meta.url);
@@ -86,7 +95,7 @@ function getSmtpTransport(emailConfig: EmailConfig): SmtpTransporter {
     greetingTimeout: 10_000,
     socketTimeout: 30_000,
   }) as SmtpTransporter;
-  cachedSmtpTransport = { key, transporter };
+  cachedSmtpTransport = { config, transporter };
   return transporter;
 }
 
