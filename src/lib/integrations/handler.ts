@@ -12,7 +12,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
-import { logger } from '@/lib/logger';
+import { logger, withRequestContext } from '@/lib/logger';
 import { checkRateLimit, createRateLimitHeaders } from './rate-limiter';
 import { verifyWebhookSignature, isTimestampValid } from './signature-verification';
 import { recordWebhookReceived } from './metrics';
@@ -65,7 +65,7 @@ export function createIntegrationHandler<T>(
   options: HandlerOptions<T>,
   processor: (ctx: IntegrationContext<T>) => Promise<{ action: string; incident?: unknown }>
 ) {
-  return async function handler(req: NextRequest) {
+  const handler = async (req: NextRequest) => {
     const startTime = performance.now();
     let integrationId: string | null = null;
     let integrationType: string = options.integrationType;
@@ -252,6 +252,8 @@ export function createIntegrationHandler<T>(
       return jsonError('Internal Server Error', 500);
     }
   };
+
+  return withRequestContext(handler, `api.integration.${options.integrationType}`);
 }
 
 /**

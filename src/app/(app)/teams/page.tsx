@@ -175,7 +175,9 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
         avatarUrl: true,
         gender: true,
       },
-      take: 500, // Limit users for the team member add dropdown to avoid unbounded memory
+      // Initial choices for bulk add. The single-member form uses a bounded,
+      // server-backed directory search and can reach users beyond this set.
+      take: 50,
     }),
     prisma.teamMember.groupBy({
       by: ['teamId'],

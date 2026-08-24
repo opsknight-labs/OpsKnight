@@ -1,0 +1,35 @@
+replicaCount: 3
+
+postgresql:
+  enabled: false
+
+database:
+  # Use a managed multi-AZ PostgreSQL service. The real TLS URL should be
+  # supplied by the existing Secret referenced below.
+  url: postgresql://replace-me@postgres.example.com:5432/opsknight?sslmode=require
+  port: 5432
+
+secrets:
+  existingSecret: opsknight-runtime
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 75
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+networkPolicy:
+  enabled: true
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi

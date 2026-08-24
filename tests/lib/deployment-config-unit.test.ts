@@ -93,6 +93,25 @@ describe('deployment configuration invariants', () => {
     expect(deployment).toContain('include "opsknight.secretName"');
   });
 
+  it('ships an enterprise high-availability baseline and guarded recovery drills', () => {
+    const values = read('helm/opsknight/values.yaml');
+    const deployment = read('helm/opsknight/templates/deployment.yaml');
+    const enterprise = read('helm/opsknight/examples/values-enterprise-ha.yaml');
+    const failover = read('scripts/verify-k8s-failover.sh');
+    const restore = read('scripts/verify-backup-restore.sh');
+
+    expect(values).toContain('topologySpreadConstraints:');
+    expect(deployment).toContain('maxUnavailable: 0');
+    expect(deployment).toContain('terminationGracePeriodSeconds:');
+    expect(enterprise).toContain('replicaCount: 3');
+    expect(enterprise).toContain('minAvailable: 2');
+    expect(enterprise).toContain('enabled: false');
+    expect(failover).toContain('CONFIRM_OPSKNIGHT_CHAOS');
+    expect(failover).toContain('ready_before < 2');
+    expect(restore).toContain('opsknight-restore-drill-');
+    expect(restore).toContain('trap cleanup EXIT');
+  });
+
   it('preserves the existing postgres Service cluster-IP mode for upgrade safety', () => {
     expect(read('k8s/postgres-service.yaml')).not.toContain('clusterIP: None');
     expect(read('helm/opsknight/templates/postgres-service.yaml')).not.toContain('clusterIP: None');

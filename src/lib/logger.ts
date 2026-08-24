@@ -27,11 +27,18 @@ class FallbackAsyncLocalStorage<T> implements AsyncLocalStorageLike<T> {
 
 function createAsyncLocalStorage<T>(): AsyncLocalStorageLike<T> {
   try {
-    const GlobalALS = (
-      globalThis as unknown as { AsyncLocalStorage?: new <V>() => AsyncLocalStorageLike<V> }
-    ).AsyncLocalStorage;
-    if (typeof GlobalALS === 'function') {
-      return new GlobalALS<T>();
+    // Avoid a static node:async_hooks import because this logger is also used
+    // by browser and Edge bundles. Node 20 exposes built-ins synchronously.
+    const runtimeProcess = (
+      globalThis as unknown as {
+        process?: { getBuiltinModule?: (id: string) => unknown };
+      }
+    ).process;
+    const asyncHooks = runtimeProcess?.getBuiltinModule?.('node:async_hooks') as
+      | { AsyncLocalStorage?: new <V>() => AsyncLocalStorageLike<V> }
+      | undefined;
+    if (typeof asyncHooks?.AsyncLocalStorage === 'function') {
+      return new asyncHooks.AsyncLocalStorage<T>();
     }
   } catch {
     // Fallback if not available
@@ -47,6 +54,35 @@ export function runWithContext<T>(context: RequestContext, fn: () => T): T {
 
 export function getRequestContext(): RequestContext {
   return requestContextStorage.getStore() ?? {};
+}
+
+function trustedRequestId(request: Request): string {
+  const supplied = request.headers.get('x-request-id')?.trim();
+  if (supplied && /^[A-Za-z0-9._:-]{1,128}$/.test(supplied)) return supplied;
+  return crypto.randomUUID();
+}
+
+/** Wrap a Node route handler with per-request structured-log correlation. */
+export function withRequestContext<
+  R extends Request,
+  A extends unknown[],
+  T,
+>(handler: (request: R, ...args: A) => Promise<T>, component: string) {
+  return async (request: R, ...args: A): Promise<T> => {
+    const requestId = trustedRequestId(request);
+    return runWithContext({ requestId, component }, async () => {
+      const result = await handler(request, ...args);
+      if (result instanceof Response) {
+        try {
+          if (!result.headers.has('x-request-id')) result.headers.set('x-request-id', requestId);
+        } catch {
+          // Some runtime-generated responses expose immutable headers. Logs
+          // still retain the correlation id in that case.
+        }
+      }
+      return result;
+    });
+  };
 }
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';

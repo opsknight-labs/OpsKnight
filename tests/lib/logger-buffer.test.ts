@@ -5,6 +5,7 @@ import {
   sanitizeString,
   runWithContext,
   getRequestContext,
+  withRequestContext,
 } from '@/lib/logger';
 import * as publicLogsRoute from '@/app/api/public-logs/route';
 import { createMockRequest, parseResponse } from '../helpers/api-test';
@@ -128,5 +129,32 @@ describe('AsyncLocalStorage Request Context', () => {
     expect(match?.requestId).toBe('req-custom');
     expect(match?.userId).toBe('user-original');
     expect(match?.component).toBe('worker');
+  });
+
+  it('keeps concurrent asynchronous request contexts isolated', async () => {
+    const observed = await Promise.all([
+      runWithContext({ requestId: 'request-a' }, async () => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        return getRequestContext().requestId;
+      }),
+      runWithContext({ requestId: 'request-b' }, async () => {
+        await Promise.resolve();
+        return getRequestContext().requestId;
+      }),
+    ]);
+
+    expect(observed).toEqual(['request-a', 'request-b']);
+  });
+
+  it('wraps route handlers and returns a correlation header', async () => {
+    const handler = withRequestContext(async () => {
+      return Response.json({ requestId: getRequestContext().requestId });
+    }, 'api.test');
+    const response = await handler(
+      new Request('http://localhost/api/test', { headers: { 'x-request-id': 'external-123' } })
+    );
+
+    expect(response.headers.get('x-request-id')).toBe('external-123');
+    await expect(response.json()).resolves.toEqual({ requestId: 'external-123' });
   });
 });

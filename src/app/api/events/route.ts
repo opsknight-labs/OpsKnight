@@ -5,7 +5,7 @@ import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { EventSchema } from '@/lib/validation';
-import { logger } from '@/lib/logger';
+import { logger, withRequestContext } from '@/lib/logger';
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 120;
 
@@ -28,7 +28,7 @@ async function getApiUserContext(apiKeyUserId: string) {
   };
 }
 
-export async function POST(req: NextRequest) {
+async function postEvent(req: NextRequest) {
   try {
     // 1. Validate Integration Key or API Key
     const authHeader = req.headers.get('Authorization');
@@ -132,3 +132,5 @@ export async function POST(req: NextRequest) {
     return jsonError('Internal Server Error', 500);
   }
 }
+
+export const POST = withRequestContext(postEvent, 'api.events');

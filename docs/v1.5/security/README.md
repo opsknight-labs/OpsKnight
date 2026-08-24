@@ -7,6 +7,7 @@ description: Identity, authorization, encryption, signature verification, and se
 # Security
 
 - [Enterprise readiness and assurance](enterprise-readiness.md)
+- [Audit evidence checklist](audit-evidence-checklist.md)
 
 This section covers identity management, authorization, cryptographic data protection, webhook signature verification, and secure operations for OpsKnight. These controls can contribute evidence to your security program; installing OpsKnight does not by itself make a deployment compliant with a standard or regulation.
 

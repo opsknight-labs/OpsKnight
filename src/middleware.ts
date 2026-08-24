@@ -209,9 +209,17 @@ function getSecurityHeaders(): Record<string, string> {
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const origin = req.headers.get('origin');
+  const suppliedRequestId = req.headers.get('x-request-id')?.trim();
+  const requestId =
+    suppliedRequestId && /^[A-Za-z0-9._:-]{1,128}$/.test(suppliedRequestId)
+      ? suppliedRequestId
+      : crypto.randomUUID();
+  const forwardedHeaders = new Headers(req.headers);
+  forwardedHeaders.set('x-request-id', requestId);
 
   // Create response with security headers
-  const response = NextResponse.next();
+  const response = NextResponse.next({ request: { headers: forwardedHeaders } });
+  response.headers.set('x-request-id', requestId);
   const securityHeaders = getSecurityHeaders();
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
@@ -353,7 +361,8 @@ export default async function middleware(req: NextRequest) {
       // NOTE: Rate limiting is now handled in the individual API routes (Node.js runtime)
       // to support Distributed Rate Limiting via PostgreSQL, which cannot run in Edge Middleware.
 
-      const apiResponse = NextResponse.next();
+      const apiResponse = NextResponse.next({ request: { headers: forwardedHeaders } });
+      apiResponse.headers.set('x-request-id', requestId);
       // Apply CORS headers
       Object.entries(corsHeaders).forEach(([key, value]) => {
         apiResponse.headers.set(key, value);
