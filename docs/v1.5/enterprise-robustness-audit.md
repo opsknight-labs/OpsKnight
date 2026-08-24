@@ -96,11 +96,12 @@ All 13 described medium findings were closed: custom-field definitions/defaults/
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | TypeScript                        | Passed: `tsc --noEmit --incremental false`                                                                                                        |
 | Production build                  | Passed: Next.js optimized build, approximately 79 seconds locally                                                                                 |
-| Full unit suite                   | Passed: 156 files; 1,218 passed; 4 intentionally skipped                                                                                          |
+| Full unit suite                   | Passed: 158 files; 1,223 passed; 4 intentionally skipped                                                                                          |
 | Focused robustness regression     | Passed: 13 files; 84 passed; 14 environment-gated skips                                                                                           |
+| Bugbot regression review          | Passed: all 4 findings remediated (2 high, 1 medium, 1 low) with regression coverage                                                              |
 | Prisma schema                     | Passed `prisma validate`                                                                                                                          |
 | Migration policy                  | Passed with zero errors; warnings are enum-only additions and historical migration notices                                                        |
-| Documentation links               | Passed across 116 v1.5 files                                                                                                                      |
+| Documentation links               | Passed across 117 v1.5 files                                                                                                                      |
 | Documentation capability contract | Passed: 19 capabilities and 52 destinations                                                                                                       |
 | ESLint correctness                | Zero errors; repository-wide baseline remains 1,256 warnings and exceeds the `npm run lint` warning budget                                        |
 | Local DB integration              | Not executed locally because PostgreSQL is unavailable; required PR CI provisions PostgreSQL 16 and runs migration smoke plus serialized DB tests |
