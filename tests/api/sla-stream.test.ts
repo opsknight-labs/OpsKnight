@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 import type { Session } from 'next-auth';
 
 const session: Session = {
-  user: { email: 'test@example.com' },
+  user: { id: 'user-1', email: 'test@example.com' },
   expires: new Date(Date.now() + 3600000).toISOString(),
 };
 
