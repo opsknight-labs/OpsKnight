@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { toggleIntegrationStatus } from '@/app/(app)/services/actions';
-import { useToast } from '@/components/ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import { Badge } from '@/components/ui/shadcn/badge';
 
 interface IntegrationStatusToggleProps {

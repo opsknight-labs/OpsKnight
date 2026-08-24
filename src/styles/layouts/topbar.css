@@ -1062,66 +1062,6 @@
   }
 }
 
-/* Toast Animations */
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes slideOut {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-
-  to {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-}
-
-.toast {
-  animation: slideIn 0.3s ease-out;
-}
-
-.toast-container {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-neutral-300) transparent;
-}
-
-.toast-container::-webkit-scrollbar {
-  width: 4px;
-}
-
-.toast-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.toast-container::-webkit-scrollbar-thumb {
-  background: var(--color-neutral-300);
-  border-radius: var(--radius-full);
-}
-
-@media (max-width: 640px) {
-  .toast-container {
-    right: 0.5rem;
-    top: 0.5rem;
-    max-width: calc(100% - 1rem);
-  }
-
-  .toast {
-    min-width: auto;
-    max-width: 100%;
-  }
-}
-
 /* ============================================
    COMPACT MODE FOR ALL PAGES (EXCEPT LOGIN)
    Optimizes spacing, padding, and typography

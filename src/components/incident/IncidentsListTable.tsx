@@ -28,7 +28,7 @@ import {
   bulkUpdateUrgency,
   bulkUpdateStatus,
 } from '@/app/(app)/incidents/bulk-actions';
-import { useToast } from '../ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import Pagination from './Pagination';
 
 import StatusBadge from './StatusBadge';

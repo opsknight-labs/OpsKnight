@@ -15,7 +15,7 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Slack, ExternalLink, Copy, CheckCircle2, ArrowRight, ArrowLeft, Info } from 'lucide-react';
-import { toast } from 'sonner';
+import { notify as toast } from '@/lib/toast';
 import SlackManifestCard from '@/components/settings/SlackManifestCard';
 
 type SetupStep = 1 | 2 | 3;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import VirtualList from './ui/VirtualList';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';

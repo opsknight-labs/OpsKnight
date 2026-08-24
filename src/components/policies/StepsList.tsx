@@ -26,7 +26,7 @@ import {
   CardDescription,
 } from '@/components/ui/shadcn/card';
 import { Clock } from 'lucide-react';
-import { useToast } from '@/components/ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import PolicyStepCreateForm from '@/components/PolicyStepCreateForm';
 
 type EscalationStep = {

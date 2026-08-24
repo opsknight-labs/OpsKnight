@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Check, Copy, Link as LinkIcon } from 'lucide-react';
-import { useToast } from '@/components/ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import { cn } from '@/lib/utils';
 
 type CopyButtonProps = {

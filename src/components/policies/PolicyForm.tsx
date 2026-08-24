@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { createPolicy } from '@/app/(app)/policies/actions';
 import { Loader2, ArrowRight } from 'lucide-react';
-import { useToast } from '@/components/ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 
 const formSchema = z.object({
   name: z.string().min(2, {

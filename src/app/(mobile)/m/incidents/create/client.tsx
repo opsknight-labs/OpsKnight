@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileButton from '@/components/mobile/MobileButton';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+import { notify as toast } from '@/lib/toast';
 
 type Service = { id: string; name: string };
 type User = { id: string; name: string | null; email: string };

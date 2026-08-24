@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Link2, Loader2, Unlink2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { notify as toast } from '@/lib/toast';
 import { DropdownMenuItem } from '@/components/ui/shadcn/dropdown-menu';
 import {
   AlertDialog,

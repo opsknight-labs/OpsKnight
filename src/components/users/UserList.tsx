@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { ChevronDown, Trash2, UserX, UserCheck, MoreHorizontal } from 'lucide-react';
-import { toast } from 'sonner';
+import { notify as toast } from '@/lib/toast';
 
 type User = {
   id: string;
