@@ -144,6 +144,24 @@ describe('mergeHybridMetrics', () => {
     expect(merged.mttr).toBeNull();
   });
 
+  it('calculates merged reopen rate against resolved incidents', () => {
+    // Historical: 40 resolved, 25% reopened => 10 reopened.
+    // Live: 10 resolved, 20% reopened => 2 reopened.
+    // Merged: 12 / 50 resolved = 24%.
+    const historical = metric({ totalIncidents: 100, resolveRate: 40, reopenRate: 25 });
+    const live = metric({
+      totalIncidents: 20,
+      resolvedIncidents: 10,
+      resolveRate: 50,
+      reopenRate: 20,
+    });
+
+    const merged = mergeHybridMetrics(historical, live);
+
+    expect(merged.resolvedIncidents).toBe(50);
+    expect(merged.reopenRate).toBeCloseTo(24, 5);
+  });
+
   it('reconstructs ack compliance from breaches + rate, then sums and re-divides', () => {
     // hist: ackCompliance=80%, 25 breaches.
     //   80% means met / (met+25) = 0.8 → met = 100, total_evaluated = 125.

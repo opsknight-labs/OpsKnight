@@ -35,6 +35,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import PrioritySelector from '@/components/incident/PrioritySelector';
 import CopyButton from '@/components/common/CopyButton';
+import { getAppUrl } from '@/lib/app-url';
 import {
   AlertCircle,
   Activity,
@@ -55,6 +56,7 @@ export const revalidate = 0;
 
 export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const appUrl = await getAppUrl();
   const incident = await prisma.incident.findUnique({
     where: { id },
     include: {
@@ -246,7 +248,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
                 className="text-slate-400 hover:text-slate-700 hover:bg-slate-100"
               />
               <CopyButton
-                text={`${typeof window !== 'undefined' ? window.location.origin : ''}/incidents/${id}`}
+                text={`${appUrl}/incidents/${id}`}
                 icon="link"
                 label="Link"
                 className="text-slate-400 hover:text-slate-700 hover:bg-slate-100"

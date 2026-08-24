@@ -7,6 +7,12 @@ import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 
 export const dynamic = 'force-dynamic';
 
+const isNextRedirectError = (error: unknown) => {
+  if (!error || typeof error !== 'object') return false;
+  const digest = (error as { digest?: unknown }).digest;
+  return typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT');
+};
+
 export default async function SetupPage() {
   try {
     const totalUsers = await prisma.user.count();
@@ -14,6 +20,7 @@ export default async function SetupPage() {
       redirect('/login');
     }
   } catch (error) {
+    if (isNextRedirectError(error)) throw error;
     logger.error('[Setup Page] Database error', { component: 'setup-page', error });
 
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -116,27 +116,24 @@ export async function bulkResolve(incidentIds: string[]) {
   }
 
   try {
-    // Update all selected incidents to RESOLVED
-    await prisma.incident.updateMany({
-      where: {
-        id: { in: incidentIds },
-      },
-      data: {
-        status: 'RESOLVED',
-        escalationStatus: 'COMPLETED',
-        nextEscalationAt: null,
-        resolvedAt: new Date(),
-      },
-    });
-
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
-    await prisma.incidentEvent.createMany({
-      data: incidentIds.map(incidentId => ({
-        incidentId,
-        type: 'MANUAL_RESOLVED',
-        message: `Bulk resolved${user ? ` by ${user.name}` : ''}`,
-      })),
+    await prisma.$transaction(async tx => {
+      await tx.incident.updateMany({
+        where: { id: { in: incidentIds } },
+        data: {
+          status: 'RESOLVED',
+          escalationStatus: 'COMPLETED',
+          nextEscalationAt: null,
+          resolvedAt: new Date(),
+        },
+      });
+      await tx.incidentEvent.createMany({
+        data: incidentIds.map(incidentId => ({
+          incidentId,
+          type: 'MANUAL_RESOLVED',
+          message: `Bulk resolved${user ? ` by ${user.name}` : ''}`,
+        })),
+      });
     });
 
     // Fetch all incidents in a single query for notifications and webhooks
@@ -222,21 +219,18 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
       return { success: false, error: 'Assignee not found' };
     }
 
-    // Update all selected incidents
-    await prisma.incident.updateMany({
-      where: {
-        id: { in: incidentIds },
-      },
-      data: { assigneeId },
-    });
-
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
-    await prisma.incidentEvent.createMany({
-      data: incidentIds.map(incidentId => ({
-        incidentId,
-        message: `Bulk reassigned to ${assignee.name}${user ? ` by ${user.name}` : ''}`,
-      })),
+    await prisma.$transaction(async tx => {
+      await tx.incident.updateMany({
+        where: { id: { in: incidentIds } },
+        data: { assigneeId },
+      });
+      await tx.incidentEvent.createMany({
+        data: incidentIds.map(incidentId => ({
+          incidentId,
+          message: `Bulk reassigned to ${assignee.name}${user ? ` by ${user.name}` : ''}`,
+        })),
+      });
     });
 
     // Fetch all incidents in a single query for notifications and webhooks
@@ -307,21 +301,18 @@ export async function bulkUpdatePriority(incidentIds: string[], priority: string
   }
 
   try {
-    // Update all selected incidents
-    await prisma.incident.updateMany({
-      where: {
-        id: { in: incidentIds },
-      },
-      data: { priority: priority || null },
-    });
-
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
-    await prisma.incidentEvent.createMany({
-      data: incidentIds.map(incidentId => ({
-        incidentId,
-        message: `Bulk priority updated to ${priority || 'Auto'}${user ? ` by ${user.name}` : ''}`,
-      })),
+    await prisma.$transaction(async tx => {
+      await tx.incident.updateMany({
+        where: { id: { in: incidentIds } },
+        data: { priority: priority || null },
+      });
+      await tx.incidentEvent.createMany({
+        data: incidentIds.map(incidentId => ({
+          incidentId,
+          message: `Bulk priority updated to ${priority || 'Auto'}${user ? ` by ${user.name}` : ''}`,
+        })),
+      });
     });
 
     revalidatePath('/incidents');

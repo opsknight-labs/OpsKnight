@@ -150,8 +150,9 @@ export function mergeHybridMetrics(
   const liveReopenCount = Math.round(
     (live.reopenRate / 100) * (live.resolvedIncidents ?? live.totalIncidents)
   );
-  // historical.reopenRate was computed as (reopenCount / totalIncidents) * 100
-  const histReopenCount = Math.round((historical.reopenRate / 100) * historical.totalIncidents);
+  // Both live and corrected historical metrics define reopen rate against
+  // resolved incidents: an incident must have been resolved before reopening.
+  const histReopenCount = Math.round((historical.reopenRate / 100) * resolvedHist);
   const reopenCount = liveReopenCount + histReopenCount;
 
   const autoResolveCount = historical.autoResolvedCount + live.autoResolvedCount;
@@ -168,7 +169,7 @@ export function mergeHybridMetrics(
   const highUrgencyRate = safeRate(highUrgencyCount);
   const afterHoursRate = safeRate(afterHoursCount);
   const escalationRate = safeRate(escalationCount);
-  const reopenRate = safeRate(reopenCount);
+  const reopenRate = resolvedTotal > 0 ? (reopenCount / resolvedTotal) * 100 : 0;
   const autoResolveRate = resolvedTotal > 0 ? (autoResolveCount / resolvedTotal) * 100 : 0;
 
   return {

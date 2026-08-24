@@ -33,9 +33,14 @@ vi.mock('@/lib/prisma', () => {
   return {
     __esModule: true,
     default: {
+      $transaction: vi.fn(),
       incident: {
         findUnique: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      incidentEvent: {
+        create: vi.fn(),
       },
       backgroundJob: {
         findUnique: vi.fn(),
@@ -48,6 +53,7 @@ vi.mock('@/lib/prisma', () => {
 describe('queue.processJob AUTO_UNSNOOZE', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma.$transaction as any).mockImplementation(async (callback: any) => callback(prisma));
   });
 
   it('resumes escalation at current step after unsnooze', async () => {
@@ -73,7 +79,8 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
     };
     (prisma.incident.findUnique as any).mockResolvedValue(updatedIncident);
     (prisma.incident.findUnique as any).mockResolvedValueOnce(snoozedIncident);
-    (prisma.incident.update as any).mockResolvedValue({});
+    (prisma.incident.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.incidentEvent.create as any).mockResolvedValue({});
     (prisma.backgroundJob.findUnique as any).mockResolvedValue({
       id: 'job-1',
       attempts: 0,
@@ -93,9 +100,9 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
 
     await queue.processJob(job);
 
-    expect(prisma.incident.update).toHaveBeenCalledWith(
+    expect(prisma.incident.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'inc-1' },
+        where: expect.objectContaining({ id: 'inc-1', status: 'SNOOZED' }),
         data: expect.objectContaining({ status: 'OPEN' }),
       })
     );
@@ -111,7 +118,7 @@ describe('queue.processJob NOTIFICATION retries', () => {
     (mockedSendNotification as any).mockResolvedValue({ success: false, error: 'fail' });
     (prisma.backgroundJob.findUnique as any).mockResolvedValue({
       id: 'job-n1',
-      attempts: 2, // this call will be attempt 3
+      attempts: 3,
       maxAttempts: 5,
       scheduledAt: new Date(),
     });
@@ -122,7 +129,7 @@ describe('queue.processJob NOTIFICATION retries', () => {
       type: 'NOTIFICATION',
       status: 'PROCESSING',
       payload: { incidentId: 'inc-1', userId: 'u1', channel: 'email', message: 'msg' },
-      attempts: 2,
+      attempts: 3,
       maxAttempts: 5,
     };
 

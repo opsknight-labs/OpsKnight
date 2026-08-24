@@ -18,6 +18,10 @@ vi.mock('@/lib/auth', () => ({
   getAuthOptions: vi.fn().mockResolvedValue({}),
 }));
 
+vi.mock('@/lib/rbac', () => ({
+  assertCanReadServiceMetrics: vi.fn(),
+}));
+
 // Mock prisma
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -136,5 +140,21 @@ describe('SLA Streaming API', () => {
         }),
       })
     );
+  });
+
+  it('returns 403 instead of streaming global data when scope authorization fails', async () => {
+    const { getServerSession } = await import('next-auth');
+    const { assertCanReadServiceMetrics } = await import('@/lib/rbac');
+    vi.mocked(getServerSession).mockResolvedValue(session);
+    vi.mocked(assertCanReadServiceMetrics).mockRejectedValueOnce(
+      new Error('Unauthorized. Specify serviceId or teamId to view metrics.')
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/sla/stream?windowDays=30');
+    const response = await GET(req);
+
+    expect(response.status).toBe(403);
+    const { default: prisma } = await import('@/lib/prisma');
+    expect(prisma.incident.count).not.toHaveBeenCalled();
   });
 });
