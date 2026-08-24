@@ -102,6 +102,23 @@ export default async function TeamsPage({ searchParams }: TeamsPageProps) {
       ],
     });
   }
+  if (minMembers !== undefined || minServices !== undefined) {
+    const [memberCounts, serviceCounts] = await Promise.all([
+      prisma.teamMember.groupBy({ by: ['teamId'], _count: { _all: true } }),
+      prisma.service.groupBy({ by: ['teamId'], _count: { _all: true } }),
+    ]);
+    const memberCountByTeam = new Map(memberCounts.map(row => [row.teamId, row._count._all]));
+    const serviceCountByTeam = new Map(
+      serviceCounts.flatMap(row => (row.teamId ? [[row.teamId, row._count._all] as const] : []))
+    );
+    const candidateIds = new Set([...memberCountByTeam.keys(), ...serviceCountByTeam.keys()]);
+    const eligibleIds = [...candidateIds].filter(
+      teamId =>
+        (minMembers === undefined || (memberCountByTeam.get(teamId) ?? 0) >= minMembers) &&
+        (minServices === undefined || (serviceCountByTeam.get(teamId) ?? 0) >= minServices)
+    );
+    whereConditions.push({ id: { in: eligibleIds } });
+  }
   const where: Prisma.TeamWhereInput = whereConditions.length > 0 ? { AND: whereConditions } : {};
 
   let orderBy: Prisma.TeamOrderByWithRelationInput | Prisma.TeamOrderByWithRelationInput[] = {

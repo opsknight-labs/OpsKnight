@@ -108,7 +108,21 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   }
   if (teamFilter) andConditions.push({ teamId: teamFilter });
   if (statusFilter !== 'all') {
-    andConditions.push({ status: statusFilter as import('@prisma/client').ServiceStatus });
+    const active = {
+      status: { in: ['OPEN', 'ACKNOWLEDGED'] as import('@prisma/client').IncidentStatus[] },
+    };
+    if (statusFilter === 'CRITICAL') {
+      andConditions.push({ incidents: { some: { ...active, urgency: 'HIGH' } } });
+    } else if (statusFilter === 'DEGRADED') {
+      andConditions.push({
+        AND: [
+          { incidents: { some: active } },
+          { incidents: { none: { ...active, urgency: 'HIGH' } } },
+        ],
+      });
+    } else if (statusFilter === 'OPERATIONAL') {
+      andConditions.push({ incidents: { none: active } });
+    }
   }
   const where: Prisma.ServiceWhereInput = andConditions.length > 0 ? { AND: andConditions } : {};
 
@@ -119,10 +133,9 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   } else if (sortBy === 'status') {
     orderBy = { status: 'asc' };
   } else if (sortBy === 'incidents_desc') {
-    // Cannot easily sort by dynamic incidents in DB, fallback to name or ignore
-    orderBy = { name: 'asc' };
+    orderBy = { incidents: { _count: 'desc' } };
   } else if (sortBy === 'incidents_asc') {
-    orderBy = { name: 'desc' };
+    orderBy = { incidents: { _count: 'asc' } };
   }
 
   const totalFilteredItems = await prisma.service.count({ where });
@@ -180,15 +193,23 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   // Calculate high-level stats (just for the page, or maybe we need total stats?)
   // If we need total stats, we can't get it without fetching all. Let's just keep stats based on what we have, or leave it. Wait, the user didn't mention stats, but they said "Remove the in-memory .filter(), .sort(), .slice() operations".
   const totalServices = totalFilteredItems;
-  const operationalCount = await prisma.service.count({
-    where: { status: 'OPERATIONAL' as import('@prisma/client').ServiceStatus },
-  });
-  const degradedCount = await prisma.service.count({
-    where: { status: 'DEGRADED' as import('@prisma/client').ServiceStatus },
-  });
-  const criticalCount = await prisma.service.count({
-    where: { status: 'CRITICAL' as import('@prisma/client').ServiceStatus },
-  });
+  const active = {
+    status: { in: ['OPEN', 'ACKNOWLEDGED'] as import('@prisma/client').IncidentStatus[] },
+  };
+  const [operationalCount, degradedCount, criticalCount] = await Promise.all([
+    prisma.service.count({ where: { incidents: { none: active } } }),
+    prisma.service.count({
+      where: {
+        AND: [
+          { incidents: { some: active } },
+          { incidents: { none: { ...active, urgency: 'HIGH' } } },
+        ],
+      },
+    }),
+    prisma.service.count({
+      where: { incidents: { some: { ...active, urgency: 'HIGH' } } },
+    }),
+  ]);
 
   const permissions = await getUserPermissions();
   const canCreateService = permissions.isAdminOrResponder;

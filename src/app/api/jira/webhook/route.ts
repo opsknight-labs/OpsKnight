@@ -70,8 +70,15 @@ const HANDLED_EVENTS = new Set(['jira:issue_updated', 'jira:issue_deleted']);
 
 export async function POST(request: NextRequest) {
   try {
+    const forwardedFor = request.headers.get('x-forwarded-for');
     const clientIp =
-      request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
+      request.headers.get('x-real-ip')?.trim() ||
+      forwardedFor
+        ?.split(',')
+        .map(value => value.trim())
+        .filter(Boolean)
+        .at(-1) ||
+      'unknown';
     const rl = await checkRateLimit(`jira-webhook:${clientIp}`, 60, 60_000); // 60 req/min
     if (!rl.allowed) {
       return NextResponse.json(
