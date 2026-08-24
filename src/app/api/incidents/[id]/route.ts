@@ -152,6 +152,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const status: IncidentStatus | null = parsed.data.status ?? null;
   const urgency: IncidentUrgency | null = parsed.data.urgency ?? null;
   const hasAssigneeUpdate = Object.prototype.hasOwnProperty.call(body, 'assigneeId');
+  const assigneeId = hasAssigneeUpdate ? (parsed.data.assigneeId ?? null) : undefined;
 
   const updates: Record<string, unknown> = {};
   if (status) {
@@ -222,7 +223,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     updates.urgency = urgency;
   }
   if (hasAssigneeUpdate) {
-    updates.assigneeId = parsed.data.assigneeId ?? null;
+    updates.assigneeId = assigneeId;
   }
 
   if (Object.keys(updates).length === 0) {
@@ -266,7 +267,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
   }
 
-  if (assigneeId !== null && assigneeId !== currentIncident.assigneeId) {
+  if (hasAssigneeUpdate && assigneeId !== currentIncident.assigneeId) {
     if (!assigneeId) {
       await prisma.incidentEvent.create({
         data: {
