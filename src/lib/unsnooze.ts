@@ -40,7 +40,7 @@ export async function processAutoUnsnoozeInternal(): Promise<{ processed: number
       if (policyData?.status !== 'SNOOZED') continue;
 
       const stepIndex = policyData?.currentEscalationStep ?? 0;
-      const delayMinutes = policyData?.service?.policy?.steps?.[stepIndex]?.delayMinutes ?? 0;
+      const delayMinutes = policyData?.service?.policy?.steps?.at(stepIndex)?.delayMinutes ?? 0;
       const nextEscalationAt = new Date(Date.now() + delayMinutes * 60 * 1000);
 
       const claim = await prisma.incident.updateMany({

@@ -75,11 +75,11 @@ export async function encryptProviderConfig(
       component: 'encrypted-provider-config',
       provider,
     });
-    if (
-      sensitiveFields.some(
-        field => typeof config[field] === 'string' && String(config[field]).length > 0
-      )
-    ) {
+    const containsSecret = Object.entries(config).some(
+      ([field, value]) =>
+        sensitiveFields.includes(field) && typeof value === 'string' && value.length > 0
+    );
+    if (containsSecret) {
       throw new Error('Provider secrets cannot be stored because encryption is unavailable.');
     }
     return { ...config };
