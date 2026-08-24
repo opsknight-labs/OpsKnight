@@ -89,6 +89,13 @@ export async function sendSMS(options: SMSOptions): Promise<{ success: boolean; 
       return { success: false, error: 'SMS notifications are not enabled' };
     }
 
+    // Format phone number to E.164 and validate minimal digit count
+    const toNumber = formatToE164(options.to);
+    const digitsOnly = toNumber.replace(/\D/g, '');
+    if (!toNumber || digitsOnly.length < 8) {
+      return { success: false, error: 'Invalid phone number format' };
+    }
+
     // Use configured provider
     if (smsConfig.provider === 'twilio') {
       // Load Twilio dynamically
