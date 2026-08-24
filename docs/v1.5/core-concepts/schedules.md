@@ -52,7 +52,13 @@ The end time must be after the start. Hours use `0` through `23`; week-day value
 - Twelve-hour rotation: rotation length `12`.
 - Business-hours-only slot: set a restriction and confirm final coverage is supplied by another layer outside it.
 
-These values are examples, not presets. Preview the result rather than assuming a duration produces the intended local handoff through daylight-saving changes.
+### Daylight Saving Time (DST) Transitions
+
+Rotations in OpsKnight are anchored to wall-clock hours in the schedule's configured IANA timezone:
+
+- **Daily and Multi-Day Rotations**: Evaluated with calendar-day arithmetic so shifts always start at the intended local hour (e.g. 09:00 AM) across 23-hour spring-forward and 25-hour fall-back transitions.
+- **Sub-Daily Rotations (1h, 2h, 4h, 6h, 8h, 12h)**: Derived from local day boundaries rather than continuous millisecond addition, preventing rotation drift and eliminating 1-hour overlap or gap defects.
+- **Overrides**: Strictly filter for active users (`status === 'ACTIVE'`) to prevent deactivated users from holding scheduled coverage.
 
 ## Manage participants
 

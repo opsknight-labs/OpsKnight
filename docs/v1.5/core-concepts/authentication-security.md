@@ -43,13 +43,13 @@ Login errors do not deliberately reveal whether the user exists. Preserve that b
 
 There is no separate configurable idle-timeout policy in v1.4. Session state can refresh during activity, subject to the ceiling.
 
-Session cookies are HTTP-only where appropriate and use `SameSite=Lax`. When `NEXTAUTH_URL` begins with `https://`, OpsKnight enables Secure cookies and secure cookie-name prefixes. The public origin and proxy scheme/host forwarding must agree or users can enter a login loop.
+Session cookies are HTTP-only where appropriate and use `SameSite=Lax`. When `NEXTAUTH_URL` begins with `https://`, OpsKnight enables Secure cookies and secure cookie-name prefixes (`__Host-authjs.csrf-token`, `__Secure-authjs.pkce.code_verifier`, etc.). The public origin and proxy scheme/host forwarding must agree or users can enter a login loop.
 
-**Settings → Security → Revoke all sessions** increments the current user's token version. Password reset, user-management security actions, and status checks also use token version/status to reject stale access. v1.4 cannot list or revoke one individual device session. Database-backed role/status changes can remain cached briefly, so revoke sessions and remove IdP access for urgent offboarding.
+**Settings → Security → Revoke all sessions** increments the current user's token version. Password reset, new user onboarding invitation acceptance, user-management security actions, and status checks also increment `tokenVersion` and invalidate active sessions across all devices. Database-backed role/status changes are verified on session validation, ensuring disabled accounts cannot make authenticated requests.
 
 ## OIDC identity boundary
 
-An established OIDC identity is bound to normalized issuer plus provider subject, not email alone. First-time linking to an existing account requires a stable subject, an explicitly verified email, administrator provisioning evidence, and an identity not already linked elsewhere. This prevents automatic email-only account takeover.
+An established OIDC identity is bound to normalized issuer plus provider subject, not email alone. First-time linking to an existing account requires a stable subject, an explicitly verified email, administrator provisioning evidence, and an identity not already linked elsewhere. Auto-provisioning strictly requires a verified email claim from the identity provider, preventing unauthorized account creation on unverified IdP accounts.
 
 OIDC role mappings can promote or demote a user on login. Use claims controlled by the identity administrator, restrict auto-provisioning domains, and test both allowed and denied cases. See [OIDC setup](../security/oidc-setup) for the exact workflow.
 

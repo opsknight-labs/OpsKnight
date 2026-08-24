@@ -131,9 +131,13 @@ Key rotation retains previous VAPID keys so existing devices can continue while 
 1. Open the mobile/PWA notification settings in a browser with service-worker and PushManager support.
 2. Allow browser notifications.
 3. Select **Enable Push Notifications** to register `/sw.js` and save the browser endpoint to the account.
-4. Select **Test Push** and confirm it opens the mobile notifications destination.
+   Push registration is per browser profile/device. Clearing site data, denying permission, changing origin, or losing the subscription requires registration again. Installing the PWA is recommended for Android reliability but does not replace permission and subscription.
 
-Push registration is per browser profile/device. Clearing site data, denying permission, changing origin, or losing the subscription requires registration again. Installing the PWA is recommended for Android reliability but does not replace permission and subscription.
+### Dispatch and background actions
+
+- **Parallel Delivery**: When a user has multiple registered devices, OpsKnight dispatches Web Push payloads concurrently across endpoints via `Promise.allSettled`, preventing slow endpoints from delaying alerts to other devices.
+- **Urgency and Expiration**: High-urgency incident notifications include RFC 8030 `Urgency: high` headers and shorter TTL windows to ensure mobile push services prioritize fast delivery.
+- **Notification Actions**: The service worker (`/custom-sw.js`) handles both the **View** action and in-shade **Acknowledge** action directly from the operating system notification shade without requiring navigation to the full web client.
 
 ## Configure Slack and service webhooks
 

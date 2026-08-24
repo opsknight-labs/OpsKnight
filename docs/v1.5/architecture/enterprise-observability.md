@@ -71,6 +71,7 @@ OpsKnight runs background work inside the app runtime (non-edge):
 - **Queue**: `src/lib/jobs/queue.ts` + `BackgroundJob`
 
 Tasks handled include escalation steps, notification retries, SLA breach checks, and cleanup.
+The job queue worker includes zombie job recovery: jobs stuck in `PROCESSING` status beyond the lock timeout with exhausted retry counts are automatically transitioned to `FAILED`, preventing worker starvation.
 
 ---
 
@@ -79,8 +80,9 @@ Tasks handled include escalation steps, notification retries, SLA breach checks,
 Current in-app logging path:
 
 - **Client log ingest**: `/api/logs/ingest`
-- **Logger**: `src/lib/logger.ts` (in-memory buffer)
+- **Logger**: `src/lib/logger.ts` (in-memory buffer with automatic sensitive credential redaction for API keys, bearer tokens, passwords, and webhook secrets)
 - **Admin-only log-buffer route**: `/api/public-logs`
+- **Audit Logging**: `src/lib/audit.ts` (sanitizes all structured context payloads before database persistence)
 
 Note: `LogEntry` exists in the Prisma schema, but the current ingest route writes to the
 application logger, not to the database.
