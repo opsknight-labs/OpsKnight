@@ -90,7 +90,14 @@ export async function sendIncidentWhatsApp(
 
     // Send via Twilio WhatsApp API
     const twilioModule = await import('twilio');
-    const twilio = ((twilioModule as any).default || twilioModule) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const twilio = (twilioModule.default || twilioModule) as unknown as (
+      sid: string,
+      token: string
+    ) => {
+      messages: {
+        create: (opts: Record<string, unknown>) => Promise<{ sid: string }>;
+      };
+    };
     const client = twilio(whatsappConfig.accountSid, whatsappConfig.authToken);
 
     try {
@@ -210,7 +217,14 @@ export async function sendWhatsApp(
 
     // Send via Twilio WhatsApp API
     const twilioModule = await import('twilio');
-    const twilio = ((twilioModule as any).default || twilioModule) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const twilio = (twilioModule.default || twilioModule) as unknown as (
+      sid: string,
+      token: string
+    ) => {
+      messages: {
+        create: (opts: Record<string, unknown>) => Promise<{ sid: string }>;
+      };
+    };
 
     const client = twilio(whatsappConfig.accountSid, whatsappConfig.authToken);
 

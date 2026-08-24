@@ -1,6 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser, assertResponderOrAbove, getUserPermissions } from '@/lib/rbac';
 import {
@@ -535,7 +536,7 @@ export async function bulkDeletePostmortems(ids: string[]) {
     return { success: false, error: 'No postmortems selected' };
   }
 
-  const deleteFilter: any = {
+  const deleteFilter: Prisma.PostmortemWhereInput = {
     OR: [{ id: { in: ids } }, { incidentId: { in: ids } }],
   };
 
