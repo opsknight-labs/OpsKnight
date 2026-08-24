@@ -255,7 +255,7 @@ model Team {
   incidents         Incident[] // Team-assigned incidents
   dashboards        Dashboard[] // Team-shared dashboards
   teamLeadId        String?
-  teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id])
+  teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
 }
 
 model TeamMember {
@@ -372,7 +372,7 @@ model Integration {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  service Service @relation(fields: [serviceId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
 
 model WebhookIntegration {
@@ -402,8 +402,8 @@ model SlackOAuthConfig {
   enabled       Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  updatedBy     String // User ID who last updated the config
-  updater       User     @relation("SlackOAuthConfigUpdater", fields: [updatedBy], references: [id])
+  updatedBy     String? // User ID who last updated the config
+  updater       User?     @relation("SlackOAuthConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@unique([id]) // Only one config record
 }
@@ -459,7 +459,7 @@ model Alert {
   incidentId String?
   createdAt  DateTime @default(now())
 
-  service  Service   @relation(fields: [serviceId], references: [id])
+  service  Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   incident Incident? @relation(fields: [incidentId], references: [id])
 
   @@index([serviceId, status]) // For querying alerts by service and status
@@ -499,7 +499,7 @@ model Incident {
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
-  service                 Service                  @relation(fields: [serviceId], references: [id])
+  service                 Service                  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   assignee                User?                    @relation(fields: [assigneeId], references: [id])
   team                    Team?                    @relation(fields: [teamId], references: [id])
   events                  IncidentEvent[]
@@ -574,12 +574,12 @@ model IncidentTemplate {
   defaultUrgency   IncidentUrgency @default(HIGH)
   defaultPriority  String? // P1-P5
   defaultServiceId String? // Default service to use
-  createdById      String // User who created the template
+  createdById      String? // User who created the template
   isPublic         Boolean         @default(false) // Whether template is available to all users
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  createdBy      User     @relation(fields: [createdById], references: [id])
+  createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   defaultService Service? @relation(fields: [defaultServiceId], references: [id])
   Team           Team?    @relation(fields: [teamId], references: [id])
   teamId         String?
@@ -621,12 +621,12 @@ model IncidentEvent {
 model IncidentNote {
   id         String   @id @default(cuid())
   incidentId String
-  userId     String
+  userId     String?
   content    String
   createdAt  DateTime @default(now())
 
   incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id])
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([incidentId, createdAt]) // For querying notes by incident chronologically
 }
@@ -645,12 +645,12 @@ model Postmortem {
   status      String    @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
   isPublic    Boolean   @default(true) // Public visibility on status page
   publishedAt DateTime?
-  createdById String
+  createdById String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   incident          Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  createdBy         User         @relation(fields: [createdById], references: [id])
+  createdBy         User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
   actionItemRecords ActionItem[]
 
   @@index([incidentId])
@@ -675,7 +675,7 @@ model ActionItem {
 
   postmortem         Postmortem          @relation(fields: [postmortemId], references: [id], onDelete: Cascade)
   incident           Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  owner              User?               @relation(fields: [ownerId], references: [id])
+  owner              User?               @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   externalIssueLinks ExternalIssueLink[]
 
   @@index([postmortemId])

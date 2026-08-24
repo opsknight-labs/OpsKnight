@@ -68,7 +68,7 @@ export default async function MobilePostmortemsPage() {
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--text-muted)]">
                     <span>{pm.incident.service.name}</span>
                     <span>•</span>
-                    <span>By {pm.createdBy.name || pm.createdBy.email}</span>
+                    <span>By {pm.createdBy?.name || pm.createdBy?.email || 'Deleted user'}</span>
                   </div>
                 </div>
                 <ChevronRight className="h-4 w-4 text-[color:var(--text-muted)]" />

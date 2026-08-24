@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
 
           // Calculate current value based on metric type
           let currentValue: number | null = null;
+          let previousUptime: number | null = null;
           let breached = false;
 
           switch (def.metricType) {
@@ -113,6 +114,13 @@ export async function GET(request: NextRequest) {
                   now
                 );
                 currentValue = uptimeMap[def.serviceId] ?? 100;
+                const previousStart = new Date(startDate.getTime() - windowDays * 86400000);
+                const previousMap = await calculateMultiServiceUptime(
+                  [def.serviceId],
+                  previousStart,
+                  startDate
+                );
+                previousUptime = previousMap[def.serviceId] ?? 100;
               } else {
                 currentValue = 100;
               }
@@ -139,9 +147,10 @@ export async function GET(request: NextRequest) {
           // Calculate trend (compare to previous period)
           let trend: 'up' | 'down' | 'stable' = 'stable';
           if (def.metricType === 'UPTIME' || def.metricType === 'AVAILABILITY') {
-            // For uptime, higher is better
-            if (metrics.previousPeriod.resolveRate < metrics.resolveRate) trend = 'up';
-            else if (metrics.previousPeriod.resolveRate > metrics.resolveRate) trend = 'down';
+            if (currentValue !== null && previousUptime !== null) {
+              if (currentValue > previousUptime) trend = 'up';
+              else if (currentValue < previousUptime) trend = 'down';
+            }
           } else if (def.metricType === 'MTTA') {
             // For MTTA, lower is better
             const prev = metrics.previousPeriod.mtta;

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { logger, getLogBuffer, sanitizeString } from '@/lib/logger';
+import {
+  logger,
+  getLogBuffer,
+  sanitizeString,
+  runWithContext,
+  getRequestContext,
+} from '@/lib/logger';
 import * as publicLogsRoute from '@/app/api/public-logs/route';
 import { createMockRequest, parseResponse } from '../helpers/api-test';
 import { getServerSession } from 'next-auth';
@@ -87,5 +93,40 @@ describe('Public Logs API', () => {
     expect(entry).toBeTruthy();
     expect(entry.error?.message).toBe('kaboom');
     expect(entry.error?.stack).toBeUndefined();
+  });
+});
+
+describe('AsyncLocalStorage Request Context', () => {
+  it('propagates request context to log entries automatically', () => {
+    const message = `context-test-${Date.now()}`;
+    runWithContext({ requestId: 'req-123', userId: 'user-456', component: 'api' }, () => {
+      expect(getRequestContext()).toEqual({
+        requestId: 'req-123',
+        userId: 'user-456',
+        component: 'api',
+      });
+      logger.info(message);
+    });
+
+    const entries = getLogBuffer(50);
+    const match = entries.find(entry => entry.message === message);
+    expect(match).toBeTruthy();
+    expect(match?.requestId).toBe('req-123');
+    expect(match?.userId).toBe('user-456');
+    expect(match?.component).toBe('api');
+  });
+
+  it('allows explicit context to override AsyncLocalStorage context', () => {
+    const message = `override-test-${Date.now()}`;
+    runWithContext({ requestId: 'req-original', userId: 'user-original', component: 'api' }, () => {
+      logger.info(message, { requestId: 'req-custom', component: 'worker' });
+    });
+
+    const entries = getLogBuffer(50);
+    const match = entries.find(entry => entry.message === message);
+    expect(match).toBeTruthy();
+    expect(match?.requestId).toBe('req-custom');
+    expect(match?.userId).toBe('user-original');
+    expect(match?.component).toBe('worker');
   });
 });

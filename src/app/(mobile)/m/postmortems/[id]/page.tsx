@@ -64,7 +64,7 @@ export default async function MobilePostmortemDetailPage({ params }: PageProps) 
             Postmortem: {pm.incident.title}
           </h1>
           <div className="text-xs text-[color:var(--text-muted)]">
-            Author: {pm.createdBy.name || pm.createdBy.email}
+            Author: {pm.createdBy?.name || pm.createdBy?.email || 'Deleted user'}
           </div>
         </div>
       </div>

@@ -43,13 +43,16 @@ export async function checkRateLimit(
       count,
     };
   } catch (error) {
-    // Fail OPEN if DB is down to avoid outage
-    logger.error('Rate limit DB check failed, allowing request', { error });
+    logger.error('Rate limit DB check failed, blocking request for safety', { error });
+    // Allow health checks through even when rate limit DB is down
+    if (key.startsWith('health:') || key.startsWith('internal:')) {
+      return { allowed: true, remaining: 1, resetAt: Date.now() + windowMs, count: 0 };
+    }
     return {
-      allowed: true,
-      remaining: 1,
+      allowed: false,
+      remaining: 0,
       resetAt: Date.now() + windowMs,
-      count: 0,
+      count: limit + 1,
     };
   }
 }

@@ -140,7 +140,9 @@ async function deleteUserInternal(userId: string) {
     prisma.onCallOverride.deleteMany({ where: { OR: [{ userId }, { replacesUserId: userId }] } }),
     prisma.onCallShift.deleteMany({ where: { userId } }),
     prisma.escalationRule.deleteMany({ where: { targetUserId: userId } }),
-    prisma.incidentNote.deleteMany({ where: { userId } }),
+    // Preserve incident notes for audit trail — nullify userId so notes survive user deletion
+    prisma.incidentNote.updateMany({ where: { userId }, data: { userId: undefined } }),
+    // Notifications are delivery receipts and less useful without the user
     prisma.notification.deleteMany({ where: { userId } }),
     prisma.incidentWatcher.deleteMany({ where: { userId } }),
     prisma.user.delete({ where: { id: userId } }),
@@ -601,22 +603,21 @@ export async function bulkUpdateUsers(
   }
 
   if (action === 'activate') {
-    for (const userId of userIds) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          status: 'ACTIVE',
-          deactivatedAt: null,
-        },
-      });
+    await prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: {
+        status: 'ACTIVE',
+        deactivatedAt: null,
+      },
+    });
 
-      await logAudit({
-        action: 'user.reactivated',
-        entityType: 'USER',
-        entityId: userId,
-        actorId: admin?.id || null,
-      });
-    }
+    await logAudit({
+      action: 'user.reactivated.bulk',
+      entityType: 'USER',
+      entityId: 'bulk',
+      actorId: admin?.id || null,
+      details: { userIds, count: userIds.length },
+    });
   } else if (action === 'deactivate') {
     if (admin && userIds.includes(admin.id)) {
       return { error: 'You cannot deactivate your own account.' };
@@ -633,23 +634,24 @@ export async function bulkUpdateUsers(
       };
     }
 
-    for (const userId of userIds) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          status: 'DISABLED',
-          deactivatedAt: new Date(),
-        },
-      });
-      await revokeUserSessions(userId);
+    await prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: {
+        status: 'DISABLED',
+        deactivatedAt: new Date(),
+      },
+    });
 
-      await logAudit({
-        action: 'user.deactivated',
-        entityType: 'USER',
-        entityId: userId,
-        actorId: admin?.id || null,
-      });
-    }
+    await Promise.all(userIds.map(id => revokeUserSessions(id)));
+
+    await logAudit({
+      action: 'user.deactivated.bulk',
+      entityType: 'USER',
+      entityId: 'bulk',
+      actorId: admin?.id || null,
+      details: { userIds, count: userIds.length },
+    });
+
     revalidatePath('/users');
     return { success: true, message: `Deactivated ${userIds.length} user(s)` };
   } else if (action === 'delete') {
@@ -667,29 +669,45 @@ export async function bulkUpdateUsers(
       return { error: error instanceof Error ? error.message : 'Unable to delete selected users.' };
     }
 
-    for (const userId of userIds) {
-      const userToDelete = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true, name: true, role: true },
-      });
+    const usersToDelete = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, email: true, name: true, role: true },
+    });
 
-      await deleteUserInternal(userId);
+    // Cannot use deleteMany due to complex cascade logic (needs deleteUserInternal)
+    const deletionResults = await Promise.allSettled(
+      userIds.map(async id => {
+        await deleteUserInternal(id);
+        return id;
+      })
+    );
+    const deletedIds = deletionResults.flatMap(result =>
+      result.status === 'fulfilled' ? [result.value] : []
+    );
+    const failedCount = userIds.length - deletedIds.length;
 
-      await logAudit({
-        action: 'user.deleted',
-        entityType: 'USER',
-        entityId: userId,
-        actorId: admin?.id || null,
-        targetEmail: userToDelete?.email,
-        details: {
-          email: userToDelete?.email,
-          name: userToDelete?.name,
-          role: userToDelete?.role,
-        },
-      });
-    }
+    await logAudit({
+      action: 'user.deleted.bulk',
+      entityType: 'USER',
+      entityId: 'bulk',
+      actorId: admin?.id || null,
+      details: {
+        userIds: deletedIds,
+        count: deletedIds.length,
+        failedCount,
+        users: usersToDelete
+          .filter(user => deletedIds.includes(user.id))
+          .map(u => ({ email: u.email, name: u.name, role: u.role })),
+      },
+    });
+
     revalidatePath('/users');
-    return { success: true, message: `Deleted ${userIds.length} user(s)` };
+    if (failedCount > 0) {
+      return {
+        error: `Deleted ${deletedIds.length} user(s), but ${failedCount} deletion(s) failed. Review the audit log and retry.`,
+      };
+    }
+    return { success: true, message: `Deleted ${deletedIds.length} user(s)` };
   } else if (action === 'setRole') {
     const role = formData.get('role') as string;
     if (!role) {
@@ -710,21 +728,21 @@ export async function bulkUpdateUsers(
       }
     }
 
-    for (const userId of userIds) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { role: role as 'ADMIN' | 'RESPONDER' | 'USER' },
-      });
-      await revokeUserSessions(userId);
+    await prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { role: role as 'ADMIN' | 'RESPONDER' | 'USER' },
+    });
 
-      await logAudit({
-        action: 'user.role.updated',
-        entityType: 'USER',
-        entityId: userId,
-        actorId: admin?.id || null,
-        details: { role },
-      });
-    }
+    await Promise.all(userIds.map(id => revokeUserSessions(id)));
+
+    await logAudit({
+      action: 'user.role.updated.bulk',
+      entityType: 'USER',
+      entityId: 'bulk',
+      actorId: admin?.id || null,
+      details: { role, userIds, count: userIds.length },
+    });
+
     revalidatePath('/users');
     return { success: true, message: `Updated role for ${userIds.length} user(s)` };
   }

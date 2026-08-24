@@ -1983,10 +1983,20 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   );
 
   // Coverage & Others
+  const mtbfDowntimeMs = calculateMergedDuration(
+    recentIncidents
+      .map(incident => ({
+        start: incident.createdAt > finalStart ? incident.createdAt : finalStart,
+        end:
+          incident.resolvedAt && incident.resolvedAt < finalEnd ? incident.resolvedAt : finalEnd,
+      }))
+      .filter(interval => interval.start < interval.end)
+  );
   const mtbfMs = calculateMtbfMs(
     recentIncidents.map(i => i.createdAt),
     finalStart,
-    finalEnd
+    finalEnd,
+    mtbfDowntimeMs
   );
 
   // Resolved tenant business-hours TZ. The same value flows into the
@@ -2273,11 +2283,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
     // Counts - use actual total from database, not limited count
     totalIncidents: totalIncidentCount,
+    resolvedIncidents: resolvedCountForCalc,
     activeIncidents,
     unassignedActive,
     highUrgencyCount: currentStats.highUrg,
-    mediumUrgencyCount: mediumActiveIncidents,
-    lowUrgencyCount: lowActiveIncidents,
+    mediumUrgencyCount: currentStats.mediumUrg,
+    lowUrgencyCount: currentStats.lowUrg,
     alertsCount,
     openCount: activeStatusFinalMap.get('OPEN') ?? 0,
     acknowledgedCount: activeStatusFinalMap.get('ACKNOWLEDGED') ?? 0,
@@ -3074,6 +3085,7 @@ export async function calculateSLAMetricsFromRollups(
     activeIncidents: openIncidents + acknowledgedIncidents,
     openCount: openIncidents,
     acknowledgedCount: acknowledgedIncidents,
+    resolvedIncidents,
     highUrgencyCount: highUrgencyIncidents,
     mediumUrgencyCount: mediumUrgencyIncidents,
     lowUrgencyCount: lowUrgencyIncidents,

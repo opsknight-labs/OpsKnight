@@ -5,6 +5,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
 import Sidebar from '@/components/Sidebar';
+import DatabaseOffline from '@/components/DatabaseOffline';
 
 import TopbarUserMenu from '@/components/TopbarUserMenu';
 import SidebarSearch from '@/components/SidebarSearch';
@@ -49,12 +50,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       email: session?.user?.email,
     });
     let userCount = 0;
+    let userCountError: unknown = null;
     try {
       userCount = await prisma.user.count();
     } catch (error) {
       if (!isNextRedirectError(error)) {
         logger.error('[App Layout] Failed to check user count', { component: 'layout', error });
+        userCountError = error;
       }
+    }
+    if (userCountError) {
+      return (
+        <DatabaseOffline
+          errorMessage={
+            userCountError instanceof Error ? userCountError.message : String(userCountError)
+          }
+        />
+      );
     }
     if (userCount === 0) {
       redirect('/setup');
@@ -91,15 +103,36 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     dbUser = null;
   }
 
+  if (dbError) {
+    return (
+      <DatabaseOffline
+        errorMessage={dbError instanceof Error ? dbError.message : String(dbError)}
+      />
+    );
+  }
+
   if (!dbError && !dbUser) {
     // Check if system is uninitialized
     let userCount = 0;
+    let verifyUserCountError: unknown = null;
     try {
       userCount = await prisma.user.count();
     } catch (error) {
       if (!isNextRedirectError(error)) {
         logger.error('[App Layout] Failed to verify user count', { component: 'layout', error });
+        verifyUserCountError = error;
       }
+    }
+    if (verifyUserCountError) {
+      return (
+        <DatabaseOffline
+          errorMessage={
+            verifyUserCountError instanceof Error
+              ? verifyUserCountError.message
+              : String(verifyUserCountError)
+          }
+        />
+      );
     }
     if (userCount === 0) {
       redirect('/setup');
@@ -166,60 +199,60 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <AppErrorBoundary>
       <TimezoneProvider initialTimeZone={userTimeZone}>
-          <UserAvatarProvider
-            currentUserId={userId}
-            currentUserAvatar={userAvatar}
-            currentUserGender={userGender}
-            currentUserName={userName}
-          >
-            <SidebarProvider>
-              <GlobalKeyboardHandlerWrapper />
-              <SkipLinks />
-              <div className="app-shell">
-                <Sidebar
-                  userName={userName}
-                  userEmail={userEmail}
-                  userRole={userRole}
-                  userAvatar={userAvatar}
-                  userGender={userGender}
-                  userId={userId}
-                />
-                <div className="content-shell">
-                  <header className="fixed top-0 right-0 left-[var(--sidebar-width)] z-30 flex h-14 items-center gap-3 border-b bg-background px-4">
-                    <div className="flex items-center gap-4">
-                      <OperationalStatus
-                        tone={statusTone}
-                        label={statusLabel}
-                        detail={statusDetail}
-                        criticalCount={criticalOpenCount}
-                        mediumCount={mediumOpenCount}
-                        lowCount={lowOpenCount}
-                      />
-                      <TopbarBreadcrumbs />
-                    </div>
-                    <div className="flex flex-1 items-center justify-center px-4">
-                      <SidebarSearch />
-                    </div>
-                    <div className="flex items-center gap-4 ml-auto">
-                      <TopbarNotifications />
-                      <QuickActions canCreate={canCreate} />
-                      <TopbarUserMenu
-                        name={userName}
-                        email={userEmail}
-                        role={userRole}
-                        avatarUrl={userAvatar}
-                        gender={userGender}
-                        userId={userId}
-                      />
-                    </div>
-                  </header>
-                  <main id="main-content" className="page-shell pt-14">
-                    {children}
-                  </main>
-                </div>
+        <UserAvatarProvider
+          currentUserId={userId}
+          currentUserAvatar={userAvatar}
+          currentUserGender={userGender}
+          currentUserName={userName}
+        >
+          <SidebarProvider>
+            <GlobalKeyboardHandlerWrapper />
+            <SkipLinks />
+            <div className="app-shell">
+              <Sidebar
+                userName={userName}
+                userEmail={userEmail}
+                userRole={userRole}
+                userAvatar={userAvatar}
+                userGender={userGender}
+                userId={userId}
+              />
+              <div className="content-shell">
+                <header className="fixed top-0 right-0 left-[var(--sidebar-width)] z-30 flex h-14 items-center gap-3 border-b bg-background px-4">
+                  <div className="flex items-center gap-4">
+                    <OperationalStatus
+                      tone={statusTone}
+                      label={statusLabel}
+                      detail={statusDetail}
+                      criticalCount={criticalOpenCount}
+                      mediumCount={mediumOpenCount}
+                      lowCount={lowOpenCount}
+                    />
+                    <TopbarBreadcrumbs />
+                  </div>
+                  <div className="flex flex-1 items-center justify-center px-4">
+                    <SidebarSearch />
+                  </div>
+                  <div className="flex items-center gap-4 ml-auto">
+                    <TopbarNotifications />
+                    <QuickActions canCreate={canCreate} />
+                    <TopbarUserMenu
+                      name={userName}
+                      email={userEmail}
+                      role={userRole}
+                      avatarUrl={userAvatar}
+                      gender={userGender}
+                      userId={userId}
+                    />
+                  </div>
+                </header>
+                <main id="main-content" className="page-shell pt-14">
+                  {children}
+                </main>
               </div>
-            </SidebarProvider>
-          </UserAvatarProvider>
+            </div>
+          </SidebarProvider>
+        </UserAvatarProvider>
       </TimezoneProvider>
       <SessionTimeoutWarning warningMinutes={5} />
     </AppErrorBoundary>

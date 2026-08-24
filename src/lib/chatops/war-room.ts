@@ -905,9 +905,9 @@ export async function ensurePostmortemDraft(incidentId: string): Promise<string 
         id: `note-${n.id}`,
         timestamp: n.createdAt.toISOString(),
         type: 'MITIGATION' as const,
-        title: `Note by ${n.user.name}`,
+        title: `Note by ${n.user?.name ?? 'Deleted user'}`,
         description: n.content,
-        actor: n.user.name,
+        actor: n.user?.name ?? 'Deleted user',
       })),
     ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 

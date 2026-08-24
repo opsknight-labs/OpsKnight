@@ -40,7 +40,7 @@ interface PostmortemDetailViewProps {
       email: string;
       avatarUrl?: string | null;
       gender?: string | null;
-    };
+    } | null;
     incident: {
       id: string;
       title: string;
@@ -152,7 +152,7 @@ export default function PostmortemDetailView({
           </div>
           <div className="flex gap-4 pt-4 border-t border-slate-200 text-sm text-muted-foreground">
             <span className="flex items-center gap-2">
-              {!isPublicView && (
+              {!isPublicView && postmortem.createdBy && (
                 <UserAvatar
                   userId={postmortem.createdBy.id}
                   name={postmortem.createdBy.name}
@@ -161,7 +161,9 @@ export default function PostmortemDetailView({
                 />
               )}
               Created by{' '}
-              <strong>{isPublicView ? 'OpsKnight Team' : postmortem.createdBy.name}</strong>
+              <strong>
+                {isPublicView ? 'OpsKnight Team' : postmortem.createdBy?.name || 'Deleted user'}
+              </strong>
             </span>
             <span>•</span>
             <span>{formatDateTime(postmortem.createdAt, userTimeZone, { format: 'date' })}</span>

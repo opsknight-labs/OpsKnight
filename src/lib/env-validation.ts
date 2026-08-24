@@ -23,7 +23,7 @@ export function getBaseUrl(): string {
     if (process.env.NODE_ENV === 'production') {
       logger.warn(
         'NEXT_PUBLIC_APP_URL environment variable is not set. ' +
-        'Using localhost fallback. Set this to your application URL for correct notification links.'
+          'Using localhost fallback. Set this to your application URL for correct notification links.'
       );
     } else {
       // Development fallback
@@ -58,6 +58,14 @@ export function validateProductionEnv(): void {
     {
       name: 'NEXTAUTH_URL',
       description: 'Full URL of your application (e.g., https://OpsKnight.yourdomain.com)',
+    },
+  ];
+
+  // Optional environment variables for reference and documentation
+  const _optional: Array<{ name: string; description: string }> = [
+    {
+      name: 'PROMETHEUS_SCRAPE_TOKEN',
+      description: 'Bearer token for scraping Prometheus metrics endpoint (/api/metrics)',
     },
   ];
 

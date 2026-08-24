@@ -29,6 +29,7 @@ function metric(overrides: Partial<SLAMetrics> = {}): SLAMetrics {
     resolveBreaches: 0,
 
     totalIncidents: 0,
+    resolvedIncidents: 0,
     activeIncidents: 0,
     unassignedActive: 0,
     highUrgencyCount: 0,

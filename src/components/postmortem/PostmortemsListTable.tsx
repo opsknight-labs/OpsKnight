@@ -44,7 +44,7 @@ type PostmortemListItem = {
     name: string | null;
     email: string | null;
     avatarUrl: string | null;
-  };
+  } | null;
   incident: {
     id: string;
     title: string;

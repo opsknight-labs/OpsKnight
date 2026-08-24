@@ -41,7 +41,8 @@ export default async function PublicPostmortemPage({
   const sanitizedPostmortem = {
     ...postmortem,
     createdBy: {
-      ...postmortem.createdBy,
+      id: postmortem.createdBy?.id ?? 'deleted-user',
+      name: postmortem.createdBy?.name ?? 'OpsKnight Team',
       email: '',
     },
   };
