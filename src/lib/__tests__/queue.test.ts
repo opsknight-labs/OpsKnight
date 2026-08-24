@@ -3,6 +3,24 @@ import prisma from '@/lib/prisma';
 import * as queue from '../jobs/queue';
 import { sendNotification as mockedSendNotification } from '@/lib/notifications';
 
+type TestMock = ReturnType<typeof vi.fn>;
+
+const prismaMock = prisma as unknown as {
+  $transaction: TestMock;
+  incident: {
+    findUnique: TestMock;
+    updateMany: TestMock;
+  };
+  incidentEvent: {
+    create: TestMock;
+  };
+  backgroundJob: {
+    findUnique: TestMock;
+    update: TestMock;
+  };
+};
+const sendNotificationMock = mockedSendNotification as unknown as TestMock;
+
 vi.mock('@/lib/user-notifications', () => ({
   sendIncidentNotifications: vi.fn(),
 }));
@@ -53,7 +71,9 @@ vi.mock('@/lib/prisma', () => {
 describe('queue.processJob AUTO_UNSNOOZE', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (prisma.$transaction as any).mockImplementation(async (callback: any) => callback(prisma));
+    prismaMock.$transaction.mockImplementation(
+      async (callback: (client: typeof prismaMock) => Promise<unknown>) => callback(prismaMock)
+    );
   });
 
   it('resumes escalation at current step after unsnooze', async () => {
@@ -77,17 +97,17 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
       acknowledgedAt: null,
       resolvedAt: null,
     };
-    (prisma.incident.findUnique as any).mockResolvedValue(updatedIncident);
-    (prisma.incident.findUnique as any).mockResolvedValueOnce(snoozedIncident);
-    (prisma.incident.updateMany as any).mockResolvedValue({ count: 1 });
-    (prisma.incidentEvent.create as any).mockResolvedValue({});
-    (prisma.backgroundJob.findUnique as any).mockResolvedValue({
+    prismaMock.incident.findUnique.mockResolvedValue(updatedIncident);
+    prismaMock.incident.findUnique.mockResolvedValueOnce(snoozedIncident);
+    prismaMock.incident.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.incidentEvent.create.mockResolvedValue({});
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({
       id: 'job-1',
       attempts: 0,
       maxAttempts: 3,
       scheduledAt: new Date(),
     });
-    (prisma.backgroundJob.update as any).mockResolvedValue({});
+    prismaMock.backgroundJob.update.mockResolvedValue({});
 
     const job = {
       id: 'job-1',
@@ -115,14 +135,14 @@ describe('queue.processJob NOTIFICATION retries', () => {
   });
 
   it('caps notification retries at 3', async () => {
-    (mockedSendNotification as any).mockResolvedValue({ success: false, error: 'fail' });
-    (prisma.backgroundJob.findUnique as any).mockResolvedValue({
+    sendNotificationMock.mockResolvedValue({ success: false, error: 'fail' });
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({
       id: 'job-n1',
       attempts: 3,
       maxAttempts: 5,
       scheduledAt: new Date(),
     });
-    (prisma.backgroundJob.update as any).mockResolvedValue({});
+    prismaMock.backgroundJob.update.mockResolvedValue({});
 
     const job = {
       id: 'job-n1',
@@ -136,7 +156,7 @@ describe('queue.processJob NOTIFICATION retries', () => {
     const result = await queue.processJob(job);
 
     expect(result).toBe(false);
-    const updateCall = (prisma.backgroundJob.update as any).mock.calls[0]?.[0];
+    const updateCall = prismaMock.backgroundJob.update.mock.calls[0]?.[0];
     expect(updateCall).toBeTruthy();
     expect(updateCall.data.status).toBe('FAILED');
   });
