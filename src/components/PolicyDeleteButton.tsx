@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import { deletePolicy } from '@/app/(app)/policies/actions';
 
 type PolicyDeleteButtonProps = {
@@ -130,7 +130,6 @@ export default function PolicyDeleteButton({ policyId, servicesUsingPolicy }: Po
         </div>
     );
 }
-
 
 
 

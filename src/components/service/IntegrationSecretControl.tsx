@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Key, RefreshCw, Trash2 } from 'lucide-react';
 import CopyButton from '@/components/service/CopyButton';
 import { rotateIntegrationSecret, clearIntegrationSecret } from '@/app/(app)/services/actions';
-import { useToast } from '@/components/ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import {
   AlertDialog,
   AlertDialogAction,

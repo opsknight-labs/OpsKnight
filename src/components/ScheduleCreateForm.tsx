@@ -3,7 +3,7 @@
 import { useActionState } from 'react';
 import { useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import TimeZoneSelect from './TimeZoneSelect';
 import {
   Card,

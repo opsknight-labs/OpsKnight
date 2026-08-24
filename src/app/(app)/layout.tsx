@@ -12,7 +12,6 @@ import QuickActions from '@/components/QuickActions';
 import TopbarNotifications from '@/components/TopbarNotifications';
 import TopbarBreadcrumbs from '@/components/TopbarBreadcrumbs';
 import GlobalKeyboardHandlerWrapper from '@/components/GlobalKeyboardHandlerWrapper';
-import { ToastProvider } from '@/components/ToastProvider';
 import AppErrorBoundary from './error-boundary';
 import SkipLinks from '@/components/SkipLinks';
 import { TimezoneProvider } from '@/contexts/TimezoneContext';
@@ -166,8 +165,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <AppErrorBoundary>
-      <ToastProvider>
-        <TimezoneProvider initialTimeZone={userTimeZone}>
+      <TimezoneProvider initialTimeZone={userTimeZone}>
           <UserAvatarProvider
             currentUserId={userId}
             currentUserAvatar={userAvatar}
@@ -222,8 +220,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </div>
             </SidebarProvider>
           </UserAvatarProvider>
-        </TimezoneProvider>
-      </ToastProvider>
+      </TimezoneProvider>
       <SessionTimeoutWarning warningMinutes={5} />
     </AppErrorBoundary>
   );

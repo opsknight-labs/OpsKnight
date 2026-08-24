@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import TimeZoneSelect from './TimeZoneSelect';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';

@@ -23,7 +23,7 @@ import { Lock, RefreshCw, Info, Camera, Upload, Loader2, Trash2, Save } from 'lu
 import { z } from 'zod';
 import { updateProfile } from '@/app/(app)/settings/actions';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { notify as toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { AvatarPicker } from '@/components/settings/AvatarPicker';
 import { getDefaultAvatar, isDefaultAvatar } from '@/lib/avatar';

@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
-import { calculateSLAMetrics } from '@/lib/sla-server';
+import { calculateMultiServiceUptime, calculateSLAMetrics } from '@/lib/sla-server';
 import { clearRetentionPolicyCache } from '@/lib/retention-policy';
 
 // Local mock for this test file to ensure isolation
@@ -87,6 +87,25 @@ const prismaMock = prisma as unknown as PrismaMock & {
   systemSettings?: PrismaMock['systemSettings'];
   sLADefinition?: PrismaMock['sLADefinition'];
 };
+
+describe('calculateMultiServiceUptime visibility', () => {
+  it('applies the requested incident visibility to the uptime query', async () => {
+    prismaMock.incident.findMany.mockResolvedValueOnce([]);
+
+    await calculateMultiServiceUptime(
+      ['service-public'],
+      new Date('2026-01-01T00:00:00.000Z'),
+      new Date('2026-01-02T00:00:00.000Z'),
+      'PUBLIC'
+    );
+
+    expect(prismaMock.incident.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ visibility: 'PUBLIC' }),
+      })
+    );
+  });
+});
 
 // Initialize the new mock functions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

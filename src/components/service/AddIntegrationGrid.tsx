@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { INTEGRATION_TYPES, IntegrationType, IntegrationCategory } from './integration-types';
 import { createIntegration } from '@/app/(app)/services/actions';
-import { useToast } from '@/components/ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import { Loader2, Plus, Info, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 

@@ -1,7 +1,6 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser, assertResponderOrAbove, getUserPermissions } from '@/lib/rbac';
 import {
@@ -183,8 +182,13 @@ export async function upsertPostmortem(incidentId: string, data: PostmortemData)
  * Get postmortem for an incident
  */
 export async function getPostmortem(incidentId: string) {
+  const user = await getCurrentUser();
+  const canViewDrafts = user.role === 'ADMIN' || user.role === 'RESPONDER';
   const postmortem = await prisma.postmortem.findUnique({
-    where: { incidentId },
+    where: {
+      incidentId,
+      ...(canViewDrafts ? {} : { status: 'PUBLISHED' }),
+    },
     include: {
       createdBy: {
         select: { id: true, name: true, email: true },
@@ -228,7 +232,7 @@ export async function getPostmortem(incidentId: string) {
   // Rolling migration aid: old postmortems may still only have JSON action
   // items. Hydrate normalized rows on first read so Jira linking works without
   // requiring a maintenance window.
-  if (actionItemRecords.length === 0) {
+  if (canViewDrafts && actionItemRecords.length === 0) {
     const legacyItems = normalizeLegacyActionItems(actionItems, {
       legacyIdPrefix: `postmortem-${postmortem.id}`,
     });
@@ -525,7 +529,7 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
  * Bulk delete postmortems by IDs
  */
 export async function bulkDeletePostmortems(ids: string[]) {
-  let currentUser: { id: string; role: string };
+  let currentUser: Awaited<ReturnType<typeof assertResponderOrAbove>>;
   try {
     currentUser = await assertResponderOrAbove();
   } catch (error) {
@@ -536,16 +540,29 @@ export async function bulkDeletePostmortems(ids: string[]) {
     return { success: false, error: 'No postmortems selected' };
   }
 
-  const deleteFilter: Prisma.PostmortemWhereInput = {
-    OR: [{ id: { in: ids } }, { incidentId: { in: ids } }],
-  };
+  const selected = await prisma.postmortem.findMany({
+    where: {
+      OR: [{ id: { in: ids } }, { incidentId: { in: ids } }],
+    },
+    select: { id: true, createdById: true },
+  });
 
-  if (currentUser.role !== 'ADMIN') {
-    deleteFilter.createdById = currentUser.id;
+  if (selected.length === 0) {
+    return { success: false, error: 'No matching postmortems found' };
+  }
+
+  if (
+    currentUser.role !== 'ADMIN' &&
+    selected.some(postmortem => postmortem.createdById !== currentUser.id)
+  ) {
+    return {
+      success: false,
+      error: 'Only administrators or the postmortem author can delete the selected records',
+    };
   }
 
   const deleted = await prisma.postmortem.deleteMany({
-    where: deleteFilter,
+    where: { id: { in: selected.map(postmortem => postmortem.id) } },
   });
 
   revalidatePath('/postmortems');

@@ -2,7 +2,7 @@
 
 import { useTransition, memo, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import UserAvatar from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/shadcn/badge';

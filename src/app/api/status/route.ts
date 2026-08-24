@@ -151,7 +151,12 @@ export async function GET(req: NextRequest) {
     }));
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const uptimeMap = await calculateMultiServiceUptime(serviceIds, thirtyDaysAgo);
+    const uptimeMap = await calculateMultiServiceUptime(
+      serviceIds,
+      thirtyDaysAgo,
+      new Date(),
+      'PUBLIC'
+    );
     const uptimeMetrics = services.map(service => ({
       serviceId: service.id,
       uptime: parseFloat((uptimeMap[service.id] || 100).toFixed(3)),

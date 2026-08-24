@@ -2612,26 +2612,23 @@ export async function calculateMultiServiceUptime(
     'incident'
   );
 
-  const whereClause: any = {
-    serviceId: { in: serviceIds },
-    AND: [
-      { createdAt: { lt: effectiveEnd } },
-      {
-        OR: [
-          { resolvedAt: { gte: effectiveStart } },
-          { updatedAt: { gte: effectiveStart } },
-          { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
-        ],
-      },
-    ],
-  };
-
-  if (visibility && visibility !== 'ALL') {
-    whereClause.visibility = visibility;
-  }
+  const visibilityFilter = visibility && visibility !== 'ALL' ? { visibility } : {};
 
   const incidents = await prisma.incident.findMany({
-    where: whereClause,
+    where: {
+      serviceId: { in: serviceIds },
+      ...visibilityFilter,
+      AND: [
+        { createdAt: { lt: effectiveEnd } },
+        {
+          OR: [
+            { resolvedAt: { gte: effectiveStart } },
+            { updatedAt: { gte: effectiveStart } },
+            { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
+          ],
+        },
+      ],
+    },
     select: {
       serviceId: true,
       createdAt: true,

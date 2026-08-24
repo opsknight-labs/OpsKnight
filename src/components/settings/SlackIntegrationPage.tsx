@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { logger } from '@/lib/logger';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { notify as toast } from '@/lib/toast';
 
 // Shadcn UI Components
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';

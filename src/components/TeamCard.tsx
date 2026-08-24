@@ -10,7 +10,7 @@ import TeamActivityLog from './TeamActivityLog';
 import BulkTeamMemberActions from './BulkTeamMemberActions';
 import TeamStats from './TeamStats';
 import TeamMemberForm from './TeamMemberForm';
-import { useToast } from './ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import {
   Card,
   CardContent,

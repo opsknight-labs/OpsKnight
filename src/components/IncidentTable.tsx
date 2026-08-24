@@ -8,7 +8,7 @@ import { updateIncidentStatus } from '@/app/(app)/incidents/actions';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import StatusBadge from '@/components/incident/StatusBadge';
-import { useToast } from '@/components/ToastProvider';
+import { useToast } from '@/hooks/use-product-notification';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { Badge } from '@/components/ui/shadcn/badge';

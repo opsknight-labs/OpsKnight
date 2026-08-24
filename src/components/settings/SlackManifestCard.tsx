@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { notify as toast } from '@/lib/toast';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';

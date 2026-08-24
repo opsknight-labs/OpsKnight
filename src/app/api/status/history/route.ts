@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
+import { getServerSession } from 'next-auth';
+import { getAuthOptions } from '@/lib/auth';
 
 /**
  * Get Status Page Historical Data
@@ -51,16 +53,20 @@ export async function GET(req: NextRequest) {
       return jsonError(authResult.error || 'Unauthorized', authResult.status || 401);
     }
 
+    if (statusPage.requireAuth) {
+      const session = await getServerSession(await getAuthOptions());
+      if (!session) {
+        return jsonError('Authentication required', 401);
+      }
+    }
+
     const serviceIds = statusPage.services.filter(sp => sp.showOnPage).map(sp => sp.serviceId);
 
-    const effectiveServiceIds =
-      serviceIds.length > 0
-        ? serviceId && serviceIds.includes(serviceId)
-          ? [serviceId]
-          : serviceIds
-        : serviceId
-          ? [serviceId]
-          : [];
+    if (serviceId && !serviceIds.includes(serviceId)) {
+      return jsonError('Service is not available on this status page', 404);
+    }
+
+    const effectiveServiceIds = serviceId ? [serviceId] : serviceIds;
 
     if (effectiveServiceIds.length === 0) {
       return jsonOk({ incidents: [], services: [] }, 200);
