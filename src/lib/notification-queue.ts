@@ -55,6 +55,30 @@ const channelStates = new Map<NotificationChannel, ChannelState>();
 const processedDedupeKeys = new Map<string, number>();
 let flushTimer: NodeJS.Timeout | null = null;
 let isProcessing = false;
+const pendingRetries = new Map<NodeJS.Timeout, QueuedNotification>();
+
+function ensureFlushTimer(): void {
+  if (!flushTimer && queue.length > 0) {
+    flushTimer = setInterval(flushQueue, FLUSH_INTERVAL_MS);
+  }
+}
+
+function scheduleRetry(notification: QueuedNotification, delayMs: number): void {
+  const timer = setTimeout(() => {
+    pendingRetries.delete(timer);
+    if (queue.length >= MAX_QUEUE_SIZE) {
+      logger.warn('[NotificationQueue] Queue full, dropping retry', {
+        incidentId: notification.incidentId,
+        userId: notification.userId,
+        channel: notification.channel,
+      });
+      return;
+    }
+    queue.push(notification);
+    ensureFlushTimer();
+  }, delayMs);
+  pendingRetries.set(timer, notification);
+}
 
 /**
  * Initialize channel states
@@ -159,9 +183,7 @@ export function queueNotification(
   });
 
   // Start flush timer if not running
-  if (!flushTimer) {
-    flushTimer = setInterval(flushQueue, FLUSH_INTERVAL_MS);
-  }
+  ensureFlushTimer();
 
   return true;
 }
@@ -209,9 +231,7 @@ export function queueBulkNotifications(
   }
 
   // Start flush timer if not running
-  if (!flushTimer && queued > 0) {
-    flushTimer = setInterval(flushQueue, FLUSH_INTERVAL_MS);
-  }
+  if (queued > 0) ensureFlushTimer();
 
   return { queued, dropped, duplicates };
 }
@@ -293,9 +313,10 @@ async function processChannelNotifications(
         const retryCount = (n.retryCount || 0) + 1;
         if (retryCount <= 5) {
           const delayMs = Math.pow(2, retryCount) * 1000;
-          setTimeout(() => {
-            queue.push({ ...n, priority: Math.min(n.priority + 1, 3), retryCount });
-          }, delayMs);
+          scheduleRetry(
+            { ...n, priority: Math.min(n.priority + 1, 3), retryCount },
+            delayMs
+          );
         } else {
           logger.error('[NotificationQueue] Notification permanently dropped due to rate limits', {
             incidentId: n.incidentId,
@@ -410,6 +431,12 @@ export async function forceFlush(): Promise<void> {
     flushTimer = null;
   }
 
+  for (const [timer, notification] of pendingRetries) {
+    clearTimeout(timer);
+    if (queue.length < MAX_QUEUE_SIZE) queue.push(notification);
+  }
+  pendingRetries.clear();
+
   // Process remaining items
   while (queue.length > 0) {
     await flushQueue();
@@ -421,6 +448,8 @@ export async function forceFlush(): Promise<void> {
  */
 export function clearQueue(): void {
   queue.length = 0;
+  for (const timer of pendingRetries.keys()) clearTimeout(timer);
+  pendingRetries.clear();
   processedDedupeKeys.clear();
   channelStates.clear();
 

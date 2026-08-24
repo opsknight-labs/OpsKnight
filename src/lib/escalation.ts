@@ -257,7 +257,11 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
     },
   });
 
-  if (!incident || !incident.service.policy?.steps?.length) {
+  if (!incident) {
+    return { escalated: false, reason: 'Incident not found' };
+  }
+
+  if (!incident.service.policy?.steps?.length) {
     // Clear escalation status if no policy
     await prisma.incident.update({
       where: { id: incidentId },

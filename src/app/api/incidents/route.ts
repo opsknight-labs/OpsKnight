@@ -223,22 +223,10 @@ export async function POST(req: NextRequest) {
   try {
     if (hasEscalationPolicy) {
       const { sendServiceNotifications } = await import('@/lib/service-notifications');
-      // Run in background, don't await to keep API fast
-      sendServiceNotifications(incident.id, 'triggered').catch(err => {
-        logger.error('api.incident.service_notification_failed', {
-          error: err.message,
-          incidentId: incident.id,
-        });
-      });
+      await sendServiceNotifications(incident.id, 'triggered');
     } else {
       const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-      // Run in background, don't await to keep API fast
-      sendIncidentNotifications(incident.id, 'triggered').catch(err => {
-        logger.error('api.incident.user_notification_failed', {
-          error: err.message,
-          incidentId: incident.id,
-        });
-      });
+      await sendIncidentNotifications(incident.id, 'triggered');
     }
   } catch (e) {
     logger.error('api.incident.service_notification_import_failed', {
@@ -246,16 +234,10 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Notify status page subscribers (Email) - run in background to avoid blocking API response
+  // Await delivery so serverless runtimes cannot terminate it with the request.
   try {
     const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
-    // Don't await - run in background for faster API response on resource-constrained systems
-    notifyStatusPageSubscribers(incident.id, 'triggered').catch(err => {
-      logger.error('api.incident.status_page_notification_failed', {
-        error: err instanceof Error ? err.message : String(err),
-        incidentId: incident.id,
-      });
-    });
+    await notifyStatusPageSubscribers(incident.id, 'triggered');
   } catch (e) {
     logger.error('api.incident.status_page_notification_import_failed', {
       error: e instanceof Error ? e.message : String(e),
@@ -263,16 +245,10 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ChatOps: Auto-create war-room for qualifying incidents (fire-and-forget)
+  // ChatOps: Auto-create war-room for qualifying incidents.
   try {
     const { createIncidentWarRoom } = await import('@/lib/chatops/war-room');
-    createIncidentWarRoom(incident.id).catch(err => {
-      logger.error('ChatOps war-room creation failed', {
-        component: 'incidents-api',
-        error: err instanceof Error ? err.message : String(err),
-        incidentId: incident.id,
-      });
-    });
+    await createIncidentWarRoom(incident.id);
   } catch (e) {
     logger.error('Failed to load chatops/war-room', { error: e });
   }
