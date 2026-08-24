@@ -36,6 +36,8 @@ describe('incident flow safeguards', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.incident.findMany.mockReset().mockResolvedValue([]);
+    prismaMock.incidentEvent.createMany.mockReset().mockResolvedValue({ count: 0 });
   });
 
   it('bulk acknowledge stops escalation', async () => {
