@@ -182,8 +182,13 @@ export async function upsertPostmortem(incidentId: string, data: PostmortemData)
  * Get postmortem for an incident
  */
 export async function getPostmortem(incidentId: string) {
+  const user = await getCurrentUser();
+  const canViewDrafts = user.role === 'ADMIN' || user.role === 'RESPONDER';
   const postmortem = await prisma.postmortem.findUnique({
-    where: { incidentId },
+    where: {
+      incidentId,
+      ...(canViewDrafts ? {} : { status: 'PUBLISHED' }),
+    },
     include: {
       createdBy: {
         select: { id: true, name: true, email: true },
@@ -227,7 +232,7 @@ export async function getPostmortem(incidentId: string) {
   // Rolling migration aid: old postmortems may still only have JSON action
   // items. Hydrate normalized rows on first read so Jira linking works without
   // requiring a maintenance window.
-  if (actionItemRecords.length === 0) {
+  if (canViewDrafts && actionItemRecords.length === 0) {
     const legacyItems = normalizeLegacyActionItems(actionItems, {
       legacyIdPrefix: `postmortem-${postmortem.id}`,
     });
@@ -521,8 +526,9 @@ export async function generatePostmortemDraft(incidentId: string, userTimeZone?:
  * Bulk delete postmortems by IDs
  */
 export async function bulkDeletePostmortems(ids: string[]) {
+  let user: Awaited<ReturnType<typeof assertResponderOrAbove>>;
   try {
-    await assertResponderOrAbove();
+    user = await assertResponderOrAbove();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -531,12 +537,28 @@ export async function bulkDeletePostmortems(ids: string[]) {
     return { success: false, error: 'No postmortems selected' };
   }
 
-  await prisma.postmortem.deleteMany({
+  const selected = await prisma.postmortem.findMany({
     where: {
       OR: [{ id: { in: ids } }, { incidentId: { in: ids } }],
     },
+    select: { id: true, createdById: true },
+  });
+
+  if (selected.length === 0) {
+    return { success: false, error: 'No matching postmortems found' };
+  }
+
+  if (user.role !== 'ADMIN' && selected.some(postmortem => postmortem.createdById !== user.id)) {
+    return {
+      success: false,
+      error: 'Only administrators or the postmortem author can delete the selected records',
+    };
+  }
+
+  const deleted = await prisma.postmortem.deleteMany({
+    where: { id: { in: selected.map(postmortem => postmortem.id) } },
   });
 
   revalidatePath('/postmortems');
-  return { success: true, count: ids.length };
+  return { success: true, count: deleted.count };
 }
