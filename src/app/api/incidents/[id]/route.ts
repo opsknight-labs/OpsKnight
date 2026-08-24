@@ -120,11 +120,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } catch (_error) {
     return jsonError('Invalid JSON in request body.', 400);
   }
-  const parsed = IncidentPatchSchema.safeParse({
-    status: body.status,
-    urgency: body.urgency,
-    assigneeId: body.assigneeId ?? null,
-  });
+  const parsed = IncidentPatchSchema.safeParse(body);
   if (!parsed.success) {
     return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
   }
@@ -155,8 +151,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   const status: IncidentStatus | null = parsed.data.status ?? null;
   const urgency: IncidentUrgency | null = parsed.data.urgency ?? null;
-  const assigneeId: string | null =
-    typeof parsed.data.assigneeId === 'string' ? parsed.data.assigneeId : null;
+  const hasAssigneeUpdate = Object.prototype.hasOwnProperty.call(body, 'assigneeId');
+  const assigneeId = hasAssigneeUpdate ? (parsed.data.assigneeId ?? null) : undefined;
 
   const updates: Record<string, unknown> = {};
   if (status) {
@@ -226,8 +222,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     updates.urgency = urgency;
   }
-  if (assigneeId !== null) {
-    updates.assigneeId = assigneeId || null;
+  if (hasAssigneeUpdate) {
+    updates.assigneeId = assigneeId;
   }
 
   if (Object.keys(updates).length === 0) {
@@ -271,7 +267,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
   }
 
-  if (assigneeId !== null && assigneeId !== currentIncident.assigneeId) {
+  if (hasAssigneeUpdate && assigneeId !== currentIncident.assigneeId) {
     if (!assigneeId) {
       await prisma.incidentEvent.create({
         data: {
