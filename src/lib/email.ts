@@ -49,26 +49,34 @@ type SmtpTransportCache = {
 
 let cachedSmtpTransport: SmtpTransportCache | null = null;
 
+const HTML_ENTITY_MAP: Record<string, string> = {
+  '&nbsp;': ' ',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&apos;': "'",
+  '&amp;': '&',
+};
+
 export function htmlToPlainText(html: string): string {
   if (!html) return '';
-  let text = html;
-  let previous: string;
-  // Iteratively strip script and style tags to prevent nested tag bypasses and handle arbitrary whitespace
+  let text = html
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\s*\/\s*(?:p|div|tr|h[1-6]|li)\s*>/gi, '\n');
+
+  let prev: string;
   do {
-    previous = text;
-    text = text.replace(/<(?:script|style)\b[^>]*>[\s\S]*?<\/(?:script|style)\s*>/gi, '');
-  } while (text !== previous);
+    prev = text;
+    text = text.replace(/<[^>]*>/g, '');
+  } while (text !== prev);
+
+  text = text.replace(
+    /&(?:nbsp|lt|gt|quot|#39|apos|amp);/gi,
+    match => HTML_ENTITY_MAP[match.toLowerCase()] ?? match
+  );
 
   return text
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(?:p|div|tr|h[1-6]|li)\s*>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
     .replace(/\r\n|\r/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
