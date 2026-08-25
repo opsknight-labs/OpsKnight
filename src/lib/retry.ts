@@ -66,17 +66,18 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Calculate delay for retry attempt with exponential backoff
+ * Calculate delay for retry attempt with Full Jitter exponential backoff
  */
 function calculateDelay(
   attempt: number,
   options: Required<Omit<RetryOptions, 'retryableErrors' | 'onRetry'>>
 ): number {
-  const baseDelay = options.initialDelayMs * Math.pow(options.backoffMultiplier, attempt - 1);
-  const cappedDelay = Math.min(baseDelay, options.maxDelayMs);
-  // Add subtle 10-20% random jitter to prevent thundering herd retries
-  const jitter = cappedDelay * (0.1 + Math.random() * 0.1);
-  return Math.min(cappedDelay + jitter, options.maxDelayMs);
+  const maxDelayForAttempt = Math.min(
+    options.maxDelayMs,
+    options.initialDelayMs * Math.pow(options.backoffMultiplier, attempt - 1)
+  );
+  // Full Jitter (AWS Architecture): uniform random between 0 and maxDelayForAttempt
+  return Math.floor(Math.random() * maxDelayForAttempt);
 }
 
 /**

@@ -404,8 +404,8 @@ export async function createIncidentWarRoom(
           users: slackUserIds.join(','),
         });
 
-        if (!batchResult.ok && batchResult.error !== 'already_in_channel') {
-          // Fallback to individual invites if batch encountered a mixed error
+        if (!batchResult.ok) {
+          // Fallback to individual invites if batch encountered an error (e.g. partial membership or already_in_channel)
           for (const slackUserId of slackUserIds) {
             const indResult = await slackApiCall('conversations.invite', botToken, {
               channel: channelId,
@@ -615,6 +615,7 @@ export async function archiveWarRoomChannel(
     await prisma.incidentEvent.create({
       data: {
         incidentId,
+        type: 'STATUS_CHANGE',
         message: `War-room channel #${incident.slackChannelName} archived`,
       },
     });
@@ -725,7 +726,7 @@ export async function inviteUserToWarRoom(
     if (!lookupResult.ok || !(lookupResult as any).user?.id) {
       const lookupErr = lookupResult.error || 'User not found in Slack workspace';
       const reason =
-        lookupErr === 'user_not_found'
+        lookupErr === 'users_not_found' || lookupErr === 'user_not_found'
           ? `Email ${normalizedEmail} not found in Slack workspace`
           : lookupErr === 'missing_scope'
             ? `Slack app is missing 'users:read.email' scope`
@@ -735,6 +736,7 @@ export async function inviteUserToWarRoom(
         .create({
           data: {
             incidentId,
+            type: 'STATUS_CHANGE',
             message: `Slack War-Room: Could not auto-invite ${user.name} (${reason})`,
           },
         })

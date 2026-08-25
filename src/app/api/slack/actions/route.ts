@@ -69,32 +69,19 @@ async function resolveSlackActor(
   return { opsUser, displayName };
 }
 
-async function handleSlackActionRequest(request: NextRequest) {
+type SlackActionPayload = {
+  type?: string;
+  challenge?: string;
+  actions?: Array<{ value?: string; action_id?: string }>;
+  user?: { id?: string; name?: string; username?: string };
+  response_url?: string;
+  container?: { channel_id?: string };
+  channel?: { id?: string };
+  [key: string]: unknown;
+};
+
+async function handleSlackActionRequest(payload: SlackActionPayload) {
   try {
-    const body = await request.text();
-    const signature = request.headers.get('x-slack-signature') || '';
-    const timestamp = request.headers.get('x-slack-request-timestamp') || '';
-
-    // Verify signature
-    const verification = await verifySlackSignature(body, signature, timestamp);
-    if (!verification.valid) {
-      logger.warn('[Slack] Rejected unverified request', { reason: verification.reason });
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    }
-
-    let payload: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (body.startsWith('payload=')) {
-      const params = new URLSearchParams(body);
-      payload = JSON.parse(params.get('payload') || '{}');
-    } else {
-      try {
-        payload = JSON.parse(body);
-      } catch {
-        const params = new URLSearchParams(body);
-        payload = JSON.parse(params.get('payload') || '{}');
-      }
-    }
-
     // Handle URL verification (for Slack app setup)
     if (payload.type === 'url_verification') {
       return NextResponse.json({ challenge: payload.challenge });
@@ -332,7 +319,6 @@ async function handleSlackActionRequest(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const workerRequest = new NextRequest(request.clone());
   const body = await request.text();
   const signature = request.headers.get('x-slack-signature') || '';
   const timestamp = request.headers.get('x-slack-request-timestamp') || '';
@@ -357,7 +343,7 @@ export async function POST(request: NextRequest) {
 
   const responseUrl = toSlackResponseUrl(payload.response_url);
   after(async () => {
-    const result = await handleSlackActionRequest(workerRequest);
+    const result = await handleSlackActionRequest(payload);
     if (!responseUrl) return;
     try {
       const responsePayload = await result.json();

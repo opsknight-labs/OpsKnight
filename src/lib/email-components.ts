@@ -31,7 +31,8 @@ export function sanitizeUrl(url: string | null | undefined): string {
   if (!url) return '#';
   const trimmed = url.trim();
   if (/^(https?:\/\/|mailto:|tel:)/i.test(trimmed)) {
-    return escapeHtml(trimmed);
+    const unescaped = trimmed.replace(/&amp;/g, '&');
+    return escapeHtml(unescaped);
   }
   return '#';
 }

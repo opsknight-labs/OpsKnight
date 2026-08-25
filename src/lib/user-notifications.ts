@@ -142,17 +142,22 @@ export async function sendUserNotification(
   ]);
   const isHighUrgency = incident?.urgency === 'HIGH';
   if (incident?.urgency === 'LOW') {
-    const localParts = new Intl.DateTimeFormat('en-US', {
-      timeZone: recipient?.timeZone || 'UTC',
-      weekday: 'short',
-      hour: 'numeric',
-      hourCycle: 'h23',
-    }).formatToParts(new Date());
-    const weekday = localParts.find(part => part.type === 'weekday')?.value;
-    const hour = Number(localParts.find(part => part.type === 'hour')?.value || 0) % 24;
-    const offHours = weekday === 'Sat' || weekday === 'Sun' || hour < 8 || hour >= 18;
-    if (offHours) {
-      channels = channels.filter(channel => !['PUSH', 'SMS', 'WHATSAPP'].includes(channel));
+    try {
+      const timeZone = recipient?.timeZone || 'UTC';
+      const localParts = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        weekday: 'short',
+        hour: 'numeric',
+        hourCycle: 'h23',
+      }).formatToParts(new Date());
+      const weekday = localParts.find(part => part.type === 'weekday')?.value;
+      const hour = Number(localParts.find(part => part.type === 'hour')?.value || 0) % 24;
+      const offHours = weekday === 'Sat' || weekday === 'Sun' || hour < 8 || hour >= 18;
+      if (offHours) {
+        channels = channels.filter(channel => !['PUSH', 'SMS', 'WHATSAPP'].includes(channel));
+      }
+    } catch {
+      // Fallback for invalid timezone string without throwing
     }
   }
 

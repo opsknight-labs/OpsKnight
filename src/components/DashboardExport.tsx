@@ -24,6 +24,19 @@ type ExportProps = {
   };
 };
 
+function escapeCSVField(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  let str = String(value);
+  const trimmed = str.trimStart();
+  if (/^[=+\-@\t\r|%]/.test(trimmed)) {
+    str = `'${str}`;
+  }
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
 export default function DashboardExport({ incidents, filters, metrics }: ExportProps) {
   const { userTimeZone } = useTimezone();
   const [isExporting, setIsExporting] = useState(false);
@@ -34,19 +47,19 @@ export default function DashboardExport({ incidents, filters, metrics }: ExportP
     const csvRows: string[] = [];
 
     // Header
-    csvRows.push('OpsKnight Dashboard Export');
-    csvRows.push(`Generated: ${formatDateTime(new Date(), userTimeZone, { format: 'datetime' })}`);
+    csvRows.push(escapeCSVField('OpsKnight Dashboard Export'));
+    csvRows.push(escapeCSVField(`Generated: ${formatDateTime(new Date(), userTimeZone, { format: 'datetime' })}`));
     csvRows.push('');
 
     // Filters
     csvRows.push('Active Filters:');
-    if (filters.status) csvRows.push(`Status: ${filters.status}`);
-    if (filters.service) csvRows.push(`Service: ${filters.service}`);
+    if (filters.status) csvRows.push(`Status: ${escapeCSVField(filters.status)}`);
+    if (filters.service) csvRows.push(`Service: ${escapeCSVField(filters.service)}`);
     if (filters.assignee !== undefined) {
-      csvRows.push(`Assignee: ${filters.assignee === '' ? 'Unassigned' : filters.assignee}`);
+      csvRows.push(`Assignee: ${escapeCSVField(filters.assignee === '' ? 'Unassigned' : filters.assignee)}`);
     }
-    if (filters.urgency) csvRows.push(`Urgency: ${filters.urgency}`);
-    if (filters.search) csvRows.push(`Search: ${filters.search}`);
+    if (filters.urgency) csvRows.push(`Urgency: ${escapeCSVField(filters.urgency)}`);
+    if (filters.search) csvRows.push(`Search: ${escapeCSVField(filters.search)}`);
     if (filters.range) {
       if (filters.range === 'all') {
         csvRows.push('Time Range: All time');
@@ -57,9 +70,9 @@ export default function DashboardExport({ incidents, filters, metrics }: ExportP
         const end = filters.endDate
           ? formatDateTime(filters.endDate, userTimeZone, { format: 'date' })
           : 'N/A';
-        csvRows.push(`Time Range: Custom (${start} - ${end})`);
+        csvRows.push(`Time Range: Custom (${escapeCSVField(start)} - ${escapeCSVField(end)})`);
       } else {
-        csvRows.push(`Time Range: ${filters.range} days`);
+        csvRows.push(`Time Range: ${escapeCSVField(filters.range)} days`);
       }
     }
     csvRows.push('');
@@ -77,18 +90,18 @@ export default function DashboardExport({ incidents, filters, metrics }: ExportP
     csvRows.push('ID,Title,Status,Urgency,Service,Assignee,Created At');
     incidents.forEach(incident => {
       const row = [
-        incident.id,
-        `"${incident.title.replace(/"/g, '""')}"`,
-        incident.status,
-        incident.urgency || 'N/A',
-        incident.service?.name || 'N/A',
-        incident.assignee?.name || incident.team?.name || 'Unassigned',
-        formatDateTime(incident.createdAt, userTimeZone, { format: 'datetime' }),
+        escapeCSVField(incident.id),
+        escapeCSVField(incident.title),
+        escapeCSVField(incident.status),
+        escapeCSVField(incident.urgency || 'N/A'),
+        escapeCSVField(incident.service?.name || 'N/A'),
+        escapeCSVField(incident.assignee?.name || incident.team?.name || 'Unassigned'),
+        escapeCSVField(formatDateTime(incident.createdAt, userTimeZone, { format: 'datetime' })),
       ];
       csvRows.push(row.join(','));
     });
 
-    const csvContent = csvRows.join('\n');
+    const csvContent = '\uFEFF' + csvRows.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);

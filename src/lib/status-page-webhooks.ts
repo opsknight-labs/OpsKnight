@@ -38,8 +38,8 @@ export async function deliverWebhook(
 
     const retryResult = await retry(
       async () => {
-        const response = await cb.execute(() =>
-          fetch(url, {
+        const response = await cb.execute(async () => {
+          const res = await fetch(url, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -50,12 +50,14 @@ export async function deliverWebhook(
             body: payloadString,
             signal: AbortSignal.timeout(10000), // 10 second timeout
             redirect: 'error',
-          })
-        );
+          });
 
-        if (!response.ok && (response.status >= 500 || response.status === 429)) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+          if (!res.ok && (res.status >= 500 || res.status === 429)) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+
+          return res;
+        });
 
         return response;
       },

@@ -92,7 +92,12 @@ export async function GET(req: NextRequest) {
 
   if (!isAdmin) {
     const publicPage = await prisma.statusPage.findFirst({
-      where: { enabled: true, enableUptimeExports: true },
+      where: {
+        enabled: true,
+        enableUptimeExports: true,
+        requireAuth: false,
+        privacyMode: { not: 'PRIVATE' },
+      },
     });
     if (!publicPage) {
       return new NextResponse('Unauthorized', { status: 403 });

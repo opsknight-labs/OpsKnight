@@ -29,11 +29,14 @@ export function buildCsv<T extends Record<string, CsvPrimitive>>(
     return sanitized;
   });
 
-  return stringify(sanitizedRows, {
-    header: true,
-    columns: columns.map(column => ({
-      key: String(column.key),
-      header: column.header,
-    })),
-  });
+  return (
+    '\uFEFF' +
+    stringify(sanitizedRows, {
+      header: true,
+      columns: columns.map(column => ({
+        key: String(column.key),
+        header: column.header,
+      })),
+    })
+  );
 }

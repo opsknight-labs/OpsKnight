@@ -9,29 +9,52 @@ const PRIORITY_SLA_TARGETS: Record<string, { ack: number; resolve: number }> = {
     'P5': { ack: 120, resolve: 2880 } // Info - 2 hours ack, 48 hours resolve
 };
 
-export function getPrioritySLATarget(priority: string | null | undefined, service: Service): { ack: number; resolve: number } {
-    if (priority && PRIORITY_SLA_TARGETS[priority]) {
-        return PRIORITY_SLA_TARGETS[priority];
+export type SlaTargetService = {
+  targetAckMinutes?: number | null;
+  targetResolveMinutes?: number | null;
+};
+
+export function getPrioritySLATarget(
+  priority: string | null | undefined,
+  service: SlaTargetService
+): { ack: number; resolve: number } {
+  if (priority) {
+    const match = priority.toUpperCase().trim().match(/^P?([1-5])$/);
+    if (match && PRIORITY_SLA_TARGETS[`P${match[1]}`]) {
+      return PRIORITY_SLA_TARGETS[`P${match[1]}`];
     }
-    // Default to service targets if no priority or priority not found
-    return {
-        ack: service.targetAckMinutes ?? 15,
-        resolve: service.targetResolveMinutes ?? 120
-    };
+  }
+  // Default to service targets if no priority or priority not found
+  return {
+    ack: service.targetAckMinutes ?? 15,
+    resolve: service.targetResolveMinutes ?? 120,
+  };
 }
 
-export function checkPriorityAckSLA(incident: Incident, service: Service): boolean {
-    if (!incident.acknowledgedAt || !incident.createdAt || !incident.priority) return false;
-    const ackTimeMinutes = (incident.acknowledgedAt.getTime() - incident.createdAt.getTime()) / 1000 / 60;
-    const target = getPrioritySLATarget(incident.priority, service);
-    return ackTimeMinutes <= target.ack;
+export function checkPriorityAckSLA(
+  incident: Incident & { snoozedMs?: number },
+  service: SlaTargetService,
+  snoozedMs?: number
+): boolean {
+  if (!incident.acknowledgedAt || !incident.createdAt || !incident.priority) return false;
+  const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
+  const activeMs = Math.max(0, incident.acknowledgedAt.getTime() - incident.createdAt.getTime() - snooze);
+  const ackTimeMinutes = activeMs / 1000 / 60;
+  const target = getPrioritySLATarget(incident.priority, service);
+  return ackTimeMinutes <= target.ack;
 }
 
-export function checkPriorityResolveSLA(incident: Incident, service: Service): boolean {
-    if (!incident.resolvedAt || !incident.createdAt || !incident.priority) return false;
-    const resolveTimeMinutes = (incident.resolvedAt.getTime() - incident.createdAt.getTime()) / 1000 / 60;
-    const target = getPrioritySLATarget(incident.priority, service);
-    return resolveTimeMinutes <= target.resolve;
+export function checkPriorityResolveSLA(
+  incident: Incident & { snoozedMs?: number },
+  service: SlaTargetService,
+  snoozedMs?: number
+): boolean {
+  if (!incident.resolvedAt || !incident.createdAt || !incident.priority) return false;
+  const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
+  const activeMs = Math.max(0, incident.resolvedAt.getTime() - incident.createdAt.getTime() - snooze);
+  const resolveTimeMinutes = activeMs / 1000 / 60;
+  const target = getPrioritySLATarget(incident.priority, service);
+  return resolveTimeMinutes <= target.resolve;
 }
 
 

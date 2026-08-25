@@ -36,7 +36,10 @@ async function notifyOverdueActionItems(now: Date): Promise<number> {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const [items, admins] = await Promise.all([
     prisma.actionItem.findMany({
-      where: { status: 'OPEN', dueDate: { lt: now } },
+      where: {
+        status: { in: ['OPEN', 'IN_PROGRESS', 'BLOCKED'] },
+        dueDate: { lt: now },
+      },
       select: { id: true, title: true, ownerId: true },
       orderBy: { dueDate: 'asc' },
       take: 500,
@@ -201,14 +204,14 @@ async function getNextScheduledTime(): Promise<Date> {
       }),
       prisma.incident.findFirst({
         where: {
-          status: 'OPEN',
-          acknowledgedAt: null,
+          status: { in: ['OPEN', 'ACKNOWLEDGED'] },
           service: { serviceNotifyOnSlaBreach: true },
         },
         orderBy: { createdAt: 'asc' },
         select: {
           createdAt: true,
           acknowledgedAt: true,
+          priority: true,
           service: {
             select: {
               targetAckMinutes: true,
@@ -234,17 +237,23 @@ async function getNextScheduledTime(): Promise<Date> {
       nextSnooze?.snoozedUntil ? new Date(nextSnooze.snoozedUntil).getTime() : null,
     ];
 
-    // Add SLA breach check time (5 min before ack target)
-    if (
-      nextSlaBreach &&
-      !nextSlaBreach.acknowledgedAt &&
-      nextSlaBreach.service?.serviceNotifyOnSlaBreach
-    ) {
+    // Add SLA breach check time (proportional warning before ack/resolve target)
+    if (nextSlaBreach && nextSlaBreach.service?.serviceNotifyOnSlaBreach) {
       const createdAt = new Date(nextSlaBreach.createdAt).getTime();
-      const ackWarningMs = 5 * 60 * 1000;
-      const targetAckMs = (nextSlaBreach.service.targetAckMinutes || 15) * 60 * 1000;
-      const breachCheckTime = createdAt + targetAckMs - ackWarningMs;
-      times.push(breachCheckTime > Date.now() ? breachCheckTime : null);
+      const { getPrioritySLATarget } = await import('./sla-priority');
+      const targets = getPrioritySLATarget(nextSlaBreach.priority, nextSlaBreach.service);
+      
+      if (!nextSlaBreach.acknowledgedAt) {
+        const targetAckMs = targets.ack * 60 * 1000;
+        const ackWarningMs = Math.min(5 * 60 * 1000, targetAckMs * 0.25);
+        const ackCheckTime = createdAt + targetAckMs - ackWarningMs;
+        times.push(ackCheckTime > Date.now() ? ackCheckTime : null);
+      }
+
+      const targetResolveMs = targets.resolve * 60 * 1000;
+      const resolveWarningMs = Math.min(15 * 60 * 1000, targetResolveMs * 0.25);
+      const resolveCheckTime = createdAt + targetResolveMs - resolveWarningMs;
+      times.push(resolveCheckTime > Date.now() ? resolveCheckTime : null);
     }
 
     const validTimes = times.filter((v): v is number => typeof v === 'number');
@@ -401,6 +410,14 @@ async function runOnce() {
           logger.warn('[Cron] Daily data cleanup completed with warnings', { error: cleanupErr });
         });
         const overdueNotifications = await notifyOverdueActionItems(now);
+
+        // Run automated SLA drift detection and self-healing
+        try {
+          const { runSLADriftDetection } = await import('./sla-drift-detection');
+          await runSLADriftDetection({ windowDaysAgo: 7 });
+        } catch (driftErr) {
+          logger.warn('[Cron] SLA drift detection completed with warnings', { error: driftErr });
+        }
 
         // Window of days that should have a rollup: yesterday back to
         // `metricsRetentionDays` ago (computed in pure UTC).
