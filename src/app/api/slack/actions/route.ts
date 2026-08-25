@@ -3,10 +3,10 @@
  * Handles Slack button clicks for ack/resolve actions
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { verifySlackSignature, toSlackResponseUrl } from '@/lib/slack-signature';
+import { toSlackResponseUrl, verifySlackSignature } from '@/lib/slack-signature';
 
 /**
  * Resolve the Slack user who pressed a button to an OpsKnight account and a
@@ -29,7 +29,11 @@ async function resolveSlackActor(
     try {
       const userRes = await fetch(
         `https://slack.com/api/users.info?user=${encodeURIComponent(slackUserId)}`,
-        { method: 'GET', headers: { Authorization: `Bearer ${botToken}` } }
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${botToken}` },
+          signal: AbortSignal.timeout(750),
+        }
       );
       const userData = await userRes.json();
       if (userData.ok && userData.user) {
@@ -49,15 +53,10 @@ async function resolveSlackActor(
 
   if (slackEmail) {
     opsUser = await prisma.user.findFirst({
-      where: { email: { equals: slackEmail, mode: 'insensitive' } },
-      select: { id: true, name: true },
-    });
-  }
-
-  for (const candidate of [slackRealName, slackUserName]) {
-    if (opsUser || !candidate) continue;
-    opsUser = await prisma.user.findFirst({
-      where: { name: { equals: candidate, mode: 'insensitive' } },
+      where: {
+        email: { equals: slackEmail, mode: 'insensitive' },
+        status: 'ACTIVE',
+      },
       select: { id: true, name: true },
     });
   }
@@ -70,7 +69,7 @@ async function resolveSlackActor(
   return { opsUser, displayName };
 }
 
-export async function POST(request: NextRequest) {
+async function handleSlackActionRequest(request: NextRequest) {
   try {
     const body = await request.text();
     const signature = request.headers.get('x-slack-signature') || '';
@@ -133,6 +132,12 @@ export async function POST(request: NextRequest) {
         slackUserId,
         slackUserName
       );
+      if (!actorUser) {
+        return NextResponse.json({
+          response_type: 'ephemeral',
+          text: '⚠️ Your Slack account is not linked to an active OpsKnight account. Match the email addresses before changing incidents.',
+        });
+      }
 
       // Two variants of every message: `responseMessage` goes to Slack and keeps
       // the <@ID> mention; `timelineMessage` is plain text for the incident
@@ -310,33 +315,6 @@ export async function POST(request: NextRequest) {
           );
       }
 
-      // Post notification directly into Slack channel & response_url
-      try {
-        const { slackApiCall } = await import('@/lib/chatops/war-room');
-
-        if (botToken && incident.slackChannelId) {
-          await slackApiCall('chat.postMessage', botToken, {
-            channel: incident.slackChannelId,
-            text: responseMessage,
-          }).catch(() => {});
-        }
-
-        // Rebuilt against a literal origin, so this can only ever reach Slack
-        const slackResponseUrl = toSlackResponseUrl(payload.response_url);
-        if (slackResponseUrl) {
-          await fetch(slackResponseUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: responseMessage,
-              response_type: 'in_channel',
-            }),
-          }).catch(() => {});
-        }
-      } catch (notifyErr) {
-        logger.warn('[Slack] Failed to dispatch action response message', { error: notifyErr });
-      }
-
       return NextResponse.json({
         text: responseMessage,
         response_type: 'in_channel',
@@ -351,4 +329,49 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+}
+
+export async function POST(request: NextRequest) {
+  const workerRequest = new NextRequest(request.clone());
+  const body = await request.text();
+  const signature = request.headers.get('x-slack-signature') || '';
+  const timestamp = request.headers.get('x-slack-request-timestamp') || '';
+  const verification = await verifySlackSignature(body, signature, timestamp);
+  if (!verification.valid) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+
+  let payload: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  try {
+    const params = new URLSearchParams(body);
+    payload = body.startsWith('payload=')
+      ? JSON.parse(params.get('payload') || '{}')
+      : JSON.parse(body);
+  } catch {
+    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+  }
+
+  if (payload.type === 'url_verification') {
+    return NextResponse.json({ challenge: payload.challenge });
+  }
+
+  const responseUrl = toSlackResponseUrl(payload.response_url);
+  after(async () => {
+    const result = await handleSlackActionRequest(workerRequest);
+    if (!responseUrl) return;
+    try {
+      const responsePayload = await result.json();
+      await fetch(responseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(responsePayload),
+      });
+    } catch (error) {
+      logger.error('[Slack] Failed to deliver deferred action response', { error });
+    }
+  });
+
+  // Slack requires acknowledgement within three seconds. All mutations and
+  // follow-up delivery run in Next.js `after`, which survives this response.
+  return new Response(null, { status: 200 });
 }

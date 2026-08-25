@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { createJiraIssue, getJiraIssue, addJiraComment, type JiraIssueSummary } from '@/lib/jira';
 import { isValidJiraKey, extractJiraKey } from '@/lib/jira-validation';
@@ -203,7 +204,7 @@ export type JiraWebhookPayload = {
     id?: string;
     key?: string;
     fields?: {
-      status?: { name?: string };
+      status?: { name?: string; statusCategory?: { key?: string } };
       assignee?: { displayName?: string; emailAddress?: string };
       updated?: string;
     };
@@ -252,7 +253,9 @@ export async function processJiraWebhookEvent(
 
   const validLinks =
     eventTime && !isNaN(eventTime.getTime())
-      ? links.filter(l => !l.lastSyncedAt || l.lastSyncedAt <= eventTime)
+      ? links.filter(
+          l => !l.lastSyncedAt || l.lastSyncedAt.getTime() <= eventTime.getTime() + 5_000
+        )
       : links;
 
   if (validLinks.length === 0) {
@@ -285,19 +288,59 @@ export async function processJiraWebhookEvent(
     data,
   });
 
-  if (
-    data.externalStatus &&
-    ['done', 'closed', 'resolved', 'complete', 'completed'].includes(
-      String(data.externalStatus).toLowerCase()
-    )
-  ) {
-    const actionItemIds = validLinks.map(l => l.actionItemId).filter(Boolean) as string[];
-    if (actionItemIds.length > 0) {
-      await prisma.actionItem.updateMany({
-        where: { id: { in: actionItemIds }, status: { not: 'COMPLETED' } },
-        data: { status: 'COMPLETED', completedAt: new Date() },
+  const actionItemIds = validLinks.map(l => l.actionItemId).filter(Boolean) as string[];
+  if (actionItemIds.length > 0 && data.externalStatus) {
+    const isDone =
+      payload.issue?.fields?.status?.statusCategory?.key?.toLowerCase() === 'done' ||
+      [
+        'done',
+        'closed',
+        'resolved',
+        'complete',
+        'completed',
+        'fixed',
+        'deployed',
+        'verified',
+        'shipped',
+      ].includes(String(data.externalStatus).toLowerCase());
+    await prisma.$transaction(async tx => {
+      await tx.actionItem.updateMany({
+        where: {
+          id: { in: actionItemIds },
+          ...(isDone ? { status: { not: 'COMPLETED' } } : { status: 'COMPLETED' }),
+        },
+        data: isDone
+          ? { status: 'COMPLETED', completedAt: new Date() }
+          : { status: 'OPEN', completedAt: null },
       });
-    }
+      const records = await tx.actionItem.findMany({
+        where: { id: { in: actionItemIds } },
+        select: { id: true, postmortemId: true, status: true, completedAt: true },
+      });
+      for (const postmortemId of new Set(records.map(record => record.postmortemId))) {
+        const postmortem = await tx.postmortem.findUnique({
+          where: { id: postmortemId },
+          select: { actionItems: true },
+        });
+        if (!Array.isArray(postmortem?.actionItems)) continue;
+        const byId = new Map(records.map(record => [record.id, record]));
+        const synced = postmortem.actionItems.map(item => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+          const record = byId.get(String((item as Record<string, unknown>).id || ''));
+          return record
+            ? {
+                ...item,
+                status: record.status,
+                completedAt: record.completedAt?.toISOString() || null,
+              }
+            : item;
+        });
+        await tx.postmortem.update({
+          where: { id: postmortemId },
+          data: { actionItems: synced as Prisma.InputJsonValue },
+        });
+      }
+    });
   }
 
   return { updated: validLinks.length };
@@ -322,7 +365,11 @@ export async function syncIncidentNoteToJira(
 
     const formattedComment = `[OpsKnight Note by ${authorName}]:\n${noteContent}`;
 
-    await Promise.allSettled(links.map(link => addJiraComment(link.externalKey, formattedComment)));
+    for (let i = 0; i < links.length; i += 5) {
+      await Promise.allSettled(
+        links.slice(i, i + 5).map(link => addJiraComment(link.externalKey, formattedComment))
+      );
+    }
 
     return links.length;
   } catch (error) {
@@ -352,7 +399,11 @@ export async function syncIncidentEventToJira(
 
     const formattedComment = `[OpsKnight Update]: ${eventMessage}`;
 
-    await Promise.allSettled(links.map(link => addJiraComment(link.externalKey, formattedComment)));
+    for (let i = 0; i < links.length; i += 5) {
+      await Promise.allSettled(
+        links.slice(i, i + 5).map(link => addJiraComment(link.externalKey, formattedComment))
+      );
+    }
 
     return links.length;
   } catch (error) {

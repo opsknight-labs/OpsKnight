@@ -44,6 +44,7 @@ vi.mock('next/cache', () => ({
 describe('createIncident Action', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma as any).customField = { findMany: vi.fn().mockResolvedValue([]) };
   });
 
   it('creates a new incident when no duplicates exist', async () => {

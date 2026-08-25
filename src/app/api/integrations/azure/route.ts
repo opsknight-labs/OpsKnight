@@ -7,6 +7,10 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import { validatePayload, AzureAlertSchema } from '@/lib/integrations/schemas';
+import {
+  IntegrationBodyTooLargeError,
+  readIntegrationBody,
+} from '@/lib/integrations/request-security';
 
 /**
  * Azure Monitor Webhook Endpoint
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest) {
 
       let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
       try {
-        body = await req.json();
+        body = JSON.parse(await readIntegrationBody(req));
       } catch (_error) {
         return jsonError('Invalid JSON in request body.', 400);
       }
@@ -74,6 +78,7 @@ export async function POST(req: NextRequest) {
 
       return jsonOk({ status: 'success', result }, 202);
     } catch (error: unknown) {
+      if (error instanceof IntegrationBodyTooLargeError) return jsonError(error.message, 413);
       logger.error('api.integration.azure_error', {
         error: error instanceof Error ? error.message : String(error),
       });

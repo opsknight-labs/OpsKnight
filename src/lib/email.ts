@@ -49,6 +49,56 @@ type EmailConfig = {
   secure?: boolean;
 };
 
+type SmtpTransporter = {
+  sendMail(options: Record<string, unknown>): Promise<{ messageId?: string }>;
+  close?: () => void;
+};
+
+type SmtpTransportCache = {
+  config: Pick<EmailConfig, 'host' | 'port' | 'user' | 'password' | 'secure'>;
+  transporter: SmtpTransporter;
+};
+
+let cachedSmtpTransport: SmtpTransportCache | null = null;
+
+function getSmtpTransport(emailConfig: EmailConfig): SmtpTransporter {
+  const config = {
+    host: emailConfig.host,
+    port: emailConfig.port,
+    user: emailConfig.user,
+    password: emailConfig.password,
+    secure: emailConfig.secure,
+  };
+  if (
+    cachedSmtpTransport &&
+    cachedSmtpTransport.config.host === config.host &&
+    cachedSmtpTransport.config.port === config.port &&
+    cachedSmtpTransport.config.user === config.user &&
+    cachedSmtpTransport.config.password === config.password &&
+    cachedSmtpTransport.config.secure === config.secure
+  ) {
+    return cachedSmtpTransport.transporter;
+  }
+
+  cachedSmtpTransport?.transporter.close?.();
+  const require = createRequire(import.meta.url);
+  const nodemailer = require('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host: emailConfig.host,
+    port: parseInt(String(emailConfig.port), 10),
+    secure: emailConfig.secure || false,
+    auth: { user: emailConfig.user, pass: emailConfig.password },
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+  }) as SmtpTransporter;
+  cachedSmtpTransport = { config, transporter };
+  return transporter;
+}
+
 /**
  * Send email notification
  * @param options Email options
@@ -240,10 +290,6 @@ export async function sendEmail(
 
     if (emailConfig.provider === 'smtp') {
       try {
-        // Use standard require via createRequire
-        const require = createRequire(import.meta.url);
-        const nodemailer = require('nodemailer');
-
         // Validate required SMTP config
         if (!emailConfig.host || !emailConfig.port || !emailConfig.user || !emailConfig.password) {
           return {
@@ -253,16 +299,7 @@ export async function sendEmail(
           };
         }
 
-        // Create transporter
-        const transporter = nodemailer.createTransport({
-          host: emailConfig.host,
-          port: parseInt(emailConfig.port.toString()),
-          secure: emailConfig.secure || false, // true for 465, false for other ports
-          auth: {
-            user: emailConfig.user,
-            pass: emailConfig.password,
-          },
-        });
+        const transporter = getSmtpTransport(emailConfig);
 
         // Send email
         const info = await transporter.sendMail({

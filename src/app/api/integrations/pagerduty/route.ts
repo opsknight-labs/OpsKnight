@@ -5,6 +5,10 @@ import { transformPagerDutyToEvent } from '@/lib/integrations/pagerduty';
 import { validatePayload, PagerDutyEventSchema } from '@/lib/integrations/schemas';
 import { checkRateLimit, createRateLimitHeaders } from '@/lib/integrations/rate-limiter';
 import { recordWebhookReceived } from '@/lib/integrations/metrics';
+import {
+  IntegrationBodyTooLargeError,
+  readIntegrationBody,
+} from '@/lib/integrations/request-security';
 
 export async function POST(req: NextRequest) {
   const startTime = performance.now();
@@ -12,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const rawBody = await req.text();
+    const rawBody = await readIntegrationBody(req);
     let body: any;
     try {
       body = JSON.parse(rawBody);
@@ -116,6 +120,12 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error) {
+    if (error instanceof IntegrationBodyTooLargeError) {
+      return new Response(JSON.stringify({ status: 'error', message: error.message }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     const duration = performance.now() - startTime;
     recordWebhookReceived(
       'PAGERDUTY',

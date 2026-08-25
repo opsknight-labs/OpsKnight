@@ -5,6 +5,8 @@ import { decrypt } from '@/lib/encryption';
 import { processJiraWebhookEvent, type JiraWebhookPayload } from '@/lib/jira-sync';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger, withRequestContext } from '@/lib/logger';
+import { getClientIp } from '@/lib/client-ip';
+import { readIntegrationBody } from '@/lib/integrations/request-security';
 
 const JiraWebhookSchema = z
   .object({
@@ -54,6 +56,7 @@ async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
   const provided =
     request.headers.get('x-jira-webhook-secret') ??
     request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
+    request.nextUrl.searchParams.get('secret') ??
     null;
 
   if (!provided) return false;
@@ -70,15 +73,7 @@ const HANDLED_EVENTS = new Set(['jira:issue_updated', 'jira:issue_deleted']);
 
 async function postJiraWebhook(request: NextRequest) {
   try {
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    const clientIp =
-      request.headers.get('x-real-ip')?.trim() ||
-      forwardedFor
-        ?.split(',')
-        .map(value => value.trim())
-        .filter(Boolean)
-        .at(-1) ||
-      'unknown';
+    const clientIp = getClientIp(request.headers);
     const rl = await checkRateLimit(`jira-webhook:${clientIp}`, 60, 60_000); // 60 req/min
     if (!rl.allowed) {
       return NextResponse.json(
@@ -100,7 +95,7 @@ async function postJiraWebhook(request: NextRequest) {
 
     let body: unknown;
     try {
-      body = await request.json();
+      body = JSON.parse(await readIntegrationBody(request));
     } catch {
       return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 });
     }

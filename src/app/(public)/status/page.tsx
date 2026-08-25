@@ -397,6 +397,25 @@ async function renderStatusPage(statusPage: any) {
     },
   });
 
+  const activeMaintenanceServiceIds = new Set<string>();
+  statusPage.announcements.forEach((announcement: any) => {
+    if (announcement.type !== 'MAINTENANCE' || !announcement.isActive) return;
+    const startDate = new Date(announcement.startDate);
+    const endDate = announcement.endDate ? new Date(announcement.endDate) : null;
+    if (startDate > now || (endDate && endDate < now)) return;
+    const ids = Array.isArray(announcement.affectedServiceIds)
+      ? announcement.affectedServiceIds
+      : [];
+    ids.forEach((serviceId: unknown) => {
+      if (typeof serviceId === 'string') activeMaintenanceServiceIds.add(serviceId);
+    });
+  });
+  services = services.map(service =>
+    activeMaintenanceServiceIds.has(service.id) && service.status === 'OPERATIONAL'
+      ? { ...service, status: 'MAINTENANCE' }
+      : service
+  );
+
   const activeIncidents = allIncidents.filter(
     (
       inc: any // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -406,7 +425,14 @@ async function renderStatusPage(statusPage: any) {
   const hasDegraded = activeIncidents.some(
     (inc: any) => inc.urgency === 'MEDIUM' || inc.urgency === 'LOW'
   );
-  const overallStatus = hasOutage ? 'outage' : hasDegraded ? 'degraded' : 'operational';
+  const hasMaintenance = services.some(service => service.status === 'MAINTENANCE');
+  const overallStatus = hasOutage
+    ? 'outage'
+    : hasDegraded
+      ? 'degraded'
+      : hasMaintenance
+        ? 'maintenance'
+        : 'operational';
   const affectedServices = services.filter(
     service => service.status && service.status !== 'OPERATIONAL'
   ).length;
@@ -421,12 +447,19 @@ async function renderStatusPage(statusPage: any) {
             background: '#fffbeb',
             border: '#fde68a',
           }
-        : {
-            label: 'All Systems Operational',
-            color: '#059669',
-            background: '#f0fdf4',
-            border: '#d1fae5',
-          };
+        : overallStatus === 'maintenance'
+          ? {
+              label: 'Scheduled Maintenance',
+              color: '#2563eb',
+              background: '#eff6ff',
+              border: '#bfdbfe',
+            }
+          : {
+              label: 'All Systems Operational',
+              color: '#059669',
+              background: '#f0fdf4',
+              border: '#d1fae5',
+            };
   const lastUpdatedLabel = now.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
   const serviceUptime90 = uptime90;
@@ -464,20 +497,6 @@ async function renderStatusPage(statusPage: any) {
       affectedServiceIds,
       affectedServices,
     };
-  });
-
-  const activeMaintenanceServiceIds = new Set<string>();
-  announcementsWithServices.forEach((announcement: any) => {
-    if (announcement.type !== 'MAINTENANCE' || !announcement.isActive) {
-      return;
-    }
-    const startDate = new Date(announcement.startDate);
-    const endDate = announcement.endDate ? new Date(announcement.endDate) : null;
-    if (startDate > now) return;
-    if (endDate && endDate < now) return;
-    (announcement.affectedServiceIds || []).forEach((serviceId: string) =>
-      activeMaintenanceServiceIds.add(serviceId)
-    );
   });
 
   const normalizeRegions = (region?: string | null) => {

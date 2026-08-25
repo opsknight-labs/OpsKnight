@@ -241,7 +241,14 @@ export async function createIncidentWarRoom(
     // Generate channel name
     const serviceSlug = slugify(incident.service.name);
     const idSuffix = incidentId.slice(-6);
-    const channelName = `${config.channelPrefix}-${idSuffix}-${serviceSlug}`.slice(0, 80);
+    const safePrefix =
+      (config.channelPrefix || 'incident')
+        .toLowerCase()
+        .replace(/^#+/, '')
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/[-_]{2,}/g, '-')
+        .replace(/^[-_]+|[-_]+$/g, '') || 'incident';
+    const channelName = `${safePrefix}-${idSuffix}-${serviceSlug}`.slice(0, 80);
 
     // Create channel via Slack API
     let effectiveChannelName = channelName;

@@ -241,7 +241,13 @@ export default async function middleware(req: NextRequest) {
   if (!skipDomainCheck) {
     const statusConfig = await fetchStatusDomainConfig();
     if (statusConfig?.enabled) {
-      const hostname = normalizeHostname(req.headers.get('host'));
+      const forwardedHost = req.headers
+        .get('x-forwarded-host')
+        ?.split(',')
+        .map(value => value.trim())
+        .filter(Boolean)
+        .at(-1);
+      const hostname = normalizeHostname(forwardedHost || req.headers.get('host'));
       const allowedHosts = new Set<string>();
       if (statusConfig.subdomain && statusConfig.appHost) {
         const subdomainHost = buildSubdomainHost(statusConfig.subdomain, statusConfig.appHost);

@@ -1,12 +1,32 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { logger } from '@/lib/logger';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-export default async function UnsubscribePage({ params }: { params: Promise<{ token: string }> }) {
+async function confirmUnsubscribe(formData: FormData) {
+  'use server';
+  const token = String(formData.get('token') || '');
+  if (token) {
+    await prisma.statusPageSubscription.updateMany({
+      where: { token, unsubscribedAt: null },
+      data: { unsubscribedAt: new Date() },
+    });
+  }
+  redirect(`/status/unsubscribe/${encodeURIComponent(token)}?done=1`);
+}
+
+export default async function UnsubscribePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams?: Promise<{ done?: string }>;
+}) {
   const { token } = await params;
-  let status: 'invalid' | 'already_unsubscribed' | 'success' | 'error' = 'error';
+  const { done } = (await searchParams) ?? {};
+  let status: 'invalid' | 'already_unsubscribed' | 'confirm' | 'success' | 'error' = 'error';
   let subscription = null;
 
   try {
@@ -19,18 +39,14 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
 
     if (!sub) {
       status = 'invalid';
+    } else if (done === '1' && sub.unsubscribedAt) {
+      status = 'success';
+      subscription = sub;
     } else if (sub.unsubscribedAt) {
       status = 'already_unsubscribed';
       subscription = sub;
     } else {
-      // Unsubscribe
-      await prisma.statusPageSubscription.update({
-        where: { id: sub.id },
-        data: {
-          unsubscribedAt: new Date(),
-        },
-      });
-      status = 'success';
+      status = done === '1' ? 'success' : 'confirm';
       subscription = sub;
     }
   } catch (error) {
@@ -79,6 +95,25 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
           </p>
         </div>
       </div>
+    );
+  }
+
+  if (status === 'confirm' && subscription) {
+    return (
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '2rem' }}>
+        <section style={{ textAlign: 'center', maxWidth: '600px' }}>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+            Unsubscribe from status updates?
+          </h1>
+          <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
+            Confirm that you no longer want updates from {subscription.statusPage.name}.
+          </p>
+          <form action={confirmUnsubscribe}>
+            <input type="hidden" name="token" value={token} />
+            <button type="submit">Confirm unsubscribe</button>
+          </form>
+        </section>
+      </main>
     );
   }
 

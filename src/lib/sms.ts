@@ -22,6 +22,7 @@ import { logger } from './logger';
 export type SMSOptions = {
   to: string; // Phone number in E.164 format (e.g., +1234567890)
   message: string;
+  notificationId?: string;
 };
 
 type TwilioClient = {
@@ -30,6 +31,7 @@ type TwilioClient = {
       body: string;
       from: string;
       to: string;
+      statusCallback?: string;
     }) => Promise<{ sid: string; status: string }>;
   };
 };
@@ -46,35 +48,27 @@ type AwsSnsModule = {
 
 export function formatToE164(phone: string): string {
   if (!phone || typeof phone !== 'string') return '';
-  let cleaned = phone.replace(/^whatsapp:/i, '').trim();
+  let cleaned = phone
+    .replace(/^whatsapp:/i, '')
+    .replace(/(?:ext\.?|extension|x)\s*\d+\s*$/i, '')
+    .trim();
   if (!cleaned) return '';
-
-  if (cleaned.startsWith('00')) {
-    const digits = cleaned.slice(2).replace(/\D/g, '');
-    return digits ? `+${digits}` : '';
-  } else if (cleaned.startsWith('+')) {
-    const digits = cleaned.slice(1).replace(/\D/g, '');
-    return digits ? `+${digits}` : '';
-  } else {
-    let digits = cleaned.replace(/\D/g, '');
-    if (!digits) return '';
-    if (digits.startsWith('0') && digits.length >= 10) {
-      digits = digits.replace(/^0+/, '');
-    }
-    if (digits.length === 10) {
-      cleaned = `+1${digits}`;
-    } else {
-      cleaned = `+${digits}`;
-    }
-    return cleaned;
-  }
+  if (cleaned.startsWith('00')) cleaned = `+${cleaned.slice(2)}`;
+  // Country-less national numbers are ambiguous and must be rejected,
+  // rather than silently routed through NANP or another guessed country.
+  if (!cleaned.startsWith('+')) return '';
+  const digits = cleaned.slice(1).replace(/[\s().-]/g, '');
+  if (!/^\d{7,15}$/.test(digits) || digits.startsWith('0')) return '';
+  return `+${digits}`;
 }
 
 /**
  * Send SMS notification
  * Uses structured logger for delivery events and warnings
  */
-export async function sendSMS(options: SMSOptions): Promise<{ success: boolean; error?: string }> {
+export async function sendSMS(
+  options: SMSOptions
+): Promise<{ success: boolean; error?: string; messageSid?: string }> {
   try {
     // Get SMS configuration
     const smsConfig = await getSMSConfig();
@@ -92,7 +86,7 @@ export async function sendSMS(options: SMSOptions): Promise<{ success: boolean; 
     // Format phone number to E.164 and validate minimal digit count
     const toNumber = formatToE164(options.to);
     const digitsOnly = toNumber.replace(/\D/g, '');
-    if (!toNumber || digitsOnly.length < 8) {
+    if (!toNumber || digitsOnly.length < 7 || digitsOnly.length > 15) {
       return { success: false, error: 'Invalid phone number format' };
     }
 
@@ -149,6 +143,11 @@ export async function sendSMS(options: SMSOptions): Promise<{ success: boolean; 
           body: options.message,
           from: smsConfig.fromNumber,
           to: toNumber,
+          ...(options.notificationId
+            ? {
+                statusCallback: `${getBaseUrl()}/api/webhooks/notifications/twilio?notificationId=${encodeURIComponent(options.notificationId)}`,
+              }
+            : {}),
         });
 
         logger.info('SMS sent successfully via Twilio', {
@@ -158,7 +157,7 @@ export async function sendSMS(options: SMSOptions): Promise<{ success: boolean; 
           status: result.status,
         });
 
-        return { success: true };
+        return { success: true, messageSid: result.sid };
       } catch (error: unknown) {
         const errorInfo =
           error && typeof error === 'object'
@@ -338,8 +337,9 @@ export async function sendSMS(options: SMSOptions): Promise<{ success: boolean; 
 export async function sendIncidentSMS(
   userId: string,
   incidentId: string,
-  eventType: 'triggered' | 'acknowledged' | 'resolved'
-): Promise<{ success: boolean; error?: string }> {
+  eventType: 'triggered' | 'acknowledged' | 'resolved',
+  notificationId?: string
+): Promise<{ success: boolean; error?: string; messageSid?: string }> {
   try {
     const [user, incident] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId } }),
@@ -440,6 +440,7 @@ export async function sendIncidentSMS(
     return await sendSMS({
       to: phoneNumber,
       message,
+      notificationId,
     });
   } catch (error: unknown) {
     const errorInfo = error && typeof error === 'object' ? (error as { message?: string }) : {};

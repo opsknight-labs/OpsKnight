@@ -62,19 +62,20 @@ describeIfRealDB('Event Ingestion Resilience Tests', { timeout: 30000 }, () => {
       expect(deduplicatedCount).toBe(4);
 
       // Verify DB state
+      const scopedDedupKey = `test-integration-id:${dedupKey}`;
       const incidentCount = await testPrisma.incident.count({
-        where: { dedupKey, serviceId: service.id },
+        where: { dedupKey: scopedDedupKey, serviceId: service.id },
       });
       expect(incidentCount).toBe(1);
 
       // Verify all alerts are linked to the same incident
       const alerts = await testPrisma.alert.findMany({
-        where: { dedupKey, serviceId: service.id },
+        where: { dedupKey: scopedDedupKey, serviceId: service.id },
       });
       expect(alerts).toHaveLength(5);
 
       const incident = await testPrisma.incident.findFirst({
-        where: { dedupKey, serviceId: service.id },
+        where: { dedupKey: scopedDedupKey, serviceId: service.id },
       });
       expect(alerts.every(a => a.incidentId === incident?.id)).toBe(true);
     });
@@ -114,13 +115,19 @@ describeIfRealDB('Event Ingestion Resilience Tests', { timeout: 30000 }, () => {
       );
       expect(resolved.action).toBe('resolved');
 
-      const incident = await testPrisma.incident.findFirst({ where: { serviceId: service.id, dedupKey } });
+      const incident = await testPrisma.incident.findFirst({
+        where: { serviceId: service.id, dedupKey: `release-quality:${dedupKey}` },
+      });
       expect(incident?.status).toBe('RESOLVED');
       expect(incident?.acknowledgedAt).not.toBeNull();
       expect(incident?.resolvedAt).not.toBeNull();
 
-      const timeline = await testPrisma.incidentEvent.findMany({ where: { incidentId: incident!.id } });
-      expect(timeline.some(event => event.message.includes('Acknowledged via API event'))).toBe(true);
+      const timeline = await testPrisma.incidentEvent.findMany({
+        where: { incidentId: incident!.id },
+      });
+      expect(timeline.some(event => event.message.includes('Acknowledged via API event'))).toBe(
+        true
+      );
       expect(timeline.some(event => event.message.includes('Auto-resolved'))).toBe(true);
     });
 
@@ -140,7 +147,7 @@ describeIfRealDB('Event Ingestion Resilience Tests', { timeout: 30000 }, () => {
       );
 
       const incidentBefore = await testPrisma.incident.findFirst({
-        where: { dedupKey, status: 'OPEN' },
+        where: { dedupKey: `test-id:${dedupKey}`, status: 'OPEN' },
       });
       expect(incidentBefore).not.toBeNull();
 

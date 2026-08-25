@@ -17,7 +17,29 @@ function parseIncidentUrgency(value: string): IncidentUrgency {
   throw new Error('Invalid incident urgency.');
 }
 
-export async function updateIncidentStatus(id: string, status: IncidentStatus) {
+async function assertRequiredCustomFieldsPresent(
+  tx: Parameters<Parameters<typeof runSerializableTransaction>[0]>[0],
+  incidentId: string
+) {
+  const missing = await tx.customField.findMany({
+    where: {
+      required: true,
+      values: { none: { incidentId, value: { not: '' } } },
+    },
+    select: { name: true },
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `Complete required custom fields before resolving: ${missing.map(field => field.name).join(', ')}`
+    );
+  }
+}
+
+export async function updateIncidentStatus(
+  id: string,
+  status: IncidentStatus,
+  expectedStatus?: IncidentStatus
+) {
   try {
     // Check resource-level authorization
     await assertCanModifyIncident(id);
@@ -34,11 +56,20 @@ export async function updateIncidentStatus(id: string, status: IncidentStatus) {
     if (!incident) {
       throw new Error(getUserFriendlyError('Incident not found.'));
     }
-
-    // Idempotency: skip update if status is already set to target status (prevents race condition & duplicate events)
+    // A retry whose desired result already exists is successful even if its
+    // expected source state is now stale because the first attempt committed.
     if (incident.status === status) {
       return incident;
     }
+    if (expectedStatus && incident.status !== expectedStatus) {
+      throw new Error(
+        `Incident changed from ${expectedStatus} to ${incident.status}; refresh before applying this update.`
+      );
+    }
+    if (incident.status === 'RESOLVED' && status === 'ACKNOWLEDGED') {
+      throw new Error('A resolved incident cannot be acknowledged. Reopen it explicitly first.');
+    }
+    if (status === 'RESOLVED') await assertRequiredCustomFieldsPresent(tx, id);
 
     // Build update data
     const updateData: any = {
@@ -218,7 +249,7 @@ export async function updateIncidentStatus(id: string, status: IncidentStatus) {
 
   // Notify status page subscribers (Email)
   try {
-    const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
+    const { scheduleStatusPageNotification } = await import('@/lib/jobs/queue');
     const eventMap: Record<string, string> = {
       ACKNOWLEDGED: 'acknowledged',
       RESOLVED: 'resolved',
@@ -226,7 +257,7 @@ export async function updateIncidentStatus(id: string, status: IncidentStatus) {
     };
     const notifyEvent = eventMap[status];
     if (notifyEvent) {
-      await notifyStatusPageSubscribers(id, notifyEvent as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      await scheduleStatusPageNotification(id, notifyEvent);
     }
   } catch (e) {
     logger.error('Status page subscriber notification failed', {
@@ -316,6 +347,7 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
     if (currentIncident.status === 'RESOLVED') {
       return;
     }
+    await assertRequiredCustomFieldsPresent(tx, id);
 
     await tx.incident.update({
       where: { id },
@@ -375,8 +407,8 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
 
   // Notify status page subscribers (Email)
   try {
-    const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
-    await notifyStatusPageSubscribers(id, 'resolved');
+    const { scheduleStatusPageNotification } = await import('@/lib/jobs/queue');
+    await scheduleStatusPageNotification(id, 'resolved');
   } catch (e) {
     logger.error('Status page subscriber notification failed', {
       component: 'incidents-actions',
@@ -544,10 +576,20 @@ export async function createIncident(formData: FormData) {
       }
     }
   }
-  const customFieldEntries = Array.from(customFieldMap.entries()).map(([fieldId, val]) => ({
-    fieldId,
-    value: val,
-  }));
+  const customFields = await prisma.customField.findMany({ orderBy: { order: 'asc' } });
+  const knownFieldIds = new Set(customFields.map(field => field.id));
+  if (Array.from(customFieldMap.keys()).some(fieldId => !knownFieldIds.has(fieldId))) {
+    throw new Error('One or more custom fields are invalid. Refresh the form and try again.');
+  }
+  const { validateCustomFieldValue } = await import('@/lib/custom-fields');
+  const customFieldEntries = customFields.flatMap(field => {
+    const supplied = customFieldMap.get(field.id) ?? field.defaultValue;
+    const validation = validateCustomFieldValue(field, supplied);
+    if (!validation.valid) throw new Error(validation.error || `Invalid ${field.name}`);
+    return validation.normalizedValue === null
+      ? []
+      : [{ fieldId: field.id, value: validation.normalizedValue }];
+  });
 
   const teamId = formData.get('teamId') as string | null;
   const visibility = (formData.get('visibility') as 'PUBLIC' | 'PRIVATE') || 'PUBLIC';
@@ -778,8 +820,8 @@ export async function createIncident(formData: FormData) {
 
   // Notify status page subscribers (Email)
   try {
-    const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
-    await notifyStatusPageSubscribers(incident.id, 'triggered');
+    const { scheduleStatusPageNotification } = await import('@/lib/jobs/queue');
+    await scheduleStatusPageNotification(incident.id, 'triggered');
   } catch (e) {
     logger.error('Status page subscriber notification failed', {
       component: 'incidents-actions',

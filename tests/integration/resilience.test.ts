@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { executeEscalation } from '@/lib/escalation';
 import {
   testPrisma,
@@ -27,7 +27,7 @@ describeIfRealDB('Database Resilience Integration Tests', { timeout: 30000 }, ()
   });
 
   describe('On-Call Schedule Resilience', () => {
-    it('should resolve to override user during override window', async () => {
+    it('should add a standalone override user during the override window', async () => {
       const primaryUser = await createTestUser({
         name: 'Primary User',
         email: 'primary@example.com',
@@ -73,21 +73,23 @@ describeIfRealDB('Database Resilience Integration Tests', { timeout: 30000 }, ()
       const result = await executeEscalation(incident.id, 0);
 
       expect(result.escalated).toBe(true);
-      expect(result.targetCount).toBe(1);
+      expect(result.targetCount).toBe(2);
 
       // Wait for DB to settle
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Verify notification was sent to OVERRIDE user, not primary
+      // A standalone override is additive, so both responders are notified.
       const notifications = await testPrisma.notification.findMany({
         where: { incidentId: incident.id },
       });
-      expect(notifications).toHaveLength(1);
-      expect(notifications[0].userId).toBe(overrideUser.id);
+      expect(notifications).toHaveLength(2);
+      expect(new Set(notifications.map(notification => notification.userId))).toEqual(
+        new Set([primaryUser.id, overrideUser.id])
+      );
 
-      // Verify incident assignee is the override user
+      // Assignment is distributed deterministically across the active responders.
       const updatedIncident = await testPrisma.incident.findUnique({ where: { id: incident.id } });
-      expect(updatedIncident?.assigneeId).toBe(overrideUser.id);
+      expect([primaryUser.id, overrideUser.id]).toContain(updatedIncident?.assigneeId);
     });
   });
 
@@ -234,12 +236,20 @@ describeIfRealDB('Database Resilience Integration Tests', { timeout: 30000 }, ()
       });
       const incident = await createTestIncident('Recovery Incident', service.id);
 
-      // Execute - it should skip step 0 and run step 1 automatically or advance state
+      // Execute - it should advance state and queue step 1 without recursive execution.
       const result = await executeEscalation(incident.id, 0);
 
-      // The code recursively calls executeEscalation for the next step if current resolves to no users
-      expect(result.stepIndex).toBe(1);
-      expect(result.escalated).toBe(true);
+      expect(result).toEqual({ escalated: false, reason: 'Escalation scheduled' });
+
+      const updatedIncident = await testPrisma.incident.findUnique({ where: { id: incident.id } });
+      expect(updatedIncident?.currentEscalationStep).toBe(1);
+      expect(updatedIncident?.escalationStatus).toBe('ESCALATING');
+
+      const queuedStep = await testPrisma.backgroundJob.findFirst({
+        where: { type: 'ESCALATION', status: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(queuedStep?.payload).toMatchObject({ incidentId: incident.id, stepIndex: 1 });
 
       // Wait for DB to settle
       await new Promise(resolve => setTimeout(resolve, 1000));

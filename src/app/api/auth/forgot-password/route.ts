@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initiatePasswordReset } from '@/lib/password-reset';
 import { logger } from '@/lib/logger';
+import { getClientIp } from '@/lib/client-ip';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,8 +13,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get IP for rate limiting
-    const rawIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-    const ip = rawIp.split(',')[0].trim();
+    const ip = getClientIp(req.headers);
 
     const result = await initiatePasswordReset(email, ip);
 

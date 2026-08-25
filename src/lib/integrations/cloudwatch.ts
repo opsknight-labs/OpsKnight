@@ -39,7 +39,7 @@ export function transformCloudWatchToEvent(message: CloudWatchAlarmMessage): {
     dedup_key: dedupKey,
     payload: {
       summary: message.AlarmName,
-      source: `AWS CloudWatch (${message.Region})`,
+      source: `AWS CloudWatch (${region})`,
       severity: (() => {
         if (isOk) return 'info';
         if (message.NewStateValue === 'INSUFFICIENT_DATA') return 'warning';

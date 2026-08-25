@@ -12,10 +12,11 @@ import {
   linkServiceToStatusPage,
   createTestIncident,
   createTestStatusPageSubscription,
-  createTestUser
+  createTestUser,
 } from '../helpers/test-db';
 
-const describeIfRealDB = (process.env.VITEST_USE_REAL_DB === '1' || process.env.CI) ? describe : describe.skip;
+const describeIfRealDB =
+  process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
 
 // Mock dependencies
 vi.mock('next-auth', () => ({
@@ -30,8 +31,8 @@ vi.mock('@/lib/email', () => ({
   sendEmail: vi.fn().mockResolvedValue({ success: true }),
 }));
 
-vi.mock('@/lib/notification-providers', async (importOriginal) => {
-  const actual = await importOriginal() as any;
+vi.mock('@/lib/notification-providers', async importOriginal => {
+  const actual = (await importOriginal()) as any;
   return {
     ...actual,
     getStatusPageEmailConfig: vi.fn().mockResolvedValue({ enabled: true, provider: 'resend' }),
@@ -64,7 +65,7 @@ describeIfRealDB('Status Page Subscription Integration', () => {
       expect(res.status).toBe(200);
 
       const sub = await testPrisma.statusPageSubscription.findFirst({
-        where: { email: 'user@example.com' }
+        where: { email: 'user@example.com' },
       });
       expect(sub).toBeDefined();
       expect(sub?.verified).toBe(false);
@@ -76,7 +77,7 @@ describeIfRealDB('Status Page Subscription Integration', () => {
       const sp = await createTestStatusPage();
       const sub = await createTestStatusPageSubscription(sp.id, 'user@example.com', {
         unsubscribedAt: new Date(),
-        verified: true
+        verified: true,
       });
 
       const req = new Request('http://localhost/api/status-page/subscribe', {
@@ -87,7 +88,9 @@ describeIfRealDB('Status Page Subscription Integration', () => {
       const res = await POST(req as any);
       expect(res.status).toBe(200);
 
-      const updatedSub = await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } });
+      const updatedSub = await testPrisma.statusPageSubscription.findUnique({
+        where: { id: sub.id },
+      });
       expect(updatedSub?.unsubscribedAt).toBeNull();
       expect(updatedSub?.verified).toBe(false);
     });
@@ -98,29 +101,50 @@ describeIfRealDB('Status Page Subscription Integration', () => {
       const sp = await createTestStatusPage();
       const sub = await createTestStatusPageSubscription(sp.id, 'user@example.com', {
         verified: false,
-        verificationToken: 'valid-token'
+        verificationToken: 'valid-token',
       });
 
       // Call the Server Component function directly
       await VerifyPage({ params: Promise.resolve({ token: 'valid-token' }) });
 
-      const updatedSub = await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } });
+      const updatedSub = await testPrisma.statusPageSubscription.findUnique({
+        where: { id: sub.id },
+      });
       expect(updatedSub?.verified).toBe(true);
       expect(updatedSub?.verificationToken).toBeNull();
     });
   });
 
   describe('Unsubscribe Flow', () => {
-    it('should unsubscribe with valid token', async () => {
+    it('should require confirmation without mutating on GET', async () => {
       const sp = await createTestStatusPage();
       const sub = await createTestStatusPageSubscription(sp.id, 'user@example.com', {
-        token: 'unsubscribe-token'
+        token: 'unsubscribe-token',
       });
 
       await UnsubscribePage({ params: Promise.resolve({ token: 'unsubscribe-token' }) });
 
-      const updatedSub = await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } });
-      expect(updatedSub?.unsubscribedAt).not.toBeNull();
+      const updatedSub = await testPrisma.statusPageSubscription.findUnique({
+        where: { id: sub.id },
+      });
+      expect(updatedSub?.unsubscribedAt).toBeNull();
+    });
+
+    it('shows success after a confirmed unsubscribe', async () => {
+      const sp = await createTestStatusPage();
+      await createTestStatusPageSubscription(sp.id, 'user@example.com', {
+        token: 'unsubscribe-token',
+        unsubscribedAt: new Date(),
+      });
+
+      const rendered = await UnsubscribePage({
+        params: Promise.resolve({ token: 'unsubscribe-token' }),
+        searchParams: Promise.resolve({ done: '1' }),
+      });
+
+      const successCard = rendered.props.children;
+      const successHeading = successCard.props.children[1];
+      expect(successHeading.props.children).toBe('Successfully Unsubscribed');
     });
   });
 
@@ -130,7 +154,7 @@ describeIfRealDB('Status Page Subscription Integration', () => {
     beforeEach(async () => {
       adminUser = await createTestUser({ email: 'admin@example.com', role: 'ADMIN' });
       (getServerSession as any).mockResolvedValue({
-        user: { email: adminUser.email, role: 'ADMIN' }
+        user: { email: adminUser.email, role: 'ADMIN' },
       });
     });
 
@@ -141,8 +165,8 @@ describeIfRealDB('Status Page Subscription Integration', () => {
 
       const req = {
         nextUrl: {
-          searchParams: new URLSearchParams({ statusPageId: sp.id, verified: 'true' })
-        }
+          searchParams: new URLSearchParams({ statusPageId: sp.id, verified: 'true' }),
+        },
       };
 
       const res = await GET(req as any);
@@ -159,14 +183,16 @@ describeIfRealDB('Status Page Subscription Integration', () => {
 
       const req = {
         nextUrl: {
-          searchParams: new URLSearchParams({ id: sub.id })
-        }
+          searchParams: new URLSearchParams({ id: sub.id }),
+        },
       };
 
       const res = await DELETE(req as any);
       expect(res.status).toBe(200);
 
-      const updatedSub = await testPrisma.statusPageSubscription.findUnique({ where: { id: sub.id } });
+      const updatedSub = await testPrisma.statusPageSubscription.findUnique({
+        where: { id: sub.id },
+      });
       expect(updatedSub?.unsubscribedAt).not.toBeNull();
     });
   });

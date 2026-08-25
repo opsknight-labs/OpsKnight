@@ -8,6 +8,7 @@ import { headers } from 'next/headers';
 import { checkRateLimit, simulateWork } from '@/lib/password-reset';
 import { validatePasswordStrength } from '@/lib/passwords';
 import { createHash } from 'crypto';
+import { getClientIp } from '@/lib/client-ip';
 
 export async function setPassword(formData: FormData) {
   const startTime = Date.now();
@@ -17,7 +18,7 @@ export async function setPassword(formData: FormData) {
 
   // 1. Rate Limiting
   const headerStore = await headers();
-  const ip = headerStore.get('x-forwarded-for') || headerStore.get('x-real-ip') || 'unknown';
+  const ip = getClientIp(headerStore);
   try {
     await checkRateLimit('unknown', ip, 'INVITE_FAILED');
   } catch (error) {
@@ -92,36 +93,45 @@ export async function setPassword(formData: FormData) {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  await prisma.$transaction(async tx => {
-    await tx.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-        status: 'ACTIVE',
-        tokenVersion: { increment: 1 },
-        invitedAt: null,
-        deactivatedAt: null,
-      },
-    });
+  try {
+    await prisma.$transaction(async tx => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          status: 'ACTIVE',
+          tokenVersion: { increment: 1 },
+          invitedAt: null,
+          deactivatedAt: null,
+        },
+      });
 
-    // Mark THIS token as used
-    await tx.userToken.update({
-      where: { tokenHash },
-      data: { usedAt: new Date() },
-    });
+      // Atomically claim THIS token. Concurrent submissions cannot both win.
+      const claimed = await tx.userToken.updateMany({
+        where: { tokenHash, type: 'INVITE', usedAt: null, expiresAt: { gt: new Date() } },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw new Error('INVITE_TOKEN_ALREADY_USED');
 
-    // Security: Invalidate ALL other INVITE tokens for this user to prevent reuse of old links
-    await tx.userToken.deleteMany({
-      where: {
-        identifier: user.email,
-        type: 'INVITE',
-        NOT: { tokenHash }, // Don't delete the one we just marked used (for audit history), or just delete them all? Keeping history is better.
-        // Actually, we just marked it used.
-        // Let's delete *other* unused invite tokens.
-        usedAt: null,
-      },
+      // Security: Invalidate ALL other INVITE tokens for this user to prevent reuse of old links
+      await tx.userToken.deleteMany({
+        where: {
+          identifier: user.email,
+          type: 'INVITE',
+          NOT: { tokenHash }, // Don't delete the one we just marked used (for audit history), or just delete them all? Keeping history is better.
+          // Actually, we just marked it used.
+          // Let's delete *other* unused invite tokens.
+          usedAt: null,
+        },
+      });
     });
-  });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'INVITE_TOKEN_ALREADY_USED') {
+      await simulateWork(startTime);
+      redirect('/set-password?error=expired');
+    }
+    throw error;
+  }
 
   await logAudit({
     action: 'user.active', // Changed action to standard user activation event

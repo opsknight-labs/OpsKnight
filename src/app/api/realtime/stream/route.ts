@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
         // Track last sent metrics for change detection to reduce bandwidth
         let lastMetricsHash = '';
         let heartbeatCounter = 0;
+        let authorizationCounter = 0;
 
         // Send initial connection message
         const send = (data: string) => {
@@ -64,6 +65,20 @@ export async function GET(req: NextRequest) {
           if (isClosed || isPolling) return;
           isPolling = true;
           try {
+            authorizationCounter++;
+            if (authorizationCounter >= 12) {
+              authorizationCounter = 0;
+              const prisma = (await import('@/lib/prisma')).default;
+              const currentUser = await prisma.user.findUnique({
+                where: { id: user.id },
+                select: { status: true },
+              });
+              if (currentUser?.status !== 'ACTIVE') {
+                send(JSON.stringify({ type: 'authorization_revoked' }));
+                cleanup();
+                return;
+              }
+            }
             // Get recent incident updates using cached query
             const incidentResult = await getCachedRecentIncidents(
               user.id,

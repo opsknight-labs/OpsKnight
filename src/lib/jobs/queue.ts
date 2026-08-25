@@ -18,7 +18,12 @@ import prisma from '../prisma';
 
 const MAX_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 
-export type JobType = 'ESCALATION' | 'NOTIFICATION' | 'AUTO_UNSNOOZE' | 'SCHEDULED_TASK';
+export type JobType =
+  | 'ESCALATION'
+  | 'NOTIFICATION'
+  | 'AUTO_UNSNOOZE'
+  | 'SCHEDULED_TASK'
+  | 'STATUS_PAGE_NOTIFICATION';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 interface JobPayload {
@@ -86,6 +91,13 @@ export async function scheduleNotification(
     channel,
     message,
   });
+}
+
+export async function scheduleStatusPageNotification(
+  incidentId: string,
+  eventType: string
+): Promise<string> {
+  return scheduleJob('STATUS_PAGE_NOTIFICATION', new Date(), { incidentId, eventType }, 5);
 }
 
 /**
@@ -291,6 +303,13 @@ export async function processJob(job: any): Promise<boolean> {
 
         await markJobFailed(job.id, notificationResult.error || 'Notification failed');
         return false;
+
+      case 'STATUS_PAGE_NOTIFICATION': {
+        const { notifyStatusPageSubscribers } = await import('../status-page-notifications');
+        await notifyStatusPageSubscribers(job.payload.incidentId, job.payload.eventType);
+        await markJobCompleted(job.id);
+        return true;
+      }
 
       case 'AUTO_UNSNOOZE':
         const incident = await prisma.incident.findUnique({

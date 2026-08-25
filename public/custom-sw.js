@@ -160,7 +160,10 @@ self.addEventListener('notificationclick', function (event) {
         event.waitUntil(
             fetch(`/api/mobile/incidents/${incidentId}/status`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Idempotency-Key': `push-ack-${incidentId}-${event.notification.tag || 'notification'}`
+                },
                 body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
                 credentials: 'include'
             }).then(() => {

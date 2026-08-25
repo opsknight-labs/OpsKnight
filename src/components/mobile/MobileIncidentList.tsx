@@ -64,6 +64,7 @@ export default function MobileIncidentList({
     setUpdatingId(id);
     setErrorMessage('');
     const previous = localIncidents;
+    const expectedStatus = localIncidents.find(incident => incident.id === id)?.status;
     setLocalIncidents(prev => {
       const updated = prev.map(incident =>
         incident.id === id ? { ...incident, status } : incident
@@ -84,7 +85,7 @@ export default function MobileIncidentList({
       const response = await fetch(requestUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, expectedStatus }),
       });
       if (!response.ok) {
         throw new Error('Failed to update incident');
@@ -98,7 +99,7 @@ export default function MobileIncidentList({
             url: requestUrl,
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status }),
+            body: JSON.stringify({ status, expectedStatus }),
           });
         } catch {
           // Ignore queue failures

@@ -4,6 +4,7 @@
  */
 
 import { createHash } from 'crypto';
+import { normalizeSeverity } from './normalization';
 
 export type DatadogSingleEvent = {
   event_type?: string;
@@ -86,15 +87,7 @@ export function transformDatadogToEvent(data: DatadogEvent): Array<{
           ? `datadog-monitor-${eventData.monitor.id}`
           : `datadog-${titleHash}`);
 
-    // Map Datadog alert type to our severity
-    let mappedSeverity: 'critical' | 'error' | 'warning' | 'info' = 'info';
-    if (alertType === 'critical') {
-      mappedSeverity = 'critical';
-    } else if (alertType === 'error') {
-      mappedSeverity = 'error';
-    } else if (alertType === 'warning') {
-      mappedSeverity = 'warning';
-    }
+    const mappedSeverity = normalizeSeverity(alertType, 'warning');
 
     return {
       event_action: isResolved ? 'resolve' : 'trigger',

@@ -125,6 +125,46 @@ export async function GET(req: NextRequest) {
         isChecking = true;
         tickCount++;
         try {
+          if (tickCount % 12 === 0) {
+            const currentUser = await prisma.user.findUnique({
+              where: { id: user.id },
+              select: {
+                status: true,
+                role: true,
+                teamMemberships: { select: { teamId: true } },
+              },
+            });
+            const currentTeamIds = new Set(
+              currentUser?.teamMemberships.map(membership => membership.teamId) || []
+            );
+            let stillAuthorized = currentUser?.status === 'ACTIVE';
+            const currentlyPrivileged =
+              currentUser?.role === 'ADMIN' || currentUser?.role === 'RESPONDER';
+            if (stillAuthorized && !currentlyPrivileged && incidentId) {
+              const target = await prisma.incident.findUnique({
+                where: { id: incidentId },
+                select: { service: { select: { teamId: true } } },
+              });
+              stillAuthorized = Boolean(
+                target?.service.teamId && currentTeamIds.has(target.service.teamId)
+              );
+            }
+            if (stillAuthorized && !currentlyPrivileged && serviceId) {
+              const target = await prisma.service.findUnique({
+                where: { id: serviceId },
+                select: { teamId: true },
+              });
+              stillAuthorized = Boolean(target?.teamId && currentTeamIds.has(target.teamId));
+            }
+            if (!stillAuthorized) {
+              send({ type: 'authorization_revoked' });
+              cleanup();
+              try {
+                controller.close();
+              } catch {}
+              return;
+            }
+          }
           let sentUpdate = false;
           if (incidentId) {
             // Stream updates for a specific incident using cache

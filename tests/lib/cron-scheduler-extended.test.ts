@@ -42,6 +42,7 @@ vi.mock('@/lib/escalation', () => ({
 
 vi.mock('@/lib/jobs/queue', () => ({
   processPendingJobs: vi.fn().mockResolvedValue({ processed: 0, failed: 0, total: 0 }),
+  cleanupOldJobs: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('@/lib/notification-retry', () => ({

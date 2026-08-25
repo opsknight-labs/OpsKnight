@@ -13,7 +13,7 @@ export default async function GlobalChatOpsIntegrationPage() {
   });
 
   const slackIntegration = await prisma.slackIntegration.findFirst({
-    where: { service: null, enabled: true },
+    where: { services: { none: {} }, enabled: true },
   });
 
   const isSlackConnected = !!slackIntegration?.botToken;
@@ -32,9 +32,9 @@ export default async function GlobalChatOpsIntegrationPage() {
         ]}
       />
 
-      <ChatOpsSettingsPage 
-        config={config} 
-        isAdmin={permissions.isAdmin} 
+      <ChatOpsSettingsPage
+        config={config}
+        isAdmin={permissions.isAdmin}
         isSlackConnected={isSlackConnected}
       />
     </div>

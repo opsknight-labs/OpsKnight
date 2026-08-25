@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const globalIntegration = await prisma.slackIntegration.findFirst({
       where: {
         enabled: true,
-        service: null,
+        services: { none: {} },
       },
     });
 

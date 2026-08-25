@@ -44,6 +44,7 @@ export type OnCallBlock = {
   layerId: string;
   layerName: string;
   source: 'rotation' | 'override';
+  isAdditiveOverride?: boolean;
 };
 
 function getDayHourInTimeZone(date: Date, timeZone: string): { day: number; hour: number } {
@@ -103,6 +104,36 @@ function addCalendarDaysInTimeZone(base: Date, days: number, timeZone: string): 
     date = new Date(baseUtc - actualOffsetMs);
   }
   return date;
+}
+
+function addCalendarHoursInTimeZone(base: Date, hours: number, timeZone: string): Date {
+  if (!Number.isInteger(hours)) return new Date(base.getTime() + hours * 60 * 60 * 1000);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = formatter.formatToParts(base);
+  const get = (type: string) => Number(parts.find(p => p.type === type)?.value ?? '0');
+  const baseUtc = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    (get('hour') % 24) + hours,
+    get('minute'),
+    get('second'),
+    base.getUTCMilliseconds()
+  );
+  const guessOffsetMs = getTimeZoneOffsetMs(new Date(baseUtc), timeZone);
+  let result = new Date(baseUtc - guessOffsetMs);
+  const actualOffsetMs = getTimeZoneOffsetMs(result, timeZone);
+  if (actualOffsetMs !== guessOffsetMs) result = new Date(baseUtc - actualOffsetMs);
+  return result;
 }
 
 function splitBlockByRestrictions(
@@ -233,42 +264,11 @@ function generateLayerBlocks(
       );
     } else if (layer.rotationLengthHours < 24 && 24 % layer.rotationLengthHours === 0) {
       // Calendar-anchored math for sub-daily integer factors of 24 (12h, 8h, 6h, 4h, 2h, 1h)
-      const totalHours = index * layer.rotationLengthHours;
-      const dayOffset = Math.floor(totalHours / 24);
-      const hourOffset = totalHours % 24;
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hourCycle: 'h23',
-      });
-      const parts = formatter.formatToParts(layerStart);
-      const get = (type: string) => Number(parts.find(p => p.type === type)?.value ?? '0');
-      const startLocalHour = get('hour') % 24;
-      const totalLocalHours = startLocalHour + hourOffset;
-      const additionalDays = dayOffset + Math.floor(totalLocalHours / 24);
-      const targetLocalHour = totalLocalHours % 24;
-
-      const baseUtc = Date.UTC(
-        get('year'),
-        get('month') - 1,
-        get('day') + additionalDays,
-        targetLocalHour,
-        get('minute'),
-        get('second'),
-        layerStart.getUTCMilliseconds()
+      blockStart = addCalendarHoursInTimeZone(
+        layerStart,
+        index * layer.rotationLengthHours,
+        timeZone
       );
-      const guessOffsetMs = getTimeZoneOffsetMs(new Date(baseUtc), timeZone);
-      let date = new Date(baseUtc - guessOffsetMs);
-      const actualOffsetMs = getTimeZoneOffsetMs(date, timeZone);
-      if (actualOffsetMs !== guessOffsetMs) {
-        date = new Date(baseUtc - actualOffsetMs);
-      }
-      blockStart = date;
     } else {
       const rotationStartTime = layerStart.getTime() + index * rotationMs;
       blockStart = new Date(rotationStartTime);
@@ -287,7 +287,7 @@ function generateLayerBlocks(
     if (shiftHours % 24 === 0) {
       rawEnd = addCalendarDaysInTimeZone(blockStart, shiftHours / 24, timeZone);
     } else {
-      rawEnd = new Date(blockStart.getTime() + shiftMs);
+      rawEnd = addCalendarHoursInTimeZone(blockStart, shiftHours, timeZone);
     }
     const blockEnd = layerEnd && rawEnd > layerEnd ? layerEnd : rawEnd;
 
@@ -360,8 +360,23 @@ function applyOverrides(blocks: OnCallBlock[], overrides: OverrideInput[]): OnCa
   let result = [...blocks];
 
   for (const override of sortedOverrides) {
+    if (!override.replacesUserId) {
+      result.push({
+        id: `override-${override.id}`,
+        start: override.start,
+        end: override.end,
+        userId: override.userId,
+        userName: override.user.name,
+        userAvatar: override.user.avatarUrl,
+        userGender: override.user.gender,
+        layerId: 'override',
+        layerName: 'Additive Override',
+        source: 'override',
+        isAdditiveOverride: true,
+      });
+      continue;
+    }
     const next: OnCallBlock[] = [];
-    const coveredIntervals: Array<{ start: Date; end: Date }> = [];
 
     for (const block of result) {
       if (override.end <= block.start || override.start >= block.end) {
@@ -392,49 +407,9 @@ function applyOverrides(blocks: OnCallBlock[], overrides: OverrideInput[]): OnCa
         userGender: override.user.gender,
         source: 'override',
       });
-      coveredIntervals.push({ start: overrideStart, end: overrideEnd });
 
       if (overrideEnd < block.end) {
         next.push({ ...block, id: `${block.id}-post-split`, start: overrideEnd });
-      }
-    }
-
-    // If override has intervals not covered by existing blocks, emit standalone override segments for gaps
-    if (!override.replacesUserId) {
-      coveredIntervals.sort((a, b) => a.start.getTime() - b.start.getTime());
-      let cursor = override.start;
-      for (const cov of coveredIntervals) {
-        if (cursor < cov.start) {
-          next.push({
-            id: `override-${override.id}-${cursor.getTime()}`,
-            start: cursor,
-            end: cov.start,
-            userId: override.userId,
-            userName: override.user.name,
-            userAvatar: override.user.avatarUrl,
-            userGender: override.user.gender,
-            layerId: 'override',
-            layerName: 'Override',
-            source: 'override',
-          });
-        }
-        if (cursor < cov.end) {
-          cursor = cov.end;
-        }
-      }
-      if (cursor < override.end) {
-        next.push({
-          id: `override-${override.id}-${cursor.getTime()}`,
-          start: cursor,
-          end: override.end,
-          userId: override.userId,
-          userName: override.user.name,
-          userAvatar: override.user.avatarUrl,
-          userGender: override.user.gender,
-          layerId: 'override',
-          layerName: 'Override',
-          source: 'override',
-        });
       }
     }
 
@@ -468,8 +443,11 @@ export function getFinalScheduleBlocks(
 ): OnCallBlock[] {
   if (blocks.length === 0) return [];
 
-  // Sort blocks by start time
-  const sorted = [...blocks].sort((a, b) => a.start.getTime() - b.start.getTime());
+  const additiveOverrides = blocks.filter(block => block.isAdditiveOverride);
+  const sorted = blocks
+    .filter(block => !block.isAdditiveOverride)
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+  if (sorted.length === 0) return additiveOverrides;
 
   // Create timeline events
   type TimelineEvent = {
@@ -555,5 +533,5 @@ export function getFinalScheduleBlocks(
     }
   }
 
-  return merged;
+  return [...merged, ...additiveOverrides].sort((a, b) => a.start.getTime() - b.start.getTime());
 }

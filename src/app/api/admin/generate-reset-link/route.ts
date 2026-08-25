@@ -1,24 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions, revokeUserSessions } from '@/lib/auth';
+import { revokeUserSessions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getAppUrl } from '@/lib/app-url';
 import { randomBytes, createHash } from 'crypto';
 import { logger } from '@/lib/logger';
+import { assertAdmin } from '@/lib/rbac';
+import { getClientIp } from '@/lib/client-ip';
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Auth Check (Admin Only)
-    const session = await getServerSession(await getAuthOptions());
-    const sessionUser = session?.user as { id: string; role: string; email: string } | undefined;
-
-    if (!sessionUser || sessionUser.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    // Re-resolve the user from the database so role demotion and account
+    // deactivation take effect without waiting for the JWT to expire.
+    const sessionUser = await assertAdmin();
 
     // Rate Limit Admin Actions (Prevent mass generation)
-    const rawIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-    const ip = rawIp.split(',')[0].trim();
+    const ip = getClientIp(req.headers);
     const { checkRateLimit } = await import('@/lib/password-reset');
     try {
       // Use Admin's email to limit *their* activity
@@ -90,6 +86,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ link: resetLink });
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Unauthorized')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
     logger.error('API Error /admin/generate-reset-link', { error });
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

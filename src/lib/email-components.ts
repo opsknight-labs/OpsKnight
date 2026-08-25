@@ -20,7 +20,7 @@ export function escapeHtml(value: unknown): string {
   if (value === null || value === undefined) return '';
   const str = String(value);
   return str
-    .replace(/&(?!amp;|lt;|gt;|quot;|#39;|#x2F;)/g, '&amp;')
+    .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')

@@ -64,7 +64,7 @@ export default async function ServiceSettingsPage({
       prisma.slackIntegration.findFirst({
         where: {
           enabled: true,
-          service: null,
+          services: { none: {} },
         },
         select: {
           id: true,
@@ -321,7 +321,8 @@ export default async function ServiceSettingsPage({
                 <Puzzle className="h-5 w-5 text-primary" /> Service Integrations & Workflows
               </h2>
               <p className="text-sm text-muted-foreground">
-                Configure notification channels (Slack) and engineering issue tracking (Jira) side-by-side.
+                Configure notification channels (Slack) and engineering issue tracking (Jira)
+                side-by-side.
               </p>
             </div>
 

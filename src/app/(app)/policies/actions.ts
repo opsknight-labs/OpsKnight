@@ -187,8 +187,9 @@ export async function deletePolicy(policyId: string) {
     );
   }
 
-  await prisma.escalationPolicy.delete({
-    where: { id: policyId },
+  await prisma.$transaction(async tx => {
+    await tx.escalationRule.deleteMany({ where: { policyId } });
+    await tx.escalationPolicy.delete({ where: { id: policyId } });
   });
 
   await logAudit({

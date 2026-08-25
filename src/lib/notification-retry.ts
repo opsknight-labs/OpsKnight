@@ -102,7 +102,7 @@ export async function retryFailedNotifications(): Promise<{
             return { success: false, claimed: false };
           }
 
-          let result: { success: boolean; error?: string } = {
+          let result: { success: boolean; error?: string; messageSid?: string } = {
             success: false,
             error: 'Unknown channel',
           };
@@ -128,7 +128,8 @@ export async function retryFailedNotifications(): Promise<{
                   const res = await smsModule.sendIncidentSMS(
                     notification.userId,
                     notification.incidentId,
-                    eventType
+                    eventType,
+                    notification.id
                   );
                   if (!res.success) throw new Error(res.error || 'SMS retry delivery failed');
                   return res;
@@ -150,7 +151,8 @@ export async function retryFailedNotifications(): Promise<{
                   const res = await whatsappModule.sendIncidentWhatsApp(
                     notification.userId,
                     notification.incidentId,
-                    eventType
+                    eventType,
+                    notification.id
                   );
                   if (!res.success) throw new Error(res.error || 'WhatsApp retry delivery failed');
                   return res;
@@ -196,6 +198,7 @@ export async function retryFailedNotifications(): Promise<{
               data: {
                 status: 'SENT',
                 sentAt: new Date(),
+                providerMessageId: result.messageSid,
               },
             });
             logger.info('notification.retry.success', {
