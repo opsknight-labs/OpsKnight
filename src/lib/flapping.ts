@@ -47,13 +47,13 @@ export async function checkAlertFlapping(
 
     // Count state transitions (TRIGGERED -> RESOLVED or RESOLVED -> TRIGGERED)
     let transitions = 0;
-    let lastStatus = recentAlerts[0]?.status ?? 'TRIGGERED';
+    let lastStatus: string | null = null;
 
-    for (let i = 1; i < recentAlerts.length; i++) {
-      if (recentAlerts[i].status !== lastStatus) {
+    for (const alert of recentAlerts) {
+      if (lastStatus !== null && alert.status !== lastStatus) {
         transitions++;
-        lastStatus = recentAlerts[i].status;
       }
+      lastStatus = alert.status;
     }
 
     const isFlapping = transitions >= config.stateChangeThreshold;

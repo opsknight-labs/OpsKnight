@@ -17,10 +17,10 @@ type JiraConfigView = {
   enabled: boolean;
   webhookSecretEncrypted: string | null;
   updatedAt: Date;
-  updatedByUser: {
-    name: string;
+  updatedByUser?: {
+    name: string | null;
     email: string;
-  };
+  } | null;
 } | null;
 
 function SubmitButton({ disabled }: { disabled: boolean }) {
@@ -198,7 +198,7 @@ export default function JiraIntegrationPage({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
             <div className="text-sm text-muted-foreground">
               {config
-                ? `Last updated by ${config.updatedByUser.name} on ${new Date(config.updatedAt).toLocaleDateString()}`
+                ? `Last updated by ${config.updatedByUser?.name || 'Administrator'} on ${new Date(config.updatedAt).toLocaleDateString()}`
                 : 'No Jira workspace is connected yet.'}
             </div>
             <div className="flex gap-2">

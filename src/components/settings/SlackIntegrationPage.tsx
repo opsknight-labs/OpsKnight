@@ -64,11 +64,11 @@ interface SlackIntegration {
   createdAt: Date;
   updatedAt: Date;
   scopes: string[];
-  installer: {
+  installer?: {
     id: string;
-    name: string;
+    name: string | null;
     email: string;
-  };
+  } | null;
 }
 
 interface SlackIntegrationPageProps {
@@ -444,7 +444,9 @@ export default function SlackIntegrationPage({
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {integration
-                    ? `Connected by ${integration.installer.name}`
+                    ? integration.installer?.name
+                      ? `Connected by ${integration.installer.name}`
+                      : 'Connected to workspace'
                     : 'Connect your Slack workspace to enable notifications'}
                 </p>
               </div>
@@ -611,7 +613,7 @@ export default function SlackIntegrationPage({
               {/* Workspace Header */}
               <SlackWorkspaceHeader
                 workspaceName={integration.workspaceName || 'Slack Workspace'}
-                installerName={integration.installer.name}
+                installerName={integration.installer?.name || 'Administrator'}
                 updatedAt={integration.updatedAt}
                 enabled={integration.enabled}
                 isAdmin={isAdmin}
