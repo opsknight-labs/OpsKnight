@@ -32,6 +32,8 @@ The middleware also accepts `Authorization: Token token=…`, `X-API-Key`, or th
 
 The integration must exist, be enabled, and point to the intended service. The route validates the route-specific provider schema, but v1.4 does not separately compare the stored integration type with the route segment. Protect each integration ID/key pair and use only the URL generated for its intended sender. A workspace API key is not interchangeable with an integration key.
 
+Authentication is resolved before OpsKnight consumes the database-backed per-integration rate limit. Requests using a nonexistent integration ID or an invalid integration key therefore do not create arbitrary per-integration rate-limit rows and do not consume the valid integration's quota. This limiter protects authenticated integration traffic; upstream proxy/WAF controls remain appropriate for broad unauthenticated abuse protection.
+
 ## Optional signature verification
 
 The integration key is always required. When a signature secret is configured on the integration, OpsKnight also verifies the raw request according to the route's signature mode unless `INTEGRATION_VERIFY_SIGNATURES=false`. Verification is enabled by default; the environment override is a diagnostic escape hatch, not a production baseline.
@@ -90,16 +92,16 @@ Accepted event requests normally return HTTP 202 with a JSON result. Common fail
 | 401    | Invalid key on legacy-handler routes, disabled integration on standardized-handler routes, or missing/invalid required signature. |
 | 403    | Disabled integration on legacy-handler routes.                                                                                    |
 | 404    | Integration not found.                                                                                                            |
-| 429    | Per-integration rate limit exceeded; honor `Retry-After`.                                                                         |
+| 429    | Per-integration rate limit exceeded after integration authentication; honor `Retry-After`.                                        |
 | 500    | Unexpected processing failure.                                                                                                    |
 
 Provider routes are being consolidated on the standardized handler, so some authentication failures currently differ between `400`, `401`, and `403`. Treat all three as non-retryable configuration/authentication failures; inspect the JSON message rather than branching only on one status.
 
-Integration routes default to 100 requests per 60 seconds per integration when integration rate limiting is enabled. Rate-limit responses include remaining/reset information; successful routes do not guarantee every provider displays those headers.
+Integration routes default to 100 requests per 60 seconds per authenticated integration when integration rate limiting is enabled. Invalid IDs and invalid integration keys are rejected before this database-backed quota is consumed. Rate-limit responses include remaining/reset information; successful routes do not guarantee every provider displays those headers.
 
 ## Production acceptance
 
-For every configured provider, test a failure and recovery using the real upstream sender. Confirm the first event creates or updates the intended service incident, repeated events deduplicate, recovery resolves the same incident, invalid credentials are rejected, and responders receive the expected notification. Preserve the provider delivery record and OpsKnight event/timeline evidence for troubleshooting.
+For every configured provider, test a failure and recovery using the real upstream sender. Confirm the first event creates or updates the intended service incident, repeated events deduplicate, recovery resolves the same incident, invalid credentials are rejected without consuming authenticated integration quota, and responders receive the expected notification. Preserve the provider delivery record and OpsKnight event/timeline evidence for troubleshooting.
 
 ## Related topics
 

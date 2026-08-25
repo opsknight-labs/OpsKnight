@@ -86,16 +86,21 @@ Each user can open **Settings → Profile** to manage supported profile fields, 
 
 OpsKnight provides a zero-latency, local `@dicebear` vector avatar generator at `/api/avatar`. Users can select from 15 curated SVG style presets (including `bottts`, `shapes`, `initials`, `personas`, `identicon`, `avataaars`, `thumbs`, `lorelei`, `notionists`, `open-peeps`, `micah`, `miniavs`, `pixel-art`, `rings`, and `glass`) with gender-appropriate styling. Avatar SVGs are rendered locally without third-party network dependencies, cached immutably with `Cache-Control: public, max-age=31536000, immutable`, and served with strict SVG sandbox headers (`Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`).
 
-Timezone affects how the application displays dates for that user. Schedule calculation remains authoritative in each schedule's timezone.
+Timezone affects how the application displays dates for that user. Schedule calculation remains authoritative in each schedule's timezone. Quiet Hours also evaluates its configured times in this profile timezone.
 
 ## Notification preferences
 
-Open **Settings → Notifications** to enable supported user channels:
+Open **Settings → Profile & Preferences → Notification Preferences** to configure personal notification behavior:
 
 - Email;
 - SMS, with a phone number;
 - Push, with a registered supported device and provider;
-- WhatsApp, with a phone number in E.164 format.
+- WhatsApp, with a phone number in E.164 format; and
+- **Quiet Hours**, an optional LOW-urgency suppression policy.
+
+Quiet Hours is **off by default** for both existing and new users. OpsKnight does not silently mute paging after an upgrade or account creation. A user must explicitly enable Quiet Hours before it can suppress any delivery channel.
+
+When enabled, the user chooses a start time, end time, and whether weekends are quiet all day. Times use the user's profile timezone. During an active Quiet Hours window, only LOW-urgency Push, SMS, and WhatsApp delivery is suppressed. Email and in-app notifications remain available, and MEDIUM/HIGH urgency bypasses Quiet Hours entirely.
 
 These switches express user preference; they do not configure workspace providers. Delivery requires all of the following:
 
@@ -103,9 +108,10 @@ These switches express user preference; they do not configure workspace provider
 2. the user enabled the channel;
 3. required contact/device data exists;
 4. the escalation or service event selects or inherits that channel;
-5. the provider accepts the message.
+5. Quiet Hours does not intentionally suppress that LOW-urgency disruptive channel; and
+6. the provider accepts the message.
 
-Team paging also respects the membership's `Receive team notifications` setting. Test the full chain and review notification history rather than assuming a saved switch guarantees delivery.
+Team paging also respects the membership's `Receive team notifications` setting. Test the full chain and review notification history rather than assuming a saved switch guarantees delivery. Quiet Hours suppression is an intentional policy decision and should not be interpreted as a provider delivery failure.
 
 ## Passwords and sessions
 
@@ -167,7 +173,7 @@ If the menu shows **Allow OIDC linking**, approval is not currently present. If 
 
 ### A user is targeted but receives no page
 
-Confirm account status, channel preference, contact/device data, team notification participation, workspace provider, and notification history.
+Confirm account status, channel preference, contact/device data, team notification participation, Quiet Hours state for LOW urgency, workspace provider, and notification history.
 
 ### An account cannot be removed
 

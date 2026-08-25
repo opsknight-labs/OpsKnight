@@ -13,6 +13,7 @@ import { sendNotification, NotificationChannel } from './notifications';
 import { isChannelAvailable } from './notification-providers';
 import { createInAppNotifications } from './in-app-notifications';
 import { logger } from './logger';
+import { filterChannelsForQuietHours } from './quiet-hours';
 
 /**
  * Get user's enabled notification channels based on their preferences
@@ -95,8 +96,13 @@ export async function sendUserNotification(
     excludedChannels?: NotificationChannel[];
     createInApp?: boolean;
   } = {}
-): Promise<{ success: boolean; channelsUsed: NotificationChannel[]; errors?: string[] }> {
-  // Create In-App Notification first
+): Promise<{
+  success: boolean;
+  channelsUsed: NotificationChannel[];
+  errors?: string[];
+  suppressedByQuietHours?: boolean;
+}> {
+  // Create In-App Notification first. In-app remains available during quiet hours.
   if (options.createInApp !== false) {
     try {
       await createInAppNotifications({
@@ -113,7 +119,6 @@ export async function sendUserNotification(
   }
 
   let channels: NotificationChannel[];
-  // ... rest of function
   const excludedChannels = new Set(options.excludedChannels ?? []);
   const userChannels = (await getUserNotificationChannels(userId)).filter(
     channel => !excludedChannels.has(channel)
@@ -147,28 +152,22 @@ export async function sendUserNotification(
 
   const [incident, recipient] = await Promise.all([
     prisma.incident.findUnique({ where: { id: incidentId }, select: { urgency: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { timeZone: true } }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        timeZone: true,
+        quietHoursEnabled: true,
+        quietHoursStartMinutes: true,
+        quietHoursEndMinutes: true,
+        quietHoursWeekendAllDay: true,
+      },
+    }),
   ]);
   const isHighUrgency = incident?.urgency === 'HIGH';
-  if (incident?.urgency === 'LOW') {
-    try {
-      const timeZone = recipient?.timeZone || 'UTC';
-      const localParts = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        weekday: 'short',
-        hour: 'numeric',
-        hourCycle: 'h23',
-      }).formatToParts(new Date());
-      const weekday = localParts.find(part => part.type === 'weekday')?.value;
-      const hour = Number(localParts.find(part => part.type === 'hour')?.value || 0) % 24;
-      const offHours = weekday === 'Sat' || weekday === 'Sun' || hour < 8 || hour >= 18;
-      if (offHours) {
-        channels = channels.filter(channel => !['PUSH', 'SMS', 'WHATSAPP'].includes(channel));
-      }
-    } catch {
-      // Fallback for invalid timezone string without throwing
-    }
-  }
+
+  const quietHoursResult = filterChannelsForQuietHours(channels, incident?.urgency, recipient);
+  channels = quietHoursResult.channels;
+  const quietHoursBlockedChannels = quietHoursResult.blockedChannels;
 
   let primarySuccess = false;
 
@@ -191,9 +190,12 @@ export async function sendUserNotification(
     }
   }
 
-  // Fallback: If all primary specified channels failed, attempt delivery via user's other available channels
+  // Fallback: If all primary specified channels failed, attempt delivery via user's other available channels.
+  // Never reintroduce disruptive channels that quiet-hours filtering intentionally blocked.
   if (channelsUsed.length === 0 && userChannels.length > 0) {
-    const fallbackChannels = userChannels.filter(ch => !channels.includes(ch));
+    const fallbackChannels = userChannels.filter(
+      ch => !channels.includes(ch) && !quietHoursBlockedChannels.has(ch)
+    );
     for (const fbChannel of fallbackChannels) {
       const fbResult = await sendNotification(incidentId, userId, fbChannel, message);
       if (fbResult.success) {
@@ -207,6 +209,24 @@ export async function sendUserNotification(
         errors.push(`Fallback ${fbChannel}: ${fbResult.error || 'Failed'}`);
       }
     }
+  }
+
+  // A deliberate quiet-hours suppression is a successful policy decision, not a
+  // notification-provider failure. In-app was already created above.
+  if (
+    channelsUsed.length === 0 &&
+    errors.length === 0 &&
+    quietHoursBlockedChannels.size > 0
+  ) {
+    logger.info('[UserNotification] External delivery suppressed by quiet hours', {
+      incidentId,
+      userId,
+    });
+    return {
+      success: true,
+      channelsUsed: [],
+      suppressedByQuietHours: true,
+    };
   }
 
   return {
@@ -248,11 +268,9 @@ export async function sendIncidentNotifications(
       }));
 
     if (!incidentData || !incidentData.service) {
-      // Use incidentData instead of incident
       return { success: false, errors: ['Incident or service not found'] };
     }
 
-    // Use incidentData for the rest of the function
     const incidentRecord = incidentData;
 
     const errors: string[] = [];
@@ -307,6 +325,11 @@ export async function sendIncidentNotifications(
           whatsappNotificationsEnabled: true,
           phoneNumber: true,
           email: true,
+          timeZone: true,
+          quietHoursEnabled: true,
+          quietHoursStartMinutes: true,
+          quietHoursEndMinutes: true,
+          quietHoursWeekendAllDay: true,
         },
       });
 
@@ -359,12 +382,32 @@ export async function sendIncidentNotifications(
           };
         }
 
+        const quietHoursResult = filterChannelsForQuietHours(
+          channels,
+          incidentRecord.urgency,
+          user
+        );
+        const deliveryChannels = quietHoursResult.channels;
+
+        if (deliveryChannels.length === 0 && quietHoursResult.blockedChannels.size > 0) {
+          logger.info('[IncidentNotification] External delivery suppressed by quiet hours', {
+            incidentId,
+            userId,
+          });
+          return {
+            userId,
+            success: true,
+            channelsUsed: [] as NotificationChannel[],
+            suppressedByQuietHours: true,
+          };
+        }
+
         const isHighUrgency = incidentRecord.urgency === 'HIGH';
         let primarySuccess = false;
         const successful = [];
         const failed = [];
 
-        for (const channel of channels) {
+        for (const channel of deliveryChannels) {
           if (primarySuccess) {
             if (isHighUrgency && channel === 'EMAIL') {
               // Continue to send email

@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import ProfileForm from '@/components/settings/ProfileForm';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
+import QuietHoursForm from '@/components/settings/QuietHoursForm';
 import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
@@ -34,6 +35,10 @@ export default async function ProfileSettingsPage() {
           pushNotificationsEnabled: true,
           whatsappNotificationsEnabled: true,
           phoneNumber: true,
+          quietHoursEnabled: true,
+          quietHoursStartMinutes: true,
+          quietHoursEndMinutes: true,
+          quietHoursWeekendAllDay: true,
         },
       })
     : null;
@@ -83,7 +88,7 @@ export default async function ProfileSettingsPage() {
 
       <SettingsSection
         title="Notification Preferences"
-        description="Choose how you want to receive incident notifications."
+        description="Choose how and when you want to receive incident notifications."
         footer={
           <p className="text-sm text-muted-foreground">
             Preference updates apply to this workspace once saved.
@@ -97,6 +102,16 @@ export default async function ProfileSettingsPage() {
           whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
           phoneNumber={user?.phoneNumber ?? null}
         />
+
+        <div className="mt-6 border-t pt-6">
+          <QuietHoursForm
+            enabled={user?.quietHoursEnabled ?? false}
+            startMinutes={user?.quietHoursStartMinutes ?? 18 * 60}
+            endMinutes={user?.quietHoursEndMinutes ?? 8 * 60}
+            weekendAllDay={user?.quietHoursWeekendAllDay ?? true}
+            timeZone={timeZone}
+          />
+        </div>
       </SettingsSection>
     </div>
   );

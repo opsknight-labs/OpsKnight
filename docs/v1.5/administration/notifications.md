@@ -15,6 +15,7 @@ valid incident recipient
   + enabled workspace provider
   + enabled user preference and contact/device data
   + escalation or service event
+  + user Quiet Hours policy when explicitly enabled
   → notification attempt and history
 ```
 
@@ -23,7 +24,7 @@ Saving one layer does not verify the whole path. Test every production recipient
 ## Permissions and settings
 
 - An application **Admin** configures workspace providers in **Settings → Notification Providers**.
-- Each user configures personal Email, SMS, Push, and WhatsApp preferences under **Settings → Notifications**.
+- Each user configures personal Email, SMS, Push, WhatsApp, and Quiet Hours preferences under **Settings → Profile & Preferences → Notification Preferences**.
 - Admins/Responders configure service-level Slack and webhook events under **Service → Settings**.
 - Policy administration is Admin-only. New steps in the current v1.4 UI inherit user preferences; the UI does not expose new per-step channel overrides.
 - Signed-in users can open **Settings → Notification History**; access to operational data should still be governed by deployment policy.
@@ -55,9 +56,31 @@ It attempts channels in order and normally stops after the first successful non-
 
 This is ordered fallback, not guaranteed fan-out to every enabled channel. An in-app notification is created separately even when no external channel is available.
 
-Stored escalation-channel data, when present, is intersected with the user's available channels. If the intersection is empty, the implementation falls back to the user's available preferences rather than dropping the page.
+Stored escalation-channel data, when present, is intersected with the user's available channels. If the intersection is empty, the implementation falls back to the user's available preferences rather than dropping the page. Quiet Hours filtering remains in force during fallback, so an intentionally suppressed LOW-urgency channel is not reintroduced by the fallback path.
 
 Service-level Slack/webhook/email/SMS/push/WhatsApp notifications are a separate path selected by service event settings. Avoid configuring duplicate paths until you have observed their combined behavior.
+
+## Quiet Hours
+
+Quiet Hours is a **personal, explicit opt-in** notification policy. It is **off by default for both existing and new users**. OpsKnight never enables it automatically during an upgrade or when an account is created.
+
+Users configure it at **Settings → Profile & Preferences → Notification Preferences → Quiet Hours**. When enabled, they can choose:
+
+- start time;
+- end time; and
+- whether Saturday and Sunday are quiet all day.
+
+The configured times are evaluated in the user's profile timezone. The initial editable schedule is 18:00–08:00 with all-day weekends, but it has no effect until the user turns Quiet Hours on.
+
+During an active Quiet Hours window:
+
+- **LOW urgency**: Push, SMS, and WhatsApp are suppressed;
+- **Email and in-app** notifications remain available; and
+- **MEDIUM and HIGH urgency** bypass Quiet Hours and continue paging normally.
+
+Suppression is intentional policy behavior, not a provider failure. OpsKnight does not create a false failed-delivery result merely because a channel was excluded by Quiet Hours. Invalid timezone/window configuration fails open rather than silently suppressing a page.
+
+For incident-response safety, do not use Quiet Hours as a substitute for escalation-policy design, schedule coverage, or urgency mapping. If a responder must always receive a class of alert, classify and route it appropriately instead of relying on a personal LOW-urgency policy.
 
 ## Configure email
 
@@ -157,6 +180,7 @@ For every on-call user:
 - [ ] at least one external channel is enabled and usable;
 - [ ] phone number is E.164 when SMS/WhatsApp is enabled;
 - [ ] push is registered on the intended device;
+- [ ] Quiet Hours is understood and intentionally configured if enabled;
 - [ ] Team notification participation is enabled for team-targeted paging;
 - [ ] a direct test policy reaches the user;
 - [ ] the user can open and acknowledge the incident.
@@ -181,7 +205,7 @@ There is no manual Retry button in the history page. Correct the provider or rec
 
 ### No notification record
 
-Check that the incident actually targeted the user/team/schedule, the policy ran, assignment and lifecycle event are correct, and the user was eligible. Review the incident timeline and escalation state.
+Check that the incident actually targeted the user/team/schedule, the policy ran, assignment and lifecycle event are correct, and the user was eligible. For LOW urgency, also check whether the user explicitly enabled Quiet Hours and the channel was intentionally suppressed. Review the incident timeline and escalation state.
 
 ### `FAILED` email
 
@@ -193,7 +217,7 @@ For Twilio, check credentials, sender capability, trial verification, regional p
 
 ### Push does not arrive
 
-Check HTTPS, browser support and permission, service worker `/sw.js`, VAPID public/private pairing, saved subscription, user preference, OS/browser background restrictions, and Test Push.
+Check HTTPS, browser support and permission, service worker `/sw.js`, VAPID public/private pairing, saved subscription, user preference, Quiet Hours for LOW urgency, OS/browser background restrictions, and Test Push.
 
 ### Slack or webhook fails
 
