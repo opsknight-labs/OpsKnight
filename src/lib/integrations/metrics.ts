@@ -27,8 +27,8 @@ export interface MetricsByIntegration {
 }
 
 interface MetricsState {
-  byType: MetricsByType;
-  byIntegration: MetricsByIntegration;
+  byType: Map<string, IntegrationMetrics>;
+  byIntegration: Map<string, IntegrationMetrics>;
   global: IntegrationMetrics;
 }
 
@@ -48,26 +48,25 @@ function createEmptyMetrics(): IntegrationMetrics {
 
 // Global metrics state
 const metricsState: MetricsState = {
-  byType: {},
-  byIntegration: {},
+  byType: new Map(),
+  byIntegration: new Map(),
   global: createEmptyMetrics(),
 };
 const MAX_INTEGRATION_METRICS = 1000;
 const MAX_TYPE_METRICS = 50;
 
-function evictOldest(entries: Record<string, IntegrationMetrics>, capacity: number) {
-  const keys = Object.keys(entries);
-  if (keys.length < capacity) return;
-  let oldestKey = keys[0];
-  let oldestTime = entries[oldestKey]?.lastReceived?.getTime() ?? 0;
-  for (const key of keys.slice(1)) {
-    const time = entries[key]?.lastReceived?.getTime() ?? 0;
+function evictOldest(entries: Map<string, IntegrationMetrics>, capacity: number) {
+  if (entries.size < capacity) return;
+  let oldestKey: string | undefined;
+  let oldestTime = Number.POSITIVE_INFINITY;
+  for (const [key, metrics] of entries) {
+    const time = metrics.lastReceived?.getTime() ?? 0;
     if (time < oldestTime) {
       oldestKey = key;
       oldestTime = time;
     }
   }
-  delete entries[oldestKey];
+  if (oldestKey) entries.delete(oldestKey);
 }
 
 /**
@@ -95,17 +94,19 @@ export function recordWebhookReceived(
   const now = new Date();
 
   // Ensure metrics objects exist
-  if (!metricsState.byType[integrationType]) {
+  let typeMetrics = metricsState.byType.get(integrationType);
+  if (!typeMetrics) {
     evictOldest(metricsState.byType, MAX_TYPE_METRICS);
-    metricsState.byType[integrationType] = createEmptyMetrics();
+    typeMetrics = createEmptyMetrics();
+    metricsState.byType.set(integrationType, typeMetrics);
   }
-  if (!metricsState.byIntegration[integrationId]) {
+  let integrationMetrics = metricsState.byIntegration.get(integrationId);
+  if (!integrationMetrics) {
     evictOldest(metricsState.byIntegration, MAX_INTEGRATION_METRICS);
-    metricsState.byIntegration[integrationId] = createEmptyMetrics();
+    integrationMetrics = createEmptyMetrics();
+    metricsState.byIntegration.set(integrationId, integrationMetrics);
   }
 
-  const typeMetrics = metricsState.byType[integrationType];
-  const integrationMetrics = metricsState.byIntegration[integrationId];
   const globalMetrics = metricsState.global;
 
   // Update all metric objects
@@ -137,21 +138,21 @@ export function recordWebhookReceived(
  * Get metrics for a specific integration type
  */
 export function getMetricsByType(integrationType: string): IntegrationMetrics {
-  return metricsState.byType[integrationType] || createEmptyMetrics();
+  return metricsState.byType.get(integrationType) || createEmptyMetrics();
 }
 
 /**
  * Get metrics for a specific integration instance
  */
 export function getMetricsByIntegration(integrationId: string): IntegrationMetrics {
-  return metricsState.byIntegration[integrationId] || createEmptyMetrics();
+  return metricsState.byIntegration.get(integrationId) || createEmptyMetrics();
 }
 
 /**
  * Get all metrics grouped by type
  */
 export function getAllMetricsByType(): MetricsByType {
-  return { ...metricsState.byType };
+  return Object.fromEntries(metricsState.byType);
 }
 
 /**
@@ -196,8 +197,8 @@ export function getMetricsSummary(): {
  * Reset all metrics (for testing)
  */
 export function resetAllMetrics(): void {
-  metricsState.byType = {};
-  metricsState.byIntegration = {};
+  metricsState.byType.clear();
+  metricsState.byIntegration.clear();
   metricsState.global = createEmptyMetrics();
 }
 
@@ -205,7 +206,7 @@ export function resetAllMetrics(): void {
  * Reset metrics for a specific integration
  */
 export function resetIntegrationMetrics(integrationId: string): void {
-  delete metricsState.byIntegration[integrationId];
+  metricsState.byIntegration.delete(integrationId);
 }
 
 /**
@@ -239,10 +240,10 @@ function startCleanupTimer() {
     const now = Date.now();
 
     // Clean up integration metrics
-    for (const [id, metrics] of Object.entries(metricsState.byIntegration)) {
+    for (const [id, metrics] of metricsState.byIntegration) {
       const lastActivity = metrics.lastReceived?.getTime() || 0;
       if (now - lastActivity > METRICS_TTL_MS) {
-        delete metricsState.byIntegration[id];
+        metricsState.byIntegration.delete(id);
       }
     }
   }, CLEANUP_INTERVAL_MS);

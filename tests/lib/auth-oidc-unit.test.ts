@@ -54,13 +54,13 @@ describe('Auth JWT + OIDC (unit)', () => {
     process.env.OIDC_REQUIRE_EMAIL_VERIFIED_STRICT = 'false';
 
     // Ensure no test leaks mock implementations into the next test
-    (prisma.user.findUnique as any).mockResolvedValue(null);
-    (prisma.user.create as any).mockResolvedValue({ id: 'u1' });
-    (prisma.user.update as any).mockResolvedValue({});
-    (prisma.userToken.findFirst as any).mockResolvedValue(null);
-    (prisma.auditLog.findFirst as any).mockResolvedValue(null);
-    (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
-    (prisma.oidcIdentity.create as any).mockResolvedValue({ id: 'id1' });
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.user.create).mockResolvedValue({ id: 'u1' } as never);
+    vi.mocked(prisma.user.update).mockResolvedValue({} as never);
+    vi.mocked(prisma.userToken.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.auditLog.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.create).mockResolvedValue({ id: 'id1' } as never);
   });
 
   it('rejects OIDC sign-in when email_verified is false', async () => {
