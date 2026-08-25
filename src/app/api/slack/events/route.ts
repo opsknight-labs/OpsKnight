@@ -45,6 +45,58 @@ export async function POST(request: NextRequest) {
     // 2. Handle Event Callbacks
     if (payload.type === 'event_callback' && payload.event) {
       const event = payload.event;
+
+      // Handle Workspace De-authorization: app_uninstalled
+      if (event.type === 'app_uninstalled') {
+        const workspaceId = payload.team_id || event.team_id;
+        if (workspaceId) {
+          const integration = await prisma.slackIntegration.findUnique({
+            where: { workspaceId },
+            select: { id: true },
+          });
+          if (integration) {
+            await prisma.$transaction(async tx => {
+              await tx.service.updateMany({
+                where: { slackIntegrationId: integration.id },
+                data: { slackIntegrationId: null },
+              });
+              await tx.slackIntegration.delete({ where: { id: integration.id } });
+            });
+            logger.info('[Slack Events] Workspace uninstalled, removed integration and unlinked services', {
+              workspaceId,
+            });
+          }
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // Handle Token Revocation: tokens_revoked
+      if (event.type === 'tokens_revoked') {
+        const workspaceId = payload.team_id || event.team_id;
+        if (workspaceId) {
+          const integration = await prisma.slackIntegration.findUnique({
+            where: { workspaceId },
+            select: { id: true },
+          });
+          if (integration) {
+            await prisma.$transaction(async tx => {
+              await tx.service.updateMany({
+                where: { slackIntegrationId: integration.id },
+                data: { slackIntegrationId: null },
+              });
+              await tx.slackIntegration.update({
+                where: { id: integration.id },
+                data: { enabled: false },
+              });
+            });
+            logger.warn('[Slack Events] Bot tokens revoked for workspace, disabled integration', {
+              workspaceId,
+            });
+          }
+        }
+        return NextResponse.json({ ok: true });
+      }
+
       const rawEmoji = (event.reaction || '').split('::')[0];
 
       // Reaction Added (📌 Emoji Reaction Sync)

@@ -34,56 +34,48 @@ export function calculateServiceHealthScore(data: ServiceHealthData): {
         recentIncidents = 0
     } = data;
 
-    // Factor 1: Incident Volume (0-25 points)
-    // Lower incident volume = higher score
+    // Factor 1: Incident Volume (0-25 points) - Focused on recent incident activity
     let incidentVolumeScore = 25;
-    if (totalIncidents > 0) {
-        // Penalize based on total incidents (logarithmic scale)
-        const incidentPenalty = Math.min(25, Math.log10(totalIncidents + 1) * 5);
-        incidentVolumeScore = Math.max(0, 25 - incidentPenalty);
-    }
-    
-    // Recent incidents penalty (last 7 days)
     if (recentIncidents > 0) {
-        const recentPenalty = Math.min(10, recentIncidents * 2);
-        incidentVolumeScore = Math.max(0, incidentVolumeScore - recentPenalty);
+        const recentPenalty = Math.min(25, recentIncidents * 3);
+        incidentVolumeScore = Math.max(0, 25 - recentPenalty);
+    } else if (openIncidents > 0) {
+        const openPenalty = Math.min(15, openIncidents * 3);
+        incidentVolumeScore = Math.max(0, 25 - openPenalty);
     }
 
     // Factor 2: Critical Issues (0-30 points)
-    // No critical incidents = full points
+    // No critical or open incidents = full points
     let criticalIssuesScore = 30;
     if (criticalIncidents > 0) {
         // Heavy penalty for critical incidents
         criticalIssuesScore = Math.max(0, 30 - (criticalIncidents * 15));
     }
-    if (openIncidents > 0 && criticalIncidents === 0) {
-        // Small penalty for any open incidents
-        criticalIssuesScore = Math.max(20, criticalIssuesScore - (openIncidents * 2));
+    if (openIncidents > 0) {
+        // Penalty for open incidents
+        const openPenalty = openIncidents * 4;
+        criticalIssuesScore = Math.max(0, criticalIssuesScore - openPenalty);
     }
 
     // Factor 3: Resolution Efficiency (0-25 points)
-    // Based on resolution rate and average resolution time
+    // Based on resolution rate of active window and average resolution time
     let resolutionEfficiencyScore = 25;
-    if (totalIncidents > 0) {
-        const resolutionRate = resolvedIncidents / totalIncidents;
-        resolutionEfficiencyScore = resolutionRate * 20; // 0-20 points for resolution rate
+    const windowTotal = resolvedIncidents + openIncidents;
+    if (windowTotal > 0) {
+        const resolutionRate = resolvedIncidents / windowTotal;
+        resolutionEfficiencyScore = resolutionRate * 25; // 0-25 points for resolution rate
         
-        // Bonus/penalty for resolution time (if available)
-        if (avgResolutionTime !== undefined) {
-            // Target: resolve within 2 hours (120 minutes)
-            // Full points if < 60 minutes, penalty if > 120 minutes
-            if (avgResolutionTime < 60) {
-                resolutionEfficiencyScore += 5; // Bonus for fast resolution
-            } else if (avgResolutionTime > 120) {
-                const timePenalty = Math.min(5, (avgResolutionTime - 120) / 60);
-                resolutionEfficiencyScore = Math.max(0, resolutionEfficiencyScore - timePenalty);
-            }
+        // Penalty for slow resolution time (if available)
+        if (avgResolutionTime !== undefined && avgResolutionTime > 120) {
+            const timePenalty = Math.min(10, ((avgResolutionTime - 120) / 60) * 2.5);
+            resolutionEfficiencyScore = Math.max(0, resolutionEfficiencyScore - timePenalty);
         }
     }
 
     // Factor 4: SLA Compliance (0-20 points)
     // Direct mapping: 100% compliance = 20 points
-    const slaComplianceScore = (slaCompliance / 100) * 20;
+    const safeSla = Math.max(0, Math.min(100, slaCompliance));
+    const slaComplianceScore = (safeSla / 100) * 20;
 
     // Calculate total score
     const totalScore = Math.round(

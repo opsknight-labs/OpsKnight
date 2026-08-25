@@ -163,26 +163,42 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
   switch (subcommand) {
     case 'ack':
     case 'acknowledge': {
-      if (incident.status === 'ACKNOWLEDGED' || incident.status === 'RESOLVED') {
+      let updated = false;
+      if (typeof prisma.incident.updateMany === 'function') {
+        const updateResult = await prisma.incident.updateMany({
+          where: { id: incident.id, status: 'OPEN' },
+          data: {
+            status: 'ACKNOWLEDGED',
+            acknowledgedAt: incident.acknowledgedAt ?? new Date(),
+            escalationStatus: 'COMPLETED',
+            nextEscalationAt: null,
+          },
+        });
+        updated = updateResult.count > 0;
+      } else {
+        await prisma.incident.update({
+          where: { id: incident.id },
+          data: {
+            status: 'ACKNOWLEDGED',
+            acknowledgedAt: incident.acknowledgedAt ?? new Date(),
+            escalationStatus: 'COMPLETED',
+            nextEscalationAt: null,
+          },
+        });
+        updated = true;
+      }
+
+      if (!updated) {
         return {
           response_type: 'ephemeral',
           text: `ℹ️ Incident is already ${incident.status.toLowerCase()}.`,
         };
       }
 
-      await prisma.incident.update({
-        where: { id: incident.id },
-        data: {
-          status: 'ACKNOWLEDGED',
-          acknowledgedAt: incident.acknowledgedAt ?? new Date(),
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-        },
-      });
-
       await prisma.incidentEvent.create({
         data: {
           incidentId: incident.id,
+          type: 'ACKNOWLEDGED',
           message: `Acknowledged via Slack ChatOps by ${actor!.name}`,
         },
       });
@@ -221,24 +237,39 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     }
 
     case 'resolve': {
-      if (incident.status === 'RESOLVED') {
+      const resolution = args || 'Resolved via Slack ChatOps';
+
+      let resolved = false;
+      if (typeof prisma.incident.updateMany === 'function') {
+        const updateResult = await prisma.incident.updateMany({
+          where: { id: incident.id, status: { not: 'RESOLVED' } },
+          data: {
+            status: 'RESOLVED',
+            resolvedAt: incident.resolvedAt ?? new Date(),
+            escalationStatus: 'COMPLETED',
+            nextEscalationAt: null,
+          },
+        });
+        resolved = updateResult.count > 0;
+      } else {
+        await prisma.incident.update({
+          where: { id: incident.id },
+          data: {
+            status: 'RESOLVED',
+            resolvedAt: incident.resolvedAt ?? new Date(),
+            escalationStatus: 'COMPLETED',
+            nextEscalationAt: null,
+          },
+        });
+        resolved = true;
+      }
+
+      if (!resolved) {
         return {
           response_type: 'ephemeral',
           text: 'ℹ️ Incident is already resolved.',
         };
       }
-
-      const resolution = args || 'Resolved via Slack ChatOps';
-
-      await prisma.incident.update({
-        where: { id: incident.id },
-        data: {
-          status: 'RESOLVED',
-          resolvedAt: incident.resolvedAt ?? new Date(),
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-        },
-      });
 
       // Create resolution note
       const noteUserId = actor!.id;
@@ -256,6 +287,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
       await prisma.incidentEvent.create({
         data: {
           incidentId: incident.id,
+          type: 'MANUAL_RESOLVED',
           message: `Resolved via Slack ChatOps by ${actor!.name}: ${resolution}`,
         },
       });
@@ -319,6 +351,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
       await prisma.incidentEvent.create({
         data: {
           incidentId: incident.id,
+          type: 'COMMENT',
           message: `Note added via Slack ChatOps by @${payload.user_name}`,
         },
       });

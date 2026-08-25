@@ -92,55 +92,72 @@ function getAppHostname(): string {
   return 'opsknight.internal';
 }
 
-export async function getEmailConfig(): Promise<EmailConfig> {
+export async function getAllConfiguredEmailProviders(): Promise<EmailConfig[]> {
   const defaultFromEmail = `noreply@${getAppHostname()}`;
+  const providers: EmailConfig[] = [];
 
   try {
-    // Check Resend first
+    // 1. Resend
     const resendProvider = await prisma.notificationProvider.findUnique({
       where: { provider: 'resend' },
     });
-
     if (resendProvider && resendProvider.enabled && resendProvider.config) {
       const config = await getDecryptedConfig('resend', resendProvider.config);
       if (config.apiKey) {
-        return {
+        providers.push({
           enabled: true,
           provider: 'resend',
           apiKey: config.apiKey as string,
           fromEmail: (config.fromEmail as string) || defaultFromEmail,
           source: 'resend',
-        };
+        });
       }
     }
 
-    // Check SendGrid
+    // 2. SendGrid
     const sendgridProvider = await prisma.notificationProvider.findUnique({
       where: { provider: 'sendgrid' },
     });
-
     if (sendgridProvider && sendgridProvider.enabled && sendgridProvider.config) {
       const config = await getDecryptedConfig('sendgrid', sendgridProvider.config);
       if (config.apiKey) {
-        return {
+        providers.push({
           enabled: true,
           provider: 'sendgrid',
           apiKey: config.apiKey as string,
           fromEmail: (config.fromEmail as string) || defaultFromEmail,
           source: 'sendgrid',
-        };
+        });
       }
     }
 
-    // Check SMTP
+    // 3. Amazon SES
+    const sesProvider = await prisma.notificationProvider.findUnique({
+      where: { provider: 'ses' },
+    });
+    if (sesProvider && sesProvider.enabled && sesProvider.config) {
+      const config = await getDecryptedConfig('ses', sesProvider.config);
+      if (config.accessKeyId && config.secretAccessKey) {
+        providers.push({
+          enabled: true,
+          provider: 'ses',
+          apiKey: config.secretAccessKey as string,
+          accessKeyId: config.accessKeyId as string,
+          fromEmail: (config.fromEmail as string) || defaultFromEmail,
+          source: 'ses',
+          host: (config.region as string) || 'us-east-1',
+        });
+      }
+    }
+
+    // 4. SMTP
     const smtpProvider = await prisma.notificationProvider.findUnique({
       where: { provider: 'smtp' },
     });
-
     if (smtpProvider && smtpProvider.enabled && smtpProvider.config) {
       const config = await getDecryptedConfig('smtp', smtpProvider.config);
       if (config.host && config.user && config.password) {
-        return {
+        providers.push({
           enabled: true,
           provider: 'smtp',
           apiKey: config.password as string,
@@ -151,37 +168,24 @@ export async function getEmailConfig(): Promise<EmailConfig> {
           user: config.user as string,
           port: config.port as string | number,
           secure: config.secure === true,
-        };
-      }
-    }
-
-    // Check Amazon SES
-    const sesProvider = await prisma.notificationProvider.findUnique({
-      where: { provider: 'ses' },
-    });
-
-    if (sesProvider && sesProvider.enabled && sesProvider.config) {
-      const config = await getDecryptedConfig('ses', sesProvider.config);
-      if (config.accessKeyId && config.secretAccessKey) {
-        return {
-          enabled: true,
-          provider: 'ses',
-          apiKey: config.secretAccessKey as string,
-          accessKeyId: config.accessKeyId as string,
-          fromEmail: (config.fromEmail as string) || defaultFromEmail,
-          source: 'ses',
-          host: (config.region as string) || 'us-east-1',
-        };
+        });
       }
     }
   } catch (error) {
-    logger.error('Failed to load Email config from database', {
+    logger.error('Failed to load Email configs from database', {
       component: 'notification-providers',
       error,
     });
-    return { enabled: false, provider: null, source: 'error' };
   }
 
+  return providers;
+}
+
+export async function getEmailConfig(): Promise<EmailConfig> {
+  const providers = await getAllConfiguredEmailProviders();
+  if (providers.length > 0) {
+    return providers[0];
+  }
   return {
     enabled: false,
     provider: null,

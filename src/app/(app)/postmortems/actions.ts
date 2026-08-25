@@ -62,6 +62,17 @@ export async function upsertPostmortem(incidentId: string, data: PostmortemData)
   // Check if incident exists and is resolved
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
+    include: {
+      service: {
+        include: {
+          team: {
+            include: {
+              members: { select: { userId: true } },
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!incident) {
@@ -70,6 +81,19 @@ export async function upsertPostmortem(incidentId: string, data: PostmortemData)
 
   if (incident.status !== 'RESOLVED') {
     throw new Error('Postmortems can only be created for resolved incidents');
+  }
+
+  const existing = await prisma.postmortem.findUnique({
+    where: { incidentId },
+    select: { createdById: true },
+  });
+
+  if (existing && user.role !== 'ADMIN' && existing.createdById !== user.id) {
+    const isTeamMember = incident.service?.team?.members.some(m => m.userId === user.id) ?? false;
+    const isAssignee = incident.assigneeId === user.id;
+    if (!isTeamMember && !isAssignee) {
+      throw new Error('Forbidden: You do not have permission to edit this postmortem');
+    }
   }
 
   const postmortem = await prisma.$transaction(async tx => {

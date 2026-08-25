@@ -95,18 +95,21 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
           const attemptTimeoutId = setTimeout(() => attemptController.abort(), timeout);
           try {
             const cb = CircuitBreakers.webhook(url);
-            const res = await cb.execute(() =>
-              fetch(url, {
+            const res = await cb.execute(async () => {
+              const response = await fetch(url, {
                 method,
                 headers: requestHeaders,
                 body: payloadString,
                 signal: attemptController.signal,
-              })
-            );
+                redirect: 'error',
+              });
 
-            if (!res.ok && isRetryableHttpError(res.status)) {
-              throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-            }
+              if (!response.ok && isRetryableHttpError(response.status)) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              }
+
+              return response;
+            });
 
             return res;
           } finally {

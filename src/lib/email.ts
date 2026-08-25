@@ -28,25 +28,13 @@ import {
   StatusBadge,
   escapeHtml,
 } from './email-components';
+import type { EmailConfig } from './notification-providers';
 
 export type EmailOptions = {
   to: string;
   subject: string;
   html: string;
   text?: string;
-};
-
-type EmailConfig = {
-  enabled?: boolean;
-  provider?: string;
-  source?: string;
-  apiKey?: string;
-  fromEmail?: string;
-  host?: string;
-  port?: string | number;
-  user?: string;
-  password?: string;
-  secure?: boolean;
 };
 
 type SmtpTransporter = {
@@ -60,6 +48,25 @@ type SmtpTransportCache = {
 };
 
 let cachedSmtpTransport: SmtpTransportCache | null = null;
+
+export function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*[\/]?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 function getSmtpTransport(emailConfig: EmailConfig): SmtpTransporter {
   const config = {
@@ -94,13 +101,194 @@ function getSmtpTransport(emailConfig: EmailConfig): SmtpTransporter {
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 30_000,
-  }) as SmtpTransporter;
+  }) as SmtpTransporter & { on?: (event: string, handler: (err: any) => void) => void };
+
+  // Attach error handler to prevent process crashes on idle background socket resets
+  if (typeof transporter.on === 'function') {
+    transporter.on('error', (err: any) => {
+      logger.warn('[SMTP Transport Pool Error]', { error: err?.message || err });
+      cachedSmtpTransport = null;
+    });
+  }
+
   cachedSmtpTransport = { config, transporter };
   return transporter;
 }
 
+async function sendWithSingleProvider(
+  options: EmailOptions,
+  emailConfig: EmailConfig
+): Promise<{ success: boolean; error?: string }> {
+  const textContent = options.text || htmlToPlainText(options.html);
+
+  if (emailConfig.provider === 'resend') {
+    try {
+      const require = createRequire(import.meta.url);
+      const { Resend } = require('resend');
+      const resend = new Resend(emailConfig.apiKey || '');
+
+      const result = await resend.emails.send({
+        from: emailConfig.fromEmail,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: textContent,
+      });
+
+      if (result.error) {
+        logger.error('Resend email send failed', {
+          component: 'email',
+          provider: 'resend',
+          error: result.error,
+          to: options.to,
+        });
+        return { success: false, error: result.error.message || 'Resend API error' };
+      }
+
+      logger.info('Email sent via Resend', { to: options.to, id: result.data?.id });
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+      if (err.code === 'MODULE_NOT_FOUND') {
+        logger.warn('Resend package not installed', { installCommand: 'npm install resend' });
+        return { success: false, error: 'Resend package not installed. Run: npm install resend' };
+      }
+      logger.error('Resend send error', { component: 'email', provider: 'resend', error, to: options.to });
+      return { success: false, error: err.message || 'Resend send error' };
+    }
+  }
+
+  if (emailConfig.provider === 'sendgrid') {
+    try {
+      const require = createRequire(import.meta.url);
+      const sgMail = require('@sendgrid/mail');
+
+      if (!emailConfig.apiKey || emailConfig.apiKey.trim() === '') {
+        return { success: false, error: 'SendGrid API key is not configured' };
+      }
+      if (!emailConfig.fromEmail || emailConfig.fromEmail.trim() === '') {
+        return { success: false, error: 'SendGrid from email is not configured' };
+      }
+
+      sgMail.setApiKey(emailConfig.apiKey);
+
+      const result = await sgMail.send({
+        to: options.to,
+        from: emailConfig.fromEmail,
+        subject: options.subject,
+        html: options.html,
+        text: textContent,
+        trackingSettings: {
+          clickTracking: { enable: false, enableText: false },
+          openTracking: { enable: false },
+        },
+      });
+
+      const response = result[0];
+      if (response && response.statusCode >= 200 && response.statusCode < 300) {
+        logger.info('Email sent via SendGrid', {
+          to: options.to,
+          from: emailConfig.fromEmail,
+          subject: options.subject,
+          statusCode: response.statusCode,
+        });
+        return { success: true };
+      }
+      return {
+        success: false,
+        error: `SendGrid API returned status ${response?.statusCode}: ${JSON.stringify(response?.body)}`,
+      };
+    } catch (error: unknown) {
+      const err = error as any;
+      if (err.code === 'MODULE_NOT_FOUND') {
+        return { success: false, error: 'SendGrid package not installed' };
+      }
+      const errorMessage =
+        typeof err.response?.body === 'object' && err.response?.body && 'errors' in err.response.body
+          ? JSON.stringify(err.response.body.errors)
+          : err.message || 'SendGrid API error';
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  if (emailConfig.provider === 'ses') {
+    try {
+      const require = createRequire(import.meta.url);
+      const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+
+      if (!emailConfig.apiKey || !emailConfig.host || !emailConfig.fromEmail) {
+        return { success: false, error: 'Amazon SES configuration incomplete' };
+      }
+
+      const sesClient = new SESClient({
+        region: emailConfig.host,
+        credentials: {
+          accessKeyId: (emailConfig as any).accessKeyId || process.env.AWS_ACCESS_KEY_ID || '',
+          secretAccessKey: emailConfig.apiKey || '',
+        },
+      });
+
+      const command = new SendEmailCommand({
+        Destination: { ToAddresses: [options.to] },
+        Message: {
+          Body: {
+            Html: { Charset: 'UTF-8', Data: options.html },
+            Text: { Charset: 'UTF-8', Data: textContent },
+          },
+          Subject: { Charset: 'UTF-8', Data: options.subject },
+        },
+        Source: emailConfig.fromEmail,
+      });
+
+      const result = await sesClient.send(command);
+      logger.info('Email sent via Amazon SES', { to: options.to, messageId: result.MessageId });
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as any;
+      if (err.code === 'MODULE_NOT_FOUND') {
+        return { success: false, error: 'AWS SES SDK package not installed' };
+      }
+      return { success: false, error: err.message || 'SES send error' };
+    }
+  }
+
+  if (emailConfig.provider === 'smtp') {
+    try {
+      if (!emailConfig.host || !emailConfig.port || !emailConfig.user || !emailConfig.password) {
+        return { success: false, error: 'SMTP configuration incomplete' };
+      }
+
+      const transporter = getSmtpTransport(emailConfig);
+      const info = await transporter.sendMail({
+        from: emailConfig.fromEmail,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: textContent,
+      });
+
+      logger.info('Email sent via SMTP', { to: options.to, messageId: info.messageId });
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as any;
+      if (err.code === 'MODULE_NOT_FOUND') {
+        return { success: false, error: 'Nodemailer package not installed' };
+      }
+      const errorParts = [
+        err.message || 'SMTP send error',
+        err.code ? `code=${err.code}` : null,
+        err.command ? `command=${err.command}` : null,
+        err.response ? `response=${err.response}` : null,
+      ].filter(Boolean);
+      return { success: false, error: errorParts.join(' | ') };
+    }
+  }
+
+  return { success: false, error: 'Unknown email provider' };
+}
+
 /**
- * Send email notification
+ * Send email notification with automatic provider failover
  * @param options Email options
  * @param providedConfig Optional email config - if provided, uses this instead of fetching from DB
  */
@@ -109,321 +297,38 @@ export async function sendEmail(
   providedConfig?: unknown
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Use provided config or get from database
-    let emailConfig: EmailConfig;
+    let configsToTry: EmailConfig[] = [];
     if (providedConfig) {
-      emailConfig = providedConfig as EmailConfig;
+      configsToTry = [providedConfig as EmailConfig];
     } else {
-      const { getEmailConfig } = await import('./notification-providers');
-      emailConfig = (await getEmailConfig()) as EmailConfig;
+      const { getAllConfiguredEmailProviders } = await import('./notification-providers');
+      configsToTry = await getAllConfiguredEmailProviders();
     }
 
-    // Log email if no provider configured or disabled
-    if (!emailConfig.enabled || !emailConfig.provider) {
-      logger.warn('Email notification skipped - provider not configured', {
+    if (configsToTry.length === 0) {
+      logger.warn('Email notification skipped - no enabled email provider configured', {
         to: options.to,
         subject: options.subject,
-        preview: options.text || options.html.substring(0, 100),
-        provider: emailConfig.provider || 'none',
-        source: emailConfig.source,
       });
-
-      return { success: false, error: 'Email provider not configured or disabled' };
+      return { success: false, error: 'No enabled email provider configured' };
     }
 
-    // Production: Use configured provider
-    if (emailConfig.provider === 'resend') {
-      try {
-        // Use standard require via createRequire
-        const require = createRequire(import.meta.url);
-        const { Resend } = require('resend');
-        const resend = new Resend(emailConfig.apiKey || '');
-
-        const result = await resend.emails.send({
-          from: emailConfig.fromEmail,
-          to: options.to,
-          subject: options.subject,
-          html: options.html,
-          text: options.text,
-        });
-
-        if (result.error) {
-          logger.error('Resend email send failed', {
-            component: 'email',
-            provider: 'resend',
-            error: result.error,
-            to: options.to,
-          });
-          return { success: false, error: result.error.message || 'Resend API error' };
-        }
-
-        logger.info('Email sent via Resend', { to: options.to, id: result.data?.id });
+    let lastError = 'Failed to send email';
+    for (const config of configsToTry) {
+      if (!config.enabled || !config.provider) continue;
+      const result = await sendWithSingleProvider(options, config);
+      if (result.success) {
         return { success: true };
-      } catch (error: unknown) {
-        // If resend package is not installed, fall back to logger notes
-        const err = error as { code?: string; message?: string };
-        if (err.code === 'MODULE_NOT_FOUND') {
-          logger.warn('Resend package not installed', { installCommand: 'npm install resend' });
-          return {
-            success: false,
-            error: 'Resend package not installed. Run: npm install resend',
-          };
-        }
-        logger.error('Resend send error', {
-          component: 'email',
-          provider: 'resend',
-          error,
-          to: options.to,
-        });
-        return { success: false, error: err.message || 'Resend send error' };
       }
+      lastError = result.error || 'Provider send failed';
+      logger.warn(`[Email] Provider ${config.provider} failed, trying fallback provider if available`, {
+        provider: config.provider,
+        error: result.error,
+        to: options.to,
+      });
     }
 
-    if (emailConfig.provider === 'sendgrid') {
-      try {
-        // Use standard require via createRequire
-        const require = createRequire(import.meta.url);
-        const sgMail = require('@sendgrid/mail');
-
-        // Validate API key
-        if (!emailConfig.apiKey || emailConfig.apiKey.trim() === '') {
-          logger.error('SendGrid API key missing', { component: 'email', provider: 'sendgrid' });
-          return { success: false, error: 'SendGrid API key is not configured' };
-        }
-
-        // Validate from email
-        if (!emailConfig.fromEmail || emailConfig.fromEmail.trim() === '') {
-          logger.error('SendGrid from email missing', { component: 'email', provider: 'sendgrid' });
-          return { success: false, error: 'SendGrid from email is not configured' };
-        }
-
-        sgMail.setApiKey(emailConfig.apiKey);
-
-        const result = await sgMail.send({
-          to: options.to,
-          from: emailConfig.fromEmail,
-          subject: options.subject,
-          html: options.html,
-          text: options.text || options.html.replace(/<[^>]*>/g, ''), // Strip HTML for text version
-          // Disable click and open tracking for security-critical emails (password resets, etc.)
-          // This prevents SendGrid from wrapping URLs with tracking domains
-          trackingSettings: {
-            clickTracking: { enable: false, enableText: false },
-            openTracking: { enable: false },
-          },
-        });
-
-        // Check response for errors
-        const response = result[0];
-        if (response) {
-          if (response.statusCode >= 200 && response.statusCode < 300) {
-            const messageId = response.headers?.['x-message-id'] || 'unknown';
-            logger.info('Email sent via SendGrid', {
-              to: options.to,
-              from: emailConfig.fromEmail,
-              subject: options.subject,
-              statusCode: response.statusCode,
-              messageId: messageId,
-              note: 'Check SendGrid Activity Feed for delivery status. If email not received, verify sender email is authenticated in SendGrid.',
-            });
-            return { success: true };
-          } else {
-            logger.error('SendGrid returned error status', {
-              component: 'email',
-              provider: 'sendgrid',
-              statusCode: response.statusCode,
-              body: response.body,
-              to: options.to,
-            });
-            return {
-              success: false,
-              error: `SendGrid API returned status ${response.statusCode}: ${JSON.stringify(response.body)}`,
-            };
-          }
-        } else {
-          logger.error('SendGrid returned empty response', {
-            component: 'email',
-            provider: 'sendgrid',
-            to: options.to,
-          });
-          return { success: false, error: 'SendGrid API returned empty response' };
-        }
-      } catch (error: unknown) {
-        // If SendGrid package is not installed, fall back to logger notes
-        const err = error as {
-          code?: string;
-          message?: string;
-          response?: { body?: unknown; statusCode?: number; headers?: Record<string, string> };
-        };
-        if (err.code === 'MODULE_NOT_FOUND') {
-          logger.warn('SendGrid package not installed', {
-            component: 'email',
-            provider: 'sendgrid',
-            installCommand: 'npm install @sendgrid/mail',
-          });
-          return {
-            success: false,
-            error: 'SendGrid package not installed. Install with: npm install @sendgrid/mail',
-          };
-        }
-
-        // Log full error details
-        logger.error('SendGrid send error', {
-          component: 'email',
-          provider: 'sendgrid',
-          error: err,
-          statusCode: err.response?.statusCode,
-          to: options.to,
-        });
-
-        // Extract error message from SendGrid response if available
-        const errorMessage =
-          typeof err.response?.body === 'object' &&
-          err.response?.body &&
-          'errors' in (err.response.body as Record<string, unknown>)
-            ? JSON.stringify((err.response.body as Record<string, unknown>).errors)
-            : err.message || 'SendGrid API error';
-
-        return { success: false, error: errorMessage };
-      }
-    }
-
-    if (emailConfig.provider === 'smtp') {
-      try {
-        // Validate required SMTP config
-        if (!emailConfig.host || !emailConfig.port || !emailConfig.user || !emailConfig.password) {
-          return {
-            success: false,
-            error:
-              'SMTP configuration incomplete. Please configure Host, Port, Username, and Password in Settings → System → Notification Providers',
-          };
-        }
-
-        const transporter = getSmtpTransport(emailConfig);
-
-        // Send email
-        const info = await transporter.sendMail({
-          from: emailConfig.fromEmail,
-          to: options.to,
-          subject: options.subject,
-          html: options.html,
-          text: options.text || options.html.replace(/<[^>]*>/g, ''), // Strip HTML for text version
-        });
-
-        logger.info('Email sent via SMTP', { to: options.to, messageId: info.messageId });
-        return { success: true };
-      } catch (error: unknown) {
-        // If nodemailer package is not installed, fall back to logger notes
-        const err = error as {
-          code?: string;
-          message?: string;
-          response?: string;
-          command?: string;
-        };
-        if (err.code === 'MODULE_NOT_FOUND') {
-          logger.warn('Nodemailer package not installed', {
-            component: 'email',
-            provider: 'smtp',
-            installCommand: 'npm install nodemailer',
-          });
-          return {
-            success: false,
-            error: 'Nodemailer package not installed. Install with: npm install nodemailer',
-          };
-        }
-        logger.error('SMTP send error', {
-          component: 'email',
-          provider: 'smtp',
-          error,
-          to: options.to,
-        });
-        const errorParts = [
-          err.message || 'SMTP send error',
-          err.code ? `code=${err.code}` : null,
-          err.command ? `command=${err.command}` : null,
-          err.response ? `response=${err.response}` : null,
-        ].filter(Boolean);
-        return { success: false, error: errorParts.join(' | ') };
-      }
-    }
-
-    if (emailConfig.provider === 'ses') {
-      try {
-        // Use standard require via createRequire
-        const require = createRequire(import.meta.url);
-        const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
-
-        // Validate required SES config
-        if (!emailConfig.apiKey || !emailConfig.host || !emailConfig.fromEmail) {
-          // In our case, apiKey is secretAccessKey and host is region
-          return {
-            success: false,
-            error:
-              'Amazon SES configuration incomplete. Please configure Access Key ID, Secret Access Key, and Region in Settings → System → Notification Providers',
-          };
-        }
-
-        // Get access key ID from config
-        const sesClient = new SESClient({
-          region: emailConfig.host,
-          credentials: {
-            accessKeyId: (emailConfig as any).accessKeyId || process.env.AWS_ACCESS_KEY_ID || '', // eslint-disable-line @typescript-eslint/no-explicit-any
-            secretAccessKey: emailConfig.apiKey || '',
-          },
-        });
-
-        const command = new SendEmailCommand({
-          Destination: {
-            ToAddresses: [options.to],
-          },
-          Message: {
-            Body: {
-              Html: {
-                Charset: 'UTF-8',
-                Data: options.html,
-              },
-              Text: {
-                Charset: 'UTF-8',
-                Data: options.text || options.html.replace(/<[^>]*>/g, ''),
-              },
-            },
-            Subject: {
-              Charset: 'UTF-8',
-              Data: options.subject,
-            },
-          },
-          Source: emailConfig.fromEmail,
-        });
-
-        const result = await sesClient.send(command);
-        logger.info('Email sent via Amazon SES', { to: options.to, messageId: result.MessageId });
-        return { success: true };
-      } catch (error: unknown) {
-        const err = error as { code?: string; message?: string };
-        if (err.code === 'MODULE_NOT_FOUND') {
-          logger.warn('AWS SES SDK not installed', {
-            component: 'email',
-            provider: 'ses',
-            installCommand: 'npm install @aws-sdk/client-ses',
-          });
-          return {
-            success: false,
-            error:
-              'AWS SES SDK package not installed. Install with: npm install @aws-sdk/client-ses',
-          };
-        }
-        logger.error('SES send error', {
-          component: 'email',
-          provider: 'ses',
-          error,
-          to: options.to,
-        });
-        return { success: false, error: err.message || 'SES send error' };
-      }
-    }
-
-    // No provider configured
-    return { success: false, error: 'No email provider configured' };
+    return { success: false, error: lastError };
   } catch (error: unknown) {
     logger.error('Email send error', { component: 'email', error, to: options.to });
     const err = error as { message?: string };

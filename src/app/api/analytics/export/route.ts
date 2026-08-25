@@ -34,18 +34,19 @@ const formatPercent = (value: number) => `${value.toFixed(0)}%`;
 function escapeCSV(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '';
   let str = String(value);
-  // Mitigate CSV Formula Injection (CWE-1236)
-  if (/^[=+\-@\t\r]/.test(str)) {
+  // Mitigate CSV Formula Injection (CWE-1236) across leading whitespace and special characters
+  const trimmed = str.trimStart();
+  if (/^[=+\-@\t\r|%]/.test(trimmed)) {
     str = `'${str}`;
   }
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 }
 
 function generateCSV(data: any[][]): string {
-  return data.map(row => row.map(escapeCSV).join(',')).join('\n');
+  return '\uFEFF' + data.map(row => row.map(escapeCSV).join(',')).join('\n');
 }
 
 function createProgressBar(value: number, max: number, length: number = 20): string {

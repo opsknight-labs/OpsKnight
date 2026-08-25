@@ -19,6 +19,29 @@ export async function sendNotification(
   message: string,
   incident?: Incident & { service?: Service | null }
 ) {
+  // Check for duplicate pending/sent notification within debounce window (60s)
+  if (typeof prisma.notification?.findFirst === 'function') {
+    const debounceWindow = new Date(Date.now() - 60_000);
+    const existingNotification = await prisma.notification.findFirst({
+      where: {
+        incidentId,
+        userId,
+        channel,
+        status: { in: ['SENT', 'PENDING'] },
+        createdAt: { gte: debounceWindow },
+      },
+      select: { id: true },
+    });
+
+    if (existingNotification) {
+      return {
+        success: true,
+        notificationId: existingNotification.id,
+        debounced: true,
+      };
+    }
+  }
+
   // Create notification record
   const notification = await prisma.notification.create({
     data: {

@@ -107,8 +107,9 @@ export async function runSLADriftDetection(options?: {
   windowStartDate.setUTCDate(windowStartDate.getUTCDate());
   windowStartDate.setUTCHours(0, 0, 0, 0);
 
-  return prisma.$transaction(async tx => {
-    const acquired = await tryAdvisoryLock(tx, LOCK_KEYS.DRIFT_DETECTION);
+  return prisma.$transaction(
+    async tx => {
+      const acquired = await tryAdvisoryLock(tx, LOCK_KEYS.DRIFT_DETECTION);
     if (!acquired) {
       logger.info('[SLA-Drift] Another drift run in progress; skipping');
       return {
@@ -239,5 +240,5 @@ export async function runSLADriftDetection(options?: {
       withinTolerance,
       ran: true,
     };
-  });
+  }, { timeout: 30000, maxWait: 5000 });
 }
