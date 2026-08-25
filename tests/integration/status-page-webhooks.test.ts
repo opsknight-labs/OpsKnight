@@ -48,6 +48,7 @@ import { getServerSession } from 'next-auth';
 describeIfRealDB('Status Page Webhooks Integration', () => {
   beforeAll(() => {
     process.env.VITEST_USE_REAL_DB = '1';
+    process.env.ENCRYPTION_KEY = '2f8a9c4e6b1d3f50718293a4b5c6d7e8f90123456789abcdef0123456789abcd';
   });
 
   beforeEach(async () => {
@@ -173,7 +174,8 @@ describeIfRealDB('Status Page Webhooks Integration', () => {
 
       // Verify signature using the actual library function
       const signature = options.headers['X-Webhook-Signature'];
-      const isValid = verifyWebhookSignature(options.body, signature, secret);
+      const timestamp = options.headers['X-Webhook-Timestamp'];
+      const isValid = verifyWebhookSignature(options.body, signature, secret, timestamp);
       expect(isValid).toBe(true);
 
       // Verify lastTriggeredAt update
