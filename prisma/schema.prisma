@@ -176,6 +176,10 @@ model User {
   pushNotificationsEnabled     Boolean    @default(false)
   whatsappNotificationsEnabled Boolean    @default(false)
   phoneNumber                  String? // For SMS notifications
+  quietHoursEnabled            Boolean    @default(false) // Explicit opt-in: never suppress paging unless the user enables Quiet Hours
+  quietHoursStartMinutes       Int        @default(1080) // 18:00 local time
+  quietHoursEndMinutes         Int        @default(480) // 08:00 local time
+  quietHoursWeekendAllDay      Boolean    @default(true)
   // JIT Profile Sync - synced from OIDC provider
   department                   String?
   jobTitle                     String?
@@ -1094,7 +1098,7 @@ model StatusPageService {
   id           String   @id @default(cuid())
   statusPageId String
   serviceId    String
-  displayName  String? // Override service name for status page
+  displayName  String? // Override service name for display
   showOnPage   Boolean  @default(true)
   order        Int      @default(0)
   createdAt    DateTime @default(now())

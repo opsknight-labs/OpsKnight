@@ -865,26 +865,28 @@ export async function processPendingEscalations(
         if (result.escalated) {
           processed++;
         } else {
-          const benignReason = (result.reason || '').toLowerCase();
-          const isBenign =
-            benignReason.includes('already in progress') ||
-            benignReason.includes('scheduled') ||
-            benignReason.includes('already completed');
+          const reason = (result.reason || '').toLowerCase();
+          const stateAlreadyHandled =
+            reason.includes('already in progress') ||
+            reason.includes('scheduled') ||
+            reason.includes('already completed') ||
+            reason.includes('exhausted') ||
+            reason.includes('completed') ||
+            reason.includes('no escalation policy') ||
+            reason.includes('no users to notify') ||
+            reason.includes('invalid target') ||
+            reason.includes('step not found');
 
-          if (isBenign) continue;
-
-          const isExhausted =
-            benignReason.includes('exhausted') ||
-            benignReason.includes('completed') ||
-            benignReason.includes('no escalation policy') ||
-            benignReason.includes('no users to notify') ||
-            benignReason.includes('invalid target');
+          // executeEscalation persists terminal states itself (including FAILED).
+          // Do not reinterpret those human-readable reasons here and overwrite
+          // the state that the executor just committed.
+          if (stateAlreadyHandled) continue;
 
           await prisma.incident.update({
             where: { id: incident.id },
             data: {
-              escalationStatus: isExhausted ? 'COMPLETED' : 'ESCALATING',
-              nextEscalationAt: isExhausted ? null : new Date(Date.now() + 30000),
+              escalationStatus: 'ESCALATING',
+              nextEscalationAt: new Date(Date.now() + 30000),
               escalationProcessingAt: null,
             },
           });
@@ -908,7 +910,7 @@ export async function processPendingEscalations(
             await prisma.incident.update({
               where: { id: incident.id },
               data: {
-                escalationStatus: 'COMPLETED',
+                escalationStatus: 'FAILED',
                 nextEscalationAt: null,
                 escalationProcessingAt: null,
               },

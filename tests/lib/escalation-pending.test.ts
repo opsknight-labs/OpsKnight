@@ -62,14 +62,9 @@ describe('processPendingEscalations', () => {
     expect(executor).toHaveBeenNthCalledWith(1, 'inc-1', 0);
     expect(executor).toHaveBeenNthCalledWith(2, 'inc-2', 2);
     expect(prisma.incident.updateMany).not.toHaveBeenCalled();
-    expect(prisma.incident.update).toHaveBeenCalledWith({
-      where: { id: 'inc-2' },
-      data: {
-        escalationStatus: 'COMPLETED',
-        nextEscalationAt: null,
-        escalationProcessingAt: null,
-      },
-    });
+    // Terminal states are persisted by executeEscalation itself. The pending
+    // processor must not reinterpret a terminal reason and overwrite that state.
+    expect(prisma.incident.update).not.toHaveBeenCalled();
     expect(result.processed).toBe(1);
     expect(result.total).toBe(2);
   });

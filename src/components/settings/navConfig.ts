@@ -40,7 +40,16 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         description: 'Personal info, timezone, and notifications',
         href: '/settings/profile',
         icon: 'user',
-        keywords: ['name', 'email', 'role', 'timezone', 'notifications'],
+        keywords: [
+          'name',
+          'email',
+          'role',
+          'timezone',
+          'notifications',
+          'quiet hours',
+          'mute alerts',
+          'low urgency',
+        ],
       },
       {
         id: 'security',

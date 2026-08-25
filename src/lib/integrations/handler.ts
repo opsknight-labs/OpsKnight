@@ -85,31 +85,9 @@ export function createIntegrationHandler<T>(
         throw IntegrationErrors.invalidPayload('integrationId is required');
       }
 
-      // 2. Rate limiting
-      if (RATE_LIMIT_ENABLED && !options.skipRateLimit) {
-        const rateResult = await checkRateLimit(integrationId);
-
-        if (!rateResult.allowed) {
-          const headers = createRateLimitHeaders(rateResult);
-          recordWebhookReceived(
-            integrationType,
-            integrationId,
-            false,
-            performance.now() - startTime,
-            'RATE_LIMITED'
-          );
-
-          return new Response(
-            JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
-            {
-              status: 429,
-              headers: { 'Content-Type': 'application/json', ...headers },
-            }
-          );
-        }
-      }
-
-      // 3. Lookup integration
+      // 2. Lookup integration before touching the per-integration limiter.
+      // The integration ID is caller-controlled, so rate limiting it first lets
+      // unauthenticated requests create arbitrary DB-backed rate-limit buckets.
       const integration = await prisma.integration.findUnique({
         where: { id: integrationId },
         select: {
@@ -141,6 +119,32 @@ export function createIntegrationHandler<T>(
       }
 
       integrationType = integration.type;
+
+      // 3. Apply the DB-backed limiter only after the integration is authenticated.
+      // This prevents invalid IDs/keys from generating arbitrary rate-limit rows
+      // or consuming a valid integration's quota.
+      if (RATE_LIMIT_ENABLED && !options.skipRateLimit) {
+        const rateResult = await checkRateLimit(integrationId);
+
+        if (!rateResult.allowed) {
+          const headers = createRateLimitHeaders(rateResult);
+          recordWebhookReceived(
+            integrationType,
+            integrationId,
+            false,
+            performance.now() - startTime,
+            'RATE_LIMITED'
+          );
+
+          return new Response(
+            JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
+            {
+              status: 429,
+              headers: { 'Content-Type': 'application/json', ...headers },
+            }
+          );
+        }
+      }
 
       // 4. Get raw body for signature verification
       const rawPayload = await readIntegrationBody(req);
@@ -309,28 +313,7 @@ export async function withIntegrationMiddleware(
     return jsonError('integrationId is required', 400);
   }
 
-  // 2. Rate limiting
-  if (RATE_LIMIT_ENABLED) {
-    const rateResult = await checkRateLimit(integrationId);
-    if (!rateResult.allowed) {
-      recordWebhookReceived(
-        integrationType,
-        integrationId,
-        false,
-        performance.now() - startTime,
-        'RATE_LIMITED'
-      );
-      return new Response(
-        JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
-        {
-          status: 429,
-          headers: { 'Content-Type': 'application/json', ...createRateLimitHeaders(rateResult) },
-        }
-      );
-    }
-  }
-
-  // 3. Integration key validation (required - industry standard)
+  // 2. Integration key validation (required - industry standard)
   // All webhook URLs include the key, so we always validate it
   // This provides baseline security for non-HMAC providers (Datadog, New Relic, etc.)
   // HMAC providers (GitHub, Sentry) get additional signature verification in route handlers
@@ -374,6 +357,28 @@ export async function withIntegrationMiddleware(
       'UNAUTHORIZED'
     );
     return jsonError('Invalid integration key', 401);
+  }
+
+  // 3. Apply the DB-backed limiter only after authentication so arbitrary
+  // integration IDs/keys cannot create rate-limit rows or burn valid quotas.
+  if (RATE_LIMIT_ENABLED) {
+    const rateResult = await checkRateLimit(integrationId);
+    if (!rateResult.allowed) {
+      recordWebhookReceived(
+        integrationType,
+        integrationId,
+        false,
+        performance.now() - startTime,
+        'RATE_LIMITED'
+      );
+      return new Response(
+        JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
+        {
+          status: 429,
+          headers: { 'Content-Type': 'application/json', ...createRateLimitHeaders(rateResult) },
+        }
+      );
+    }
   }
 
   try {
