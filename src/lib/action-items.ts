@@ -79,12 +79,14 @@ export function getStoredActionItemId(params: {
   legacyId?: string;
   index: number;
 }): string {
-  if (params.legacyId?.startsWith('ai_')) {
+  const sanitizedPmId = sanitizeIdentifierPart(params.postmortemId);
+  const expectedPrefix = `ai_${sanitizedPmId}_`;
+  if (params.legacyId?.startsWith(expectedPrefix)) {
     return params.legacyId;
   }
 
   const source = params.legacyId?.trim() || `index_${params.index}`;
-  return `ai_${sanitizeIdentifierPart(params.postmortemId)}_${sanitizeIdentifierPart(source)}`;
+  return `${expectedPrefix}${sanitizeIdentifierPart(source)}`;
 }
 
 export function formatActionItemDueDate(

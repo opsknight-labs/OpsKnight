@@ -31,7 +31,7 @@ export function getUserInviteEmailTemplate(data: UserInviteEmailData): {
   const greetingName = data.userName || 'there';
   const safeGreetingName = escapeHtml(greetingName);
   const safeInvitedBy = data.invitedBy ? escapeHtml(data.invitedBy) : '';
-  const safeInviteUrl = escapeHtml(data.inviteUrl);
+  const rawInviteUrl = data.inviteUrl?.trim() || '#';
   const resolveLogoUrl = (baseUrl: string) => {
     const parsed = new URL(baseUrl);
     const basePath =
@@ -70,7 +70,7 @@ export function getUserInviteEmailTemplate(data: UserInviteEmailData): {
                 <p style="margin: 0 0 20px 0; color: #e2e8f0 !important; font-size: 15px; line-height: 1.7; text-align: center;">
                     Set your password to activate your account and access the OpsKnight console.
                 </p>
-                ${EmailButton('Set up your account →', safeInviteUrl, {
+                ${EmailButton('Set up your account →', rawInviteUrl, {
                   buttonBackground: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
                   buttonShadow: '0 10px 24px rgba(37, 99, 235, 0.35)',
                 })}
@@ -84,7 +84,7 @@ export function getUserInviteEmailTemplate(data: UserInviteEmailData): {
                     Button not working?
                 </p>
                 <p style="margin: 0; color: #9ca3af; font-size: 13px; line-height: 1.6; word-break: break-all;">
-                    Copy and paste this link: <a href="${safeInviteUrl}" style="color: #2563eb; text-decoration: none;">${safeInviteUrl}</a>
+                    Copy and paste this link: <a href="${escapeHtml(rawInviteUrl)}" style="color: #2563eb; text-decoration: none;">${escapeHtml(rawInviteUrl)}</a>
                 </p>
             </div>
 

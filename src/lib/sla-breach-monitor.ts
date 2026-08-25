@@ -1,6 +1,8 @@
 import 'server-only';
 import { logger } from './logger';
 import { WebhookIntegration } from '@prisma/client';
+import { getPrioritySLATarget } from './sla-priority';
+import { escapeHtml } from './email-components';
 
 /**
  * SLA Breach Monitor - Proactive Breach Detection
@@ -75,6 +77,7 @@ export async function checkSLABreaches(
       title: true,
       serviceId: true,
       urgency: true,
+      priority: true,
       status: true,
       createdAt: true,
       acknowledgedAt: true,
@@ -187,9 +190,10 @@ export async function checkSLABreaches(
 
     const elapsedMs = Math.max(0, now.getTime() - incident.createdAt.getTime() - snoozedMs);
 
-    // Default SLA targets
-    const ackTargetMinutes = incident.service.targetAckMinutes ?? 15;
-    const resolveTargetMinutes = incident.service.targetResolveMinutes ?? 120;
+    // Resolve priority SLA targets (e.g. P1 = 5m ack / 60m resolve)
+    const targets = getPrioritySLATarget(incident.priority, incident.service);
+    const ackTargetMinutes = targets.ack;
+    const resolveTargetMinutes = targets.resolve;
 
     const ackTargetMs = ackTargetMinutes * 60 * 1000;
     const resolveTargetMs = resolveTargetMinutes * 60 * 1000;
@@ -199,12 +203,16 @@ export async function checkSLABreaches(
       continue;
     }
 
+    // Proportional early warning thresholds (e.g. 25% remaining or configured ceiling)
+    const effectiveAckWarning = Math.min(ackWarningThreshold, ackTargetMs * 0.25);
+    const effectiveResolveWarning = Math.min(resolveWarningThreshold, resolveTargetMs * 0.25);
+
     // Check ack SLA (only if not acknowledged)
     if (!incident.acknowledgedAt) {
       const ackRemainingMs = ackTargetMs - elapsedMs;
 
       // Warning or breach
-      if (ackRemainingMs < ackWarningThreshold) {
+      if (ackRemainingMs < effectiveAckWarning) {
         const isBreached = ackRemainingMs <= 0;
         const key = isBreached ? 'breached' : 'warning';
 
@@ -219,6 +227,7 @@ export async function checkSLABreaches(
               await prisma.incidentEvent.create({
                 data: {
                   incidentId: incident.id,
+                  type: isBreached ? 'ESCALATED' : 'COMMENT',
                   message: isBreached
                     ? `🚨 SLA ACK Breached: target was ${ackTargetMinutes} min`
                     : `⏰ SLA ACK Warning: ${Math.max(1, Math.round(ackRemainingMs / 60000))} min remaining`,
@@ -254,7 +263,7 @@ export async function checkSLABreaches(
     const resolveRemainingMs = resolveTargetMs - elapsedMs;
 
     // Warning or breach
-    if (resolveRemainingMs < resolveWarningThreshold) {
+    if (resolveRemainingMs < effectiveResolveWarning) {
       const isBreached = resolveRemainingMs <= 0;
       const key = isBreached ? 'breached' : 'warning';
 
@@ -334,14 +343,18 @@ async function notifyBreachWarning(
   warning: BreachWarning,
   config: BreachMonitorConfig
 ): Promise<void> {
+  const isBreached = warning.timeRemainingMs <= 0;
   const remainingMinutes = Math.round(warning.timeRemainingMs / 60000);
-  const breachEmoji = warning.breachType === 'ack' ? '⏰' : '⚠️';
+  const breachEmoji = isBreached ? '🚨' : warning.breachType === 'ack' ? '⏰' : '⚠️';
+  const breachAction = isBreached ? 'BREACHED' : 'WARNING';
+  const breachTypeUpper = warning.breachType.toUpperCase();
 
-  const message = `${breachEmoji} SLA ${warning.breachType.toUpperCase()} Warning: "${warning.title}"`;
-  const plainText = `${breachEmoji} SLA ${warning.breachType.toUpperCase()} Warning: ${warning.title} (${warning.serviceName}) - ${remainingMinutes} min remaining`;
+  const message = `${breachEmoji} SLA ${breachTypeUpper} ${breachAction}: "${warning.title}"`;
+  const plainText = isBreached
+    ? `🚨 SLA ${breachTypeUpper} BREACHED: ${warning.serviceName} - "${warning.title}" has breached its ${warning.targetMinutes} minute SLA target.`
+    : `⚠️ SLA ${breachTypeUpper} WARNING: ${warning.serviceName} - "${warning.title}" has ${remainingMinutes} minutes remaining before SLA breach.`;
 
-  // Always log the warning
-  logger.warn('[SLA Breach Warning]', {
+  logger.warn(`[SLA Breach ${breachAction}]`, {
     incidentId: warning.incidentId,
     breachType: warning.breachType,
     remainingMinutes,
@@ -351,21 +364,16 @@ async function notifyBreachWarning(
     message: plainText,
   });
 
-  // Send Slack notification if enabled
+  // 1. Send Slack notification if enabled
   if (config.notifySlack) {
-    // Dynamic import to break circular dependency
     const { sendSlackNotification, sendSlackMessageToChannel } = await import('./slack');
-
-    // Check if service has SLACK channel enabled
-    // Default to true if channels logic not yet populated to be safe, or check specific channels
     const channels = warning.serviceNotificationChannels || [];
     const hasSlackEnabled = channels.length === 0 || channels.includes('SLACK');
 
-    // We attempt notification if global flag is true AND service allows it
     if (hasSlackEnabled) {
       let sent = false;
 
-      // 1. Try OAuth Channel First (Preferred)
+      // Try OAuth Channel First
       if (warning.slackChannel) {
         try {
           const result = await sendSlackMessageToChannel(
@@ -378,48 +386,15 @@ async function notifyBreachWarning(
               serviceName: warning.serviceName,
               assigneeName: warning.assigneeName,
             },
-            'triggered', // Use triggered style for alert
-            true, // Interactive buttons
-            warning.serviceId, // Pass service ID for token lookup
-            plainText // Pass the time remaining context
+            'triggered',
+            true,
+            warning.serviceId
           );
 
-          // Enhanced Slack Block handling is in `slack.ts`, we rely on it.
-          // However, for breaches, we might want custom blocks.
-          // Since we are reusing `sendSlackMessageToChannel` with 'triggered' style, it gets standard formatting.
-          // Ideally we should have a specific 'breach' style or pass custom blocks.
-          // For now, we will rely on the improved 'triggered' template which is already much better.
-          // We can't easily inject custom Breach blocks without refactoring `sendSlackMessageToChannel` signature significantly.
-          // Given the user wants "Best of Best", let's assume the new Standard template (Red header, clear details) covers this well.
-          // Only difference is the "Time Remaining" context.
-          // We passed 'message' (short title) above.
-          // Actually, we should call a specialized function if we really want a "Breach" template.
-          // But `sendSlackMessageToChannel` is generic.
-          // Let's rely on the title being descriptive: `SLA ACK Warning: "Title"` as passed in `message`.
-          // Wait, `sendSlackMessageToChannel` takes `incident` object. It generates its own title from `incident.title`.
-          // So the `message` variable here is ignored by `sendSlackMessageToChannel`!
-          // We need to pass `additionalMessage` to `sendSlackMessageToChannel` or `sendSlackNotification`.
-          // `sendSlackMessageToChannel` doesn't accept `additionalMessage` in its current signature?
-          // Let's check `slack.ts` signature from Step 948.
-          // `export async function sendSlackMessageToChannel(channel: string, incident: IncidentDetails, eventType: SlackEventType, includeInteractiveButtons: boolean = true, serviceId?: string)`
-          // It DOES NOT accept `additionalMessage`. That's a gap.
-          // However `sendSlackNotification` (webhook) DOES accept it.
-
-          // I will proceed with this update to `notifyBreachWarning` but I should note that I might need to update `slack.ts` to accept additionalMessage if I want the time remaining to show up in the Context block.
-          // Actually, let's look at `sendSlackNotification` calls below - they DO pass `message`.
-          // For the OAuth one, we might lose the "15 min remaining" context if we don't fix `slack.ts` signature or logic.
-
-          // To make it "Best of Best", I should update `slack.ts` to accept `additionalMessage` in `sendSlackMessageToChannel` as well.
-          // But I am in `sla-breach-monitor.ts` right now.
-          // I will assume I can update `slack.ts` later or purely for this file update the email template first.
           if (result.success) {
             sent = true;
             logger.info('[SLA Breach Monitor] Slack notification sent via OAuth channel', {
               warning,
-            });
-          } else {
-            logger.warn('[SLA Breach Monitor] OAuth Slack failed, trying webhook fallback', {
-              error: result.error,
             });
           }
         } catch (err) {
@@ -427,11 +402,11 @@ async function notifyBreachWarning(
         }
       }
 
-      // 2. Fallback to Webhook
+      // Fallback to Service Webhook
       if (!sent && warning.slackWebhookUrl) {
         try {
           await sendSlackNotification(
-            'triggered', // Use triggered style (Red) for attention
+            'triggered',
             {
               id: warning.incidentId,
               title: warning.title,
@@ -440,19 +415,20 @@ async function notifyBreachWarning(
               serviceName: warning.serviceName,
               assigneeName: warning.assigneeName,
             },
-            message, // Additional context passed here
-            warning.slackWebhookUrl // Explicitly pass the webhook URL
+            message,
+            warning.slackWebhookUrl
           );
-
-          logger.info('[SLA Breach Monitor] Slack notification sent via Webhook', { warning });
           sent = true;
+          logger.info('[SLA Breach Monitor] Slack notification sent via Service Webhook', {
+            warning,
+          });
         } catch (error) {
           logger.error('[SLA Breach Monitor] Failed to send Slack webhook notification', { error });
         }
       }
 
+      // Last resort: Global webhook
       if (!sent && !warning.slackChannel && !warning.slackWebhookUrl) {
-        // Last resort: Global webhook (sendSlackNotification defaults to global if no url passed)
         try {
           await sendSlackNotification(
             'triggered',
@@ -476,7 +452,7 @@ async function notifyBreachWarning(
     }
   }
 
-  // Send Webhook notifications if enabled
+  // 2. Send Webhook notifications if enabled
   if (config.notifyWebhook && warning.serviceNotificationChannels?.includes('WEBHOOK')) {
     try {
       const { sendIncidentWebhook } = await import('./webhooks');
@@ -488,7 +464,7 @@ async function notifyBreachWarning(
           const result = await sendIncidentWebhook(
             webhook.url,
             warning.incidentId,
-            'warning',
+            isBreached ? 'triggered' : 'warning',
             webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
             webhook.type,
             webhook.channel || undefined
@@ -517,56 +493,62 @@ async function notifyBreachWarning(
     }
   }
 
-  // Send email notification if enabled
+  // 3. Send email notification if enabled
   if (config.notifyEmail) {
     try {
-      // Check for generic alert email in config
       const alertEmail = config.alertEmail || process.env.SLA_ALERT_EMAIL;
 
       if (alertEmail) {
         const { sendEmail } = await import('./email');
+        const safeServiceName = escapeHtml(warning.serviceName);
+        const safeTitle = escapeHtml(warning.title);
+        const safeUrgency = escapeHtml(warning.urgency);
+        const baseUrl = (process.env.NEXTAUTH_URL || '').replace(/\/+$/, '');
+        const incidentUrl = `${baseUrl}/incidents/${encodeURIComponent(warning.incidentId)}`;
 
         await sendEmail({
           to: alertEmail,
-          subject: `[SLA WARNING] ${warning.serviceName}: ${warning.title}`,
+          subject: isBreached
+            ? `[SLA BREACHED] ${warning.serviceName}: ${warning.title}`
+            : `[SLA WARNING] ${warning.serviceName}: ${warning.title}`,
           html: `
-                          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px androidx.rgba(0, 0, 0, 0.1);">
-                              <div style="background-color: #fee2e2; padding: 20px; text-align: center; border-bottom: 1px solid #fecaca;">
-                                  <h1 style="color: #991b1b; margin: 0; font-size: 24px; font-weight: 800;">${breachEmoji} SLA BREACH WARNING</h1>
-                                  <p style="color: #7f1d1d; margin: 8px 0 0 0; font-size: 16px; font-weight: 500;">Action Required Immediately</p>
+                          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                              <div style="background-color: ${isBreached ? '#fee2e2' : '#fef3c7'}; padding: 20px; text-align: center; border-bottom: 1px solid ${isBreached ? '#fecaca' : '#fde68a'};">
+                                  <h1 style="color: ${isBreached ? '#991b1b' : '#92400e'}; margin: 0; font-size: 24px; font-weight: 800;">${breachEmoji} SLA ${breachTypeUpper} ${breachAction}</h1>
+                                  <p style="color: ${isBreached ? '#7f1d1d' : '#78350f'}; margin: 8px 0 0 0; font-size: 16px; font-weight: 500;">Action Required Immediately</p>
                               </div>
                               
                               <div style="padding: 24px; background-color: #ffffff;">
                                   <div style="margin-bottom: 24px; text-align: center;">
-                                      <p style="font-size: 36px; font-weight: 800; color: ${remainingMinutes < 0 ? '#dc2626' : '#d97706'}; margin: 0;">
-                                          ${remainingMinutes} min
+                                      <p style="font-size: 36px; font-weight: 800; color: ${isBreached ? '#dc2626' : '#d97706'}; margin: 0;">
+                                          ${isBreached ? 'BREACHED' : `${remainingMinutes} min`}
                                       </p>
-                                      <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 14px;">Time Remaining</p>
+                                      <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 14px;">${isBreached ? 'SLA Status' : 'Time Remaining'}</p>
                                   </div>
 
                                   <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
                                       <table style="width: 100%; border-collapse: collapse;">
                                           <tr>
                                               <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Service</td>
-                                              <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right;">${warning.serviceName}</td>
+                                              <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right;">${safeServiceName}</td>
                                           </tr>
                                           <tr>
                                               <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Urgency</td>
-                                              <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right;">${warning.urgency}</td>
+                                              <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right;">${safeUrgency}</td>
                                           </tr>
                                           <tr>
                                               <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Target</td>
-                                              <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right;">${warning.targetMinutes} min (${warning.breachType.toUpperCase()})</td>
+                                              <td style="padding: 8px 0; color: #111827; font-weight: 600; text-align: right;">${warning.targetMinutes} min (${breachTypeUpper})</td>
                                           </tr>
                                       </table>
                                   </div>
 
-                                  <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 18px;">${warning.title}</h3>
+                                  <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 18px;">${safeTitle}</h3>
                                   <p style="color: #4b5563; font-size: 14px; line-height: 1.5; margin: 0 0 24px 0;">
-                                      This incident is approaching its SLA limit. Please acknowledge or resolve it immediately to avoid a breach.
+                                      ${isBreached ? 'This incident has exceeded its SLA target deadline. Immediate triage and resolution are required.' : 'This incident is approaching its SLA limit. Please acknowledge or resolve it immediately to avoid a breach.'}
                                   </p>
 
-                                  <a href="${process.env.NEXTAUTH_URL}/incidents/${warning.incidentId}" style="display: block; width: 100%; padding: 12px 0; background-color: #dc2626; color: #ffffff; text-decoration: none; text-align: center; border-radius: 6px; font-weight: 600; font-size: 16px;">
+                                  <a href="${incidentUrl}" style="display: block; width: 100%; padding: 12px 0; background-color: #dc2626; color: #ffffff; text-decoration: none; text-align: center; border-radius: 6px; font-weight: 600; font-size: 16px;">
                                       View Incident
                                   </a>
                               </div>

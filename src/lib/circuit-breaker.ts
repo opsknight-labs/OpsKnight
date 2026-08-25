@@ -154,8 +154,18 @@ export class CircuitBreaker {
    * Handle failed execution
    */
   private onFailure(error: unknown): void {
+    const now = Date.now();
+    const failureWindow = 60000; // 1-minute sliding failure window
+    if (
+      this.state.state === 'CLOSED' &&
+      this.state.lastFailureTime > 0 &&
+      now - this.state.lastFailureTime > failureWindow
+    ) {
+      this.state.failures = 0;
+    }
+
     this.state.failures++;
-    this.state.lastFailureTime = Date.now();
+    this.state.lastFailureTime = now;
 
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -224,7 +234,7 @@ export class CircuitBreaker {
       const now = Date.now();
       return now - this.state.lastFailureTime >= this.config.resetTimeout;
     }
-    return true; // HALF_OPEN allows one request
+    return !this.state.halfOpenRequestInFlight;
   }
 }
 
@@ -293,7 +303,14 @@ export const CircuitBreakers = {
     } catch {
       host = 'invalid-url';
     }
-    return getCircuitBreaker(`webhook:${host}`, {
+    const key = `webhook:${host}`;
+    if (breakers.size > 200 && !breakers.has(key)) {
+      const firstKey = breakers.keys().next().value;
+      if (firstKey && firstKey.startsWith('webhook:')) {
+        breakers.delete(firstKey);
+      }
+    }
+    return getCircuitBreaker(key, {
       failureThreshold: 3,
       resetTimeout: 60000, // 1 minute
       timeout: 10000,

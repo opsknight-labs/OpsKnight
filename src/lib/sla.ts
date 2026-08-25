@@ -278,12 +278,17 @@ export function calculateMTTR(incident: {
  * Check if an incident met the acknowledgement SLA
  */
 export function checkAckSLA(
-  incident: { acknowledgedAt: Date | null; createdAt: Date },
-  service: { targetAckMinutes?: number | null }
+  incident: { acknowledgedAt: Date | null; createdAt: Date; snoozedMs?: number },
+  service: { targetAckMinutes?: number | null },
+  snoozedMs?: number
 ): boolean {
   if (!incident.acknowledgedAt || !incident.createdAt) return false;
-  const ackTimeMinutes =
-    (incident.acknowledgedAt.getTime() - incident.createdAt.getTime()) / 1000 / 60;
+  const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
+  const activeMs = Math.max(
+    0,
+    incident.acknowledgedAt.getTime() - incident.createdAt.getTime() - snooze
+  );
+  const ackTimeMinutes = activeMs / 1000 / 60;
   const target = service.targetAckMinutes ?? 15; // Default to 15 minutes
   return ackTimeMinutes <= target;
 }
@@ -292,12 +297,17 @@ export function checkAckSLA(
  * Check if an incident met the resolution SLA
  */
 export function checkResolveSLA(
-  incident: { resolvedAt: Date | null; createdAt: Date },
-  service: { targetResolveMinutes?: number | null }
+  incident: { resolvedAt: Date | null; createdAt: Date; snoozedMs?: number },
+  service: { targetResolveMinutes?: number | null },
+  snoozedMs?: number
 ): boolean {
   if (!incident.resolvedAt || !incident.createdAt) return false;
-  const resolveTimeMinutes =
-    (incident.resolvedAt.getTime() - incident.createdAt.getTime()) / 1000 / 60;
+  const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
+  const activeMs = Math.max(
+    0,
+    incident.resolvedAt.getTime() - incident.createdAt.getTime() - snooze
+  );
+  const resolveTimeMinutes = activeMs / 1000 / 60;
   const target = service.targetResolveMinutes ?? 120; // Default to 120 minutes
   return resolveTimeMinutes <= target;
 }

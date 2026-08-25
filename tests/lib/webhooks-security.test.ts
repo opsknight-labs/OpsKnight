@@ -26,7 +26,7 @@ describe('webhook delivery boundary', () => {
     expect(assertSafeOutboundUrl).toHaveBeenCalledTimes(2);
     expect(fetch).toHaveBeenCalledWith(
       'https://hooks.example.com',
-      expect.objectContaining({ redirect: 'manual' })
+      expect.objectContaining({ redirect: 'error' })
     );
   });
 });

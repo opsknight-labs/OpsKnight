@@ -78,11 +78,6 @@ export async function processAutoUnsnoozeInternal(): Promise<{ processed: number
     }
 
     try {
-      const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-      await sendIncidentNotifications(incident.id, 'updated');
-      const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
-      await notifyStatusPageSubscribers(incident.id, 'investigating');
-      const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
       const updatedIncident = await prisma.incident.findUnique({
         where: { id: incident.id },
         include: {
@@ -92,7 +87,12 @@ export async function processAutoUnsnoozeInternal(): Promise<{ processed: number
           },
         },
       });
-      if (updatedIncident) {
+      if (updatedIncident && updatedIncident.status === 'OPEN') {
+        const { sendIncidentNotifications } = await import('@/lib/user-notifications');
+        await sendIncidentNotifications(incident.id, 'updated');
+        const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
+        await notifyStatusPageSubscribers(incident.id, 'investigating');
+        const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
         await triggerWebhooksForService(updatedIncident.serviceId, 'incident.updated', {
           id: updatedIncident.id,
           title: updatedIncident.title,
