@@ -50,20 +50,26 @@ type SmtpTransportCache = {
 let cachedSmtpTransport: SmtpTransportCache | null = null;
 
 export function htmlToPlainText(html: string): string {
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<br\s*[\/]?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<\/tr>/gi, '\n')
-    .replace(/<\/h[1-6]>/gi, '\n\n')
+  if (!html) return '';
+  let text = html;
+  let previous: string;
+  // Iteratively strip script and style tags to prevent nested tag bypasses and handle arbitrary whitespace
+  do {
+    previous = text;
+    text = text.replace(/<(?:script|style)\b[^>]*>[\s\S]*?<\/(?:script|style)\s*>/gi, '');
+  } while (text !== previous);
+
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|tr|h[1-6]|li)\s*>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\r\n|\r/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
