@@ -169,7 +169,10 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
     alertCount = await deleteInBatches(
       () =>
         prisma.alert.findMany({
-          where: { createdAt: { lt: alertCutoff }, incidentId: null },
+          // Prune all alerts older than the retention cutoff, regardless of incidentId.
+          // The previous restriction (incidentId: null) incorrectly exempted attached alerts
+          // from pruning, causing unbounded Alert table growth on high-volume streams.
+          where: { createdAt: { lt: alertCutoff } },
           select: { id: true },
           orderBy: { id: 'asc' },
           take: BATCH_SIZE,

@@ -652,6 +652,15 @@ export async function createOverride(
     return { error: 'End date must be after start date.' };
   }
 
+  // Validate the override target user is active
+  const targetUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { status: true },
+  });
+  if (!targetUser || targetUser.status !== 'ACTIVE') {
+    return { error: 'Cannot create an override for a deactivated or non-existent user.' };
+  }
+
   try {
     await prisma.onCallOverride.create({
       data: {

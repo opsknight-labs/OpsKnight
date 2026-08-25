@@ -313,23 +313,37 @@ export async function processEvent(
         ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
         : null;
 
+      // Flapping detection: check rapid state oscillations before creating a new incident
+      // Done outside the transaction since it reads Alert rows that were just committed
+      // (the current alert was created above in the same tx, so we use a non-tx prisma read)
+      let isFlapping = false;
+      try {
+        const { checkAlertFlapping } = await import('./flapping');
+        const flappingResult = await checkAlertFlapping(dedup_key, serviceId);
+        isFlapping = flappingResult.isFlapping;
+      } catch (_) {
+        // Non-critical: if flapping check fails, proceed with normal incident creation
+      }
+
       const newIncident = await tx.incident.create({
         data: {
           title: sanitizedTitle,
           description: truncatedDescription,
-          status: 'OPEN',
+          status: isFlapping ? 'SUPPRESSED' : 'OPEN',
           urgency,
           dedupKey: dedup_key,
           serviceId,
+          ...(isFlapping ? { escalationStatus: 'COMPLETED', nextEscalationAt: null } : {}),
         },
       });
 
-      logger.info('event.incident_created', {
+      logger.info(isFlapping ? 'event.incident_created_suppressed_flapping' : 'event.incident_created', {
         incidentId: newIncident.id,
         dedupKey: dedup_key,
         source: eventData.source,
         severity: eventData.severity,
         urgency,
+        isFlapping,
       });
 
       // Connect alert to incident
@@ -342,12 +356,19 @@ export async function processEvent(
       await tx.incidentEvent.create({
         data: {
           incidentId: newIncident.id,
-          message: `Incident triggered via API from ${eventData.source}`,
+          message: isFlapping
+            ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${eventData.source}. Notifications muted until signal stabilises.`
+            : `Incident triggered via API from ${eventData.source}`,
         },
       });
 
       // Note: Webhook triggering happens outside transaction to avoid blocking
-      return { action: 'triggered', incident: newIncident };
+      // If the incident is suppressed due to flapping, return 'suppressed' action
+      // so the caller skips escalation dispatch
+      return {
+        action: isFlapping ? ('suppressed' as const) : ('triggered' as const),
+        incident: newIncident,
+      };
     }
 
     if (event_action === 'resolve') {
@@ -364,12 +385,16 @@ export async function processEvent(
           escalationStatus: 'COMPLETED',
           nextEscalationAt: null,
           resolvedAt: existingIncident!.resolvedAt ?? new Date(),
+          // Clear stale snooze metadata so if incident is reopened it starts fresh
+          snoozedUntil: null,
+          snoozeReason: null,
         },
       });
 
       await tx.incidentEvent.create({
         data: {
           incidentId: existingIncident!.id,
+          type: 'AUTO_RESOLVED',
           message: `Auto-resolved by event from ${eventData.source}.`,
         },
       });

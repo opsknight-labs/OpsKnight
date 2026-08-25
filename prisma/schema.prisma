@@ -429,8 +429,8 @@ model OidcConfig {
   profileMapping Json?    @default("{}") // { department: "dept", jobTitle: "title", avatarUrl: "picture" }
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  updatedBy      String
-  updater        User     @relation(fields: [updatedBy], references: [id])
+  updatedBy      String?
+  updater        User?    @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@unique([id])
 }
@@ -442,14 +442,14 @@ model SlackIntegration {
   workspaceName String? // Slack workspace name
   botToken      String // Encrypted bot token (xoxb-...)
   signingSecret String? // Encrypted signing secret
-  installedBy   String // User ID who installed the integration
+  installedBy   String? // User ID who installed the integration
   scopes        String[] // OAuth scopes granted
   enabled       Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   services  Service[] @relation("ServiceSlackIntegration")
-  installer User      @relation(fields: [installedBy], references: [id])
+  installer User?     @relation(fields: [installedBy], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId]) // One integration per workspace (can be global or service-specific)
   @@index([workspaceId])
@@ -545,6 +545,11 @@ model Incident {
   @@index([assigneeId, createdAt, status], name: "idx_incident_assignee_load") // For assignee workload queries
   // ChatOps War-Room: Channel lookup from slash commands
   @@index([slackChannelId], name: "idx_incident_war_room_channel") // For slash command channel→incident resolution
+  // Realtime SSE polling: updatedAt queries on every active browser connection (every 3-5s)
+  @@index([updatedAt], name: "idx_incident_updated_at") // Prevents full table scan on realtime polling
+  @@index([serviceId, updatedAt], name: "idx_incident_service_updated_at") // Per-service realtime updates
+  // Dashboard filtering by priority (SLA dashboards, widgets, exports)
+  @@index([priority, status], name: "idx_incident_priority_status")
 }
 
 model Tag {
@@ -621,6 +626,7 @@ model IncidentEvent {
   @@index([incidentId, createdAt]) // For querying events by incident chronologically
   @@index([incidentId, message, createdAt], name: "idx_event_ack_search") // For ack event searches with message filtering
   @@index([incidentId, type], name: "idx_event_type") // For typed event classification (escalation/reopen/auto-resolve)
+  @@index([createdAt], name: "idx_event_global_created_at") // For cross-incident timeline feeds and global retention sweeps
 }
 
 model IncidentNote {
@@ -700,9 +706,9 @@ model JiraConfig {
   webhookSecretEncrypted String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
-  updatedBy              String
+  updatedBy              String?
 
-  updatedByUser User @relation("JiraConfigUpdater", fields: [updatedBy], references: [id])
+  updatedByUser User? @relation("JiraConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
 }
 
 model JiraServiceMapping {
@@ -850,6 +856,8 @@ model Notification {
   @@index([status, createdAt]) // For querying pending/failed notifications
   @@index([channel, status]) // For querying by channel and status
   @@index([userId, status, createdAt]) // For user's pending notification queries
+  @@index([incidentId, channel], name: "idx_notification_incident_channel") // For channel fallback detection per incident
+  @@index([incidentId, userId, status], name: "idx_notification_incident_user_status") // For per-incident per-user dedup checks
 }
 
 model InAppNotification {

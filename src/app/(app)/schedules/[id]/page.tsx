@@ -124,6 +124,7 @@ export default async function ScheduleDetailPage({
           scheduleId: id,
           start: { lt: calendarRangeEnd },
           end: { gt: calendarRangeStart },
+          user: { status: 'ACTIVE' },
         },
         select: {
           id: true,
@@ -136,7 +137,11 @@ export default async function ScheduleDetailPage({
         },
       }),
       prisma.onCallOverride.findMany({
-        where: { scheduleId: id, end: { gte: now } },
+        where: {
+          scheduleId: id,
+          end: { gte: now },
+          user: { status: 'ACTIVE' },
+        },
         select: {
           id: true,
           start: true,
