@@ -69,7 +69,18 @@ async function resolveSlackActor(
   return { opsUser, displayName };
 }
 
-async function handleSlackActionRequest(payload: Record<string, any>) {
+type SlackActionPayload = {
+  type?: string;
+  challenge?: string;
+  actions?: Array<{ value?: string; action_id?: string }>;
+  user?: { id?: string; name?: string; username?: string };
+  response_url?: string;
+  container?: { channel_id?: string };
+  channel?: { id?: string };
+  [key: string]: unknown;
+};
+
+async function handleSlackActionRequest(payload: SlackActionPayload) {
   try {
     // Handle URL verification (for Slack app setup)
     if (payload.type === 'url_verification') {

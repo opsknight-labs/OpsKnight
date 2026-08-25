@@ -241,7 +241,7 @@ async function getNextScheduledTime(): Promise<Date> {
     if (nextSlaBreach && nextSlaBreach.service?.serviceNotifyOnSlaBreach) {
       const createdAt = new Date(nextSlaBreach.createdAt).getTime();
       const { getPrioritySLATarget } = await import('./sla-priority');
-      const targets = getPrioritySLATarget(nextSlaBreach.priority, nextSlaBreach.service as any);
+      const targets = getPrioritySLATarget(nextSlaBreach.priority, nextSlaBreach.service);
       
       if (!nextSlaBreach.acknowledgedAt) {
         const targetAckMs = targets.ack * 60 * 1000;

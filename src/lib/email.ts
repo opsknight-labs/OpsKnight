@@ -115,12 +115,13 @@ function getSmtpTransport(emailConfig: EmailConfig): SmtpTransporter {
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 30_000,
-  }) as SmtpTransporter & { on?: (event: string, handler: (err: any) => void) => void };
+  }) as SmtpTransporter & { on?: (event: string, handler: (err: unknown) => void) => void };
 
   // Attach error handler to prevent process crashes on idle background socket resets
   if (typeof transporter.on === 'function') {
-    transporter.on('error', (err: any) => {
-      logger.warn('[SMTP Transport Pool Error]', { error: err?.message || err });
+    transporter.on('error', (err: unknown) => {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.warn('[SMTP Transport Pool Error]', { error: errorMsg });
       cachedSmtpTransport = null;
     });
   }
@@ -213,7 +214,11 @@ async function sendWithSingleProvider(
         error: `SendGrid API returned status ${response?.statusCode}: ${JSON.stringify(response?.body)}`,
       };
     } catch (error: unknown) {
-      const err = error as any;
+      const err = error as {
+        code?: string;
+        message?: string;
+        response?: { body?: { errors?: unknown } };
+      };
       if (err.code === 'MODULE_NOT_FOUND') {
         return { success: false, error: 'SendGrid package not installed' };
       }
@@ -237,7 +242,7 @@ async function sendWithSingleProvider(
       const sesClient = new SESClient({
         region: emailConfig.host,
         credentials: {
-          accessKeyId: (emailConfig as any).accessKeyId || process.env.AWS_ACCESS_KEY_ID || '',
+          accessKeyId: emailConfig.accessKeyId || process.env.AWS_ACCESS_KEY_ID || '',
           secretAccessKey: emailConfig.apiKey || '',
         },
       });
@@ -258,7 +263,7 @@ async function sendWithSingleProvider(
       logger.info('Email sent via Amazon SES', { to: options.to, messageId: result.MessageId });
       return { success: true };
     } catch (error: unknown) {
-      const err = error as any;
+      const err = error as { code?: string; message?: string };
       if (err.code === 'MODULE_NOT_FOUND') {
         return { success: false, error: 'AWS SES SDK package not installed' };
       }
@@ -284,7 +289,12 @@ async function sendWithSingleProvider(
       logger.info('Email sent via SMTP', { to: options.to, messageId: info.messageId });
       return { success: true };
     } catch (error: unknown) {
-      const err = error as any;
+      const err = error as {
+        code?: string;
+        message?: string;
+        command?: string;
+        response?: string;
+      };
       if (err.code === 'MODULE_NOT_FOUND') {
         return { success: false, error: 'Nodemailer package not installed' };
       }

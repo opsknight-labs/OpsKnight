@@ -9,9 +9,14 @@ const PRIORITY_SLA_TARGETS: Record<string, { ack: number; resolve: number }> = {
     'P5': { ack: 120, resolve: 2880 } // Info - 2 hours ack, 48 hours resolve
 };
 
+export type SlaTargetService = {
+  targetAckMinutes?: number | null;
+  targetResolveMinutes?: number | null;
+};
+
 export function getPrioritySLATarget(
   priority: string | null | undefined,
-  service: Service
+  service: SlaTargetService
 ): { ack: number; resolve: number } {
   if (priority) {
     const match = priority.toUpperCase().trim().match(/^P?([1-5])$/);
@@ -28,7 +33,7 @@ export function getPrioritySLATarget(
 
 export function checkPriorityAckSLA(
   incident: Incident & { snoozedMs?: number },
-  service: Service,
+  service: SlaTargetService,
   snoozedMs?: number
 ): boolean {
   if (!incident.acknowledgedAt || !incident.createdAt || !incident.priority) return false;
@@ -41,7 +46,7 @@ export function checkPriorityAckSLA(
 
 export function checkPriorityResolveSLA(
   incident: Incident & { snoozedMs?: number },
-  service: Service,
+  service: SlaTargetService,
   snoozedMs?: number
 ): boolean {
   if (!incident.resolvedAt || !incident.createdAt || !incident.priority) return false;

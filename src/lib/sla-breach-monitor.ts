@@ -191,7 +191,7 @@ export async function checkSLABreaches(
     const elapsedMs = Math.max(0, now.getTime() - incident.createdAt.getTime() - snoozedMs);
 
     // Resolve priority SLA targets (e.g. P1 = 5m ack / 60m resolve)
-    const targets = getPrioritySLATarget(incident.priority, incident.service as any);
+    const targets = getPrioritySLATarget(incident.priority, incident.service);
     const ackTargetMinutes = targets.ack;
     const resolveTargetMinutes = targets.resolve;
 
