@@ -25,7 +25,6 @@ export function calculateServiceHealthScore(data: ServiceHealthData): {
   };
 } {
   const {
-    totalIncidents,
     openIncidents,
     criticalIncidents,
     resolvedIncidents,

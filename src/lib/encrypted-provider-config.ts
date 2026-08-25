@@ -21,6 +21,10 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
   ses: ['accessKeyId', 'secretAccessKey'],
 };
 
+function getSensitiveFields(provider: string): string[] {
+  return Object.entries(SENSITIVE_FIELDS).find(([name]) => name === provider)?.[1] ?? [];
+}
+
 /**
  * Marker prefix for encrypted values
  */
@@ -67,7 +71,7 @@ export async function encryptProviderConfig(
   provider: string,
   config: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const sensitiveFields = SENSITIVE_FIELDS[provider] || [];
+  const sensitiveFields = getSensitiveFields(provider);
 
   // Check if encryption is available
   const key = await getEncryptionKey();
@@ -86,24 +90,26 @@ export async function encryptProviderConfig(
     return { ...config };
   }
 
-  const encryptedConfig = { ...config };
-
-  for (const field of sensitiveFields) {
-    const value = config[field];
-    if (typeof value === 'string' && value.length > 0) {
-      try {
-        encryptedConfig[field] = await encryptValue(value);
-      } catch (error) {
-        logger.error('Failed to encrypt provider config field', {
-          component: 'encrypted-provider-config',
-          provider,
-          field,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-        throw new Error(`Failed to encrypt provider config field: ${field}`);
-      }
-    }
-  }
+  const encryptedConfig = Object.fromEntries(
+    await Promise.all(
+      Object.entries(config).map(async ([field, value]) => {
+        if (!sensitiveFields.includes(field) || typeof value !== 'string' || !value) {
+          return [field, value];
+        }
+        try {
+          return [field, await encryptValue(value)];
+        } catch (error) {
+          logger.error('Failed to encrypt provider config field', {
+            component: 'encrypted-provider-config',
+            provider,
+            field,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          throw new Error(`Failed to encrypt provider config field: ${field}`);
+        }
+      })
+    )
+  );
 
   if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
     encryptedConfig.vapidKeyHistory = await Promise.all(
@@ -134,7 +140,7 @@ export async function decryptProviderConfig(
   provider: string,
   config: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const sensitiveFields = SENSITIVE_FIELDS[provider] || [];
+  const sensitiveFields = getSensitiveFields(provider);
 
   // Check if encryption is available
   const key = await getEncryptionKey();
@@ -143,25 +149,26 @@ export async function decryptProviderConfig(
     return config;
   }
 
-  const decryptedConfig = { ...config };
-
-  for (const field of sensitiveFields) {
-    const value = config[field];
-    if (typeof value === 'string' && isEncrypted(value)) {
-      try {
-        decryptedConfig[field] = await decryptValue(value);
-      } catch (error) {
-        logger.error('Failed to decrypt provider config field', {
-          component: 'encrypted-provider-config',
-          provider,
-          field,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-        // Return empty string on decryption failure to avoid exposing encrypted data
-        decryptedConfig[field] = '';
-      }
-    }
-  }
+  const decryptedConfig = Object.fromEntries(
+    await Promise.all(
+      Object.entries(config).map(async ([field, value]) => {
+        if (!sensitiveFields.includes(field) || typeof value !== 'string' || !isEncrypted(value)) {
+          return [field, value];
+        }
+        try {
+          return [field, await decryptValue(value)];
+        } catch (error) {
+          logger.error('Failed to decrypt provider config field', {
+            component: 'encrypted-provider-config',
+            provider,
+            field,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          return [field, ''];
+        }
+      })
+    )
+  );
 
   if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
     decryptedConfig.vapidKeyHistory = await Promise.all(
@@ -185,13 +192,14 @@ export async function decryptProviderConfig(
  * Check if a config has any encrypted fields
  */
 export function hasEncryptedFields(provider: string, config: Record<string, unknown>): boolean {
-  const sensitiveFields = SENSITIVE_FIELDS[provider] || [];
-
-  for (const field of sensitiveFields) {
-    const value = config[field];
-    if (typeof value === 'string' && isEncrypted(value)) {
-      return true;
-    }
+  const sensitiveFields = getSensitiveFields(provider);
+  if (
+    Object.entries(config).some(
+      ([field, value]) =>
+        sensitiveFields.includes(field) && typeof value === 'string' && isEncrypted(value)
+    )
+  ) {
+    return true;
   }
 
   if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
@@ -214,16 +222,18 @@ export function maskSensitiveFields(
   provider: string,
   config: Record<string, unknown>
 ): Record<string, unknown> {
-  const sensitiveFields = SENSITIVE_FIELDS[provider] || [];
-  const maskedConfig = { ...config };
-
-  for (const field of sensitiveFields) {
-    const value = config[field];
-    if (typeof value === 'string' && value.length > 0) {
-      maskedConfig[field] = SECRET_MASK;
-      maskedConfig[`has${field.charAt(0).toUpperCase()}${field.slice(1)}`] = true;
-    }
-  }
+  const sensitiveFields = getSensitiveFields(provider);
+  const maskedConfig = Object.fromEntries(
+    Object.entries(config).flatMap(([field, value]) => {
+      if (!sensitiveFields.includes(field) || typeof value !== 'string' || !value) {
+        return [[field, value]];
+      }
+      return [
+        [field, SECRET_MASK],
+        [`has${field.charAt(0).toUpperCase()}${field.slice(1)}`, true],
+      ];
+    })
+  );
 
   if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
     maskedConfig.vapidKeyHistory = config.vapidKeyHistory.map(entry => {
@@ -245,13 +255,17 @@ export function mergeSensitiveProviderFields(
   incoming: Record<string, unknown>,
   existing: Record<string, unknown>
 ): Record<string, unknown> {
-  const merged = { ...incoming };
-  for (const field of SENSITIVE_FIELDS[provider] || []) {
-    const value = incoming[field];
-    if (value === SECRET_MASK || value === '' || value === undefined || value === null) {
-      if (existing[field] !== undefined) merged[field] = existing[field];
-    }
-  }
+  const sensitiveFields = new Set(getSensitiveFields(provider));
+  const existingFields = new Map(Object.entries(existing));
+  const merged = Object.fromEntries(
+    Object.entries(incoming).map(([field, value]) => {
+      const preserveExisting =
+        sensitiveFields.has(field) &&
+        (value === SECRET_MASK || value === '' || value === undefined || value === null) &&
+        existingFields.has(field);
+      return [field, preserveExisting ? existingFields.get(field) : value];
+    })
+  );
   if (provider === 'web-push' && existing.vapidKeyHistory !== undefined) {
     merged.vapidKeyHistory = existing.vapidKeyHistory;
   }

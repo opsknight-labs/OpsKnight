@@ -15,6 +15,7 @@
 import { Prisma } from '@prisma/client';
 import { logger } from '../logger';
 import prisma from '../prisma';
+import type { NotificationChannel } from '../notifications';
 
 const MAX_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 
@@ -320,7 +321,7 @@ export async function processJob(job: any): Promise<boolean> {
           notificationResult = await sendNotification(
             job.payload.incidentId,
             job.payload.userId,
-            job.payload.channel as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+            job.payload.channel as NotificationChannel,
             job.payload.message
           );
         }

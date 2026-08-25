@@ -248,13 +248,15 @@ export default async function PublicStatusPage() {
 async function renderStatusPage(statusPage: any) {
   // Active maintenance must never be displaced by newer informational
   // announcements because it directly affects calculated service health.
-  statusPage.announcements.sort((a: any, b: any) => {
-    const typePriority = (value: string) => (value === 'MAINTENANCE' ? 0 : 1);
-    return (
-      typePriority(a.type) - typePriority(b.type) ||
-      new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-    );
-  });
+  statusPage.announcements.sort(
+    (a: { type: string; startDate: Date }, b: { type: string; startDate: Date }) => {
+      const typePriority = (value: string) => (value === 'MAINTENANCE' ? 0 : 1);
+      return (
+        typePriority(a.type) - typePriority(b.type) ||
+        new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+      );
+    }
+  );
 
   // Parse branding
   const branding =

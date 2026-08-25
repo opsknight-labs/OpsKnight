@@ -1,6 +1,5 @@
 import type { SLAMetricsFilter } from './sla-server';
-import type { WidgetDataContext } from './widget-data-provider';
-import { getWidgetData } from './widget-data-provider';
+import { getWidgetData, type WidgetDataContext } from './widget-data-provider';
 
 const WIDGET_CACHE_TTL_MS = 5_000;
 const MAX_WIDGET_CACHE_ENTRIES = 1_000;
