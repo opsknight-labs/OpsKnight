@@ -7,6 +7,7 @@ import { sendEmail } from '@/lib/email';
 import { getVerificationEmailTemplate } from '@/lib/status-page-email-templates';
 import { getBaseUrl } from '@/lib/env-validation';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 import {
   getStatusPageLogoUrl,
   getStatusPagePublicUrl,
@@ -19,8 +20,7 @@ import {
  */
 export async function POST(req: NextRequest) {
   try {
-    const ipHeader = req.headers.get('x-forwarded-for') || '';
-    const ip = ipHeader.split(',')[0]?.trim() || 'anonymous';
+    const ip = getClientIp(req.headers);
     const ipRate = await checkRateLimit(`api:status-page:subscribe:ip:${ip}`, 10, 60_000);
     if (!ipRate.allowed) {
       const retryAfter = Math.ceil((ipRate.resetAt - Date.now()) / 1000);
@@ -84,7 +84,10 @@ export async function POST(req: NextRequest) {
         return jsonOk({ success: true, message: 'Already subscribed' }, 200);
       } else if (Date.now() - existing.subscribedAt.getTime() < 60_000) {
         return jsonOk(
-          { success: true, message: 'Verification email was recently sent. Please try again shortly.' },
+          {
+            success: true,
+            message: 'Verification email was recently sent. Please try again shortly.',
+          },
           200
         );
       } else {

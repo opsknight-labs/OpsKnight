@@ -484,11 +484,12 @@ async function notifyBreachWarning(
 
       for (const webhook of webhooks) {
         try {
+          const { decryptStoredSecret } = await import('./encryption');
           const result = await sendIncidentWebhook(
             webhook.url,
             warning.incidentId,
             'warning',
-            webhook.secret || undefined,
+            webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
             webhook.type,
             webhook.channel || undefined
           );

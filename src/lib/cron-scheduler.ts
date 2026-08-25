@@ -96,26 +96,24 @@ async function getState() {
  */
 async function acquireLock(): Promise<boolean> {
   const { default: prisma } = await import('./prisma');
-  const now = new Date();
 
   try {
-    // Try to acquire lock using atomic update
-    const result = await prisma.cronSchedulerState.updateMany({
-      where: {
-        id: SINGLETON_ID,
-        OR: [
-          { lockedBy: null }, // No lock
-          { lockedBy: WORKER_ID }, // We already have it
-          { lockedAt: { lt: new Date(now.getTime() - LOCK_TIMEOUT_MS) } }, // Stale lock
-        ],
-      },
-      data: {
-        lockedBy: WORKER_ID,
-        lockedAt: now,
-      },
-    });
+    // PostgreSQL is the sole clock authority for lease expiry. Gating on
+    // nextRunAt also prevents standby replicas from immediately acquiring a
+    // deliberately released lock before the next scheduler cycle is due.
+    const result = await prisma.$executeRaw`
+      UPDATE "cron_scheduler_state"
+      SET "lockedBy" = ${WORKER_ID}, "lockedAt" = NOW()
+      WHERE "id" = ${SINGLETON_ID}
+        AND ("nextRunAt" IS NULL OR "nextRunAt" <= NOW())
+        AND (
+          "lockedBy" IS NULL
+          OR "lockedBy" = ${WORKER_ID}
+          OR "lockedAt" < NOW() - (${LOCK_TIMEOUT_MS} * INTERVAL '1 millisecond')
+        )
+    `;
 
-    if (result.count > 0) {
+    if (result > 0) {
       logger.debug('[Cron] Lock acquired', { workerId: WORKER_ID });
       return true;
     }
@@ -136,7 +134,7 @@ async function acquireLock(): Promise<boolean> {
 /**
  * Release the distributed lock
  */
-async function releaseLock(): Promise<void> {
+async function releaseLock(nextRunAt: Date): Promise<void> {
   const { default: prisma } = await import('./prisma');
 
   try {
@@ -148,6 +146,7 @@ async function releaseLock(): Promise<void> {
       data: {
         lockedBy: null,
         lockedAt: null,
+        nextRunAt,
       },
     });
     logger.debug('[Cron] Lock released', { workerId: WORKER_ID });
@@ -322,10 +321,11 @@ async function runOnce() {
   let heartbeat: NodeJS.Timeout | null = setInterval(async () => {
     try {
       const { default: prisma } = await import('./prisma');
-      await prisma.cronSchedulerState.updateMany({
-        where: { id: SINGLETON_ID, lockedBy: WORKER_ID },
-        data: { lockedAt: new Date() },
-      });
+      await prisma.$executeRaw`
+        UPDATE "cron_scheduler_state"
+        SET "lockedAt" = NOW()
+        WHERE "id" = ${SINGLETON_ID} AND "lockedBy" = ${WORKER_ID}
+      `;
     } catch (_) {}
   }, 30_000);
 
@@ -534,16 +534,17 @@ async function runOnce() {
       heartbeat = null;
     }
 
-    // Release lock and schedule next run
-    await releaseLock();
-
+    // Persist the next due time before releasing the lock. This closes the
+    // window where a standby could acquire an unlocked row and run early.
+    let nextTime: Date;
     try {
-      const nextTime = await getNextScheduledTime();
-      scheduleNextRun(nextTime);
+      nextTime = await getNextScheduledTime();
     } catch (error) {
       logger.error('[Cron] Failed to schedule next tick, retrying in MAX_DELAY', { error });
-      scheduleNextRun(new Date(Date.now() + MAX_DELAY_MS));
+      nextTime = new Date(Date.now() + MAX_DELAY_MS);
     }
+    await releaseLock(nextTime);
+    scheduleNextRun(nextTime, false);
   }
 }
 
@@ -586,7 +587,7 @@ export async function stopCronScheduler() {
     timer = null;
   }
 
-  await releaseLock();
+  await releaseLock(new Date());
   initialized = false; // Allow restart
 
   logger.info('[Cron] Scheduler stopped', { workerId: WORKER_ID });
@@ -609,7 +610,7 @@ export async function getCronSchedulerStatus() {
       lockedAt: state.lockedAt,
       schedule: 'dynamic',
     };
-  } catch (error) {
+  } catch (_error) {
     return {
       running: !!timer,
       workerId: WORKER_ID,

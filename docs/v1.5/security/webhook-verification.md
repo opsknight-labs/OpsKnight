@@ -1,7 +1,7 @@
 ---
 title: Webhook authentication and signatures
 description: Exact inbound integration authentication, optional provider signatures, Slack verification, and outbound signature formats
-version: v1.4
+version: v1.5
 order: 4
 ---
 
@@ -95,9 +95,13 @@ Status-page webhooks use a different contract:
 ```http
 X-Webhook-Signature: sha256=HEX_HMAC
 X-Webhook-Event: incident.created
+X-Webhook-Delivery: UUID
+X-Webhook-Timestamp: 1786973846000
 ```
 
-The HMAC-SHA256 input is the exact JSON body only. This path does not include a signed timestamp header in v1.4, so receivers cannot enforce freshness from an OpsKnight-signed delivery time. Use TLS, keep the secret unique, make event handling idempotent, and apply receiver-side network and replay controls where possible.
+The timestamp is Unix time in milliseconds. The HMAC-SHA256 input is `timestamp + "." + exactJsonBody`. Verify the raw body and timestamp exactly as described for service webhooks, reject stale timestamps, and use `X-Webhook-Delivery` as an idempotency key. The same delivery ID and signature are retained across retries.
+
+Outbound service and status-page webhook destinations are revalidated before every attempt, redirects are rejected, and private/reserved network destinations are blocked. Receivers should still require HTTPS, a unique secret, bounded replay age, and idempotent processing.
 
 ## Secret rotation
 

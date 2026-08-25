@@ -4,6 +4,8 @@ import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
+import { assertSafeOutboundUrl } from '@/lib/network-security';
+import { encrypt } from '@/lib/encryption';
 
 /**
  * Webhook Management API
@@ -31,9 +33,13 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return jsonOk({ webhooks }, 200);
+    return jsonOk(
+      {
+        webhooks: webhooks.map(webhook => ({ ...webhook, secret: '••••••••', hasSecret: true })),
+      },
+      200
+    );
   } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('api.status_page.webhooks.get_error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -58,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     // Validate URL
     try {
-      new URL(url);
+      await assertSafeOutboundUrl(url);
     } catch {
       return jsonError('Invalid URL format', 400);
     }
@@ -70,16 +76,15 @@ export async function POST(req: NextRequest) {
       data: {
         statusPageId,
         url,
-        secret,
+        secret: await encrypt(secret),
         events: events,
         enabled: true,
       },
     });
 
     logger.info('api.status_page.webhook.created', { webhookId: webhook.id, statusPageId });
-    return jsonOk({ webhook }, 201);
+    return jsonOk({ webhook: { ...webhook, secret }, hasSecret: true }, 201);
   } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('api.status_page.webhook.create_error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -110,7 +115,7 @@ export async function PATCH(req: NextRequest) {
     if (url !== undefined) {
       // Validate URL
       try {
-        new URL(url);
+        await assertSafeOutboundUrl(url);
         updateData.url = url;
       } catch {
         return jsonError('Invalid URL format', 400);
@@ -138,7 +143,6 @@ export async function PATCH(req: NextRequest) {
     logger.info('api.status_page.webhook.updated', { webhookId: id });
     return jsonOk({ webhook }, 200);
   } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
     if (error.code === 'P2025') {
       return jsonError('Webhook not found', 404);
     }
@@ -174,7 +178,6 @@ export async function DELETE(req: NextRequest) {
     logger.info('api.status_page.webhook.deleted', { webhookId: id });
     return jsonOk({ success: true }, 200);
   } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('api.status_page.webhook.delete_error', {
       error: error instanceof Error ? error.message : String(error),
     });

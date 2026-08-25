@@ -455,17 +455,15 @@ export function generateIncidentEmailHTML(
   const baseUrl = getBaseUrl();
   const incidentUrl = incident.incidentUrl || `${baseUrl}/incidents/${incident.id}`;
   const safeIncidentUrl = escapeHtml(incidentUrl);
-  const safeServiceName = escapeHtml(incident.service?.name || 'Service');
+  const serviceName = incident.service?.name || 'Service';
   const safeIncidentTitle = escapeHtml(incident.title || 'Incident');
   const safeDescription = incident.description ? escapeHtml(incident.description) : '';
-  const safeStatus = escapeHtml(incident.status);
   const safeUrgency = escapeHtml(incident.urgency);
   const assigneeName =
     incident.assignee?.name ||
     incident.assignee?.email ||
     (incident.team?.name ? `${incident.team.name} (Team)` : '') ||
     'Unassigned';
-  const safeAssigneeName = escapeHtml(assigneeName);
 
   const normalizedEventType =
     eventType ||
@@ -485,7 +483,7 @@ export function generateIncidentEmailHTML(
           : incident.urgency === 'MEDIUM'
             ? 'Elevated Incident Alert'
             : 'Incident Notification';
-  const headerSubtitle = `Service: ${safeServiceName}`;
+  const headerSubtitle = `Service: ${serviceName}`;
 
   const updateTitle =
     normalizedEventType === 'resolved'
@@ -581,10 +579,10 @@ export function generateIncidentEmailHTML(
   };
 
   const infoItems = [
-    { label: 'Service', value: safeServiceName, highlight: true },
-    { label: 'Status', value: safeStatus },
-    { label: 'Urgency', value: safeUrgency },
-    { label: 'Assignee', value: safeAssigneeName },
+    { label: 'Service', value: serviceName, highlight: true },
+    { label: 'Status', value: incident.status },
+    { label: 'Urgency', value: incident.urgency },
+    { label: 'Assignee', value: assigneeName },
     {
       label: 'Created',
       value: formatDateTime(incident.createdAt, timeZone, { format: 'datetime' }),

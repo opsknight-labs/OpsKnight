@@ -77,92 +77,25 @@ function isProduction(): boolean {
 }
 
 const MISSING_SECRET_MESSAGE =
-  'NEXTAUTH_SECRET is not set, and no derivable fallback (ENCRYPTION_KEY) is ' +
-  'available. In production this is a fatal misconfiguration: NextAuth runs in two ' +
+  'NEXTAUTH_SECRET is not set. In production this is a fatal misconfiguration: NextAuth runs in two ' +
   'runtimes (Node for API routes, Edge for middleware), each generating its own ' +
   'ephemeral secret if none is provided — so JWTs minted in one runtime cannot be ' +
   'verified in the other, and every navigation past `/` redirects back to /login. ' +
   'Set NEXTAUTH_SECRET to a stable value (e.g., `openssl rand -base64 32`).';
-
-// Cache the derived secret so we don't recompute the hash on every call.
-let derivedSecretCache: string | null = null;
-
-/**
- * Derive a stable NextAuth secret from an existing deploy-stable input
- * (`ENCRYPTION_KEY`) when no explicit NEXTAUTH_SECRET is set. Used as a
- * graceful fallback so an operator who forgot to set NEXTAUTH_SECRET but
- * did set ENCRYPTION_KEY still gets working sessions instead of the
- * silent two-runtime divergence described above.
- *
- * Properties:
- *   - Deterministic: Node and Edge runtimes compute the same value.
- *   - Stable across restarts: `ENCRYPTION_KEY` doesn't change between
- *     deploys.
- *   - Domain-separated: the digest input includes a fixed namespace
- *     prefix so the derived secret can't be misused as the encryption
- *     key itself.
- *   - Uses Web Crypto (`crypto.subtle`), which is available in both
- *     Node 18+ and Edge runtimes.
- *
- * Caveat: deriving an auth secret from another secret shares the blast
- * radius of either. ENCRYPTION_KEY compromise already grants full DB
- * read access, so the marginal risk is small — but explicit
- * NEXTAUTH_SECRET (separate secret) is still the recommended setup.
- */
-async function deriveSecretFromEncryptionKey(seed: string): Promise<string> {
-  if (derivedSecretCache) return derivedSecretCache;
-  const enc = new TextEncoder().encode('opsknight:nextauth-secret:v1:' + seed);
-  const buf = await globalThis.crypto.subtle.digest('SHA-256', enc);
-  // base64url to keep it safe in env / cookie contexts.
-  if (typeof Buffer !== 'undefined') {
-    derivedSecretCache = Buffer.from(buf).toString('base64');
-  } else {
-    const bytes = new Uint8Array(buf);
-    let bin = '';
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-    derivedSecretCache = btoa(bin);
-  }
-  return derivedSecretCache;
-}
-
-function getEncryptionKeySeed(): string | null {
-  const seed = process.env.ENCRYPTION_KEY;
-  // Require a minimum entropy floor — refuse to derive from an obviously
-  // weak ENCRYPTION_KEY (e.g., development placeholder).
-  if (!seed || seed.length < 32) return null;
-  return seed;
-}
 
 /**
  * Get the NextAuth secret.
  *
  * Priority chain:
  *   1. `NEXTAUTH_SECRET` env var — explicit, recommended.
- *   2. Derived from `ENCRYPTION_KEY` env var — deterministic across
- *      Node + Edge runtimes; lets a deploy that already has
- *      ENCRYPTION_KEY (which is required for the encryption pipeline)
- *      get working sessions without a separate operator action. Logs a
- *      warning so the explicit-secret recommendation isn't forgotten.
- *   3. Production with neither set → throw. Better to fail the deploy
- *      than ship the broken two-runtime divergence.
- *   4. Dev/test → in-memory ephemeral generation, with a warn.
+ *   2. Production without it → throw. Authentication and encryption keys
+ *      deliberately remain separate cryptographic domains.
+ *   3. Dev/test → in-memory ephemeral generation, with a warn.
  */
 export async function getNextAuthSecret(): Promise<string> {
   const envSecret = process.env.NEXTAUTH_SECRET;
   if (envSecret) {
     return envSecret;
-  }
-
-  const seed = getEncryptionKeySeed();
-  if (seed) {
-    if (!derivedSecretCache) {
-      logger.warn(
-        '[SecretManager] NEXTAUTH_SECRET not set; deriving deterministically from ' +
-          'ENCRYPTION_KEY. Sessions will be stable, but set NEXTAUTH_SECRET explicitly ' +
-          'for cleaner key separation.'
-      );
-    }
-    return deriveSecretFromEncryptionKey(seed);
   }
 
   if (isProduction()) {
@@ -196,10 +129,6 @@ export function getNextAuthSecretSync(): string {
   const envSecret = process.env.NEXTAUTH_SECRET;
   if (envSecret) {
     return envSecret;
-  }
-
-  if (derivedSecretCache) {
-    return derivedSecretCache;
   }
 
   if (isProduction()) {

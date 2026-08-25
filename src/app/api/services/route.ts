@@ -30,8 +30,16 @@ export async function GET(req: NextRequest) {
     }
     const { searchParams } = new URL(req.url);
     const limit = parseLimit(searchParams.get('limit'));
+    const apiUser = await prisma.user.findUnique({
+      where: { id: apiKey.userId },
+      select: { role: true, status: true, teamMemberships: { select: { teamId: true } } },
+    });
+    if (!apiUser || apiUser.status !== 'ACTIVE') return jsonError('Unauthorized.', 401);
+    const hasGlobalRead = apiUser.role === 'ADMIN' || apiUser.role === 'RESPONDER';
+    const teamIds = apiUser.teamMemberships.map(membership => membership.teamId);
 
     const services = await prisma.service.findMany({
+      where: hasGlobalRead ? {} : { teamId: { in: teamIds } },
       orderBy: { createdAt: 'desc' },
       take: limit,
       select: {

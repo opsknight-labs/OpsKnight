@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
 import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
 
 const INSENSITIVE_MODE = 'insensitive' as const;
@@ -41,7 +42,6 @@ type UserSearchResult = {
   email?: string | null;
   role?: string | null;
   avatarUrl?: string | null;
-  gender?: string | null;
 };
 
 type PolicySearchResult = {
@@ -95,8 +95,21 @@ export async function GET(req: NextRequest) {
     const incidentAccess = isPrivileged
       ? {}
       : {
-          OR: [{ assigneeId: currentUser.id }, { service: { teamId: { in: teamIds } } }],
+          OR: [
+            { assigneeId: currentUser.id },
+            { watchers: { some: { userId: currentUser.id } } },
+            {
+              AND: [{ visibility: 'PUBLIC' as const }, { service: { teamId: { in: teamIds } } }],
+            },
+          ],
         };
+
+    const rate = await checkRateLimit(`api:search:user:${currentUser.id}`, 30, 60_000);
+    if (!rate.allowed) {
+      return jsonError('Rate limit exceeded', 429, {
+        retryAfter: Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000)),
+      });
+    }
 
     const searchParams = req.nextUrl.searchParams;
     const query = searchParams.get('q');
@@ -113,7 +126,14 @@ export async function GET(req: NextRequest) {
     }
 
     // Performance: Limit query length to prevent regex DoS
-    const sanitizedTerm = searchTerm.slice(0, 100);
+    const sanitizedTerm = searchTerm
+      .slice(0, 100)
+      .replace(/[%_\\]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (sanitizedTerm.length < 2) {
+      return jsonOk({ results: [] }, 200);
+    }
     const searchTermLower = sanitizedTerm.toLowerCase();
 
     // Performance: Limit word-based search to reduce OR conditions
@@ -231,7 +251,6 @@ export async function GET(req: NextRequest) {
           email: true,
           role: true,
           avatarUrl: true,
-          gender: true,
         },
       }),
 
@@ -270,12 +289,7 @@ export async function GET(req: NextRequest) {
                 isPrivileged
                   ? {}
                   : {
-                      incident: {
-                        OR: [
-                          { assigneeId: currentUser.id },
-                          { service: { teamId: { in: teamIds } } },
-                        ],
-                      },
+                      incident: incidentAccess,
                     },
                 {
                   OR: [
@@ -356,7 +370,6 @@ export async function GET(req: NextRequest) {
         href: `/users?highlight=${u.id}`,
         priority: 6,
         avatarUrl: u.avatarUrl,
-        gender: u.gender,
       })),
       ...policies.map(p => ({
         type: 'policy' as const,

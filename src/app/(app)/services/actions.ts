@@ -4,28 +4,26 @@ import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
-import { getDefaultActorId, logAudit } from '@/lib/audit';
-import { assertAdminOrResponder, assertAdmin } from '@/lib/rbac';
+import { encrypt } from '@/lib/encryption';
+import { logAudit } from '@/lib/audit';
+import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
 
 const JIRA_AUTO_CREATE_URGENCIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
 
 export async function createIntegration(formData: FormData) {
-  let currentUser: { id: string } | null = null;
-  try {
-    currentUser = await assertAdminOrResponder();
-  } catch (error) {
-    throw new Error(error instanceof Error ? error.message : 'Unauthorized');
-  }
   const serviceId = formData.get('serviceId') as string;
   const name = formData.get('name') as string;
   const type = (formData.get('type') as string) || 'EVENTS_API_V2';
+  if (!serviceId || !name) throw new Error('Missing required fields');
 
-  if (!serviceId || !name) {
-    throw new Error('Missing required fields');
+  let currentUser: { id: string } | null = null;
+  try {
+    currentUser = await assertCanModifyService(serviceId);
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
-
   // Generate a random 32-char hex key
   const key = randomBytes(16).toString('hex');
 
@@ -56,14 +54,17 @@ export async function deleteIntegration(
 ) {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
 
-  await prisma.integration.delete({
-    where: { id: integrationId },
+  const integration = await prisma.integration.findFirst({
+    where: { id: integrationId, serviceId },
+    select: { id: true },
   });
+  if (!integration) throw new Error('Integration not found for this service.');
+  await prisma.integration.delete({ where: { id: integration.id } });
 
   await logAudit({
     action: 'integration.deleted',
@@ -78,9 +79,9 @@ export async function deleteIntegration(
 }
 
 export async function updateService(serviceId: string, formData: FormData) {
-  let currentUser: { id: string } | null = null;
+  let currentUser: { id: string; role?: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -93,6 +94,16 @@ export async function updateService(serviceId: string, formData: FormData) {
   const slackChannel = formData.get('slackChannel') as string;
   const teamId = formData.get('teamId') as string;
   const escalationPolicyId = formData.get('escalationPolicyId') as string;
+
+  if (teamId && currentUser.role !== 'ADMIN') {
+    const destinationMembership = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { teamId, userId: currentUser.id } },
+      select: { id: true },
+    });
+    if (!destinationMembership) {
+      throw new Error('Unauthorized. You cannot move a service into another team.');
+    }
+  }
 
   // Notification preferences
   const serviceNotifyOnTriggered = formData.get('serviceNotifyOnTriggered') === 'true';
@@ -177,13 +188,8 @@ export async function saveJiraServiceMapping(
 ): Promise<{ success?: boolean; error?: string | null }> {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Unauthorized' };
-  }
-
-  try {
     const serviceId = ((formData.get('serviceId') as string | null) ?? '').trim();
+    currentUser = await assertCanModifyService(serviceId);
     const projectKey = assertJiraProjectKey((formData.get('projectKey') as string | null) ?? '');
     const incidentIssueType = assertJiraIssueType(
       (formData.get('incidentIssueType') as string | null) ?? '',
@@ -270,7 +276,7 @@ export async function saveJiraServiceMapping(
 export async function rotateIntegrationSecret(integrationId: string, serviceId: string) {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -278,8 +284,8 @@ export async function rotateIntegrationSecret(integrationId: string, serviceId: 
   const signatureSecret = randomBytes(32).toString('hex');
 
   await prisma.integration.update({
-    where: { id: integrationId },
-    data: { signatureSecret },
+    where: { id: integrationId, serviceId },
+    data: { signatureSecret: await encrypt(signatureSecret) },
   });
 
   await logAudit({
@@ -291,18 +297,19 @@ export async function rotateIntegrationSecret(integrationId: string, serviceId: 
   });
 
   revalidatePath(`/services/${serviceId}/integrations`);
+  return { secret: signatureSecret };
 }
 
 export async function clearIntegrationSecret(integrationId: string, serviceId: string) {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
 
   await prisma.integration.update({
-    where: { id: integrationId },
+    where: { id: integrationId, serviceId },
     data: { signatureSecret: null },
   });
 
@@ -324,13 +331,13 @@ export async function toggleIntegrationStatus(
 ) {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
 
   await prisma.integration.update({
-    where: { id: integrationId },
+    where: { id: integrationId, serviceId },
     data: { enabled },
   });
 

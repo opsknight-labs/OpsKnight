@@ -12,13 +12,24 @@ export async function getCurrentUser() {
   }
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, role: true, email: true, name: true, timeZone: true, status: true },
+    select: {
+      id: true,
+      role: true,
+      email: true,
+      name: true,
+      timeZone: true,
+      status: true,
+      tokenVersion: true,
+    },
   });
   if (!user) {
     throw new Error('User not found');
   }
   if (user.status === 'DISABLED') {
     throw new Error('Unauthorized. User is inactive or disabled.');
+  }
+  if ((user.tokenVersion ?? 0) !== (session.user.tokenVersion ?? 0)) {
+    throw new Error('Unauthorized. Session has been revoked.');
   }
   return user;
 }
@@ -175,15 +186,15 @@ export async function getUserPermissions() {
 /**
  * Check if user can modify an incident
  * Users can modify incidents if:
- * - They are ADMIN or RESPONDER (any incident)
+ * - They are ADMIN (any incident)
  * - They are the assignee
  * - They are a member of the team that owns the service
  */
 export async function assertCanModifyIncident(incidentId: string) {
   const user = await getCurrentUser();
 
-  // Admins and responders can modify any incident
-  if (user.role === 'ADMIN' || user.role === 'RESPONDER') {
+  // Only global admins bypass team boundaries.
+  if (user.role === 'ADMIN') {
     return user;
   }
 
@@ -229,8 +240,8 @@ export async function assertCanModifyIncident(incidentId: string) {
 export async function assertCanViewIncident(incidentId: string) {
   const user = await getCurrentUser();
 
-  // Admins and responders can view any incident
-  if (user.role === 'ADMIN' || user.role === 'RESPONDER') {
+  // Only global admins bypass incident visibility and team boundaries.
+  if (user.role === 'ADMIN') {
     return user;
   }
 
@@ -239,6 +250,7 @@ export async function assertCanViewIncident(incidentId: string) {
     where: { id: incidentId },
     include: {
       assignee: true,
+      watchers: { where: { userId: user.id }, select: { id: true } },
       service: {
         include: {
           team: {
@@ -262,8 +274,16 @@ export async function assertCanViewIncident(incidentId: string) {
     return user;
   }
 
-  // Check if user is team member
-  if (incident.service.team && incident.service.team.members.length > 0) {
+  if (incident.watchers.length > 0) {
+    return user;
+  }
+
+  // Private incidents require explicit assignee/watcher access.
+  if (
+    incident.visibility === 'PUBLIC' &&
+    incident.service.team &&
+    incident.service.team.members.length > 0
+  ) {
     return user;
   }
 
@@ -276,8 +296,9 @@ export async function assertCanViewIncident(incidentId: string) {
 export async function assertCanModifyService(serviceId: string) {
   const user = await getCurrentUser();
 
-  // Admins and responders can modify any service
-  if (user.role === 'ADMIN' || user.role === 'RESPONDER') {
+  // Global admins can modify any service. Responders remain scoped to
+  // services owned by a team they belong to.
+  if (user.role === 'ADMIN') {
     return user;
   }
 

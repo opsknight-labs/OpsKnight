@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getUserPermissions } from '@/lib/rbac';
+import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
 import StatusBadge from '@/components/incident/StatusBadge';
 import PriorityBadge from '@/components/incident/PriorityBadge';
 import {
@@ -56,6 +56,7 @@ export const revalidate = 0;
 
 export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await assertCanViewIncident(id);
   const appUrl = await getAppUrl();
   const incident = await prisma.incident.findUnique({
     where: { id },

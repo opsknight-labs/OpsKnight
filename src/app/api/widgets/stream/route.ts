@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
-import { getWidgetData } from '@/lib/widget-data-provider';
+import { getCachedWidgetData } from '@/lib/widget-data-cache';
 import prisma from '@/lib/prisma';
 import { buildDateFilter } from '@/lib/dashboard-utils';
 
@@ -78,7 +78,7 @@ export async function GET(request: Request) {
 
         // Send initial data immediately
         try {
-          const initialData = await getWidgetData(user.id, user.role, widgetFilters);
+          const initialData = await getCachedWidgetData(user.id, user.role, widgetFilters);
           if (!isClosed) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(initialData)}\n\n`));
           }
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
           if (isClosed || isUpdating) return;
           isUpdating = true;
           try {
-            const data = await getWidgetData(user.id, user.role, widgetFilters);
+            const data = await getCachedWidgetData(user.id, user.role, widgetFilters);
             if (!isClosed) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
             }

@@ -63,11 +63,10 @@ function trustedRequestId(request: Request): string {
 }
 
 /** Wrap a Node route handler with per-request structured-log correlation. */
-export function withRequestContext<
-  R extends Request,
-  A extends unknown[],
-  T,
->(handler: (request: R, ...args: A) => Promise<T>, component: string) {
+export function withRequestContext<R extends Request, A extends unknown[], T>(
+  handler: (request: R, ...args: A) => Promise<T>,
+  component: string
+) {
   return async (request: R, ...args: A): Promise<T> => {
     const requestId = trustedRequestId(request);
     return runWithContext({ requestId, component }, async () => {
@@ -172,6 +171,12 @@ export function sanitizeString(val: string): string {
 }
 
 export function sanitizeContext(context: unknown, seen = new WeakSet<object>()): unknown {
+  // JSON.stringify throws on bigint values. Logging must never turn a valid
+  // application operation (database ids, advisory lock keys, counters) into
+  // an application failure.
+  if (typeof context === 'bigint') {
+    return context.toString();
+  }
   if (!context || typeof context !== 'object') {
     if (typeof context === 'string') {
       return sanitizeString(context);
@@ -200,6 +205,8 @@ export function sanitizeContext(context: unknown, seen = new WeakSet<object>()):
   for (const [key, value] of Object.entries(context as Record<string, unknown>)) {
     if (SENSITIVE_KEYS.some(regex => regex.test(key))) {
       sanitized[key] = '[REDACTED]';
+    } else if (typeof value === 'bigint') {
+      sanitized[key] = value.toString();
     } else if (typeof value === 'object' && value !== null) {
       sanitized[key] = sanitizeContext(value, seen);
     } else if (typeof value === 'string') {

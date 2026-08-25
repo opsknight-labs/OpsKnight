@@ -1,10 +1,16 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { assertAdmin } from '@/lib/rbac';
-import { getCurrentUser } from '@/lib/rbac';
+import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
+import { Prisma } from '@prisma/client';
+import {
+  decryptProviderConfig,
+  encryptProviderConfig,
+  maskSensitiveFields,
+  mergeSensitiveProviderFields,
+} from '@/lib/encrypted-provider-config';
 
 /**
  * Get all notification provider configurations
@@ -16,13 +22,11 @@ export async function getNotificationProviders() {
     orderBy: { provider: 'asc' },
   });
 
-  // Return providers with decrypted config (for now, just return as-is)
-  // In production, you'd decrypt here
   return providers.map(p => ({
     id: p.id,
     provider: p.provider,
     enabled: p.enabled,
-    config: (p.config as Record<string, unknown>) || {},
+    config: maskSensitiveFields(p.provider, (p.config as Record<string, unknown>) || {}),
     updatedAt: p.updatedAt.toISOString(),
   }));
 }
@@ -46,9 +50,14 @@ export async function updateNotificationProvider(
 
   const user = await getCurrentUser();
 
-  // Encrypt sensitive fields (for now, just store as-is)
-  // In production, use encryption library like crypto-js or similar
-  const encryptedConfig = config;
+  const existingProvider = providerId
+    ? await prisma.notificationProvider.findUnique({ where: { id: providerId } })
+    : await prisma.notificationProvider.findUnique({ where: { provider } });
+  const existingConfig = existingProvider?.config
+    ? await decryptProviderConfig(provider, existingProvider.config as Record<string, unknown>)
+    : {};
+  const mergedConfig = mergeSensitiveProviderFields(provider, config, existingConfig);
+  const encryptedConfig = await encryptProviderConfig(provider, mergedConfig);
 
   if (providerId) {
     // Update existing
@@ -56,7 +65,7 @@ export async function updateNotificationProvider(
       where: { id: providerId },
       data: {
         enabled,
-        config: encryptedConfig,
+        config: encryptedConfig as Prisma.InputJsonValue,
         updatedBy: user.id,
       },
     });
@@ -67,12 +76,12 @@ export async function updateNotificationProvider(
       create: {
         provider,
         enabled,
-        config: encryptedConfig,
+        config: encryptedConfig as Prisma.InputJsonValue,
         updatedBy: user.id,
       },
       update: {
         enabled,
-        config: encryptedConfig,
+        config: encryptedConfig as Prisma.InputJsonValue,
         updatedBy: user.id,
       },
     });
@@ -114,7 +123,9 @@ export async function generateVapidKeys(options?: {
   const existing = await prisma.notificationProvider.findUnique({
     where: { provider: 'web-push' },
   });
-  const existingConfig = (existing?.config as Record<string, unknown>) || {};
+  const existingConfig = existing?.config
+    ? await decryptProviderConfig('web-push', existing.config as Record<string, unknown>)
+    : {};
   const previousKeys = Array.isArray(existingConfig.vapidKeyHistory)
     ? (existingConfig.vapidKeyHistory as Array<{ publicKey: string; privateKey: string }>)
     : [];
@@ -145,16 +156,17 @@ export async function generateVapidKeys(options?: {
       .slice(0, 3),
   };
 
+  const encryptedNextConfig = await encryptProviderConfig('web-push', nextConfig);
   await prisma.notificationProvider.upsert({
     where: { provider: 'web-push' },
     create: {
       provider: 'web-push',
       enabled: existing?.enabled ?? false,
-      config: nextConfig,
+      config: encryptedNextConfig as Prisma.InputJsonValue,
       updatedBy: user.id,
     },
     update: {
-      config: nextConfig,
+      config: encryptedNextConfig as Prisma.InputJsonValue,
       updatedBy: user.id,
     },
   });
@@ -197,6 +209,29 @@ function isValidDomain(domain: string) {
   return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain);
 }
 
+type RoleMappingRule = {
+  claim: string;
+  value: string;
+  role: 'ADMIN' | 'RESPONDER' | 'USER';
+};
+
+function parseRoleMapping(input: string): RoleMappingRule[] {
+  const parsed: unknown = JSON.parse(input);
+  if (!Array.isArray(parsed)) throw new Error('Role mapping must be an array.');
+
+  return parsed.map(entry => {
+    if (!entry || typeof entry !== 'object') throw new Error('Invalid role mapping entry.');
+    const candidate = entry as Record<string, unknown>;
+    const claim = typeof candidate.claim === 'string' ? candidate.claim.trim() : '';
+    const value = typeof candidate.value === 'string' ? candidate.value.trim() : '';
+    const role = candidate.role;
+    if (!claim || !value || (role !== 'ADMIN' && role !== 'RESPONDER' && role !== 'USER')) {
+      throw new Error('Role mappings require a claim, value, and valid role.');
+    }
+    return { claim, value, role };
+  });
+}
+
 export async function saveOidcConfig(
   prevState: { error?: string | null; success?: boolean } | undefined,
   formData: FormData
@@ -225,6 +260,12 @@ export async function saveOidcConfig(
   const allowedDomains = normalizeDomains(allowedDomainsInput);
   const customScopes = (formData.get('customScopes') as string | null)?.trim() ?? null;
   const providerLabel = (formData.get('providerLabel') as string | null)?.trim() ?? null;
+  let roleMapping: RoleMappingRule[] = [];
+  try {
+    roleMapping = parseRoleMapping((formData.get('roleMapping') as string | null) || '[]');
+  } catch {
+    return { error: 'Invalid Role Mapping configuration.' };
+  }
 
   // Auto-detect provider type from Issuer URL
   function detectProviderType(issuerUrl: string): string {
@@ -296,6 +337,14 @@ export async function saveOidcConfig(
     return { error: 'Allowed domains must be valid domain names.' };
   }
 
+  if (enabled) {
+    const { validateOidcConnection } = await import('@/lib/oidc-validation');
+    const validation = await validateOidcConnection(issuer);
+    if (!validation.isValid) {
+      return { error: validation.error || 'OIDC discovery validation failed.' };
+    }
+  }
+
   const existing = await prisma.oidcConfig.findFirst({
     orderBy: { updatedAt: 'desc' },
   });
@@ -327,6 +376,7 @@ export async function saveOidcConfig(
       customScopes,
       providerType,
       providerLabel,
+      roleMapping: roleMapping as Prisma.InputJsonValue,
       profileMapping: Object.keys(profileMapping).length > 0 ? profileMapping : {},
       updatedBy: actorId,
     },
@@ -340,6 +390,7 @@ export async function saveOidcConfig(
       customScopes,
       providerType,
       providerLabel,
+      roleMapping: roleMapping as Prisma.InputJsonValue,
       profileMapping: Object.keys(profileMapping).length > 0 ? profileMapping : {},
       updatedBy: actorId,
     },
@@ -348,14 +399,15 @@ export async function saveOidcConfig(
   await import('@/lib/audit').then(m =>
     m.logAudit({
       action: 'oidc.config.updated',
-      entityType: 'USER',
-      entityId: user.id,
+      entityType: 'SSO_CONFIG',
+      entityId: existing?.id || 'default',
       actorId,
       details: {
         enabled,
         autoProvision,
         issuer,
         allowedDomainsCount: allowedDomains.length,
+        roleMappingCount: roleMapping.length,
       },
     })
   );

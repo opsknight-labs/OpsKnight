@@ -2,9 +2,9 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { getDefaultActorId, logAudit } from '@/lib/audit';
+import { logAudit } from '@/lib/audit';
 import { randomBytes, createHash } from 'crypto';
-import { assertAdmin, assertAdminOrResponder, assertNotSelf } from '@/lib/rbac';
+import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf } from '@/lib/rbac';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
 import { revokeUserSessions } from '@/lib/auth';
@@ -131,10 +131,6 @@ async function deleteUserInternal(userId: string) {
       where: { assigneeId: userId },
       data: { assigneeId: null },
     }),
-    prisma.auditLog.updateMany({
-      where: { actorId: userId },
-      data: { actorId: null },
-    }),
     prisma.teamMember.deleteMany({ where: { userId } }),
     prisma.onCallLayerUser.deleteMany({ where: { userId } }),
     prisma.onCallOverride.deleteMany({ where: { OR: [{ userId }, { replacesUserId: userId }] } }),
@@ -213,8 +209,6 @@ export async function addUser(
     });
 
     // Rate Limit (Admin Abuse Protection)
-    const ip = 'unknown'; // Server actions don't easily get IP unless passed. Using email limit.
-    // Actually we can get headers().
     const { headers } = await import('next/headers');
     const headerList = await headers();
     const realIp = headerList.get('x-forwarded-for') || headerList.get('x-real-ip') || 'unknown';
@@ -339,26 +333,22 @@ export async function updateUserRole(userId: string, formData: FormData) {
 }
 
 export async function addUserToTeam(userId: string, formData: FormData) {
+  const teamId = formData.get('teamId') as string;
+  if (!teamId) return;
+
   let currentUser: { id: string; role?: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertAdminOrTeamOwner(teamId);
   } catch (error) {
     return {
       error:
         error instanceof Error
           ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
+          : 'Unauthorized. Admin or team owner access required.',
     };
   }
-  const teamId = formData.get('teamId') as string;
-  let role = (formData.get('role') as string) || 'MEMBER';
-
-  if (!teamId) return;
-
-  // Only administrators can grant OWNER role in a team
-  if (role === 'OWNER' && currentUser?.role !== 'ADMIN') {
-    role = 'MEMBER';
-  }
+  const requestedRole = (formData.get('role') as string) || 'MEMBER';
+  const role = ['OWNER', 'ADMIN', 'MEMBER'].includes(requestedRole) ? requestedRole : 'MEMBER';
 
   const existing = await prisma.teamMember.findFirst({
     where: { teamId, userId },

@@ -80,7 +80,7 @@ export function transformDatadogToEvent(data: DatadogEvent): Array<{
     const titleHash = createHash('sha256').update(titleKey).digest('hex').slice(0, 32);
 
     const dedupKey =
-      eventData.aggregation_key ||
+      (eventData.aggregation_key ? `datadog-${eventData.aggregation_key}` : null) ||
       (eventData.alert?.id
         ? `datadog-alert-${eventData.alert.id}`
         : eventData.monitor?.id

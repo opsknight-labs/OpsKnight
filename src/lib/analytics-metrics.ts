@@ -46,7 +46,7 @@ export function calculateMtbfMs(
   const failureCount = dates.length;
   if (failureCount === 0) {
     if (!windowStart || !windowEnd) return 0;
-    return windowEnd.getTime() - windowStart.getTime();
+    return Math.max(0, windowEnd.getTime() - windowStart.getTime());
   }
   if (!windowStart || !windowEnd) {
     // Legacy behaviour: total span / failure count (original formula)

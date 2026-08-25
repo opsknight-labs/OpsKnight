@@ -49,28 +49,68 @@ export async function POST(request: NextRequest) {
     const delivered = messageStatus === 'delivered' || messageStatus === 'read';
     const failed =
       messageStatus === 'failed' || messageStatus === 'undelivered' || messageStatus === 'canceled';
-    const result = await prisma.notification.updateMany({
+    const notification = await prisma.notification.findFirst({
       where: {
         OR: [
           ...(notificationId ? [{ id: notificationId }] : []),
           ...(messageSid ? [{ providerMessageId: messageSid }] : []),
         ],
       },
-      data: {
-        providerMessageId: messageSid || undefined,
-        status: delivered ? 'DELIVERED' : failed ? 'FAILED' : 'SENT',
-        deliveredAt: delivered ? new Date() : failed ? null : undefined,
-        failedAt: failed ? new Date() : delivered ? null : undefined,
-        errorMsg: failed
-          ? params.get('ErrorMessage') ||
-            `Twilio delivery failed (${params.get('ErrorCode') || 'unknown'})`
-          : null,
+      select: {
+        id: true,
+        incidentId: true,
+        userId: true,
+        channel: true,
+        message: true,
       },
     });
 
-    if (result.count === 0) {
+    if (!notification) {
       logger.warn('twilio.dlr_notification_not_found', { notificationId, messageSid });
       return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
+    }
+
+    const updateData = {
+      providerMessageId: messageSid || undefined,
+      status: delivered ? 'DELIVERED' : failed ? 'FAILED' : 'SENT',
+      deliveredAt: delivered ? new Date() : failed ? null : undefined,
+      failedAt: failed ? new Date() : delivered ? null : undefined,
+      errorMsg: failed
+        ? params.get('ErrorMessage') ||
+          `Twilio delivery failed (${params.get('ErrorCode') || 'unknown'})`
+        : null,
+    } as const;
+
+    if (failed) {
+      await prisma.$transaction(async tx => {
+        const transitioned = await tx.notification.updateMany({
+          where: { id: notification.id, status: { not: 'FAILED' } },
+          data: updateData,
+        });
+        if (transitioned.count === 0) return;
+
+        await tx.backgroundJob.create({
+          data: {
+            type: 'NOTIFICATION',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            maxAttempts: 3,
+            payload: {
+              mode: 'CHANNEL_FALLBACK',
+              incidentId: notification.incidentId,
+              userId: notification.userId,
+              message: notification.message || 'Incident notification delivery failed',
+              failedChannel: notification.channel,
+              sourceNotificationId: notification.id,
+            },
+          },
+        });
+      });
+    } else {
+      await prisma.notification.update({
+        where: { id: notification.id },
+        data: updateData,
+      });
     }
     return new NextResponse(null, { status: 204 });
   } catch (error) {

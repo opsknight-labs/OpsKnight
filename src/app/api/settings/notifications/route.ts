@@ -4,7 +4,12 @@ import { getCurrentUser } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { getUserFriendlyError } from '@/lib/user-friendly-errors';
 import prisma from '@/lib/prisma';
-import { encryptProviderConfig, decryptProviderConfig } from '@/lib/encrypted-provider-config';
+import {
+  SECRET_MASK,
+  decryptProviderConfig,
+  encryptProviderConfig,
+  mergeSensitiveProviderFields,
+} from '@/lib/encrypted-provider-config';
 
 /**
  * Type guard for provider config
@@ -38,8 +43,10 @@ export async function GET(_req: NextRequest) {
       smsConfig = {
         enabled: true,
         provider: 'twilio',
-        accountSid: config.accountSid || '',
-        authToken: config.authToken || '',
+        accountSid: config.accountSid ? SECRET_MASK : '',
+        hasAccountSid: Boolean(config.accountSid),
+        authToken: config.authToken ? SECRET_MASK : '',
+        hasAuthToken: Boolean(config.authToken),
         fromNumber: config.fromNumber || '',
       };
     } else if (awsProvider && awsProvider.enabled && isProviderConfig(awsProvider.config)) {
@@ -48,8 +55,10 @@ export async function GET(_req: NextRequest) {
         enabled: true,
         provider: 'aws-sns',
         region: config.region || 'us-east-1',
-        accessKeyId: config.accessKeyId || '',
-        secretAccessKey: config.secretAccessKey || '',
+        accessKeyId: config.accessKeyId ? SECRET_MASK : '',
+        hasAccessKeyId: Boolean(config.accessKeyId),
+        secretAccessKey: config.secretAccessKey ? SECRET_MASK : '',
+        hasSecretAccessKey: Boolean(config.secretAccessKey),
       };
     }
 
@@ -61,7 +70,8 @@ export async function GET(_req: NextRequest) {
         enabled: true,
         provider: 'web-push',
         vapidPublicKey: config.vapidPublicKey || '',
-        vapidPrivateKey: config.vapidPrivateKey || '',
+        vapidPrivateKey: config.vapidPrivateKey ? SECRET_MASK : '',
+        hasVapidPrivateKey: Boolean(config.vapidPrivateKey),
         vapidSubject: config.vapidSubject || '',
       };
     }
@@ -82,8 +92,10 @@ export async function GET(_req: NextRequest) {
       whatsappConfig = {
         number: whatsappNumber,
         contentSid: whatsappContentSid,
-        accountSid: decryptedConfig.whatsappAccountSid || '',
-        authToken: decryptedConfig.whatsappAuthToken || '',
+        accountSid: decryptedConfig.whatsappAccountSid ? SECRET_MASK : '',
+        hasAccountSid: Boolean(decryptedConfig.whatsappAccountSid),
+        authToken: decryptedConfig.whatsappAuthToken ? SECRET_MASK : '',
+        hasAuthToken: Boolean(decryptedConfig.whatsappAuthToken),
         enabled: !!whatsappEnabled && !!whatsappNumber,
       };
     }
@@ -120,6 +132,13 @@ export async function POST(req: NextRequest) {
     // Save SMS provider (Twilio or AWS SNS)
     if (body.sms) {
       const smsProvider = body.sms.provider === 'twilio' ? 'twilio' : 'aws-sns';
+      const existingSmsProvider =
+        smsProvider === 'twilio'
+          ? existingTwilioProvider
+          : await prisma.notificationProvider.findUnique({ where: { provider: smsProvider } });
+      const existingSmsConfig = isProviderConfig(existingSmsProvider?.config)
+        ? await decryptProviderConfig(smsProvider, existingSmsProvider.config)
+        : {};
       let smsConfig: Record<string, unknown> = {
         enabled: body.sms.enabled || false,
       };
@@ -145,6 +164,7 @@ export async function POST(req: NextRequest) {
         smsConfig.secretAccessKey = body.sms.secretAccessKey || '';
       }
 
+      smsConfig = mergeSensitiveProviderFields(smsProvider, smsConfig, existingSmsConfig);
       // Encrypt sensitive fields before storing
       smsConfig = await encryptProviderConfig(smsProvider, smsConfig);
 
@@ -185,6 +205,13 @@ export async function POST(req: NextRequest) {
         vapidSubject: body.push.vapidSubject || '',
       };
 
+      const existingPushProvider = await prisma.notificationProvider.findUnique({
+        where: { provider: 'web-push' },
+      });
+      const existingPushConfig = isProviderConfig(existingPushProvider?.config)
+        ? await decryptProviderConfig('web-push', existingPushProvider.config)
+        : {};
+      pushConfig = mergeSensitiveProviderFields('web-push', pushConfig, existingPushConfig);
       // Encrypt sensitive fields before storing
       pushConfig = await encryptProviderConfig('web-push', pushConfig);
 
@@ -218,6 +245,11 @@ export async function POST(req: NextRequest) {
         whatsappAuthToken: body.whatsapp.authToken ?? existingTwilioConfig.whatsappAuthToken ?? '',
       };
 
+      updatedTwilioConfig = mergeSensitiveProviderFields(
+        'twilio',
+        updatedTwilioConfig,
+        existingTwilioConfig
+      );
       // Encrypt sensitive fields before storing
       updatedTwilioConfig = await encryptProviderConfig('twilio', updatedTwilioConfig);
 

@@ -25,6 +25,7 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
  * Marker prefix for encrypted values
  */
 const ENCRYPTED_PREFIX = 'enc:';
+export const SECRET_MASK = '••••••••';
 
 /**
  * Check if a value is already encrypted
@@ -104,6 +105,21 @@ export async function encryptProviderConfig(
     }
   }
 
+  if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
+    encryptedConfig.vapidKeyHistory = await Promise.all(
+      config.vapidKeyHistory.map(async entry => {
+        if (!entry || typeof entry !== 'object') return entry;
+        const keyEntry = entry as Record<string, unknown>;
+        return {
+          ...keyEntry,
+          ...(typeof keyEntry.privateKey === 'string' && keyEntry.privateKey
+            ? { privateKey: await encryptValue(keyEntry.privateKey) }
+            : {}),
+        };
+      })
+    );
+  }
+
   return encryptedConfig;
 }
 
@@ -147,6 +163,21 @@ export async function decryptProviderConfig(
     }
   }
 
+  if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
+    decryptedConfig.vapidKeyHistory = await Promise.all(
+      config.vapidKeyHistory.map(async entry => {
+        if (!entry || typeof entry !== 'object') return entry;
+        const keyEntry = entry as Record<string, unknown>;
+        return {
+          ...keyEntry,
+          ...(typeof keyEntry.privateKey === 'string' && isEncrypted(keyEntry.privateKey)
+            ? { privateKey: await decryptValue(keyEntry.privateKey) }
+            : {}),
+        };
+      })
+    );
+  }
+
   return decryptedConfig;
 }
 
@@ -161,6 +192,15 @@ export function hasEncryptedFields(provider: string, config: Record<string, unkn
     if (typeof value === 'string' && isEncrypted(value)) {
       return true;
     }
+  }
+
+  if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
+    return config.vapidKeyHistory.some(
+      entry =>
+        entry &&
+        typeof entry === 'object' &&
+        isEncrypted((entry as Record<string, unknown>).privateKey)
+    );
   }
 
   return false;
@@ -180,10 +220,40 @@ export function maskSensitiveFields(
   for (const field of sensitiveFields) {
     const value = config[field];
     if (typeof value === 'string' && value.length > 0) {
-      // Show first 4 chars if long enough, otherwise just mask
-      maskedConfig[field] = value.length > 8 ? value.slice(0, 4) + '***' : '***';
+      maskedConfig[field] = SECRET_MASK;
+      maskedConfig[`has${field.charAt(0).toUpperCase()}${field.slice(1)}`] = true;
     }
   }
 
+  if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
+    maskedConfig.vapidKeyHistory = config.vapidKeyHistory.map(entry => {
+      if (!entry || typeof entry !== 'object') return entry;
+      const keyEntry = entry as Record<string, unknown>;
+      return {
+        publicKey: keyEntry.publicKey,
+        hasPrivateKey: Boolean(keyEntry.privateKey),
+      };
+    });
+  }
+
   return maskedConfig;
+}
+
+/** Preserve an existing secret when a settings form submits a mask or blank value. */
+export function mergeSensitiveProviderFields(
+  provider: string,
+  incoming: Record<string, unknown>,
+  existing: Record<string, unknown>
+): Record<string, unknown> {
+  const merged = { ...incoming };
+  for (const field of SENSITIVE_FIELDS[provider] || []) {
+    const value = incoming[field];
+    if (value === SECRET_MASK || value === '' || value === undefined || value === null) {
+      if (existing[field] !== undefined) merged[field] = existing[field];
+    }
+  }
+  if (provider === 'web-push' && existing.vapidKeyHistory !== undefined) {
+    merged.vapidKeyHistory = existing.vapidKeyHistory;
+  }
+  return merged;
 }

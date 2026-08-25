@@ -43,7 +43,7 @@ type AugmentedUser = User & {
 };
 
 function isOidcEmailVerifiedStrict() {
-  return (process.env.OIDC_REQUIRE_EMAIL_VERIFIED_STRICT ?? 'false').toLowerCase() === 'true';
+  return (process.env.OIDC_REQUIRE_EMAIL_VERIFIED_STRICT ?? 'true').toLowerCase() === 'true';
 }
 
 const AUTH_OPTIONS_CACHE_TTL_MS = Number.parseInt(
@@ -216,8 +216,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           },
         },
       },
-      // Trust host headers if explicit env var is set OR if NEXTAUTH_URL is configured (which locks the origin)
-      trustHost: !!(process.env.AUTH_TRUST_HOST || process.env.NEXTAUTH_URL),
+      // Host headers affect OAuth callback construction. Trust them only when an
+      // operator explicitly opts in for a correctly configured reverse proxy.
+      trustHost: process.env.AUTH_TRUST_HOST?.toLowerCase() === 'true',
       providers: [
         ...(oidcConfig
           ? [
@@ -610,6 +611,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           if (session.user) {
             (session.user as AugmentedUser).role = token.role;
             (session.user as AugmentedUser).id = token.sub;
+            (session.user as AugmentedUser).tokenVersion =
+              (token as AugmentedJWT).tokenVersion ?? 0;
             // Always use the latest name from token (which is fetched from DB)
             session.user.name = (token.name as string) || session.user.name;
             session.user.email = (token.email as string) || session.user.email;
@@ -803,11 +806,21 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               // The used INVITE token is intentionally retained for audit history, so it is a
               // durable server-side signal that an administrator provisioned this email address.
               if (existing && !isInvitedUser) {
-                const inviteRecord = await prisma.userToken.findFirst({
-                  where: { identifier: email, type: 'INVITE' },
-                  select: { id: true },
-                });
-                hasProvisioningEvidence = !!inviteRecord;
+                const [inviteRecord, bootstrapRecord] = await Promise.all([
+                  prisma.userToken.findFirst({
+                    where: { identifier: email, type: 'INVITE' },
+                    select: { id: true },
+                  }),
+                  prisma.auditLog.findFirst({
+                    where: {
+                      entityType: 'USER',
+                      entityId: existing.id,
+                      action: 'user.bootstrap',
+                    },
+                    select: { id: true },
+                  }),
+                ]);
+                hasProvisioningEvidence = !!inviteRecord || !!bootstrapRecord;
               }
 
               // SECURITY: Never link a pre-existing account on email match alone. For an
@@ -982,14 +995,23 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               // Sync avatar URL
               if (mapping.avatarUrl && oidcProfile[mapping.avatarUrl]) {
                 const avatar = String(oidcProfile[mapping.avatarUrl]);
+                let safeAvatar: string | null = null;
+                try {
+                  const parsedAvatar = new URL(avatar);
+                  if (parsedAvatar.protocol === 'https:' && avatar.length <= 2048) {
+                    safeAvatar = parsedAvatar.toString();
+                  }
+                } catch {
+                  safeAvatar = null;
+                }
                 // Only sync if value changed AND the current value is NOT a locally uploaded file
                 // This prevents OIDC from overwriting a user's custom uploaded photo.
                 const isLocalUpload =
                   targetUser.avatarUrl?.startsWith('/api/users/') ||
                   targetUser.avatarUrl?.startsWith('/uploads/');
 
-                if (avatar && avatar !== targetUser.avatarUrl && !isLocalUpload) {
-                  updateData.avatarUrl = avatar;
+                if (safeAvatar && safeAvatar !== targetUser.avatarUrl && !isLocalUpload) {
+                  updateData.avatarUrl = safeAvatar;
                   logger.debug('[Auth] Syncing avatar URL from OIDC', {
                     component: 'auth:signIn',
                     claimName: mapping.avatarUrl,

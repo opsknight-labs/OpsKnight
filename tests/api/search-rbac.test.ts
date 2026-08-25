@@ -15,6 +15,11 @@ vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn().mockResolvedValue({}) }))
 vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@/lib/rate-limit', () => ({
+  checkRateLimit: vi
+    .fn()
+    .mockResolvedValue({ allowed: true, remaining: 99, resetAt: Date.now() + 60_000 }),
+}));
 vi.mock('@/lib/prisma', () => ({
   default: {
     incident: { findMany: mocks.findMany },
@@ -45,7 +50,13 @@ describe('global search RBAC', () => {
     expect(response.status).toBe(200);
     const incidentQuery = mocks.findMany.mock.calls[0][0];
     expect(incidentQuery.where.AND[0]).toEqual({
-      OR: [{ assigneeId: 'user-1' }, { service: { teamId: { in: ['team-1'] } } }],
+      OR: [
+        { assigneeId: 'user-1' },
+        { watchers: { some: { userId: 'user-1' } } },
+        {
+          AND: [{ visibility: 'PUBLIC' }, { service: { teamId: { in: ['team-1'] } } }],
+        },
+      ],
     });
     const serviceQuery = mocks.findMany.mock.calls[1][0];
     expect(serviceQuery.where.AND[0]).toEqual({ teamId: { in: ['team-1'] } });

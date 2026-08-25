@@ -21,23 +21,27 @@ import {
 interface IntegrationSecretControlProps {
   integrationId: string;
   serviceId: string;
-  initialSecret: string | null;
+  hasSecret: boolean;
   className?: string;
 }
 
 export default function IntegrationSecretControl({
   integrationId,
   serviceId,
-  initialSecret,
+  hasSecret,
   className,
 }: IntegrationSecretControlProps) {
   const [loading, setLoading] = useState(false);
+  const [configured, setConfigured] = useState(hasSecret);
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
   const { showToast } = useToast();
 
   const handleRotate = async () => {
     setLoading(true);
     try {
-      await rotateIntegrationSecret(integrationId, serviceId);
+      const result = await rotateIntegrationSecret(integrationId, serviceId);
+      setConfigured(true);
+      setRevealedSecret(result.secret);
       showToast('Secret rotated successfully', 'success');
     } catch (_error) {
       showToast('Failed to rotate secret', 'error');
@@ -50,6 +54,8 @@ export default function IntegrationSecretControl({
     setLoading(true);
     try {
       await clearIntegrationSecret(integrationId, serviceId);
+      setConfigured(false);
+      setRevealedSecret(null);
       showToast('Secret cleared successfully', 'success');
     } catch (_error) {
       showToast('Failed to clear secret', 'error');
@@ -58,7 +64,7 @@ export default function IntegrationSecretControl({
     }
   };
 
-  if (!initialSecret) {
+  if (!configured) {
     return (
       <div className="space-y-2">
         <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
@@ -90,12 +96,10 @@ export default function IntegrationSecretControl({
       </div>
       <div className="bg-white border rounded px-2 py-1.5 font-mono text-xs flex items-center justify-between gap-2 shadow-sm group">
         <div className="flex items-center gap-2 overflow-hidden flex-1">
-          <span className="truncate blur-[3px] hover:blur-none transition-all duration-300 select-all cursor-text text-slate-600">
-            {initialSecret}
-          </span>
+          <span className="truncate text-slate-600">{revealedSecret || '••••••••••••••••'}</span>
         </div>
         <div className="flex items-center gap-1">
-          <CopyButton text={initialSecret} />
+          {revealedSecret && <CopyButton text={revealedSecret} />}
 
           <AlertDialog>
             <AlertDialogTrigger asChild>

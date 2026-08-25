@@ -129,13 +129,13 @@ export async function GET(request: NextRequest) {
               break;
             case 'MTTA':
               // MTTA in minutes - lower is better
-              currentValue = metrics.mttaP50 !== null ? metrics.mttaP50 : null;
+              currentValue = metrics.mttd;
               // For MTTA, target is max minutes allowed
               breached = currentValue !== null && currentValue > def.target;
               break;
             case 'MTTR':
               // MTTR in minutes - lower is better
-              currentValue = metrics.mttrP50 !== null ? metrics.mttrP50 : null;
+              currentValue = metrics.mttr;
               breached = currentValue !== null && currentValue > def.target;
               break;
             case 'LATENCY_P99':
@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
           } else if (def.metricType === 'MTTA') {
             // For MTTA, lower is better
             const prev = metrics.previousPeriod.mtta;
-            const curr = metrics.mttd;
+            const curr = currentValue;
             if (prev !== null && curr !== null) {
               if (curr < prev) trend = 'up';
               else if (curr > prev) trend = 'down';
@@ -211,22 +211,15 @@ export async function GET(request: NextRequest) {
     const totalDefinitions = complianceData.length;
     const breachedCount = complianceData.filter(c => c.breached).length;
     const healthyCount = totalDefinitions - breachedCount;
-    const avgCompliance =
-      complianceData
-        .filter(
-          c =>
-            c.currentValue !== null &&
-            (c.metricType === 'UPTIME' || c.metricType === 'AVAILABILITY')
-        )
-        .reduce((sum, c) => sum + (c.currentValue || 0), 0) /
-      Math.max(
-        1,
-        complianceData.filter(
-          c =>
-            c.currentValue !== null &&
-            (c.metricType === 'UPTIME' || c.metricType === 'AVAILABILITY')
-        ).length
-      );
+    const complianceValues = complianceData
+      .filter(
+        c =>
+          c.currentValue !== null && (c.metricType === 'UPTIME' || c.metricType === 'AVAILABILITY')
+      )
+      .map(c => c.currentValue as number);
+    const avgCompliance = complianceValues.length
+      ? complianceValues.reduce((sum, value) => sum + value, 0) / complianceValues.length
+      : null;
 
     return NextResponse.json({
       definitions: complianceData,
@@ -234,7 +227,7 @@ export async function GET(request: NextRequest) {
         total: totalDefinitions,
         healthy: healthyCount,
         breached: breachedCount,
-        avgCompliance: isNaN(avgCompliance) ? null : Math.round(avgCompliance * 100) / 100,
+        avgCompliance: avgCompliance === null ? null : Math.round(avgCompliance * 100) / 100,
       },
       generatedAt: new Date().toISOString(),
     });

@@ -37,21 +37,19 @@ describe('getNextAuthSecret', () => {
     expect(secret).toBe('explicit-secret-value-1234567890abcdef');
   });
 
-  it('derives a stable secret from ENCRYPTION_KEY when NEXTAUTH_SECRET is missing', async () => {
+  it('does not reuse ENCRYPTION_KEY when NEXTAUTH_SECRET is missing', async () => {
     delete process.env.NEXTAUTH_SECRET;
     process.env.ENCRYPTION_KEY = 'a'.repeat(64);
     const { getNextAuthSecret } = await freshSecretManager();
     const secret1 = await getNextAuthSecret();
     const secret2 = await getNextAuthSecret();
-    // Same value across calls — required so Node and Edge runtimes agree.
+    // Development uses one ephemeral secret per module instance.
     expect(secret1).toBe(secret2);
-    // Not equal to the ENCRYPTION_KEY itself (domain-separated digest).
     expect(secret1).not.toBe('a'.repeat(64));
-    // Looks like a base64 SHA-256 digest (~44 chars).
     expect(secret1.length).toBeGreaterThanOrEqual(40);
   });
 
-  it('derives the SAME value across fresh module loads with the same ENCRYPTION_KEY (Node/Edge parity)', async () => {
+  it('does not deterministically derive session secrets from ENCRYPTION_KEY', async () => {
     delete process.env.NEXTAUTH_SECRET;
     process.env.ENCRYPTION_KEY = 'b'.repeat(64);
     const sm1 = await freshSecretManager();
@@ -59,24 +57,12 @@ describe('getNextAuthSecret', () => {
     vi.resetModules();
     const sm2 = await freshSecretManager();
     const v2 = await sm2.getNextAuthSecret();
-    expect(v1).toBe(v2);
-  });
-
-  it('derives a DIFFERENT value for different ENCRYPTION_KEYs', async () => {
-    delete process.env.NEXTAUTH_SECRET;
-    process.env.ENCRYPTION_KEY = 'a'.repeat(64);
-    const sm1 = await freshSecretManager();
-    const v1 = await sm1.getNextAuthSecret();
-    vi.resetModules();
-    process.env.ENCRYPTION_KEY = 'c'.repeat(64);
-    const sm2 = await freshSecretManager();
-    const v2 = await sm2.getNextAuthSecret();
     expect(v1).not.toBe(v2);
   });
 
-  it('rejects too-short ENCRYPTION_KEY (entropy floor)', async () => {
+  it('requires NEXTAUTH_SECRET in production even when ENCRYPTION_KEY is present', async () => {
     delete process.env.NEXTAUTH_SECRET;
-    process.env.ENCRYPTION_KEY = 'short'; // < 32 chars
+    process.env.ENCRYPTION_KEY = 'a'.repeat(64);
     (process.env as Record<string, string>).NODE_ENV = 'production';
     const { getNextAuthSecret } = await freshSecretManager();
     await expect(getNextAuthSecret()).rejects.toThrow(/NEXTAUTH_SECRET is not set/);

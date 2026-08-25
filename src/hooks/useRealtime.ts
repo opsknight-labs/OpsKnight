@@ -12,6 +12,7 @@ export type RealtimeEvent =
       timestamp: string;
     }
   | { type: 'heartbeat'; timestamp: string }
+  | { type: 'authorization_revoked' }
   | { type: 'error'; message: string; timestamp: string };
 
 export type RealtimeMetrics = {
@@ -32,10 +33,12 @@ export function useRealtime() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
+  const authorizationRevoked = useRef(false);
 
   useEffect(() => {
     const handleOnline = () => {
       // Reset attempts and reconnect immediately
+      if (authorizationRevoked.current) return;
       reconnectAttempts.current = 0;
       // Close existing connection and let the reconnect logic re-open it
       if (eventSourceRef.current) {
@@ -55,6 +58,7 @@ export function useRealtime() {
 
   useEffect(() => {
     let mounted = true;
+    authorizationRevoked.current = false;
 
     const connect = () => {
       if (!mounted) return;
@@ -92,6 +96,13 @@ export function useRealtime() {
               case 'error':
                 setError(data.message);
                 break;
+              case 'authorization_revoked':
+                authorizationRevoked.current = true;
+                eventSource.close();
+                eventSourceRef.current = null;
+                setIsConnected(false);
+                setError('Real-time authorization was revoked. Sign in again to reconnect.');
+                break;
             }
           } catch (err) {
             logger.error('Failed to parse SSE event', { component: 'useRealtime', error: err });
@@ -99,7 +110,7 @@ export function useRealtime() {
         };
 
         eventSource.onerror = () => {
-          if (!mounted) return;
+          if (!mounted || authorizationRevoked.current) return;
           setIsConnected(false);
           eventSource.close();
 

@@ -90,7 +90,6 @@ export default async function PublicStatusPage() {
           OR: [{ type: 'UPDATE' }, { endDate: null }, { endDate: { gte: new Date() } }],
         },
         orderBy: { startDate: 'desc' },
-        take: 3,
       },
     },
   });
@@ -247,6 +246,16 @@ export default async function PublicStatusPage() {
 }
 
 async function renderStatusPage(statusPage: any) {
+  // Active maintenance must never be displaced by newer informational
+  // announcements because it directly affects calculated service health.
+  statusPage.announcements.sort((a: any, b: any) => {
+    const typePriority = (value: string) => (value === 'MAINTENANCE' ? 0 : 1);
+    return (
+      typePriority(a.type) - typePriority(b.type) ||
+      new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+    );
+  });
+
   // Parse branding
   const branding =
     statusPage.branding &&

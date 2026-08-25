@@ -292,8 +292,8 @@ describe('🚀 Comprehensive 28-Integration & Settings Matrix Verification', () 
 
       const events = transformPrometheusToEvent(promPayload);
       expect(events.length).toBe(2);
-      expect(events[0].dedup_key).toBe('fp-1');
-      expect(events[1].dedup_key).toBe('fp-2');
+      expect(events[0].dedup_key).toBe('prometheus-fp-1');
+      expect(events[1].dedup_key).toBe('prometheus-fp-2');
     });
 
     it('10. Sentry: Issue assignment and ignore actions map to acknowledge (not trigger)', () => {
@@ -705,7 +705,7 @@ describe('🚀 Comprehensive 28-Integration & Settings Matrix Verification', () 
 
       const v2Hash = hashTokenV2(token);
       expect(v2Hash.length).toBe(64);
-      expect(v1Hash).toBe(v2Hash);
+      expect(v1Hash).not.toBe(v2Hash);
     });
 
     it('25. RBAC: Unauthenticated requests fall back safely to VIEWER with empty ID', async () => {

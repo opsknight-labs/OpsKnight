@@ -2,7 +2,7 @@ import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getDefaultActorId, logAudit } from '@/lib/audit';
+import { logAudit } from '@/lib/audit';
 import { getUserPermissions, assertAdminOrResponder } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import ServicesListTable from '@/components/service/ServicesListTable';
@@ -16,8 +16,9 @@ export const revalidate = 0;
 
 async function createService(formData: FormData) {
   'use server';
+  let currentUser: { id: string };
   try {
-    await assertAdminOrResponder();
+    currentUser = await assertAdminOrResponder();
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -47,7 +48,7 @@ async function createService(formData: FormData) {
       action: 'service.created',
       entityType: 'SERVICE',
       entityId: service.id,
-      actorId: await getDefaultActorId(),
+      actorId: currentUser.id,
       details: { name: normalizedName, teamId: teamId || null },
     });
 

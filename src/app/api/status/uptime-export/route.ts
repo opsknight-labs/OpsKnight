@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { buildCsv } from '@/lib/csv';
+import { getServerSession } from 'next-auth';
+import { getAuthOptions } from '@/lib/auth';
 
 function escapePdf(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
@@ -93,9 +95,19 @@ export async function GET(req: NextRequest) {
   if (!isAdmin) {
     const publicPage = await prisma.statusPage.findFirst({
       where: { enabled: true, enableUptimeExports: true },
+      select: { requireAuth: true },
     });
     if (!publicPage) {
       return new NextResponse('Unauthorized', { status: 403 });
+    }
+    if (publicPage.requireAuth) {
+      const session = await getServerSession(await getAuthOptions());
+      if (!session) {
+        return new NextResponse('Authentication required', {
+          status: 401,
+          headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' },
+        });
+      }
     }
   }
 

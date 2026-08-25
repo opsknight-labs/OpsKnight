@@ -2,10 +2,10 @@ import { createHmac } from 'crypto';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const updateMany = vi.hoisted(() => vi.fn());
+const { findFirst, update } = vi.hoisted(() => ({ findFirst: vi.fn(), update: vi.fn() }));
 
 vi.mock('@/lib/prisma', () => ({
-  default: { notification: { updateMany } },
+  default: { notification: { findFirst, update } },
 }));
 
 vi.mock('@/lib/notification-providers', () => ({
@@ -40,18 +40,23 @@ function signedRequest(body: string, signatureOverride?: string) {
 describe('Twilio delivery receipt webhook', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    updateMany.mockResolvedValue({ count: 1 });
+    findFirst.mockResolvedValue({
+      id: 'notif-1',
+      incidentId: 'incident-1',
+      userId: 'user-1',
+      channel: 'SMS',
+      message: 'message',
+    });
+    update.mockResolvedValue({ id: 'notif-1' });
   });
 
   it('verifies the callback and records delivered messages', async () => {
     const response = await POST(signedRequest('MessageSid=SM123&MessageStatus=delivered'));
 
     expect(response.status).toBe(204);
-    expect(updateMany).toHaveBeenCalledWith(
+    expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
-          OR: [{ id: 'notif-1' }, { providerMessageId: 'SM123' }],
-        },
+        where: { id: 'notif-1' },
         data: expect.objectContaining({
           providerMessageId: 'SM123',
           status: 'DELIVERED',
@@ -69,6 +74,6 @@ describe('Twilio delivery receipt webhook', () => {
     );
 
     expect(response.status).toBe(401);
-    expect(updateMany).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 });

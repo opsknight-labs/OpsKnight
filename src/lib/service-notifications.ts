@@ -134,11 +134,12 @@ export async function sendServiceNotifications(
                   ? 'resolved'
                   : 'updated';
 
+          const { decryptStoredSecret } = await import('./encryption');
           const result = await sendIncidentWebhook(
             webhook.url,
             incidentId,
             webhookEventType,
-            webhook.secret || undefined,
+            webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
             webhook.type, // Pass webhook type for proper formatting
             webhook.channel || undefined
           );

@@ -6,6 +6,7 @@ import { transformGrafanaToEvents, GrafanaAlert } from '@/lib/integrations/grafa
 import { verifyGrafanaSignature } from '@/lib/integrations/signature-verification';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
+import { decryptStoredSecret } from '@/lib/encryption';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import { validatePayload, GrafanaAlertSchema } from '@/lib/integrations/schemas';
 import {
@@ -53,7 +54,8 @@ export async function POST(req: NextRequest) {
           logger.warn('api.integration.grafana_missing_signature', { integrationId });
           return jsonError('Missing X-Grafana-Signature header', 401);
         }
-        if (!verifyGrafanaSignature(rawBody, signature, integration.signatureSecret)) {
+        const signatureSecret = await decryptStoredSecret(integration.signatureSecret);
+        if (!verifyGrafanaSignature(rawBody, signature, signatureSecret)) {
           logger.warn('api.integration.grafana_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }

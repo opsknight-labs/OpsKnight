@@ -72,6 +72,17 @@ function isPublicPath(pathname: string) {
   return /\.(jpg|jpeg|png|gif|svg|ico|css|js|woff|woff2|ttf|eot|webmanifest)$/i.test(pathname);
 }
 
+function isStatusDomainPath(pathname: string) {
+  return (
+    pathname === '/' ||
+    pathname === '/history' ||
+    pathname === '/subscribe' ||
+    pathname.startsWith('/postmortems/') ||
+    pathname.startsWith('/verify') ||
+    pathname.startsWith('/unsubscribe')
+  );
+}
+
 function normalizeHostname(value?: string | null) {
   if (!value) return '';
   return value.split(':')[0]?.trim().toLowerCase() || '';
@@ -261,13 +272,14 @@ export default async function middleware(req: NextRequest) {
           allowedHosts.add(customHost);
         }
       }
-      if (hostname && allowedHosts.has(hostname)) {
+      if (hostname && allowedHosts.has(hostname) && isStatusDomainPath(pathname)) {
         const url = req.nextUrl.clone();
         url.pathname = pathname === '/' || pathname === '' ? '/status' : `/status${pathname}`;
         const rewriteResponse = NextResponse.rewrite(url);
         Object.entries(securityHeaders).forEach(([key, value]) => {
           rewriteResponse.headers.set(key, value);
         });
+        rewriteResponse.headers.set('x-request-id', requestId);
         return rewriteResponse;
       }
     }
@@ -346,11 +358,6 @@ export default async function middleware(req: NextRequest) {
 
   if (pathname.startsWith('/api')) {
     const originAllowed = origin && CORS_ALLOWED_ORIGINS.includes(origin);
-    const clientId =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-
     if (originAllowed) {
       const corsHeaders = {
         'Access-Control-Allow-Origin': origin,
@@ -385,6 +392,14 @@ export default async function middleware(req: NextRequest) {
 
     // Let API routes handle auth/authorization; avoid login redirects for API calls.
     return response;
+  }
+
+  // Private status pages must never be cached by browsers or shared CDNs. These
+  // headers are safe for public pages too and prevent configuration changes from
+  // leaving stale status data at an intermediary.
+  if (pathname === '/status' || pathname.startsWith('/status/')) {
+    response.headers.set('Cache-Control', 'private, no-store');
+    response.headers.set('Vary', 'Cookie');
   }
 
   // Check authentication status

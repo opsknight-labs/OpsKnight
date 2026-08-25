@@ -20,7 +20,7 @@ The implementation uses action-specific checks; a role name is not a guarantee t
 
 ## Resource checks for a User
 
-The central v1.4 checks allow a regular `USER` to:
+The central v1.5 checks allow a regular `USER` to:
 
 - view or modify an incident when assigned to it or a member of the service's owning team;
 - modify a service when a member of its owning team;
@@ -52,7 +52,7 @@ Application Admins and Responders can create/edit teams and add Members. Only ap
 | Assign elevated team roles                                    | Application Admin or that team's Owner                       |
 | Access a User-scoped operational resource                     | Assignment/team relationship required by that resource check |
 
-Consult the task guide because some workflows add stricter checks and some read-only pages are available to every signed-in user. For example, the v1.4 Audit Log page is not Admin-gated.
+Consult the task guide because some workflows add stricter checks. The Audit Log and system/security settings are Admin-only; operational pages additionally apply incident, service, schedule, and team scope checks.
 
 ## Least-privilege workflow
 

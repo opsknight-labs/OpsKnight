@@ -1,12 +1,12 @@
 ---
 order: 2
 title: Configuration Reference
-description: Runtime, deployment, security, integration, and advanced environment variables supported by OpsKnight v1.4.
+description: Runtime, deployment, security, integration, and advanced environment variables supported by OpsKnight v1.5.
 ---
 
 # Configuration Reference
 
-This page documents the operator-facing environment variables supported by OpsKnight v1.4. Copy `env.example` to `.env`, then provide secrets through your platform's secret store in production.
+This page documents the operator-facing environment variables supported by OpsKnight v1.5. Copy `env.example` to `.env`, then provide secrets through your platform's secret store in production.
 
 ```bash
 cp env.example .env
@@ -30,9 +30,10 @@ These variables must be set for OpsKnight to start correctly in any environment.
 
 ## Security & Encryption
 
-| Variable         | Required in Production | Description                                                                                                                                          |
-| ---------------- | :--------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ENCRYPTION_KEY` |        **Yes**         | 32-byte hex master key (64 hex chars) used to encrypt supported stored provider and integration credentials. API keys are one-way hashed separately. |
+| Variable          | Required in Production | Description                                                                                                                                                             |
+| ----------------- | :--------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ENCRYPTION_KEYS` |      Recommended       | Rotation keyring in `key-id:64-hex-key` entries. The first key encrypts new values; remaining keys decrypt older v3/legacy values.                                      |
+| `ENCRYPTION_KEY`  |   Yes if no keyring    | Single 32-byte hex key used for compatibility and as an optional legacy key alongside `ENCRYPTION_KEYS`. API keys are keyed hashes and are not encrypted with this key. |
 
 ### Generating the Encryption Key
 
@@ -131,6 +132,7 @@ Set the public and private variables together. The database-backed Web Push prov
 | `SENTRY_FORCE_ENABLE`                     | `false`                    | Enables that optional Sentry path outside production when `true`.                                                                 |
 | `NEXT_PUBLIC_ENABLE_WEB_VITALS`           | `false` outside production | Enables browser Web Vitals reporting outside production.                                                                          |
 | `APP_VERSION` / `NEXT_PUBLIC_APP_VERSION` | Package version            | Server/public version label override.                                                                                             |
+| `PROMETHEUS_SCRAPE_TOKEN`                 | —                          | Bearer token for authenticated scraping of `/api/metrics`; use a high-entropy secret.                                             |
 
 OpenTelemetry variables are not consumed by the v1.4 application code and are therefore not part of this reference.
 
@@ -157,7 +159,7 @@ OpenTelemetry variables are not consumed by the v1.4 application code and are th
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `AUTH_TRUST_HOST`                                              | Explicitly enables Auth.js host trust; setting `NEXTAUTH_URL` also enables it.                                    |
 | `TRUSTED_PROXY_HOPS`                                           | Number of trusted proxy entries read from the right side of `X-Forwarded-For`; defaults to `1`.                   |
-| `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`                           | Requires a verified-email claim from OIDC when `true`.                                                            |
+| `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`                           | Requires a verified-email claim from OIDC; defaults to `true`. Set `false` only after IdP-specific risk review.   |
 | `OIDC_CONFIG_CACHE_TTL_MS`, `OIDC_CONFIG_RECORD_CACHE_TTL_MS`  | Advanced OIDC cache TTLs.                                                                                         |
 | `AUTH_OPTIONS_CACHE_TTL_MS`, `JWT_USER_REFRESH_TTL_MS`         | Advanced authentication/session cache timing.                                                                     |
 | `API_KEY_SECRET`                                               | Overrides the secret used to hash API keys; otherwise `NEXTAUTH_SECRET` is used. Back up and rotate deliberately. |

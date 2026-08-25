@@ -14,8 +14,9 @@ export async function saveChatOpsConfig(
   _prevState: ChatOpsConfigState | undefined,
   formData: FormData
 ): Promise<ChatOpsConfigState> {
+  let actor: { id: string };
   try {
-    await assertAdmin();
+    actor = await assertAdmin();
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
@@ -33,7 +34,7 @@ export async function saveChatOpsConfig(
       .replace(/[^a-z0-9-]/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 20);
-    
+
     if (!sanitizedPrefix) {
       return { error: 'Channel prefix must contain at least one alphanumeric character.' };
     }
@@ -43,7 +44,9 @@ export async function saveChatOpsConfig(
     const archiveOnResolveValue = formData.get('archiveOnResolve');
     const archiveOnResolve = archiveOnResolveValue === 'on' || archiveOnResolveValue === 'true';
     const defaultVideoBridge = (formData.get('defaultVideoBridge') as string | null) ?? 'NONE';
-    const customBridgeUrlTemplate = ((formData.get('customBridgeUrlTemplate') as string | null) ?? '').trim();
+    const customBridgeUrlTemplate = (
+      (formData.get('customBridgeUrlTemplate') as string | null) ?? ''
+    ).trim();
 
     await prisma.chatOpsConfig.upsert({
       where: { id: 'default' },
@@ -72,6 +75,7 @@ export async function saveChatOpsConfig(
       action: 'chatops.config.updated',
       entityType: 'SERVICE',
       entityId: 'chatops-config',
+      actorId: actor.id,
       details: {
         enabled,
         channelPrefix,
@@ -84,6 +88,8 @@ export async function saveChatOpsConfig(
 
     return { success: true, error: null };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Failed to save ChatOps configuration.' };
+    return {
+      error: error instanceof Error ? error.message : 'Failed to save ChatOps configuration.',
+    };
   }
 }

@@ -19,6 +19,12 @@ An OpsKnight release can change the application image, database schema, deployme
 
 Never depend on a floating `latest` tag as your rollback record.
 
+### Enterprise-hardening migration notes
+
+This release adds audit actor snapshots and indexes, API-key expiry/indexing, and uniqueness constraints for escalation steps and exact schedule overrides. The data migration deterministically renumbers colliding escalation steps and removes exact duplicate overrides before creating the constraints. Rehearse it against a recent production-size restore, review affected-row counts, and preserve the pre-upgrade recovery point.
+
+The release also writes new protected secrets using v3 authenticated encryption. Keep the current encryption key available during upgrade. If rotating at the same time, deploy `ENCRYPTION_KEYS=new-id:NEW_KEY,old-id:OLD_KEY` consistently to every replica, rotate/re-save credentials, validate them, and only then retire the old key. Existing plaintext webhook/signature secrets must be rotated or re-saved to gain encryption at rest.
+
 ## Deploy
 
 ### Docker Compose
@@ -68,6 +74,9 @@ Do not call the upgrade complete until all checks pass:
 - email/SMS/push/Slack or the deployment's required channels deliver;
 - public status, RSS/subscriber behavior, webhooks, and mobile PWA work where enabled;
 - logs, scheduler ticks, database capacity, and error rates remain within baseline through the soak period.
+- API keys have the expected owner/scopes/expiry and legacy keys authenticate during the migration window;
+- `/api/metrics` rejects anonymous access and accepts the configured scrape Bearer token;
+- outbound service/status webhooks reject redirects/private destinations and the receiver validates timestamped signatures and delivery IDs;
 
 ## Choose rollback type
 

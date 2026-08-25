@@ -1,10 +1,11 @@
 /**
  * Encryption utilities for sensitive data
- * Uses AES-256-CBC encryption with envelope encryption (v2).
+ * Uses authenticated AES-256-GCM envelope encryption (v3).
  *
  * Key resolution order:
- *  1. ENCRYPTION_KEY environment variable (required in production)
- *  2. Static development fallback key (only when NODE_ENV === 'development')
+ *  1. First key in ENCRYPTION_KEYS (for example `k2:hex,k1:hex`)
+ *  2. ENCRYPTION_KEY environment variable (legacy single-key deployments)
+ *  3. Static development fallback key (development only)
  */
 
 import crypto from 'crypto';
@@ -18,78 +19,171 @@ function isValidHexKey(value: string): boolean {
   return /^[0-9a-f]{64}$/i.test(value);
 }
 
+function isWeakKey(value: string): boolean {
+  return /^0{64}$/i.test(value) || /^([0-9a-f])\1{63}$/i.test(value);
+}
+
+type EncryptionKeyEntry = { id: string; key: string };
+
+function getEncryptionKeyring(): EncryptionKeyEntry[] {
+  const entries: EncryptionKeyEntry[] = [];
+  const configuredKeyring = process.env.ENCRYPTION_KEYS?.trim();
+
+  if (configuredKeyring) {
+    for (const rawEntry of configuredKeyring.split(',')) {
+      const separator = rawEntry.indexOf(':');
+      const id = rawEntry.slice(0, separator).trim();
+      const key = rawEntry.slice(separator + 1).trim();
+      if (
+        separator <= 0 ||
+        !/^[A-Za-z0-9._-]{1,64}$/.test(id) ||
+        !isValidHexKey(key) ||
+        (process.env.NODE_ENV === 'production' && isWeakKey(key))
+      ) {
+        logger.error('[Encryption] ENCRYPTION_KEYS contains an invalid or weak key entry.');
+        return [];
+      }
+      if (entries.some(entry => entry.id === id)) {
+        logger.error('[Encryption] ENCRYPTION_KEYS contains a duplicate key ID.');
+        return [];
+      }
+      entries.push({ id, key });
+    }
+  }
+
+  const legacyKey = process.env.ENCRYPTION_KEY?.trim();
+  if (legacyKey) {
+    if (
+      !isValidHexKey(legacyKey) ||
+      (process.env.NODE_ENV === 'production' && isWeakKey(legacyKey))
+    ) {
+      logger.error(
+        '[Encryption] ENCRYPTION_KEY is invalid or uses a known weak value. Encryption disabled.'
+      );
+      return [];
+    }
+    if (!entries.some(entry => entry.key === legacyKey)) {
+      const legacyId = entries.some(entry => entry.id === 'k1') ? 'legacy' : 'k1';
+      entries.push({ id: legacyId, key: legacyKey });
+    }
+  }
+
+  if (entries.length === 0 && process.env.NODE_ENV === 'development') {
+    logger.warn(
+      '[Encryption] Encryption keys not set. Using development fallback key. DO NOT use this in production.'
+    );
+    entries.push({ id: 'dev', key: DEV_FALLBACK_KEY });
+  }
+
+  return entries;
+}
+
 /**
  * Resolve the active encryption key.
  * Returns null only in production when ENCRYPTION_KEY is not set.
  */
 export function getEncryptionKey(): string | null {
-  const envKey = process.env.ENCRYPTION_KEY;
-
-  if (envKey) {
-    if (!isValidHexKey(envKey)) {
-      logger.error(
-        '[Encryption] ENCRYPTION_KEY is set but is not a valid 32-byte hex string (64 hex chars). Encryption disabled.'
-      );
-      return null;
-    }
-    return envKey;
-  }
-
-  if (process.env.NODE_ENV === 'development') {
-    logger.warn(
-      '[Encryption] ENCRYPTION_KEY not set. Using development fallback key. DO NOT use this in production.'
-    );
-    return DEV_FALLBACK_KEY;
-  }
-
-  logger.error(
-    '[Encryption] ENCRYPTION_KEY environment variable is not set. Encryption features are disabled.'
-  );
+  const active = getEncryptionKeyring()[0];
+  if (active) return active.key;
+  logger.error('[Encryption] No valid encryption key is configured.');
   return null;
 }
 
 /**
- * Encrypt text using AES-256-CBC envelope encryption (v2 format).
+ * Encrypt text using AES-256-GCM envelope encryption (v3 format).
  */
-export async function encryptWithKey(text: string, keyHex: string): Promise<string> {
-  const algorithm = 'aes-256-cbc';
+export async function encryptWithKey(
+  text: string,
+  keyHex: string,
+  keyId: string = 'k1'
+): Promise<string> {
+  const algorithm = 'aes-256-gcm';
   if (!keyHex || !isValidHexKey(keyHex)) {
     throw new Error('Invalid encryption key provided');
+  }
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(keyId)) {
+    throw new Error('Invalid encryption key ID');
   }
 
   // 1. Generate Data Encryption Key (DEK)
   const dek = crypto.randomBytes(32);
-  const dekHex = dek.toString('hex');
 
   // 2. Encrypt payload with DEK
-  const payloadIv = crypto.randomBytes(16);
+  const payloadIv = crypto.randomBytes(12);
   const payloadCipher = crypto.createCipheriv(algorithm, dek, payloadIv);
-  let encryptedPayload = payloadCipher.update(text, 'utf8', 'hex');
-  encryptedPayload += payloadCipher.final('hex');
+  payloadCipher.setAAD(Buffer.from(`opsknight:v3:${keyId}:payload`, 'utf8'));
+  const encryptedPayload = Buffer.concat([
+    payloadCipher.update(text, 'utf8'),
+    payloadCipher.final(),
+  ]);
+  const payloadAuthTag = payloadCipher.getAuthTag();
 
   // 3. Encrypt DEK with master key
   const masterKey = Buffer.from(keyHex, 'hex');
-  const dekIv = crypto.randomBytes(16);
+  const dekIv = crypto.randomBytes(12);
   const dekCipher = crypto.createCipheriv(algorithm, masterKey, dekIv);
-  let encryptedDek = dekCipher.update(dekHex, 'utf8', 'hex');
-  encryptedDek += dekCipher.final('hex');
+  dekCipher.setAAD(Buffer.from(`opsknight:v3:${keyId}:dek`, 'utf8'));
+  const encryptedDek = Buffer.concat([dekCipher.update(dek), dekCipher.final()]);
+  const dekAuthTag = dekCipher.getAuthTag();
 
-  // v2:dekIv:encryptedDek:payloadIv:encryptedPayload
-  return `v2:${dekIv.toString('hex')}:${encryptedDek}:${payloadIv.toString('hex')}:${encryptedPayload}`;
+  // v3:kid:dekIv:encryptedDek:dekTag:payloadIv:encryptedPayload:payloadTag
+  return [
+    'v3',
+    keyId,
+    dekIv.toString('hex'),
+    encryptedDek.toString('hex'),
+    dekAuthTag.toString('hex'),
+    payloadIv.toString('hex'),
+    encryptedPayload.toString('hex'),
+    payloadAuthTag.toString('hex'),
+  ].join(':');
 }
 
 /**
- * Decrypt ciphertext using AES-256-CBC. Supports both v1 (legacy) and v2 (envelope) formats.
+ * Decrypt ciphertext. Supports authenticated v3 plus legacy v1/v2 CBC data.
  */
 export async function decryptWithKey(encryptedText: string, keyHex: string): Promise<string> {
-  const algorithm = 'aes-256-cbc';
   if (!keyHex || !isValidHexKey(keyHex)) {
     throw new Error('Invalid encryption key provided');
   }
   const masterKey = Buffer.from(keyHex, 'hex');
 
+  if (encryptedText.startsWith('v3:')) {
+    const parts = encryptedText.split(':');
+    if (parts.length !== 8 || !/^[A-Za-z0-9._-]{1,64}$/.test(parts[1])) {
+      throw new Error('Invalid v3 encrypted text format');
+    }
+    const [, keyId, dekIvHex, encryptedDekHex, dekTagHex, payloadIvHex, payloadHex, payloadTagHex] =
+      parts;
+    const dekDecipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      masterKey,
+      Buffer.from(dekIvHex, 'hex')
+    );
+    dekDecipher.setAAD(Buffer.from(`opsknight:v3:${keyId}:dek`, 'utf8'));
+    dekDecipher.setAuthTag(Buffer.from(dekTagHex, 'hex'));
+    const dek = Buffer.concat([
+      dekDecipher.update(Buffer.from(encryptedDekHex, 'hex')),
+      dekDecipher.final(),
+    ]);
+    if (dek.length !== 32) throw new Error('Invalid v3 data encryption key');
+
+    const payloadDecipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      dek,
+      Buffer.from(payloadIvHex, 'hex')
+    );
+    payloadDecipher.setAAD(Buffer.from(`opsknight:v3:${keyId}:payload`, 'utf8'));
+    payloadDecipher.setAuthTag(Buffer.from(payloadTagHex, 'hex'));
+    return Buffer.concat([
+      payloadDecipher.update(Buffer.from(payloadHex, 'hex')),
+      payloadDecipher.final(),
+    ]).toString('utf8');
+  }
+
   // V2 envelope format
   if (encryptedText.startsWith('v2:')) {
+    const algorithm = 'aes-256-cbc';
     const parts = encryptedText.split(':');
     if (parts.length !== 5) {
       throw new Error('Invalid v2 encrypted text format');
@@ -111,6 +205,7 @@ export async function decryptWithKey(encryptedText: string, keyHex: string): Pro
   }
 
   // Legacy v1 format: iv:ciphertext
+  const algorithm = 'aes-256-cbc';
   const parts = encryptedText.split(':');
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new Error('Invalid encrypted text format');
@@ -126,9 +221,9 @@ export async function decryptWithKey(encryptedText: string, keyHex: string): Pro
  * Encrypt using the active system key.
  */
 export async function encrypt(text: string): Promise<string> {
-  const keyHex = getEncryptionKey();
-  if (!keyHex) throw new Error('ENCRYPTION_KEY not configured');
-  return encryptWithKey(text, keyHex);
+  const active = getEncryptionKeyring()[0];
+  if (!active) throw new Error('ENCRYPTION_KEY not configured');
+  return encryptWithKey(text, active.key, active.id);
 }
 
 /**
@@ -136,9 +231,25 @@ export async function encrypt(text: string): Promise<string> {
  */
 export async function decrypt(encryptedText: string): Promise<string> {
   try {
-    const keyHex = getEncryptionKey();
-    if (!keyHex) throw new Error('ENCRYPTION_KEY not configured');
-    return await decryptWithKey(encryptedText, keyHex);
+    const keyring = getEncryptionKeyring();
+    if (keyring.length === 0) throw new Error('ENCRYPTION_KEY not configured');
+
+    if (encryptedText.startsWith('v3:')) {
+      const keyId = encryptedText.split(':', 3)[1];
+      const matchingKey = keyring.find(entry => entry.id === keyId);
+      if (!matchingKey) throw new Error(`Encryption key ID is unavailable: ${keyId}`);
+      return await decryptWithKey(encryptedText, matchingKey.key);
+    }
+
+    let lastLegacyError: unknown;
+    for (const entry of keyring) {
+      try {
+        return await decryptWithKey(encryptedText, entry.key);
+      } catch (error) {
+        lastLegacyError = error;
+      }
+    }
+    throw lastLegacyError || new Error('Unable to decrypt legacy ciphertext');
   } catch (primaryError) {
     // If primary decryption fails, attempt legacy database-backed key fallback
     try {
@@ -160,11 +271,11 @@ export async function decrypt(encryptedText: string): Promise<string> {
 
         // Asynchronously migrate this specific ciphertext to the new key in the database
         // without blocking the returned result:
-        const keyHex = getEncryptionKey();
-        if (keyHex) {
+        const active = getEncryptionKeyring()[0];
+        if (active) {
           Promise.resolve().then(async () => {
             try {
-              const newEncrypted = await encryptWithKey(decryptedLegacy, keyHex);
+              const newEncrypted = await encryptWithKey(decryptedLegacy, active.key, active.id);
 
               // 1. Check OidcConfig
               await prisma.oidcConfig.updateMany({
@@ -230,4 +341,11 @@ export async function decrypt(encryptedText: string): Promise<string> {
     logger.error('[Encryption] Decryption error', { error: primaryError });
     throw new Error('Failed to decrypt token');
   }
+}
+
+/** Read a secret during the rollout from legacy plaintext to encrypted values. */
+export async function decryptStoredSecret(value: string): Promise<string> {
+  const looksEncrypted =
+    value.startsWith('v3:') || value.startsWith('v2:') || /^[0-9a-f]+:[0-9a-f]+$/i.test(value);
+  return looksEncrypted ? decrypt(value) : value;
 }

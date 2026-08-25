@@ -16,6 +16,7 @@ import { Card } from '@/components/ui/shadcn/card';
 
 import { assertAdmin } from '@/lib/rbac';
 import type { AuditEntityType } from '@prisma/client';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,7 @@ type AuditLogPageProps = {
     entityId?: string;
     actorId?: string;
     action?: string;
+    page?: string;
   }>;
 };
 
@@ -36,6 +38,8 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
   const entityId = awaitedParams?.entityId;
   const actorId = awaitedParams?.actorId;
   const action = awaitedParams?.action;
+  const page = Math.max(1, Number.parseInt(awaitedParams?.page || '1', 10) || 1);
+  const pageSize = 50;
 
   const session = await getServerSession(await getAuthOptions());
   const email = session?.user?.email ?? null;
@@ -51,22 +55,36 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     ...(action ? { action } : {}),
   };
 
-  const logs = await prisma.auditLog.findMany({
-    where,
-    include: {
-      actor: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          avatarUrl: true,
-          gender: true,
+  const [logs, totalLogs] = await Promise.all([
+    prisma.auditLog.findMany({
+      where,
+      include: {
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+            gender: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 250,
-  });
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.auditLog.count({ where }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
+  const pageHref = (targetPage: number) => {
+    const params = new URLSearchParams();
+    if (entityType) params.set('entityType', entityType);
+    if (entityId) params.set('entityId', entityId);
+    if (actorId) params.set('actorId', actorId);
+    if (action) params.set('action', action);
+    params.set('page', String(targetPage));
+    return `/audit?${params.toString()}`;
+  };
 
   return (
     <main className="p-4 [zoom:0.8]">
@@ -127,9 +145,11 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
                         </div>
                       )}
                       <div>
-                        <div className="font-semibold">{log.actor?.name || 'System'}</div>
+                        <div className="font-semibold">
+                          {log.actor?.name || log.actorName || 'System'}
+                        </div>
                         <div className="text-xs text-muted-foreground">
-                          {log.actor?.email || '-'}
+                          {log.actor?.email || log.actorEmail || '-'}
                         </div>
                       </div>
                     </div>
@@ -155,6 +175,23 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
           </Table>
         </div>
       </Card>
+      <div className="mt-4 flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">
+          Page {Math.min(page, totalPages)} of {totalPages} · {totalLogs} entries
+        </span>
+        <div className="flex gap-2">
+          {page > 1 && (
+            <Link className="rounded border px-3 py-2 hover:bg-muted" href={pageHref(page - 1)}>
+              Previous
+            </Link>
+          )}
+          {page < totalPages && (
+            <Link className="rounded border px-3 py-2 hover:bg-muted" href={pageHref(page + 1)}>
+              Next
+            </Link>
+          )}
+        </div>
+      </div>
     </main>
   );
 }

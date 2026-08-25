@@ -1,4 +1,5 @@
-import { randomBytes, scryptSync } from 'crypto';
+import { createHmac, randomBytes, scrypt } from 'crypto';
+import { promisify } from 'util';
 import { getNextAuthSecretSync } from './secret-manager';
 
 function getDefaultSecret(): string {
@@ -7,35 +8,39 @@ function getDefaultSecret(): string {
 
 export function generateApiKey() {
   const raw = randomBytes(32).toString('base64url');
-  const token = `ok_${raw}`;
+  const environment = process.env.NODE_ENV === 'production' ? 'live' : 'test';
+  const token = `ok_${environment}_${raw}`;
   return {
     token,
-    prefix: token.slice(0, 8),
+    prefix: token.slice(0, 12),
     tokenHash: hashTokenV2(token),
   };
 }
 
 /**
- * Legacy hash function (upgraded to use scrypt for stronger, slower hashing)
- * Kept only for backward-compatibility lookups and lazy migration.
+ * Compatibility HMAC namespace retained for callers that need a distinct
+ * legacy identifier without performing expensive password hashing.
  */
 export function hashTokenV1(token: string) {
   const secret = getDefaultSecret();
-  const derivedKey = scryptSync(token, secret, 32);
-  return derivedKey.toString('hex');
+  return createHmac('sha256', secret).update(`opsknight:api-key:v1:${token}`).digest('hex');
 }
 
 /**
- * Secure hash function (Scrypt)
- * Used for all new keys and migrated keys.
- * High computational effort prevents brute-force.
+ * Fast keyed lookup hash. API keys already carry 256 bits of entropy, so a
+ * password KDF adds event-loop pressure without improving brute-force safety.
  */
 export function hashTokenV2(token: string) {
-  // scryptSync(password, salt, keyLength, [options])
   const secret = getDefaultSecret();
-  // Using the secret as salt is acceptable here as the secret is high-entropy
-  const derivedKey = scryptSync(token, secret, 32);
-  return derivedKey.toString('hex');
+  return createHmac('sha256', secret).update(`opsknight:api-key:v2:${token}`).digest('hex');
+}
+
+const scryptAsync = promisify(scrypt);
+
+/** Compute hashes written by releases that used synchronous scrypt. */
+export async function hashLegacyScryptToken(token: string): Promise<string> {
+  const derived = (await scryptAsync(token, getDefaultSecret(), 32)) as Buffer;
+  return derived.toString('hex');
 }
 
 export const hashToken = hashTokenV2;

@@ -35,6 +35,9 @@ vi.mock('@/lib/prisma', () => {
       findFirst: vi.fn(),
       upsert: vi.fn(),
     },
+    auditLog: {
+      findFirst: vi.fn(),
+    },
   };
   return { default: mockPrisma };
 });
@@ -55,6 +58,7 @@ describe('Auth JWT + OIDC (unit)', () => {
     (prisma.user.create as any).mockResolvedValue({ id: 'u1' });
     (prisma.user.update as any).mockResolvedValue({});
     (prisma.userToken.findFirst as any).mockResolvedValue(null);
+    (prisma.auditLog.findFirst as any).mockResolvedValue(null);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
     (prisma.oidcIdentity.create as any).mockResolvedValue({ id: 'id1' });
   });

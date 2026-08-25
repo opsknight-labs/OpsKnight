@@ -69,11 +69,24 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     }
     return jsonOk({ success: true }, 200);
   } catch (error) {
+    const message = error instanceof Error ? error.message : '';
     logger.error('api.mobile.incident.update_failed', {
       component: 'mobile-incident-status',
       error,
       incidentId: params.id,
     });
+    if (message.includes('Incident not found')) {
+      return jsonError('Incident not found.', 404);
+    }
+    if (message.includes('Unauthorized') || message.includes('permission')) {
+      return jsonError('Forbidden.', 403);
+    }
+    if (
+      message.includes('resolved incident cannot be acknowledged') ||
+      message.includes('Incident changed from')
+    ) {
+      return jsonError(message, 409);
+    }
     return jsonError('Failed to update incident.', 500);
   }
 }

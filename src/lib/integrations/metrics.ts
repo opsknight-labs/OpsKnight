@@ -52,6 +52,23 @@ const metricsState: MetricsState = {
   byIntegration: {},
   global: createEmptyMetrics(),
 };
+const MAX_INTEGRATION_METRICS = 1000;
+const MAX_TYPE_METRICS = 50;
+
+function evictOldest(entries: Record<string, IntegrationMetrics>, capacity: number) {
+  const keys = Object.keys(entries);
+  if (keys.length < capacity) return;
+  let oldestKey = keys[0];
+  let oldestTime = entries[oldestKey]?.lastReceived?.getTime() ?? 0;
+  for (const key of keys.slice(1)) {
+    const time = entries[key]?.lastReceived?.getTime() ?? 0;
+    if (time < oldestTime) {
+      oldestKey = key;
+      oldestTime = time;
+    }
+  }
+  delete entries[oldestKey];
+}
 
 /**
  * Update running average latency
@@ -79,9 +96,11 @@ export function recordWebhookReceived(
 
   // Ensure metrics objects exist
   if (!metricsState.byType[integrationType]) {
+    evictOldest(metricsState.byType, MAX_TYPE_METRICS);
     metricsState.byType[integrationType] = createEmptyMetrics();
   }
   if (!metricsState.byIntegration[integrationId]) {
+    evictOldest(metricsState.byIntegration, MAX_INTEGRATION_METRICS);
     metricsState.byIntegration[integrationId] = createEmptyMetrics();
   }
 

@@ -1,7 +1,9 @@
 import prisma from '@/lib/prisma';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import PostmortemDetailView from '@/components/postmortem/PostmortemDetailView';
 import Link from 'next/link';
+import { getServerSession } from 'next-auth';
+import { getAuthOptions } from '@/lib/auth';
 
 export default async function PublicPostmortemPage({
   params,
@@ -9,6 +11,15 @@ export default async function PublicPostmortemPage({
   params: Promise<{ incidentId: string }>;
 }) {
   const { incidentId } = await params;
+
+  const statusPage = await prisma.statusPage.findFirst({
+    where: { enabled: true },
+    select: { requireAuth: true },
+  });
+  if (statusPage?.requireAuth) {
+    const session = await getServerSession(await getAuthOptions());
+    if (!session) redirect(`/login?callbackUrl=/status/postmortems/${incidentId}`);
+  }
 
   const postmortem = await prisma.postmortem.findFirst({
     where: {

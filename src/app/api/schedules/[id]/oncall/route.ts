@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
 import { resolveEscalationTarget } from '@/lib/escalation';
 import { logger } from '@/lib/logger';
+import { checkApiKeyRateLimit } from '@/lib/api-rate-limit';
+import { getScheduleApiScope } from '@/lib/schedule-api-auth';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -19,12 +21,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         { status: 403 }
       );
     }
+    const rate = await checkApiKeyRateLimit('schedules:oncall', apiKey.id, 60);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded.' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } }
+      );
+    }
 
     const { id } = await params;
 
     // Verify schedule exists
-    const schedule = await prisma.onCallSchedule.findUnique({
-      where: { id },
+    const scheduleScope = await getScheduleApiScope(apiKey.userId);
+    const schedule = await prisma.onCallSchedule.findFirst({
+      where: { id, ...scheduleScope },
       select: { id: true },
     });
 

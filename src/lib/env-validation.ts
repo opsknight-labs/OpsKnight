@@ -54,7 +54,10 @@ export function validateProductionEnv(): void {
       name: 'DATABASE_URL',
       description: 'PostgreSQL connection string',
     },
-    // NEXTAUTH_SECRET is now auto-generated - no longer required in env
+    {
+      name: 'NEXTAUTH_SECRET',
+      description: 'Independent signing secret for authentication sessions',
+    },
     {
       name: 'NEXTAUTH_URL',
       description: 'Full URL of your application (e.g., https://OpsKnight.yourdomain.com)',
@@ -72,6 +75,13 @@ export function validateProductionEnv(): void {
   // Safe because 'name' comes from the hardcoded 'required' array above
   // eslint-disable-next-line security/detect-object-injection
   const missing = required.filter(({ name }) => !process.env[name]);
+
+  if (!process.env.ENCRYPTION_KEY && !process.env.ENCRYPTION_KEYS) {
+    missing.push({
+      name: 'ENCRYPTION_KEY or ENCRYPTION_KEYS',
+      description: '32-byte encryption key or versioned encryption keyring',
+    });
+  }
 
   if (missing.length > 0) {
     const errorMessage = [

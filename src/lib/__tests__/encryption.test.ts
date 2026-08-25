@@ -56,13 +56,13 @@ describe('Encryption Utility Tests', () => {
     });
   });
 
-  describe('Envelope Encryption (v2) Operations', () => {
+  describe('Envelope Encryption (v3) Operations', () => {
     it('should encrypt and decrypt data correctly using a valid key', async () => {
       const plaintext = 'Secret OpsKnight Credential';
       const encrypted = await encryptWithKey(plaintext, VALID_KEY);
 
-      expect(encrypted).toContain('v2:');
-      expect(encrypted.split(':')).toHaveLength(5); // v2:dekIv:encryptedDek:payloadIv:encryptedPayload
+      expect(encrypted).toContain('v3:');
+      expect(encrypted.split(':')).toHaveLength(8);
 
       const decrypted = await decryptWithKey(encrypted, VALID_KEY);
       expect(decrypted).toBe(plaintext);

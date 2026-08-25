@@ -23,8 +23,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
     }
     const { id } = await params;
-    const service = await prisma.service.findUnique({
-      where: { id },
+    const apiUser = await prisma.user.findUnique({
+      where: { id: apiKey.userId },
+      select: { role: true, status: true, teamMemberships: { select: { teamId: true } } },
+    });
+    if (!apiUser || apiUser.status !== 'ACTIVE') return jsonError('Unauthorized.', 401);
+    const hasGlobalRead = apiUser.role === 'ADMIN' || apiUser.role === 'RESPONDER';
+    const teamIds = apiUser.teamMemberships.map(membership => membership.teamId);
+    const service = await prisma.service.findFirst({
+      where: { id, ...(hasGlobalRead ? {} : { teamId: { in: teamIds } }) },
       select: {
         id: true,
         name: true,

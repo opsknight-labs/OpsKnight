@@ -353,7 +353,7 @@ export default async function ServiceIntegrationsPage({
                               <IntegrationSecretControl
                                 integrationId={integration.id}
                                 serviceId={service.id}
-                                initialSecret={integration.signatureSecret}
+                                hasSecret={!!integration.signatureSecret}
                                 className="w-full"
                               />
                             </div>
