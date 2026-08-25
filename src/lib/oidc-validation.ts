@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { assertSafeOutboundUrl } from '@/lib/network-security';
 
 export type OidcValidationResult = {
   isValid: boolean;
@@ -98,11 +99,25 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
 
     logger.info(`[OIDC Validation] Checking discovery URL: ${discoveryUrl}`);
 
+    try {
+      await assertSafeOutboundUrl(discoveryUrl, { requireHttps: true });
+    } catch {
+      return { isValid: false, error: 'OIDC issuer resolves to a restricted network address.' };
+    }
+
     const response = await fetch(discoveryUrl, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(5000),
+      redirect: 'manual',
     });
+
+    if (response.status >= 300 && response.status < 400) {
+      return {
+        isValid: false,
+        error: 'OIDC discovery redirects are not allowed. Configure the canonical issuer URL.',
+      };
+    }
 
     if (!response.ok) {
       logger.warn(`[OIDC Validation] Discovery failed with status: ${response.status}`);
@@ -115,21 +130,40 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
     const config = await response.json();
 
     // 2. Metadata Check: Verify required endpoints exist
-    if (!config.authorization_endpoint || !config.token_endpoint) {
+    if (!config.authorization_endpoint || !config.token_endpoint || !config.jwks_uri) {
       return {
         isValid: false,
         error:
-          'Issuer metadata is missing required endpoints (authorization_endpoint, token_endpoint).',
+          'Issuer metadata is missing required endpoints (authorization_endpoint, token_endpoint, jwks_uri).',
       };
     }
 
-    // 3. Algorithm Check: Verify RS256 support (NextAuth default)
-    // Note: Some providers might not list it explicitly if they only support one, but it's good to check if array exists.
-    if (Array.isArray(config.id_token_signing_alg_values_supported)) {
-      if (!config.id_token_signing_alg_values_supported.includes('RS256')) {
+    for (const endpoint of [
+      config.authorization_endpoint,
+      config.token_endpoint,
+      config.jwks_uri,
+    ]) {
+      try {
+        await assertSafeOutboundUrl(String(endpoint), { requireHttps: true });
+      } catch {
         return {
           isValid: false,
-          error: 'Identity Provider uses unsupported signing algorithms. RS256 is required.',
+          error: 'Issuer metadata contains an unsafe or non-HTTPS endpoint.',
+        };
+      }
+    }
+
+    // 3. Algorithm Check: permit asymmetric enterprise-safe algorithms only.
+    if (Array.isArray(config.id_token_signing_alg_values_supported)) {
+      const permittedAlgorithms = new Set(['RS256', 'ES256']);
+      if (
+        !config.id_token_signing_alg_values_supported.some((alg: unknown) =>
+          permittedAlgorithms.has(String(alg))
+        )
+      ) {
+        return {
+          isValid: false,
+          error: 'Identity Provider must support RS256 or ES256 ID-token signing.',
         };
       }
     }

@@ -38,7 +38,7 @@ export async function validateWebhookUrl(urlString: string): Promise<boolean> {
   }
 }
 
-function isPrivateIp(ip: string): boolean {
+export function isPrivateIp(ip: string): boolean {
   const lowerIp = ip.toLowerCase();
 
   // IPv6 checks
@@ -56,6 +56,10 @@ function isPrivateIp(ip: string): boolean {
     }
     // Site-local (deprecated but still blocked) fec0::/10
     if (lowerIp.startsWith('fec')) return true;
+    // Unspecified address and IPv4-compatible encodings.
+    if (lowerIp === '::' || lowerIp.startsWith('::ffff:0:')) return true;
+    // Documentation and multicast ranges.
+    if (lowerIp.startsWith('2001:db8:') || lowerIp.startsWith('ff')) return true;
     return false;
   }
 
@@ -108,4 +112,19 @@ function isPrivateIp(ip: string): boolean {
   if (parts[0] >= 240) return true;
 
   return false;
+}
+
+export async function assertSafeOutboundUrl(
+  urlString: string,
+  options: { requireHttps?: boolean } = {}
+): Promise<URL> {
+  const url = new URL(urlString);
+  if (url.username || url.password) throw new Error('URLs containing credentials are not allowed');
+  if (options.requireHttps && url.protocol !== 'https:') {
+    throw new Error('HTTPS is required');
+  }
+  if (!(await validateWebhookUrl(url.toString()))) {
+    throw new Error('URL resolves to a restricted network address');
+  }
+  return url;
 }

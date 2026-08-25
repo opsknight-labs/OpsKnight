@@ -1,7 +1,7 @@
 ---
 order: 3
 title: API Rate Limiting
-description: Understand v1.4 API-key, event, integration, status API, and subscription limits and their exact client-visible behavior.
+description: Understand v1.5 API-key, event, integration, status API, and subscription limits and their exact client-visible behavior.
 ---
 
 # API Rate Limiting
@@ -31,7 +31,7 @@ The database key includes the current fixed time window. Every accepted or rejec
 
 This is not a queue and it does not smooth traffic. A burst at a window boundary can produce a different traffic shape than a rolling-window limiter. Clients should still pace requests.
 
-If the database rate-limit check throws, v1.4 logs the error and fails open so the limiter does not create an additional outage. Database readiness and 429 monitoring therefore both matter.
+If the database rate-limit check throws, OpsKnight fails closed for external traffic and returns the normal limited response. Explicit health/internal buckets remain available for recovery diagnostics. Database readiness, limiter errors, and 429 monitoring therefore all matter.
 
 ## HTTP 429 contract
 
@@ -94,7 +94,7 @@ async function requestWithRateLimitRetry(url, options, attempts = 3) {
 
 Status API limits and windows are configured on the status page. There is no per-API-key custom-limit form or published API for creating keys with a custom limit.
 
-Application API and standard integration constants are code-defined in v1.4. Changing them requires maintaining a custom application build and updating this public contract; prefer pacing and workload design first.
+Application API and standard integration constants are code-defined in v1.5. Changing them requires maintaining a custom application build and updating this public contract; prefer pacing and workload design first.
 
 ## Operations
 
@@ -104,18 +104,18 @@ Application API and standard integration constants are code-defined in v1.4. Cha
 - Use distinct integration/API keys per producer so one producer cannot consume another's bucket.
 - Preserve correct client IP forwarding for IP-keyed status and subscription paths; trust only your configured proxies.
 
-There is no published Prometheus metrics endpoint for rate-limit counters in v1.4, and internal requests do not receive a documented universal bypass header.
+The authenticated `/api/metrics` endpoint publishes application/job health metrics, but not per-key rate-limit counters. Configure `PROMETHEUS_SCRAPE_TOKEN` and send it as a Bearer token, or use an Admin session for interactive diagnosis. Internal requests do not receive a universal bypass header.
 
 ## Troubleshooting
 
-| Symptom                                      | Check                                                                                          |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 429 sooner than expected                     | Shared key/integration across workers, shared `get` bucket, retries, or a boundary-time burst. |
-| Every producer throttles together            | Producers reuse one API or integration key; issue separate least-privilege keys.               |
-| Counters accumulate                          | Internal scheduler disabled/failing or PostgreSQL cleanup errors.                              |
-| No rate limiting during database outage      | Expected fail-open behavior; restore the database and protect the edge independently.          |
-| Integration ignores `INTEGRATION_RATE_LIMIT` | It may use a legacy/provider-specific handler rather than the standard handler.                |
-| Status JSON limit differs                    | Status-page owner configured a custom maximum/window or disabled it.                           |
+| Symptom                                        | Check                                                                                          |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 429 sooner than expected                       | Shared key/integration across workers, shared `get` bucket, retries, or a boundary-time burst. |
+| Every producer throttles together              | Producers reuse one API or integration key; issue separate least-privilege keys.               |
+| Counters accumulate                            | Internal scheduler disabled/failing or PostgreSQL cleanup errors.                              |
+| External requests are limited during DB outage | Expected fail-closed behavior; restore database readiness before reopening normal traffic.     |
+| Integration ignores `INTEGRATION_RATE_LIMIT`   | It may use a legacy/provider-specific handler rather than the standard handler.                |
+| Status JSON limit differs                      | Status-page owner configured a custom maximum/window or disabled it.                           |
 
 ## Related topics
 

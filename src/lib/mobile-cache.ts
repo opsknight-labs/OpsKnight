@@ -14,8 +14,11 @@ type EncryptedEnvelope = {
 const textEncoder = typeof window !== 'undefined' ? new TextEncoder() : null;
 const textDecoder = typeof window !== 'undefined' ? new TextDecoder() : null;
 
-const CACHE_KEY_PASSPHRASE = 'mobile-cache-key-v1';
 const CACHE_PREFIX = 'opsknight:mobile-cache:';
+const KEY_DATABASE = 'opsknight-secure-cache';
+const KEY_STORE = 'keys';
+const KEY_ID = 'mobile-cache-aes-gcm';
+let cryptoKeyPromise: Promise<CryptoKey | null> | null = null;
 
 const base64Encode = (bytes: ArrayBuffer): string => {
   if (typeof window === 'undefined') return '';
@@ -38,17 +41,56 @@ const base64Decode = (value: string): ArrayBuffer => {
 };
 
 const getCryptoKey = async (): Promise<CryptoKey | null> => {
-  if (typeof window === 'undefined' || !window.crypto?.subtle || !textEncoder) {
-    return null;
-  }
-  const rawHash = await window.crypto.subtle.digest(
-    'SHA-256',
-    textEncoder.encode(CACHE_KEY_PASSPHRASE)
-  );
-  return window.crypto.subtle.importKey('raw', rawHash, { name: 'AES-GCM' }, false, [
-    'encrypt',
-    'decrypt',
-  ]);
+  if (typeof window === 'undefined' || !window.crypto?.subtle || !window.indexedDB) return null;
+  if (cryptoKeyPromise) return cryptoKeyPromise;
+
+  cryptoKeyPromise = new Promise(resolve => {
+    const request = window.indexedDB.open(KEY_DATABASE, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(KEY_STORE)) {
+        request.result.createObjectStore(KEY_STORE);
+      }
+    };
+    request.onerror = () => resolve(null);
+    request.onsuccess = () => {
+      const database = request.result;
+      const read = database.transaction(KEY_STORE, 'readonly').objectStore(KEY_STORE).get(KEY_ID);
+      read.onerror = () => {
+        database.close();
+        resolve(null);
+      };
+      read.onsuccess = async () => {
+        if (read.result instanceof CryptoKey) {
+          database.close();
+          resolve(read.result);
+          return;
+        }
+        try {
+          const key = await window.crypto.subtle.generateKey(
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+          );
+          const write = database
+            .transaction(KEY_STORE, 'readwrite')
+            .objectStore(KEY_STORE)
+            .put(key, KEY_ID);
+          write.onerror = () => {
+            database.close();
+            resolve(null);
+          };
+          write.onsuccess = () => {
+            database.close();
+            resolve(key);
+          };
+        } catch {
+          database.close();
+          resolve(null);
+        }
+      };
+    };
+  });
+  return cryptoKeyPromise;
 };
 
 const encryptEnvelope = async <T>(
@@ -155,7 +197,7 @@ export const writeCache = async <T>(key: string, data: T): Promise<void> => {
         if (encrypted) {
           window.localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(encrypted));
         }
-      } catch (retryError) {
+      } catch (_retryError) {
         console.warn('Mobile cache is full and eviction failed');
       }
     }

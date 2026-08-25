@@ -35,10 +35,9 @@ declare global {
 }
 
 const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalThis.prismaGlobal = prisma;
-}
+// Next.js may evaluate this module in multiple chunks even in production. Keep
+// one client per process so every chunk shares the same connection pool.
+globalThis.prismaGlobal = prisma;
 
 // Connection pool health check
 export async function checkDatabaseHealth(): Promise<{ ok: boolean; latencyMs: number }> {
@@ -46,7 +45,7 @@ export async function checkDatabaseHealth(): Promise<{ ok: boolean; latencyMs: n
   try {
     await prisma.$queryRaw`SELECT 1`;
     return { ok: true, latencyMs: Date.now() - start };
-  } catch (error) {
+  } catch (_error) {
     return { ok: false, latencyMs: Date.now() - start };
   }
 }

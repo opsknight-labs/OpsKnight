@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { EmptyState } from './feedback/EmptyState';
 import CopyButton from './CopyButton';
 import ConfirmDialog from './ConfirmDialog';
-import { Key, CheckCircle2, XCircle, Loader2, Copy } from 'lucide-react';
+import { Key, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 type ApiKey = {
   id: string;
@@ -37,6 +37,9 @@ type ApiKey = {
   createdAt: string;
   lastUsedAt?: string | null;
   revokedAt?: string | null;
+  expiresAt?: string | null;
+  expired?: boolean;
+  ownerEmail?: string;
 };
 
 type State = {
@@ -55,7 +58,13 @@ function SubmitButton() {
   );
 }
 
-export default function ApiKeysPanel({ keys }: { keys: ApiKey[] }) {
+export default function ApiKeysPanel({
+  keys,
+  canCreateWriteKeys,
+}: {
+  keys: ApiKey[];
+  canCreateWriteKeys: boolean;
+}) {
   const [state, formAction] = useActionState<State, FormData>(createApiKey, {
     error: null,
     success: false,
@@ -83,6 +92,9 @@ export default function ApiKeysPanel({ keys }: { keys: ApiKey[] }) {
     { value: 'services:read', title: 'Services Read', detail: 'View service information' },
     { value: 'schedules:read', title: 'Schedules Read', detail: 'View on-call schedules' },
   ];
+  const visibleScopes = canCreateWriteKeys
+    ? scopes
+    : scopes.filter(scope => !scope.value.endsWith(':write'));
 
   return (
     <div className="space-y-6">
@@ -105,7 +117,7 @@ export default function ApiKeysPanel({ keys }: { keys: ApiKey[] }) {
               <Label>Permissions</Label>
               <p className="text-sm text-muted-foreground">Choose the scopes this key can access</p>
               <div className="grid gap-3 md:grid-cols-2">
-                {scopes.map(scope => (
+                {visibleScopes.map(scope => (
                   <div
                     key={scope.value}
                     className="flex items-start space-x-3 rounded-lg border p-4 hover:bg-accent"
@@ -128,6 +140,25 @@ export default function ApiKeysPanel({ keys }: { keys: ApiKey[] }) {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="expiration-days">Expiration</Label>
+              <select
+                id="expiration-days"
+                name="expirationDays"
+                defaultValue="90"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="7">7 days</option>
+                <option value="30">30 days</option>
+                <option value="90">90 days</option>
+                <option value="180">180 days</option>
+                <option value="365">1 year</option>
+              </select>
+              <p className="text-sm text-muted-foreground">
+                Keys stop authenticating automatically after this date.
+              </p>
             </div>
 
             {state?.error && (
@@ -182,9 +213,11 @@ export default function ApiKeysPanel({ keys }: { keys: ApiKey[] }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Owner</TableHead>
                   <TableHead>Prefix</TableHead>
                   <TableHead>Scopes</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead>Expires</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
@@ -193,6 +226,9 @@ export default function ApiKeysPanel({ keys }: { keys: ApiKey[] }) {
                 {keys.map(key => (
                   <TableRow key={key.id}>
                     <TableCell className="font-medium">{key.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {key.ownerEmail || 'You'}
+                    </TableCell>
                     <TableCell>
                       <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
                         {key.prefix}********
@@ -214,16 +250,19 @@ export default function ApiKeysPanel({ keys }: { keys: ApiKey[] }) {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{key.createdAt}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {key.expiresAt || 'Legacy key'}
+                    </TableCell>
                     <TableCell>
                       <Badge
-                        variant={key.revokedAt ? 'destructive' : 'default'}
+                        variant={key.revokedAt || key.expired ? 'destructive' : 'default'}
                         className="text-xs"
                       >
-                        {key.revokedAt ? 'Revoked' : 'Active'}
+                        {key.revokedAt ? 'Revoked' : key.expired ? 'Expired' : 'Active'}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {!key.revokedAt && (
+                      {!key.revokedAt && !key.expired && (
                         <Button
                           variant="ghost"
                           size="sm"

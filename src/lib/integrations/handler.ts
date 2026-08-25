@@ -14,12 +14,13 @@ import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger, withRequestContext } from '@/lib/logger';
 import { checkRateLimit, createRateLimitHeaders } from './rate-limiter';
-import { verifyWebhookSignature, isTimestampValid } from './signature-verification';
+import { verifyWebhookSignature } from './signature-verification';
 import { recordWebhookReceived } from './metrics';
 import { IntegrationErrors, isIntegrationError } from './errors';
 import { validatePayload, IntegrationSchemas } from './schemas';
-import { extractIntegrationKey, isIntegrationAuthorized } from './auth';
+import { isIntegrationAuthorized } from './auth';
 import type { z } from 'zod';
+import { decryptStoredSecret } from '@/lib/encryption';
 import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
@@ -160,12 +161,8 @@ export function createIntegrationHandler<T>(
       // 7. Signature verification (if enabled and secret configured)
       if (VERIFY_SIGNATURES && !options.skipSignatureVerification && integration.signatureSecret) {
         const provider = options.signatureProvider || 'generic';
-        const sigResult = verifyWebhookSignature(
-          provider,
-          rawPayload,
-          headers,
-          integration.signatureSecret
-        );
+        const signatureSecret = await decryptStoredSecret(integration.signatureSecret);
+        const sigResult = verifyWebhookSignature(provider, rawPayload, headers, signatureSecret);
 
         if (!sigResult.valid) {
           logger.warn('integration.signature_verification_failed', {

@@ -57,20 +57,13 @@ export function mergeHybridMetrics(
   // compliance is null (no evaluation possible). When compliance is
   // null we treat met as 0.
   const reconstructMet = (
-    compliance: number | null,
+    _compliance: number | null,
     breaches: number,
     totalIncidents: number,
     rate: number
   ): number => {
-    if (compliance === null || !Number.isFinite(compliance) || compliance <= 0) return 0;
     const evaluatedTotal = Math.round((rate / 100) * totalIncidents);
-    if (breaches === 0) {
-      return compliance >= 100 ? evaluatedTotal : 0;
-    }
-    if (compliance >= 100) return Math.max(0, evaluatedTotal - breaches);
-    const totalEvaluated = breaches / (1 - compliance / 100);
-    const result = Math.round(totalEvaluated - breaches);
-    return Number.isFinite(result) ? Math.max(0, result) : 0;
+    return Math.max(0, evaluatedTotal - breaches);
   };
 
   const ackMetHist = reconstructMet(

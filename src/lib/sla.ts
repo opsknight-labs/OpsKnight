@@ -284,7 +284,10 @@ export function checkAckSLA(
 ): boolean {
   if (!incident.acknowledgedAt || !incident.createdAt) return false;
   const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
-  const activeMs = Math.max(0, incident.acknowledgedAt.getTime() - incident.createdAt.getTime() - snooze);
+  const activeMs = Math.max(
+    0,
+    incident.acknowledgedAt.getTime() - incident.createdAt.getTime() - snooze
+  );
   const ackTimeMinutes = activeMs / 1000 / 60;
   const target = service.targetAckMinutes ?? 15; // Default to 15 minutes
   return ackTimeMinutes <= target;
@@ -300,7 +303,10 @@ export function checkResolveSLA(
 ): boolean {
   if (!incident.resolvedAt || !incident.createdAt) return false;
   const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
-  const activeMs = Math.max(0, incident.resolvedAt.getTime() - incident.createdAt.getTime() - snooze);
+  const activeMs = Math.max(
+    0,
+    incident.resolvedAt.getTime() - incident.createdAt.getTime() - snooze
+  );
   const resolveTimeMinutes = activeMs / 1000 / 60;
   const target = service.targetResolveMinutes ?? 120; // Default to 120 minutes
   return resolveTimeMinutes <= target;

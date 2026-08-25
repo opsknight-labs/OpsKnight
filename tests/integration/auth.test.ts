@@ -425,7 +425,7 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
       const result = await signInCallback({
         user: { id: user.id, email: user.email, name: user.name },
         account: { provider: 'oidc', providerAccountId: 'sub-role-test' },
-        profile: { groups: ['admins'], sub: 'sub-role-test' },
+        profile: { email_verified: true, groups: ['admins'], sub: 'sub-role-test' },
       });
 
       expect(result).toBe(true);
@@ -475,6 +475,7 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
         user: { id: user.id, email: user.email, name: user.name },
         account: { provider: 'oidc', providerAccountId: 'sub-sync-test' },
         profile: {
+          email_verified: true,
           dept: 'Engineering',
           title: 'Staff Engineer',
           picture: 'https://example.com/avatar.png',

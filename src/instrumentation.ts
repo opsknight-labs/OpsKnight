@@ -59,9 +59,8 @@ export async function register() {
     const { validateProductionEnv } = await import('./lib/env-validation');
     validateProductionEnv();
 
-    const { getOpsKnightProcessRole, getRuntimeResponsibilities } = await import(
-      './lib/runtime-role'
-    );
+    const { getOpsKnightProcessRole, getRuntimeResponsibilities } =
+      await import('./lib/runtime-role');
     const role = getOpsKnightProcessRole();
     const responsibilities = getRuntimeResponsibilities(role);
 

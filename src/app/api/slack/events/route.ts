@@ -62,9 +62,12 @@ export async function POST(request: NextRequest) {
               });
               await tx.slackIntegration.delete({ where: { id: integration.id } });
             });
-            logger.info('[Slack Events] Workspace uninstalled, removed integration and unlinked services', {
-              workspaceId,
-            });
+            logger.info(
+              '[Slack Events] Workspace uninstalled, removed integration and unlinked services',
+              {
+                workspaceId,
+              }
+            );
           }
         }
         return NextResponse.json({ ok: true });

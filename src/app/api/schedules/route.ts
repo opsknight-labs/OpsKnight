@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
+import { checkApiKeyRateLimit } from '@/lib/api-rate-limit';
+import { getScheduleApiScope } from '@/lib/schedule-api-auth';
 
 function parseLimit(value: string | null) {
   const limit = Number(value);
@@ -24,11 +26,20 @@ export async function GET(req: NextRequest) {
         { status: 403 }
       );
     }
+    const rate = await checkApiKeyRateLimit('schedules', apiKey.id);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded.' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } }
+      );
+    }
 
     const { searchParams } = new URL(req.url);
     const limit = parseLimit(searchParams.get('limit'));
+    const scheduleScope = await getScheduleApiScope(apiKey.userId);
 
     const schedules = await prisma.onCallSchedule.findMany({
+      where: scheduleScope,
       orderBy: { createdAt: 'desc' },
       take: limit,
       select: {

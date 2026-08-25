@@ -6,6 +6,7 @@ import { transformGitHubToEvent, GitHubEvent } from '@/lib/integrations/github';
 import { verifyGitHubSignature } from '@/lib/integrations/signature-verification';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
+import { decryptStoredSecret } from '@/lib/encryption';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import { validatePayload, GitHubEventSchema } from '@/lib/integrations/schemas';
 import {
@@ -63,7 +64,8 @@ export async function POST(req: NextRequest) {
           return jsonError('Missing X-Hub-Signature-256 header', 401);
         }
 
-        if (!verifyGitHubSignature(rawBody, signature, integration.signatureSecret)) {
+        const signatureSecret = await decryptStoredSecret(integration.signatureSecret);
+        if (!verifyGitHubSignature(rawBody, signature, signatureSecret)) {
           logger.warn('api.integration.github_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }

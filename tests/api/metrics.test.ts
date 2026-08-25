@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getServerSession } from 'next-auth';
-import { GET } from '@/app/api/metrics/route';
+import { clearMetricsCache, GET } from '@/app/api/metrics/route';
 import prisma from '@/lib/prisma';
 
 vi.mock('next-auth', () => ({
@@ -31,6 +31,7 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearMetricsCache();
     process.env = { ...originalEnv };
   });
 
@@ -72,12 +73,14 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
     expect(text).toContain('opsknight_build_info');
     expect(text).toContain('opsknight_active_incidents 3');
     expect(text).toContain('opsknight_active_users 10');
-    expect(text).toContain('opsknight_job_queue_total{status="pending"} 5');
-    expect(text).toContain('opsknight_job_queue_total{status="processing"} 2');
+    expect(text).toContain('opsknight_job_queue{status="pending"} 5');
+    expect(text).toContain('opsknight_job_queue{status="processing"} 2');
   });
 
   it('allows access with authenticated user session', async () => {
-    vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'admin@example.com' } });
+    vi.mocked(getServerSession).mockResolvedValue({
+      user: { email: 'admin@example.com', role: 'ADMIN' },
+    });
 
     vi.mocked(prisma.backgroundJob.groupBy).mockResolvedValue([]);
     vi.mocked(prisma.incident.count).mockResolvedValue(0);

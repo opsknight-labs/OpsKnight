@@ -2,15 +2,17 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { getDefaultActorId, logAudit } from '@/lib/audit';
-import { assertAdminOrResponder } from '@/lib/rbac';
+import { logAudit } from '@/lib/audit';
+import { assertCanModifyService } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 import { assertWebhookIntegrationNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
+import { assertSafeOutboundUrl } from '@/lib/network-security';
+import { encrypt } from '@/lib/encryption';
 
 export async function createWebhookIntegration(serviceId: string, formData: FormData) {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -24,6 +26,7 @@ export async function createWebhookIntegration(serviceId: string, formData: Form
   if (!name || !type || !url) {
     throw new Error('Name, type, and URL are required');
   }
+  await assertSafeOutboundUrl(url);
 
   let normalizedName = name;
   try {
@@ -41,7 +44,7 @@ export async function createWebhookIntegration(serviceId: string, formData: Form
       name: normalizedName,
       type,
       url,
-      secret: secret || null,
+      secret: secret ? await encrypt(secret) : null,
       channel: channel || null,
       enabled: true,
     },
@@ -66,7 +69,7 @@ export async function updateWebhookIntegration(
 ) {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -81,6 +84,7 @@ export async function updateWebhookIntegration(
   if (!name || !type || !url) {
     throw new Error('Name, type, and URL are required');
   }
+  await assertSafeOutboundUrl(url);
 
   // Get existing webhook to preserve secret if not provided
   const existing = await prisma.webhookIntegration.findUnique({
@@ -105,7 +109,7 @@ export async function updateWebhookIntegration(
       name: normalizedName,
       type,
       url,
-      secret: secret || existing?.secret || null, // Preserve existing secret if not provided
+      secret: secret ? await encrypt(secret) : existing?.secret || null,
       channel: channel || null,
       enabled,
     },
@@ -127,7 +131,7 @@ export async function updateWebhookIntegration(
 export async function deleteWebhookIntegration(integrationId: string, serviceId: string) {
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertCanModifyService(serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }

@@ -110,135 +110,137 @@ export async function runSLADriftDetection(options?: {
   return prisma.$transaction(
     async tx => {
       const acquired = await tryAdvisoryLock(tx, LOCK_KEYS.DRIFT_DETECTION);
-    if (!acquired) {
-      logger.info('[SLA-Drift] Another drift run in progress; skipping');
+      if (!acquired) {
+        logger.info('[SLA-Drift] Another drift run in progress; skipping');
+        return {
+          windowStart: windowStartDate.toISOString(),
+          windowEnd: windowEndDate.toISOString(),
+          ranAt,
+          samples: [],
+          withinTolerance: true,
+          ran: false,
+          skippedReason: 'concurrent-run',
+        };
+      }
+
+      // Both paths apply retention bounds; pre-clip so the comparison
+      // is apples-to-apples.
+      const { start, end, isClipped } = await getQueryDateBounds(
+        windowStartDate,
+        windowEndDate,
+        'incident'
+      );
+      if (isClipped) {
+        logger.warn('[SLA-Drift] Sample window clipped by retention; comparison may be skewed');
+      }
+
+      // Run both paths in parallel.
+      const [liveResult, rollupResult] = await Promise.all([
+        // Force the live path by passing explicit dates and an
+        // urgency filter that's "any" — but to truly force live we
+        // pass an empty filter; that's already the default. The
+        // boundary check in calculateSLAMetrics will still take the
+        // hybrid path for this range because end is older than now -
+        // 90 days... actually that means it'd take the *rollup* path.
+        // To force live, we use the realTimeWindowDays=0 trick by
+        // hand: query directly via the same SQL the live path uses.
+        //
+        // Pragmatic shortcut: temporarily override the policy by
+        // passing a windowDays that places the range inside the
+        // live window from the call's perspective. The simplest is
+        // to invoke calculateSLAMetrics with startDate / endDate
+        // for the sample window. With the existing branching, that
+        // range is entirely historical → takes the rollup path.
+        // So instead we go directly: run a minimal live aggregate
+        // here. To avoid duplicating SQL, we accept that
+        // `calculateSLAMetrics` for this window will return the
+        // rollup result, and pair it against `calculateSLAMetricsFromRollups`
+        // directly to detect *internal* rollup-vs-rollup drift only.
+        //
+        // Limitation noted: a fuller live-vs-rollup drift detector
+        // needs an exported "force-live" helper from sla-server;
+        // documented as a follow-up.
+        calculateSLAMetrics({ startDate: start, endDate: end, _forceLive: true }),
+        calculateSLAMetricsFromRollups(start, end, start, end, false, {}),
+      ]);
+
+      const samples: DriftSample[] = [
+        compare(
+          'totalIncidents',
+          liveResult.totalIncidents,
+          rollupResult.totalIncidents,
+          DEFAULT_TOLERANCE_FRACTION,
+          DEFAULT_SMALL_COUNT_TOLERANCE
+        ),
+        compare(
+          'highUrgencyCount',
+          liveResult.highUrgencyCount,
+          rollupResult.highUrgencyCount,
+          DEFAULT_TOLERANCE_FRACTION,
+          DEFAULT_SMALL_COUNT_TOLERANCE
+        ),
+        compare(
+          'mediumUrgencyCount',
+          liveResult.mediumUrgencyCount,
+          rollupResult.mediumUrgencyCount,
+          DEFAULT_TOLERANCE_FRACTION,
+          DEFAULT_SMALL_COUNT_TOLERANCE
+        ),
+        compare(
+          'lowUrgencyCount',
+          liveResult.lowUrgencyCount,
+          rollupResult.lowUrgencyCount,
+          DEFAULT_TOLERANCE_FRACTION,
+          DEFAULT_SMALL_COUNT_TOLERANCE
+        ),
+        compare(
+          'ackBreaches',
+          liveResult.ackBreaches,
+          rollupResult.ackBreaches,
+          DEFAULT_TOLERANCE_FRACTION,
+          DEFAULT_SMALL_COUNT_TOLERANCE
+        ),
+        compare(
+          'resolveBreaches',
+          liveResult.resolveBreaches,
+          rollupResult.resolveBreaches,
+          DEFAULT_TOLERANCE_FRACTION,
+          DEFAULT_SMALL_COUNT_TOLERANCE
+        ),
+        compare('mttr', liveResult.mttr, rollupResult.mttr, options?.toleranceFraction ?? 0.02),
+        compare(
+          'autoResolvedCount',
+          liveResult.autoResolvedCount,
+          rollupResult.autoResolvedCount,
+          DEFAULT_TOLERANCE_FRACTION,
+          DEFAULT_SMALL_COUNT_TOLERANCE
+        ),
+      ];
+
+      const withinTolerance = samples.every(s => s.withinTolerance);
+      if (!withinTolerance) {
+        logger.error('[SLA-Drift] Divergence detected between live and rollup paths', {
+          windowStart: start.toISOString(),
+          windowEnd: end.toISOString(),
+          divergent: samples.filter(s => !s.withinTolerance),
+        });
+      } else {
+        logger.info('[SLA-Drift] Sample passed within tolerance', {
+          windowStart: start.toISOString(),
+          windowEnd: end.toISOString(),
+          sampleCount: samples.length,
+        });
+      }
+
       return {
-        windowStart: windowStartDate.toISOString(),
-        windowEnd: windowEndDate.toISOString(),
+        windowStart: start.toISOString(),
+        windowEnd: end.toISOString(),
         ranAt,
-        samples: [],
-        withinTolerance: true,
-        ran: false,
-        skippedReason: 'concurrent-run',
+        samples,
+        withinTolerance,
+        ran: true,
       };
-    }
-
-    // Both paths apply retention bounds; pre-clip so the comparison
-    // is apples-to-apples.
-    const { start, end, isClipped } = await getQueryDateBounds(
-      windowStartDate,
-      windowEndDate,
-      'incident'
-    );
-    if (isClipped) {
-      logger.warn('[SLA-Drift] Sample window clipped by retention; comparison may be skewed');
-    }
-
-    // Run both paths in parallel.
-    const [liveResult, rollupResult] = await Promise.all([
-      // Force the live path by passing explicit dates and an
-      // urgency filter that's "any" — but to truly force live we
-      // pass an empty filter; that's already the default. The
-      // boundary check in calculateSLAMetrics will still take the
-      // hybrid path for this range because end is older than now -
-      // 90 days... actually that means it'd take the *rollup* path.
-      // To force live, we use the realTimeWindowDays=0 trick by
-      // hand: query directly via the same SQL the live path uses.
-      //
-      // Pragmatic shortcut: temporarily override the policy by
-      // passing a windowDays that places the range inside the
-      // live window from the call's perspective. The simplest is
-      // to invoke calculateSLAMetrics with startDate / endDate
-      // for the sample window. With the existing branching, that
-      // range is entirely historical → takes the rollup path.
-      // So instead we go directly: run a minimal live aggregate
-      // here. To avoid duplicating SQL, we accept that
-      // `calculateSLAMetrics` for this window will return the
-      // rollup result, and pair it against `calculateSLAMetricsFromRollups`
-      // directly to detect *internal* rollup-vs-rollup drift only.
-      //
-      // Limitation noted: a fuller live-vs-rollup drift detector
-      // needs an exported "force-live" helper from sla-server;
-      // documented as a follow-up.
-      calculateSLAMetrics({ startDate: start, endDate: end, _forceLive: true }),
-      calculateSLAMetricsFromRollups(start, end, start, end, false, {}),
-    ]);
-
-    const samples: DriftSample[] = [
-      compare(
-        'totalIncidents',
-        liveResult.totalIncidents,
-        rollupResult.totalIncidents,
-        DEFAULT_TOLERANCE_FRACTION,
-        DEFAULT_SMALL_COUNT_TOLERANCE
-      ),
-      compare(
-        'highUrgencyCount',
-        liveResult.highUrgencyCount,
-        rollupResult.highUrgencyCount,
-        DEFAULT_TOLERANCE_FRACTION,
-        DEFAULT_SMALL_COUNT_TOLERANCE
-      ),
-      compare(
-        'mediumUrgencyCount',
-        liveResult.mediumUrgencyCount,
-        rollupResult.mediumUrgencyCount,
-        DEFAULT_TOLERANCE_FRACTION,
-        DEFAULT_SMALL_COUNT_TOLERANCE
-      ),
-      compare(
-        'lowUrgencyCount',
-        liveResult.lowUrgencyCount,
-        rollupResult.lowUrgencyCount,
-        DEFAULT_TOLERANCE_FRACTION,
-        DEFAULT_SMALL_COUNT_TOLERANCE
-      ),
-      compare(
-        'ackBreaches',
-        liveResult.ackBreaches,
-        rollupResult.ackBreaches,
-        DEFAULT_TOLERANCE_FRACTION,
-        DEFAULT_SMALL_COUNT_TOLERANCE
-      ),
-      compare(
-        'resolveBreaches',
-        liveResult.resolveBreaches,
-        rollupResult.resolveBreaches,
-        DEFAULT_TOLERANCE_FRACTION,
-        DEFAULT_SMALL_COUNT_TOLERANCE
-      ),
-      compare('mttr', liveResult.mttr, rollupResult.mttr, options?.toleranceFraction ?? 0.02),
-      compare(
-        'autoResolvedCount',
-        liveResult.autoResolvedCount,
-        rollupResult.autoResolvedCount,
-        DEFAULT_TOLERANCE_FRACTION,
-        DEFAULT_SMALL_COUNT_TOLERANCE
-      ),
-    ];
-
-    const withinTolerance = samples.every(s => s.withinTolerance);
-    if (!withinTolerance) {
-      logger.error('[SLA-Drift] Divergence detected between live and rollup paths', {
-        windowStart: start.toISOString(),
-        windowEnd: end.toISOString(),
-        divergent: samples.filter(s => !s.withinTolerance),
-      });
-    } else {
-      logger.info('[SLA-Drift] Sample passed within tolerance', {
-        windowStart: start.toISOString(),
-        windowEnd: end.toISOString(),
-        sampleCount: samples.length,
-      });
-    }
-
-    return {
-      windowStart: start.toISOString(),
-      windowEnd: end.toISOString(),
-      ranAt,
-      samples,
-      withinTolerance,
-      ran: true,
-    };
-  }, { timeout: 30000, maxWait: 5000 });
+    },
+    { timeout: 30000, maxWait: 5000 }
+  );
 }

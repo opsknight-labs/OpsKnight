@@ -6,6 +6,10 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { EventSchema } from '@/lib/validation';
 import { logger, withRequestContext } from '@/lib/logger';
+import {
+  IntegrationBodyTooLargeError,
+  readIntegrationBody,
+} from '@/lib/integrations/request-security';
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 120;
 
@@ -62,8 +66,12 @@ async function postEvent(req: NextRequest) {
     // 2. Parse Body
     let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     try {
-      body = await req.json();
-    } catch (_error) {
+      const rawBody = await readIntegrationBody(req);
+      body = JSON.parse(rawBody);
+    } catch (error) {
+      if (error instanceof IntegrationBodyTooLargeError) {
+        return jsonError('Payload too large.', 413);
+      }
       return jsonError('Invalid JSON in request body.', 400);
     }
 

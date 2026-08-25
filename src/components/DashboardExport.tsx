@@ -48,7 +48,11 @@ export default function DashboardExport({ incidents, filters, metrics }: ExportP
 
     // Header
     csvRows.push(escapeCSVField('OpsKnight Dashboard Export'));
-    csvRows.push(escapeCSVField(`Generated: ${formatDateTime(new Date(), userTimeZone, { format: 'datetime' })}`));
+    csvRows.push(
+      escapeCSVField(
+        `Generated: ${formatDateTime(new Date(), userTimeZone, { format: 'datetime' })}`
+      )
+    );
     csvRows.push('');
 
     // Filters
@@ -56,7 +60,9 @@ export default function DashboardExport({ incidents, filters, metrics }: ExportP
     if (filters.status) csvRows.push(`Status: ${escapeCSVField(filters.status)}`);
     if (filters.service) csvRows.push(`Service: ${escapeCSVField(filters.service)}`);
     if (filters.assignee !== undefined) {
-      csvRows.push(`Assignee: ${escapeCSVField(filters.assignee === '' ? 'Unassigned' : filters.assignee)}`);
+      csvRows.push(
+        `Assignee: ${escapeCSVField(filters.assignee === '' ? 'Unassigned' : filters.assignee)}`
+      );
     }
     if (filters.urgency) csvRows.push(`Urgency: ${escapeCSVField(filters.urgency)}`);
     if (filters.search) csvRows.push(`Search: ${escapeCSVField(filters.search)}`);

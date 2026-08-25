@@ -4,6 +4,7 @@ import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { deliverWebhook } from '@/lib/status-page-webhooks';
+import { decryptStoredSecret } from '@/lib/encryption';
 
 /**
  * Test webhook endpoint
@@ -64,7 +65,11 @@ export async function POST(req: NextRequest) {
           timestamp: new Date().toISOString(),
           data: testPayload,
         };
-        const ok = await deliverWebhook(webhook!.url, webhook!.secret, payload);
+        const ok = await deliverWebhook(
+          webhook!.url,
+          await decryptStoredSecret(webhook!.secret),
+          payload
+        );
         if (!ok) throw new Error(`Failed delivery to ${webhook!.url}`);
         return { webhookId: webhook!.id, url: webhook!.url, success: true };
       })

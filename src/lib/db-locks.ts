@@ -99,10 +99,13 @@ export async function tryAdvisoryLock(tx: Prisma.TransactionClient, key: bigint)
     `;
     return rows[0]?.pg_try_advisory_xact_lock === true;
   } catch (err) {
-    logger.warn('[DbLocks] pg_try_advisory_xact_lock failed; treating as not-acquired', {
+    // A statement failure aborts the surrounding PostgreSQL transaction. Do
+    // not disguise it as ordinary lock contention: callers could otherwise
+    // continue work that is guaranteed to roll back, obscuring the root cause.
+    logger.error('[DbLocks] pg_try_advisory_xact_lock failed; rolling back transaction', {
       key: key.toString(),
       error: err instanceof Error ? err.message : String(err),
     });
-    return false;
+    throw err;
   }
 }

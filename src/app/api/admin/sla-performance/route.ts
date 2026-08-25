@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { calculatePercentile } from '@/lib/analytics-metrics';
 
 /**
  * SLA Performance Admin API
@@ -115,10 +116,9 @@ export async function GET(req: NextRequest) {
     avgIncidentCount = Math.round(totalIncidentCount / queryCount);
 
     // Percentiles (logs are already sorted by durationMs)
-    const p50Index = Math.floor(queryCount * 0.5);
-    const p95Index = Math.floor(queryCount * 0.95);
-    p50Duration = logs[p50Index]?.durationMs ?? null;
-    p95Duration = logs[p95Index]?.durationMs ?? null;
+    const durations = logs.map((log: { durationMs: number }) => log.durationMs);
+    p50Duration = calculatePercentile(durations, 50);
+    p95Duration = calculatePercentile(durations, 95);
 
     // Slow queries (>5 seconds)
     slowQueryCount = logs.filter((log: any) => log.durationMs > 5000).length;

@@ -53,7 +53,12 @@ export function formatToE164(phone: string): string {
     .replace(/(?:ext\.?|extension|x)\s*\d+\s*$/i, '')
     .trim();
   if (!cleaned) return '';
-  if (cleaned.startsWith('00')) cleaned = `+${cleaned.slice(2)}`;
+  if (cleaned.startsWith('00')) cleaned = `+${cleaned.slice(2).trimStart()}`;
+  // International numbers are often written as +44 (0) 7911..., where
+  // `(0)` documents the domestic trunk prefix and is not part of E.164.
+  // Only remove the explicitly marked trunk prefix; guessing from a bare
+  // zero would corrupt countries where a leading zero is significant.
+  cleaned = cleaned.replace(/^(\+\s*\d{1,3})\s*\(0\)\s*/, '$1');
   // Country-less national numbers are ambiguous and must be rejected,
   // rather than silently routed through NANP or another guessed country.
   if (!cleaned.startsWith('+')) return '';

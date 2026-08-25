@@ -2,7 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { getDefaultActorId, logAudit } from '@/lib/audit';
+import { logAudit } from '@/lib/audit';
 import { assertAdminOrResponder, assertAdmin, assertAdminOrTeamOwner } from '@/lib/rbac';
 import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { logger } from '@/lib/logger';
@@ -171,6 +171,18 @@ export async function deleteTeam(teamId: string) {
       where: { teamId },
       data: { teamId: null },
     }),
+    prisma.incident.updateMany({
+      where: { teamId },
+      data: { teamId: null },
+    }),
+    prisma.escalationRule.updateMany({
+      where: { targetTeamId: teamId },
+      data: { targetTeamId: null },
+    }),
+    prisma.dashboard.updateMany({
+      where: { teamId },
+      data: { teamId: null },
+    }),
     prisma.team.delete({
       where: { id: teamId },
     }),
@@ -194,35 +206,20 @@ export async function deleteTeam(teamId: string) {
 export async function addTeamMember(teamId: string, formData: FormData) {
   let currentUser;
   try {
-    currentUser = await assertAdminOrResponder();
+    currentUser = await assertAdminOrTeamOwner(teamId);
   } catch (error) {
     return {
       error:
         error instanceof Error
           ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
+          : 'Unauthorized. Admin or team owner access required.',
     };
   }
   const userId = formData.get('userId') as string;
   const role = (formData.get('role') as string) || 'MEMBER';
 
-  // Only admins or team owners can assign OWNER/ADMIN roles
-  if (role === 'OWNER' || role === 'ADMIN') {
-    const isAdmin = currentUser.role === 'ADMIN';
-    const isTeamOwner = await prisma.teamMember.findFirst({
-      where: {
-        teamId,
-        userId: currentUser.id,
-        role: 'OWNER',
-      },
-    });
-
-    if (!isAdmin && !isTeamOwner) {
-      return { error: 'Only admins or team owners can assign OWNER or ADMIN roles.' };
-    }
-  }
-
   if (!userId) return;
+  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) return { error: 'Invalid team role.' };
 
   await prisma.teamMember.create({
     data: {
@@ -286,21 +283,15 @@ export async function updateTeamMemberRole(
     return { error: 'Member not found.' };
   }
 
-  // Only admins or team owners can assign or modify OWNER/ADMIN roles
-  if (role === 'OWNER' || role === 'ADMIN' || member.role === 'OWNER' || member.role === 'ADMIN') {
-    const isAdmin = currentUser.role === 'ADMIN';
-    const isTeamOwner = await prisma.teamMember.findFirst({
-      where: {
-        teamId: member.teamId,
-        userId: currentUser.id,
-        role: 'OWNER',
-      },
-    });
-
-    if (!isAdmin && !isTeamOwner) {
-      return { error: 'Only admins or team owners can modify OWNER or ADMIN roles.' };
-    }
+  try {
+    currentUser = await assertAdminOrTeamOwner(member.teamId);
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unauthorized. Admin or team owner required.',
+    };
   }
+
+  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) return { error: 'Invalid team role.' };
 
   if (member.role === 'OWNER' && role !== 'OWNER') {
     try {
@@ -321,7 +312,7 @@ export async function updateTeamMemberRole(
   await logAudit({
     action: 'team.member.role.updated',
     entityType: 'TEAM_MEMBER',
-    entityId: memberId,
+    entityId: `${member.teamId}:${member.userId}`,
     actorId,
     details: { teamId: member.teamId, userId: member.userId, role },
   });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 
 const MAX_BODY_SIZE = 50 * 1024; // 50KB
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
@@ -9,8 +10,7 @@ const RATE_LIMIT_MAX = 30; // 30 logs per minute per IP
 export async function POST(req: NextRequest) {
   try {
     // Basic Rate Limiting by IP
-    const ipHeader = req.headers.get('x-forwarded-for') || '';
-    const ip = ipHeader.split(',')[0]?.trim() || 'anonymous';
+    const ip = getClientIp(req.headers);
     const rate = await checkRateLimit(
       `api:logs:ingest:${ip}`,
       RATE_LIMIT_MAX,

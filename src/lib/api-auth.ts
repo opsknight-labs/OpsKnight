@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashTokenV1, hashTokenV2 } from '@/lib/api-keys';
+import { hashLegacyScryptToken, hashTokenV2 } from '@/lib/api-keys';
 
 function extractApiKey(req: NextRequest) {
   const header = req.headers.get('authorization') || '';
@@ -19,15 +19,20 @@ export async function authenticateApiKey(req: NextRequest) {
   if (!token) return null;
 
   const v2Hash = hashTokenV2(token);
+  const activeFilter = {
+    revokedAt: null,
+    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    user: { status: 'ACTIVE' as const },
+  };
   let apiKey = await prisma.apiKey.findFirst({
-    where: { tokenHash: v2Hash, revokedAt: null, user: { status: 'ACTIVE' } },
+    where: { tokenHash: v2Hash, ...activeFilter },
   });
 
   // Lazy migration: Check legacy hash if V2 not found
   if (!apiKey) {
-    const v1Hash = hashTokenV1(token);
+    const v1Hash = await hashLegacyScryptToken(token);
     apiKey = await prisma.apiKey.findFirst({
-      where: { tokenHash: v1Hash, revokedAt: null, user: { status: 'ACTIVE' } },
+      where: { tokenHash: v1Hash, ...activeFilter },
     });
 
     if (apiKey) {
@@ -45,8 +50,11 @@ export async function authenticateApiKey(req: NextRequest) {
 
   if (!apiKey) return null;
 
-  await prisma.apiKey.update({
-    where: { id: apiKey.id },
+  await prisma.apiKey.updateMany({
+    where: {
+      id: apiKey.id,
+      OR: [{ lastUsedAt: null }, { lastUsedAt: { lt: new Date(Date.now() - 5 * 60_000) } }],
+    },
     data: { lastUsedAt: new Date() },
   });
 

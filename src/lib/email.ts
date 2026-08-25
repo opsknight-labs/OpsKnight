@@ -168,7 +168,12 @@ async function sendWithSingleProvider(
         logger.warn('Resend package not installed', { installCommand: 'npm install resend' });
         return { success: false, error: 'Resend package not installed. Run: npm install resend' };
       }
-      logger.error('Resend send error', { component: 'email', provider: 'resend', error, to: options.to });
+      logger.error('Resend send error', {
+        component: 'email',
+        provider: 'resend',
+        error,
+        to: options.to,
+      });
       return { success: false, error: err.message || 'Resend send error' };
     }
   }
@@ -223,7 +228,9 @@ async function sendWithSingleProvider(
         return { success: false, error: 'SendGrid package not installed' };
       }
       const errorMessage =
-        typeof err.response?.body === 'object' && err.response?.body && 'errors' in err.response.body
+        typeof err.response?.body === 'object' &&
+        err.response?.body &&
+        'errors' in err.response.body
           ? JSON.stringify(err.response.body.errors)
           : err.message || 'SendGrid API error';
       return { success: false, error: errorMessage };
@@ -345,11 +352,14 @@ export async function sendEmail(
         return { success: true };
       }
       lastError = result.error || 'Provider send failed';
-      logger.warn(`[Email] Provider ${config.provider} failed, trying fallback provider if available`, {
-        provider: config.provider,
-        error: result.error,
-        to: options.to,
-      });
+      logger.warn(
+        `[Email] Provider ${config.provider} failed, trying fallback provider if available`,
+        {
+          provider: config.provider,
+          error: result.error,
+          to: options.to,
+        }
+      );
     }
 
     return { success: false, error: lastError };
@@ -384,17 +394,15 @@ export function generateIncidentEmailHTML(
   const baseUrl = getBaseUrl();
   const incidentUrl = incident.incidentUrl || `${baseUrl}/incidents/${incident.id}`;
   const safeIncidentUrl = escapeHtml(incidentUrl);
-  const safeServiceName = escapeHtml(incident.service?.name || 'Service');
+  const serviceName = incident.service?.name || 'Service';
   const safeIncidentTitle = escapeHtml(incident.title || 'Incident');
   const safeDescription = incident.description ? escapeHtml(incident.description) : '';
-  const safeStatus = escapeHtml(incident.status);
   const safeUrgency = escapeHtml(incident.urgency);
   const assigneeName =
     incident.assignee?.name ||
     incident.assignee?.email ||
     (incident.team?.name ? `${incident.team.name} (Team)` : '') ||
     'Unassigned';
-  const safeAssigneeName = escapeHtml(assigneeName);
 
   const normalizedEventType =
     eventType ||
@@ -414,7 +422,7 @@ export function generateIncidentEmailHTML(
           : incident.urgency === 'MEDIUM'
             ? 'Elevated Incident Alert'
             : 'Incident Notification';
-  const headerSubtitle = `Service: ${safeServiceName}`;
+  const headerSubtitle = `Service: ${serviceName}`;
 
   const updateTitle =
     normalizedEventType === 'resolved'
@@ -510,10 +518,10 @@ export function generateIncidentEmailHTML(
   };
 
   const infoItems = [
-    { label: 'Service', value: safeServiceName, highlight: true },
-    { label: 'Status', value: safeStatus },
-    { label: 'Urgency', value: safeUrgency },
-    { label: 'Assignee', value: safeAssigneeName },
+    { label: 'Service', value: serviceName, highlight: true },
+    { label: 'Status', value: incident.status },
+    { label: 'Urgency', value: incident.urgency },
+    { label: 'Assignee', value: assigneeName },
     {
       label: 'Created',
       value: formatDateTime(incident.createdAt, timeZone, { format: 'datetime' }),

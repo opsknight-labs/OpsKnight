@@ -11,7 +11,6 @@
  */
 
 import { logger } from './logger';
-import prisma from './prisma';
 import { NotificationChannel, sendNotification } from './notifications';
 import { batchArray } from './db-utils';
 
@@ -313,10 +312,7 @@ async function processChannelNotifications(
         const retryCount = (n.retryCount || 0) + 1;
         if (retryCount <= 5) {
           const delayMs = Math.pow(2, retryCount) * 1000;
-          scheduleRetry(
-            { ...n, priority: Math.min(n.priority + 1, 3), retryCount },
-            delayMs
-          );
+          scheduleRetry({ ...n, priority: Math.min(n.priority + 1, 3), retryCount }, delayMs);
         } else {
           logger.error('[NotificationQueue] Notification permanently dropped due to rate limits', {
             incidentId: n.incidentId,
@@ -334,9 +330,19 @@ async function processChannelNotifications(
 
     const results = await Promise.allSettled(
       toProcess.map(async n => {
-        processedDedupeKeys.set(n.dedupeKey, Date.now());
         try {
           const result = await sendNotification(n.incidentId, n.userId, n.channel, n.message);
+
+          // Notification providers report expected delivery failures in their
+          // result instead of throwing. Treat those results as failures so the
+          // queue's retry policy is actually applied.
+          if (!result.success) {
+            throw new Error(result.error || `${n.channel} notification delivery failed`);
+          }
+
+          // A failed attempt must not suppress a later enqueue of the same
+          // notification. Record the dedupe key only after confirmed delivery.
+          processedDedupeKeys.set(n.dedupeKey, Date.now());
 
           // Clean old dedupe keys periodically (keep last 10 minutes)
           if (processedDedupeKeys.size > 10000) {
@@ -367,7 +373,10 @@ async function processChannelNotifications(
         const retryCount = (notification.retryCount || 0) + 1;
 
         if (retryCount <= 3) {
-          queue.push({ ...notification, retryCount });
+          scheduleRetry(
+            { ...notification, retryCount },
+            Math.min(Math.pow(2, retryCount) * 1000, 30_000)
+          );
         } else {
           logger.error('[NotificationQueue] Notification permanently dropped after 3 retries', {
             incidentId: notification.incidentId,

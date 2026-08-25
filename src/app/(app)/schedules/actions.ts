@@ -2,7 +2,8 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { assertAdminOrResponder } from '@/lib/rbac';
+import { assertAdminOrResponder, getCurrentUser } from '@/lib/rbac';
+import { logAudit } from '@/lib/audit';
 import { createInAppNotifications, getScheduleUserIds } from '@/lib/in-app-notifications';
 import { parseDateTimeInTimeZone, isValidTimeZone } from '@/lib/timezone';
 import { assertScheduleNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
@@ -17,6 +18,41 @@ async function getScheduleName(scheduleId: string) {
     select: { name: true },
   });
   return schedule?.name || 'On-call schedule';
+}
+
+async function assertCanCreateScheduleOverride(scheduleId: string) {
+  const user = await getCurrentUser();
+  if (user.role === 'ADMIN') return user;
+
+  const accessible = await prisma.onCallSchedule.findFirst({
+    where: {
+      id: scheduleId,
+      OR: [
+        { layers: { some: { users: { some: { userId: user.id } } } } },
+        {
+          escalationRules: {
+            some: {
+              policy: {
+                services: {
+                  some: {
+                    team: { members: { some: { userId: user.id, role: 'OWNER' } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  });
+
+  if (!accessible) {
+    throw new Error(
+      'Unauthorized. Only an administrator, owning team lead, or assigned schedule member can create overrides.'
+    );
+  }
+  return user;
 }
 
 async function notifyScheduleMembers(
@@ -56,8 +92,9 @@ export async function createSchedule(
   _prevState: ScheduleFormState,
   formData: FormData
 ): Promise<ScheduleFormState> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
     return {
       error:
@@ -79,8 +116,15 @@ export async function createSchedule(
 
   try {
     const normalizedName = await assertScheduleNameAvailable(name);
-    await prisma.onCallSchedule.create({
+    const schedule = await prisma.onCallSchedule.create({
       data: { name: normalizedName, timeZone },
+    });
+    await logAudit({
+      action: 'schedule.created',
+      entityType: 'SCHEDULE',
+      entityId: schedule.id,
+      actorId,
+      details: { name: normalizedName, timeZone },
     });
 
     revalidatePath('/schedules');
@@ -97,8 +141,9 @@ export async function updateSchedule(
   scheduleId: string,
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
     return {
       error:
@@ -125,6 +170,13 @@ export async function updateSchedule(
       where: { id: scheduleId },
       data: { name: normalizedName, timeZone },
     });
+    await logAudit({
+      action: 'schedule.updated',
+      entityType: 'SCHEDULE',
+      entityId: scheduleId,
+      actorId,
+      details: { name: normalizedName, timeZone },
+    });
 
     const scheduleName = await getScheduleName(scheduleId);
     await notifyScheduleMembers(
@@ -148,8 +200,9 @@ export async function createLayer(
   scheduleId: string,
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
     return {
       error:
@@ -225,7 +278,7 @@ export async function createLayer(
   }
 
   try {
-    await prisma.onCallLayer.create({
+    const layer = await prisma.onCallLayer.create({
       data: {
         scheduleId,
         name,
@@ -235,6 +288,13 @@ export async function createLayer(
         shiftLengthHours: shiftLength,
         restrictions,
       },
+    });
+    await logAudit({
+      action: 'schedule.layer.created',
+      entityType: 'SCHEDULE',
+      entityId: scheduleId,
+      actorId,
+      details: { layerId: layer.id, name },
     });
 
     const scheduleName = await getScheduleName(scheduleId);
@@ -255,8 +315,9 @@ export async function deleteLayer(
   scheduleId: string,
   layerId: string
 ): Promise<{ error?: string } | undefined> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
     return {
       error:
@@ -283,6 +344,13 @@ export async function deleteLayer(
         where: { id: layerId },
       }),
     ]);
+    await logAudit({
+      action: 'schedule.layer.deleted',
+      entityType: 'SCHEDULE',
+      entityId: scheduleId,
+      actorId,
+      details: { layerId, name: layer.name },
+    });
 
     const scheduleName = await getScheduleName(scheduleId);
     await notifyScheduleMembers(
@@ -302,8 +370,9 @@ export async function addLayerUser(
   layerId: string,
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
     return {
       error:
@@ -377,6 +446,13 @@ export async function addLayerUser(
       })
     )
   );
+  await logAudit({
+    action: 'schedule.member.added',
+    entityType: 'SCHEDULE',
+    entityId: layer.scheduleId,
+    actorId,
+    details: { layerId, userId, position: finalPosition },
+  });
 
   const scheduleName = await getScheduleName(layer.scheduleId);
   await notifyScheduleMembers(
@@ -393,8 +469,9 @@ export async function updateLayer(
   layerId: string,
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
     return {
       error:
@@ -482,6 +559,13 @@ export async function updateLayer(
         restrictions,
       },
     });
+    await logAudit({
+      action: 'schedule.layer.updated',
+      entityType: 'SCHEDULE',
+      entityId: layerMeta.scheduleId,
+      actorId,
+      details: { layerId, name },
+    });
 
     const scheduleName = await getScheduleName(layerMeta.scheduleId);
     await notifyScheduleMembers(
@@ -501,8 +585,9 @@ export async function moveLayerUser(
   userId: string,
   direction: 'up' | 'down'
 ): Promise<{ error?: string } | undefined> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
     return {
       error:
@@ -545,6 +630,13 @@ export async function moveLayerUser(
         data: { position: current.position },
       }),
     ]);
+    await logAudit({
+      action: 'schedule.member.reordered',
+      entityType: 'SCHEDULE',
+      entityId: layer.scheduleId,
+      actorId,
+      details: { layerId, userId, direction },
+    });
 
     revalidatePath(`/schedules/${layer.scheduleId}`);
     revalidatePath('/schedules');
@@ -557,8 +649,9 @@ export async function removeLayerUser(
   layerId: string,
   userId: string
 ): Promise<{ error?: string } | undefined> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
     return {
       error:
@@ -594,6 +687,13 @@ export async function removeLayerUser(
         })
       )
     );
+    await logAudit({
+      action: 'schedule.member.removed',
+      entityType: 'SCHEDULE',
+      entityId: layer.scheduleId,
+      actorId,
+      details: { layerId, userId },
+    });
 
     const scheduleName = await getScheduleName(layer.scheduleId);
     await notifyScheduleMembers(
@@ -613,8 +713,9 @@ export async function createOverride(
   scheduleId: string,
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertCanCreateScheduleOverride(scheduleId)).id;
   } catch (error) {
     return {
       error:
@@ -662,13 +763,26 @@ export async function createOverride(
   }
 
   try {
-    await prisma.onCallOverride.create({
+    const override = await prisma.onCallOverride.create({
       data: {
         scheduleId,
         userId,
         replacesUserId: replacesUserId || null,
         start: startDate,
         end: endDate,
+      },
+    });
+    await logAudit({
+      action: 'schedule.override.created',
+      entityType: 'SCHEDULE',
+      entityId: scheduleId,
+      actorId,
+      details: {
+        overrideId: override.id,
+        userId,
+        replacesUserId,
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
       },
     });
 
@@ -692,8 +806,9 @@ export async function deleteOverride(
   scheduleId: string,
   overrideId: string
 ): Promise<{ error?: string } | undefined> {
+  let actorId: string;
   try {
-    await assertAdminOrResponder();
+    actorId = (await assertCanCreateScheduleOverride(scheduleId)).id;
   } catch (error) {
     return {
       error:
@@ -714,6 +829,13 @@ export async function deleteOverride(
 
     await prisma.onCallOverride.delete({
       where: { id: overrideId },
+    });
+    await logAudit({
+      action: 'schedule.override.deleted',
+      entityType: 'SCHEDULE',
+      entityId: scheduleId,
+      actorId,
+      details: { overrideId, userId: override.userId, replacesUserId: override.replacesUserId },
     });
 
     if (override) {

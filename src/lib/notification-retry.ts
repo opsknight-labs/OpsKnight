@@ -20,6 +20,22 @@ export async function retryFailedNotifications(): Promise<{
   succeeded: number;
   failed: number;
 }> {
+  // A process can die after creating/claiming a notification but before it
+  // records success or failure. Reclaim those orphaned PENDING rows into the
+  // normal retry flow instead of leaving them stuck forever.
+  await prisma.notification.updateMany({
+    where: {
+      status: 'PENDING',
+      createdAt: { lt: new Date(Date.now() - 10 * 60_000) },
+      attempts: { lt: _MAX_RETRY_ATTEMPTS },
+    },
+    data: {
+      status: 'FAILED',
+      failedAt: new Date(),
+      errorMsg: 'Notification dispatch timed out before completion.',
+    },
+  });
+
   const failedNotifications = await prisma.notification.findMany({
     where: {
       status: 'FAILED',

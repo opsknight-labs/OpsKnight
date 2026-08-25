@@ -5,6 +5,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { IncidentPatchSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
+import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
 
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 type IncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -385,8 +386,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     else if (status === 'OPEN') notifyEvent = 'investigating';
 
     if (notifyEvent) {
-      const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
-      await notifyStatusPageSubscribers(incident.id, notifyEvent as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      await scheduleStatusPageNotification(incident.id, notifyEvent);
     }
   } catch (e) {
     logger.error('api.incident.status_page_notification_failed', {

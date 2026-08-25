@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashTokenV1, hashTokenV2 } from '@/lib/api-keys';
+import { hashLegacyScryptToken, hashTokenV2 } from '@/lib/api-keys';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 
@@ -19,10 +19,6 @@ function extractToken(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
   if (authHeader?.startsWith('Bearer ')) {
     return authHeader.slice('Bearer '.length).trim();
-  }
-  const tokenParam = req.nextUrl.searchParams.get('token');
-  if (tokenParam) {
-    return tokenParam.trim();
   }
   return null;
 }
@@ -62,7 +58,7 @@ export async function authorizeStatusApiRequest(
 
     // Lazy migration: Try V1 hash if V2 not found
     if (!tokenRecord) {
-      const v1Hash = hashTokenV1(token);
+      const v1Hash = await hashLegacyScryptToken(token);
       tokenRecord = await prisma.statusPageApiToken.findFirst({
         where: {
           statusPageId,
@@ -88,8 +84,11 @@ export async function authorizeStatusApiRequest(
   }
 
   if (tokenRecord) {
-    await prisma.statusPageApiToken.update({
-      where: { id: tokenRecord.id },
+    await prisma.statusPageApiToken.updateMany({
+      where: {
+        id: tokenRecord.id,
+        OR: [{ lastUsedAt: null }, { lastUsedAt: { lt: new Date(Date.now() - 5 * 60_000) } }],
+      },
       data: { lastUsedAt: new Date() },
     });
   }

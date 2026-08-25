@@ -70,7 +70,7 @@ export function transformPrometheusToEvent(payload: PrometheusAlert): Array<{
 
     // Use fingerprint as dedup key if available
     // Fallback: Create a stable hash from sorted labels to ensure identical alerts map to the same incident
-    let dedupKey = alert.fingerprint;
+    let dedupKey = alert.fingerprint ? `prometheus-${alert.fingerprint}` : '';
 
     if (!dedupKey) {
       const labels = alert.labels || {};

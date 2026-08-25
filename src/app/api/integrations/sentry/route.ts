@@ -6,6 +6,7 @@ import { transformSentryToEvent, SentryEvent } from '@/lib/integrations/sentry';
 import { verifySentrySignature } from '@/lib/integrations/signature-verification';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
+import { decryptStoredSecret } from '@/lib/encryption';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import { validatePayload, SentryEventSchema } from '@/lib/integrations/schemas';
 import {
@@ -53,7 +54,8 @@ export async function POST(req: NextRequest) {
           logger.warn('api.integration.sentry_missing_signature', { integrationId });
           return jsonError('Missing Sentry-Hook-Signature header', 401);
         }
-        if (!verifySentrySignature(rawBody, signature, integration.signatureSecret)) {
+        const signatureSecret = await decryptStoredSecret(integration.signatureSecret);
+        if (!verifySentrySignature(rawBody, signature, signatureSecret)) {
           logger.warn('api.integration.sentry_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }

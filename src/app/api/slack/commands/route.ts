@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { handleSlashCommand } from '@/lib/chatops/slash-commands';
 import { verifySlackSignature, toSlackResponseUrl } from '@/lib/slack-signature';
@@ -39,8 +39,9 @@ export async function POST(request: NextRequest) {
       // Processing taking longer than 1.5s -> finish in background and post to response_url
       // Rebuilt against a literal origin, so this can only ever reach Slack
       const responseUrl = toSlackResponseUrl(payload.response_url);
-      handlePromise
-        .then(async result => {
+      after(async () => {
+        try {
+          const result = await handlePromise;
           // Attacker-controlled input — only ever POST back to Slack's own host
           if (responseUrl && result) {
             try {
@@ -55,10 +56,10 @@ export async function POST(request: NextRequest) {
               });
             }
           }
-        })
-        .catch(err => {
+        } catch (err) {
           logger.error('[Slack] Error in async slash command processing', { error: err });
-        });
+        }
+      });
 
       // Return immediate HTTP 200 to Slack within 1.5s to prevent 3000ms operation_timeout
       return NextResponse.json({

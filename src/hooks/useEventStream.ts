@@ -28,6 +28,7 @@ export function useEventStream(options: EventStreamOptions = {}) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
+  const authorizationRevokedRef = useRef(false);
 
   // Use refs for callbacks to avoid re-creating EventSource on callback changes
   const onMessageRef = useRef(onMessage);
@@ -44,6 +45,7 @@ export function useEventStream(options: EventStreamOptions = {}) {
 
   useEffect(() => {
     isMountedRef.current = true;
+    authorizationRevokedRef.current = false;
 
     if (!enabled) {
       return;
@@ -79,6 +81,16 @@ export function useEventStream(options: EventStreamOptions = {}) {
         if (!isMountedRef.current) return;
         try {
           const parsed = JSON.parse(event.data);
+          if (parsed?.type === 'authorization_revoked') {
+            authorizationRevokedRef.current = true;
+            eventSource.close();
+            eventSourceRef.current = null;
+            setIsConnected(false);
+            const revokedError = new Error('Event stream authorization was revoked.');
+            setError(revokedError);
+            onErrorRef.current?.(revokedError);
+            return;
+          }
           setData(parsed);
           onMessageRef.current?.(parsed);
         } catch (err) {
@@ -87,7 +99,7 @@ export function useEventStream(options: EventStreamOptions = {}) {
       };
 
       eventSource.onerror = _err => {
-        if (!isMountedRef.current) return;
+        if (!isMountedRef.current || authorizationRevokedRef.current) return;
         setIsConnected(false);
         const connectionError = new Error('Event stream connection error');
         setError(connectionError);
@@ -114,9 +126,15 @@ export function useEventStream(options: EventStreamOptions = {}) {
 
     setupConnection();
 
+    const handleOnline = () => {
+      if (!authorizationRevokedRef.current) setupConnection();
+    };
+    window.addEventListener('online', handleOnline);
+
     // Cleanup on unmount
     return () => {
       isMountedRef.current = false;
+      window.removeEventListener('online', handleOnline);
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;

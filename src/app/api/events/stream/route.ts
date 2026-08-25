@@ -27,16 +27,18 @@ export async function GET(req: NextRequest) {
   }
 
   const prisma = (await import('@/lib/prisma')).default;
+  const sessionTokenVersion = session.user.tokenVersion ?? 0;
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
     select: {
       id: true,
       role: true,
+      tokenVersion: true,
       teamMemberships: { select: { teamId: true } },
     },
   });
 
-  if (!user) {
+  if (!user || (user.tokenVersion ?? 0) !== sessionTokenVersion) {
     return new Response('Unauthorized', { status: 401 });
   }
 
@@ -131,13 +133,16 @@ export async function GET(req: NextRequest) {
               select: {
                 status: true,
                 role: true,
+                tokenVersion: true,
                 teamMemberships: { select: { teamId: true } },
               },
             });
             const currentTeamIds = new Set(
               currentUser?.teamMemberships.map(membership => membership.teamId) || []
             );
-            let stillAuthorized = currentUser?.status === 'ACTIVE';
+            let stillAuthorized =
+              currentUser?.status === 'ACTIVE' &&
+              (currentUser.tokenVersion ?? 0) === sessionTokenVersion;
             const currentlyPrivileged =
               currentUser?.role === 'ADMIN' || currentUser?.role === 'RESPONDER';
             if (stillAuthorized && !currentlyPrivileged && incidentId) {

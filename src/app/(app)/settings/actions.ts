@@ -373,6 +373,7 @@ export async function createApiKey(
     const user = await getCurrentUser();
     const name = (formData.get('name') as string | null)?.trim() ?? '';
     const scopes = formData.getAll('scopes').filter(Boolean) as string[];
+    const expirationDays = Number(formData.get('expirationDays') || 90);
     const allowedScopes = new Set([
       'events:write',
       'incidents:read',
@@ -380,12 +381,26 @@ export async function createApiKey(
       'services:read',
       'schedules:read',
     ]);
+    const requestedScopes = scopes.filter(scope => allowedScopes.has(scope));
+    const userAllowedScopes = new Set(['incidents:read', 'services:read', 'schedules:read']);
+    if (user.role === 'USER' && requestedScopes.some(scope => !userAllowedScopes.has(scope))) {
+      return { error: 'Write scopes require Responder or Admin access.' };
+    }
     const finalScopes =
-      scopes.length > 0 ? scopes.filter(scope => allowedScopes.has(scope)) : ['events:write'];
+      requestedScopes.length > 0
+        ? requestedScopes
+        : user.role === 'USER'
+          ? ['incidents:read']
+          : ['events:write'];
 
     if (!name) {
       return { error: 'Name is required.' };
     }
+    if (!Number.isInteger(expirationDays) || expirationDays < 1 || expirationDays > 365) {
+      return { error: 'API keys must expire between 1 and 365 days.' };
+    }
+
+    const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);
 
     const { token, prefix, tokenHash } = generateApiKey();
 
@@ -396,15 +411,16 @@ export async function createApiKey(
         tokenHash,
         scopes: finalScopes,
         userId: user.id,
+        expiresAt,
       },
     });
 
     await logAudit({
       action: 'api_key.created',
-      entityType: 'USER',
-      entityId: user.id,
+      entityType: 'API_KEY',
+      entityId: key.id,
       actorId: user.id,
-      details: { keyId: key.id, name, prefix, scopes: finalScopes },
+      details: { name, prefix, scopes: finalScopes, expiresAt: expiresAt.toISOString() },
     });
 
     revalidatePath('/settings/api-keys');
@@ -421,10 +437,16 @@ export async function revokeApiKey(formData: FormData) {
   }
 
   const user = await getCurrentUser();
+  const key = await prisma.apiKey.findUnique({
+    where: { id: keyId },
+    select: { id: true, userId: true },
+  });
+  if (!key || (user.role !== 'ADMIN' && key.userId !== user.id)) {
+    throw new Error('API key not found or you do not have permission to revoke it.');
+  }
   await prisma.apiKey.updateMany({
     where: {
       id: keyId,
-      userId: user.id,
       revokedAt: null,
     },
     data: {
@@ -434,10 +456,10 @@ export async function revokeApiKey(formData: FormData) {
 
   await logAudit({
     action: 'api_key.revoked',
-    entityType: 'USER',
-    entityId: user.id,
+    entityType: 'API_KEY',
+    entityId: keyId,
     actorId: user.id,
-    details: { keyId },
+    details: { ownerId: key.userId },
   });
 
   revalidatePath('/settings/api-keys');

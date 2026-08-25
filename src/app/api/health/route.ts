@@ -50,15 +50,21 @@ export async function GET(request: NextRequest) {
     // Check background scheduler state
     try {
       const schedulerStartTime = Date.now();
-      const schedulerState = await prisma.cronSchedulerState.findUnique({
-        where: { id: 'singleton' },
-        select: { lastRunAt: true, lastError: true },
-      });
+      const [schedulerState] = await prisma.$queryRaw<
+        Array<{ heartbeatDead: boolean; lastRunAt: Date | null }>
+      >`
+        SELECT
+          "lastRunAt",
+          COALESCE("lockedAt", "lastRunAt") < NOW() - INTERVAL '15 minutes' AS "heartbeatDead"
+        FROM "cron_scheduler_state"
+        WHERE "id" = 'singleton'
+        LIMIT 1
+      `;
       if (schedulerState) {
         checks.scheduler = {
-          status: schedulerState.lastError ? 'unhealthy' : 'healthy',
+          status: schedulerState.heartbeatDead ? 'unhealthy' : 'healthy',
           latency: Date.now() - schedulerStartTime,
-          ...(schedulerState.lastError ? { error: 'Scheduler reported an error' } : {}),
+          ...(schedulerState.heartbeatDead ? { error: 'Scheduler heartbeat is stale' } : {}),
         };
       }
     } catch (_) {}

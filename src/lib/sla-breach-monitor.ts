@@ -419,7 +419,9 @@ async function notifyBreachWarning(
             warning.slackWebhookUrl
           );
           sent = true;
-          logger.info('[SLA Breach Monitor] Slack notification sent via Service Webhook', { warning });
+          logger.info('[SLA Breach Monitor] Slack notification sent via Service Webhook', {
+            warning,
+          });
         } catch (error) {
           logger.error('[SLA Breach Monitor] Failed to send Slack webhook notification', { error });
         }
@@ -458,11 +460,12 @@ async function notifyBreachWarning(
 
       for (const webhook of webhooks) {
         try {
+          const { decryptStoredSecret } = await import('./encryption');
           const result = await sendIncidentWebhook(
             webhook.url,
             warning.incidentId,
             isBreached ? 'triggered' : 'warning',
-            webhook.secret || undefined,
+            webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
             webhook.type,
             webhook.channel || undefined
           );

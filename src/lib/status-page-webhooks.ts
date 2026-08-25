@@ -5,6 +5,7 @@
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import crypto from 'crypto';
+import { decryptStoredSecret } from './encryption';
 import { retry } from './retry';
 import { CircuitBreakers } from './circuit-breaker';
 
@@ -24,27 +25,36 @@ export async function deliverWebhook(
 ): Promise<boolean> {
   try {
     // SSRF Protection: Validate webhook URL before making request
-    const { validateWebhookUrl } = await import('./network-security');
-    const isValidUrl = await validateWebhookUrl(url);
-    if (!isValidUrl) {
+    const { assertSafeOutboundUrl } = await import('./network-security');
+    try {
+      await assertSafeOutboundUrl(url);
+    } catch {
       logger.warn('api.status_page.webhook.blocked_ssrf', { url });
       return false;
     }
 
     const payloadString = JSON.stringify(payload);
-    const signature = crypto.createHmac('sha256', secret).update(payloadString).digest('hex');
+    const signatureTimestamp = Date.now().toString();
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(`${signatureTimestamp}.${payloadString}`)
+      .digest('hex');
+    const deliveryId = crypto.randomUUID();
 
     const cb = CircuitBreakers.webhook(url);
 
     const retryResult = await retry(
       async () => {
         const response = await cb.execute(async () => {
+          await assertSafeOutboundUrl(url);
           const res = await fetch(url, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'X-Webhook-Signature': `sha256=${signature}`,
               'X-Webhook-Event': payload.event,
+              'X-Webhook-Delivery': deliveryId,
+              'X-Webhook-Timestamp': signatureTimestamp,
               'User-Agent': 'OpsKnight-StatusPage/1.0',
             },
             body: payloadString,
@@ -182,14 +192,16 @@ export async function triggerStatusPageWebhooks(
     for (let i = 0; i < webhooks.length; i += BATCH_SIZE) {
       const batch = webhooks.slice(i, i + BATCH_SIZE);
       await Promise.allSettled(
-        batch.map(webhook =>
-          deliverWebhook(webhook.url, webhook.secret, payload).catch(err => {
-            logger.error('api.status_page.webhook.delivery_exception', {
-              webhookId: webhook.id,
-              error: err instanceof Error ? err.message : String(err),
-            });
-            return false;
-          })
+        batch.map(async webhook =>
+          deliverWebhook(webhook.url, await decryptStoredSecret(webhook.secret), payload).catch(
+            err => {
+              logger.error('api.status_page.webhook.delivery_exception', {
+                webhookId: webhook.id,
+                error: err instanceof Error ? err.message : String(err),
+              });
+              return false;
+            }
+          )
         )
       );
     }
@@ -266,10 +278,20 @@ export async function triggerWebhooksForService(
 export function verifyWebhookSignature(
   payload: string,
   signature: string,
-  secret: string
+  secret: string,
+  timestamp?: string,
+  maxAgeMs: number = 5 * 60_000
 ): boolean {
   try {
-    const expectedSignature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    if (timestamp) {
+      const sentAt = Number(timestamp);
+      if (!Number.isFinite(sentAt) || Math.abs(Date.now() - sentAt) > maxAgeMs) return false;
+    }
+    const signedPayload = timestamp ? `${timestamp}.${payload}` : payload;
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(signedPayload)
+      .digest('hex');
 
     const providedSignature = signature.replace('sha256=', '');
     return crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(providedSignature));

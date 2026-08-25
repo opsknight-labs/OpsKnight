@@ -10,7 +10,7 @@
 
 import prisma from './prisma';
 import { sendNotification, NotificationChannel } from './notifications';
-import { isChannelAvailable, getEmailConfig } from './notification-providers';
+import { isChannelAvailable } from './notification-providers';
 import { createInAppNotifications } from './in-app-notifications';
 import { logger } from './logger';
 
@@ -90,25 +90,34 @@ export async function sendUserNotification(
   incidentId: string,
   userId: string,
   message: string,
-  escalationChannels?: NotificationChannel[]
+  escalationChannels?: NotificationChannel[],
+  options: {
+    excludedChannels?: NotificationChannel[];
+    createInApp?: boolean;
+  } = {}
 ): Promise<{ success: boolean; channelsUsed: NotificationChannel[]; errors?: string[] }> {
   // Create In-App Notification first
-  try {
-    await createInAppNotifications({
-      userIds: [userId],
-      type: 'INCIDENT',
-      title: 'Action Required', // Generic title for escalation/direct message
-      message: message,
-      entityType: 'INCIDENT',
-      entityId: incidentId,
-    });
-  } catch (error) {
-    logger.error('Failed to create In-App notification', { userId, incidentId, error });
+  if (options.createInApp !== false) {
+    try {
+      await createInAppNotifications({
+        userIds: [userId],
+        type: 'INCIDENT',
+        title: 'Action Required', // Generic title for escalation/direct message
+        message: message,
+        entityType: 'INCIDENT',
+        entityId: incidentId,
+      });
+    } catch (error) {
+      logger.error('Failed to create In-App notification', { userId, incidentId, error });
+    }
   }
 
   let channels: NotificationChannel[];
   // ... rest of function
-  const userChannels = await getUserNotificationChannels(userId);
+  const excludedChannels = new Set(options.excludedChannels ?? []);
+  const userChannels = (await getUserNotificationChannels(userId)).filter(
+    channel => !excludedChannels.has(channel)
+  );
 
   // If escalation step specifies channels, use those (filtered by user preferences and availability)
   if (escalationChannels && escalationChannels.length > 0) {

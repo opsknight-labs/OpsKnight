@@ -120,6 +120,15 @@ export async function sendSlackNotification(
   };
 
   try {
+    const parsedTarget = new URL(targetUrl);
+    if (
+      parsedTarget.protocol !== 'https:' ||
+      parsedTarget.username ||
+      parsedTarget.password ||
+      !['hooks.slack.com', 'hooks.slack-gov.com'].includes(parsedTarget.hostname.toLowerCase())
+    ) {
+      return { success: false, error: 'Slack webhook URL must use an official Slack host' };
+    }
     // Use retry logic for improved reliability
     const response = await retryFetch(
       targetUrl,
@@ -127,6 +136,7 @@ export async function sendSlackNotification(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        redirect: 'manual',
       },
       {
         maxAttempts: 3,

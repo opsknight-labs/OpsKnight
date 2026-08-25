@@ -50,16 +50,12 @@ export async function DELETE(request: NextRequest) {
         }
       }
 
-      // Clear service reference if exists
-      if (service) {
-        await prisma.service.update({
-          where: { id: service.id },
+      await prisma.$transaction(async tx => {
+        await tx.service.updateMany({
+          where: { slackIntegrationId: integrationId },
           data: { slackIntegrationId: null },
         });
-      }
-
-      await prisma.slackIntegration.delete({
-        where: { id: integrationId },
+        await tx.slackIntegration.delete({ where: { id: integrationId } });
       });
 
       logger.info('[Slack] Integration disconnected', {
@@ -102,18 +98,16 @@ export async function DELETE(request: NextRequest) {
     } else {
       // Disconnect global integration (no serviceId)
       const globalIntegration = await prisma.slackIntegration.findFirst({
-        where: { services: { none: {} } },
+        orderBy: { updatedAt: 'desc' },
       });
 
       if (globalIntegration) {
-        // Clear all service references to this integration
-        await prisma.service.updateMany({
-          where: { slackIntegrationId: globalIntegration.id },
-          data: { slackIntegrationId: null },
-        });
-
-        await prisma.slackIntegration.delete({
-          where: { id: globalIntegration.id },
+        await prisma.$transaction(async tx => {
+          await tx.service.updateMany({
+            where: { slackIntegrationId: globalIntegration.id },
+            data: { slackIntegrationId: null },
+          });
+          await tx.slackIntegration.delete({ where: { id: globalIntegration.id } });
         });
 
         logger.info('[Slack] Global integration disconnected', {
@@ -127,7 +121,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'No integration found to disconnect' }, { status: 404 });
     }
   } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
     logger.error('[Slack] Disconnect error', {
       error: error.message,
       stack: error.stack,

@@ -70,6 +70,17 @@ describe('String Sanitization & ReDoS Defense', () => {
   });
 });
 
+describe('Runtime-safe context serialization', () => {
+  it('serializes bigint values without throwing', () => {
+    const message = `bigint-context-${Date.now()}`;
+
+    expect(() => logger.info(message, { counter: BigInt(9141001) })).not.toThrow();
+
+    const match = getLogBuffer(50).find(entry => entry.message === message);
+    expect(match?.context).toMatchObject({ counter: '9141001' });
+  });
+});
+
 describe('Public Logs API', () => {
   it('returns log entries without stack traces', async () => {
     mockAssertAdmin.mockResolvedValue({ id: 'admin-1', role: 'ADMIN', status: 'ACTIVE' });

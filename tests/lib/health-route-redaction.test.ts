@@ -30,9 +30,9 @@ describe('public readiness response', () => {
     const response = await GET(new NextRequest('http://localhost/api/health?mode=readiness'));
     const body = await response.json();
 
-    expect(body.checks.scheduler.error).toBe('Scheduler reported an error');
+    expect(body.checks.scheduler.error).toBeUndefined();
     expect(JSON.stringify(body)).not.toContain('secret-password');
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
   });
 
   it('does not expose database connection errors', async () => {

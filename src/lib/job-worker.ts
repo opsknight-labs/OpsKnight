@@ -127,7 +127,8 @@ async function runOnce(): Promise<void> {
       durationMs: Date.now() - startedAt,
     });
 
-    const delay = result.total > 0 ? workerConfig.busyPollMs : withIdleJitter(workerConfig.idlePollMs);
+    const delay =
+      result.total > 0 ? workerConfig.busyPollMs : withIdleJitter(workerConfig.idlePollMs);
     scheduleNextRun(delay);
   } catch (error) {
     lastError = error instanceof Error ? error.message : String(error);

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  getOpsKnightProcessRole,
-  getRuntimeResponsibilities,
-} from '@/lib/runtime-role';
+import { getOpsKnightProcessRole, getRuntimeResponsibilities } from '@/lib/runtime-role';
 
 describe('runtime process roles', () => {
   it('preserves the existing integrated runtime by default', () => {

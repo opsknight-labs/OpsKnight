@@ -31,6 +31,12 @@ enum AuditEntityType {
   TEAM_MEMBER
   SERVICE
   ESCALATION_POLICY
+  API_KEY
+  SSO_CONFIG
+  SCHEDULE
+  CUSTOM_FIELD
+  STATUS_PAGE
+  SYSTEM_CONFIG
 }
 
 enum UserTokenType {
@@ -358,6 +364,7 @@ model EscalationRule {
   targetTeam     Team?           @relation(fields: [targetTeamId], references: [id])
   targetSchedule OnCallSchedule? @relation(fields: [targetScheduleId], references: [id])
 
+  @@unique([policyId, stepOrder])
   @@index([policyId])
   @@index([targetUserId])
   @@index([targetTeamId])
@@ -812,6 +819,7 @@ model OnCallOverride {
   user         User           @relation("OverrideUser", fields: [userId], references: [id])
   replacesUser User?          @relation("OverrideReplacesUser", fields: [replacesUserId], references: [id])
 
+  @@unique([scheduleId, userId, start, end])
   @@index([scheduleId, start, end]) // For finding active overrides in date range
   @@index([userId, start, end]) // For user's override schedule queries
 }
@@ -904,16 +912,20 @@ model AuditLog {
   entityType  AuditEntityType
   entityId    String?
   actorId     String?
+  actorEmail  String? // Immutable actor snapshot retained after user deletion
+  actorName   String? // Immutable actor snapshot retained after user deletion
   details     Json?
   targetEmail String? // For rate limiting queries (avoid JSON scan)
   ip          String? // For rate limiting queries (avoid JSON scan)
   createdAt   DateTime        @default(now())
 
-  actor User? @relation(fields: [actorId], references: [id])
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId]) // For querying audit logs by entity
   @@index([actorId, createdAt]) // For querying audit logs by actor
   @@index([createdAt]) // For time-based queries
+  @@index([entityType, createdAt])
+  @@index([action, createdAt])
   // Rate Limiting Performance Indexes
   @@index([action, targetEmail, createdAt]) // For checking email rate limits O(log n)
   @@index([action, ip, createdAt]) // For checking IP rate limits O(log n)
@@ -945,10 +957,13 @@ model ApiKey {
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
   revokedAt  DateTime?
+  expiresAt  DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
 }
 
 // System-level notification provider configuration

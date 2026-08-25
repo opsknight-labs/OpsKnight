@@ -54,9 +54,9 @@ describe('dedicated job worker', () => {
   });
 
   it('rejects unsafe or inconsistent configuration', () => {
-    expect(() =>
-      getJobWorkerConfig(testEnv({ OPSKNIGHT_WORKER_CONCURRENCY: '51' }))
-    ).toThrow(/OPSKNIGHT_WORKER_CONCURRENCY/);
+    expect(() => getJobWorkerConfig(testEnv({ OPSKNIGHT_WORKER_CONCURRENCY: '51' }))).toThrow(
+      /OPSKNIGHT_WORKER_CONCURRENCY/
+    );
 
     expect(() =>
       getJobWorkerConfig(

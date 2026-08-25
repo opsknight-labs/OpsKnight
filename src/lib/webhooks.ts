@@ -59,9 +59,10 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
     }
 
     // SSRF Protection: Validate URL
-    const { validateWebhookUrl } = await import('./network-security');
-    const isValid = await validateWebhookUrl(url);
-    if (!isValid) {
+    const { assertSafeOutboundUrl } = await import('./network-security');
+    try {
+      await assertSafeOutboundUrl(url);
+    } catch {
       return { success: false, error: 'Invalid or restricted Webhook URL' };
     }
 
@@ -91,6 +92,9 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
       const retryResult = await retry(
         async () => {
           attempts++;
+          // Resolve again immediately before every attempt. This limits DNS
+          // rebinding exposure and prevents a retry from using a newly-private answer.
+          await assertSafeOutboundUrl(url);
           const attemptController = new AbortController();
           const attemptTimeoutId = setTimeout(() => attemptController.abort(), timeout);
           try {
@@ -826,10 +830,19 @@ export async function sendIncidentWebhook(
 export function verifyWebhookSignature(
   payload: string,
   signature: string,
-  secret: string
+  secret: string,
+  timestamp?: string,
+  maxAgeMs: number = 5 * 60_000
 ): boolean {
   try {
-    const expectedSignature = generateSignature(payload, secret);
+    if (timestamp) {
+      const sentAt = Number(timestamp);
+      if (!Number.isFinite(sentAt) || Math.abs(Date.now() - sentAt) > maxAgeMs) return false;
+    }
+    const expectedSignature = generateSignature(
+      timestamp ? `${timestamp}.${payload}` : payload,
+      secret
+    );
     const providedSignature = signature.replace(/^sha256=/, '');
 
     // Use timing-safe comparison to prevent timing attacks

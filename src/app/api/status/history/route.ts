@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
     const incidents = serializeRecentIncidents(metrics.recentIncidents);
     const services = metrics.serviceMetrics.map(s => ({ id: s.id, name: s.name }));
 
-    return jsonOk(
+    const response = jsonOk(
       {
         incidents,
         services,
@@ -106,6 +106,11 @@ export async function GET(req: NextRequest) {
       },
       200
     );
+    if (statusPage.requireAuth) {
+      response.headers.set('Cache-Control', 'private, no-store');
+      response.headers.set('Vary', 'Cookie, Authorization');
+    }
+    return response;
   } catch (error: any) {
     logger.error('api.status.history.error', {
       error: error instanceof Error ? error.message : String(error),

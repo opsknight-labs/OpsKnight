@@ -6,6 +6,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { IncidentCreateSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { executeEscalation } from '@/lib/escalation';
+import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
 
 function parseLimit(value: string | null) {
   const limit = Number(value);
@@ -234,12 +235,11 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Await delivery so serverless runtimes cannot terminate it with the request.
+  // Subscriber fan-out is durable and processed outside the request path.
   try {
-    const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
-    await notifyStatusPageSubscribers(incident.id, 'triggered');
+    await scheduleStatusPageNotification(incident.id, 'triggered');
   } catch (e) {
-    logger.error('api.incident.status_page_notification_import_failed', {
+    logger.error('api.incident.status_page_notification_enqueue_failed', {
       error: e instanceof Error ? e.message : String(e),
       incidentId: incident.id,
     });

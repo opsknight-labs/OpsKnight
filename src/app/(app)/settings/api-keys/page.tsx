@@ -11,13 +11,14 @@ export default async function ApiKeysSettingsPage() {
   const user = email
     ? await prisma.user.findUnique({
         where: { email },
-        select: { id: true, timeZone: true },
+        select: { id: true, timeZone: true, role: true },
       })
     : null;
   const timeZone = getUserTimeZone(user ?? undefined);
   const keys = user
     ? await prisma.apiKey.findMany({
-        where: { userId: user.id },
+        where: user.role === 'ADMIN' ? undefined : { userId: user.id },
+        include: { user: { select: { email: true } } },
         orderBy: { createdAt: 'desc' },
       })
     : [];
@@ -37,6 +38,7 @@ export default async function ApiKeysSettingsPage() {
           name: key.name,
           prefix: key.prefix,
           scopes: key.scopes,
+          ownerEmail: key.user.email,
           createdAt: formatDateTime(key.createdAt, timeZone, { format: 'date' }),
           lastUsedAt: key.lastUsedAt
             ? formatDateTime(key.lastUsedAt, timeZone, { format: 'date' })
@@ -44,7 +46,12 @@ export default async function ApiKeysSettingsPage() {
           revokedAt: key.revokedAt
             ? formatDateTime(key.revokedAt, timeZone, { format: 'date' })
             : null,
+          expiresAt: key.expiresAt
+            ? formatDateTime(key.expiresAt, timeZone, { format: 'date' })
+            : null,
+          expired: !!key.expiresAt && key.expiresAt <= new Date(),
         }))}
+        canCreateWriteKeys={user?.role === 'ADMIN' || user?.role === 'RESPONDER'}
       />
     </div>
   );

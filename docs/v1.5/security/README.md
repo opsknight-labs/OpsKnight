@@ -17,13 +17,13 @@ This section covers identity management, authorization, cryptographic data prote
 | :--------------------------------------------- | :-------------------------------------------------------------------- |
 | [OIDC SSO Setup](./oidc-setup)                 | Configure single sign-on with Google, Okta, Azure AD, and Keycloak    |
 | [Authorization and Roles](./authorization)     | Apply workspace roles, team roles, and resource ownership safely      |
-| [Envelope Encryption](./encryption)            | AES-256-CBC envelope encryption for integration secrets and tokens    |
+| [Envelope Encryption](./encryption)            | Authenticated AES-256-GCM envelope encryption and keyring rotation    |
 | [Webhook Verification](./webhook-verification) | HMAC-SHA256 signature verification and timing-safe payload validation |
 
 ## Key Concepts
 
 - **Authentication** is handled by NextAuth.js with OIDC support. See [Authentication](../administration/authentication) for the full guide.
-- **Encryption at rest** uses AES-256-CBC envelope encryption. The master key is supplied via the `ENCRYPTION_KEY` environment variable.
+- **Encryption at rest** uses authenticated AES-256-GCM envelope encryption for new protected values. Keys are supplied through `ENCRYPTION_KEYS` or the single-key `ENCRYPTION_KEY` compatibility setting.
 - **Signature verification** validates provider-specific tokens or raw-body HMACs when a signature secret is configured. Only modes that include and validate a timestamp provide an application-level replay-age check; use the exact [webhook contract](./webhook-verification).
 
 ## Authentication boundary

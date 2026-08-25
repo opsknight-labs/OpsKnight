@@ -12,24 +12,6 @@ import { getAppUrl } from '@/lib/app-url';
 import crypto from 'crypto';
 import { SLACK_BOT_SCOPES } from '@/lib/slack/app-manifest';
 
-const isLocalhostUrl = (value: string) =>
-  value.includes('localhost') || value.includes('127.0.0.1');
-
-const getRequestOrigin = (request: NextRequest): string | null => {
-  const forwardedProto = request.headers.get('x-forwarded-proto');
-  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
-  if (forwardedHost) {
-    const protocol = forwardedProto?.split(',')[0]?.trim() || 'https';
-    return `${protocol}://${forwardedHost}`;
-  }
-
-  try {
-    return new URL(request.url).origin;
-  } catch {
-    return null;
-  }
-};
-
 export async function GET(request: NextRequest) {
   try {
     // Require authentication
@@ -65,14 +47,11 @@ export async function GET(request: NextRequest) {
     }
 
     const configuredAppUrl = await getAppUrl();
-    const requestOrigin = getRequestOrigin(request);
-    const appUrl =
-      requestOrigin && isLocalhostUrl(configuredAppUrl) && !isLocalhostUrl(requestOrigin)
-        ? requestOrigin
-        : configuredAppUrl;
 
     const SLACK_REDIRECT_URI =
-      config?.redirectUri || process.env.SLACK_REDIRECT_URI || `${appUrl}/api/slack/oauth/callback`;
+      config?.redirectUri ||
+      process.env.SLACK_REDIRECT_URI ||
+      `${configuredAppUrl}/api/slack/oauth/callback`;
 
     if (!SLACK_CLIENT_ID || !SLACK_CLIENT_SECRET) {
       logger.warn('[Slack] Slack OAuth attempted but not fully configured', {

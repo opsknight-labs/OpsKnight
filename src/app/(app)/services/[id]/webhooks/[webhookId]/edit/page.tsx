@@ -43,7 +43,7 @@ export default async function EditWebhookPage({
     notFound();
   }
 
-  const updateWebhookWithIds = updateWebhookIntegration.bind(null, id, webhookId);
+  const updateWebhookWithIds = updateWebhookIntegration.bind(null, webhookId, id);
   const deleteWebhookWithIds = deleteWebhookIntegration.bind(null, webhookId, id);
 
   return (
@@ -151,11 +151,15 @@ export default async function EditWebhookPage({
                   id="secret"
                   name="secret"
                   type="password"
-                  defaultValue={webhook.secret || ''}
-                  placeholder="HMAC secret for signature verification"
+                  defaultValue=""
+                  placeholder={
+                    webhook.secret
+                      ? 'Configured — enter a new value to rotate'
+                      : 'HMAC secret for signature verification'
+                  }
                 />
                 <p className="text-xs text-muted-foreground">
-                  Optional: Secret for HMAC signature verification
+                  Leave blank to preserve the configured secret. Stored values are never displayed.
                 </p>
               </div>
 

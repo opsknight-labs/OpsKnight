@@ -168,8 +168,13 @@ describe('mergeHybridMetrics', () => {
     // live: ackCompliance=50%, 5 breaches.
     //   50% means met / (met+5) = 0.5 → met = 5, total_evaluated = 10.
     // merged: 105 met, 30 breached, 135 evaluated → 105/135 ≈ 77.78%.
-    const historical = metric({ ackCompliance: 80, ackBreaches: 25 });
-    const live = metric({ ackCompliance: 50, ackBreaches: 5 });
+    const historical = metric({
+      totalIncidents: 125,
+      ackRate: 100,
+      ackCompliance: 80,
+      ackBreaches: 25,
+    });
+    const live = metric({ totalIncidents: 10, ackRate: 100, ackCompliance: 50, ackBreaches: 5 });
 
     const merged = mergeHybridMetrics(historical, live);
 

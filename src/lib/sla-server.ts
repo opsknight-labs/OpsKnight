@@ -205,6 +205,7 @@ const DB_AGGREGATION_THRESHOLD = 500;
  */
 type DbAggregateMetrics = {
   totalIncidents: number;
+  acknowledgedCount: number;
   resolvedCount: number;
   avgMttaMs: number | null;
   avgMttrMs: number | null;
@@ -347,6 +348,7 @@ async function calculateDbAggregateMetrics(
     const aggregateResult = await prisma.$queryRaw<
       Array<{
         total_incidents: bigint;
+        acknowledged_count: bigint;
         resolved_count: bigint;
         avg_mtta_ms: number | null;
         avg_mttr_ms: number | null;
@@ -362,26 +364,22 @@ async function calculateDbAggregateMetrics(
     >`
       SELECT
         COUNT(*) as total_incidents,
+        COUNT(*) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as acknowledged_count,
         COUNT(*) FILTER (WHERE "status" = 'RESOLVED') as resolved_count,
         AVG(GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000))
           FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as avg_mtta_ms,
         AVG(GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000))
           FILTER (WHERE "status" = 'RESOLVED' AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
         COUNT(*) FILTER (
-          WHERE ("acknowledgedAt" IS NOT NULL
-            AND GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000) <= ${Prisma.raw(ackTargetCase)})
-          OR ("acknowledgedAt" IS NULL AND "status" = 'RESOLVED'
-            AND GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000) <= ${Prisma.raw(ackTargetCase)})
+          WHERE "acknowledgedAt" IS NOT NULL
+            AND GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000) <= ${Prisma.raw(ackTargetCase)}
         ) as ack_sla_met,
         COUNT(*) FILTER (
           WHERE ("acknowledgedAt" IS NOT NULL
             AND GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000) > ${Prisma.raw(ackTargetCase)})
-          OR ("acknowledgedAt" IS NULL
-            AND "status" != 'RESOLVED'
+          OR ("acknowledgedAt" IS NULL AND "status" = 'RESOLVED')
+          OR ("acknowledgedAt" IS NULL AND "status" != 'RESOLVED'
             AND EXTRACT(EPOCH FROM (NOW() - "createdAt")) * 1000 > ${Prisma.raw(ackTargetCase)})
-          OR ("acknowledgedAt" IS NULL
-            AND "status" = 'RESOLVED'
-            AND GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000) > ${Prisma.raw(ackTargetCase)})
         ) as ack_sla_breached,
         COUNT(*) FILTER (
           WHERE "status" = 'RESOLVED'
@@ -492,6 +490,7 @@ async function calculateDbAggregateMetrics(
 
     return {
       totalIncidents: Number(agg?.total_incidents ?? 0),
+      acknowledgedCount: Number(agg?.acknowledged_count ?? 0),
       resolvedCount: Number(agg?.resolved_count ?? 0),
       avgMttaMs: agg?.avg_mtta_ms ?? null,
       avgMttrMs: agg?.avg_mttr_ms ?? null,
@@ -516,6 +515,7 @@ async function calculateDbAggregateMetrics(
     // Return empty metrics to trigger fallback
     return {
       totalIncidents: -1, // Signal to use fallback
+      acknowledgedCount: 0,
       resolvedCount: 0,
       avgMttaMs: null,
       avgMttrMs: null,
@@ -1613,8 +1613,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       mttr: dbAggMetrics.avgMttrMs ?? null,
       ackRate:
         dbAggMetrics.totalIncidents > 0
-          ? ((dbAggMetrics.ackSlaMet + dbAggMetrics.ackSlaBreached) / dbAggMetrics.totalIncidents) *
-            100
+          ? (dbAggMetrics.acknowledgedCount / dbAggMetrics.totalIncidents) * 100
           : 0,
       resolveRate:
         dbAggMetrics.totalIncidents > 0
@@ -1718,15 +1717,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           ackSlaBreached++;
         }
       } else if (incident.status === 'RESOLVED') {
-        const resolvedAt = incident.resolvedAt || incident.updatedAt;
-        if (resolvedAt && incident.createdAt) {
-          const diffMin = (resolvedAt.getTime() - incident.createdAt.getTime()) / 60000;
-          if (diffMin <= ackTarget) {
-            ackSlaMet++;
-          } else {
-            ackSlaBreached++;
-          }
-        }
+        ackSlaBreached++;
       } else {
         // Check if unacked incident is overdue
         const elapsedMin = (now.getTime() - incident.createdAt.getTime()) / 60000;
@@ -1772,18 +1763,18 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   const useHourlyTrend = actualWindowDays === 1;
   const trendLength = useHourlyTrend ? 24 : actualWindowDays;
 
-  const trendSeries = Array.from({ length: trendLength }, (_, idx) => {
-    const point = new Date(finalStart);
-    if (useHourlyTrend) {
-      point.setHours(point.getHours() + idx);
-    } else {
-      point.setDate(point.getDate() + idx);
-    }
+  const trendPoints = new Map<string, Date>();
+  for (let cursor = finalStart.getTime(); cursor <= finalEnd.getTime(); cursor += 60 * 60 * 1000) {
+    const point = new Date(cursor);
+    const key = useHourlyTrend
+      ? toHourKeyInTimeZone(point, userTimeZone)
+      : toDateKeyInTimeZone(point, userTimeZone);
+    if (!trendPoints.has(key)) trendPoints.set(key, point);
+  }
+  const trendSeries = [...trendPoints.entries()].slice(-trendLength).map(([key, point]) => {
     return {
       date: point,
-      key: useHourlyTrend
-        ? toHourKeyInTimeZone(point, userTimeZone)
-        : toDateKeyInTimeZone(point, userTimeZone),
+      key,
       label: useHourlyTrend
         ? formatHourLabel(point, userTimeZone)
         : formatDayLabel(point, userTimeZone),
@@ -1993,7 +1984,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     recentIncidents
       .map(incident => ({
         start: incident.createdAt > finalStart ? incident.createdAt : finalStart,
-        end: incident.resolvedAt && incident.resolvedAt < finalEnd ? incident.resolvedAt : finalEnd,
+        end:
+          incident.status === 'RESOLVED'
+            ? (incident.resolvedAt || incident.updatedAt) < finalEnd
+              ? incident.resolvedAt || incident.updatedAt
+              : finalEnd
+            : finalEnd,
       }))
       .filter(interval => interval.start < interval.end)
   );
@@ -2452,6 +2448,7 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
       createdAt: true,
       acknowledgedAt: true,
       resolvedAt: true,
+      updatedAt: true,
       status: true,
     },
   });
@@ -2461,7 +2458,9 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
   let totalAckEvaluated = 0;
   let totalResolveEvaluated = 0;
 
-  const evaluationTime = end;
+  // Manual callers can request today's snapshot. Never evaluate against a
+  // future end-of-day, which would manufacture breaches that have not happened.
+  const evaluationTime = new Date(Math.min(end.getTime(), Date.now()));
   const targetAckTime = (definition as { targetAckTime?: number }).targetAckTime;
   const targetResolveTime = (definition as { targetResolveTime?: number }).targetResolveTime;
 
@@ -2473,9 +2472,13 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
         const ackMinutes =
           (incident.acknowledgedAt.getTime() - incident.createdAt.getTime()) / 60000;
         if (ackMinutes <= targetAckTime) metAck++;
-      } else if (incident.status !== 'RESOLVED') {
-        // Check if overdue
-        const elapsedMin = (evaluationTime.getTime() - incident.createdAt.getTime()) / 60000;
+      } else {
+        // Resolution does not imply acknowledgement. Evaluate an incident
+        // without acknowledgedAt up to its resolution (or snapshot time), so
+        // resolved-but-never-acknowledged incidents are not omitted from ACK
+        // compliance entirely.
+        const ackEvaluationTime = incident.resolvedAt ?? evaluationTime;
+        const elapsedMin = (ackEvaluationTime.getTime() - incident.createdAt.getTime()) / 60000;
         if (elapsedMin > targetAckTime) {
           totalAckEvaluated++; // Count as breach
         }
@@ -2484,10 +2487,11 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
 
     // RESOLVE evaluation
     if (targetResolveTime) {
-      if (incident.resolvedAt) {
+      const resolvedTime =
+        incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
+      if (resolvedTime) {
         totalResolveEvaluated++;
-        const resolveMinutes =
-          (incident.resolvedAt.getTime() - incident.createdAt.getTime()) / 60000;
+        const resolveMinutes = (resolvedTime.getTime() - incident.createdAt.getTime()) / 60000;
         if (resolveMinutes <= targetResolveTime) metResolve++;
       } else if (incident.status !== 'RESOLVED') {
         // Check if overdue

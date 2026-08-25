@@ -71,9 +71,12 @@ export async function GET(req: NextRequest) {
               const prisma = (await import('@/lib/prisma')).default;
               const currentUser = await prisma.user.findUnique({
                 where: { id: user.id },
-                select: { status: true },
+                select: { status: true, tokenVersion: true },
               });
-              if (currentUser?.status !== 'ACTIVE') {
+              if (
+                currentUser?.status !== 'ACTIVE' ||
+                (currentUser.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)
+              ) {
                 send(JSON.stringify({ type: 'authorization_revoked' }));
                 cleanup();
                 return;

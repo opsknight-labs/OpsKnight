@@ -15,6 +15,7 @@
 import { Prisma } from '@prisma/client';
 import { logger } from '../logger';
 import prisma from '../prisma';
+import type { NotificationChannel } from '../notifications';
 
 const MAX_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 
@@ -32,6 +33,8 @@ interface JobPayload {
   channel?: string;
   message?: string;
   stepIndex?: number;
+  mode?: 'CHANNEL_FALLBACK';
+  failedChannel?: string;
   [key: string]: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
@@ -146,7 +149,7 @@ export async function claimPendingJobs(limit: number = 50, type?: JobType): Prom
           "error" = 'Job timed out in PROCESSING state after exceeding maxAttempts',
           "failedAt" = NOW()
       WHERE "status" = 'PROCESSING'
-        AND "startedAt" < NOW() - INTERVAL '10 minutes'
+        AND ("startedAt" IS NULL OR "startedAt" < NOW() - INTERVAL '10 minutes')
         AND "attempts" >= "maxAttempts";
     `
     )
@@ -158,7 +161,7 @@ export async function claimPendingJobs(limit: number = 50, type?: JobType): Prom
       WITH cte AS (
         SELECT "id"
         FROM "BackgroundJob"
-        WHERE ("status" = 'PENDING' OR ("status" = 'PROCESSING' AND "startedAt" < NOW() - INTERVAL '10 minutes'))
+        WHERE ("status" = 'PENDING' OR ("status" = 'PROCESSING' AND ("startedAt" IS NULL OR "startedAt" < NOW() - INTERVAL '10 minutes')))
           AND "scheduledAt" <= NOW()
           AND "attempts" < "maxAttempts"
           ${typeFilter}
@@ -273,13 +276,55 @@ export async function processJob(job: any): Promise<boolean> {
         }
 
       case 'NOTIFICATION':
-        const { sendNotification } = await import('../notifications');
-        const notificationResult = await sendNotification(
-          job.payload.incidentId,
-          job.payload.userId,
-          job.payload.channel as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-          job.payload.message
-        );
+        let notificationResult: { success: boolean; error?: string };
+        if (job.payload.mode === 'CHANNEL_FALLBACK') {
+          const { getUserNotificationChannels, sendUserNotification } =
+            await import('../user-notifications');
+          const failedRows = await prisma.notification.findMany({
+            where: {
+              incidentId: job.payload.incidentId,
+              userId: job.payload.userId,
+              status: 'FAILED',
+            },
+            select: { channel: true },
+          });
+          const excludedChannels = Array.from(
+            new Set([
+              ...failedRows.map(row => row.channel),
+              ...(job.payload.failedChannel ? [job.payload.failedChannel] : []),
+            ])
+          );
+          const availableChannels = (await getUserNotificationChannels(job.payload.userId)).filter(
+            channel => !excludedChannels.includes(channel)
+          );
+
+          if (availableChannels.length === 0) {
+            notificationResult = {
+              success: false,
+              error: 'No untried notification fallback channels remain',
+            };
+          } else {
+            const fallbackResult = await sendUserNotification(
+              job.payload.incidentId,
+              job.payload.userId,
+              job.payload.message,
+              availableChannels,
+              { excludedChannels, createInApp: false }
+            );
+            notificationResult = {
+              success: fallbackResult.success,
+              error: fallbackResult.errors?.join('; '),
+            };
+          }
+        } else {
+          const { sendNotification } = await import('../notifications');
+          notificationResult = await sendNotification(
+            job.payload.incidentId,
+            job.payload.userId,
+            job.payload.channel as NotificationChannel,
+            job.payload.message
+          );
+        }
         if (notificationResult.success) {
           await markJobCompleted(job.id);
           return true;
@@ -307,6 +352,50 @@ export async function processJob(job: any): Promise<boolean> {
       case 'STATUS_PAGE_NOTIFICATION': {
         const { notifyStatusPageSubscribers } = await import('../status-page-notifications');
         await notifyStatusPageSubscribers(job.payload.incidentId, job.payload.eventType);
+        const incidentForWebhook = await prisma.incident.findUnique({
+          where: { id: job.payload.incidentId },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            urgency: true,
+            priority: true,
+            visibility: true,
+            serviceId: true,
+            createdAt: true,
+            acknowledgedAt: true,
+            resolvedAt: true,
+            service: { select: { id: true, name: true } },
+          },
+        });
+        if (incidentForWebhook?.visibility === 'PUBLIC') {
+          const { triggerWebhooksForService } = await import('../status-page-webhooks');
+          const eventMap: Record<string, string> = {
+            triggered: 'incident.created',
+            acknowledged: 'incident.acknowledged',
+            resolved: 'incident.resolved',
+            snoozed: 'incident.snoozed',
+            suppressed: 'incident.suppressed',
+            updated: 'incident.updated',
+            investigating: 'incident.updated',
+          };
+          await triggerWebhooksForService(
+            incidentForWebhook.serviceId,
+            eventMap[job.payload.eventType] || 'incident.updated',
+            {
+              id: incidentForWebhook.id,
+              title: incidentForWebhook.title,
+              status: incidentForWebhook.status,
+              urgency: incidentForWebhook.urgency,
+              priority: incidentForWebhook.priority,
+              visibility: incidentForWebhook.visibility,
+              service: incidentForWebhook.service,
+              createdAt: incidentForWebhook.createdAt.toISOString(),
+              acknowledgedAt: incidentForWebhook.acknowledgedAt?.toISOString() || null,
+              resolvedAt: incidentForWebhook.resolvedAt?.toISOString() || null,
+            }
+          );
+        }
         await markJobCompleted(job.id);
         return true;
       }

@@ -196,57 +196,6 @@ export async function updateIncidentStatus(
     });
   }
 
-  // Trigger status page webhooks for incident status changes
-  try {
-    const updatedIncident = await prisma.incident.findUnique({
-      where: { id },
-      include: {
-        service: { select: { id: true, name: true } },
-        assignee: {
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-        },
-      },
-    });
-
-    if (updatedIncident) {
-      const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-      let eventType = 'incident.updated';
-
-      if (status === 'RESOLVED') {
-        eventType = 'incident.resolved';
-      } else if (status === 'ACKNOWLEDGED') {
-        eventType = 'incident.acknowledged';
-      } else if (status === 'SNOOZED') {
-        eventType = 'incident.snoozed'; // Or updated, depending on standard
-      } else if (status === 'SUPPRESSED') {
-        eventType = 'incident.suppressed';
-      }
-
-      await triggerWebhooksForService(updatedIncident.serviceId, eventType, {
-        id: updatedIncident.id,
-        title: updatedIncident.title,
-        description: updatedIncident.description,
-        status: updatedIncident.status,
-        urgency: updatedIncident.urgency,
-        priority: updatedIncident.priority,
-        service: {
-          id: updatedIncident.service.id,
-          name: updatedIncident.service.name,
-        },
-        assignee: updatedIncident.assignee,
-        createdAt: updatedIncident.createdAt.toISOString(),
-        acknowledgedAt: updatedIncident.acknowledgedAt?.toISOString() || null,
-        resolvedAt: updatedIncident.resolvedAt?.toISOString() || null,
-      });
-    }
-  } catch (e) {
-    logger.error('Status page webhook trigger failed', {
-      component: 'incidents-actions',
-      error: e,
-      incidentId: id,
-    });
-  }
-
   // Notify status page subscribers (Email)
   try {
     const { scheduleStatusPageNotification } = await import('@/lib/jobs/queue');
@@ -254,6 +203,8 @@ export async function updateIncidentStatus(
       ACKNOWLEDGED: 'acknowledged',
       RESOLVED: 'resolved',
       OPEN: 'investigating', // Re-opened or opened
+      SNOOZED: 'snoozed',
+      SUPPRESSED: 'suppressed',
     };
     const notifyEvent = eventMap[status];
     if (notifyEvent) {
@@ -411,44 +362,6 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
     await scheduleStatusPageNotification(id, 'resolved');
   } catch (e) {
     logger.error('Status page subscriber notification failed', {
-      component: 'incidents-actions',
-      error: e,
-      incidentId: id,
-    });
-  }
-
-  // Trigger status page webhooks for resolution
-  try {
-    const incidentWithRelations = await prisma.incident.findUnique({
-      where: { id },
-      include: {
-        service: { select: { id: true, name: true } },
-        assignee: {
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-        },
-      },
-    });
-
-    if (incidentWithRelations) {
-      const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-      await triggerWebhooksForService(incidentWithRelations.serviceId, 'incident.resolved', {
-        id: incidentWithRelations.id,
-        title: incidentWithRelations.title,
-        description: incidentWithRelations.description,
-        status: incidentWithRelations.status,
-        urgency: incidentWithRelations.urgency,
-        priority: incidentWithRelations.priority,
-        service: {
-          id: incidentWithRelations.service.id,
-          name: incidentWithRelations.service.name,
-        },
-        assignee: incidentWithRelations.assignee,
-        createdAt: incidentWithRelations.createdAt.toISOString(),
-        resolvedAt: incidentWithRelations.resolvedAt?.toISOString() || new Date().toISOString(),
-      });
-    }
-  } catch (e) {
-    logger.error('Status page webhook trigger failed', {
       component: 'incidents-actions',
       error: e,
       incidentId: id,
@@ -781,43 +694,6 @@ export async function createIncident(formData: FormData) {
     });
   }
 
-  // Trigger status page webhooks for incident.created event
-  try {
-    const incidentWithRelations = await prisma.incident.findUnique({
-      where: { id: incident.id },
-      include: {
-        service: { select: { id: true, name: true } },
-        assignee: {
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-        },
-      },
-    });
-
-    if (incidentWithRelations) {
-      const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-      await triggerWebhooksForService(incident.serviceId, 'incident.created', {
-        id: incidentWithRelations.id,
-        title: incidentWithRelations.title,
-        description: incidentWithRelations.description,
-        status: incidentWithRelations.status,
-        urgency: incidentWithRelations.urgency,
-        priority: incidentWithRelations.priority,
-        service: {
-          id: incidentWithRelations.service.id,
-          name: incidentWithRelations.service.name,
-        },
-        assignee: incidentWithRelations.assignee,
-        createdAt: incidentWithRelations.createdAt.toISOString(),
-      });
-    }
-  } catch (e) {
-    logger.error('Status page webhook trigger failed', {
-      component: 'incidents-actions',
-      error: e,
-      incidentId: incident.id,
-    });
-  }
-
   // Notify status page subscribers (Email)
   try {
     const { scheduleStatusPageNotification } = await import('@/lib/jobs/queue');
@@ -913,6 +789,7 @@ export async function addNote(incidentId: string, content: string) {
   } catch (error) {
     throw new Error(getUserFriendlyError(error));
   }
+  await assertCanModifyIncident(incidentId);
   const user = await getCurrentUser();
 
   await prisma.$transaction(async tx => {
