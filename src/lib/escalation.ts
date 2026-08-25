@@ -281,6 +281,47 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
   const currentStepIndex = stepIndex ?? incident.currentEscalationStep ?? 0;
 
   if (currentStepIndex >= policySteps.length) {
+    // Check how many times this escalation has looped
+    const loopEventsCount = typeof prisma.incidentEvent?.count === 'function'
+      ? await prisma.incidentEvent.count({
+          where: {
+            incidentId,
+            message: { contains: 'Looping back to Step 1' },
+          },
+        })
+      : 0;
+
+    const MAX_LOOPS = 2; // Allow up to 2 retry cycles
+    if (loopEventsCount < MAX_LOOPS && incident.status === 'OPEN' && !incident.acknowledgedAt) {
+      const cooldownMinutes = 15;
+      const nextAt = new Date(Date.now() + cooldownMinutes * 60 * 1000);
+      await prisma.incident.update({
+        where: { id: incidentId },
+        data: {
+          escalationStatus: 'ESCALATING',
+          nextEscalationAt: nextAt,
+          currentEscalationStep: 0,
+          escalationProcessingAt: null,
+        },
+      });
+
+      if (typeof prisma.incidentEvent?.create === 'function') {
+        await prisma.incidentEvent.create({
+          data: {
+            incidentId,
+            type: 'ESCALATED',
+            message: `Escalation policy completed all ${policySteps.length} step(s). Looping back to Step 1 in ${cooldownMinutes} minutes (Cycle ${loopEventsCount + 1}/${MAX_LOOPS}).`,
+          },
+        });
+      }
+
+      return {
+        escalated: true,
+        reason: `Looping back to Step 1 after cooldown (Cycle ${loopEventsCount + 1})`,
+        nextEscalationAt: nextAt,
+      };
+    }
+
     // Mark escalation as completed
     await prisma.incident.update({
       where: { id: incidentId },
@@ -293,7 +334,7 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
     });
 
     try {
-      if (prisma.incidentEvent?.create) {
+      if (typeof prisma.incidentEvent?.create === 'function') {
         await prisma.incidentEvent.create({
           data: {
             incidentId,

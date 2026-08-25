@@ -349,10 +349,13 @@ async function runOnce() {
     });
 
     // Group 2: Secondary tasks (can run in parallel)
-    const [retryResult, autoUnsnoozeResult, breachResult] = await Promise.all([
+    const { processShiftRotations, processUpcomingShiftReminders } = await import('./oncall-handoff');
+    const [retryResult, autoUnsnoozeResult, breachResult, handoffResult, reminderCount] = await Promise.all([
       retryFailedNotifications(),
       processAutoUnsnoozeInternal(),
       checkSLABreaches(),
+      processShiftRotations(new Date()),
+      processUpcomingShiftReminders(new Date(), 60),
     ]);
 
     logger.info('[Cron] Secondary tasks processed', {
@@ -362,6 +365,8 @@ async function runOnce() {
         activeIncidents: breachResult.activeIncidentCount,
         warnings: breachResult.warningCount,
       },
+      shiftHandoff: handoffResult,
+      shiftReminders: reminderCount,
     });
 
     // Group 3: Maintenance tasks (low priority, run last)

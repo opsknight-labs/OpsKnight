@@ -424,6 +424,14 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
       deactivatedAt: new Date(),
     },
   });
+  if (typeof prisma.onCallOverride?.deleteMany === 'function') {
+    await prisma.onCallOverride.deleteMany({
+      where: {
+        userId,
+        end: { gte: new Date() },
+      },
+    });
+  }
   await revokeUserSessions(userId);
 
   await logAudit({
@@ -641,6 +649,15 @@ export async function bulkUpdateUsers(
         deactivatedAt: new Date(),
       },
     });
+
+    if (typeof prisma.onCallOverride?.deleteMany === 'function') {
+      await prisma.onCallOverride.deleteMany({
+        where: {
+          userId: { in: userIds },
+          end: { gte: new Date() },
+        },
+      });
+    }
 
     await Promise.all(userIds.map(id => revokeUserSessions(id)));
 

@@ -50,6 +50,17 @@ export async function sendServiceNotifications(
       return { success: false, errors: ['Incident or service not found'] };
     }
 
+    // Race guard: if a resolve event arrived while escalation was in-flight,
+    // the incident may already be RESOLVED. Never send a 'triggered' notification
+    // for an incident that is no longer OPEN.
+    if (eventType === 'triggered' && incident.status !== 'OPEN') {
+      logger.info('service_notifications.triggered_aborted_non_open_state', {
+        incidentId,
+        currentStatus: incident.status,
+      });
+      return { success: true };
+    }
+
     // Get service-configured notification channels (isolated from user preferences)
     const serviceChannels = incident.service.serviceNotificationChannels || [];
     const errors: string[] = [];
