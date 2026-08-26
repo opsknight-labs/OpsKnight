@@ -3,11 +3,11 @@
 import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateQuietHoursPreferences } from '@/app/(app)/settings/quiet-hours-actions';
-import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
+import { Clock3, Moon, ShieldCheck } from 'lucide-react';
 
 type State = {
   error?: string | null;
@@ -54,7 +54,7 @@ export default function QuietHoursForm({
   }, [state?.success, router]);
 
   return (
-    <form action={formAction} className="space-y-1">
+    <form action={formAction} className="space-y-5">
       <input type="hidden" name="quietHoursEnabled" value={enabledChecked ? 'on' : 'off'} />
       <input
         type="hidden"
@@ -64,53 +64,71 @@ export default function QuietHoursForm({
       <input type="hidden" name="quietHoursStart" value={startTime} />
       <input type="hidden" name="quietHoursEnd" value={endTime} />
 
-      <SettingsRow
-        label="Quiet hours"
-        description="Mute disruptive LOW-urgency alerts during your local quiet hours."
-        tooltip="Push, SMS and WhatsApp are muted. MEDIUM/HIGH urgency, email and in-app notifications still deliver."
-      >
-        <div className="w-full max-w-xl space-y-4">
-          <div className="flex items-center gap-3">
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex min-w-0 gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Moon className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="quiet-hours-switch" className="text-base font-semibold">
+                Quiet Hours
+              </Label>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Pause disruptive LOW-urgency alerts on your personal schedule.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 self-start sm:self-auto">
             <Switch
               id="quiet-hours-switch"
               checked={enabledChecked}
               onCheckedChange={setEnabledChecked}
             />
-            <Label htmlFor="quiet-hours-switch" className="text-sm">
+            <Label htmlFor="quiet-hours-switch" className="min-w-14 text-sm font-medium">
               {enabledChecked ? 'Enabled' : 'Disabled'}
             </Label>
           </div>
+        </div>
 
-          {enabledChecked && (
-            <div className="space-y-4 rounded-lg border p-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="quiet-hours-start">Start time</Label>
-                  <Input
-                    id="quiet-hours-start"
-                    type="time"
-                    value={startTime}
-                    onChange={event => setStartTime(event.target.value)}
-                  />
+        {enabledChecked && (
+          <div className="space-y-5 border-t bg-muted/20 p-4 sm:p-5">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(16rem,1.35fr)]">
+              <div className="space-y-2 rounded-lg border bg-background p-4">
+                <div className="flex items-center gap-2">
+                  <Clock3 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <Label htmlFor="quiet-hours-start">Starts at</Label>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="quiet-hours-end">End time</Label>
-                  <Input
-                    id="quiet-hours-end"
-                    type="time"
-                    value={endTime}
-                    onChange={event => setEndTime(event.target.value)}
-                  />
+                <Input
+                  id="quiet-hours-start"
+                  type="time"
+                  value={startTime}
+                  onChange={event => setStartTime(event.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2 rounded-lg border bg-background p-4">
+                <div className="flex items-center gap-2">
+                  <Clock3 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <Label htmlFor="quiet-hours-end">Ends at</Label>
                 </div>
+                <Input
+                  id="quiet-hours-end"
+                  type="time"
+                  value={endTime}
+                  onChange={event => setEndTime(event.target.value)}
+                  className="w-full"
+                />
               </div>
 
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-4 rounded-lg border bg-background p-4">
                 <div>
                   <Label htmlFor="quiet-hours-weekend" className="text-sm">
-                    Mute all day on weekends
+                    All-day weekends
                   </Label>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Saturday and Sunday are treated as quiet hours for LOW urgency.
+                    Keep LOW-urgency alerts quiet Saturday and Sunday.
                   </p>
                 </div>
                 <Switch
@@ -119,15 +137,24 @@ export default function QuietHoursForm({
                   onCheckedChange={setWeekendChecked}
                 />
               </div>
+            </div>
 
-              <p className="text-xs text-muted-foreground">
-                Times use your profile timezone: <span className="font-medium">{timeZone}</span>.
-                Change it under General Preferences if needed.
+            <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
+              <p className="flex items-start gap-2 rounded-lg bg-background/70 p-3">
+                <Clock3 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>
+                  Scheduled in <span className="font-medium text-foreground">{timeZone}</span>, the
+                  timezone configured above.
+                </span>
+              </p>
+              <p className="flex items-start gap-2 rounded-lg bg-background/70 p-3">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>MEDIUM/HIGH urgency, email, and in-app notifications always continue.</span>
               </p>
             </div>
-          )}
-        </div>
-      </SettingsRow>
+          </div>
+        )}
+      </div>
 
       {(state?.error || state?.success) && (
         <div
@@ -137,8 +164,8 @@ export default function QuietHoursForm({
         </div>
       )}
 
-      <div className="pt-4">
-        <Button type="submit" disabled={isPending}>
+      <div className="flex justify-end">
+        <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
           {isPending ? 'Saving...' : 'Save Quiet Hours'}
         </Button>
       </div>

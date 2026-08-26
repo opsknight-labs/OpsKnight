@@ -90,13 +90,13 @@ Timezone affects how the application displays dates for that user. Schedule calc
 
 ## Notification preferences
 
-Open **Settings → Profile & Preferences → Notification Preferences** to configure personal notification behavior:
+Open **Settings → Profile & Preferences** to configure personal notification behavior:
 
 - Email;
 - SMS, with a phone number;
 - Push, with a registered supported device and provider;
 - WhatsApp, with a phone number in E.164 format; and
-- **Quiet Hours**, an optional LOW-urgency suppression policy.
+- **Quiet Hours** under General Preferences, an optional LOW-urgency suppression policy.
 
 Quiet Hours is **off by default** for both existing and new users. OpsKnight does not silently mute paging after an upgrade or account creation. A user must explicitly enable Quiet Hours before it can suppress any delivery channel.
 
