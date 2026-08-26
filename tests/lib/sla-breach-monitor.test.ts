@@ -14,6 +14,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     incidentEvent: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
     },
   },
@@ -30,9 +31,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('sla-breach-monitor', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    const { default: prisma } = await import('@/lib/prisma');
+    vi.mocked(prisma.incidentEvent.findMany).mockResolvedValue([]);
   });
 
   describe('checkSLABreaches', () => {
@@ -158,6 +161,47 @@ describe('sla-breach-monitor', () => {
       const result = await checkSLABreaches();
 
       expect(result.warnings).toHaveLength(0);
+    });
+
+    it('deduplicates SLA ACK and RESOLVE breach events when already logged', async () => {
+      const { default: prisma } = await import('@/lib/prisma');
+
+      const now = new Date('2026-01-05T12:00:00Z');
+      vi.setSystemTime(now);
+
+      // Incident created 3 hours ago (both 15m ack and 120m resolve targets breached)
+      const createdAt = new Date(now.getTime() - 180 * 60 * 1000);
+
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([
+        {
+          id: 'inc-1',
+          title: 'Breached Incident',
+          serviceId: 'svc-1',
+          urgency: 'HIGH',
+          status: 'OPEN',
+          createdAt,
+          acknowledgedAt: null,
+          service: {
+            id: 'svc-1',
+            name: 'Test Service',
+            targetAckMinutes: 15,
+            targetResolveMinutes: 120,
+            serviceNotifyOnSlaBreach: true,
+          },
+        },
+      ] as any);
+
+      // Existing breach events in DB
+      vi.mocked(prisma.incidentEvent.findMany).mockResolvedValue([
+        { incidentId: 'inc-1', message: '🚨 SLA ACK Breached: target was 15 min' },
+        { incidentId: 'inc-1', message: '🚨 SLA RESOLVE Breached: target was 120 min' },
+      ] as any);
+
+      const result = await checkSLABreaches();
+
+      // No new warnings or duplicate events created
+      expect(result.warnings).toHaveLength(0);
+      expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     });
   });
 

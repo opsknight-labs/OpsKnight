@@ -31,19 +31,23 @@ export async function processUpcomingShiftReminders(
       const currentUserId = currentOnCallMap.get(shift.scheduleId);
       // Only remind if the responder is taking over or shift is starting
       if (currentUserId !== shift.userId) {
-        const minutesUntilStart = Math.max(1, Math.round((shift.start.getTime() - now.getTime()) / 60000));
+        const minutesUntilStart = Math.max(
+          1,
+          Math.round((shift.start.getTime() - now.getTime()) / 60000)
+        );
 
         // Deduplicate in-app notification within the last 45 minutes
-        const recentNotification = typeof prisma.inAppNotification?.findFirst === 'function'
-          ? await prisma.inAppNotification.findFirst({
-              where: {
-                userId: shift.userId,
-                type: 'SCHEDULE',
-                entityId: shift.scheduleId,
-                createdAt: { gte: new Date(now.getTime() - 45 * 60 * 1000) },
-              },
-            })
-          : null;
+        const recentNotification =
+          typeof prisma.inAppNotification?.findFirst === 'function'
+            ? await prisma.inAppNotification.findFirst({
+                where: {
+                  userId: shift.userId,
+                  type: 'SCHEDULE',
+                  entityId: shift.scheduleId,
+                  createdAt: { gte: new Date(now.getTime() - 45 * 60 * 1000) },
+                },
+              })
+            : null;
 
         if (!recentNotification) {
           await createInAppNotifications({
@@ -122,7 +126,12 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
             select: { id: true, title: true, status: true, assigneeId: true },
           });
 
-          for (const incident of activeIncidents) {
+          // Only reassign incidents that are not already assigned to the incoming responder
+          const incidentsToReassign = activeIncidents.filter(
+            incident => incident.assigneeId !== currentShift.userId
+          );
+
+          for (const incident of incidentsToReassign) {
             // Reassign to incoming responder
             await prisma.incident.update({
               where: { id: incident.id },
@@ -141,13 +150,13 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
             result.incidentsReassigned++;
           }
 
-          // Send handoff summary digest to incoming responder
-          if (activeIncidents.length > 0) {
+          // Send handoff summary digest to incoming responder only if incidents were reassigned
+          if (incidentsToReassign.length > 0) {
             await createInAppNotifications({
               userIds: [currentShift.userId],
               type: 'INCIDENT',
               title: 'Shift Handoff: Active Incidents',
-              message: `You took over on-call for "${currentShift.schedule.name}" with ${activeIncidents.length} active incident(s).`,
+              message: `You took over on-call for "${currentShift.schedule.name}" with ${incidentsToReassign.length} active incident(s).`,
               entityType: 'SCHEDULE',
               entityId: currentShift.scheduleId,
             });
