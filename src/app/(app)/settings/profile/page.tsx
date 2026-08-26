@@ -81,9 +81,19 @@ export default async function ProfileSettingsPage() {
 
       <SettingsSection
         title="General Preferences"
-        description="Set your timezone and summary preferences."
+        description="Set your timezone, summary preferences, and personal quiet hours."
       >
         <PreferencesForm timeZone={user?.timeZone ?? 'UTC'} />
+
+        <div className="mt-6 border-t pt-6">
+          <QuietHoursForm
+            enabled={user?.quietHoursEnabled ?? false}
+            startMinutes={user?.quietHoursStartMinutes ?? 18 * 60}
+            endMinutes={user?.quietHoursEndMinutes ?? 8 * 60}
+            weekendAllDay={user?.quietHoursWeekendAllDay ?? true}
+            timeZone={timeZone}
+          />
+        </div>
       </SettingsSection>
 
       <SettingsSection
@@ -102,16 +112,6 @@ export default async function ProfileSettingsPage() {
           whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
           phoneNumber={user?.phoneNumber ?? null}
         />
-
-        <div className="mt-6 border-t pt-6">
-          <QuietHoursForm
-            enabled={user?.quietHoursEnabled ?? false}
-            startMinutes={user?.quietHoursStartMinutes ?? 18 * 60}
-            endMinutes={user?.quietHoursEndMinutes ?? 8 * 60}
-            weekendAllDay={user?.quietHoursWeekendAllDay ?? true}
-            timeZone={timeZone}
-          />
-        </div>
       </SettingsSection>
     </div>
   );

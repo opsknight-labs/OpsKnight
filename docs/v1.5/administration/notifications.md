@@ -24,7 +24,7 @@ Saving one layer does not verify the whole path. Test every production recipient
 ## Permissions and settings
 
 - An application **Admin** configures workspace providers in **Settings → Notification Providers**.
-- Each user configures personal Email, SMS, Push, WhatsApp, and Quiet Hours preferences under **Settings → Profile & Preferences → Notification Preferences**.
+- Each user configures Email, SMS, Push, and WhatsApp under **Notification Preferences**, and Quiet Hours beside timezone under **General Preferences**.
 - Admins/Responders configure service-level Slack and webhook events under **Service → Settings**.
 - Policy administration is Admin-only. New steps in the current v1.4 UI inherit user preferences; the UI does not expose new per-step channel overrides.
 - Signed-in users can open **Settings → Notification History**; access to operational data should still be governed by deployment policy.
@@ -64,7 +64,7 @@ Service-level Slack/webhook/email/SMS/push/WhatsApp notifications are a separate
 
 Quiet Hours is a **personal, explicit opt-in** notification policy. It is **off by default for both existing and new users**. OpsKnight never enables it automatically during an upgrade or when an account is created.
 
-Users configure it at **Settings → Profile & Preferences → Notification Preferences → Quiet Hours**. When enabled, they can choose:
+Users configure it at **Settings → Profile & Preferences → General Preferences → Quiet Hours**. When enabled, they can choose:
 
 - start time;
 - end time; and
