@@ -58,6 +58,8 @@ export type SLAMetrics = {
   autoResolveRate: number;
 
   previousPeriod: {
+    /** False when the comparison query failed; consumers must not render a zero-data trend. */
+    available?: boolean;
     totalIncidents: number;
     highUrgencyCount: number;
     /** Optional for backwards-compat — pre-PR consumers may not read these. */
@@ -118,6 +120,8 @@ export type SLAMetrics = {
   recurringTitles: Array<{ title: string; count: number }>;
   eventsPerIncident: number;
   heatmapData: Array<{ date: string; count: number }>;
+  /** False when heatmap aggregation failed; an empty array alone may mean no incidents. */
+  heatmapAvailable?: boolean;
 
   activeIncidentSummaries?: Array<{
     id: string;

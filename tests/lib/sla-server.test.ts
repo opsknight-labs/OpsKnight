@@ -464,3 +464,204 @@ describe('calculateSLAMetrics investigation metrics', () => {
     expect(metrics.mttk).toBeCloseTo(12.5, 2);
   });
 });
+
+describe('calculateSLAMetrics composed PostgreSQL queries', () => {
+  type CapturedSqlQuery = { sql: string; values: unknown[] };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-02T00:00:00Z'));
+    clearRetentionPolicyCache();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('flattens canonical filters into every large-dataset raw query', async () => {
+    setupBaseMocks({
+      activeIncidents: [],
+      recentIncidents: [],
+      previousIncidents: [],
+      heatmapIncidents: [],
+      escalationEvents: [],
+    });
+
+    prismaMock.incident.count.mockReset().mockResolvedValueOnce(501).mockResolvedValueOnce(0);
+    prismaMock.$queryRaw.mockReset().mockImplementation(async (query: unknown) => {
+      const sql = String((query as Partial<CapturedSqlQuery>)?.sql ?? '');
+
+      if (sql.includes('total_incidents')) {
+        return [
+          {
+            total_incidents: BigInt(501),
+            acknowledged_count: BigInt(0),
+            resolved_count: BigInt(0),
+            avg_mtta_ms: null,
+            avg_mttr_ms: null,
+            ack_sla_met: BigInt(0),
+            ack_sla_breached: BigInt(0),
+            resolve_sla_met: BigInt(0),
+            resolve_sla_breached: BigInt(0),
+            high_urgency_count: BigInt(0),
+            medium_urgency_count: BigInt(0),
+            low_urgency_count: BigInt(0),
+            after_hours_count: BigInt(0),
+          },
+        ];
+      }
+      if (sql.includes('mtta_p50_ms')) {
+        return [
+          {
+            mtta_p50_ms: null,
+            mtta_p95_ms: null,
+            mttr_p50_ms: null,
+            mttr_p95_ms: null,
+          },
+        ];
+      }
+      if (sql.includes('escalation_count')) {
+        return [
+          {
+            escalation_count: BigInt(0),
+            reopen_count: BigInt(0),
+            auto_resolve_count: BigInt(0),
+          },
+        ];
+      }
+      if (sql.includes('total_count')) {
+        return [
+          {
+            total_count: BigInt(0),
+            high_urgency_count: BigInt(0),
+            medium_urgency_count: BigInt(0),
+            low_urgency_count: BigInt(0),
+            avg_mtta_ms: null,
+            avg_mttr_ms: null,
+            ack_count: BigInt(0),
+            resolve_count: BigInt(0),
+          },
+        ];
+      }
+      return [];
+    });
+
+    await calculateSLAMetrics({
+      windowDays: 1,
+      userTimeZone: 'UTC',
+      serviceId: ['service-a', 'service-b'],
+      teamId: ['team-a', 'team-b'],
+      assigneeId: 'user-a',
+      urgency: 'HIGH',
+      status: 'RESOLVED',
+      visibility: 'PRIVATE',
+      useOrScope: true,
+    });
+
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(5);
+    const queries = prismaMock.$queryRaw.mock.calls.map(([query]) => query as CapturedSqlQuery);
+
+    for (const query of queries) {
+      expect(query).toEqual(
+        expect.objectContaining({ sql: expect.any(String), values: expect.any(Array) })
+      );
+      // Production previously emitted the entire filter object as a lone
+      // PostgreSQL placeholder (`$3`/`$20`) in grammar position.
+      expect(query.sql).not.toMatch(/^\s*\?\s*$/m);
+    }
+
+    const heatmapQuery = queries.find(query => query.sql.includes('SELECT DATE("createdAt")'));
+    const aggregateQuery = queries.find(query => query.sql.includes('total_incidents'));
+    const eventQuery = queries.find(query => query.sql.includes('escalation_count'));
+
+    for (const query of [heatmapQuery, aggregateQuery, eventQuery]) {
+      expect(query).toBeDefined();
+      if (!query) throw new Error('Expected composed SLA query was not executed');
+      expect(query.sql).toContain('= ANY(?::text[])');
+      expect(query.sql).toContain('"teamId" = ANY(?::text[])');
+      expect(query.sql).toContain(' OR ');
+      expect(query.values).toContainEqual(['service-a', 'service-b']);
+      expect(query.values).toContainEqual(['team-a', 'team-b']);
+    }
+  });
+
+  it('marks comparison data unavailable when optional raw queries fail', async () => {
+    setupBaseMocks({
+      activeIncidents: [],
+      recentIncidents: [],
+      previousIncidents: [],
+      heatmapIncidents: [],
+      escalationEvents: [],
+    });
+
+    prismaMock.$queryRaw.mockReset().mockRejectedValue(new Error('transient database failure'));
+
+    const metrics = await calculateSLAMetrics({ windowDays: 1, userTimeZone: 'UTC' });
+
+    expect(metrics.previousPeriod.available).toBe(false);
+    expect(metrics.heatmapAvailable).toBe(false);
+    expect(metrics.heatmapData).toEqual([]);
+    expect(metrics.insights).toEqual([]);
+  });
+
+  it('loads the complete filtered set when database aggregation fails', async () => {
+    setupBaseMocks({
+      activeIncidents: [],
+      recentIncidents: [],
+      previousIncidents: [],
+      heatmapIncidents: [],
+      escalationEvents: [],
+    });
+
+    const fallbackIncident = {
+      id: 'fallback-incident',
+      title: 'Fallback incident',
+      description: null,
+      createdAt: new Date('2026-01-01T12:00:00Z'),
+      updatedAt: new Date('2026-01-01T12:30:00Z'),
+      status: 'OPEN',
+      urgency: 'HIGH',
+      assigneeId: null,
+      serviceId: 'service-a',
+      acknowledgedAt: new Date('2026-01-01T12:05:00Z'),
+      resolvedAt: null,
+      service: {
+        id: 'service-a',
+        name: 'Service A',
+        region: null,
+        targetAckMinutes: 15,
+        targetResolveMinutes: 120,
+      },
+    };
+
+    prismaMock.incident.count.mockReset().mockResolvedValueOnce(501).mockResolvedValueOnce(0);
+    prismaMock.incident.findMany.mockResolvedValueOnce([fallbackIncident]);
+    prismaMock.$queryRaw.mockReset().mockImplementation(async (query: unknown) => {
+      const sql = String((query as Partial<CapturedSqlQuery>)?.sql ?? '');
+      if (sql.includes('total_incidents')) throw new Error('aggregate query failed');
+      if (sql.includes('total_count')) {
+        return [
+          {
+            total_count: BigInt(0),
+            high_urgency_count: BigInt(0),
+            medium_urgency_count: BigInt(0),
+            low_urgency_count: BigInt(0),
+            avg_mtta_ms: null,
+            avg_mttr_ms: null,
+            ack_count: BigInt(0),
+            resolve_count: BigInt(0),
+          },
+        ];
+      }
+      return [];
+    });
+
+    const metrics = await calculateSLAMetrics({ windowDays: 1, userTimeZone: 'UTC' });
+
+    expect(prismaMock.incident.findMany).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ take: expect.anything() })
+    );
+    expect(metrics.highUrgencyCount).toBe(1);
+    expect(metrics.ackRate).toBe(100);
+  });
+});

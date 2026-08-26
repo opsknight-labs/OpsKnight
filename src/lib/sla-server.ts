@@ -38,69 +38,80 @@ const CUID_REGEX = /^c[a-z0-9]{24,}$/i;
  */
 function buildIncidentFilterSql(filters: SLAMetricsFilter, tableAlias: string = ''): Prisma.Sql {
   const prefix = tableAlias ? `${tableAlias}.` : '';
-  const fragments: Prisma.Sql[] = [];
+  const predicates: Prisma.Sql[] = [];
+  const scopePredicates: Prisma.Sql[] = [];
 
   // serviceId — scalar or array
   if (filters.serviceId) {
     if (Array.isArray(filters.serviceId)) {
       if (filters.serviceId.length > 0) {
-        fragments.push(
-          Prisma.sql`AND ${Prisma.raw(`${prefix}"serviceId"`)} = ANY(${filters.serviceId}::text[])`
+        scopePredicates.push(
+          Prisma.sql`${Prisma.raw(`${prefix}"serviceId"`)} = ANY(${filters.serviceId}::text[])`
         );
       }
     } else {
-      fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"serviceId"`)} = ${filters.serviceId}`);
+      scopePredicates.push(
+        Prisma.sql`${Prisma.raw(`${prefix}"serviceId"`)} = ${filters.serviceId}`
+      );
     }
   }
 
   // teamId — uses the Service table via subquery since Incident has no
   // direct teamId column (Incident.teamId may exist but Service.teamId is
-  // the source of truth elsewhere in the code). The `useOrScope` flag is
-  // intentionally NOT honored here — historical aggregates use AND scope
-  // for consistency with the rest of the metrics; OR-scope is a UI
-  // affordance for the recent window only.
+  // the source of truth elsewhere in the code).
   if (filters.teamId) {
     const teamIds = Array.isArray(filters.teamId) ? filters.teamId : [filters.teamId];
     if (teamIds.length > 0) {
-      fragments.push(
-        Prisma.sql`AND ${Prisma.raw(`${prefix}"serviceId"`)} IN (
+      const serviceTeamPredicate = Prisma.sql`${Prisma.raw(`${prefix}"serviceId"`)} IN (
           SELECT id FROM "Service" WHERE "teamId" = ANY(${teamIds}::text[])
-        )`
+        )`;
+      scopePredicates.push(
+        filters.useOrScope
+          ? Prisma.sql`(${Prisma.raw(`${prefix}"teamId"`)} = ANY(${teamIds}::text[]) OR ${serviceTeamPredicate})`
+          : serviceTeamPredicate
       );
     }
   }
 
   if (filters.urgency) {
-    fragments.push(
-      Prisma.sql`AND ${Prisma.raw(`${prefix}"urgency"`)} = ${filters.urgency}::"IncidentUrgency"`
+    predicates.push(
+      Prisma.sql`${Prisma.raw(`${prefix}"urgency"`)} = ${filters.urgency}::"IncidentUrgency"`
     );
   }
 
   if (filters.status) {
-    fragments.push(
-      Prisma.sql`AND ${Prisma.raw(`${prefix}"status"`)} = ${filters.status}::"IncidentStatus"`
+    predicates.push(
+      Prisma.sql`${Prisma.raw(`${prefix}"status"`)} = ${filters.status}::"IncidentStatus"`
     );
   }
 
   if (filters.visibility && filters.visibility !== 'ALL') {
-    fragments.push(
-      Prisma.sql`AND ${Prisma.raw(`${prefix}"visibility"`)} = ${filters.visibility}::"IncidentVisibility"`
+    predicates.push(
+      Prisma.sql`${Prisma.raw(`${prefix}"visibility"`)} = ${filters.visibility}::"IncidentVisibility"`
     );
   }
 
   if (filters.assigneeId !== undefined) {
     if (filters.assigneeId === null) {
-      fragments.push(Prisma.sql`AND ${Prisma.raw(`${prefix}"assigneeId"`)} IS NULL`);
+      scopePredicates.push(Prisma.sql`${Prisma.raw(`${prefix}"assigneeId"`)} IS NULL`);
     } else {
-      fragments.push(
-        Prisma.sql`AND ${Prisma.raw(`${prefix}"assigneeId"`)} = ${filters.assigneeId}`
+      scopePredicates.push(
+        Prisma.sql`${Prisma.raw(`${prefix}"assigneeId"`)} = ${filters.assigneeId}`
       );
     }
   }
 
-  // `Prisma.join([])` throws — return empty SQL when there are no filters
-  // so the call site can splice the fragment unconditionally.
-  return fragments.length > 0 ? Prisma.join(fragments, ' ') : Prisma.empty;
+  if (scopePredicates.length > 0) {
+    predicates.push(
+      filters.useOrScope
+        ? Prisma.sql`(${Prisma.join(scopePredicates, ' OR ')})`
+        : Prisma.sql`(${Prisma.join(scopePredicates, ' AND ')})`
+    );
+  }
+
+  // `Prisma.join([])` throws. Returning Prisma.empty lets callers compose
+  // this fragment unconditionally without creating a placeholder.
+  return predicates.length > 0 ? Prisma.sql`AND ${Prisma.join(predicates, ' AND ')}` : Prisma.empty;
 }
 
 // Business-hours constants moved to `./business-hours.ts` to break the
@@ -230,7 +241,7 @@ type DbAggregateMetrics = {
  * Calculates core SLA metrics using database aggregation for better performance at scale.
  * Uses PostgreSQL aggregate functions instead of fetching all rows to memory.
  *
- * @param whereClause - Prisma where clause for filtering incidents
+ * @param filters - Canonical SLA filters shared by Prisma and raw-SQL paths
  * @param start - Start date of the window
  * @param end - End date of the window
  * @param serviceTargetMap - Map of service IDs to their SLA targets
@@ -242,7 +253,7 @@ type DbAggregateMetrics = {
  * tenant-configurable follow-up.
  */
 async function calculateDbAggregateMetrics(
-  whereClause: Prisma.IncidentWhereInput,
+  filters: SLAMetricsFilter,
   start: Date,
   end: Date,
   serviceTargetMap: Map<string, { ackMinutes: number; resolveMinutes: number }>,
@@ -281,65 +292,11 @@ async function calculateDbAggregateMetrics(
     resolveTargetCase = `CASE ${resolveCases} ELSE ${defaultResolveMs} END`;
   }
 
-  // Build filter conditions for raw SQL using parameterized queries
-  // Using Prisma.sql for proper parameterization to prevent SQL injection and enable query plan caching
-  const serviceIdFilter = (whereClause as { serviceId?: string | { in: string[] } }).serviceId;
-  const serviceFilterSql = serviceIdFilter
-    ? typeof serviceIdFilter === 'string'
-      ? Prisma.sql`AND "serviceId" = ${serviceIdFilter}`
-      : Prisma.sql`AND "serviceId" = ANY(${serviceIdFilter.in || []}::text[])`
-    : Prisma.empty;
-
-  const urgencyFilter = (whereClause as { urgency?: string }).urgency;
-  const urgencyFilterSql = urgencyFilter
-    ? Prisma.sql`AND "urgency" = ${urgencyFilter}::"IncidentUrgency"`
-    : Prisma.empty;
-
-  const statusFilter = (whereClause as { status?: string }).status;
-  const statusFilterSql = statusFilter
-    ? Prisma.sql`AND "status" = ${statusFilter}::"IncidentStatus"`
-    : Prisma.empty;
-
-  const assigneeIdFilter = (whereClause as { assigneeId?: string | null }).assigneeId;
-  const assigneeFilterSql =
-    assigneeIdFilter !== undefined
-      ? assigneeIdFilter === null
-        ? Prisma.sql`AND "assigneeId" IS NULL`
-        : Prisma.sql`AND "assigneeId" = ${assigneeIdFilter}`
-      : Prisma.empty;
-
-  const visibilityFilter = (whereClause as { visibility?: string }).visibility;
-  const visibilityFilterSql =
-    visibilityFilter && visibilityFilter !== 'ALL'
-      ? Prisma.sql`AND "visibility" = ${visibilityFilter}::"IncidentVisibility"`
-      : Prisma.empty;
-
-  // Build aliased filter conditions for JOIN queries (using i. prefix for incident table)
-  const serviceFilterSqlAliased = serviceIdFilter
-    ? typeof serviceIdFilter === 'string'
-      ? Prisma.sql`AND i."serviceId" = ${serviceIdFilter}`
-      : Prisma.sql`AND i."serviceId" = ANY(${serviceIdFilter.in || []}::text[])`
-    : Prisma.empty;
-
-  const urgencyFilterSqlAliased = urgencyFilter
-    ? Prisma.sql`AND i."urgency" = ${urgencyFilter}::"IncidentUrgency"`
-    : Prisma.empty;
-
-  const statusFilterSqlAliased = statusFilter
-    ? Prisma.sql`AND i."status" = ${statusFilter}::"IncidentStatus"`
-    : Prisma.empty;
-
-  const assigneeFilterSqlAliased =
-    assigneeIdFilter !== undefined
-      ? assigneeIdFilter === null
-        ? Prisma.sql`AND i."assigneeId" IS NULL`
-        : Prisma.sql`AND i."assigneeId" = ${assigneeIdFilter}`
-      : Prisma.empty;
-
-  const visibilityFilterSqlAliased =
-    visibilityFilter && visibilityFilter !== 'ALL'
-      ? Prisma.sql`AND i."visibility" = ${visibilityFilter}::"IncidentVisibility"`
-      : Prisma.empty;
+  // Keep every aggregate surface aligned with the Prisma filter semantics.
+  // Constructing a second filter set from Prisma.IncidentWhereInput omitted
+  // relational team filters and diverged from `useOrScope` at scale.
+  const incidentFilterSql = buildIncidentFilterSql(filters);
+  const incidentFilterSqlAliased = buildIncidentFilterSql(filters, 'i');
 
   // Calculate business hours for after-hours detection
   // Business hours: Monday-Friday 8am-6pm in user's timezone
@@ -367,7 +324,7 @@ async function calculateDbAggregateMetrics(
         low_urgency_count: bigint;
         after_hours_count: bigint;
       }>
-    >`
+    >(Prisma.sql`
       SELECT
         COUNT(*) as total_incidents,
         COUNT(*) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as acknowledged_count,
@@ -418,12 +375,8 @@ async function calculateDbAggregateMetrics(
       FROM "Incident"
       WHERE "createdAt" >= ${start}
         AND "createdAt" <= ${end}
-        ${serviceFilterSql}
-        ${urgencyFilterSql}
-        ${statusFilterSql}
-        ${assigneeFilterSql}
-        ${visibilityFilterSql}
-    `;
+        ${incidentFilterSql}
+    `);
 
     // Percentile query - separate for cleaner code and optional optimization
     const percentileResult = await prisma.$queryRaw<
@@ -433,7 +386,7 @@ async function calculateDbAggregateMetrics(
         mttr_p50_ms: number | null;
         mttr_p95_ms: number | null;
       }>
-    >`
+    >(Prisma.sql`
       SELECT
         PERCENTILE_CONT(0.5) WITHIN GROUP (
           ORDER BY GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000)
@@ -450,12 +403,8 @@ async function calculateDbAggregateMetrics(
       FROM "Incident"
       WHERE "createdAt" >= ${start}
         AND "createdAt" <= ${end}
-        ${serviceFilterSql}
-        ${urgencyFilterSql}
-        ${statusFilterSql}
-        ${assigneeFilterSql}
-        ${visibilityFilterSql}
-    `;
+        ${incidentFilterSql}
+    `);
 
     // Event counts query — for escalation, reopen, auto-resolve rates.
     //
@@ -474,7 +423,7 @@ async function calculateDbAggregateMetrics(
         reopen_count: bigint;
         auto_resolve_count: bigint;
       }>
-    >`
+    >(Prisma.sql`
       SELECT
         COUNT(DISTINCT e."incidentId") FILTER (WHERE ${escalatedPredicate}) as escalation_count,
         COUNT(DISTINCT e."incidentId") FILTER (WHERE ${reopenedPredicate}) as reopen_count,
@@ -483,12 +432,8 @@ async function calculateDbAggregateMetrics(
       INNER JOIN "Incident" i ON e."incidentId" = i."id"
       WHERE i."createdAt" >= ${start}
         AND i."createdAt" <= ${end}
-        ${serviceFilterSqlAliased}
-        ${urgencyFilterSqlAliased}
-        ${statusFilterSqlAliased}
-        ${assigneeFilterSqlAliased}
-        ${visibilityFilterSqlAliased}
-    `;
+        ${incidentFilterSqlAliased}
+    `);
 
     const agg = aggregateResult[0];
     const pct = percentileResult[0];
@@ -942,7 +887,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       : { teamId: Array.isArray(filters.teamId) ? { in: filters.teamId } : filters.teamId }
     : {};
 
-  const assigneeWhere = filters.assigneeId ? { assigneeId: filters.assigneeId } : null;
+  const assigneeWhere =
+    filters.assigneeId !== undefined ? { assigneeId: filters.assigneeId } : null;
   const statusWhere = filters.status ? { status: filters.status } : null;
   const urgencyWhere = filters.urgency ? { urgency: filters.urgency } : null;
   const visibilityWhere =
@@ -1062,6 +1008,29 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   const fullIncidentFilterSql = buildIncidentFilterSql(filters);
 
   // Step 3: Parallel fetch - lightweight queries that work at any scale
+  const incidentMetricSelect = {
+    id: true,
+    title: true,
+    createdAt: true,
+    updatedAt: true,
+    status: true,
+    urgency: true,
+    assigneeId: true,
+    serviceId: true,
+    description: true,
+    acknowledgedAt: true,
+    resolvedAt: true,
+    service: {
+      select: {
+        id: true,
+        name: true,
+        region: true,
+        targetAckMinutes: true,
+        targetResolveMinutes: true,
+      },
+    },
+  } satisfies Prisma.IncidentSelect;
+
   const [
     activeIncidentsData,
     mutedStatusCounts,
@@ -1168,7 +1137,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     // doesn't contradict the metrics above it (team/urgency/status/
     // visibility/assignee).
     prisma
-      .$queryRaw<Array<{ date: string; count: bigint }>>`
+      .$queryRaw<Array<{ date: string; count: bigint }>>(
+        Prisma.sql`
       SELECT DATE("createdAt") as date, COUNT(*) as count
       FROM "Incident"
       WHERE "createdAt" >= ${heatmapStart}
@@ -1177,9 +1147,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       GROUP BY DATE("createdAt")
       ORDER BY date
     `
+      )
       .catch(err => {
-        logger.warn('[SLA] Heatmap raw query failed, falling back to empty list', { error: err });
-        return [];
+        logger.warn('[SLA] Heatmap raw query failed; marking heatmap unavailable', { error: err });
+        return null;
       }),
     prisma.incident.groupBy({
       by: ['urgency'],
@@ -1206,28 +1177,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     // For small datasets, fetch all; for large datasets, limit to display needs
     prisma.incident.findMany({
       where: recentIncidentWhere,
-      select: {
-        id: true,
-        title: true,
-        createdAt: true,
-        updatedAt: true,
-        status: true,
-        urgency: true,
-        assigneeId: true,
-        serviceId: true,
-        description: true,
-        acknowledgedAt: true,
-        resolvedAt: true,
-        service: {
-          select: {
-            id: true,
-            name: true,
-            region: true,
-            targetAckMinutes: true,
-            targetResolveMinutes: true,
-          },
-        },
-      },
+      select: incidentMetricSelect,
       orderBy: { createdAt: 'desc' },
       // PERFORMANCE: Limit fetch for large datasets, fetch all for small
       take: useDbAggregation
@@ -1251,7 +1201,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           ack_count: bigint;
           resolve_count: bigint;
         }>
-      >`
+      >(
+        Prisma.sql`
       SELECT
         COUNT(*) as total_count,
         COUNT(*) FILTER (WHERE "urgency" = 'HIGH'::"IncidentUrgency") as high_urgency_count,
@@ -1268,31 +1219,25 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         AND "createdAt" < ${previousEnd}
         ${fullIncidentFilterSql}
     `
+      )
       .catch(err => {
-        logger.warn('[SLA] Previous period query failed, returning zeroed stats', { error: err });
-        return [
-          {
-            total_count: BigInt(0),
-            high_urgency_count: BigInt(0),
-            medium_urgency_count: BigInt(0),
-            low_urgency_count: BigInt(0),
-            avg_mtta_ms: null,
-            avg_mttr_ms: null,
-            ack_count: BigInt(0),
-            resolve_count: BigInt(0),
-          },
-        ];
+        logger.warn('[SLA] Previous period query failed; marking comparison unavailable', {
+          error: err,
+        });
+        return null;
       }),
   ]);
 
   // Convert heatmap aggregates to expected format
-  const heatmapIncidents = heatmapAggregates.map(row => ({
+  const heatmapAvailable = heatmapAggregates !== null;
+  const heatmapIncidents = (heatmapAggregates ?? []).map(row => ({
     createdAt: new Date(row.date),
     count: Number(row.count),
   }));
 
   // Process previous period aggregates
-  const prevAgg = previousPeriodAggregates[0];
+  const previousPeriodAvailable = previousPeriodAggregates !== null;
+  const prevAgg = previousPeriodAggregates?.[0];
   const previousIncidentsCount = Number(prevAgg?.total_count ?? 0);
   const prevHighUrgCount = Number(prevAgg?.high_urgency_count ?? 0);
   const prevMediumUrgCount = Number(prevAgg?.medium_urgency_count ?? 0);
@@ -1311,21 +1256,18 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
   // For small datasets, we use displayIncidentsRaw for all processing
   // For large datasets, we use DB aggregation + limited display incidents
-  const allRecentIncidents = displayIncidentsRaw;
+  let recentIncidents = displayIncidentsRaw;
 
   // Performance monitoring: Log query completion with timing
   const dbQueryDuration = Date.now() - queryStartTime;
   logger.debug('[SLA] Database queries completed', {
     duration: dbQueryDuration,
-    incidentCount: allRecentIncidents.length,
+    incidentCount: recentIncidents.length,
     totalIncidentCount,
     dateRange: { start: finalStart.toISOString(), end: finalEnd.toISOString() },
     retentionDays: retentionPolicy.incidentRetentionDays,
     useDbAggregation,
   });
-
-  // Use display incidents for UI rendering
-  const recentIncidents = allRecentIncidents;
 
   // Build service target map early for DB aggregation
   const serviceTargetMap = new Map<string, { ackMinutes: number; resolveMinutes: number }>();
@@ -1349,7 +1291,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   let dbAggMetrics: DbAggregateMetrics | null = null;
   if (useDbAggregation) {
     dbAggMetrics = await calculateDbAggregateMetrics(
-      recentIncidentWhere,
+      filters,
       finalStart,
       finalEnd,
       serviceTargetMap,
@@ -1358,8 +1300,20 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
     // Check if DB aggregation failed (signaled by totalIncidents = -1)
     if (dbAggMetrics.totalIncidents === -1) {
-      logger.warn('[SLA] DB aggregation failed, falling back to in-memory for this request');
+      logger.warn('[SLA] DB aggregation failed; loading the complete filtered set for fallback');
       dbAggMetrics = null;
+      // The display query is intentionally paginated above. Reusing that
+      // truncated array for fallback silently published incorrect headline
+      // metrics. A raw-query failure is exceptional, so favor correctness and
+      // load the full filtered set through Prisma's structured query path.
+      recentIncidents = await prisma.incident.findMany({
+        where: recentIncidentWhere,
+        select: incidentMetricSelect,
+        orderBy: { createdAt: 'desc' },
+      });
+      logger.info('[SLA] Complete in-memory fallback dataset loaded', {
+        incidentCount: recentIncidents.length,
+      });
     }
   }
 
@@ -1675,12 +1629,16 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
   // Insights
   const insights: SLAMetrics['insights'] = [];
-  if (currentStats.count > prevStatsDetailed.count && prevStatsDetailed.count > 0) {
+  if (
+    previousPeriodAvailable &&
+    currentStats.count > prevStatsDetailed.count &&
+    prevStatsDetailed.count > 0
+  ) {
     insights.push({
       type: 'negative',
       text: `Incident volume up ${currentStats.count - prevStatsDetailed.count} vs previous period`,
     });
-  } else if (currentStats.count < prevStatsDetailed.count) {
+  } else if (previousPeriodAvailable && currentStats.count < prevStatsDetailed.count) {
     insights.push({
       type: 'positive',
       text: `Incident volume down ${Math.abs(currentStats.count - prevStatsDetailed.count)} vs previous period`,
@@ -1688,6 +1646,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   }
 
   if (
+    previousPeriodAvailable &&
     currentStats.mtta !== null &&
     prevStatsDetailed.mtta !== null &&
     currentStats.mtta < prevStatsDetailed.mtta &&
@@ -1698,6 +1657,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       text: `Response time improved by ${Math.round((1 - currentStats.mtta / prevStatsDetailed.mtta) * 100)}%`,
     });
   } else if (
+    previousPeriodAvailable &&
     currentStats.mtta !== null &&
     prevStatsDetailed.mtta !== null &&
     currentStats.mtta > prevStatsDetailed.mtta &&
@@ -2341,6 +2301,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     autoResolveRate: Math.round(autoResolveRate * 100) / 100,
 
     previousPeriod: {
+      available: previousPeriodAvailable,
       totalIncidents: prevStatsDetailed.count,
       highUrgencyCount: prevStatsDetailed.highUrg,
       // Medium/low previous-period counts come from the same aggregate
@@ -2413,6 +2374,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           totalRecent
         : 0,
     heatmapData,
+    heatmapAvailable,
     currentShifts: currentShiftsData.map(s => ({
       id: s.id,
       userId: s.userId,
@@ -3275,6 +3237,7 @@ export async function calculateSLAMetricsFromRollups(
     // would require a second rollup query for [start - windowMs, start);
     // out of scope for this PR but flagged for follow-up.
     previousPeriod: {
+      available: false,
       totalIncidents: 0,
       highUrgencyCount: 0,
       mtta: null,
@@ -3306,6 +3269,7 @@ export async function calculateSLAMetricsFromRollups(
           (priorityFilter.has('P5') ? r.p5Incidents : 0)
         : r.totalIncidents,
     })),
+    heatmapAvailable: true,
     serviceMetrics: [],
     insights: [],
     currentShifts: [],

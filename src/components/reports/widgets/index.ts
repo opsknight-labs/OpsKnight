@@ -34,7 +34,7 @@ export function getPreviousPeriodValue(
   metricKey: string
 ): number | null {
   const previousPeriod = metrics.previousPeriod;
-  if (!previousPeriod) return null;
+  if (!previousPeriod || previousPeriod.available === false) return null;
 
   // Map current period keys to previous period keys
   const keyMap: Record<string, keyof typeof previousPeriod> = {
@@ -49,7 +49,8 @@ export function getPreviousPeriodValue(
   const prevKey = keyMap[metricKey];
   if (!prevKey) return null;
 
-  return previousPeriod[prevKey] ?? null;
+  const value = previousPeriod[prevKey];
+  return typeof value === 'number' ? value : null;
 }
 
 /**

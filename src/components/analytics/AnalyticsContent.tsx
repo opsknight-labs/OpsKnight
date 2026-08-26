@@ -159,9 +159,16 @@ export default async function AnalyticsContent({
     return 'neutral';
   };
 
-  const incidentDelta = getDelta(metrics.totalIncidents, metrics.previousPeriod.totalIncidents);
-  const mttaDelta = getDelta(metrics.mttd, metrics.previousPeriod.mtta);
-  const mttrDelta = getDelta(metrics.mttr, metrics.previousPeriod.mttr);
+  const previousPeriodAvailable = metrics.previousPeriod.available !== false;
+  const incidentDelta = previousPeriodAvailable
+    ? getDelta(metrics.totalIncidents, metrics.previousPeriod.totalIncidents)
+    : null;
+  const mttaDelta = previousPeriodAvailable
+    ? getDelta(metrics.mttd, metrics.previousPeriod.mtta)
+    : null;
+  const mttrDelta = previousPeriodAvailable
+    ? getDelta(metrics.mttr, metrics.previousPeriod.mttr)
+    : null;
   const smoothingWindow = windowDays <= 3 ? 1 : windowDays <= 14 ? 3 : 7;
   const countSeries = smoothSeries(
     metrics.trendSeries.map(entry => entry.count),
