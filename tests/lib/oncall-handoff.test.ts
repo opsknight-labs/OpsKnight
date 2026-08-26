@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { processShiftRotations } from '@/lib/oncall-handoff';
+import type { DynamicOnCallShift } from '@/lib/oncall-shifts';
 
 // Mock prisma
 vi.mock('@/lib/prisma', () => ({
@@ -58,30 +59,36 @@ describe('oncall-handoff', () => {
         if (time.getTime() < now.getTime()) {
           return [
             {
+              id: 'shift-1',
               scheduleId: 'sched-1',
               userId: 'user-a',
-              schedule: { name: 'Devops Schedule' },
-              user: { name: 'User A' },
-            } as any,
+              schedule: { id: 'sched-1', name: 'Devops Schedule' },
+              user: { id: 'user-a', name: 'User A' },
+              start: new Date(now.getTime() - 60 * 60 * 1000),
+              end: now,
+            } as unknown as DynamicOnCallShift,
           ];
         }
         return [
           {
+            id: 'shift-2',
             scheduleId: 'sched-1',
             userId: 'user-b',
-            schedule: { name: 'Devops Schedule' },
-            user: { name: 'User B' },
-          } as any,
+            schedule: { id: 'sched-1', name: 'Devops Schedule' },
+            user: { id: 'user-b', name: 'User B' },
+            start: now,
+            end: new Date(now.getTime() + 60 * 60 * 1000),
+          } as unknown as DynamicOnCallShift,
         ];
       });
 
       vi.mocked(prisma.escalationPolicy.findMany).mockResolvedValue([
-        { id: 'ep-1', services: [{ id: 'svc-1' }] } as any,
-      ]);
+        { id: 'ep-1', services: [{ id: 'svc-1' }] },
+      ] as unknown as Awaited<ReturnType<typeof prisma.escalationPolicy.findMany>>);
 
       vi.mocked(prisma.incident.findMany).mockResolvedValue([
-        { id: 'inc-1', title: 'Open issue', status: 'OPEN', assigneeId: 'user-a' } as any,
-      ]);
+        { id: 'inc-1', title: 'Open issue', status: 'OPEN', assigneeId: 'user-a' },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
       const result = await processShiftRotations(now);
 
@@ -105,31 +112,37 @@ describe('oncall-handoff', () => {
         if (time.getTime() < now.getTime()) {
           return [
             {
+              id: 'shift-1',
               scheduleId: 'sched-1',
               userId: 'user-a',
-              schedule: { name: 'Devops Schedule' },
-              user: { name: 'User B' },
-            } as any,
+              schedule: { id: 'sched-1', name: 'Devops Schedule' },
+              user: { id: 'user-a', name: 'User A' },
+              start: new Date(now.getTime() - 60 * 60 * 1000),
+              end: new Date(now.getTime() - 2 * 60 * 1000),
+            } as unknown as DynamicOnCallShift,
           ];
         }
         return [
           {
+            id: 'shift-2',
             scheduleId: 'sched-1',
             userId: 'user-b',
-            schedule: { name: 'Devops Schedule' },
-            user: { name: 'User B' },
-          } as any,
+            schedule: { id: 'sched-1', name: 'Devops Schedule' },
+            user: { id: 'user-b', name: 'User B' },
+            start: new Date(now.getTime() - 2 * 60 * 1000),
+            end: new Date(now.getTime() + 60 * 60 * 1000),
+          } as unknown as DynamicOnCallShift,
         ];
       });
 
       vi.mocked(prisma.escalationPolicy.findMany).mockResolvedValue([
-        { id: 'ep-1', services: [{ id: 'svc-1' }] } as any,
-      ]);
+        { id: 'ep-1', services: [{ id: 'svc-1' }] },
+      ] as unknown as Awaited<ReturnType<typeof prisma.escalationPolicy.findMany>>);
 
       // Incident is already assigned to user-b
       vi.mocked(prisma.incident.findMany).mockResolvedValue([
-        { id: 'inc-1', title: 'Open issue', status: 'OPEN', assigneeId: 'user-b' } as any,
-      ]);
+        { id: 'inc-1', title: 'Open issue', status: 'OPEN', assigneeId: 'user-b' },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
       const result = await processShiftRotations(now);
 

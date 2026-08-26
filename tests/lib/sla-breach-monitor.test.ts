@@ -81,8 +81,8 @@ describe('sla-breach-monitor', () => {
             slackWebhookUrl: null,
             serviceNotifyOnSlaBreach: true,
           },
-        } as any,
-      ] as any);
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
       const result = await checkSLABreaches();
 
@@ -122,7 +122,7 @@ describe('sla-breach-monitor', () => {
             serviceNotifyOnSlaBreach: true,
           },
         },
-      ] as any);
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
       const result = await checkSLABreaches();
 
@@ -156,7 +156,7 @@ describe('sla-breach-monitor', () => {
             slackWebhookUrl: null,
           },
         },
-      ] as any);
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
       const result = await checkSLABreaches();
 
@@ -189,13 +189,13 @@ describe('sla-breach-monitor', () => {
             serviceNotifyOnSlaBreach: true,
           },
         },
-      ] as any);
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
       // Existing breach events in DB
       vi.mocked(prisma.incidentEvent.findMany).mockResolvedValue([
         { incidentId: 'inc-1', message: '🚨 SLA ACK Breached: target was 15 min' },
         { incidentId: 'inc-1', message: '🚨 SLA RESOLVE Breached: target was 120 min' },
-      ] as any);
+      ] as unknown as Awaited<ReturnType<typeof prisma.incidentEvent.findMany>>);
 
       const result = await checkSLABreaches();
 
