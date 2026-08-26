@@ -1272,14 +1272,14 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         logger.warn('[SLA] Previous period query failed, returning zeroed stats', { error: err });
         return [
           {
-            total_count: 0n,
-            high_urgency_count: 0n,
-            medium_urgency_count: 0n,
-            low_urgency_count: 0n,
+            total_count: BigInt(0),
+            high_urgency_count: BigInt(0),
+            medium_urgency_count: BigInt(0),
+            low_urgency_count: BigInt(0),
             avg_mtta_ms: null,
             avg_mttr_ms: null,
-            ack_count: 0n,
-            resolve_count: 0n,
+            ack_count: BigInt(0),
+            resolve_count: BigInt(0),
           },
         ];
       }),
