@@ -15,14 +15,32 @@ export type GitHubEvent = {
     name: string;
     head_branch?: string;
     status: 'queued' | 'in_progress' | 'completed' | 'requested';
-    conclusion?: 'success' | 'failure' | 'cancelled' | 'timed_out';
+    conclusion?:
+      | 'success'
+      | 'failure'
+      | 'neutral'
+      | 'cancelled'
+      | 'timed_out'
+      | 'action_required'
+      | 'stale'
+      | 'skipped'
+      | null;
     html_url: string;
   };
   check_run?: {
     id: number;
     name: string;
     status: 'queued' | 'in_progress' | 'completed';
-    conclusion?: 'success' | 'failure' | 'cancelled' | 'timed_out';
+    conclusion?:
+      | 'success'
+      | 'failure'
+      | 'neutral'
+      | 'cancelled'
+      | 'timed_out'
+      | 'action_required'
+      | 'stale'
+      | 'skipped'
+      | null;
     html_url: string;
   };
   deployment?: {
