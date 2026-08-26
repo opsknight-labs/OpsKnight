@@ -1,0 +1,31 @@
+{{- if .Values.pgbouncer.enabled }}
+{{- if ne .Values.runtime.mode "split" }}
+{{- fail "pgbouncer.enabled requires runtime.mode=split so scheduler/worker traffic can stay on direct PostgreSQL connections" }}
+{{- end }}
+{{- if .Values.database.url }}
+{{- fail "pgbouncer.enabled cannot be combined with database.url; configure structured postgresql.* values instead" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opsknight.pgbouncer.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  pgbouncer.ini: |
+    [databases]
+    {{ .Values.postgresql.database }} = host={{ include "opsknight.directHost" . }} port={{ .Values.postgresql.port }} dbname={{ .Values.postgresql.database }}
+
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = {{ .Values.pgbouncer.port }}
+    auth_type = scram-sha-256
+    auth_file = /etc/pgbouncer-auth/userlist.txt
+    pool_mode = {{ .Values.pgbouncer.poolMode }}
+    max_client_conn = {{ .Values.pgbouncer.maxClientConnections }}
+    default_pool_size = {{ .Values.pgbouncer.defaultPoolSize }}
+    reserve_pool_size = {{ .Values.pgbouncer.reservePoolSize }}
+    max_prepared_statements = {{ .Values.pgbouncer.maxPreparedStatements }}
+    ignore_startup_parameters = extra_float_digits,search_path
+{{- end }}

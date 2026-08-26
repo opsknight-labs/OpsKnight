@@ -8,6 +8,7 @@ metadata:
 spec:
   selector:
     app: opsknight-app
+    opsknight-role: web
   ports:
     - protocol: TCP
       port: 80

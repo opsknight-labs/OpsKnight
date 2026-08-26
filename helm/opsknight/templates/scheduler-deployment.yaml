@@ -1,0 +1,62 @@
+{{- if eq .Values.runtime.mode "split" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opsknight.fullname" . }}-scheduler
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+    opsknight-role: scheduler
+spec:
+  replicas: {{ .Values.scheduler.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "opsknight.selectorLabels" . | nindent 6 }}
+      opsknight-role: scheduler
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "opsknight.selectorLabels" . | nindent 8 }}
+        opsknight-role: scheduler
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if not .Values.secrets.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.scheduler.terminationGracePeriodSeconds }}
+      serviceAccountName: {{ include "opsknight.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: scheduler
+          image: {{ include "opsknight.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "opsknight.fullname" . }}-config
+          env:
+            - name: OPSKNIGHT_PROCESS_ROLE
+              value: scheduler
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.schedulerDatabaseUrl }}
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.nextauthSecret }}
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.encryptionKey }}
+          resources:
+            {{- toYaml .Values.scheduler.resources | nindent 12 }}
+{{- end }}

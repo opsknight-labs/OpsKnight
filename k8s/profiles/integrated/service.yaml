@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsknight-service
+  namespace: opsknight
+  labels:
+    app: opsknight-app
+spec:
+  type: ClusterIP
+  selector:
+    app: opsknight-app
+    opsknight-role: integrated
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 3000

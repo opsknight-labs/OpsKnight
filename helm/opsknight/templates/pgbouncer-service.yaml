@@ -1,0 +1,18 @@
+{{- if .Values.pgbouncer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opsknight.pgbouncer.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: pgbouncer
+      port: {{ .Values.pgbouncer.port }}
+      targetPort: pgbouncer
+{{- end }}

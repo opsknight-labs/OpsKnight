@@ -1,6 +1,11 @@
 # Default values for opsknight
 # This is a YAML-formatted file.
 
+# Backward-compatible chart default. For new production Kubernetes deployments,
+# prefer runtime.mode=split so web, worker, and scheduler capacity can scale independently.
+runtime:
+  mode: integrated
+
 replicaCount: 2
 
 image:
@@ -60,7 +65,7 @@ resources:
     cpu: 500m
     memory: 1Gi
 
-# Disabled by default so a basic install does not depend on metrics-server.
+# Integrated-mode HPA. Split mode uses web.autoscaling instead.
 autoscaling:
   enabled: false
   minReplicas: 2
@@ -110,12 +115,78 @@ readinessProbe:
   successThreshold: 1
   failureThreshold: 3
 
+# Split-runtime settings. These are ignored while runtime.mode=integrated.
+web:
+  replicaCount: 2
+  database:
+    connectionLimit: 10
+    poolTimeout: 30
+  # Keep the request modest for small installations while allowing a Node.js
+  # web process to burst above 500m while the default HPA adds replicas.
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  # Split mode is the recommended production topology, so its web tier scales
+  # automatically by default. The minimum remains two replicas for small installs.
+  # CPU is the default signal because validation identified CPU throttling as the
+  # first web-tier bottleneck; memory scaling stays configurable but disabled.
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: null
+  terminationGracePeriodSeconds: 30
+
+worker:
+  replicaCount: 2
+  database:
+    connectionLimit: 10
+    poolTimeout: 30
+  config:
+    batchSize: 100
+    concurrency: 15
+    idlePollMs: 1000
+    busyPollMs: 100
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  terminationGracePeriodSeconds: 60
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+scheduler:
+  replicaCount: 1
+  database:
+    connectionLimit: 5
+    poolTimeout: 30
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  terminationGracePeriodSeconds: 30
+
 secrets:
   # Use a pre-created Secret instead of rendering secret values into the Helm release.
   # External Secrets/CSI operators should keep the required keys synchronized.
   existingSecret: ''
   keys:
     databaseUrl: DATABASE_URL
+    webDatabaseUrl: WEB_DATABASE_URL
+    workerDatabaseUrl: WORKER_DATABASE_URL
+    schedulerDatabaseUrl: SCHEDULER_DATABASE_URL
     nextauthSecret: NEXTAUTH_SECRET
     encryptionKey: ENCRYPTION_KEY
     postgresUser: POSTGRES_USER
@@ -136,12 +207,12 @@ config:
   hostname: '0.0.0.0'
   nextTelemetryDisabled: '1'
 
-# Full DATABASE_URL override. Prefer this for managed PostgreSQL, TLS parameters,
-# PgBouncer, or credentials containing characters that require URI encoding.
+# Full DATABASE_URL override. In integrated mode this behaves exactly as before.
+# In split mode it is used directly for all roles unless PgBouncer is enabled.
+# Built-in PgBouncer needs structured postgresql.* values because Helm cannot
+# safely parse arbitrary connection URLs.
 database:
   url: ''
-  # NetworkPolicy cannot infer a port reliably from a URL. Keep this aligned
-  # with database.url when using an external database on a non-default port.
   port: 5432
 
 postgresql:
@@ -151,6 +222,7 @@ postgresql:
   port: '5432'
   username: opsknight
   password: 'opsknight_secure_password_change_me'
+  # Integrated-mode Prisma pool defaults retained for backward compatibility.
   connectionLimit: 40
   poolTimeout: 30
   storage: 10Gi
@@ -159,7 +231,6 @@ postgresql:
     repository: postgres
     tag: '15-alpine'
     pullPolicy: IfNotPresent
-  # postgres:15-alpine uses uid/gid 70 for the postgres user.
   podSecurityContext:
     runAsNonRoot: true
     runAsUser: 70
@@ -183,3 +254,35 @@ postgresql:
     limits:
       memory: 2Gi
       cpu: 2000m
+
+# Optional PgBouncer for split mode. Only web traffic is pooled through it;
+# workers and the scheduler keep direct PostgreSQL connections.
+pgbouncer:
+  enabled: false
+  image:
+    repository: ghcr.io/icoretech/pgbouncer-docker
+    tag: '1.25.1'
+    pullPolicy: IfNotPresent
+  port: 6432
+  poolMode: transaction
+  maxClientConnections: 1000
+  defaultPoolSize: 40
+  reservePoolSize: 10
+  maxPreparedStatements: 100
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 70
+    runAsGroup: 70
+    readOnlyRootFilesystem: true

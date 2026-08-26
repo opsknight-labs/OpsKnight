@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsknight-worker
+  namespace: opsknight
+  labels:
+    app: opsknight-app
+    opsknight-role: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: opsknight-app
+      opsknight-role: worker
+  template:
+    metadata:
+      labels:
+        app: opsknight-app
+        opsknight-role: worker
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: opsknight-worker
+          image: ghcr.io/opsknight-labs/opsknight:1.4.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: opsknight-config
+            - secretRef:
+                name: opsknight-secrets
+          env:
+            - name: OPSKNIGHT_PROCESS_ROLE
+              value: worker
+            - name: OPSKNIGHT_WORKER_BATCH_SIZE
+              value: '100'
+            - name: OPSKNIGHT_WORKER_CONCURRENCY
+              value: '15'
+            - name: OPSKNIGHT_WORKER_IDLE_POLL_MS
+              value: '1000'
+            - name: OPSKNIGHT_WORKER_BUSY_POLL_MS
+              value: '100'
+            - name: DATABASE_URL
+              value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=10&pool_timeout=30'
+          resources:
+            requests:
+              cpu: '100m'
+              memory: '256Mi'
+            limits:
+              cpu: '500m'
+              memory: '1Gi'
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault

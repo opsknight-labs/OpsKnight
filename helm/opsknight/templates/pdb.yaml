@@ -10,4 +10,20 @@ spec:
   selector:
     matchLabels:
       {{- include "opsknight.selectorLabels" . | nindent 6 }}
+      opsknight-role: {{ ternary "web" "integrated" (eq .Values.runtime.mode "split") }}
+{{- end }}
+{{- if and (eq .Values.runtime.mode "split") .Values.worker.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "opsknight.fullname" . }}-worker
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.worker.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "opsknight.selectorLabels" . | nindent 6 }}
+      opsknight-role: worker
 {{- end }}

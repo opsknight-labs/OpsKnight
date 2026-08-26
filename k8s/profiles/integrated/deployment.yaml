@@ -5,22 +5,42 @@ metadata:
   namespace: opsknight
   labels:
     app: opsknight-app
+    opsknight-role: integrated
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: opsknight-app
+      opsknight-role: integrated
   template:
     metadata:
       labels:
         app: opsknight-app
+        opsknight-role: integrated
     spec:
       serviceAccountName: opsknight-app
       automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
       securityContext:
+        runAsNonRoot: true
         runAsUser: 1001
         runAsGroup: 1001
         fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: opsknight-app
+              opsknight-role: integrated
       containers:
         - name: opsknight-app
           image: ghcr.io/opsknight-labs/opsknight:1.4.0
@@ -34,6 +54,8 @@ spec:
             - secretRef:
                 name: opsknight-secrets
           env:
+            - name: OPSKNIGHT_PROCESS_ROLE
+              value: integrated
             - name: DATABASE_URL
               value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30'
           resources:
@@ -43,6 +65,14 @@ spec:
             limits:
               cpu: '500m'
               memory: '1Gi'
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           startupProbe:
             httpGet:
               path: /api/health?mode=readiness

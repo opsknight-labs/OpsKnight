@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsknight-scheduler
+  namespace: opsknight
+  labels:
+    app: opsknight-app
+    opsknight-role: scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsknight-app
+      opsknight-role: scheduler
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: opsknight-app
+        opsknight-role: scheduler
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: opsknight-scheduler
+          image: ghcr.io/opsknight-labs/opsknight:1.4.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: opsknight-config
+            - secretRef:
+                name: opsknight-secrets
+          env:
+            - name: OPSKNIGHT_PROCESS_ROLE
+              value: scheduler
+            - name: DATABASE_URL
+              value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=5&pool_timeout=30'
+          resources:
+            requests:
+              cpu: '100m'
+              memory: '256Mi'
+            limits:
+              cpu: '500m'
+              memory: '1Gi'
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault

@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsknight-pgbouncer
+  namespace: opsknight
+  labels:
+    app: opsknight-pgbouncer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsknight-pgbouncer
+  template:
+    metadata:
+      labels:
+        app: opsknight-pgbouncer
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pgbouncer
+          image: ghcr.io/icoretech/pgbouncer-docker:1.25.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            readOnlyRootFilesystem: true
+          ports:
+            - name: pgbouncer
+              containerPort: 6432
+          volumeMounts:
+            - name: config
+              mountPath: /etc/pgbouncer/pgbouncer.ini
+              subPath: pgbouncer.ini
+              readOnly: true
+            - name: auth
+              mountPath: /etc/pgbouncer-auth
+              readOnly: true
+            - name: run
+              mountPath: /var/run/pgbouncer
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            tcpSocket:
+              port: pgbouncer
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: pgbouncer
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config
+          configMap:
+            name: opsknight-pgbouncer
+        - name: auth
+          secret:
+            secretName: opsknight-pgbouncer-auth
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

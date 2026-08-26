@@ -7,11 +7,9 @@ spec:
   podSelector:
     matchLabels:
       app: opsknight-app
-  policyTypes:
-    - Ingress
-    - Egress
+      opsknight-role: integrated
+  policyTypes: [Ingress, Egress]
   ingress:
-    # Standard namespace label added by Kubernetes; adjust for your ingress controller namespace.
     - from:
         - namespaceSelector:
             matchLabels:
@@ -19,21 +17,11 @@ spec:
       ports:
         - protocol: TCP
           port: 3000
-    - from:
-        - podSelector:
-            matchLabels:
-              app: opsknight-app
-      ports:
-        - protocol: TCP
-          port: 3000
   egress:
-    # Allow PostgreSQL on 5432. This supports the bundled DB and managed/external PostgreSQL.
-    # Production overlays should narrow this to the actual database CIDR/namespace when known.
     - to: []
       ports:
         - protocol: TCP
           port: 5432
-    # DNS may use UDP or TCP.
     - to:
         - namespaceSelector: {}
       ports:
@@ -41,7 +29,6 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # External integrations and identity/notification providers.
     - to: []
       ports:
         - protocol: TCP
@@ -56,16 +43,14 @@ spec:
   podSelector:
     matchLabels:
       app: opsknight-postgres
-  policyTypes:
-    - Ingress
-    - Egress
+  policyTypes: [Ingress, Egress]
   ingress:
     - from:
         - podSelector:
             matchLabels:
               app: opsknight-app
+              opsknight-role: integrated
       ports:
         - protocol: TCP
           port: 5432
-  # PostgreSQL does not initiate network connections in the bundled topology.
   egress: []

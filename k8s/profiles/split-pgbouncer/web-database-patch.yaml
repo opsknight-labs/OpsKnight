@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsknight-app
+  namespace: opsknight
+spec:
+  template:
+    spec:
+      containers:
+        - name: opsknight-app
+          env:
+            - name: DATABASE_URL
+              value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@opsknight-pgbouncer:6432/$(POSTGRES_DB)?schema=public&connection_limit=10&pool_timeout=30'
