@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
               if (currentValue > previousUptime) trend = 'up';
               else if (currentValue < previousUptime) trend = 'down';
             }
-          } else if (def.metricType === 'MTTA') {
+          } else if (metrics.previousPeriod.available !== false && def.metricType === 'MTTA') {
             // For MTTA, lower is better
             const prev = metrics.previousPeriod.mtta;
             const curr = currentValue;
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
               if (curr < prev) trend = 'up';
               else if (curr > prev) trend = 'down';
             }
-          } else {
+          } else if (metrics.previousPeriod.available !== false) {
             // For time-based metrics (MTTR), lower is better
             if (metrics.previousPeriod.mttr !== null && metrics.mttr !== null) {
               if (metrics.mttr < metrics.previousPeriod.mttr) trend = 'up';
