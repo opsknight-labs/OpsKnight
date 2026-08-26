@@ -2,7 +2,7 @@
  * PostgreSQL-based Job Queue System
  *
  * This implementation uses PostgreSQL instead of Redis/BullMQ.
- * Jobs are stored in the BackgroundJob table and processed by cron jobs.
+ * Jobs are stored in the BackgroundJob table and processed by workers/schedulers.
  *
  * Benefits:
  * - No additional infrastructure (Redis) needed
@@ -138,6 +138,12 @@ export async function getPendingJobs(limit: number = 50): Promise<any[]> {
 /**
  * Atomically claim pending jobs for processing.
  * Uses SKIP LOCKED to avoid concurrent workers claiming the same jobs.
+ *
+ * EVENT_SIDE_EFFECT jobs add one more boundary: a later lifecycle event in the
+ * same incident/lane cannot be claimed while an older job in that lane is
+ * pending or processing. This preserves created -> acknowledged -> resolved
+ * ordering for dependent external systems without serializing independent
+ * webhook, Slack, escalation, and war-room lanes.
  */
 export async function claimPendingJobs(limit: number = 50, type?: JobType): Promise<any[]> {
   // Recover abandoned jobs that exceeded maxAttempts while in PROCESSING
@@ -155,18 +161,45 @@ export async function claimPendingJobs(limit: number = 50, type?: JobType): Prom
     )
     .catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
 
-  const typeFilter = type ? Prisma.sql`AND "type" = ${type}::"JobType"` : Prisma.empty;
+  const typeFilter = type
+    ? Prisma.sql`AND candidate."type" = ${type}::"JobType"`
+    : Prisma.empty;
   const jobs = await prisma.$queryRaw<any[]>( // eslint-disable-line @typescript-eslint/no-explicit-any
     Prisma.sql`
       WITH cte AS (
-        SELECT "id"
-        FROM "BackgroundJob"
-        WHERE ("status" = 'PENDING' OR ("status" = 'PROCESSING' AND ("startedAt" IS NULL OR "startedAt" < NOW() - INTERVAL '10 minutes')))
-          AND "scheduledAt" <= NOW()
-          AND "attempts" < "maxAttempts"
+        SELECT candidate."id"
+        FROM "BackgroundJob" AS candidate
+        WHERE (
+            candidate."status" = 'PENDING'
+            OR (
+              candidate."status" = 'PROCESSING'
+              AND (
+                candidate."startedAt" IS NULL
+                OR candidate."startedAt" < NOW() - INTERVAL '10 minutes'
+              )
+            )
+          )
+          AND candidate."scheduledAt" <= NOW()
+          AND candidate."attempts" < candidate."maxAttempts"
           ${typeFilter}
-        ORDER BY "scheduledAt" ASC
-        FOR UPDATE SKIP LOCKED
+          AND (
+            candidate."type" <> 'SCHEDULED_TASK'::"JobType"
+            OR candidate."payload"->>'task' IS DISTINCT FROM 'EVENT_SIDE_EFFECT'
+            OR NOT EXISTS (
+              SELECT 1
+              FROM "BackgroundJob" AS older
+              WHERE older."type" = 'SCHEDULED_TASK'::"JobType"
+                AND older."status" IN ('PENDING', 'PROCESSING')
+                AND older."payload"->>'task' = 'EVENT_SIDE_EFFECT'
+                AND older."payload"->>'incidentId' = candidate."payload"->>'incidentId'
+                AND older."payload"->>'lane' = candidate."payload"->>'lane'
+                AND older."id" <> candidate."id"
+                AND (older."payload"->>'eventOrderAt')::timestamptz
+                  < (candidate."payload"->>'eventOrderAt')::timestamptz
+            )
+          )
+        ORDER BY candidate."scheduledAt" ASC, candidate."createdAt" ASC
+        FOR UPDATE OF candidate SKIP LOCKED
         LIMIT ${limit}
       )
       UPDATE "BackgroundJob"
@@ -396,6 +429,25 @@ export async function processJob(job: any): Promise<boolean> {
             }
           );
         }
+        await markJobCompleted(job.id);
+        return true;
+      }
+
+      case 'SCHEDULED_TASK': {
+        if (job.payload?.task !== 'EVENT_SIDE_EFFECT') {
+          await prisma.backgroundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'FAILED',
+              failedAt: new Date(),
+              error: `Unknown scheduled task: ${job.payload?.task || 'missing task'}`,
+            },
+          });
+          return false;
+        }
+
+        const { processEventSideEffect } = await import('../event-side-effects');
+        await processEventSideEffect(job.payload);
         await markJobCompleted(job.id);
         return true;
       }
