@@ -14,7 +14,17 @@ describe('incidents-query helpers', () => {
 
   it('keeps valid filters and sorts intact', () => {
     expect(normalizeIncidentFilter('mine')).toBe('mine');
+    expect(normalizeIncidentFilter('acknowledged')).toBe('acknowledged');
+    expect(normalizeIncidentFilter('open')).toBe('open');
     expect(normalizeIncidentSort('updated')).toBe('updated');
+  });
+
+  it('builds acknowledged and open filters correctly', () => {
+    const ackWhere = buildIncidentWhere({ filter: 'acknowledged' });
+    expect(ackWhere).toEqual({ status: 'ACKNOWLEDGED' });
+
+    const openWhere = buildIncidentWhere({ filter: 'open' });
+    expect(openWhere).toEqual({ status: 'OPEN' });
   });
 
   it('builds mine filter with assignee and open-only status', () => {

@@ -22,7 +22,16 @@ export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url);
 
   // Validate and sanitize input parameters to prevent abuse
-  const VALID_FILTERS = ['all', 'mine', 'all_open', 'resolved', 'snoozed', 'suppressed'];
+  const VALID_FILTERS = [
+    'all',
+    'mine',
+    'all_open',
+    'open',
+    'acknowledged',
+    'resolved',
+    'snoozed',
+    'suppressed',
+  ];
   const VALID_FORMATS = ['csv', 'xlsx'];
   const VALID_URGENCIES = ['all', 'HIGH', 'MEDIUM', 'LOW'];
   const VALID_PRIORITIES = ['all', 'P1', 'P2', 'P3', 'P4', 'P5'];
@@ -48,10 +57,14 @@ export async function GET(req: NextRequest) {
   if (filter === 'mine') {
     where = {
       assigneeId: (session.user as any).id, // eslint-disable-line @typescript-eslint/no-explicit-any
-      status: { notIn: ['RESOLVED'] },
+      status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] },
     };
   } else if (filter === 'all_open') {
     where = { status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] } };
+  } else if (filter === 'open') {
+    where = { status: 'OPEN' };
+  } else if (filter === 'acknowledged') {
+    where = { status: 'ACKNOWLEDGED' };
   } else if (filter === 'resolved') {
     where = { status: 'RESOLVED' };
   } else if (filter === 'snoozed') {
