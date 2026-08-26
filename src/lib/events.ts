@@ -19,7 +19,7 @@ export type EventPayload = {
 };
 
 import { createHash } from 'crypto';
-import { runSerializableTransaction } from './db-utils';
+import { runReadCommittedTransaction } from './db-utils';
 
 const MAX_DEDUP_KEY_LENGTH = 512;
 const MAX_STORED_ALERT_PAYLOAD_BYTES = 64 * 1024;
@@ -120,6 +120,22 @@ function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJs
   };
 }
 
+async function lockEventDedupKeys(
+  tx: Prisma.TransactionClient,
+  serviceId: string,
+  candidateDedupKeys: string[]
+): Promise<void> {
+  // Serialize only requests that can address the same logical incident. Include
+  // legacy keys during rolling upgrades and use deterministic lock ordering.
+  const lockKeys = Array.from(
+    new Set(candidateDedupKeys.map(key => JSON.stringify([serviceId, key])))
+  ).sort();
+
+  for (const lockKey of lockKeys) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+  }
+}
+
 export async function processEvent(
   payload: EventPayload,
   serviceId: string,
@@ -143,7 +159,23 @@ export async function processEvent(
     eventData.summary = `Alert from ${eventData.source}`;
   }
 
-  const result = await runSerializableTransaction(async tx => {
+  // This read previously used the global Prisma client from inside an
+  // interactive transaction, which could consume a second pool connection
+  // while the transaction held the first. The uncommitted current alert was
+  // never visible to that read, so preserve the same historical check outside
+  // the transaction and avoid nested pool pressure.
+  let isFlapping = false;
+  if (event_action === 'trigger') {
+    try {
+      const { checkAlertFlapping } = await import('./flapping');
+      const flappingResult = await checkAlertFlapping(dedup_key, serviceId);
+      isFlapping = flappingResult.isFlapping;
+    } catch (_) {
+      // Non-critical: if flapping check fails, proceed with normal incident creation
+    }
+  }
+
+  const result = await runReadCommittedTransaction(async tx => {
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
       where: { id: serviceId },
@@ -158,6 +190,11 @@ export async function processEvent(
       });
       throw new Error(`Service not found: ${serviceId}. Integration may be misconfigured.`);
     }
+
+    // ReadCommitted removes broad Serializable predicate conflicts. A
+    // transaction-scoped advisory lock preserves the find-then-create
+    // deduplication boundary for events targeting the same service/key.
+    await lockEventDedupKeys(tx, serviceId, candidateDedupKeys);
 
     // 2. Find existing open incident with this dedup_key BEFORE creating alert
     // This prevents alert orphaning when resolve/acknowledge has no matching incident
@@ -313,18 +350,6 @@ export async function processEvent(
         ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
         : null;
 
-      // Flapping detection: check rapid state oscillations before creating a new incident
-      // Done outside the transaction since it reads Alert rows that were just committed
-      // (the current alert was created above in the same tx, so we use a non-tx prisma read)
-      let isFlapping = false;
-      try {
-        const { checkAlertFlapping } = await import('./flapping');
-        const flappingResult = await checkAlertFlapping(dedup_key, serviceId);
-        isFlapping = flappingResult.isFlapping;
-      } catch (_) {
-        // Non-critical: if flapping check fails, proceed with normal incident creation
-      }
-
       const newIncident = await tx.incident.create({
         data: {
           title: sanitizedTitle,
@@ -448,7 +473,7 @@ export async function processEvent(
       source: eventData.source,
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
-  });
+  }, EVENT_TRANSACTION_MAX_ATTEMPTS);
 
   if (result.action === 'triggered' && result.incident) {
     // Trigger status page webhooks for incident.created event
