@@ -32,9 +32,10 @@ describeIfRealDB('Event Ingestion Resilience Tests', { timeout: 30000 }, () => {
   });
 
   describe('Incident Deduplication Race Conditions', () => {
-    it('should create exactly one incident when receiving multiple identical trigger events simultaneously', async () => {
+    it('should create exactly one incident when receiving identical trigger events concurrently', async () => {
       const service = await createTestService('Deduplication Service');
       const dedupKey = `test-dedup-${Date.now()}`;
+      const eventCount = 10;
 
       const payload: EventPayload = {
         event_action: 'trigger',
@@ -46,20 +47,22 @@ describeIfRealDB('Event Ingestion Resilience Tests', { timeout: 30000 }, () => {
         },
       };
 
-      // Process events in rapid succession but not exact-simultaneity
-      // to allow local DB to handle serializable isolation without flaky timeouts.
-      // The processEvent still uses Serializable isolation and will retry internally.
-      const results = [];
-      for (let i = 0; i < 5; i++) {
-        results.push(await processEvent(payload, service.id, 'test-integration-id'));
-      }
+      // This is intentionally true concurrency. Event ingestion uses
+      // ReadCommitted isolation plus a transaction-scoped advisory lock for the
+      // service/dedup key so unrelated keys can progress independently while
+      // the find-then-create deduplication boundary remains race-safe.
+      const results = await Promise.all(
+        Array.from({ length: eventCount }, () =>
+          processEvent(payload, service.id, 'test-integration-id')
+        )
+      );
 
       // Verify results
       const triggeredCount = results.filter(r => r.action === 'triggered').length;
       const deduplicatedCount = results.filter(r => r.action === 'deduplicated').length;
 
       expect(triggeredCount).toBe(1);
-      expect(deduplicatedCount).toBe(4);
+      expect(deduplicatedCount).toBe(eventCount - 1);
 
       // Verify DB state
       const scopedDedupKey = `test-integration-id:${dedupKey}`;
@@ -72,7 +75,7 @@ describeIfRealDB('Event Ingestion Resilience Tests', { timeout: 30000 }, () => {
       const alerts = await testPrisma.alert.findMany({
         where: { dedupKey: scopedDedupKey, serviceId: service.id },
       });
-      expect(alerts).toHaveLength(5);
+      expect(alerts).toHaveLength(eventCount);
 
       const incident = await testPrisma.incident.findFirst({
         where: { dedupKey: scopedDedupKey, serviceId: service.id },
