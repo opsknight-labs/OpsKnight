@@ -15,7 +15,7 @@ on:
       - 'env.example'
       - 'helm/**'
       - 'k8s/**'
-      - 'docs/v1.4/deployment/**'
+      - 'docs/v1.5/deployment/**'
       - 'tests/lib/deployment-config-unit.test.ts'
       - '.github/workflows/docker-image.yml'
       - '.github/workflows/deployment-validation.yml'
@@ -33,6 +33,7 @@ on:
       - 'env.example'
       - 'helm/**'
       - 'k8s/**'
+      - 'docs/v1.5/deployment/**'
       - '.github/workflows/docker-image.yml'
       - '.github/workflows/deployment-validation.yml'
 
@@ -72,6 +73,68 @@ jobs:
       - name: Render Helm defaults
         run: helm template opsknight helm/opsknight --namespace opsknight > /tmp/opsknight-helm.yaml
 
+      - name: Render Helm split runtime
+        run: |
+          helm template opsknight helm/opsknight --namespace opsknight \
+            --set runtime.mode=split \
+            > /tmp/opsknight-helm-split.yaml
+
+      - name: Render Helm split runtime with HPA disabled
+        run: |
+          helm template opsknight helm/opsknight --namespace opsknight \
+            --set runtime.mode=split \
+            --set web.autoscaling.enabled=false \
+            > /tmp/opsknight-helm-split-no-hpa.yaml
+
+      - name: Render Helm split runtime with PgBouncer
+        run: |
+          helm template opsknight helm/opsknight --namespace opsknight \
+            --set runtime.mode=split \
+            --set pgbouncer.enabled=true \
+            --set pgbouncer.existingAuthSecret=opsknight-ci-pgbouncer-auth \
+            --set postgresql.password=ci-validation-only \
+            > /tmp/opsknight-helm-pgbouncer.yaml
+
+      - name: Render Helm external PostgreSQL with verified TLS and PgBouncer
+        run: |
+          helm template opsknight helm/opsknight --namespace opsknight \
+            --set runtime.mode=split \
+            --set pgbouncer.enabled=true \
+            --set pgbouncer.existingAuthSecret=opsknight-pgbouncer-auth-external \
+            --set postgresql.enabled=false \
+            --set postgresql.host=db.example.com \
+            --set postgresql.password=ci-validation-only \
+            --set postgresql.tls.enabled=true \
+            --set postgresql.tls.existingSecret=opsknight-database-ca \
+            > /tmp/opsknight-helm-pgbouncer-external-tls.yaml
+
+      - name: Reject unsafe or invalid Helm runtime configurations
+        shell: bash
+        run: |
+          set -euo pipefail
+          if helm template opsknight helm/opsknight --set runtime.mode=splt >/dev/null 2>&1; then
+            echo 'invalid runtime.mode unexpectedly rendered'
+            exit 1
+          fi
+          if helm template opsknight helm/opsknight \
+            --set runtime.mode=split \
+            --set pgbouncer.enabled=true \
+            --set postgresql.enabled=false \
+            --set postgresql.host=db.example.com \
+            --set postgresql.password=ci-validation-only \
+            >/dev/null 2>&1; then
+            echo 'external PostgreSQL + bundled PgBouncer rendered without verified TLS'
+            exit 1
+          fi
+          if helm template opsknight helm/opsknight \
+            --set runtime.mode=split \
+            --set pgbouncer.enabled=true \
+            --set pgbouncer.existingAuthSecret=opsknight-ci-pgbouncer-auth \
+            >/dev/null 2>&1; then
+            echo 'bundled PgBouncer rendered with the shipped placeholder database password'
+            exit 1
+          fi
+
       - name: Render Helm external database configuration
         run: |
           helm template opsknight helm/opsknight \
@@ -91,22 +154,135 @@ jobs:
             --set-string secrets.existingSecret='opsknight-runtime' \
             > /tmp/opsknight-helm-external-secret.yaml
 
-      - name: Render Kustomize base
-        run: kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+      - name: Render Kustomize integrated profile
+        run: kubectl kustomize k8s > /tmp/opsknight-kustomize-integrated.yaml
+
+      - name: Render Kustomize split profile
+        run: kubectl kustomize k8s/profiles/split > /tmp/opsknight-kustomize-split.yaml
+
+      - name: Render Kustomize split profile with PgBouncer
+        run: |
+          cp k8s/profiles/split-pgbouncer/pgbouncer-userlist.txt.example \
+            k8s/profiles/split-pgbouncer/pgbouncer-userlist.txt
+          kubectl kustomize k8s/profiles/split-pgbouncer > /tmp/opsknight-kustomize-pgbouncer.yaml
 
       - name: Validate rendered invariants
         shell: bash
         run: |
           set -euo pipefail
+
+          # Helm integrated compatibility invariants.
           grep -q 'ghcr.io/opsknight-labs/opsknight:' /tmp/opsknight-helm.yaml
+          grep -q 'value: integrated' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
           grep -q 'maxUnavailable: 0' /tmp/opsknight-helm.yaml
           grep -q 'topologySpreadConstraints:' /tmp/opsknight-helm.yaml
           grep -q 'checksum/config:' /tmp/opsknight-helm.yaml
           grep -q 'checksum/secret:' /tmp/opsknight-helm.yaml
           grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-helm.yaml
-          grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
-          grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
+          grep -q 'kind: Ingress' /tmp/opsknight-kustomize-integrated.yaml
+          grep -q 'kind: HorizontalPodAutoscaler' /tmp/opsknight-kustomize-integrated.yaml
+          grep -q 'kind: NetworkPolicy' /tmp/opsknight-kustomize-integrated.yaml
+
+          # Helm recommended split runtime: HPA is on by default and CPU-driven.
+          grep -q 'name: opsknight-worker' /tmp/opsknight-helm-split.yaml
+          grep -q 'name: opsknight-scheduler' /tmp/opsknight-helm-split.yaml
+          grep -q 'value: worker' /tmp/opsknight-helm-split.yaml
+          grep -q 'value: scheduler' /tmp/opsknight-helm-split.yaml
+          grep -q 'WEB_DATABASE_URL' /tmp/opsknight-helm-split.yaml
+          grep -q 'cpu: 250m' /tmp/opsknight-helm-split.yaml
+          grep -q 'cpu: 1000m' /tmp/opsknight-helm-split.yaml
+          grep -q 'kind: HorizontalPodAutoscaler' /tmp/opsknight-helm-split.yaml
+          grep -q 'minReplicas: 2' /tmp/opsknight-helm-split.yaml
+          grep -q 'maxReplicas: 12' /tmp/opsknight-helm-split.yaml
+          grep -q 'averageUtilization: 70' /tmp/opsknight-helm-split.yaml
+          if grep -A8 'kind: HorizontalPodAutoscaler' /tmp/opsknight-helm-split.yaml | grep -q 'name: memory'; then
+            echo 'split Helm HPA unexpectedly uses memory as a default scaling signal'
+            exit 1
+          fi
+          if grep -q 'kind: HorizontalPodAutoscaler' /tmp/opsknight-helm-split-no-hpa.yaml; then
+            echo 'split Helm HPA disable switch did not remove the HPA'
+            exit 1
+          fi
+
+          # Helm split + PgBouncer invariants.
+          grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-helm-pgbouncer.yaml
+          grep -q 'pool_mode = transaction' /tmp/opsknight-helm-pgbouncer.yaml
+          grep -q 'max_prepared_statements = 100' /tmp/opsknight-helm-pgbouncer.yaml
+          grep -q 'ignore_startup_parameters = extra_float_digits,search_path' /tmp/opsknight-helm-pgbouncer.yaml
+          grep -q 'runAsUser: 70' /tmp/opsknight-helm-pgbouncer.yaml
+          grep -q 'runAsGroup: 70' /tmp/opsknight-helm-pgbouncer.yaml
+          grep -q '6432' /tmp/opsknight-helm-pgbouncer.yaml
+          grep -q 'kind: HorizontalPodAutoscaler' /tmp/opsknight-helm-pgbouncer.yaml
+          grep -q 'ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd' /tmp/opsknight-helm-pgbouncer.yaml
+
+          # External PostgreSQL through bundled PgBouncer fails closed unless
+          # backend TLS verifies the server certificate.
+          grep -q 'server_tls_sslmode = verify-full' /tmp/opsknight-helm-pgbouncer-external-tls.yaml
+          grep -q 'server_tls_ca_file = /etc/pgbouncer-tls/ca.crt' /tmp/opsknight-helm-pgbouncer-external-tls.yaml
+          grep -q 'secretName: opsknight-database-ca' /tmp/opsknight-helm-pgbouncer-external-tls.yaml
+          grep -q 'secretName: opsknight-pgbouncer-auth-external' /tmp/opsknight-helm-pgbouncer-external-tls.yaml
+
+          # Kustomize integrated profile mirrors Helm compatibility topology.
+          grep -q 'opsknight-role: integrated' /tmp/opsknight-kustomize-integrated.yaml
+          grep -q 'value: integrated' /tmp/opsknight-kustomize-integrated.yaml
+          grep -q 'connection_limit=40' /tmp/opsknight-kustomize-integrated.yaml
+          grep -q 'maxUnavailable: 0' /tmp/opsknight-kustomize-integrated.yaml
+          grep -q 'topologySpreadConstraints:' /tmp/opsknight-kustomize-integrated.yaml
+          if grep -q 'name: opsknight-worker' /tmp/opsknight-kustomize-integrated.yaml; then
+            echo 'integrated Kustomize profile unexpectedly rendered a worker'
+            exit 1
+          fi
+          if grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-kustomize-integrated.yaml; then
+            echo 'integrated Kustomize profile unexpectedly rendered PgBouncer'
+            exit 1
+          fi
+
+          # Kustomize recommended split profile includes the default CPU HPA.
+          grep -q 'name: opsknight-worker' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'name: opsknight-scheduler' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'opsknight-role: web' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'value: worker' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'value: scheduler' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'connection_limit=10' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'connection_limit=5' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'value: "100"' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'value: "15"' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'cpu: 250m' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'cpu: 1000m' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'kind: HorizontalPodAutoscaler' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'minReplicas: 2' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'maxReplicas: 12' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'averageUtilization: 70' /tmp/opsknight-kustomize-split.yaml
+          if grep -A8 'kind: HorizontalPodAutoscaler' /tmp/opsknight-kustomize-split.yaml | grep -q 'name: memory'; then
+            echo 'split Kustomize HPA unexpectedly uses memory as a default scaling signal'
+            exit 1
+          fi
+          if grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-kustomize-split.yaml; then
+            echo 'split Kustomize profile unexpectedly rendered PgBouncer'
+            exit 1
+          fi
+
+          # Kustomize split+PgBouncer inherits split HPA and pooled-web topology.
+          grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'pool_mode = transaction' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'max_client_conn = 1000' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'default_pool_size = 40' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'reserve_pool_size = 10' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'max_prepared_statements = 100' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'ignore_startup_parameters = extra_float_digits,search_path' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'runAsUser: 70' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'runAsGroup: 70' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'opsknight-pgbouncer:6432' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'name: opsknight-worker' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'name: opsknight-scheduler' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'opsknight-postgres-service' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'kind: HorizontalPodAutoscaler' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'maxReplicas: 12' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'name: opsknight-pgbouncer-netpol' /tmp/opsknight-kustomize-pgbouncer.yaml
+
+          # Existing deployment compatibility checks.
           grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-external-db.yaml
           grep -q 'port: 6432' /tmp/opsknight-helm-external-db.yaml
@@ -122,7 +298,7 @@ jobs:
             echo 'chart rendered a Secret even though secrets.existingSecret is configured'
             exit 1
           fi
-          if grep -q 'runAsUser: 999' /tmp/opsknight-helm.yaml /tmp/opsknight-kustomize.yaml; then
+          if grep -q 'runAsUser: 999' /tmp/opsknight-helm.yaml /tmp/opsknight-helm-split.yaml /tmp/opsknight-helm-pgbouncer.yaml /tmp/opsknight-kustomize-integrated.yaml /tmp/opsknight-kustomize-split.yaml /tmp/opsknight-kustomize-pgbouncer.yaml; then
             echo 'obsolete PostgreSQL uid 999 found'
             exit 1
           fi

@@ -1,0 +1,135 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-web-netpol
+  namespace: opsknight
+spec:
+  podSelector:
+    matchLabels:
+      app: opsknight-app
+      opsknight-role: web
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: opsknight-pgbouncer
+      ports:
+        - protocol: TCP
+          port: 6432
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-background-netpol
+  namespace: opsknight
+spec:
+  podSelector:
+    matchExpressions:
+      - key: opsknight-role
+        operator: In
+        values: [worker, scheduler]
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: opsknight-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-pgbouncer-netpol
+  namespace: opsknight
+spec:
+  podSelector:
+    matchLabels:
+      app: opsknight-pgbouncer
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: opsknight-app
+              opsknight-role: web
+      ports:
+        - protocol: TCP
+          port: 6432
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: opsknight-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-postgres-netpol
+  namespace: opsknight
+spec:
+  podSelector:
+    matchLabels:
+      app: opsknight-postgres
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: opsknight-role
+                operator: In
+                values: [worker, scheduler]
+      ports:
+        - protocol: TCP
+          port: 5432
+    - from:
+        - podSelector:
+            matchLabels:
+              app: opsknight-pgbouncer
+      ports:
+        - protocol: TCP
+          port: 5432
+  egress: []

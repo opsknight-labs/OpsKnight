@@ -1,0 +1,90 @@
+{{- if .Values.pgbouncer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opsknight.pgbouncer.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.pgbouncer.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/pgbouncer-configmap.yaml") . | sha256sum }}
+        {{- if not .Values.pgbouncer.existingAuthSecret }}
+        checksum/auth: {{ include (print $.Template.BasePath "/pgbouncer-secret.yaml") . | sha256sum }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pgbouncer
+          image: {{ include "opsknight.pgbouncer.image" . | quote }}
+          imagePullPolicy: {{ .Values.pgbouncer.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.pgbouncer.securityContext | nindent 12 }}
+          ports:
+            - name: pgbouncer
+              containerPort: {{ .Values.pgbouncer.port }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/pgbouncer/pgbouncer.ini
+              subPath: pgbouncer.ini
+              readOnly: true
+            - name: auth
+              mountPath: /etc/pgbouncer-auth
+              readOnly: true
+            - name: run
+              mountPath: /var/run/pgbouncer
+            - name: tmp
+              mountPath: /tmp
+            {{- if not .Values.postgresql.enabled }}
+            - name: database-tls
+              mountPath: /etc/pgbouncer-tls
+              readOnly: true
+            {{- end }}
+          readinessProbe:
+            tcpSocket:
+              port: pgbouncer
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: pgbouncer
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.pgbouncer.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "opsknight.pgbouncer.fullname" . }}
+        - name: auth
+          secret:
+            secretName: {{ include "opsknight.pgbouncer.authSecretName" . }}
+            items:
+              - key: {{ .Values.pgbouncer.authFileKey }}
+                path: userlist.txt
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if not .Values.postgresql.enabled }}
+        - name: database-tls
+          secret:
+            secretName: {{ .Values.postgresql.tls.existingSecret }}
+            items:
+              - key: {{ .Values.postgresql.tls.caKey }}
+                path: ca.crt
+        {{- end }}
+{{- end }}

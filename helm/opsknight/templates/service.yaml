@@ -13,3 +13,6 @@ spec:
       name: http
   selector:
     {{- include "opsknight.selectorLabels" . | nindent 4 }}
+    {{ if eq .Values.runtime.mode "split" }}
+    opsknight-role: web
+    {{ end }}

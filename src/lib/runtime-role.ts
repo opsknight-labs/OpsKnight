@@ -5,6 +5,7 @@ export type OpsKnightProcessRole = (typeof OPSKNIGHT_PROCESS_ROLES)[number];
 export interface RuntimeResponsibilities {
   startScheduler: boolean;
   startJobWorker: boolean;
+  schedulerProcessesJobs: boolean;
 }
 
 const DEFAULT_PROCESS_ROLE: OpsKnightProcessRole = 'integrated';
@@ -38,12 +39,12 @@ export function getOpsKnightProcessRole(
 export function getRuntimeResponsibilities(role: OpsKnightProcessRole): RuntimeResponsibilities {
   switch (role) {
     case 'integrated':
-      return { startScheduler: true, startJobWorker: false };
+      return { startScheduler: true, startJobWorker: false, schedulerProcessesJobs: true };
     case 'web':
-      return { startScheduler: false, startJobWorker: false };
+      return { startScheduler: false, startJobWorker: false, schedulerProcessesJobs: false };
     case 'scheduler':
-      return { startScheduler: true, startJobWorker: false };
+      return { startScheduler: true, startJobWorker: false, schedulerProcessesJobs: false };
     case 'worker':
-      return { startScheduler: false, startJobWorker: true };
+      return { startScheduler: false, startJobWorker: true, schedulerProcessesJobs: false };
   }
 }

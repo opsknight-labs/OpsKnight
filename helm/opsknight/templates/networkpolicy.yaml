@@ -1,18 +1,18 @@
 {{- if .Values.networkPolicy.enabled }}
+{{- $split := eq .Values.runtime.mode "split" }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ include "opsknight.fullname" . }}-app
-  labels:
-    {{- include "opsknight.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
       {{- include "opsknight.selectorLabels" . | nindent 6 }}
-  policyTypes:
-    - Ingress
-    - Egress
+      {{- if $split }}
+      opsknight-role: web
+      {{- end }}
+  policyTypes: [Ingress, Egress]
   ingress:
     - from:
         - namespaceSelector:
@@ -21,15 +21,17 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.service.targetPort }}
-    - from:
+  egress:
+    {{- if and $split .Values.pgbouncer.enabled }}
+    - to:
         - podSelector:
             matchLabels:
-              {{- include "opsknight.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+              app.kubernetes.io/instance: {{ .Release.Name }}
       ports:
         - protocol: TCP
-          port: {{ .Values.service.targetPort }}
-  egress:
-    {{- if .Values.postgresql.enabled }}
+          port: {{ .Values.pgbouncer.port }}
+    {{- else if .Values.postgresql.enabled }}
     - to:
         - podSelector:
             matchLabels:
@@ -38,7 +40,6 @@ spec:
         - protocol: TCP
           port: 5432
     {{- else }}
-    # External/managed PostgreSQL may live outside this namespace or cluster.
     - to: []
       ports:
         - protocol: TCP
@@ -55,22 +56,83 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+{{- if $split }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opsknight.fullname" . }}-background
+spec:
+  podSelector:
+    matchExpressions:
+      - key: opsknight-role
+        operator: In
+        values: [worker, scheduler]
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.database.port | int }}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+{{- end }}
+{{- if .Values.pgbouncer.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opsknight.pgbouncer.fullname" . }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "opsknight.selectorLabels" . | nindent 14 }}
+              opsknight-role: web
+      ports:
+        - protocol: TCP
+          port: {{ .Values.pgbouncer.port }}
+  egress:
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.port | int }}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}
 {{- if .Values.postgresql.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ include "opsknight.fullname" . }}-postgresql
-  labels:
-    {{- include "opsknight.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: {{ include "opsknight.name" . }}-postgresql
       app.kubernetes.io/instance: {{ .Release.Name }}
-  policyTypes:
-    - Ingress
-    - Egress
+  policyTypes: [Ingress, Egress]
   ingress:
     - from:
         - podSelector:
@@ -79,7 +141,16 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
-  # PostgreSQL does not initiate network connections in the bundled topology.
+    {{- if .Values.pgbouncer.enabled }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
   egress: []
 {{- end }}
 {{- end }}

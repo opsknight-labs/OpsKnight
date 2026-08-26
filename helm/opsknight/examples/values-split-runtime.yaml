@@ -1,0 +1,37 @@
+runtime:
+  mode: split
+
+web:
+  replicaCount: 2
+  database:
+    connectionLimit: 10
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: null
+
+worker:
+  replicaCount: 2
+  database:
+    connectionLimit: 10
+
+scheduler:
+  replicaCount: 1
+  database:
+    connectionLimit: 5
+
+# Enable only when database connection pressure justifies it. Web traffic goes
+# through PgBouncer; workers and scheduler remain direct to PostgreSQL.
+pgbouncer:
+  enabled: false
+  maxClientConnections: 1000
+  defaultPoolSize: 40

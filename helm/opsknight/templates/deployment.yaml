@@ -1,16 +1,26 @@
+{{- $split := eq .Values.runtime.mode "split" -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "opsknight.fullname" . }}
   labels:
     {{- include "opsknight.labels" . | nindent 4 }}
+    opsknight-role: {{ ternary "web" "integrated" $split }}
 spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 0
       maxSurge: 1
-  {{- if not .Values.autoscaling.enabled }}
+  {{- if $split }}
+  {{- if .Values.web.autoscaling.enabled }}
+  {{- if .Release.IsInstall }}
+  replicas: {{ .Values.web.autoscaling.minReplicas }}
+  {{- end }}
+  {{- else }}
+  replicas: {{ .Values.web.replicaCount }}
+  {{- end }}
+  {{- else if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
@@ -28,8 +38,9 @@ spec:
       {{- end }}
       labels:
         {{- include "opsknight.selectorLabels" . | nindent 8 }}
+        opsknight-role: {{ ternary "web" "integrated" $split }}
     spec:
-      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ ternary .Values.web.terminationGracePeriodSeconds .Values.terminationGracePeriodSeconds $split }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -52,11 +63,13 @@ spec:
             - configMapRef:
                 name: {{ include "opsknight.fullname" . }}-config
           env:
+            - name: OPSKNIGHT_PROCESS_ROLE
+              value: {{ ternary "web" "integrated" $split }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" . }}
-                  key: {{ .Values.secrets.keys.databaseUrl }}
+                  key: {{ ternary .Values.secrets.keys.webDatabaseUrl .Values.secrets.keys.databaseUrl $split }}
             - name: NEXTAUTH_SECRET
               valueFrom:
                 secretKeyRef:
@@ -67,6 +80,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" . }}
                   key: {{ .Values.secrets.keys.encryptionKey }}
+          {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled (not .Values.database.url) }}
+          volumeMounts:
+            - name: database-tls
+              mountPath: /etc/opsknight-db-tls
+              readOnly: true
+          {{- end }}
           startupProbe:
             {{- toYaml .Values.startupProbe | nindent 12 }}
           livenessProbe:
@@ -74,7 +93,20 @@ spec:
           readinessProbe:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
           resources:
+            {{- if $split }}
+            {{- toYaml .Values.web.resources | nindent 12 }}
+            {{- else }}
             {{- toYaml .Values.resources | nindent 12 }}
+            {{- end }}
+      {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled (not .Values.database.url) }}
+      volumes:
+        - name: database-tls
+          secret:
+            secretName: {{ required "postgresql.tls.existingSecret is required when postgresql.tls.enabled=true" .Values.postgresql.tls.existingSecret }}
+            items:
+              - key: {{ .Values.postgresql.tls.caKey }}
+                path: ca.crt
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -92,6 +124,7 @@ spec:
           labelSelector:
             matchLabels:
               {{- include "opsknight.selectorLabels" $ | nindent 14 }}
+              opsknight-role: {{ ternary "web" "integrated" $split }}
         {{- end }}
       {{- end }}
       {{- with .Values.tolerations }}

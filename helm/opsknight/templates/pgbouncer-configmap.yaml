@@ -1,0 +1,49 @@
+{{- if .Values.pgbouncer.enabled }}
+{{- if ne .Values.runtime.mode "split" }}
+{{- fail "pgbouncer.enabled requires runtime.mode=split so scheduler/worker traffic can stay on direct PostgreSQL connections" }}
+{{- end }}
+{{- if .Values.database.url }}
+{{- fail "pgbouncer.enabled cannot be combined with database.url; configure structured postgresql.* values instead" }}
+{{- end }}
+{{- if and (not .Values.pgbouncer.existingAuthSecret) (eq .Values.postgresql.password "opsknight_secure_password_change_me") }}
+{{- fail "pgbouncer.enabled requires pgbouncer.existingAuthSecret or a non-default postgresql.password" }}
+{{- end }}
+{{- if and (not .Values.secrets.existingSecret) (eq .Values.postgresql.password "opsknight_secure_password_change_me") }}
+{{- fail "pgbouncer.enabled requires secrets.existingSecret or a non-default postgresql.password for application database URLs" }}
+{{- end }}
+{{- if not .Values.postgresql.enabled }}
+{{- if not .Values.postgresql.tls.enabled }}
+{{- fail "external PostgreSQL with bundled PgBouncer requires postgresql.tls.enabled=true and certificate verification" }}
+{{- end }}
+{{- if not .Values.postgresql.tls.existingSecret }}
+{{- fail "postgresql.tls.existingSecret is required for external PostgreSQL with bundled PgBouncer" }}
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opsknight.pgbouncer.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  pgbouncer.ini: |
+    [databases]
+    {{ .Values.postgresql.database }} = host={{ include "opsknight.directHost" . }} port={{ .Values.postgresql.port }} dbname={{ .Values.postgresql.database }}
+
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = {{ .Values.pgbouncer.port }}
+    auth_type = scram-sha-256
+    auth_file = /etc/pgbouncer-auth/userlist.txt
+    pool_mode = {{ .Values.pgbouncer.poolMode }}
+    max_client_conn = {{ .Values.pgbouncer.maxClientConnections }}
+    default_pool_size = {{ .Values.pgbouncer.defaultPoolSize }}
+    reserve_pool_size = {{ .Values.pgbouncer.reservePoolSize }}
+    max_prepared_statements = {{ .Values.pgbouncer.maxPreparedStatements }}
+    ignore_startup_parameters = extra_float_digits,search_path
+    {{ if not .Values.postgresql.enabled }}
+    server_tls_sslmode = verify-full
+    server_tls_ca_file = /etc/pgbouncer-tls/ca.crt
+    {{ end }}
+{{- end }}

@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../split
+  - pgbouncer-configmap.yaml
+  - pgbouncer-deployment.yaml
+  - pgbouncer-service.yaml
+
+components:
+  - ../../components/network-split-pgbouncer
+
+secretGenerator:
+  - name: opsknight-pgbouncer-auth
+    files:
+      - userlist.txt=pgbouncer-userlist.txt
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+patches:
+  - path: web-database-patch.yaml

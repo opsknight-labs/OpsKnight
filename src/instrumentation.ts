@@ -70,7 +70,7 @@ export async function register() {
     // an incompatible bundle.
     if (responsibilities.startScheduler) {
       const { startCronScheduler, stopCronScheduler } = await import('./lib/cron-scheduler');
-      startCronScheduler();
+      startCronScheduler({ processJobs: responsibilities.schedulerProcessesJobs });
       stopScheduler = stopCronScheduler;
     }
 
@@ -85,6 +85,7 @@ export async function register() {
       role,
       scheduler: responsibilities.startScheduler,
       jobWorker: responsibilities.startJobWorker,
+      schedulerProcessesJobs: responsibilities.schedulerProcessesJobs,
     });
 
     if (!shutdownHandlersRegistered) {

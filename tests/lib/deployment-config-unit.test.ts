@@ -10,14 +10,14 @@ describe('deployment configuration invariants', () => {
   it('keeps packaged deployment versions aligned with the application version', () => {
     const pkg = JSON.parse(read('package.json')) as { version: string };
     const chart = read('helm/opsknight/Chart.yaml');
-    const rawDeployment = read('k8s/deployment.yaml');
+    const rawDeployment = read('k8s/profiles/integrated/deployment.yaml');
     expect(chart).toContain(`version: ${pkg.version}`);
     expect(chart).toContain(`appVersion: '${pkg.version}'`);
     expect(rawDeployment).toContain(`ghcr.io/opsknight-labs/opsknight:${pkg.version}`);
   });
 
   it('runs postgres:15-alpine with its uid/gid instead of uid 999', () => {
-    const raw = read('k8s/postgres-statefulset.yaml');
+    const raw = read('k8s/base/postgres-statefulset.yaml');
     const helm = read('helm/opsknight/values.yaml');
     expect(raw).toContain('runAsUser: 70');
     expect(raw).toContain('runAsGroup: 70');
@@ -27,31 +27,31 @@ describe('deployment configuration invariants', () => {
   });
 
   it('does not ship the obsolete OpsSentinal postgres credentials', () => {
-    const secret = read('k8s/secret.yaml');
+    const secret = read('k8s/base/secret.yaml');
     expect(secret).toContain('POSTGRES_USER: b3Bza25pZ2h0');
     expect(secret).not.toContain('T3BzU2VudGluYWw=');
     expect(secret).not.toContain('T3BzU2VudGluYWxfc2VjdXJlX3Bhc3N3b3JkX2NoYW5nZV9tZQ==');
   });
 
   it('uses portable network policies and isolates bundled postgres egress', () => {
-    const raw = read('k8s/network-policy.yaml');
+    const raw = read('k8s/components/network-integrated/network-policy.yaml');
     const helm = read('helm/opsknight/templates/networkpolicy.yaml');
     expect(raw).toContain('kubernetes.io/metadata.name: ingress-nginx');
     expect(helm).toContain('ingressNamespaceLabels');
     expect(raw).toContain('port: 5432');
     expect(helm).toContain('.Values.database.port');
-    expect(raw).toContain('PostgreSQL does not initiate network connections');
+    expect(raw).toContain('name: opsknight-postgres-netpol');
     expect(raw).toContain('egress: []');
     expect(helm).toContain('egress: []');
   });
 
   it('exposes the public app URL in Kubernetes and Helm', () => {
-    expect(read('k8s/configmap.yaml')).toContain('NEXT_PUBLIC_APP_URL');
+    expect(read('k8s/base/configmap.yaml')).toContain('NEXT_PUBLIC_APP_URL');
     expect(read('helm/opsknight/templates/configmap.yaml')).toContain('NEXT_PUBLIC_APP_URL');
   });
 
   it('protects long migration starts and fails closed on migration failure', () => {
-    expect(read('k8s/deployment.yaml')).toContain('startupProbe:');
+    expect(read('k8s/profiles/integrated/deployment.yaml')).toContain('startupProbe:');
     expect(read('helm/opsknight/templates/deployment.yaml')).toContain('startupProbe:');
     const entrypoint = read('docker-entrypoint.sh');
     expect(entrypoint).toContain('Refusing to start against an unknown database schema');
@@ -65,8 +65,8 @@ describe('deployment configuration invariants', () => {
   });
 
   it('does not allocate an unused standalone postgres PVC', () => {
-    expect(read('k8s/kustomization.yaml')).not.toContain('postgres-pvc.yaml');
-    expect(fs.existsSync(path.join(root, 'k8s/postgres-pvc.yaml'))).toBe(false);
+    expect(read('k8s/base/kustomization.yaml')).not.toContain('postgres-pvc.yaml');
+    expect(fs.existsSync(path.join(root, 'k8s/base/postgres-pvc.yaml'))).toBe(false);
   });
 
   it('supports explicit database URL overrides for Compose and Helm', () => {
@@ -93,6 +93,82 @@ describe('deployment configuration invariants', () => {
     expect(deployment).toContain('include "opsknight.secretName"');
   });
 
+  it('preserves immutable selectors and historical root Kustomize resources on upgrade', () => {
+    const helmDeployment = read('helm/opsknight/templates/deployment.yaml');
+    const helmSelector = helmDeployment.slice(
+      helmDeployment.indexOf('  selector:'),
+      helmDeployment.indexOf('  template:')
+    );
+    const integratedDeployment = read('k8s/profiles/integrated/deployment.yaml');
+    const integratedSelector = integratedDeployment.slice(
+      integratedDeployment.indexOf('  selector:'),
+      integratedDeployment.indexOf('  template:')
+    );
+    const splitDeployment = read('k8s/profiles/split/deployment.yaml');
+    const splitSelector = splitDeployment.slice(
+      splitDeployment.indexOf('  selector:'),
+      splitDeployment.indexOf('  template:')
+    );
+
+    expect(helmSelector).not.toContain('opsknight-role:');
+    expect(integratedSelector).not.toContain('opsknight-role:');
+    expect(splitSelector).not.toContain('opsknight-role:');
+
+    const helmService = read('helm/opsknight/templates/service.yaml');
+    expect(helmService).toContain('if eq .Values.runtime.mode "split"');
+    expect(read('k8s/profiles/integrated/service.yaml')).not.toContain(
+      'opsknight-role: integrated'
+    );
+    expect(read('k8s/profiles/integrated/pod-disruption-budget.yaml')).not.toContain(
+      'opsknight-role: integrated'
+    );
+    expect(read('k8s/components/network-integrated/network-policy.yaml')).not.toContain(
+      'opsknight-role: integrated'
+    );
+
+    const rootKustomization = read('k8s/kustomization.yaml');
+    expect(rootKustomization).toContain('components/ingress');
+    expect(rootKustomization).toContain('components/integrated-hpa');
+    expect(rootKustomization).toContain('components/network-integrated');
+  });
+
+  it('fails closed for PgBouncer credentials, images, and external database TLS', () => {
+    const values = read('helm/opsknight/values.yaml');
+    const helpers = read('helm/opsknight/templates/_helpers.tpl');
+    const config = read('helm/opsknight/templates/pgbouncer-configmap.yaml');
+    const deployment = read('helm/opsknight/templates/pgbouncer-deployment.yaml');
+    const auth = read('helm/opsknight/templates/pgbouncer-secret.yaml');
+    const rawKustomization = read('k8s/profiles/split-pgbouncer/kustomization.yaml');
+    const rawDeployment = read('k8s/profiles/split-pgbouncer/pgbouncer-deployment.yaml');
+
+    expect(values).toContain("existingAuthSecret: ''");
+    expect(values).toContain(
+      "digest: 'sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd'"
+    );
+    expect(helpers).toContain('define "opsknight.pgbouncer.image"');
+    expect(deployment).toContain('include "opsknight.pgbouncer.authSecretName"');
+    expect(auth).toContain('replace "\\\\" "\\\\\\\\"');
+    expect(auth).toContain('replace "\\\"" "\\\\\\\""');
+    expect(config).toContain('server_tls_sslmode = verify-full');
+    expect(config).toContain('postgresql.tls.existingSecret is required');
+    expect(rawKustomization).toContain('pgbouncer-userlist.txt');
+    expect(rawKustomization).toContain('components/network-split-pgbouncer');
+    expect(rawKustomization).toContain('disableNameSuffixHash: true');
+    expect(
+      fs.existsSync(path.join(root, 'k8s/profiles/split-pgbouncer/pgbouncer-secret.yaml'))
+    ).toBe(false);
+    expect(rawDeployment).toContain(
+      'ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd'
+    );
+  });
+
+  it('validates runtime mode instead of silently falling back to integrated mode', () => {
+    const schema = JSON.parse(read('helm/opsknight/values.schema.json')) as {
+      properties: { runtime: { properties: { mode: { enum: string[] } } } };
+    };
+    expect(schema.properties.runtime.properties.mode.enum).toEqual(['integrated', 'split']);
+  });
+
   it('ships an enterprise high-availability baseline and guarded recovery drills', () => {
     const values = read('helm/opsknight/values.yaml');
     const deployment = read('helm/opsknight/templates/deployment.yaml');
@@ -113,7 +189,7 @@ describe('deployment configuration invariants', () => {
   });
 
   it('preserves the existing postgres Service cluster-IP mode for upgrade safety', () => {
-    expect(read('k8s/postgres-service.yaml')).not.toContain('clusterIP: None');
+    expect(read('k8s/base/postgres-service.yaml')).not.toContain('clusterIP: None');
     expect(read('helm/opsknight/templates/postgres-service.yaml')).not.toContain('clusterIP: None');
   });
 
@@ -193,7 +269,7 @@ describe('deployment configuration invariants', () => {
       'docker-compose.yml',
       'env.example',
       'helm/opsknight/values.yaml',
-      'k8s/deployment.yaml',
+      'k8s/profiles/integrated/deployment.yaml',
       'docs/v1/deployment/README.md',
       'docs/v1.1/deployment/README.md',
       'docs/v1.2/deployment/README.md',

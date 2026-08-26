@@ -1,4 +1,6 @@
-{{- if .Values.autoscaling.enabled }}
+{{- $split := eq .Values.runtime.mode "split" -}}
+{{- $enabled := ternary .Values.web.autoscaling.enabled .Values.autoscaling.enabled $split -}}
+{{- if $enabled }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -10,23 +12,25 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: {{ include "opsknight.fullname" . }}
-  minReplicas: {{ .Values.autoscaling.minReplicas }}
-  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  minReplicas: {{ ternary .Values.web.autoscaling.minReplicas .Values.autoscaling.minReplicas $split }}
+  maxReplicas: {{ ternary .Values.web.autoscaling.maxReplicas .Values.autoscaling.maxReplicas $split }}
   metrics:
-    {{- if .Values.autoscaling.targetCPUUtilizationPercentage }}
+    {{- $cpu := ternary .Values.web.autoscaling.targetCPUUtilizationPercentage .Values.autoscaling.targetCPUUtilizationPercentage $split }}
+    {{- $memory := ternary .Values.web.autoscaling.targetMemoryUtilizationPercentage .Values.autoscaling.targetMemoryUtilizationPercentage $split }}
+    {{- if $cpu }}
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+          averageUtilization: {{ $cpu }}
     {{- end }}
-    {{- if .Values.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- if $memory }}
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
+          averageUtilization: {{ $memory }}
     {{- end }}
 {{- end }}

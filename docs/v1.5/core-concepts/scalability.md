@@ -1,172 +1,328 @@
 ---
 order: 18
 title: Scalability and capacity planning
-description: Measure OpsKnight capacity, scale the shipped runtime safely, and prove workload limits before production.
+description: Scale OpsKnight v1.5 web, worker, scheduler, PostgreSQL, and optional PgBouncer using measured capacity rather than fixed claims.
 ---
 
 # Scalability and capacity planning
 
-OpsKnight v1.4 does not publish a universal user, incident, notification, or streaming-connection capacity. Throughput depends on application and PostgreSQL resources, replica count, incident fan-out, query history, external-provider latency, and the traffic shape. Treat any capacity number that was not measured on your deployment as an assumption, not a product guarantee.
+OpsKnight v1.5 does not publish a universal user, incident, notification, or request capacity. Safe throughput depends on application resources, PostgreSQL capacity, replica count, query shape, incident fan-out, external-provider latency, dataset size, and traffic mix.
 
-This guide separates code-defined protective limits from measured capacity and provides a repeatable way to establish safe operating limits for your environment.
+Treat any capacity number that was not measured on your deployment as an assumption, not a product guarantee.
+
+## Scaling architecture
+
+v1.5 supports two Kubernetes runtime models.
+
+### Integrated — compatibility mode
+
+```text
+web/API + scheduled work
+          │
+          ▼
+   application replicas
+          │
+          ▼
+      PostgreSQL
+```
+
+Integrated mode remains the Helm/root-Kustomize default for backward compatibility. It is not the recommended topology for new production Kubernetes deployments.
+
+### Split — recommended for production
+
+```text
+users/integrations -> web pods -----------┐
+                       ▲                  │
+                  HPA 2 → 12              │
+                                          │
+background jobs ----> worker pods --------┼-> PostgreSQL
+                                          │
+scheduled work -----> scheduler ----------┘
+```
+
+Split mode separates public request handling, durable background-job processing, and scheduled-work ownership into independent deployments.
+
+Default split shape:
+
+- 2 baseline web replicas;
+- web HPA enabled by default, 2→12 replicas;
+- 70% CPU HPA target;
+- web CPU request 250m and limit 1000m;
+- 2 worker replicas;
+- 1 scheduler replica;
+- web pool 10 per pod;
+- worker pool 10 per pod;
+- scheduler pool 5;
+- worker batch size 100;
+- worker concurrency 15.
+
+The baseline remains small for low-traffic installations while allowing the web tier to add capacity automatically. The HPA requires the Kubernetes resource Metrics API. If metrics are unavailable, the baseline replicas continue to run but automatic scaling cannot calculate desired replicas.
+
+These defaults are starting values, not measured capacity recommendations.
+
+## Optional PgBouncer
+
+For measured web-side connection pressure, the Kubernetes packaging can place PgBouncer between web pods and PostgreSQL:
+
+```text
+web -> PgBouncer -> PostgreSQL
+worker ----------> PostgreSQL
+scheduler --------> PostgreSQL
+```
+
+Workers and scheduler remain direct to PostgreSQL. The bundled PgBouncer uses transaction pooling and is disabled by default.
+
+PgBouncer can reduce the number of PostgreSQL backend sessions consumed by many web clients. It does not reduce query cost and cannot compensate for saturated CPU, slow storage, lock contention, missing query optimization, or inefficient application behavior.
 
 ## Model the workload
 
-Build a representative workload before choosing infrastructure. Record at least:
+A representative capacity test should include the workload dimensions that matter to your installation:
 
-| Workload dimension   | Include in the model                                                                                  |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| Inbound events       | Sustained and burst rate, payload size, producer count, stable versus high-cardinality deduplication. |
-| Incident processing  | Trigger/acknowledge/resolve mix, new versus correlated events, notes, watchers, and bulk actions.     |
-| Notification fan-out | Recipients and channels per incident, escalation depth, retry rate, and provider response latency.    |
-| Interactive use      | Concurrent desktop/mobile users, dashboard refreshes, analytics range, exports, and SSE connections.  |
-| Scheduled work       | Due escalations, unsnoozes, failed-delivery retries, SLA checks, rollups, and retention cleanup.      |
-| Stored data          | Incident/event history, notification history, audit/system logs, rollups, indexes, and growth rate.   |
-| Failure recovery     | Producer retries, provider outages, database slowdown, replica restarts, and the resulting backlog.   |
+| Dimension | Include |
+| --- | --- |
+| Inbound events | Sustained/burst rate, producer count, payload size, dedup-key cardinality. |
+| Incident processing | New vs correlated events, acknowledge/resolve mix, bulk actions. |
+| Notifications | Recipients, channels, escalation depth, retry rate, provider latency. |
+| Interactive use | Concurrent dashboard users, incident lists/details, services, integrations, SSE. |
+| Background jobs | Queue depth, due-job age, retries, provider failures, recovery backlog. |
+| Scheduled work | Escalations, unsnoozes, maintenance/retention activity. |
+| Stored data | Incident/event history, notification history, audit logs, indexes, growth. |
+| Failure recovery | Producer retries, provider outage, database slowdown, pod restart, backlog drain. |
 
-Average traffic is insufficient for incident-management capacity planning. Test the alert storm, notification fan-out, and recovery burst you need to survive.
+Average traffic is insufficient. Include the alert storm and recovery burst you need to survive.
 
-## Distinguish limits from capacity
+## PostgreSQL connection budget
 
-The following v1.4 values are implementation guardrails. They prevent one path from consuming unlimited resources; they are not benchmark results or service-level objectives.
-
-| Path                                  | Shipped behavior                                                                                                                                      |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Published Events API                  | 120 requests per 60-second fixed window for the route's integration/API-key bucket.                                                                   |
-| Standard provider-integration handler | 100 requests per 60 seconds per integration by default; some provider-specific or legacy routes differ.                                               |
-| PostgreSQL background jobs            | A scheduler cycle claims at most 100 due rows and processes them with concurrency 15. The dynamic scheduler normally runs every 15 seconds–2 minutes. |
-| Immediate notification queue          | Each application process holds at most 5,000 pending items, takes batches of 50, and uses per-channel concurrency 10. A full queue drops new items.   |
-| Notification channel guards           | Per process and per minute: email 100, SMS 50, push 200, Slack 100, webhook 100, WhatsApp 30. Provider quotas can be lower.                           |
-| Real-time dashboard stream            | Each connected client polls cached incident/metric functions every five seconds and receives a heartbeat about every 30 seconds.                      |
-| Real-time cache                       | Process-local entries use short TTLs and a 5,000-entry bound. Replicas do not share this cache.                                                       |
-
-See [API rate limiting](../api/rate-limiting) for the complete client-visible contract. Do not add the values above together to infer total notification or incident throughput. A slow provider, expensive query, or wide escalation fan-out can lower observed capacity significantly.
-
-## Understand the scaling topology
-
-One Next.js application serves the UI, API routes, provider webhooks, real-time streams, and the internal scheduler. PostgreSQL stores product state, rate-limit counters, scheduler coordination, and durable background jobs. Redis and a separately deployed worker service are not part of the v1.4 runtime.
-
-Multiple application replicas can use the same PostgreSQL database. For every replica:
-
-1. Deploy the same application version and runtime configuration.
-2. Use the same `NEXTAUTH_SECRET`, `ENCRYPTION_KEY`, public URL, and provider settings.
-3. Connect to the same migrated PostgreSQL database.
-4. Keep the scheduler enabled across instances. PostgreSQL coordinates scheduler ownership via `CronSchedulerState` distributed locks with 30-second heartbeats and 5-minute timeout. Standby replicas poll with randomized jitter (15–30s) to ensure automated leader failover if the active leader replica stops.
-5. Allow long-lived SSE responses at the load balancer or reverse proxy and disable response buffering for them.
-6. Drain traffic and in-flight work before stopping the process.
-
-Horizontal application scaling does not turn process-local state into shared state. Each replica has its own immediate notification queue, real-time cache, and circuit-breaker state. A process exit can lose items that have not reached durable storage. Review [Technical architecture](./technical-architecture) before choosing a high-availability topology.
-
-## Budget PostgreSQL connections
-
-Do not copy a fixed `connection_limit`, `max_connections`, or memory setting from another deployment. Budget connections across the entire database environment:
+Connection limits are per process/pod. Budget the complete environment:
 
 ```text
-(application replicas × maximum application pool per replica)
-+ migration and administrative reserve
-+ monitoring, backup, and other client connections
-≤ PostgreSQL connection capacity
+(web replicas × web pool)
++ (worker replicas × worker pool)
++ (scheduler replicas × scheduler pool)
++ migration/admin reserve
++ monitoring/backup/other clients
+< PostgreSQL max_connections
 ```
 
-Choose the application pool and database limit together. Leave reserve for migrations, health checks, recovery access, and expected failover behavior. Increasing a connection limit without sufficient PostgreSQL CPU, memory, I/O, and query capacity can increase contention instead of throughput.
+Split baseline:
 
-During a load test, monitor active/waiting connections, pool wait time, transaction/query latency, locks, deadlocks, CPU, memory, storage latency, and WAL/replication lag where applicable. Change one variable at a time and retain the before/after evidence.
+```text
+2 × 10 web
++ 2 × 10 worker
++ 1 × 5 scheduler
+= 45 application connections
+```
 
-## Establish a capacity envelope
+Without PgBouncer, also budget the HPA maximum. At 12 web replicas, the web tier can theoretically consume up to 120 direct PostgreSQL connections if every pool is full, before workers, scheduler, and operational reserve are added.
 
-### 1. Define measurable objectives
+Do not allocate the entire PostgreSQL connection limit to application pools. Keep reserve for migrations, failover, health/monitoring clients, backup tooling, and emergency administration.
 
-Set objectives for the workflows users depend on, for example:
+Increasing pool size does not automatically increase throughput. Once database CPU, memory, I/O, locks, or query execution become the bottleneck, more concurrent database work can increase latency and failure rate.
 
-- accepted-event rate and HTTP p50/p95/p99 latency;
-- time from accepted trigger to committed incident;
-- time from trigger to first attempted and first successful notification;
-- acknowledge/resolve success and latency during an alert storm;
-- maximum age and count of due background jobs;
-- interactive/API error rate and latency with concurrent SSE users;
-- PostgreSQL utilization, connection headroom, lock time, and storage growth; and
-- recovery time after a provider, database, or application fault.
+## What to measure
 
-Define an error budget and a minimum headroom target before testing. A test does not pass merely because requests eventually complete.
+At minimum capture:
 
-### 2. Build a production-like test environment
+### Application/web
 
-Use the intended application image, replica topology, PostgreSQL major version, connection path, proxy timeouts, and realistic data volume. Use synthetic or properly sanitized data. Never direct a capacity test at real responders, customer webhooks, or paid messaging channels without explicit safeguards.
+- request rate;
+- HTTP success/error rate;
+- p50/p90/p95/p99 latency;
+- CPU and memory;
+- HPA desired/current replicas;
+- CPU throttling;
+- restarts and readiness failures;
+- event-loop or runtime saturation where available;
+- SSE disconnect/reconnect behavior.
 
-Replace external providers with controlled test endpoints that can reproduce normal latency, throttling, timeouts, and failures. Preserve realistic notification fan-out and payload sizes.
+### Worker
 
-### 3. Run progressive and failure tests
+- pending/processing/failed job counts;
+- oldest due-job age;
+- jobs processed per second;
+- job duration;
+- retry/exhaustion rate;
+- worker CPU/memory;
+- database transaction failures.
 
-Run each test long enough to expose queue growth, cleanup, connection pressure, and storage effects:
+### Scheduler
 
-1. Establish an idle and normal-traffic baseline.
-2. Increase one workload dimension in steps and hold each step at steady state.
-3. Test bursts at and beyond the expected peak without bypassing route rate limits accidentally.
-4. Combine inbound load, responder activity, SSE connections, and scheduled work.
-5. Add slow/throttled providers and confirm backlogs and retries remain bounded.
-6. Restart and drain application replicas; verify the process-local queue boundary is understood.
-7. Introduce PostgreSQL latency or a controlled disconnect; verify readiness, recovery, and producer behavior.
-8. Exercise scheduler-owner loss and confirm another eligible process advances scheduled work after ownership becomes available.
-9. Stop new load and measure backlog drain time and final delivery/error state.
+- scheduler health/ownership;
+- tick errors;
+- failover behavior;
+- due work advancing on time.
 
-Use stable `dedup_key` values when measuring correlation and unique keys when measuring incident creation. Mixing the two produces a misleading result.
+### PostgreSQL
 
-### 4. Record the safe operating limit
+- total, active, and idle connections;
+- connections grouped by application role/process where available;
+- pool wait/timeout symptoms;
+- query latency and slow-query plans;
+- locks/deadlocks/serialization conflicts;
+- CPU, memory, storage latency, and I/O;
+- table/index growth;
+- backup/replication status where applicable.
 
-The capacity envelope is the highest tested workload that meets every objective with the required headroom and without an unbounded queue, connection, latency, error, memory, or storage trend. Record:
+### PgBouncer
 
-- application/database/proxy versions and exact resources;
-- replica and connection-pool settings;
-- dataset size and retention configuration;
-- workload generator, payload mix, fan-out, duration, and provider behavior;
-- results, bottleneck, headroom, and failure/recovery observations; and
-- the date, owner, and conditions that require a retest.
+When enabled, capture:
 
-Retest after material changes to the application, schema/indexes, PostgreSQL, proxy, replicas, notification providers, retention, or expected traffic.
+- client connections;
+- server/backend connections;
+- active/waiting clients;
+- pool saturation;
+- backend pool/reserve utilization;
+- connection/query wait behavior.
 
-## Monitor saturation in production
+A connection-pooling test is incomplete if PostgreSQL reports unexplained sessions. Account for each application role plus administrative/monitoring clients.
 
-Alert on trends before users experience an incident-delivery failure:
+## Progressive capacity test
 
-| Layer         | Watch                                                                                                                 |
-| ------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Application   | Readiness, restarts, CPU/memory, request errors/latency, event 429s, SSE disconnects, and instance churn.             |
-| PostgreSQL    | Connections/pool waits, query latency, locks/deadlocks, CPU, storage/I/O, table/index growth, and backup/replication. |
-| Scheduler     | Lock ownership/heartbeat, tick errors, oldest due job, pending/processing/failed counts, and retry exhaustion.        |
-| Integrations  | Accepted/rejected requests, signature/auth failures, 429s, processing latency, and retry storms.                      |
-| Notifications | Pending work, dropped/full-queue messages, failed history, retry age, provider latency/quotas, and circuit state.     |
-| User paths    | Synthetic trigger-to-notification-to-resolve timing plus representative login, incident, and status-page checks.      |
+Use short, controlled stages first. Long soak tests should come only after the basic bottleneck is understood.
 
-The application includes health/readiness output, system logs, notification history, integration health, and an admin SLA-query performance page. These are useful evidence, but v1.4 does not publish a complete Prometheus-compatible capacity metrics endpoint. Collect platform and PostgreSQL telemetry independently.
+A useful sequence is:
+
+1. Record idle baseline and HPA state.
+2. Run 100 representative dashboard users.
+3. Run 250 users.
+4. Run 500 users only if the previous stage is healthy.
+5. Observe HPA response and per-pod CPU rather than fixing the replica count unless the test specifically requires it.
+6. Repeat with PgBouncer only if connection pressure is observed.
+7. Run a short inbound-event test while background work is active.
+8. Stop load and confirm replicas, queues, and metrics return toward baseline.
+
+Stop a stage when the system is clearly saturated. Continuing destructive load after the bottleneck is already proven produces little additional information.
+
+## Dashboard capacity
+
+Dashboard capacity is not determined by connection count alone. For realistic testing, include a mix such as:
+
+- incident list;
+- services;
+- incident detail;
+- integration/health views;
+- SSE/realtime traffic where applicable.
+
+Use realistic think time rather than sending every virtual user in a tight loop.
+
+If latency degrades, determine which layer saturates first:
+
+1. web CPU/event loop or HPA reaction;
+2. PostgreSQL connection availability;
+3. query execution/locks;
+4. database CPU/I/O;
+5. proxy/SSE limits;
+6. another shared dependency.
+
+Do not add indexes or caches based only on a load-test symptom. Capture the actual query and use `EXPLAIN (ANALYZE, BUFFERS)` or equivalent evidence before changing database structure.
+
+## Worker scaling
+
+Workers can be scaled independently in split mode. Scale them using backlog evidence, not the number of web replicas.
+
+Useful worker signals:
+
+- oldest pending/due job age;
+- backlog growth vs drain rate;
+- job execution latency;
+- provider response time;
+- PostgreSQL transaction latency/conflicts;
+- worker CPU/memory.
+
+If adding workers reduces drain time while database latency remains stable, additional workers may help. If adding workers increases database waits, conflicts, or provider throttling, the bottleneck is elsewhere.
+
+The worker claim mechanism prevents simultaneous duplicate claims through PostgreSQL locking, but external side effects remain at-least-once. A crash after an external effect and before completion is recorded can result in a later retry. Capacity tests must not describe this behavior as exactly-once delivery.
+
+## Scheduler scaling
+
+The scheduler is not horizontally scaled for throughput by default. The split deployment uses one scheduler replica. Scheduler correctness/failover should be validated separately from worker throughput.
+
+Do not use multiple scheduler replicas as a generic performance knob without proving a scheduler bottleneck and understanding lock/failover semantics.
+
+## Inbound event capacity
+
+The Events API includes database-backed rate limiting and returns `202` for accepted requests. Capacity tests must distribute integration keys correctly when measuring aggregate throughput; a synchronized or low-cardinality key generator can accidentally benchmark rate limiting instead of application capacity.
+
+For event tests record:
+
+- `202`, `429`, and `5xx` counts;
+- p50/p95/p99 latency;
+- dedup outcome;
+- transaction/serialization failures;
+- PostgreSQL connections and CPU;
+- background-job growth caused by accepted events.
+
+Do not bypass client-visible rate limits unless the test is explicitly labeled an internal concurrency test.
+
+## Deduplication and transaction contention
+
+High concurrency against the same active incident/deduplication key can create transaction contention even when logical uniqueness is preserved.
+
+When testing this path, separate two questions:
+
+1. Did the system create the correct number of active incidents?
+2. Did every request complete successfully without transaction retry exhaustion?
+
+A result can be correct on uniqueness and still be operationally unacceptable because too many requests fail under contention.
+
+## Capacity acceptance criteria
+
+Define objectives before testing. Example categories:
+
+- maximum acceptable HTTP error rate;
+- p95/p99 latency target;
+- HPA scaling behavior and stabilization;
+- maximum queue age;
+- zero unexpected pool timeouts;
+- PostgreSQL connection headroom;
+- database CPU/I/O headroom;
+- successful backlog recovery after a burst;
+- expected scheduler behavior during pod loss.
+
+The capacity envelope is the highest tested workload that satisfies every required objective with reserve and without an unbounded connection, queue, latency, error, memory, or storage trend.
+
+Do not label a single-node benchmark as production capacity or high-availability proof.
+
+## Record the result
+
+For every meaningful benchmark record:
+
+- OpsKnight commit/image;
+- deployment profile and exact values/patches;
+- web HPA min/max/target and observed replica count;
+- worker/scheduler replica counts;
+- per-role pool settings;
+- PgBouncer settings if enabled;
+- PostgreSQL version/resources/`max_connections`;
+- dataset size;
+- load mix/duration;
+- result metrics;
+- first bottleneck observed;
+- changes tested and before/after evidence;
+- test date and owner.
+
+This makes later regression testing comparable instead of anecdotal.
 
 ## Respond to saturation
 
-1. Identify whether ingress, application CPU/memory, PostgreSQL, scheduled work, or a provider is the first constrained layer.
-2. Protect incident writes and acknowledgement/resolve paths before analytics, exports, or other expensive non-critical work.
-3. Pace producers and respect `Retry-After`; use stable deduplication keys for idempotent event retries.
-4. Reduce accidental fan-out or noisy-source traffic at its owner while preserving required alerts.
-5. Scale or tune the constrained layer using a tested change. Adding application replicas cannot fix a saturated database or provider quota.
-6. Confirm queues drain, latency returns to baseline, and synthetic delivery succeeds.
-7. Preserve evidence, update the capacity envelope, and correct the monitoring threshold or architecture that allowed the surprise.
+1. Identify the first constrained layer.
+2. Confirm HPA has healthy metrics and enough node capacity to scale.
+3. Protect incident writes, acknowledge/resolve, and required background delivery before expensive analytics/reporting work.
+4. Respect client `Retry-After` and use stable deduplication keys for retries.
+5. Scale only the constrained role/layer.
+6. Recalculate PostgreSQL connection budgets before increasing web HPA bounds or worker replicas.
+7. Use PgBouncer only for connection pressure, not as a substitute for query/database work.
+8. Confirm replicas/queues/latency recover and synthetic incident delivery succeeds.
+9. Preserve the evidence and update the operating limit/runbook.
 
-Do not disable rate limits or raise queue/database limits as a first response without understanding the next bottleneck and failure mode.
-
-## Implementation map
-
-- `src/lib/cron-scheduler.ts` — scheduler cadence, ownership, and job-cycle limits.
-- `src/lib/jobs/queue.ts` — durable job claims, concurrency, retry, and statistics.
-- `src/lib/notification-queue.ts` — process-local queue limits and channel guards.
-- `src/lib/realtime-cache.ts` — process-local cache TTLs and bound.
-- `src/app/api/realtime/stream/route.ts` — authenticated dashboard SSE polling.
-- `src/lib/rate-limit.ts` and `src/lib/integrations/rate-limiter.ts` — database-backed request limits.
-- `src/lib/admin-health.ts` — administrator health checks and SLA-query observations.
+Do not disable rate limits or raise queue/database limits as a first response without understanding the next bottleneck.
 
 ## Related topics
 
-- [Technical architecture](./technical-architecture)
-- [Architecture diagrams](../architecture/diagrams)
-- [Monitoring](../deployment/monitoring)
-- [Maintenance](../deployment/maintenance)
-- [API rate limiting](../api/rate-limiting)
+- [Deployment overview](../deployment/README)
 - [Kubernetes deployment](../deployment/kubernetes)
+- [Helm deployment](../deployment/helm)
+- [Kustomize](../deployment/kustomize)
+- [Monitoring](../deployment/monitoring)
+- [API rate limiting](../api/rate-limiting)
 - [Troubleshooting](../troubleshooting)
