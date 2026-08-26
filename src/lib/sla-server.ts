@@ -292,11 +292,13 @@ async function calculateDbAggregateMetrics(
 
   const urgencyFilter = (whereClause as { urgency?: string }).urgency;
   const urgencyFilterSql = urgencyFilter
-    ? Prisma.sql`AND "urgency" = ${urgencyFilter}`
+    ? Prisma.sql`AND "urgency" = ${urgencyFilter}::"IncidentUrgency"`
     : Prisma.empty;
 
   const statusFilter = (whereClause as { status?: string }).status;
-  const statusFilterSql = statusFilter ? Prisma.sql`AND "status" = ${statusFilter}` : Prisma.empty;
+  const statusFilterSql = statusFilter
+    ? Prisma.sql`AND "status" = ${statusFilter}::"IncidentStatus"`
+    : Prisma.empty;
 
   const assigneeIdFilter = (whereClause as { assigneeId?: string | null }).assigneeId;
   const assigneeFilterSql =
