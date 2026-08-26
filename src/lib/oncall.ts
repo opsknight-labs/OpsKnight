@@ -1,4 +1,8 @@
-import { getTimeZoneOffsetMs } from './timezone';
+import {
+  getTimeZoneOffsetMs,
+  resolveLocalDateTimeInTimeZone,
+  type LocalDateTimeParts,
+} from './timezone';
 
 type LayerUser = {
   userId: string;
@@ -47,14 +51,44 @@ export type OnCallBlock = {
   isAdditiveOverride?: boolean;
 };
 
+const weekdayHourFormatterCache = new Map<string, Intl.DateTimeFormat>();
+const localDateTimeFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function getWeekdayHourFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = weekdayHourFormatterCache.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'short',
+      hour: 'numeric',
+      hour12: false,
+      hourCycle: 'h23',
+    });
+    weekdayHourFormatterCache.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
+function getLocalDateTimeFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = localDateTimeFormatterCache.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    localDateTimeFormatterCache.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 function getDayHourInTimeZone(date: Date, timeZone: string): { day: number; hour: number } {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    hour: 'numeric',
-    hour12: false,
-    hourCycle: 'h23',
-  }).formatToParts(date);
+  const parts = getWeekdayHourFormatter(timeZone).formatToParts(date);
 
   const weekday = parts.find(p => p.type === 'weekday')?.value ?? 'Sun';
   const hour = Number(parts.find(p => p.type === 'hour')?.value ?? '0') % 24;
@@ -71,69 +105,115 @@ function getDayHourInTimeZone(date: Date, timeZone: string): { day: number; hour
 
   return { day: dayMap[weekday] ?? 0, hour };
 }
-function addCalendarDaysInTimeZone(base: Date, days: number, timeZone: string): Date {
-  // Get the date parts in the target timezone
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  });
-  const parts = formatter.formatToParts(base);
-  const get = (type: string) => Number(parts.find(p => p.type === type)?.value ?? '0');
 
-  // Reconstruct the date with calendar day offset, keeping the same wall-clock time
-  const baseUtc = Date.UTC(
-    get('year'),
-    get('month') - 1,
-    get('day') + days,
-    get('hour') % 24,
-    get('minute'),
-    get('second')
+function getLocalDateTimeParts(date: Date, timeZone: string): Required<LocalDateTimeParts> {
+  const parts = getLocalDateTimeFormatter(timeZone).formatToParts(date);
+  const get = (type: string) => Number(parts.find(part => part.type === type)?.value ?? '0');
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour') % 24,
+    minute: get('minute'),
+    second: get('second'),
+    millisecond: date.getUTCMilliseconds(),
+  };
+}
+
+function resolveShiftedWallClock(
+  base: Date,
+  timeZone: string,
+  mutateUtcParts: (date: Date) => void,
+  fallbackMs: number
+): Date {
+  const local = getLocalDateTimeParts(base, timeZone);
+  const pseudoUtc = new Date(
+    Date.UTC(
+      local.year,
+      local.month - 1,
+      local.day,
+      local.hour,
+      local.minute,
+      local.second,
+      local.millisecond
+    )
+  );
+  mutateUtcParts(pseudoUtc);
+
+  const resolved = resolveLocalDateTimeInTimeZone(
+    {
+      year: pseudoUtc.getUTCFullYear(),
+      month: pseudoUtc.getUTCMonth() + 1,
+      day: pseudoUtc.getUTCDate(),
+      hour: pseudoUtc.getUTCHours(),
+      minute: pseudoUtc.getUTCMinutes(),
+      second: pseudoUtc.getUTCSeconds(),
+      millisecond: pseudoUtc.getUTCMilliseconds(),
+    },
+    timeZone,
+    'compatible'
   );
 
-  // Convert back from target timezone to UTC with two-step DST boundary refinement
-  const guessOffsetMs = getTimeZoneOffsetMs(new Date(baseUtc), timeZone);
-  let date = new Date(baseUtc - guessOffsetMs);
-  const actualOffsetMs = getTimeZoneOffsetMs(date, timeZone);
-  if (actualOffsetMs !== guessOffsetMs) {
-    date = new Date(baseUtc - actualOffsetMs);
+  // The timezone was already validated when the schedule was created. Keep a
+  // deterministic elapsed-time fallback for corrupted legacy rows rather than
+  // returning an invalid Date and poisoning the entire escalation path.
+  return resolved ?? new Date(base.getTime() + fallbackMs);
+}
+
+function addCalendarDaysInTimeZone(base: Date, days: number, timeZone: string): Date {
+  if (!Number.isInteger(days)) {
+    return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
   }
-  return date;
+  return resolveShiftedWallClock(
+    base,
+    timeZone,
+    date => date.setUTCDate(date.getUTCDate() + days),
+    days * 24 * 60 * 60 * 1000
+  );
 }
 
 function addCalendarHoursInTimeZone(base: Date, hours: number, timeZone: string): Date {
-  if (!Number.isInteger(hours)) return new Date(base.getTime() + hours * 60 * 60 * 1000);
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  if (!Number.isInteger(hours)) {
+    return new Date(base.getTime() + hours * 60 * 60 * 1000);
+  }
+  return resolveShiftedWallClock(
+    base,
     timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  });
-  const parts = formatter.formatToParts(base);
-  const get = (type: string) => Number(parts.find(p => p.type === type)?.value ?? '0');
-  const baseUtc = Date.UTC(
-    get('year'),
-    get('month') - 1,
-    get('day'),
-    (get('hour') % 24) + hours,
-    get('minute'),
-    get('second'),
-    base.getUTCMilliseconds()
+    date => date.setUTCHours(date.getUTCHours() + hours),
+    hours * 60 * 60 * 1000
   );
-  const guessOffsetMs = getTimeZoneOffsetMs(new Date(baseUtc), timeZone);
-  let result = new Date(baseUtc - guessOffsetMs);
-  const actualOffsetMs = getTimeZoneOffsetMs(result, timeZone);
-  if (actualOffsetMs !== guessOffsetMs) result = new Date(baseUtc - actualOffsetMs);
-  return result;
+}
+
+function isCalendarAnchoredRotation(rotationLengthHours: number): boolean {
+  if (!Number.isInteger(rotationLengthHours) || rotationLengthHours <= 0) return false;
+  return (
+    rotationLengthHours % 24 === 0 ||
+    (rotationLengthHours < 24 && 24 % rotationLengthHours === 0)
+  );
+}
+
+function getRotationStartAtIndex(
+  layerStart: Date,
+  index: number,
+  rotationLengthHours: number,
+  timeZone: string
+): Date {
+  // The stored start is already an exact instant. Reinterpreting index 0 as a
+  // wall-clock value can move a start in the second occurrence of a fall-back
+  // overlap to the first occurrence, creating coverage before layer.start.
+  if (index === 0) return new Date(layerStart);
+
+  if (rotationLengthHours % 24 === 0) {
+    return addCalendarDaysInTimeZone(
+      layerStart,
+      index * (rotationLengthHours / 24),
+      timeZone
+    );
+  }
+  if (isCalendarAnchoredRotation(rotationLengthHours)) {
+    return addCalendarHoursInTimeZone(layerStart, index * rotationLengthHours, timeZone);
+  }
+  return new Date(layerStart.getTime() + index * rotationLengthHours * 60 * 60 * 1000);
 }
 
 function splitBlockByRestrictions(
@@ -188,11 +268,9 @@ function splitBlockByRestrictions(
 
     if (allowed) {
       if (!segStart) segStart = new Date(cursor);
-    } else {
-      if (segStart) {
-        result.push({ start: segStart, end: new Date(cursor) });
-        segStart = null;
-      }
+    } else if (segStart) {
+      result.push({ start: segStart, end: new Date(cursor) });
+      segStart = null;
     }
 
     if (nextCursor.getTime() <= cursor.getTime()) {
@@ -217,14 +295,16 @@ function generateLayerBlocks(
 ): OnCallBlock[] {
   const sortedUsers = [...layer.users].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
-  if (!sortedUsers || sortedUsers.length === 0) {
+  if (sortedUsers.length === 0) {
     return [];
   }
 
   const rotationMs = layer.rotationLengthHours * 60 * 60 * 1000;
-  const shiftMs = (layer.shiftLengthHours || layer.rotationLengthHours) * 60 * 60 * 1000;
+  const shiftHours = layer.shiftLengthHours || layer.rotationLengthHours;
+  const shiftMs = shiftHours * 60 * 60 * 1000;
+  const calendarAnchoredRotation = isCalendarAnchoredRotation(layer.rotationLengthHours);
 
-  if (rotationMs <= 0 || shiftMs <= 0) {
+  if (rotationMs <= 0 || shiftMs <= 0 || !Number.isFinite(rotationMs) || !Number.isFinite(shiftMs)) {
     return [];
   }
 
@@ -238,91 +318,109 @@ function generateLayerBlocks(
   }
 
   const blocks: OnCallBlock[] = [];
-  let guard = 0;
 
+  // Seek close to the requested range using elapsed time, then intentionally
+  // rewind across the largest civil-time jump supported by the resolver. This
+  // keeps expansion O(window size) rather than O(schedule age), while giving
+  // us enough history to establish a monotonic boundary floor around unusual
+  // transitions such as Pacific/Apia's skipped day.
   let index = 0;
-  // If layerStart is way in the past, skip to near effectiveWindowStart
   if (layerStart < effectiveWindowStart) {
     const elapsed = effectiveWindowStart.getTime() - layerStart.getTime();
-    index = Math.floor(elapsed / rotationMs);
+    index = Math.max(0, Math.floor(elapsed / rotationMs));
+    const transitionLookbackSlots = calendarAnchoredRotation
+      ? Math.ceil((48 * 60 * 60 * 1000) / rotationMs) + 2
+      : 2;
+    index = Math.max(0, index - transitionLookbackSlots);
   }
 
-  // Safety break to prevent infinite loops (max 5 years of shifts or 5000 iterations)
-  const maxIterations = 5000;
-  let iterations = 0;
+  const initialIndex = index;
+  const maxIterations = 1_000_000;
+  let rawRotationStart = getRotationStartAtIndex(
+    layerStart,
+    index,
+    layer.rotationLengthHours,
+    timeZone
+  );
+  let monotonicBoundaryMs = rawRotationStart.getTime();
 
-  while (iterations < maxIterations) {
-    iterations++;
+  while (index - initialIndex < maxIterations) {
+    const rawNextRotationStart = getRotationStartAtIndex(
+      layerStart,
+      index + 1,
+      layer.rotationLengthHours,
+      timeZone
+    );
+    const rawNextMs = rawNextRotationStart.getTime();
 
-    let blockStart: Date;
-    if (layer.rotationLengthHours % 24 === 0) {
-      // Calendar-day math to avoid DST drift for daily/weekly/multi-day rotations
-      blockStart = addCalendarDaysInTimeZone(
-        layerStart,
-        index * (layer.rotationLengthHours / 24),
-        timeZone
-      );
-    } else if (layer.rotationLengthHours < 24 && 24 % layer.rotationLengthHours === 0) {
-      // Calendar-anchored math for sub-daily integer factors of 24 (12h, 8h, 6h, 4h, 2h, 1h)
-      blockStart = addCalendarHoursInTimeZone(
-        layerStart,
-        index * layer.rotationLengthHours,
-        timeZone
-      );
-    } else {
-      const rotationStartTime = layerStart.getTime() + index * rotationMs;
-      blockStart = new Date(rotationStartTime);
-    }
-
-    if (blockStart >= windowEnd) {
-      break;
-    }
-
-    if (layerEnd && blockStart >= layerEnd) {
-      break;
-    }
-
-    let rawEnd: Date;
-    const shiftHours = layer.shiftLengthHours || layer.rotationLengthHours;
-    if (shiftHours % 24 === 0) {
-      rawEnd = addCalendarDaysInTimeZone(blockStart, shiftHours / 24, timeZone);
-    } else {
-      rawEnd = addCalendarHoursInTimeZone(blockStart, shiftHours, timeZone);
-    }
-    const blockEnd = layerEnd && rawEnd > layerEnd ? layerEnd : rawEnd;
-
-    // Check visibility
-    // If the entire duty block is before window start, skip
-    if (blockEnd <= effectiveWindowStart) {
+    // Generated wall-clock boundaries can collapse or even move backward when
+    // a timezone skips a large civil interval (for example Apia skipped an
+    // entire day). Never let a later nominal index rewind the real timeline.
+    // Collapsed/backward positions still consume responder rotation parity but
+    // do not emit duplicate or overlapping coverage.
+    if (rawNextMs <= monotonicBoundaryMs) {
       index++;
-      guard++;
+      rawRotationStart = rawNextRotationStart;
       continue;
     }
 
-    // Determine User
-    const user = sortedUsers[index % sortedUsers.length];
+    const rotationStart = new Date(
+      Math.max(rawRotationStart.getTime(), monotonicBoundaryMs, layerStart.getTime())
+    );
+    const nextRotationStart = rawNextRotationStart;
 
-    // Clamping to visual window
-    const clampedStart = blockStart < windowStart ? windowStart : blockStart;
-    const clampedEnd = blockEnd > windowEnd ? windowEnd : blockEnd;
+    if (rotationStart >= windowEnd) break;
+    if (layerEnd && rotationStart >= layerEnd) break;
 
-    if (clampedStart < clampedEnd) {
-      if (layer.restrictions) {
-        // Split into hourly sub-blocks and filter by restriction
-        const { daysOfWeek, startHour, endHour } = layer.restrictions;
-        const subBlocks = splitBlockByRestrictions(
-          clampedStart,
-          clampedEnd,
-          timeZone,
-          daysOfWeek,
-          startHour,
-          endHour
-        );
-        for (const sub of subBlocks) {
+    let rawEnd: Date;
+    if (shiftHours === layer.rotationLengthHours) {
+      // Full-duty slots meet exactly at the next monotonic rotation boundary.
+      rawEnd = nextRotationStart;
+    } else if (!calendarAnchoredRotation) {
+      rawEnd = new Date(rotationStart.getTime() + shiftMs);
+    } else if (shiftHours % 24 === 0) {
+      rawEnd = addCalendarDaysInTimeZone(rotationStart, shiftHours / 24, timeZone);
+    } else {
+      rawEnd = addCalendarHoursInTimeZone(rotationStart, shiftHours, timeZone);
+    }
+
+    const blockEnd = layerEnd && rawEnd > layerEnd ? layerEnd : rawEnd;
+
+    if (blockEnd > rotationStart && blockEnd > effectiveWindowStart) {
+      const user = sortedUsers[index % sortedUsers.length];
+      const clampedStart = rotationStart < windowStart ? windowStart : rotationStart;
+      const clampedEnd = blockEnd > windowEnd ? windowEnd : blockEnd;
+
+      if (clampedStart < clampedEnd) {
+        if (layer.restrictions) {
+          const { daysOfWeek, startHour, endHour } = layer.restrictions;
+          const subBlocks = splitBlockByRestrictions(
+            clampedStart,
+            clampedEnd,
+            timeZone,
+            daysOfWeek,
+            startHour,
+            endHour
+          );
+          for (const sub of subBlocks) {
+            blocks.push({
+              id: `${layer.id}-${index}-${sub.start.getTime()}`,
+              start: sub.start,
+              end: sub.end,
+              userId: user.userId,
+              userName: user.user.name,
+              userAvatar: user.user.avatarUrl,
+              userGender: user.user.gender,
+              layerId: layer.id,
+              layerName: layer.name,
+              source: 'rotation',
+            });
+          }
+        } else {
           blocks.push({
-            id: `${layer.id}-${index}-${sub.start.getTime()}`,
-            start: sub.start,
-            end: sub.end,
+            id: `${layer.id}-${index}`,
+            start: clampedStart,
+            end: clampedEnd,
             userId: user.userId,
             userName: user.user.name,
             userAvatar: user.user.avatarUrl,
@@ -332,24 +430,16 @@ function generateLayerBlocks(
             source: 'rotation',
           });
         }
-      } else {
-        blocks.push({
-          id: `${layer.id}-${index}`,
-          start: clampedStart,
-          end: clampedEnd,
-          userId: user.userId,
-          userName: user.user.name,
-          userAvatar: user.user.avatarUrl,
-          userGender: user.user.gender,
-          layerId: layer.id,
-          layerName: layer.name,
-          source: 'rotation',
-        });
       }
     }
 
+    monotonicBoundaryMs = rawNextMs;
     index++;
-    guard++;
+    rawRotationStart = rawNextRotationStart;
+  }
+
+  if (index - initialIndex >= maxIterations) {
+    throw new RangeError('Requested on-call schedule window exceeds the safe rotation expansion limit.');
   }
 
   return blocks;

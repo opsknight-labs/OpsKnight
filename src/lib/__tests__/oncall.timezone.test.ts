@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { buildScheduleBlocks } from '../oncall';
 
+function expectContinuousCoverage(blocks: Array<{ start: Date; end: Date }>) {
+  let previous: { start: Date; end: Date } | undefined;
+  for (const block of blocks) {
+    if (previous) {
+      expect(previous.end.getTime()).toBe(block.start.getTime());
+    }
+    previous = block;
+  }
+}
+
 // Regression: restrictions should be evaluated in the schedule timezone, not server/local time.
 describe('buildScheduleBlocks timezone-aware restrictions', () => {
   it('skips a block when local day is allowed but schedule timezone day is not', () => {
@@ -29,7 +39,6 @@ describe('buildScheduleBlocks timezone-aware restrictions', () => {
   });
 
   it('preserves wall-clock start time across DST spring-forward boundary', () => {
-    // 2026-03-07 is before DST (EST, UTC-5), 2026-03-08 is transition, 2026-03-09 is after (EDT, UTC-4)
     const layerStart = new Date('2026-03-07T05:00:00Z'); // 2026-03-07 00:00 EST
     const layer = {
       id: 'layer-dst',
@@ -50,11 +59,8 @@ describe('buildScheduleBlocks timezone-aware restrictions', () => {
     const blocks = buildScheduleBlocks([layer], [], windowStart, windowEnd, 'America/New_York');
 
     expect(blocks.length).toBe(3);
-    // Day 0: 2026-03-07 00:00 EST -> 05:00 UTC
     expect(blocks[0].start.toISOString()).toBe('2026-03-07T05:00:00.000Z');
-    // Day 1: 2026-03-08 00:00 EST -> 05:00 UTC
     expect(blocks[1].start.toISOString()).toBe('2026-03-08T05:00:00.000Z');
-    // Day 2: 2026-03-09 00:00 EDT -> 04:00 UTC (not 05:00 UTC!)
     expect(blocks[2].start.toISOString()).toBe('2026-03-09T04:00:00.000Z');
   });
 
@@ -100,8 +106,159 @@ describe('buildScheduleBlocks timezone-aware restrictions', () => {
     expect(blocks[0].end.getTime() - blocks[0].start.getTime()).toBe(13 * 3600_000);
   });
 
+  it('keeps 1-hour wall-clock rotations continuous through spring-forward', () => {
+    const layer = {
+      id: 'hourly-spring',
+      name: 'Hourly',
+      start: new Date('2026-03-08T05:00:00.000Z'), // 00:00 EST
+      end: null,
+      rotationLengthHours: 1,
+      users: [
+        { userId: 'u1', user: { name: 'User One' }, position: 0 },
+        { userId: 'u2', user: { name: 'User Two' }, position: 1 },
+      ],
+    };
+    const blocks = buildScheduleBlocks(
+      [layer],
+      [],
+      layer.start,
+      new Date('2026-03-08T12:00:00.000Z'),
+      'America/New_York'
+    );
+
+    expectContinuousCoverage(blocks);
+    expect(blocks[0].start.toISOString()).toBe('2026-03-08T05:00:00.000Z');
+    expect(blocks[blocks.length - 1].end.toISOString()).toBe('2026-03-08T12:00:00.000Z');
+    expect(blocks.every(block => block.end > block.start)).toBe(true);
+  });
+
+  it('keeps 1-hour wall-clock rotations continuous through fall-back', () => {
+    const layer = {
+      id: 'hourly-fall',
+      name: 'Hourly',
+      start: new Date('2026-11-01T04:00:00.000Z'), // 00:00 EDT
+      end: null,
+      rotationLengthHours: 1,
+      users: [
+        { userId: 'u1', user: { name: 'User One' }, position: 0 },
+        { userId: 'u2', user: { name: 'User Two' }, position: 1 },
+      ],
+    };
+    const blocks = buildScheduleBlocks(
+      [layer],
+      [],
+      layer.start,
+      new Date('2026-11-01T10:00:00.000Z'),
+      'America/New_York'
+    );
+
+    expectContinuousCoverage(blocks);
+    expect(blocks[1].end.getTime() - blocks[1].start.getTime()).toBe(2 * 3600_000);
+  });
+
+  it('never moves a layer that starts in the second fall-back occurrence before its exact start', () => {
+    const layer = {
+      id: 'fall-second-occurrence',
+      name: 'Second Occurrence',
+      start: new Date('2026-11-01T06:30:00.000Z'), // 01:30 EST, the second 01:30
+      end: null,
+      rotationLengthHours: 1,
+      users: [
+        { userId: 'u1', user: { name: 'User One' }, position: 0 },
+        { userId: 'u2', user: { name: 'User Two' }, position: 1 },
+      ],
+    };
+
+    const blocks = buildScheduleBlocks(
+      [layer],
+      [],
+      new Date('2026-11-01T05:00:00.000Z'),
+      new Date('2026-11-01T10:00:00.000Z'),
+      'America/New_York'
+    );
+
+    expect(blocks[0].start.toISOString()).toBe('2026-11-01T06:30:00.000Z');
+    expect(blocks.every(block => block.start >= layer.start)).toBe(true);
+    expectContinuousCoverage(blocks);
+  });
+
+  it('keeps full-day timezone jumps monotonic without duplicate coverage', () => {
+    const layer = {
+      id: 'apia-hourly',
+      name: 'Apia Hourly',
+      start: new Date('2011-12-29T10:00:00.000Z'), // 2011-12-29 00:00 -10
+      end: null,
+      rotationLengthHours: 1,
+      users: [
+        { userId: 'u1', user: { name: 'User One' }, position: 0 },
+        { userId: 'u2', user: { name: 'User Two' }, position: 1 },
+        { userId: 'u3', user: { name: 'User Three' }, position: 2 },
+      ],
+    };
+
+    const windowEnd = new Date('2012-01-02T10:00:00.000Z');
+    const blocks = buildScheduleBlocks([layer], [], layer.start, windowEnd, 'Pacific/Apia');
+    const uniqueIntervals = new Set(
+      blocks.map(block => `${block.start.getTime()}-${block.end.getTime()}`)
+    );
+
+    expect(blocks).toHaveLength(96);
+    expect(uniqueIntervals.size).toBe(blocks.length);
+    expect(blocks[0].start.getTime()).toBe(layer.start.getTime());
+    expect(blocks[blocks.length - 1].end.getTime()).toBe(windowEnd.getTime());
+    expect(blocks.every(block => block.end > block.start)).toBe(true);
+    expectContinuousCoverage(blocks);
+  });
+
+  it('fast-forwards safely past a full-day timezone jump', () => {
+    const layer = {
+      id: 'apia-fast-forward',
+      name: 'Apia Fast Forward',
+      start: new Date('2011-12-29T10:00:00.000Z'),
+      end: null,
+      rotationLengthHours: 1,
+      users: [
+        { userId: 'u1', user: { name: 'User One' }, position: 0 },
+        { userId: 'u2', user: { name: 'User Two' }, position: 1 },
+      ],
+    };
+    const windowStart = new Date('2012-02-01T10:00:00.000Z');
+    const windowEnd = new Date('2012-02-02T10:00:00.000Z');
+
+    const blocks = buildScheduleBlocks([layer], [], windowStart, windowEnd, 'Pacific/Apia');
+    expect(blocks).toHaveLength(24);
+    expect(blocks[0].start.getTime()).toBe(windowStart.getTime());
+    expect(blocks[blocks.length - 1].end.getTime()).toBe(windowEnd.getTime());
+    expectContinuousCoverage(blocks);
+  });
+
+  it('uses fixed elapsed semantics for arbitrary sub-daily rotations without DST gaps', () => {
+    const layer = {
+      id: 'five-hour',
+      name: 'Five Hour',
+      start: new Date('2026-03-08T05:00:00.000Z'), // 00:00 EST
+      end: null,
+      rotationLengthHours: 5,
+      users: [
+        { userId: 'u1', user: { name: 'User One' }, position: 0 },
+        { userId: 'u2', user: { name: 'User Two' }, position: 1 },
+      ],
+    };
+    const blocks = buildScheduleBlocks(
+      [layer],
+      [],
+      layer.start,
+      new Date('2026-03-09T06:00:00.000Z'),
+      'America/New_York'
+    );
+
+    expectContinuousCoverage(blocks);
+    for (const block of blocks) {
+      expect(block.end.getTime() - block.start.getTime()).toBe(5 * 3600_000);
+    }
+  });
+
   it('splits multi-day rotation block into hourly sub-blocks matching restriction window', () => {
-    // 168h (1 week) rotation starting Mon Dec 1 2025 00:00 UTC
     const layerStart = new Date('2025-12-01T00:00:00Z');
     const layer = {
       id: 'layer-restricted',
@@ -117,12 +274,11 @@ describe('buildScheduleBlocks timezone-aware restrictions', () => {
       },
     };
 
-    const windowStart = new Date('2025-12-01T00:00:00Z'); // Monday 00:00 UTC
-    const windowEnd = new Date('2025-12-08T00:00:00Z'); // Next Monday 00:00 UTC
+    const windowStart = new Date('2025-12-01T00:00:00Z');
+    const windowEnd = new Date('2025-12-08T00:00:00Z');
 
     const blocks = buildScheduleBlocks([layer], [], windowStart, windowEnd, 'UTC');
 
-    // 5 business days, 1 block per day from 09:00 to 17:00
     expect(blocks.length).toBe(5);
     expect(blocks[0].start.toISOString()).toBe('2025-12-01T09:00:00.000Z');
     expect(blocks[0].end.toISOString()).toBe('2025-12-01T17:00:00.000Z');
