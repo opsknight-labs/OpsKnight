@@ -278,17 +278,17 @@ export default async function Dashboard({
   const metricsTotalCount = slaMetrics.totalIncidents;
   const metricsOpenCount = slaMetrics.statusMix.find(s => s.status === 'OPEN')?.count ?? 0;
   const metricsResolvedCount = slaMetrics.statusMix.find(s => s.status === 'RESOLVED')?.count ?? 0;
+  const currentPeriodAcknowledged =
+    slaMetrics.statusMix.find(s => s.status === 'ACKNOWLEDGED')?.count ?? 0;
+  const metricsActiveCount = metricsOpenCount + currentPeriodAcknowledged;
   const unassignedCount = slaMetrics.unassignedActive;
 
   const allActiveIncidentsCount =
     slaMetrics.activeIncidents ??
     slaMetrics.activeCount ??
     slaMetrics.openCount + slaMetrics.acknowledgedCount;
-  const allOpenIncidentsCount = allActiveIncidentsCount;
   const allAcknowledgedCount = slaMetrics.acknowledgedCount;
   const currentCriticalActive = slaMetrics.criticalCount;
-  const currentPeriodAcknowledged =
-    slaMetrics.statusMix.find(s => s.status === 'ACKNOWLEDGED')?.count ?? 0;
   const mttaMinutes = slaMetrics.mttd;
 
   // Calculate system status
@@ -412,8 +412,9 @@ export default async function Dashboard({
       >
         <DashboardCommandCenter
           systemStatus={systemStatus}
-          allOpenIncidentsCount={allOpenIncidentsCount}
+          allActiveIncidentsCount={allActiveIncidentsCount}
           totalInRange={totalInRange}
+          metricsActiveCount={metricsActiveCount}
           metricsOpenCount={metricsOpenCount}
           metricsResolvedCount={metricsResolvedCount}
           unassignedCount={unassignedCount}

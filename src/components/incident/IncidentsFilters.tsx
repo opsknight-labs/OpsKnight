@@ -278,7 +278,9 @@ export default function IncidentsFilters({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">Status</Label>
+            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
+              Status
+            </Label>
             <Select value={currentFilter} onValueChange={val => updateParams({ filter: val })}>
               <SelectTrigger className="h-9 bg-muted/30 focus:bg-background transition-colors text-sm">
                 <div className="flex items-center gap-2">
@@ -291,7 +293,7 @@ export default function IncidentsFilters({
                 <SelectItem value="all_open">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                    <span>Open</span>
+                    <span>Active</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="mine">
@@ -323,7 +325,9 @@ export default function IncidentsFilters({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">Team</Label>
+            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
+              Team
+            </Label>
             <Select value={currentTeamId} onValueChange={val => updateParams({ teamId: val })}>
               <SelectTrigger className="h-9 bg-muted/30 focus:bg-background transition-colors text-sm">
                 <div className="flex items-center gap-2">
@@ -344,7 +348,9 @@ export default function IncidentsFilters({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">Urgency</Label>
+            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
+              Urgency
+            </Label>
             <Select
               value={currentUrgency}
               onValueChange={val => updateParams({ urgency: val === 'all' ? 'all' : val })}
@@ -380,7 +386,9 @@ export default function IncidentsFilters({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">Sort</Label>
+            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
+              Sort
+            </Label>
             <Select
               value={currentSort}
               onValueChange={val => updateParams({ sort: val === 'newest' ? 'newest' : val })}

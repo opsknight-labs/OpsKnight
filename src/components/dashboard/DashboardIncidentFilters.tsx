@@ -289,7 +289,7 @@ export default function DashboardIncidentFilters({
               </SelectTrigger>
               <SelectContent className="rounded-lg">
                 <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="OPEN">Open</SelectItem>
+                <SelectItem value="OPEN">Triggered</SelectItem>
                 <SelectItem value="ACKNOWLEDGED">Acknowledged</SelectItem>
                 <SelectItem value="RESOLVED">Resolved</SelectItem>
                 <SelectItem value="SNOOZED">Snoozed</SelectItem>

@@ -17,7 +17,8 @@ type ExportProps = {
     endDate?: string;
   };
   metrics: {
-    totalOpen: number;
+    totalActive: number;
+    totalTriggered: number;
     totalResolved: number;
     totalAcknowledged: number;
     unassigned: number;
@@ -85,7 +86,8 @@ export default function DashboardExport({ incidents, filters, metrics }: ExportP
 
     // Metrics Summary
     csvRows.push('Metrics Summary:');
-    csvRows.push(`Open Incidents,${metrics.totalOpen}`);
+    csvRows.push(`Active Incidents,${metrics.totalActive}`);
+    csvRows.push(`Triggered Incidents,${metrics.totalTriggered}`);
     csvRows.push(`Resolved Incidents,${metrics.totalResolved}`);
     csvRows.push(`Acknowledged Incidents,${metrics.totalAcknowledged}`);
     csvRows.push(`Unassigned Incidents,${metrics.unassigned}`);

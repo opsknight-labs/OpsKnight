@@ -17,8 +17,9 @@ type SystemStatus = {
 
 type DashboardCommandCenterProps = {
   systemStatus: SystemStatus;
-  allOpenIncidentsCount: number;
+  allActiveIncidentsCount: number;
   totalInRange: number;
+  metricsActiveCount: number;
   metricsOpenCount: number;
   metricsResolvedCount: number;
   unassignedCount: number;
@@ -34,8 +35,9 @@ type DashboardCommandCenterProps = {
 
 export default function DashboardCommandCenter({
   systemStatus,
-  allOpenIncidentsCount,
+  allActiveIncidentsCount,
   totalInRange,
+  metricsActiveCount,
   metricsOpenCount,
   metricsResolvedCount,
   unassignedCount,
@@ -89,9 +91,9 @@ export default function DashboardCommandCenter({
             >
               {systemStatus.label}
             </Badge>
-            {allOpenIncidentsCount > 0 && (
+            {allActiveIncidentsCount > 0 && (
               <span className="text-xs text-primary-foreground/80">
-                ({allOpenIncidentsCount} active)
+                ({allActiveIncidentsCount} active)
               </span>
             )}
             <Badge
@@ -126,7 +128,8 @@ export default function DashboardCommandCenter({
               incidents={incidents}
               filters={filters}
               metrics={{
-                totalOpen: metricsOpenCount,
+                totalActive: metricsActiveCount,
+                totalTriggered: metricsOpenCount,
                 totalResolved: metricsResolvedCount,
                 totalAcknowledged: currentPeriodAcknowledged,
                 unassigned: unassignedCount,
@@ -138,7 +141,14 @@ export default function DashboardCommandCenter({
 
       <div className="relative z-10 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <MetricCard label="TOTAL" value={totalInRange} rangeLabel={rangeLabel} variant="hero" />
-        <MetricCard label="OPEN" value={metricsOpenCount} rangeLabel={rangeLabel} variant="hero" />
+        <MetricCard
+          label="ACTIVE"
+          value={metricsActiveCount}
+          rangeLabel={rangeLabel}
+          description={`${metricsOpenCount.toLocaleString()} Triggered · ${currentPeriodAcknowledged.toLocaleString()} Acknowledged`}
+          href="/incidents?filter=all_open"
+          variant="hero"
+        />
         <MetricCard
           label="RESOLVED"
           value={metricsResolvedCount}
