@@ -12,10 +12,11 @@ const DEFAULT_PROCESS_ROLE: OpsKnightProcessRole = 'integrated';
 /**
  * Resolve the role for this process.
  *
- * The default deliberately preserves the pre-worker-plane runtime: every
- * application process starts the existing distributed cron scheduler. New
- * deployments can opt into separated web/scheduler/worker responsibilities
- * without forcing a flag-day migration on existing installations.
+ * The default preserves the single-process self-hosted runtime while also
+ * running the durable job worker in-process. This keeps Docker Compose and
+ * other integrated installs low-latency without requiring a separate worker
+ * container, while split deployments can continue to isolate web, scheduler,
+ * and worker responsibilities.
  */
 export function getOpsKnightProcessRole(
   value: string | undefined = process.env.OPSKNIGHT_PROCESS_ROLE
@@ -38,7 +39,7 @@ export function getOpsKnightProcessRole(
 export function getRuntimeResponsibilities(role: OpsKnightProcessRole): RuntimeResponsibilities {
   switch (role) {
     case 'integrated':
-      return { startScheduler: true, startJobWorker: false };
+      return { startScheduler: true, startJobWorker: true };
     case 'web':
       return { startScheduler: false, startJobWorker: false };
     case 'scheduler':

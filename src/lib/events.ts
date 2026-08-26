@@ -1,9 +1,9 @@
 import { Prisma, IncidentUrgency } from '@prisma/client';
-import prisma from './prisma';
-import { executeEscalation } from './notifications';
-import { notifySlackForIncident } from './slack';
 import { logger } from './logger';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
+import { createHash } from 'crypto';
+import { runReadCommittedTransaction } from './db-utils';
+import { enqueueEventSideEffects } from './event-outbox';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -17,9 +17,6 @@ export type EventPayload = {
     custom_details?: unknown;
   };
 };
-
-import { createHash } from 'crypto';
-import { runReadCommittedTransaction } from './db-utils';
 
 const MAX_DEDUP_KEY_LENGTH = 512;
 const MAX_STORED_ALERT_PAYLOAD_BYTES = 64 * 1024;
@@ -332,6 +329,8 @@ export async function processEvent(
           },
         });
 
+        await enqueueEventSideEffects(tx, 'resolved', resolvedIncident.id);
+
         logger.info('event.out_of_order_resolved', {
           incidentId: resolvedIncident.id,
           dedupKey: dedup_key,
@@ -389,9 +388,10 @@ export async function processEvent(
         },
       });
 
-      // Note: Webhook triggering happens outside transaction to avoid blocking
-      // If the incident is suppressed due to flapping, return 'suppressed' action
-      // so the caller skips escalation dispatch
+      if (!isFlapping) {
+        await enqueueEventSideEffects(tx, 'triggered', newIncident.id);
+      }
+
       return {
         action: isFlapping ? ('suppressed' as const) : ('triggered' as const),
         incident: newIncident,
@@ -426,6 +426,8 @@ export async function processEvent(
         },
       });
 
+      await enqueueEventSideEffects(tx, 'resolved', resolvedIncident.id);
+
       logger.info('event.incident_resolved', {
         incidentId: resolvedIncident.id,
         dedupKey: dedup_key,
@@ -459,6 +461,8 @@ export async function processEvent(
         },
       });
 
+      await enqueueEventSideEffects(tx, 'acknowledged', ackIncident.id);
+
       logger.info('event.incident_acknowledged', {
         incidentId: ackIncident.id,
         dedupKey: dedup_key,
@@ -477,229 +481,10 @@ export async function processEvent(
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
   }, EVENT_TRANSACTION_MAX_ATTEMPTS);
 
-  if (result.action === 'triggered' && result.incident) {
-    // Trigger status page webhooks for incident.created event
-    try {
-      const { triggerWebhooksForService } = await import('./status-page-webhooks');
-      const incidentWithService = await prisma.incident.findUnique({
-        where: { id: result.incident.id },
-        include: {
-          service: { select: { id: true, name: true } },
-          assignee: {
-            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-          },
-        },
-      });
-
-      if (incidentWithService) {
-        // Await externally visible side effects so process teardown cannot
-        // silently discard them after the response is returned.
-        const webhookStart = performance.now();
-        await triggerWebhooksForService(result.incident.serviceId, 'incident.created', {
-          id: incidentWithService.id,
-          title: incidentWithService.title,
-          description: incidentWithService.description,
-          status: incidentWithService.status,
-          urgency: incidentWithService.urgency,
-          priority: incidentWithService.priority,
-          service: {
-            id: incidentWithService.service.id,
-            name: incidentWithService.service.name,
-          },
-          assignee: incidentWithService.assignee,
-          createdAt: incidentWithService.createdAt.toISOString(),
-        })
-          .then(() => {
-            logger.info('api.event.webhook_trigger_success', {
-              latencyMs: performance.now() - webhookStart,
-              incidentId: result.incident.id,
-            });
-          })
-          .catch(err => {
-            logger.error('api.event.webhook_trigger_failed', {
-              error: err instanceof Error ? err.message : String(err),
-              latencyMs: performance.now() - webhookStart,
-            });
-          });
-      }
-    } catch (e) {
-      logger.error('api.event.webhook_trigger_error', {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-
-    // Execute escalation policy, then choose the correct notification path.
-    const notifyStart = performance.now();
-    await executeEscalation(result.incident.id)
-      .then(escalationResult => {
-        const route = escalationNotificationRoute(escalationResult || {});
-
-        if (route === 'service') {
-          return import('./service-notifications')
-            .then(({ sendServiceNotifications }) => {
-              return sendServiceNotifications(result.incident.id, 'triggered')
-                .then(() => {
-                  logger.info('api.event.notifications_sent', {
-                    latencyMs: performance.now() - notifyStart,
-                    incidentId: result.incident.id,
-                  });
-                })
-                .catch(error => {
-                  logger.error('Service notification failed', {
-                    incidentId: result.incident.id,
-                    error: error instanceof Error ? error.message : 'Unknown error',
-                    latencyMs: performance.now() - notifyStart,
-                  });
-                });
-            })
-            .catch(e => logger.error('Failed to load service-notifications', { error: e }));
-        } else {
-          // Fallback only when the policy cannot provide responders. Scheduled
-          // steps retain their configured delay and do not page the whole team.
-          return import('./user-notifications')
-            .then(({ sendIncidentNotifications }) => {
-              return sendIncidentNotifications(result.incident.id, 'triggered')
-                .then(() => {
-                  logger.info('api.event.user_notifications_sent', {
-                    latencyMs: performance.now() - notifyStart,
-                    incidentId: result.incident.id,
-                  });
-                })
-                .catch(error => {
-                  logger.error('User notification failed', {
-                    incidentId: result.incident.id,
-                    error: error instanceof Error ? error.message : 'Unknown error',
-                    latencyMs: performance.now() - notifyStart,
-                  });
-                });
-            })
-            .catch(e => logger.error('Failed to load user-notifications', { error: e }));
-        }
-      })
-      .catch(error => {
-        logger.error('Escalation failed', {
-          incidentId: result.incident.id,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-
-        return import('./service-notifications')
-          .then(({ sendServiceNotifications }) => {
-            return sendServiceNotifications(result.incident.id, 'triggered').catch(err => {
-              logger.error('Service notification failed', {
-                incidentId: result.incident.id,
-                error: err instanceof Error ? err.message : 'Unknown error',
-                latencyMs: performance.now() - notifyStart,
-              });
-            });
-          })
-          .catch(e => logger.error('Failed to load service-notifications', { error: e }));
-      });
-
-    // ChatOps: Auto-create war-room channel for qualifying incidents.
-    await import('./chatops/war-room')
-      .then(({ createIncidentWarRoom }) => {
-        return createIncidentWarRoom(result.incident.id)
-          .then(warRoomResult => {
-            if (warRoomResult.success) {
-              logger.info('chatops.war_room_created', {
-                incidentId: result.incident.id,
-                channelName: warRoomResult.channelName,
-              });
-            }
-          })
-          .catch(err => {
-            logger.error('chatops.war_room_creation_failed', {
-              incidentId: result.incident.id,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          });
-      })
-      .catch(e => logger.error('Failed to load chatops/war-room', { error: e }));
-  }
-
-  if (result.action === 'resolved' && result.incident) {
-    // Trigger status page webhooks for incident.resolved event
-    try {
-      const { triggerWebhooksForService } = await import('./status-page-webhooks');
-      const incidentWithService = await prisma.incident.findUnique({
-        where: { id: result.incident.id },
-        include: {
-          service: { select: { id: true, name: true } },
-          assignee: {
-            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-          },
-        },
-      });
-
-      if (incidentWithService) {
-        await triggerWebhooksForService(result.incident.serviceId, 'incident.resolved', {
-          id: incidentWithService.id,
-          title: incidentWithService.title,
-          description: incidentWithService.description,
-          status: incidentWithService.status,
-          urgency: incidentWithService.urgency,
-          priority: incidentWithService.priority,
-          service: {
-            id: incidentWithService.service.id,
-            name: incidentWithService.service.name,
-          },
-          assignee: incidentWithService.assignee,
-          createdAt: incidentWithService.createdAt.toISOString(),
-          acknowledgedAt: incidentWithService.acknowledgedAt?.toISOString() || null,
-          resolvedAt: incidentWithService.resolvedAt?.toISOString() || null,
-        }).catch(err => {
-          logger.error('api.event.webhook_trigger_failed', {
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-      }
-    } catch (e) {
-      logger.error('api.event.webhook_trigger_error', {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-
-    await notifySlackForIncident(result.incident.id, 'resolved').catch(error => {
-      logger.error('Slack notification failed', {
-        incidentId: result.incident.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    });
-
-    // ChatOps: Archive war-room channel on resolve.
-    await import('./chatops/war-room')
-      .then(({ archiveWarRoomChannel }) => {
-        return archiveWarRoomChannel(result.incident.id).catch(err => {
-          logger.error('chatops.war_room_archive_failed', {
-            incidentId: result.incident.id,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-      })
-      .catch(e => logger.error('Failed to load chatops/war-room', { error: e }));
-  }
-
-  if (result.action === 'acknowledged' && result.incident) {
-    await notifySlackForIncident(result.incident.id, 'acknowledged').catch(error => {
-      logger.error('Slack notification failed', {
-        incidentId: result.incident.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    });
-  }
-
+  // External side-effects are persisted above in the same transaction and are
+  // executed by the durable PostgreSQL job worker. The API no longer waits for
+  // webhook, notification, Slack, or ChatOps network calls before returning.
   return result;
 }
 
-export function escalationNotificationRoute(result: {
-  escalated?: boolean;
-  reason?: string;
-}): 'service' | 'fallback' {
-  const reason = (result.reason || '').toLowerCase();
-  const policyOwnsResponderRouting =
-    result.escalated === true ||
-    reason.includes('scheduled') ||
-    reason.includes('already in progress');
-
-  return policyOwnsResponderRouting ? 'service' : 'fallback';
-}
+export { escalationNotificationRoute } from './event-side-effects';

@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { getOpsKnightProcessRole, getRuntimeResponsibilities } from '@/lib/runtime-role';
 
 describe('runtime process roles', () => {
-  it('preserves the existing integrated runtime by default', () => {
+  it('preserves the integrated runtime by default and processes durable jobs in-process', () => {
     expect(getOpsKnightProcessRole(undefined)).toBe('integrated');
     expect(getRuntimeResponsibilities('integrated')).toEqual({
       startScheduler: true,
-      startJobWorker: false,
+      startJobWorker: true,
     });
   });
 
