@@ -14,10 +14,10 @@ Use one packaging owner per namespace. Do not install Helm and Kustomize variant
 
 ## Choose a packaging path
 
-| Path | Use it when | Detailed guide |
-| --- | --- | --- |
-| Helm | Your release process manages values and Helm releases. Set `runtime.mode=split` for new production deployments. | [Helm](./helm) |
-| Kustomize | Your release process owns rendered YAML and environment patches. Use `k8s/profiles/split`. | [Kustomize](./kustomize) |
+| Path      | Use it when                                                                                                     | Detailed guide           |
+| --------- | --------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Helm      | Your release process manages values and Helm releases. Set `runtime.mode=split` for new production deployments. | [Helm](./helm)           |
+| Kustomize | Your release process owns rendered YAML and environment patches. Use `k8s/profiles/split`.                      | [Kustomize](./kustomize) |
 
 ## Runtime topology choices
 
@@ -69,6 +69,8 @@ scheduler -------------> PostgreSQL
 ```
 
 PgBouncer is optional and disabled by default. Use it only when measured web-side connection pressure warrants pooling. It does not fix slow SQL, lock contention, or a saturated PostgreSQL instance.
+
+The shipped image is digest-pinned. Helm supports an externally managed PgBouncer authentication Secret, and the Kustomize profile requires an untracked local `userlist.txt` input before it can render. For external PostgreSQL behind the bundled Helm PgBouncer, verified backend TLS and a CA Secret are mandatory.
 
 The split+PgBouncer topology inherits the same default web HPA as split mode.
 
@@ -153,6 +155,8 @@ kubectl kustomize k8s/profiles/split-pgbouncer > /tmp/opsknight-split-pgbouncer.
 ```
 
 Review the rendered image, role labels, baseline replicas, HPA bounds, Service selectors, Secret sources, database URLs/pools, PgBouncer configuration, probes, resources, PDB, storage, ingress, and NetworkPolicy.
+
+When upgrading the historical `k8s/` entry point under GitOps pruning, also confirm its ingress, integrated HPA, and NetworkPolicy remain present. The compatibility entry point retains them intentionally.
 
 ## Apply and verify
 
@@ -253,16 +257,16 @@ A Deployment or Helm rollback does not reverse PostgreSQL migrations or data cha
 
 ## Troubleshooting
 
-| Symptom | Check |
-| --- | --- |
-| HPA shows `<unknown>` metrics | Metrics API/metrics-server health, resource requests, API aggregation. |
-| Readiness fails | PostgreSQL DNS/network/TLS/credentials, migrations, schema state, web CPU pressure. |
-| Failures appear after scaling | Pool budget, DB saturation, role configuration drift, pod resources. |
-| Jobs build up | Worker health/concurrency, database latency, provider failures, job retries. |
-| Scheduled work stops | Scheduler pod health and scheduler state/lock ownership. |
-| PgBouncer clients connect but requests stall | Backend pool saturation, query latency, PostgreSQL CPU/locks. |
-| PostgreSQL reaches max connections | HPA max replicas, per-role pools, non-OpsKnight clients, migration/admin reserve. |
-| SSE/dashboard disconnects | Ingress buffering/timeouts, draining, web pod CPU/HPA behavior. |
+| Symptom                                      | Check                                                                               |
+| -------------------------------------------- | ----------------------------------------------------------------------------------- |
+| HPA shows `<unknown>` metrics                | Metrics API/metrics-server health, resource requests, API aggregation.              |
+| Readiness fails                              | PostgreSQL DNS/network/TLS/credentials, migrations, schema state, web CPU pressure. |
+| Failures appear after scaling                | Pool budget, DB saturation, role configuration drift, pod resources.                |
+| Jobs build up                                | Worker health/concurrency, database latency, provider failures, job retries.        |
+| Scheduled work stops                         | Scheduler pod health and scheduler state/lock ownership.                            |
+| PgBouncer clients connect but requests stall | Backend pool saturation, query latency, PostgreSQL CPU/locks.                       |
+| PostgreSQL reaches max connections           | HPA max replicas, per-role pools, non-OpsKnight clients, migration/admin reserve.   |
+| SSE/dashboard disconnects                    | Ingress buffering/timeouts, draining, web pod CPU/HPA behavior.                     |
 
 ## Related topics
 

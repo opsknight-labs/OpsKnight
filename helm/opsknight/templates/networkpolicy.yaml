@@ -9,7 +9,9 @@ spec:
   podSelector:
     matchLabels:
       {{- include "opsknight.selectorLabels" . | nindent 6 }}
-      opsknight-role: {{ ternary "web" "integrated" $split }}
+      {{- if $split }}
+      opsknight-role: web
+      {{- end }}
   policyTypes: [Ingress, Egress]
   ingress:
     - from:

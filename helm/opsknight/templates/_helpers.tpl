@@ -56,6 +56,14 @@ opsknight-role: {{ .role }}
 {{- end -}}
 {{- end }}
 
+{{- define "opsknight.pgbouncer.image" -}}
+{{- if .Values.pgbouncer.image.digest -}}
+{{- printf "%s@%s" .Values.pgbouncer.image.repository (.Values.pgbouncer.image.digest | trimPrefix "@") -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.pgbouncer.image.repository .Values.pgbouncer.image.tag -}}
+{{- end -}}
+{{- end }}
+
 {{- define "opsknight.secretName" -}}
 {{- default (printf "%s-secrets" (include "opsknight.fullname" .)) .Values.secrets.existingSecret | trunc 63 | trimSuffix "-" -}}
 {{- end }}
@@ -72,6 +80,16 @@ opsknight-role: {{ .role }}
 {{- printf "%s-pgbouncer" (include "opsknight.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{- define "opsknight.pgbouncer.authSecretName" -}}
+{{- default (printf "%s-auth" (include "opsknight.pgbouncer.fullname" .)) .Values.pgbouncer.existingAuthSecret | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
+{{- define "opsknight.externalDatabaseTlsQuery" -}}
+{{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled -}}
+{{- printf "&sslmode=verify-full&sslrootcert=/etc/opsknight-db-tls/ca.crt" -}}
+{{- end -}}
+{{- end }}
+
 {{- define "opsknight.directHost" -}}
 {{- if .Values.postgresql.enabled -}}
 {{- include "opsknight.postgresql.serviceName" . -}}
@@ -86,7 +104,8 @@ opsknight-role: {{ .role }}
 {{- .Values.database.url }}
 {{- else }}
 {{- $host := include "opsknight.directHost" . }}
-{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int .Values.postgresql.connectionLimit) (int .Values.postgresql.poolTimeout) }}
+{{- $tlsQuery := include "opsknight.externalDatabaseTlsQuery" . }}
+{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d%s" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int .Values.postgresql.connectionLimit) (int .Values.postgresql.poolTimeout) $tlsQuery }}
 {{- end }}
 {{- end }}
 
@@ -103,7 +122,11 @@ opsknight-role: {{ .role }}
 {{- $host = include "opsknight.pgbouncer.fullname" . }}
 {{- $port = printf "%d" (int .Values.pgbouncer.port) }}
 {{- end }}
-{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host $port .Values.postgresql.database (int .Values.web.database.connectionLimit) (int .Values.web.database.poolTimeout) }}
+{{- $tlsQuery := "" }}
+{{- if not .Values.pgbouncer.enabled }}
+{{- $tlsQuery = include "opsknight.externalDatabaseTlsQuery" . }}
+{{- end }}
+{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d%s" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host $port .Values.postgresql.database (int .Values.web.database.connectionLimit) (int .Values.web.database.poolTimeout) $tlsQuery }}
 {{- end }}
 {{- end }}
 
@@ -112,7 +135,8 @@ opsknight-role: {{ .role }}
 {{- .Values.database.url }}
 {{- else }}
 {{- $host := include "opsknight.directHost" . }}
-{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int .Values.worker.database.connectionLimit) (int .Values.worker.database.poolTimeout) }}
+{{- $tlsQuery := include "opsknight.externalDatabaseTlsQuery" . }}
+{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d%s" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int .Values.worker.database.connectionLimit) (int .Values.worker.database.poolTimeout) $tlsQuery }}
 {{- end }}
 {{- end }}
 
@@ -121,6 +145,7 @@ opsknight-role: {{ .role }}
 {{- .Values.database.url }}
 {{- else }}
 {{- $host := include "opsknight.directHost" . }}
-{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int .Values.scheduler.database.connectionLimit) (int .Values.scheduler.database.poolTimeout) }}
+{{- $tlsQuery := include "opsknight.externalDatabaseTlsQuery" . }}
+{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d%s" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int .Values.scheduler.database.connectionLimit) (int .Values.scheduler.database.poolTimeout) $tlsQuery }}
 {{- end }}
 {{- end }}

@@ -21,7 +21,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: pgbouncer
-          image: ghcr.io/icoretech/pgbouncer-docker:1.25.1
+          image: ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false

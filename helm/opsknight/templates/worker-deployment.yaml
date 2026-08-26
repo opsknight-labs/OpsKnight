@@ -65,6 +65,21 @@ spec:
               value: {{ .Values.worker.config.idlePollMs | quote }}
             - name: OPSKNIGHT_WORKER_BUSY_POLL_MS
               value: {{ .Values.worker.config.busyPollMs | quote }}
+          {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled (not .Values.database.url) }}
+          volumeMounts:
+            - name: database-tls
+              mountPath: /etc/opsknight-db-tls
+              readOnly: true
+          {{- end }}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
+      {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled (not .Values.database.url) }}
+      volumes:
+        - name: database-tls
+          secret:
+            secretName: {{ required "postgresql.tls.existingSecret is required when postgresql.tls.enabled=true" .Values.postgresql.tls.existingSecret }}
+            items:
+              - key: {{ .Values.postgresql.tls.caKey }}
+                path: ca.crt
+      {{- end }}
 {{- end }}

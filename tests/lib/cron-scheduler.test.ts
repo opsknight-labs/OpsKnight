@@ -44,6 +44,16 @@ describe('cron-scheduler lifecycle', () => {
 
     expect(status.running).toBe(true);
     expect(status.schedule).toBe('dynamic');
+    expect(status.processJobs).toBe(true);
+  });
+
+  it('can reserve queue processing for dedicated workers', async () => {
+    startCronScheduler({ processJobs: false });
+
+    const status = await getCronSchedulerStatus();
+
+    expect(status.running).toBe(true);
+    expect(status.processJobs).toBe(false);
   });
 
   it('marks scheduler as stopped after stop', async () => {

@@ -10,7 +10,9 @@ spec:
   selector:
     matchLabels:
       {{- include "opsknight.selectorLabels" . | nindent 6 }}
-      opsknight-role: {{ ternary "web" "integrated" (eq .Values.runtime.mode "split") }}
+      {{- if eq .Values.runtime.mode "split" }}
+      opsknight-role: web
+      {{- end }}
 {{- end }}
 {{- if and (eq .Values.runtime.mode "split") .Values.worker.podDisruptionBudget.enabled }}
 ---

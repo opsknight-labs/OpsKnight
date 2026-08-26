@@ -222,6 +222,13 @@ postgresql:
   port: '5432'
   username: opsknight
   password: 'opsknight_secure_password_change_me'
+  # Required for structured external PostgreSQL when the bundled PgBouncer is
+  # enabled. The CA is mounted into PgBouncer and direct worker/scheduler pods,
+  # and every backend connection uses sslmode=verify-full.
+  tls:
+    enabled: false
+    existingSecret: ''
+    caKey: ca.crt
   # Integrated-mode Prisma pool defaults retained for backward compatibility.
   connectionLimit: 40
   poolTimeout: 30
@@ -262,6 +269,7 @@ pgbouncer:
   image:
     repository: ghcr.io/icoretech/pgbouncer-docker
     tag: '1.25.1'
+    digest: 'sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd'
     pullPolicy: IfNotPresent
   port: 6432
   poolMode: transaction
@@ -270,6 +278,10 @@ pgbouncer:
   reservePoolSize: 10
   maxPreparedStatements: 100
   replicas: 1
+  # Prefer an externally managed auth Secret in production. It must contain
+  # authFileKey in PgBouncer userlist.txt format.
+  existingAuthSecret: ''
+  authFileKey: userlist.txt
   resources:
     requests:
       cpu: 50m

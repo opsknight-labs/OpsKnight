@@ -16,7 +16,6 @@ spec:
   selector:
     matchLabels:
       app: opsknight-app
-      opsknight-role: integrated
   template:
     metadata:
       labels:

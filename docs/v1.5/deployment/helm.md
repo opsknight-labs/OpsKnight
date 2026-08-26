@@ -160,6 +160,8 @@ pgbouncer:
   reservePoolSize: 10
   maxPreparedStatements: 100
   replicas: 1
+  existingAuthSecret: opsknight-pgbouncer-auth
+  authFileKey: userlist.txt
 ```
 
 The bundled configuration:
@@ -167,7 +169,10 @@ The bundled configuration:
 - uses transaction pooling;
 - supports prepared statements with `max_prepared_statements = 100`;
 - accepts Prisma startup parameters `extra_float_digits` and `search_path`;
-- runs with numeric uid/gid 70 for Kubernetes `runAsNonRoot` enforcement.
+- runs with numeric uid/gid 70 for Kubernetes `runAsNonRoot` enforcement;
+- uses an immutable multi-platform image digest by default.
+
+The default single replica is a starting topology, not an HA guarantee. If proxy continuity is required, qualify multiple replicas, disruption behavior, connection draining, and database connection budgets in the target cluster.
 
 PgBouncer is a connection-management option, not a database performance accelerator. It can reduce PostgreSQL backend-session pressure; it does not fix slow queries, transaction contention, saturated CPU, or insufficient storage I/O.
 
@@ -188,6 +193,21 @@ pgbouncer:
 The chart intentionally rejects that combination.
 
 For an externally managed PgBouncer, leave the bundled PgBouncer disabled and supply the complete connection URI through your Secret or `database.url`.
+
+For an external PostgreSQL backend behind the bundled PgBouncer, certificate verification is mandatory:
+
+```yaml
+postgresql:
+  enabled: false
+  host: db.internal.example.com
+  port: '5432'
+  tls:
+    enabled: true
+    existingSecret: opsknight-database-ca
+    caKey: ca.crt
+```
+
+The chart configures PgBouncer with `server_tls_sslmode=verify-full`, mounts the CA, and adds `sslmode=verify-full` plus the CA path to chart-generated direct worker/scheduler URLs. Rendering fails if the CA Secret is not configured. When `secrets.existingSecret` owns role URLs, include equivalent TLS verification parameters in `WORKER_DATABASE_URL` and `SCHEDULER_DATABASE_URL`.
 
 ## Recommended production values
 
@@ -285,7 +305,7 @@ Key names are configurable under `secrets.keys`.
 
 When the chart manages the Secret, it generates role-specific URLs from `database.url` or structured PostgreSQL values. When you provide an existing Secret, your secret controller owns creation and rotation of the required keys.
 
-If bundled PostgreSQL is enabled, preserve the configured PostgreSQL credentials. If bundled PgBouncer is enabled, its authentication is derived from `postgresql.username` and `postgresql.password`, so those values must match the PostgreSQL backend credentials.
+If bundled PostgreSQL is enabled, preserve the configured PostgreSQL credentials. For bundled PgBouncer in production, provide `pgbouncer.existingAuthSecret`; it must contain `pgbouncer.authFileKey` in PgBouncer `userlist.txt` format and match the PostgreSQL backend credentials. This keeps the database password out of Helm values and release history. The chart-generated auth Secret remains available for evaluation with an explicitly supplied non-default password and escapes PgBouncer auth-file-sensitive characters. Rendering fails if PgBouncer is enabled with the shipped placeholder password.
 
 ## Database URL behavior
 

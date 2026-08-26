@@ -93,6 +93,82 @@ describe('deployment configuration invariants', () => {
     expect(deployment).toContain('include "opsknight.secretName"');
   });
 
+  it('preserves immutable selectors and historical root Kustomize resources on upgrade', () => {
+    const helmDeployment = read('helm/opsknight/templates/deployment.yaml');
+    const helmSelector = helmDeployment.slice(
+      helmDeployment.indexOf('  selector:'),
+      helmDeployment.indexOf('  template:')
+    );
+    const integratedDeployment = read('k8s/profiles/integrated/deployment.yaml');
+    const integratedSelector = integratedDeployment.slice(
+      integratedDeployment.indexOf('  selector:'),
+      integratedDeployment.indexOf('  template:')
+    );
+    const splitDeployment = read('k8s/profiles/split/deployment.yaml');
+    const splitSelector = splitDeployment.slice(
+      splitDeployment.indexOf('  selector:'),
+      splitDeployment.indexOf('  template:')
+    );
+
+    expect(helmSelector).not.toContain('opsknight-role:');
+    expect(integratedSelector).not.toContain('opsknight-role:');
+    expect(splitSelector).not.toContain('opsknight-role:');
+
+    const helmService = read('helm/opsknight/templates/service.yaml');
+    expect(helmService).toContain('if eq .Values.runtime.mode "split"');
+    expect(read('k8s/profiles/integrated/service.yaml')).not.toContain(
+      'opsknight-role: integrated'
+    );
+    expect(read('k8s/profiles/integrated/pod-disruption-budget.yaml')).not.toContain(
+      'opsknight-role: integrated'
+    );
+    expect(read('k8s/components/network-integrated/network-policy.yaml')).not.toContain(
+      'opsknight-role: integrated'
+    );
+
+    const rootKustomization = read('k8s/kustomization.yaml');
+    expect(rootKustomization).toContain('components/ingress');
+    expect(rootKustomization).toContain('components/integrated-hpa');
+    expect(rootKustomization).toContain('components/network-integrated');
+  });
+
+  it('fails closed for PgBouncer credentials, images, and external database TLS', () => {
+    const values = read('helm/opsknight/values.yaml');
+    const helpers = read('helm/opsknight/templates/_helpers.tpl');
+    const config = read('helm/opsknight/templates/pgbouncer-configmap.yaml');
+    const deployment = read('helm/opsknight/templates/pgbouncer-deployment.yaml');
+    const auth = read('helm/opsknight/templates/pgbouncer-secret.yaml');
+    const rawKustomization = read('k8s/profiles/split-pgbouncer/kustomization.yaml');
+    const rawDeployment = read('k8s/profiles/split-pgbouncer/pgbouncer-deployment.yaml');
+
+    expect(values).toContain("existingAuthSecret: ''");
+    expect(values).toContain(
+      "digest: 'sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd'"
+    );
+    expect(helpers).toContain('define "opsknight.pgbouncer.image"');
+    expect(deployment).toContain('include "opsknight.pgbouncer.authSecretName"');
+    expect(auth).toContain('replace "\\\\" "\\\\\\\\"');
+    expect(auth).toContain('replace "\\\"" "\\\\\\\""');
+    expect(config).toContain('server_tls_sslmode = verify-full');
+    expect(config).toContain('postgresql.tls.existingSecret is required');
+    expect(rawKustomization).toContain('pgbouncer-userlist.txt');
+    expect(rawKustomization).toContain('components/network-split-pgbouncer');
+    expect(rawKustomization).toContain('disableNameSuffixHash: true');
+    expect(
+      fs.existsSync(path.join(root, 'k8s/profiles/split-pgbouncer/pgbouncer-secret.yaml'))
+    ).toBe(false);
+    expect(rawDeployment).toContain(
+      'ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd'
+    );
+  });
+
+  it('validates runtime mode instead of silently falling back to integrated mode', () => {
+    const schema = JSON.parse(read('helm/opsknight/values.schema.json')) as {
+      properties: { runtime: { properties: { mode: { enum: string[] } } } };
+    };
+    expect(schema.properties.runtime.properties.mode.enum).toEqual(['integrated', 'split']);
+  });
+
   it('ships an enterprise high-availability baseline and guarded recovery drills', () => {
     const values = read('helm/opsknight/values.yaml');
     const deployment = read('helm/opsknight/templates/deployment.yaml');

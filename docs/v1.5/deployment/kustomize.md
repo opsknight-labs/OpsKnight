@@ -12,12 +12,12 @@ OpsKnight v1.5 ships first-class Kustomize profiles that mirror the primary Helm
 
 ## Supported profiles
 
-| Profile | Command | Guidance |
-| --- | --- | --- |
-| Integrated | `kubectl apply -k k8s` | Backward-compatible root entry point. |
-| Integrated (explicit) | `kubectl apply -k k8s/profiles/integrated` | Same integrated topology explicitly. |
-| **Split — recommended** | `kubectl apply -k k8s/profiles/split` | New production deployments; includes web HPA 2→12. |
-| Split + PgBouncer | `kubectl apply -k k8s/profiles/split-pgbouncer` | Recommended split topology plus web connection pooling. |
+| Profile                 | Command                                         | Guidance                                                                                                |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Integrated              | `kubectl apply -k k8s`                          | Backward-compatible root entry point, including the historical ingress, HPA, and NetworkPolicy objects. |
+| Integrated (explicit)   | `kubectl apply -k k8s/profiles/integrated`      | Minimal integrated topology for a new customization.                                                    |
+| **Split — recommended** | `kubectl apply -k k8s/profiles/split`           | New production deployments; includes web HPA 2→12.                                                      |
+| Split + PgBouncer       | `kubectl apply -k k8s/profiles/split-pgbouncer` | Recommended split topology plus web connection pooling.                                                 |
 
 Kustomize has no Helm-style values switch, so topology is selected by profile and environment-specific changes are applied with standard patches/components.
 
@@ -29,7 +29,7 @@ Kustomize has no Helm-style values switch, so topology is selected by profile an
 - `OPSKNIGHT_PROCESS_ROLE=integrated`;
 - PostgreSQL connection limit 40 per pod;
 - 30-second termination grace period;
-- no HPA in the integrated profile by default.
+- the explicit profile is minimal; the backward-compatible root keeps the historical HPA, ingress, and NetworkPolicy resources so GitOps pruning cannot remove them during upgrade.
 
 ### Split — recommended
 
@@ -71,6 +71,7 @@ PgBouncer defaults match Helm:
 - 1 PgBouncer replica.
 
 Only web traffic uses PgBouncer. Worker and scheduler database traffic remains direct to PostgreSQL.
+The shipped proxy image is pinned by immutable multi-platform digest. One replica is a starting point, not an HA guarantee; production environments that require proxy continuity must test multiple replicas, disruption behavior, and connection draining.
 
 ## Repository layout
 
@@ -92,7 +93,7 @@ k8s/
 └── README.md
 ```
 
-The split profile includes the `web-hpa` component directly. The split-PgBouncer profile builds on split, so it inherits the same default web autoscaling policy.
+The split profile includes the `web-hpa` component directly. The split-PgBouncer profile builds on split, so it inherits the same default web autoscaling policy and enables its restrictive NetworkPolicy by default.
 
 ## Build a production customization
 
@@ -201,9 +202,17 @@ Pooling should follow measurement. It does not replace query profiling, lock ana
 
 ## PgBouncer credentials
 
-The split-PgBouncer profile includes PgBouncer configuration and authentication material suitable as a deployment template. Before production use, replace placeholder credentials and keep PgBouncer authentication synchronized with the PostgreSQL backend credentials.
+The split-PgBouncer profile deliberately does not contain deployable authentication credentials. Create the ignored local input file before rendering:
 
-Never commit real PgBouncer or PostgreSQL credentials to the repository.
+```bash
+cp k8s/profiles/split-pgbouncer/pgbouncer-userlist.txt.example \
+  k8s/profiles/split-pgbouncer/pgbouncer-userlist.txt
+chmod 600 k8s/profiles/split-pgbouncer/pgbouncer-userlist.txt
+# Edit the file so its user/password match the PostgreSQL credential supplied
+# by your production Secret customization.
+```
+
+Kustomize fails to render this profile while that file is absent. The generated Secret name is wired into the PgBouncer Deployment. Because its name is stable, rotate the Secret and explicitly restart the PgBouncer Deployment so every pod reloads the auth file. Never commit the local file, rendered Secret, or real PostgreSQL credentials.
 
 ## Optional components
 
@@ -214,7 +223,7 @@ The shipped components provide:
 - ingress: `k8s/components/ingress`;
 - integrated NetworkPolicy: `k8s/components/network-integrated`;
 - split NetworkPolicy: `k8s/components/network-split`;
-- split + PgBouncer NetworkPolicy: `k8s/components/network-split-pgbouncer`.
+- split + PgBouncer NetworkPolicy: `k8s/components/network-split-pgbouncer` — already included by the split-PgBouncer profile.
 
 Reference only the NetworkPolicy component appropriate for the selected runtime topology.
 
@@ -243,6 +252,7 @@ The split render should include:
 Split + PgBouncer:
 
 ```bash
+test -f k8s/profiles/split-pgbouncer/pgbouncer-userlist.txt
 kubectl kustomize k8s/profiles/split-pgbouncer > /tmp/opsknight-split-pgbouncer.yaml
 ```
 
@@ -283,11 +293,12 @@ If PgBouncer is enabled, verify web pods connect through port 6432 and workers/s
 
 1. Back up PostgreSQL and critical secrets.
 2. Record the current rendered manifests and image digest.
-3. Render/diff the new profile/customization.
-4. Recalculate PostgreSQL connection budget at baseline and HPA maximum.
-5. Verify the resource Metrics API.
-6. Apply and observe migrations, readiness, HPA, workers, scheduler, and database connections.
-7. Verify a controlled incident and background-job flow.
+3. For the historical `k8s/` entry point, confirm ingress, HPA, and NetworkPolicy remain in the rendered diff; a pruning controller must not delete them.
+4. Render/diff the new profile/customization.
+5. Recalculate PostgreSQL connection budget at baseline and HPA maximum.
+6. Verify the resource Metrics API.
+7. Apply and observe migrations, readiness, HPA, workers, scheduler, and database connections.
+8. Verify a controlled incident and background-job flow.
 
 Kubernetes rollout rollback does not reverse Prisma migrations or data changes. Confirm schema compatibility before reverting application resources.
 

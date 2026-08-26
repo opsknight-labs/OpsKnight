@@ -30,6 +30,16 @@ const SINGLETON_ID = 'singleton';
 let timer: NodeJS.Timeout | null = null;
 let initialized = false;
 let lastJobCleanup = 0;
+let processJobsInScheduler = true;
+
+export interface CronSchedulerOptions {
+  /**
+   * Integrated mode preserves the historical queue-draining behavior. The
+   * dedicated scheduler role disables it so worker backlog cannot delay
+   * escalations, SLA checks, and other time-sensitive scheduler work.
+   */
+  processJobs?: boolean;
+}
 
 async function notifyOverdueActionItems(now: Date): Promise<number> {
   const { default: prisma } = await import('./prisma');
@@ -339,8 +349,12 @@ async function runOnce() {
   }, 30_000);
 
   try {
-    // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
-    const jobResult = await processPendingJobs(100, 15);
+    // Integrated mode keeps the historical queue-draining fallback. In split
+    // mode dedicated workers own the durable queue so backlog cannot delay
+    // time-sensitive scheduler responsibilities.
+    const jobResult = processJobsInScheduler
+      ? await processPendingJobs(100, 15)
+      : { processed: 0, failed: 0, total: 0 };
     const escalationResult = await processPendingEscalations();
 
     logger.info('[Cron] Critical tasks processed', {
@@ -349,14 +363,16 @@ async function runOnce() {
     });
 
     // Group 2: Secondary tasks (can run in parallel)
-    const { processShiftRotations, processUpcomingShiftReminders } = await import('./oncall-handoff');
-    const [retryResult, autoUnsnoozeResult, breachResult, handoffResult, reminderCount] = await Promise.all([
-      retryFailedNotifications(),
-      processAutoUnsnoozeInternal(),
-      checkSLABreaches(),
-      processShiftRotations(new Date()),
-      processUpcomingShiftReminders(new Date(), 60),
-    ]);
+    const { processShiftRotations, processUpcomingShiftReminders } =
+      await import('./oncall-handoff');
+    const [retryResult, autoUnsnoozeResult, breachResult, handoffResult, reminderCount] =
+      await Promise.all([
+        retryFailedNotifications(),
+        processAutoUnsnoozeInternal(),
+        checkSLABreaches(),
+        processShiftRotations(new Date()),
+        processUpcomingShiftReminders(new Date(), 60),
+      ]);
 
     logger.info('[Cron] Secondary tasks processed', {
       retries: retryResult,
@@ -573,7 +589,7 @@ async function runOnce() {
 /**
  * Start the cron scheduler
  */
-export function startCronScheduler() {
+export function startCronScheduler(options: CronSchedulerOptions = {}) {
   if (initialized) {
     logger.debug('[Cron] Already initialized, skipping');
     return;
@@ -593,8 +609,12 @@ export function startCronScheduler() {
     return;
   }
 
+  processJobsInScheduler = options.processJobs ?? true;
   initialized = true;
-  logger.info('[Cron] Starting scheduler', { workerId: WORKER_ID });
+  logger.info('[Cron] Starting scheduler', {
+    workerId: WORKER_ID,
+    processJobs: processJobsInScheduler,
+  });
 
   // Schedule first run immediately
   scheduleNextRun(new Date());
@@ -611,6 +631,7 @@ export async function stopCronScheduler() {
 
   await releaseLock(new Date());
   initialized = false; // Allow restart
+  processJobsInScheduler = true;
 
   logger.info('[Cron] Scheduler stopped', { workerId: WORKER_ID });
 }
@@ -624,6 +645,7 @@ export async function getCronSchedulerStatus() {
     return {
       running: !!timer,
       workerId: WORKER_ID,
+      processJobs: processJobsInScheduler,
       lastRunAt: state.lastRunAt,
       lastSuccessAt: state.lastSuccessAt,
       lastError: state.lastError,
@@ -636,6 +658,7 @@ export async function getCronSchedulerStatus() {
     return {
       running: !!timer,
       workerId: WORKER_ID,
+      processJobs: processJobsInScheduler,
       lastRunAt: null,
       lastSuccessAt: null,
       lastError: 'Failed to read state from database',

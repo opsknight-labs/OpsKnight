@@ -9,7 +9,6 @@ spec:
   type: ClusterIP
   selector:
     app: opsknight-app
-    opsknight-role: integrated
   ports:
     - name: http
       protocol: TCP

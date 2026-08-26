@@ -19,7 +19,9 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/pgbouncer-configmap.yaml") . | sha256sum }}
+        {{- if not .Values.pgbouncer.existingAuthSecret }}
         checksum/auth: {{ include (print $.Template.BasePath "/pgbouncer-secret.yaml") . | sha256sum }}
+        {{- end }}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -27,7 +29,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: pgbouncer
-          image: "{{ .Values.pgbouncer.image.repository }}:{{ .Values.pgbouncer.image.tag }}"
+          image: {{ include "opsknight.pgbouncer.image" . | quote }}
           imagePullPolicy: {{ .Values.pgbouncer.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.pgbouncer.securityContext | nindent 12 }}
@@ -46,6 +48,11 @@ spec:
               mountPath: /var/run/pgbouncer
             - name: tmp
               mountPath: /tmp
+            {{- if not .Values.postgresql.enabled }}
+            - name: database-tls
+              mountPath: /etc/pgbouncer-tls
+              readOnly: true
+            {{- end }}
           readinessProbe:
             tcpSocket:
               port: pgbouncer
@@ -64,9 +71,20 @@ spec:
             name: {{ include "opsknight.pgbouncer.fullname" . }}
         - name: auth
           secret:
-            secretName: {{ include "opsknight.pgbouncer.fullname" . }}-auth
+            secretName: {{ include "opsknight.pgbouncer.authSecretName" . }}
+            items:
+              - key: {{ .Values.pgbouncer.authFileKey }}
+                path: userlist.txt
         - name: run
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        {{- if not .Values.postgresql.enabled }}
+        - name: database-tls
+          secret:
+            secretName: {{ .Values.postgresql.tls.existingSecret }}
+            items:
+              - key: {{ .Values.postgresql.tls.caKey }}
+                path: ca.crt
+        {{- end }}
 {{- end }}

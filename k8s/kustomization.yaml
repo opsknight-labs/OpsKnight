@@ -4,3 +4,10 @@ kind: Kustomization
 # Backward-compatible default, matching Helm runtime.mode=integrated.
 resources:
   - profiles/integrated
+
+# Preserve every object rendered by the historical root entry point. This is
+# important for GitOps controllers that prune resources removed from a render.
+components:
+  - components/ingress
+  - components/integrated-hpa
+  - components/network-integrated

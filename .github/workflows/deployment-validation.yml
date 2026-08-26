@@ -91,7 +91,49 @@ jobs:
           helm template opsknight helm/opsknight --namespace opsknight \
             --set runtime.mode=split \
             --set pgbouncer.enabled=true \
+            --set pgbouncer.existingAuthSecret=opsknight-ci-pgbouncer-auth \
+            --set postgresql.password=ci-validation-only \
             > /tmp/opsknight-helm-pgbouncer.yaml
+
+      - name: Render Helm external PostgreSQL with verified TLS and PgBouncer
+        run: |
+          helm template opsknight helm/opsknight --namespace opsknight \
+            --set runtime.mode=split \
+            --set pgbouncer.enabled=true \
+            --set pgbouncer.existingAuthSecret=opsknight-pgbouncer-auth-external \
+            --set postgresql.enabled=false \
+            --set postgresql.host=db.example.com \
+            --set postgresql.password=ci-validation-only \
+            --set postgresql.tls.enabled=true \
+            --set postgresql.tls.existingSecret=opsknight-database-ca \
+            > /tmp/opsknight-helm-pgbouncer-external-tls.yaml
+
+      - name: Reject unsafe or invalid Helm runtime configurations
+        shell: bash
+        run: |
+          set -euo pipefail
+          if helm template opsknight helm/opsknight --set runtime.mode=splt >/dev/null 2>&1; then
+            echo 'invalid runtime.mode unexpectedly rendered'
+            exit 1
+          fi
+          if helm template opsknight helm/opsknight \
+            --set runtime.mode=split \
+            --set pgbouncer.enabled=true \
+            --set postgresql.enabled=false \
+            --set postgresql.host=db.example.com \
+            --set postgresql.password=ci-validation-only \
+            >/dev/null 2>&1; then
+            echo 'external PostgreSQL + bundled PgBouncer rendered without verified TLS'
+            exit 1
+          fi
+          if helm template opsknight helm/opsknight \
+            --set runtime.mode=split \
+            --set pgbouncer.enabled=true \
+            --set pgbouncer.existingAuthSecret=opsknight-ci-pgbouncer-auth \
+            >/dev/null 2>&1; then
+            echo 'bundled PgBouncer rendered with the shipped placeholder database password'
+            exit 1
+          fi
 
       - name: Render Helm external database configuration
         run: |
@@ -119,7 +161,10 @@ jobs:
         run: kubectl kustomize k8s/profiles/split > /tmp/opsknight-kustomize-split.yaml
 
       - name: Render Kustomize split profile with PgBouncer
-        run: kubectl kustomize k8s/profiles/split-pgbouncer > /tmp/opsknight-kustomize-pgbouncer.yaml
+        run: |
+          cp k8s/profiles/split-pgbouncer/pgbouncer-userlist.txt.example \
+            k8s/profiles/split-pgbouncer/pgbouncer-userlist.txt
+          kubectl kustomize k8s/profiles/split-pgbouncer > /tmp/opsknight-kustomize-pgbouncer.yaml
 
       - name: Validate rendered invariants
         shell: bash
@@ -135,6 +180,9 @@ jobs:
           grep -q 'checksum/config:' /tmp/opsknight-helm.yaml
           grep -q 'checksum/secret:' /tmp/opsknight-helm.yaml
           grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-helm.yaml
+          grep -q 'kind: Ingress' /tmp/opsknight-kustomize-integrated.yaml
+          grep -q 'kind: HorizontalPodAutoscaler' /tmp/opsknight-kustomize-integrated.yaml
+          grep -q 'kind: NetworkPolicy' /tmp/opsknight-kustomize-integrated.yaml
 
           # Helm recommended split runtime: HPA is on by default and CPU-driven.
           grep -q 'name: opsknight-worker' /tmp/opsknight-helm-split.yaml
@@ -166,6 +214,14 @@ jobs:
           grep -q 'runAsGroup: 70' /tmp/opsknight-helm-pgbouncer.yaml
           grep -q '6432' /tmp/opsknight-helm-pgbouncer.yaml
           grep -q 'kind: HorizontalPodAutoscaler' /tmp/opsknight-helm-pgbouncer.yaml
+          grep -q 'ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd' /tmp/opsknight-helm-pgbouncer.yaml
+
+          # External PostgreSQL through bundled PgBouncer fails closed unless
+          # backend TLS verifies the server certificate.
+          grep -q 'server_tls_sslmode = verify-full' /tmp/opsknight-helm-pgbouncer-external-tls.yaml
+          grep -q 'server_tls_ca_file = /etc/pgbouncer-tls/ca.crt' /tmp/opsknight-helm-pgbouncer-external-tls.yaml
+          grep -q 'secretName: opsknight-database-ca' /tmp/opsknight-helm-pgbouncer-external-tls.yaml
+          grep -q 'secretName: opsknight-pgbouncer-auth-external' /tmp/opsknight-helm-pgbouncer-external-tls.yaml
 
           # Kustomize integrated profile mirrors Helm compatibility topology.
           grep -q 'opsknight-role: integrated' /tmp/opsknight-kustomize-integrated.yaml
@@ -218,11 +274,13 @@ jobs:
           grep -q 'runAsUser: 70' /tmp/opsknight-kustomize-pgbouncer.yaml
           grep -q 'runAsGroup: 70' /tmp/opsknight-kustomize-pgbouncer.yaml
           grep -q 'opsknight-pgbouncer:6432' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd' /tmp/opsknight-kustomize-pgbouncer.yaml
           grep -q 'name: opsknight-worker' /tmp/opsknight-kustomize-pgbouncer.yaml
           grep -q 'name: opsknight-scheduler' /tmp/opsknight-kustomize-pgbouncer.yaml
           grep -q 'opsknight-postgres-service' /tmp/opsknight-kustomize-pgbouncer.yaml
           grep -q 'kind: HorizontalPodAutoscaler' /tmp/opsknight-kustomize-pgbouncer.yaml
           grep -q 'maxReplicas: 12' /tmp/opsknight-kustomize-pgbouncer.yaml
+          grep -q 'name: opsknight-pgbouncer-netpol' /tmp/opsknight-kustomize-pgbouncer.yaml
 
           # Existing deployment compatibility checks.
           grep -q '127.0.0.1' /tmp/opsknight-compose.yaml

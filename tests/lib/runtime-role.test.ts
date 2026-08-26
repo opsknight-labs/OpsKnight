@@ -7,6 +7,7 @@ describe('runtime process roles', () => {
     expect(getRuntimeResponsibilities('integrated')).toEqual({
       startScheduler: true,
       startJobWorker: false,
+      schedulerProcessesJobs: true,
     });
   });
 
@@ -14,14 +15,17 @@ describe('runtime process roles', () => {
     expect(getRuntimeResponsibilities('web')).toEqual({
       startScheduler: false,
       startJobWorker: false,
+      schedulerProcessesJobs: false,
     });
     expect(getRuntimeResponsibilities('scheduler')).toEqual({
       startScheduler: true,
       startJobWorker: false,
+      schedulerProcessesJobs: false,
     });
     expect(getRuntimeResponsibilities('worker')).toEqual({
       startScheduler: false,
       startJobWorker: true,
+      schedulerProcessesJobs: false,
     });
   });
 
