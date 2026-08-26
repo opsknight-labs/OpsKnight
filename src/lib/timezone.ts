@@ -16,6 +16,41 @@ type TimeZoneOption = {
   offsetLabel: string;
 };
 
+export type LocalDateTimeParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second?: number;
+  millisecond?: number;
+};
+
+export type TimeZoneDisambiguation = 'reject' | 'earlier' | 'later' | 'compatible';
+
+type NormalizedLocalDateTimeParts = Required<LocalDateTimeParts>;
+
+const validTimeZoneCache = new Set<string>();
+const zonedDateTimeFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function getZonedDateTimeFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = zonedDateTimeFormatterCache.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    zonedDateTimeFormatterCache.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Get user's timezone preference, fallback to UTC
  */
@@ -267,10 +302,15 @@ function formatOffset(minutes: number): string {
  * Validate timezone string
  */
 export function isValidTimeZone(timeZone: string): boolean {
+  if (validTimeZoneCache.has(timeZone)) return true;
+
   try {
     Intl.DateTimeFormat(undefined, { timeZone });
+    validTimeZoneCache.add(timeZone);
     return true;
   } catch {
+    // Do not cache arbitrary invalid strings; callers may pass user input and
+    // an unbounded negative cache would create an avoidable memory sink.
     return false;
   }
 }
@@ -281,22 +321,9 @@ export function isValidTimeZone(timeZone: string): boolean {
  */
 export function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
   try {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      // hourCycle h23 keeps midnight as hour 00. `hour12: false` alone is not
-      // enough: on Node 20's ICU, en-US resolves to the h24 cycle and formats
-      // midnight as hour "24", which rolls Date.UTC below into the next day and
-      // yields a 24h offset error. Node 22 defaults to h23, so this diverged by
-      // runtime — see the %24 guard for the same reason.
-      hourCycle: 'h23',
-    });
-    const parts = formatter.formatToParts(date);
+    // Reuse one formatter per timezone. Constructing Intl formatters is far
+    // more expensive than formatToParts and dominated large schedule windows.
+    const parts = getZonedDateTimeFormatter(timeZone).formatToParts(date);
     const partMap: Record<string, string> = {};
     for (const part of parts) {
       if (part.type !== 'literal') {
@@ -319,37 +346,180 @@ export function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
   }
 }
 
+function normalizeLocalDateTimeParts(parts: LocalDateTimeParts): NormalizedLocalDateTimeParts {
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: parts.hour,
+    minute: parts.minute,
+    second: parts.second ?? 0,
+    millisecond: parts.millisecond ?? 0,
+  };
+}
+
+function compareLocalDateTimeParts(
+  a: NormalizedLocalDateTimeParts,
+  b: NormalizedLocalDateTimeParts
+): number {
+  if (a.year !== b.year) return a.year - b.year;
+  if (a.month !== b.month) return a.month - b.month;
+  if (a.day !== b.day) return a.day - b.day;
+  if (a.hour !== b.hour) return a.hour - b.hour;
+  if (a.minute !== b.minute) return a.minute - b.minute;
+  if (a.second !== b.second) return a.second - b.second;
+  return a.millisecond - b.millisecond;
+}
+
+function getLocalDateTimePartsForInstant(
+  date: Date,
+  timeZone: string
+): NormalizedLocalDateTimeParts {
+  const parts = getZonedDateTimeFormatter(timeZone).formatToParts(date);
+  const get = (type: string) => Number(parts.find(part => part.type === type)?.value ?? '0');
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour') % 24,
+    minute: get('minute'),
+    second: get('second'),
+    millisecond: date.getUTCMilliseconds(),
+  };
+}
+
+function isValidLocalDateTimeParts(parts: NormalizedLocalDateTimeParts): boolean {
+  const candidate = new Date(
+    Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+      parts.millisecond
+    )
+  );
+  return (
+    candidate.getUTCFullYear() === parts.year &&
+    candidate.getUTCMonth() + 1 === parts.month &&
+    candidate.getUTCDate() === parts.day &&
+    candidate.getUTCHours() === parts.hour &&
+    candidate.getUTCMinutes() === parts.minute &&
+    candidate.getUTCSeconds() === parts.second &&
+    candidate.getUTCMilliseconds() === parts.millisecond
+  );
+}
+
+/**
+ * Resolve local wall-clock components into a UTC instant.
+ *
+ * `reject` is the safe choice for user-entered schedule timestamps: it refuses
+ * nonexistent spring-forward times and duplicated fall-back times instead of
+ * silently moving coverage. `compatible` follows Temporal-style behavior for
+ * generated recurrence boundaries (earlier occurrence for overlaps, later
+ * wall-clock time for gaps), which keeps recurring schedules deterministic.
+ */
+export function resolveLocalDateTimeInTimeZone(
+  input: LocalDateTimeParts,
+  timeZone: string,
+  disambiguation: TimeZoneDisambiguation = 'reject'
+): Date | null {
+  if (!isValidTimeZone(timeZone)) return null;
+
+  const target = normalizeLocalDateTimeParts(input);
+  if (!isValidLocalDateTimeParts(target)) return null;
+
+  const nominalUtcMs = Date.UTC(
+    target.year,
+    target.month - 1,
+    target.day,
+    target.hour,
+    target.minute,
+    target.second,
+    target.millisecond
+  );
+
+  // Probe both sides of the requested wall time. ±24h straddles even full-day
+  // political jumps (for example Pacific/Apia), while ±6h catches short DST and
+  // fractional transitions near the target. Five probes discover the relevant
+  // offsets without multiplying formatter work for every schedule boundary.
+  const probeHours = [-24, -6, 0, 6, 24];
+  const offsets = Array.from(
+    new Set(
+      probeHours.map(hours =>
+        getTimeZoneOffsetMs(new Date(nominalUtcMs + hours * 60 * 60 * 1000), timeZone)
+      )
+    )
+  );
+
+  const exactCandidates: Date[] = [];
+  const alternatives: Array<{ date: Date; local: NormalizedLocalDateTimeParts }> = [];
+
+  for (const offsetMs of offsets) {
+    const date = new Date(nominalUtcMs - offsetMs);
+    const local = getLocalDateTimePartsForInstant(date, timeZone);
+    alternatives.push({ date, local });
+    if (compareLocalDateTimeParts(local, target) === 0) {
+      exactCandidates.push(date);
+    }
+  }
+
+  const candidates = Array.from(
+    new Map(exactCandidates.map(candidate => [candidate.getTime(), candidate])).values()
+  ).sort((a, b) => a.getTime() - b.getTime());
+
+  if (candidates.length === 1) return candidates[0];
+
+  if (candidates.length > 1) {
+    if (disambiguation === 'earlier' || disambiguation === 'compatible') {
+      return candidates[0];
+    }
+    if (disambiguation === 'later') {
+      return candidates[candidates.length - 1];
+    }
+    return null;
+  }
+
+  // No exact candidate means the local time lies inside a forward clock jump.
+  // For generated recurrence boundaries, resolve deterministically to the
+  // nearest representable wall time on the requested side of the gap.
+  if (disambiguation === 'reject') return null;
+
+  const before = alternatives
+    .filter(candidate => compareLocalDateTimeParts(candidate.local, target) < 0)
+    .sort((a, b) => compareLocalDateTimeParts(a.local, b.local));
+  const after = alternatives
+    .filter(candidate => compareLocalDateTimeParts(candidate.local, target) > 0)
+    .sort((a, b) => compareLocalDateTimeParts(a.local, b.local));
+
+  if (disambiguation === 'earlier') {
+    return before[before.length - 1]?.date ?? null;
+  }
+  return after[0]?.date ?? null;
+}
+
 /**
  * Parse a datetime-local value as a date in the provided timezone.
+ * Ambiguous and nonexistent wall-clock values are rejected so schedule edits
+ * cannot silently move an on-call handoff across a DST transition.
  */
 export function parseDateTimeInTimeZone(value: string, timeZone: string): Date | null {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
 
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
-  if (!match) {
-    return null;
-  }
+  if (!match) return null;
 
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const hour = Number(match[4]);
-  const minute = Number(match[5]);
+  const parts: LocalDateTimeParts = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4]),
+    minute: Number(match[5]),
+  };
 
-  if ([year, month, day, hour, minute].some(Number.isNaN)) {
-    return null;
-  }
-
-  const utcMillis = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
-  const guessOffsetMs = getTimeZoneOffsetMs(new Date(utcMillis), timeZone);
-  let date = new Date(utcMillis - guessOffsetMs);
-  const actualOffsetMs = getTimeZoneOffsetMs(date, timeZone);
-  if (actualOffsetMs !== guessOffsetMs) {
-    date = new Date(utcMillis - actualOffsetMs);
-  }
-  return date;
+  if (Object.values(parts).some(Number.isNaN)) return null;
+  return resolveLocalDateTimeInTimeZone(parts, timeZone, 'reject');
 }
 
 function pad2(value: number): string {
@@ -402,8 +572,16 @@ export function addDaysToDateKey(dateKey: string, days: number): string {
 }
 
 export function startOfDayFromDateKey(dateKey: string, timeZone: string): Date {
-  const value = `${dateKey}T00:00`;
-  return parseDateTimeInTimeZone(value, timeZone) ?? new Date(`${dateKey}T00:00:00Z`);
+  const parts = parseDateKey(dateKey);
+  if (parts) {
+    const resolved = resolveLocalDateTimeInTimeZone(
+      { ...parts, hour: 0, minute: 0 },
+      timeZone,
+      'compatible'
+    );
+    if (resolved) return resolved;
+  }
+  return new Date(`${dateKey}T00:00:00Z`);
 }
 
 export function startOfNextDayFromDateKey(dateKey: string, timeZone: string): Date {

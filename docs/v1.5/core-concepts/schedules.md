@@ -54,11 +54,16 @@ The end time must be after the start. Hours use `0` through `23`; week-day value
 
 ### Daylight Saving Time (DST) Transitions
 
-Rotations in OpsKnight are anchored to wall-clock hours in the schedule's configured IANA timezone:
+OpsKnight resolves schedule boundaries against the configured IANA timezone rather than a fixed UTC offset:
 
-- **Daily and Multi-Day Rotations**: Evaluated with calendar-day arithmetic so shifts always start at the intended local hour (e.g. 09:00 AM) across 23-hour spring-forward and 25-hour fall-back transitions.
-- **Sub-Daily Rotations (1h, 2h, 4h, 6h, 8h, 12h)**: Derived from local day boundaries rather than continuous millisecond addition, preventing rotation drift and eliminating 1-hour overlap or gap defects.
+- **Daily and Multi-Day Rotations**: Evaluated with calendar-day arithmetic so shifts stay anchored to the intended local wall-clock hour across 23-hour, 24-hour, and 25-hour days.
+- **Sub-Daily Wall-Clock Rotations (1h, 2h, 3h, 4h, 6h, 8h, 12h)**: Intervals that divide a local day are anchored to local wall-clock boundaries. A skipped spring-forward boundary can collapse a nominal slot to zero duration; a repeated fall-back hour can lengthen a slot. Coverage remains contiguous because a full-duty slot always ends at the next resolved rotation boundary.
+- **Arbitrary Sub-Daily Rotations**: Durations such as `5h` or `7h` use elapsed-time semantics. They remain exact-duration and contiguous across DST, so their displayed local handoff hour may move when the UTC offset changes.
+- **Non-1-Hour Transitions**: Resolution uses the timezone database and does not assume DST always changes by exactly one hour; half-hour transitions such as `Australia/Lord_Howe` are handled by the same logic.
+- **User-Entered Transition Times**: A local timestamp that does not exist during spring-forward, or occurs twice during fall-back, is rejected instead of being silently shifted to a different instant. Choose an unambiguous local time and save again.
 - **Overrides**: Strictly filter for active users (`status === 'ACTIVE'`) to prevent deactivated users from holding scheduled coverage.
+
+Generated recurrence boundaries use deterministic Temporal-compatible disambiguation: the earlier occurrence during a fall-back overlap and the later representable wall-clock time during a spring-forward gap. This rule applies only to generated recurrence boundaries; ambiguous user input is not silently accepted.
 
 ## Manage participants
 
@@ -113,7 +118,11 @@ Verify participant order, rotation start, rotation length, schedule timezone, la
 
 ### Handoff is an hour early or late
 
-Confirm the IANA timezone and inspect the date for a daylight-saving transition. Avoid treating a fixed UTC offset as a timezone.
+Confirm the IANA timezone and inspect the date for a daylight-saving transition. Avoid treating a fixed UTC offset as a timezone. Also note that not every DST change is one hour.
+
+### A transition-time form value is rejected
+
+The selected local time is either nonexistent (spring-forward) or ambiguous (fall-back) in the schedule timezone. Choose an unambiguous wall-clock time; OpsKnight intentionally refuses to guess which instant you meant.
 
 ### An override has no effect
 

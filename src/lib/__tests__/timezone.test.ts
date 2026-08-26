@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   addDaysToDateKey,
   formatDateKeyInTimeZone,
+  parseDateTimeInTimeZone,
+  resolveLocalDateTimeInTimeZone,
   startOfDayFromDateKey,
   startOfNextDayFromDateKey,
 } from '../timezone';
@@ -54,5 +56,64 @@ describe('timezone helpers', () => {
         expect(formatDateKeyInTimeZone(nextStart, timeZone)).toBe(addDaysToDateKey(dateKey, 1));
       }
     }
+  });
+
+  it('rejects nonexistent wall-clock input during spring-forward', () => {
+    expect(parseDateTimeInTimeZone('2026-03-08T02:30', 'America/New_York')).toBeNull();
+  });
+
+  it('rejects ambiguous wall-clock input during fall-back', () => {
+    expect(parseDateTimeInTimeZone('2026-11-01T01:30', 'America/New_York')).toBeNull();
+  });
+
+  it('resolves generated recurrence boundaries with Temporal-compatible DST semantics', () => {
+    const spring = resolveLocalDateTimeInTimeZone(
+      { year: 2026, month: 3, day: 8, hour: 2, minute: 30 },
+      'America/New_York',
+      'compatible'
+    );
+    expect(spring?.toISOString()).toBe('2026-03-08T07:30:00.000Z'); // 03:30 EDT
+
+    const fallEarlier = resolveLocalDateTimeInTimeZone(
+      { year: 2026, month: 11, day: 1, hour: 1, minute: 30 },
+      'America/New_York',
+      'compatible'
+    );
+    const fallLater = resolveLocalDateTimeInTimeZone(
+      { year: 2026, month: 11, day: 1, hour: 1, minute: 30 },
+      'America/New_York',
+      'later'
+    );
+    expect(fallEarlier?.toISOString()).toBe('2026-11-01T05:30:00.000Z');
+    expect(fallLater?.toISOString()).toBe('2026-11-01T06:30:00.000Z');
+  });
+
+  it('handles 30-minute DST transitions without assuming a one-hour change', () => {
+    expect(parseDateTimeInTimeZone('2026-10-04T02:15', 'Australia/Lord_Howe')).toBeNull();
+    expect(parseDateTimeInTimeZone('2026-04-05T01:45', 'Australia/Lord_Howe')).toBeNull();
+
+    const compatible = resolveLocalDateTimeInTimeZone(
+      { year: 2026, month: 10, day: 4, hour: 2, minute: 15 },
+      'Australia/Lord_Howe',
+      'compatible'
+    );
+    expect(compatible?.toISOString()).toBe('2026-10-03T15:45:00.000Z'); // 02:45 +11
+  });
+
+  it('handles full-day political timezone jumps', () => {
+    expect(parseDateTimeInTimeZone('2011-12-30T12:00', 'Pacific/Apia')).toBeNull();
+
+    const compatible = resolveLocalDateTimeInTimeZone(
+      { year: 2011, month: 12, day: 30, hour: 12, minute: 0 },
+      'Pacific/Apia',
+      'compatible'
+    );
+    expect(compatible?.toISOString()).toBe('2011-12-30T22:00:00.000Z'); // 2011-12-31 12:00 +14
+  });
+
+  it('rejects invalid calendar values instead of normalizing them', () => {
+    expect(parseDateTimeInTimeZone('2026-02-30T10:00', 'UTC')).toBeNull();
+    expect(parseDateTimeInTimeZone('2026-13-01T10:00', 'UTC')).toBeNull();
+    expect(parseDateTimeInTimeZone('2026-01-01T24:00', 'UTC')).toBeNull();
   });
 });
