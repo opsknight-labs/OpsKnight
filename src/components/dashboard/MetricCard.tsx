@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef, memo } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
 type MetricCardProps = {
@@ -9,6 +10,8 @@ type MetricCardProps = {
   rangeLabel?: string;
   isDark?: boolean;
   variant?: 'default' | 'hero';
+  description?: string;
+  href?: string;
 };
 
 /**
@@ -83,6 +86,8 @@ const MetricCard = memo(function MetricCard({
   rangeLabel,
   isDark = false,
   variant = 'default',
+  description,
+  href,
 }: MetricCardProps) {
   // Parse value and determine if we should animate
   const { shouldAnimate, numericEnd, displayString } = React.useMemo(() => {
@@ -120,7 +125,7 @@ const MetricCard = memo(function MetricCard({
 
   const isHero = variant === 'hero';
 
-  return (
+  const card = (
     <div
       className={cn(
         'relative overflow-hidden text-center transition-all duration-300',
@@ -136,7 +141,7 @@ const MetricCard = memo(function MetricCard({
         isHero ? 'p-3 md:p-4' : 'p-6 sm:p-4'
       )}
       role="figure"
-      aria-label={`${label}: ${formattedDisplay}${rangeLabel ? ` ${rangeLabel}` : ''}`}
+      aria-label={`${label}: ${formattedDisplay}${description ? `. ${description}` : ''}${rangeLabel ? ` ${rangeLabel}` : ''}`}
     >
       {/* Accent bar for default variant */}
       {!isDark && !isHero && (
@@ -164,7 +169,29 @@ const MetricCard = memo(function MetricCard({
       >
         {label} {rangeLabel && <span className="opacity-80 text-[0.7rem]">{rangeLabel}</span>}
       </div>
+      {description && (
+        <div
+          className={cn(
+            'mt-1 text-[0.7rem] leading-tight relative z-10',
+            isDark || isHero ? 'text-white/75' : 'text-muted-foreground'
+          )}
+        >
+          {description}
+        </div>
+      )}
     </div>
+  );
+
+  if (!href) return card;
+
+  return (
+    <Link
+      href={href}
+      className="block rounded-lg no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+      aria-label={`View ${label.toLowerCase()} incidents`}
+    >
+      {card}
+    </Link>
   );
 });
 

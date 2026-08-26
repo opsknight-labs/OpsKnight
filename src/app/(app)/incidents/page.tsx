@@ -98,7 +98,7 @@ export default async function IncidentsPage({
 
   // Aggregate status counts from groupBy result
   const statusCountMap = new Map(statusCounts.map(s => [s.status, s._count._all]));
-  const openCount = (statusCountMap.get('OPEN') || 0) + (statusCountMap.get('ACKNOWLEDGED') || 0);
+  const activeCount = (statusCountMap.get('OPEN') || 0) + (statusCountMap.get('ACKNOWLEDGED') || 0);
   const resolvedCount = statusCountMap.get('RESOLVED') || 0;
   const snoozedCount = statusCountMap.get('SNOOZED') || 0;
   const suppressedCount = statusCountMap.get('SUPPRESSED') || 0;
@@ -149,8 +149,8 @@ export default async function IncidentsPage({
             </Card>
             <Card className="bg-white/10 border-white/20 backdrop-blur">
               <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-red-200">{openCount}</div>
-                <div className="text-[10px] md:text-xs opacity-90">Open</div>
+                <div className="text-xl md:text-2xl font-extrabold text-red-200">{activeCount}</div>
+                <div className="text-[10px] md:text-xs opacity-90">Active</div>
               </CardContent>
             </Card>
             <Card className="bg-white/10 border-white/20 backdrop-blur">
