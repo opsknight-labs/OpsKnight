@@ -342,6 +342,10 @@ async function calculateDbAggregateMetrics(
   // Calculate business hours for after-hours detection
   // Business hours: Monday-Friday 8am-6pm in user's timezone
   // Using PostgreSQL's AT TIME ZONE for accurate timezone handling
+  // PostgreSQL AT TIME ZONE does not accept parameterized placeholders in this grammar position.
+  // Validate and sanitize the timezone string through normalizeTimeZone before raw interpolation.
+  const safeTz = normalizeTimeZone(businessHoursTimeZone);
+  const tzRawSql = Prisma.raw(`'${safeTz.replace(/'/g, "''")}'`);
 
   try {
     // Main aggregate query - calculates all core metrics in one pass
@@ -399,14 +403,14 @@ async function calculateDbAggregateMetrics(
         -- After-hours classification uses BUSINESS_HOURS_TIMEZONE (UTC)
         -- so this aggregate agrees with the rollup-generation path.
         COUNT(*) FILTER (
-          WHERE EXTRACT(DOW FROM "createdAt" AT TIME ZONE ${businessHoursTimeZone}) IN (0, 6)
+          WHERE EXTRACT(DOW FROM "createdAt" AT TIME ZONE ${tzRawSql}) IN (0, 6)
           OR CASE
                WHEN ${BUSINESS_HOURS_START} <= ${BUSINESS_HOURS_END} THEN
-                 EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${businessHoursTimeZone}) < ${BUSINESS_HOURS_START}
-                 OR EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${businessHoursTimeZone}) >= ${BUSINESS_HOURS_END}
+                 EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${tzRawSql}) < ${BUSINESS_HOURS_START}
+                 OR EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${tzRawSql}) >= ${BUSINESS_HOURS_END}
                ELSE
-                 EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${businessHoursTimeZone}) >= ${BUSINESS_HOURS_END}
-                 AND EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${businessHoursTimeZone}) < ${BUSINESS_HOURS_START}
+                 EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${tzRawSql}) >= ${BUSINESS_HOURS_END}
+                 AND EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${tzRawSql}) < ${BUSINESS_HOURS_START}
              END
         ) as after_hours_count
       FROM "Incident"
