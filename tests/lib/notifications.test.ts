@@ -3,10 +3,14 @@ import { sendNotification } from '@/lib/notifications';
 import prisma from '@/lib/prisma';
 import * as emailModule from '@/lib/email';
 
+type NotificationFindResult = Awaited<ReturnType<typeof prisma.notification.findFirst>>;
+type NotificationCreateResult = Awaited<ReturnType<typeof prisma.notification.create>>;
+type IncidentFindResult = Awaited<ReturnType<typeof prisma.incident.findUnique>>;
+
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
-    notification: { create: vi.fn(), update: vi.fn() },
+    notification: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     incident: { findUnique: vi.fn() },
     incidentEvent: { create: vi.fn() },
   },
@@ -54,6 +58,59 @@ describe('Notifications Library', () => {
         data: expect.objectContaining({ status: 'SENT' }),
       })
     );
+  });
+
+  it('should debounce an identical recent notification payload', async () => {
+    const message = '[API] Incident triggered: CPU high';
+    vi.mocked(prisma.notification.findFirst).mockResolvedValue(
+      { id: 'notif-existing' } as unknown as NotificationFindResult
+    );
+
+    const result = await sendNotification('inc-1', 'user-1', 'EMAIL', message);
+
+    expect(result).toEqual({
+      success: true,
+      notificationId: 'notif-existing',
+      debounced: true,
+    });
+    expect(prisma.notification.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          incidentId: 'inc-1',
+          userId: 'user-1',
+          channel: 'EMAIL',
+          message,
+        }),
+      })
+    );
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+    expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
+  });
+
+  it('should not let a recent trigger notification suppress a resolved lifecycle message', async () => {
+    const resolvedMessage = '[API] Incident resolved: CPU high';
+    vi.mocked(prisma.notification.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.notification.create).mockResolvedValue(
+      { id: 'notif-resolved', attempts: 0 } as unknown as NotificationCreateResult
+    );
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue(
+      {
+        id: 'inc-1',
+        status: 'RESOLVED',
+      } as unknown as IncidentFindResult
+    );
+    vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({ success: true });
+
+    const result = await sendNotification('inc-1', 'user-1', 'EMAIL', resolvedMessage);
+
+    expect(result.success).toBe(true);
+    expect(prisma.notification.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ message: resolvedMessage }),
+      })
+    );
+    expect(prisma.notification.create).toHaveBeenCalled();
+    expect(emailModule.sendIncidentEmail).toHaveBeenCalledWith('user-1', 'inc-1', 'resolved');
   });
 
   it('should route to WHATSAPP channel correctly', async () => {
