@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/shadcn/switch';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
-import { Clock3, Moon, ShieldCheck } from 'lucide-react';
+import { Clock3, Info, Moon, ShieldCheck } from 'lucide-react';
 
 type State = {
   error?: string | null;
@@ -92,6 +92,15 @@ export default function QuietHoursForm({
           </div>
         </div>
 
+        <div className="flex items-start gap-2 border-t bg-muted/20 px-4 py-3 text-xs leading-relaxed text-muted-foreground sm:px-5">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <p>
+            <span className="font-medium text-foreground">How it works:</span> Your start-to-end
+            window applies every day. Turn on all-day weekends to extend quiet hours through all of
+            Saturday and Sunday. When it is off, the regular time window still applies on weekends.
+          </p>
+        </div>
+
         {enabledChecked && (
           <div className="space-y-5 border-t bg-muted/20 p-4 sm:p-5">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(16rem,1.35fr)]">
@@ -125,10 +134,10 @@ export default function QuietHoursForm({
               <div className="flex items-center justify-between gap-4 rounded-lg border bg-background p-4">
                 <div>
                   <Label htmlFor="quiet-hours-weekend" className="text-sm">
-                    All-day weekends
+                    Quiet all day on weekends
                   </Label>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Keep LOW-urgency alerts quiet Saturday and Sunday.
+                    Otherwise, the regular time window applies.
                   </p>
                 </div>
                 <Switch
