@@ -45,7 +45,7 @@ function buildIncidentFilterSql(filters: SLAMetricsFilter, tableAlias: string = 
     if (Array.isArray(filters.serviceId)) {
       if (filters.serviceId.length > 0) {
         fragments.push(
-          Prisma.sql`AND ${Prisma.raw(`${prefix}"serviceId"`)} IN (${Prisma.join(filters.serviceId)})`
+          Prisma.sql`AND ${Prisma.raw(`${prefix}"serviceId"`)} = ANY(${filters.serviceId}::text[])`
         );
       }
     } else {
@@ -64,7 +64,7 @@ function buildIncidentFilterSql(filters: SLAMetricsFilter, tableAlias: string = 
     if (teamIds.length > 0) {
       fragments.push(
         Prisma.sql`AND ${Prisma.raw(`${prefix}"serviceId"`)} IN (
-          SELECT id FROM "Service" WHERE "teamId" IN (${Prisma.join(teamIds)})
+          SELECT id FROM "Service" WHERE "teamId" = ANY(${teamIds}::text[])
         )`
       );
     }
@@ -371,11 +371,11 @@ async function calculateDbAggregateMetrics(
       SELECT
         COUNT(*) as total_incidents,
         COUNT(*) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as acknowledged_count,
-        COUNT(*) FILTER (WHERE "status" = 'RESOLVED') as resolved_count,
+        COUNT(*) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus") as resolved_count,
         AVG(GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000))
           FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as avg_mtta_ms,
         AVG(GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000))
-          FILTER (WHERE "status" = 'RESOLVED' AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
+          FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
         COUNT(*) FILTER (
           WHERE "acknowledgedAt" IS NOT NULL
             AND GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000) <= ${Prisma.raw(ackTargetCase)}
@@ -383,25 +383,25 @@ async function calculateDbAggregateMetrics(
         COUNT(*) FILTER (
           WHERE ("acknowledgedAt" IS NOT NULL
             AND GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000) > ${Prisma.raw(ackTargetCase)})
-          OR ("acknowledgedAt" IS NULL AND "status" = 'RESOLVED')
-          OR ("acknowledgedAt" IS NULL AND "status" != 'RESOLVED'
+          OR ("acknowledgedAt" IS NULL AND "status" = 'RESOLVED'::"IncidentStatus")
+          OR ("acknowledgedAt" IS NULL AND "status" != 'RESOLVED'::"IncidentStatus"
             AND EXTRACT(EPOCH FROM (NOW() - "createdAt")) * 1000 > ${Prisma.raw(ackTargetCase)})
         ) as ack_sla_breached,
         COUNT(*) FILTER (
-          WHERE "status" = 'RESOLVED'
+          WHERE "status" = 'RESOLVED'::"IncidentStatus"
           AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL
           AND GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000) <= ${Prisma.raw(resolveTargetCase)}
         ) as resolve_sla_met,
         COUNT(*) FILTER (
-          WHERE ("status" = 'RESOLVED'
+          WHERE ("status" = 'RESOLVED'::"IncidentStatus"
             AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL
             AND GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000) > ${Prisma.raw(resolveTargetCase)})
-          OR ("status" != 'RESOLVED'
+          OR ("status" != 'RESOLVED'::"IncidentStatus"
             AND EXTRACT(EPOCH FROM (NOW() - "createdAt")) * 1000 > ${Prisma.raw(resolveTargetCase)})
         ) as resolve_sla_breached,
-        COUNT(*) FILTER (WHERE "urgency" = 'HIGH') as high_urgency_count,
-        COUNT(*) FILTER (WHERE "urgency" = 'MEDIUM') as medium_urgency_count,
-        COUNT(*) FILTER (WHERE "urgency" = 'LOW') as low_urgency_count,
+        COUNT(*) FILTER (WHERE "urgency" = 'HIGH'::"IncidentUrgency") as high_urgency_count,
+        COUNT(*) FILTER (WHERE "urgency" = 'MEDIUM'::"IncidentUrgency") as medium_urgency_count,
+        COUNT(*) FILTER (WHERE "urgency" = 'LOW'::"IncidentUrgency") as low_urgency_count,
         -- After-hours classification uses BUSINESS_HOURS_TIMEZONE (UTC)
         -- so this aggregate agrees with the rollup-generation path.
         COUNT(*) FILTER (
@@ -443,10 +443,10 @@ async function calculateDbAggregateMetrics(
         ) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as mtta_p95_ms,
         PERCENTILE_CONT(0.5) WITHIN GROUP (
           ORDER BY GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000)
-        ) FILTER (WHERE "status" = 'RESOLVED' AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL) as mttr_p50_ms,
+        ) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL) as mttr_p50_ms,
         PERCENTILE_CONT(0.95) WITHIN GROUP (
           ORDER BY GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000)
-        ) FILTER (WHERE "status" = 'RESOLVED' AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL) as mttr_p95_ms
+        ) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL) as mttr_p95_ms
       FROM "Incident"
       WHERE "createdAt" >= ${start}
         AND "createdAt" <= ${end}
@@ -1167,7 +1167,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     // set must mirror `recentIncidentWhere` so the heatmap visualization
     // doesn't contradict the metrics above it (team/urgency/status/
     // visibility/assignee).
-    prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
+    prisma
+      .$queryRaw<Array<{ date: string; count: bigint }>>`
       SELECT DATE("createdAt") as date, COUNT(*) as count
       FROM "Incident"
       WHERE "createdAt" >= ${heatmapStart}
@@ -1175,7 +1176,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         ${fullIncidentFilterSql}
       GROUP BY DATE("createdAt")
       ORDER BY date
-    `,
+    `
+      .catch(err => {
+        logger.warn('[SLA] Heatmap raw query failed, falling back to empty list', { error: err });
+        return [];
+      }),
     prisma.incident.groupBy({
       by: ['urgency'],
       where: recentIncidentWhere,
@@ -1234,34 +1239,50 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     // for-like against the current window (was: only serviceId honored,
     // so team/urgency/etc-scoped queries returned a previousPeriod from
     // an unrelated population).
-    prisma.$queryRaw<
-      Array<{
-        total_count: bigint;
-        high_urgency_count: bigint;
-        medium_urgency_count: bigint;
-        low_urgency_count: bigint;
-        avg_mtta_ms: number | null;
-        avg_mttr_ms: number | null;
-        ack_count: bigint;
-        resolve_count: bigint;
-      }>
-    >`
+    prisma
+      .$queryRaw<
+        Array<{
+          total_count: bigint;
+          high_urgency_count: bigint;
+          medium_urgency_count: bigint;
+          low_urgency_count: bigint;
+          avg_mtta_ms: number | null;
+          avg_mttr_ms: number | null;
+          ack_count: bigint;
+          resolve_count: bigint;
+        }>
+      >`
       SELECT
         COUNT(*) as total_count,
-        COUNT(*) FILTER (WHERE "urgency" = 'HIGH') as high_urgency_count,
-        COUNT(*) FILTER (WHERE "urgency" = 'MEDIUM') as medium_urgency_count,
-        COUNT(*) FILTER (WHERE "urgency" = 'LOW') as low_urgency_count,
+        COUNT(*) FILTER (WHERE "urgency" = 'HIGH'::"IncidentUrgency") as high_urgency_count,
+        COUNT(*) FILTER (WHERE "urgency" = 'MEDIUM'::"IncidentUrgency") as medium_urgency_count,
+        COUNT(*) FILTER (WHERE "urgency" = 'LOW'::"IncidentUrgency") as low_urgency_count,
         AVG(EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000)
           FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as avg_mtta_ms,
         AVG(EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000)
-          FILTER (WHERE "status" = 'RESOLVED' AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
+          FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
         COUNT(*) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as ack_count,
-        COUNT(*) FILTER (WHERE "status" = 'RESOLVED') as resolve_count
+        COUNT(*) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus") as resolve_count
       FROM "Incident"
       WHERE "createdAt" >= ${previousStart}
         AND "createdAt" < ${previousEnd}
         ${fullIncidentFilterSql}
-    `,
+    `
+      .catch(err => {
+        logger.warn('[SLA] Previous period query failed, returning zeroed stats', { error: err });
+        return [
+          {
+            total_count: BigInt(0),
+            high_urgency_count: BigInt(0),
+            medium_urgency_count: BigInt(0),
+            low_urgency_count: BigInt(0),
+            avg_mtta_ms: null,
+            avg_mttr_ms: null,
+            ack_count: BigInt(0),
+            resolve_count: BigInt(0),
+          },
+        ];
+      }),
   ]);
 
   // Convert heatmap aggregates to expected format
