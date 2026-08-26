@@ -16,7 +16,7 @@ type IncidentListItem = {
   service: { name: string };
 };
 
-type IncidentFilter = 'all' | 'open' | 'resolved';
+export type IncidentFilter = 'all' | 'open' | 'acknowledged' | 'resolved';
 
 export default function MobileIncidentList({
   incidents,
@@ -41,11 +41,12 @@ export default function MobileIncidentList({
         }
       }
     };
-    void loadFromCache();
+    loadFromCache();
   }, []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && !navigator.onLine && incidents.length === 0) {
+    if (typeof window === 'undefined') return;
+    if (incidents.length === 0 && !navigator.onLine) {
       return;
     }
     setLocalIncidents(incidents);
@@ -69,7 +70,10 @@ export default function MobileIncidentList({
       const updated = prev.map(incident =>
         incident.id === id ? { ...incident, status } : incident
       );
-      if (filter === 'open' && status === 'RESOLVED') {
+      if (filter === 'open') {
+        return updated.filter(incident => incident.id !== id);
+      }
+      if (filter === 'acknowledged' && status !== 'ACKNOWLEDGED') {
         return updated.filter(incident => incident.id !== id);
       }
       if (filter === 'resolved' && status !== 'RESOLVED') {

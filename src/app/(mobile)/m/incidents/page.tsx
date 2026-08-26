@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import MobileIncidentList from '@/components/mobile/MobileIncidentList';
+import MobileIncidentList, { type IncidentFilter } from '@/components/mobile/MobileIncidentList';
 import MobileListControls from '@/components/mobile/MobileListControls';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -8,11 +8,10 @@ import { AlertTriangle, Plus, ChevronLeft, ChevronRight, SearchX } from 'lucide-
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 20;
-type MobileIncidentFilter = 'all' | 'open' | 'resolved';
 type MobileIncidentSort = 'created_desc' | 'created_asc' | 'urgency';
 
-const normalizeFilter = (value?: string): MobileIncidentFilter => {
-  if (value === 'open' || value === 'resolved') {
+const normalizeFilter = (value?: string): IncidentFilter => {
+  if (value === 'open' || value === 'acknowledged' || value === 'resolved') {
     return value;
   }
   return 'all';
@@ -41,7 +40,9 @@ export default async function MobileIncidentsPage(props: {
   }
 
   if (filter === 'open') {
-    where.status = { not: 'RESOLVED' };
+    where.status = 'OPEN';
+  } else if (filter === 'acknowledged') {
+    where.status = 'ACKNOWLEDGED';
   } else if (filter === 'resolved') {
     where.status = 'RESOLVED';
   }
@@ -107,6 +108,7 @@ export default async function MobileIncidentsPage(props: {
         filters={[
           { label: 'All', value: 'all' },
           { label: 'Open', value: 'open' },
+          { label: 'Acknowledged', value: 'acknowledged' },
           { label: 'Resolved', value: 'resolved' },
         ]}
         sortOptions={[
