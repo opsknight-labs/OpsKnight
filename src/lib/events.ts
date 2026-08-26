@@ -159,22 +159,6 @@ export async function processEvent(
     eventData.summary = `Alert from ${eventData.source}`;
   }
 
-  // This read previously used the global Prisma client from inside an
-  // interactive transaction, which could consume a second pool connection
-  // while the transaction held the first. The uncommitted current alert was
-  // never visible to that read, so preserve the same historical check outside
-  // the transaction and avoid nested pool pressure.
-  let isFlapping = false;
-  if (event_action === 'trigger') {
-    try {
-      const { checkAlertFlapping } = await import('./flapping');
-      const flappingResult = await checkAlertFlapping(dedup_key, serviceId);
-      isFlapping = flappingResult.isFlapping;
-    } catch (_) {
-      // Non-critical: if flapping check fails, proceed with normal incident creation
-    }
-  }
-
   const result = await runReadCommittedTransaction(async tx => {
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
@@ -214,6 +198,21 @@ export async function processEvent(
         data: { dedupKey: dedup_key },
       });
       existingIncident.dedupKey = dedup_key;
+    }
+
+    // Run this after the advisory lock so a queued event observes alert
+    // history committed by earlier events for the same dedup key. Passing the
+    // transaction client avoids opening a second pooled connection while this
+    // interactive transaction is active.
+    let isFlapping = false;
+    if (event_action === 'trigger' && !existingIncident) {
+      try {
+        const { checkAlertFlapping } = await import('./flapping');
+        const flappingResult = await checkAlertFlapping(dedup_key, serviceId, undefined, tx);
+        isFlapping = flappingResult.isFlapping;
+      } catch (_) {
+        // Non-critical: if flapping check fails, proceed with normal incident creation
+      }
     }
 
     // 3. For acknowledge, skip alert creation if no matching incident
@@ -362,14 +361,17 @@ export async function processEvent(
         },
       });
 
-      logger.info(isFlapping ? 'event.incident_created_suppressed_flapping' : 'event.incident_created', {
-        incidentId: newIncident.id,
-        dedupKey: dedup_key,
-        source: eventData.source,
-        severity: eventData.severity,
-        urgency,
-        isFlapping,
-      });
+      logger.info(
+        isFlapping ? 'event.incident_created_suppressed_flapping' : 'event.incident_created',
+        {
+          incidentId: newIncident.id,
+          dedupKey: dedup_key,
+          source: eventData.source,
+          severity: eventData.severity,
+          urgency,
+          isFlapping,
+        }
+      );
 
       // Connect alert to incident
       await tx.alert.update({

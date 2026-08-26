@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { logger } from './logger';
 
@@ -25,12 +26,13 @@ const DEFAULT_CONFIG: FlappingConfig = {
 export async function checkAlertFlapping(
   dedupKey: string,
   serviceId: string,
-  config: FlappingConfig = DEFAULT_CONFIG
+  config: FlappingConfig = DEFAULT_CONFIG,
+  db: Pick<Prisma.TransactionClient, 'alert'> = prisma
 ): Promise<{ isFlapping: boolean; transitionCount: number }> {
   try {
     const windowStart = new Date(Date.now() - config.windowSeconds * 1000);
 
-    const recentAlerts = await prisma.alert.findMany({
+    const recentAlerts = await db.alert.findMany({
       where: {
         dedupKey,
         serviceId,
