@@ -1,34 +1,16 @@
 /**
- * User-friendly error message translations
- * Converts technical error messages to user-friendly ones
+ * User-friendly error message translations.
+ *
+ * @deprecated New domain code should throw AppError with a stable error code.
+ * This helper remains as a compatibility bridge while legacy string callers migrate.
  */
+import { isAppError } from './errors';
 
-export function getUserFriendlyError(error: string | Error | unknown): string {
-  // Handle Event objects specifically (they stringify to "[object Event]")
-  if (error && typeof error === 'object' && 'type' in error && 'target' in error) {
-    return 'An unexpected error occurred. Please try again.';
-  }
+const GENERIC_ERROR = 'An unexpected error occurred. Please try again.';
 
-  // Handle Error instances
-  if (error instanceof Error) {
-    // return error.message || 'An unexpected error occurred.';
-    error = error.message || 'An unexpected error occurred.';
-  }
-
-  // Handle strings
-  // if (typeof error === 'string') {
-  //   return error;
-  // }
-
-  // Handle objects that stringify to "[object ...]"
-  const errorString = String(error);
-  if (errorString.startsWith('[object ') && errorString.endsWith(']')) {
-    return 'An unexpected error occurred. Please try again.';
-  }
-
-  const errorMessage = errorString;
-
-  // Database/Prisma errors
+function translateLegacyMessage(errorMessage: string): string | undefined {
+  // Database/Prisma errors. These are legacy compatibility rules only; new
+  // code should map structured Prisma error codes at the domain boundary.
   if (errorMessage.includes('Unique constraint')) {
     if (errorMessage.includes('email')) {
       return 'A user with this email already exists. Please use a different email address.';
@@ -47,7 +29,6 @@ export function getUserFriendlyError(error: string | Error | unknown): string {
     return 'The item you are trying to update does not exist. It may have been deleted.';
   }
 
-  // Validation errors
   if (errorMessage.includes('required')) {
     return 'Please fill in all required fields.';
   }
@@ -56,7 +37,6 @@ export function getUserFriendlyError(error: string | Error | unknown): string {
     return 'Please check your input and try again.';
   }
 
-  // Authorization errors
   if (errorMessage.includes('Unauthorized') || errorMessage.includes('unauthorized')) {
     return 'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
   }
@@ -65,7 +45,6 @@ export function getUserFriendlyError(error: string | Error | unknown): string {
     return 'The requested item could not be found. It may have been deleted or you may not have access to it.';
   }
 
-  // Network/API errors
   if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
     return 'Unable to connect to the server. Please check your internet connection and try again.';
   }
@@ -74,17 +53,41 @@ export function getUserFriendlyError(error: string | Error | unknown): string {
     return 'The request took too long to complete. Please try again.';
   }
 
-  // Generic fallback
   if (errorMessage.includes('Internal Server Error') || errorMessage.includes('500')) {
     return 'An unexpected error occurred. Please try again. If the problem persists, contact support.';
   }
 
-  // Return original if no match found
-  return errorMessage;
+  return undefined;
+}
+
+export function getUserFriendlyError(error: string | Error | unknown): string {
+  if (isAppError(error)) {
+    return error.userMessage;
+  }
+
+  // Handle Event objects specifically (they stringify to "[object Event]").
+  if (error && typeof error === 'object' && 'type' in error && 'target' in error) {
+    return GENERIC_ERROR;
+  }
+
+  // Unexpected Error instances are untrusted. Preserve translations for known
+  // legacy errors, but never expose an unmatched exception message to users.
+  if (error instanceof Error) {
+    return translateLegacyMessage(error.message) ?? GENERIC_ERROR;
+  }
+
+  const errorString = String(error);
+  if (errorString.startsWith('[object ') && errorString.endsWith(']')) {
+    return GENERIC_ERROR;
+  }
+
+  // Plain strings are still treated as intentionally user-facing legacy input.
+  // New code should use AppError instead so semantic meaning does not depend on text.
+  return translateLegacyMessage(errorString) ?? errorString;
 }
 
 /**
- * Get a user-friendly success message for common actions
+ * Get a user-friendly success message for common actions.
  */
 export function getSuccessMessage(action: string, entity: string): string {
   const messages: Record<string, string> = {
@@ -99,5 +102,3 @@ export function getSuccessMessage(action: string, entity: string): string {
 
   return messages[action.toLowerCase()] || `${action} completed successfully.`;
 }
-
-

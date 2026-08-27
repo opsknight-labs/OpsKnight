@@ -1,16 +1,15 @@
 /**
  * Helper utilities for server actions to provide consistent error handling
- * and user-friendly error messages
+ * and user-friendly error messages.
  */
 
-import { getUserFriendlyError } from './user-friendly-errors';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { isAppError } from './errors';
+import { getUserFriendlyError } from './user-friendly-errors';
 
 /**
- * Wraps a server action with error handling that converts errors to user-friendly messages
- *
- * @param action - The server action function to wrap
- * @returns A wrapped function that catches errors and returns user-friendly messages
+ * Wraps a server action with error handling that converts legacy errors to
+ * user-friendly messages while preserving typed AppError identity.
  */
 export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(action: T): T {
   // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -27,7 +26,12 @@ export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(ac
       )
         throw error;
 
-      // If it's already a state object with error, return it
+      // Typed application errors already contain safe public messaging and
+      // machine-readable identity. Do not flatten them back into plain Error.
+      if (isAppError(error)) throw error;
+
+      // If it's already a state object with error, return it using the legacy
+      // string contract until individual server actions adopt structured state.
       if (error && typeof error === 'object' && 'error' in error) {
         return {
           ...error,
@@ -35,18 +39,13 @@ export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(ac
         };
       }
 
-      // Convert error to user-friendly message
-      const friendlyMessage = getUserFriendlyError(error);
-
-      // If action returns a state object, wrap error in state format
-      // Otherwise, throw the friendly error
-      throw new Error(friendlyMessage);
+      throw new Error(getUserFriendlyError(error));
     }
   }) as T;
 }
 
 /**
- * Creates an error state object for form actions
+ * Creates an error state object for form actions.
  */
 export function createErrorState(error: unknown): { error: string } {
   return {
@@ -55,7 +54,7 @@ export function createErrorState(error: unknown): { error: string } {
 }
 
 /**
- * Creates a success state object for form actions
+ * Creates a success state object for form actions.
  */
 export function createSuccessState<T = Record<string, never>>(data?: T): { success: true } & T {
   return {
