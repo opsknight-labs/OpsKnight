@@ -6,6 +6,8 @@
  * Resource policies (team membership, assignment, visibility) are evaluated by
  * the server after the role grants the relevant scoped capability.
  */
+import { AppError } from '@/lib/errors';
+
 export const APP_ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
@@ -122,15 +124,16 @@ export const ROLE_DESCRIPTIONS = new Map<AppRole, string>([
   ['USER', 'Team-scoped access to assigned operational information.'],
 ]);
 
-export class AuthorizationError extends Error {
-  readonly code = 'AUTHORIZATION_DENIED';
-  readonly status = 403;
-
+export class AuthorizationError extends AppError {
   constructor(
     message: string,
     readonly capability: Capability
   ) {
-    super(message);
+    super({
+      code: 'AUTHORIZATION_DENIED',
+      userMessage: message,
+      details: { capability },
+    });
     this.name = 'AuthorizationError';
   }
 }
