@@ -5,6 +5,7 @@ import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { getDefaultAvatar } from '@/lib/avatar';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,7 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
         },
       },
       assignedIncidents: {
-        where: { status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] } },
+        where: { status: { in: activeIncidentStatuses() } },
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -37,7 +38,7 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
       },
       _count: {
         select: {
-          assignedIncidents: true,
+          assignedIncidents: { where: { status: { in: activeIncidentStatuses() } } },
         },
       },
     },
@@ -125,14 +126,14 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Open Incidents Section */}
+      {/* Active Incidents Section */}
       <div className="flex flex-col gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Open Incidents ({user.assignedIncidents.length})
+          Active Incidents ({user._count.assignedIncidents})
         </h3>
         <div className="flex flex-col gap-2">
           {user.assignedIncidents.length === 0 ? (
-            <p className="text-xs text-slate-500 dark:text-slate-400">No open incidents</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">No active incidents</p>
           ) : (
             user.assignedIncidents.map(incident => (
               <Link key={incident.id} href={`/m/incidents/${incident.id}`} className="no-underline">
@@ -151,6 +152,11 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
             ))
           )}
         </div>
+        {user._count.assignedIncidents > user.assignedIncidents.length && (
+          <p className="text-[11px] text-[color:var(--text-muted)]">
+            Showing {user.assignedIncidents.length} of {user._count.assignedIncidents}
+          </p>
+        )}
       </div>
     </div>
   );

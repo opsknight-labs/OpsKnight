@@ -7,6 +7,7 @@ import { cleanupUserTokens } from '@/lib/user-tokens';
 import { cleanupExpiredRateLimits } from '@/lib/rate-limit';
 import { checkSLABreaches } from './sla-breach-monitor';
 import crypto from 'crypto';
+import { activeIncidentStatuses } from './incident-status';
 
 /**
  * Production-Grade Cron Scheduler
@@ -203,7 +204,7 @@ async function getNextScheduledTime(): Promise<Date> {
       }),
       prisma.incident.findFirst({
         where: {
-          status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+          status: { in: activeIncidentStatuses() },
           service: { serviceNotifyOnSlaBreach: true },
         },
         orderBy: { createdAt: 'asc' },
@@ -349,14 +350,16 @@ async function runOnce() {
     });
 
     // Group 2: Secondary tasks (can run in parallel)
-    const { processShiftRotations, processUpcomingShiftReminders } = await import('./oncall-handoff');
-    const [retryResult, autoUnsnoozeResult, breachResult, handoffResult, reminderCount] = await Promise.all([
-      retryFailedNotifications(),
-      processAutoUnsnoozeInternal(),
-      checkSLABreaches(),
-      processShiftRotations(new Date()),
-      processUpcomingShiftReminders(new Date(), 60),
-    ]);
+    const { processShiftRotations, processUpcomingShiftReminders } =
+      await import('./oncall-handoff');
+    const [retryResult, autoUnsnoozeResult, breachResult, handoffResult, reminderCount] =
+      await Promise.all([
+        retryFailedNotifications(),
+        processAutoUnsnoozeInternal(),
+        checkSLABreaches(),
+        processShiftRotations(new Date()),
+        processUpcomingShiftReminders(new Date(), 60),
+      ]);
 
     logger.info('[Cron] Secondary tasks processed', {
       retries: retryResult,

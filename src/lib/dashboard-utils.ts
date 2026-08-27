@@ -68,7 +68,10 @@ export function buildIncidentWhere(
   const where: Prisma.IncidentWhereInput = { ...dateFilter };
 
   if (options.includeStatus && filters.status && filters.status !== 'ALL') {
-    where.status = filters.status as Prisma.EnumIncidentStatusFilter;
+    where.status =
+      filters.status === 'ACTIVE'
+        ? { in: ['OPEN', 'ACKNOWLEDGED'] }
+        : (filters.status as Prisma.EnumIncidentStatusFilter);
   }
 
   if (filters.assignee !== undefined) {

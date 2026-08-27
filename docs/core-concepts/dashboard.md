@@ -18,7 +18,15 @@ The dashboard is the command center for real-time incident response. It surfaces
 
 ### Active Incidents
 
-Shows unresolved incidents with:
+Shows the current actionable backlog: Triggered (`OPEN`) plus Acknowledged incidents. Snoozed, Suppressed, and Resolved incidents are excluded.
+
+Dashboard scopes are explicit:
+
+- **Current** applies to Active, current urgency, and unassigned Active counts.
+- The displayed range applies to Total, Resolved, trends, MTTA, MTTR, and other historical analysis.
+- Retention can clip historical analysis but does not hide current Active incidents.
+
+Each active incident includes:
 
 - Severity badge
 - Service name

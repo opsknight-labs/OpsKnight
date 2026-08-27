@@ -3,6 +3,7 @@ import { logger } from './logger';
 import { WebhookIntegration } from '@prisma/client';
 import { getPrioritySLATarget } from './sla-priority';
 import { escapeHtml } from './email-components';
+import { activeIncidentStatuses } from './incident-status';
 
 /**
  * SLA Breach Monitor - Proactive Breach Detection
@@ -70,7 +71,7 @@ export async function checkSLABreaches(
   // Get all active incidents with their service SLA targets
   const incidents = await prisma.incident.findMany({
     where: {
-      status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] },
+      status: { in: activeIncidentStatuses() },
     },
     select: {
       id: true,

@@ -28,7 +28,7 @@ export default async function MobileAnalyticsPage() {
   const windowLabelDays = slaMetrics.isClipped ? effectiveWindowDays : metricsWindowDays;
   const windowLabelSuffix = slaMetrics.isClipped ? ' (retention limit)' : '';
 
-  const openIncidents = slaMetrics.activeIncidents;
+  const activeIncidents = slaMetrics.activeIncidents;
   const incidentsInRange = slaMetrics.totalIncidents;
   const mtta = slaMetrics.mttd ?? null;
   const mttr = slaMetrics.mttr ?? null;
@@ -87,9 +87,11 @@ export default async function MobileAnalyticsPage() {
       <div className="grid grid-cols-2 gap-3">
         <MobileCard className="relative overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-500 to-rose-500" />
-          <div className="text-2xl font-bold text-[color:var(--text-primary)]">{openIncidents}</div>
+          <div className="text-2xl font-bold text-[color:var(--text-primary)]">
+            {activeIncidents}
+          </div>
           <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-            Open Incidents
+            Active Incidents
           </div>
         </MobileCard>
         <MobileCard className="relative overflow-hidden">

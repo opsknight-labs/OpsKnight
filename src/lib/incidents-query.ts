@@ -1,4 +1,5 @@
-import type { IncidentUrgency, Prisma } from '@prisma/client';
+import type { IncidentStatus, IncidentUrgency, Prisma } from '@prisma/client';
+import { activeIncidentStatuses } from './incident-status';
 
 export type IncidentListFilter =
   | 'all'
@@ -34,32 +35,74 @@ export function normalizeIncidentSort(value?: string): IncidentListSort {
   return 'newest';
 }
 
+export function normalizeIncidentStatus(value?: string): IncidentStatus | undefined {
+  if (
+    value === 'OPEN' ||
+    value === 'ACKNOWLEDGED' ||
+    value === 'RESOLVED' ||
+    value === 'SNOOZED' ||
+    value === 'SUPPRESSED'
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
 export function buildIncidentWhere({
   filter,
   search,
   priority,
   urgency,
   assigneeId,
+  assignee,
+  serviceId,
+  status,
+  createdAfter,
+  createdBefore,
 }: {
   filter: IncidentListFilter;
   search?: string;
   priority?: string;
   urgency?: string;
   assigneeId?: string | null;
+  assignee?: string;
+  serviceId?: string;
+  status?: IncidentStatus;
+  createdAfter?: Date;
+  createdBefore?: Date;
 }): Prisma.IncidentWhereInput {
   const where: Prisma.IncidentWhereInput = {};
 
   if (filter === 'mine') {
     where.assigneeId = assigneeId ?? undefined;
-    where.status = { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] };
+    where.status = { in: activeIncidentStatuses() };
   } else if (filter === 'all_open') {
-    where.status = { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] };
+    where.status = { in: activeIncidentStatuses() };
   } else if (filter === 'resolved') {
     where.status = 'RESOLVED';
   } else if (filter === 'snoozed') {
     where.status = 'SNOOZED';
   } else if (filter === 'suppressed') {
     where.status = 'SUPPRESSED';
+  }
+
+  if (status && filter === 'all') {
+    where.status = status;
+  }
+
+  if (assignee && filter !== 'mine') {
+    where.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
+  }
+
+  if (serviceId) {
+    where.serviceId = serviceId;
+  }
+
+  if (createdAfter || createdBefore) {
+    where.createdAt = {
+      ...(createdAfter ? { gte: createdAfter } : {}),
+      ...(createdBefore ? { lte: createdBefore } : {}),
+    };
   }
 
   if (search) {

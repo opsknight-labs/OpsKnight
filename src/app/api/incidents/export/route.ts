@@ -4,6 +4,11 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { assertResponderOrAbove } from '@/lib/rbac';
 import { buildCsv, type CsvColumn } from '@/lib/csv';
+import {
+  buildIncidentWhere,
+  normalizeIncidentFilter,
+  normalizeIncidentStatus,
+} from '@/lib/incidents-query';
 import ExcelJS from 'exceljs';
 
 export const runtime = 'nodejs';
@@ -22,13 +27,12 @@ export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url);
 
   // Validate and sanitize input parameters to prevent abuse
-  const VALID_FILTERS = ['all', 'mine', 'all_open', 'resolved', 'snoozed', 'suppressed'];
   const VALID_FORMATS = ['csv', 'xlsx'];
   const VALID_URGENCIES = ['all', 'HIGH', 'MEDIUM', 'LOW'];
   const VALID_PRIORITIES = ['all', 'P1', 'P2', 'P3', 'P4', 'P5'];
 
   const filterParam = searchParams.get('filter') || 'all';
-  const filter = VALID_FILTERS.includes(filterParam) ? filterParam : 'all';
+  const filter = normalizeIncidentFilter(filterParam);
 
   // Limit search string length to prevent abuse
   const search = (searchParams.get('search') || '').slice(0, 200);
@@ -40,41 +44,30 @@ export async function GET(req: NextRequest) {
   const urgency = VALID_URGENCIES.includes(urgencyParam) ? urgencyParam : 'all';
 
   const teamId = searchParams.get('teamId') || 'all';
+  const status = normalizeIncidentStatus(searchParams.get('status') || undefined);
+  const assignee = searchParams.get('assignee') || undefined;
+  const serviceId = searchParams.get('serviceId') || undefined;
+  const createdAfterParam = searchParams.get('createdAfter');
+  const createdBeforeParam = searchParams.get('createdBefore');
+  const createdAfter = createdAfterParam ? new Date(createdAfterParam) : undefined;
+  const createdBefore = createdBeforeParam ? new Date(createdBeforeParam) : undefined;
 
   const formatParam = searchParams.get('format') || 'csv';
   const format = VALID_FORMATS.includes(formatParam) ? formatParam : 'csv';
 
-  let where: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-  if (filter === 'mine') {
-    where = {
-      assigneeId: (session.user as any).id, // eslint-disable-line @typescript-eslint/no-explicit-any
-      status: { notIn: ['RESOLVED'] },
-    };
-  } else if (filter === 'all_open') {
-    where = { status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] } };
-  } else if (filter === 'resolved') {
-    where = { status: 'RESOLVED' };
-  } else if (filter === 'snoozed') {
-    where = { status: 'SNOOZED' };
-  } else if (filter === 'suppressed') {
-    where = { status: 'SUPPRESSED' };
-  }
-
-  if (search) {
-    where.OR = [
-      { title: { contains: search, mode: 'insensitive' } },
-      { description: { contains: search, mode: 'insensitive' } },
-      { id: { contains: search, mode: 'insensitive' } },
-    ];
-  }
-
-  if (priority !== 'all') {
-    where.priority = priority;
-  }
-
-  if (urgency !== 'all') {
-    where.urgency = urgency;
-  }
+  const where = buildIncidentWhere({
+    filter,
+    search,
+    priority,
+    urgency,
+    assigneeId: (session.user as { id?: string }).id,
+    assignee,
+    serviceId,
+    status,
+    createdAfter: createdAfter && !Number.isNaN(createdAfter.getTime()) ? createdAfter : undefined,
+    createdBefore:
+      createdBefore && !Number.isNaN(createdBefore.getTime()) ? createdBefore : undefined,
+  });
 
   if (teamId !== 'all') {
     if (teamId === 'mine') {

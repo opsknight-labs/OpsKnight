@@ -126,7 +126,7 @@ function ServiceCard({
 
       {openIncidents > 0 && (
         <span className="rounded-full bg-red-100 px-2 py-1 text-[10px] font-bold uppercase text-red-700 dark:bg-red-900/40 dark:text-red-300">
-          {openIncidents} open
+          {openIncidents} active
         </span>
       )}
 

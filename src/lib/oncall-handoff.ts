@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { logger } from './logger';
 import { getActiveOnCallShifts } from './oncall-shifts';
 import { createInAppNotifications } from './in-app-notifications';
+import { activeIncidentStatuses } from './incident-status';
 
 export interface ShiftHandoffResult {
   remindersSent: number;
@@ -31,19 +32,23 @@ export async function processUpcomingShiftReminders(
       const currentUserId = currentOnCallMap.get(shift.scheduleId);
       // Only remind if the responder is taking over or shift is starting
       if (currentUserId !== shift.userId) {
-        const minutesUntilStart = Math.max(1, Math.round((shift.start.getTime() - now.getTime()) / 60000));
+        const minutesUntilStart = Math.max(
+          1,
+          Math.round((shift.start.getTime() - now.getTime()) / 60000)
+        );
 
         // Deduplicate in-app notification within the last 45 minutes
-        const recentNotification = typeof prisma.inAppNotification?.findFirst === 'function'
-          ? await prisma.inAppNotification.findFirst({
-              where: {
-                userId: shift.userId,
-                type: 'SCHEDULE',
-                entityId: shift.scheduleId,
-                createdAt: { gte: new Date(now.getTime() - 45 * 60 * 1000) },
-              },
-            })
-          : null;
+        const recentNotification =
+          typeof prisma.inAppNotification?.findFirst === 'function'
+            ? await prisma.inAppNotification.findFirst({
+                where: {
+                  userId: shift.userId,
+                  type: 'SCHEDULE',
+                  entityId: shift.scheduleId,
+                  createdAt: { gte: new Date(now.getTime() - 45 * 60 * 1000) },
+                },
+              })
+            : null;
 
         if (!recentNotification) {
           await createInAppNotifications({
@@ -113,11 +118,11 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
 
         const serviceIds = policies.flatMap(p => p.services.map(s => s.id));
         if (serviceIds.length > 0) {
-          // Find active, unacknowledged or open incidents on these services
+          // Find active (triggered or acknowledged) incidents on these services
           const activeIncidents = await prisma.incident.findMany({
             where: {
               serviceId: { in: serviceIds },
-              status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+              status: { in: activeIncidentStatuses() },
             },
             select: { id: true, title: true, status: true, assigneeId: true },
           });

@@ -16,7 +16,7 @@ type IncidentListItem = {
   service: { name: string };
 };
 
-type IncidentFilter = 'all' | 'open' | 'resolved';
+type IncidentFilter = 'all' | 'open' | 'all_open' | 'resolved';
 
 export default function MobileIncidentList({
   incidents,

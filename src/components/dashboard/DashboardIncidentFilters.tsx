@@ -187,7 +187,7 @@ export default function DashboardIncidentFilters({
                   updateParams({ assignee: 'all', status: 'all' });
                   return;
                 }
-                updateParams({ assignee: userId, status: 'OPEN' });
+                updateParams({ assignee: userId, status: 'ACTIVE' });
               }}
             >
               Mine
@@ -201,7 +201,7 @@ export default function DashboardIncidentFilters({
                   updateParams({ assignee: 'all', status: 'all' });
                   return;
                 }
-                updateParams({ assignee: 'unassigned', status: 'OPEN' });
+                updateParams({ assignee: 'unassigned', status: 'ACTIVE' });
               }}
             >
               Unassigned
@@ -289,6 +289,7 @@ export default function DashboardIncidentFilters({
               </SelectTrigger>
               <SelectContent className="rounded-lg">
                 <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
                 <SelectItem value="OPEN">Triggered</SelectItem>
                 <SelectItem value="ACKNOWLEDGED">Acknowledged</SelectItem>
                 <SelectItem value="RESOLVED">Resolved</SelectItem>

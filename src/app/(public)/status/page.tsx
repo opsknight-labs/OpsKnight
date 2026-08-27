@@ -23,6 +23,7 @@ import StatusPageIncidents from '@/components/status-page/StatusPageIncidents';
 import StatusPageAnnouncements from '@/components/status-page/StatusPageAnnouncements';
 import StatusPageSubscribe from '@/components/status-page/StatusPageSubscribe';
 import StatusPageMetrics from '@/components/status-page/StatusPageMetrics';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 import StatusPageAutoRefresh from '@/components/status-page/StatusPageAutoRefresh';
 
 export const dynamic = 'force-dynamic';
@@ -300,7 +301,7 @@ async function renderStatusPage(statusPage: any) {
           select: {
             incidents: {
               where: {
-                status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+                status: { in: activeIncidentStatuses() },
                 visibility: 'PUBLIC',
               },
             },
@@ -308,7 +309,7 @@ async function renderStatusPage(statusPage: any) {
         },
         incidents: {
           where: {
-            status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+            status: { in: activeIncidentStatuses() },
             visibility: 'PUBLIC',
           },
           select: {
@@ -395,7 +396,7 @@ async function renderStatusPage(statusPage: any) {
       OR: [
         { createdAt: { gte: ninetyDaysAgo } },
         { resolvedAt: { gte: ninetyDaysAgo } },
-        { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
+        { status: { in: activeIncidentStatuses() } },
       ],
     },
     select: {

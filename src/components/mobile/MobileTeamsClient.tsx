@@ -100,7 +100,7 @@ export default function MobileTeamsClient({
                   </span>
                   {team._count.incidents > 0 && (
                     <span className="text-red-600 dark:text-red-400">
-                      {'\u{1F525}'} {team._count.incidents} open incident
+                      {'\u{1F525}'} {team._count.incidents} active incident
                       {team._count.incidents !== 1 ? 's' : ''}
                     </span>
                   )}

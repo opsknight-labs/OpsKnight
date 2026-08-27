@@ -4,6 +4,7 @@ import {
   buildIncidentWhere,
   normalizeIncidentFilter,
   normalizeIncidentSort,
+  normalizeIncidentStatus,
 } from '@/lib/incidents-query';
 
 describe('incidents-query helpers', () => {
@@ -25,7 +26,36 @@ describe('incidents-query helpers', () => {
 
     expect(where).toEqual({
       assigneeId: 'user-1',
-      status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] },
+      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+    });
+  });
+
+  it('normalizes only supported strict incident statuses', () => {
+    expect(normalizeIncidentStatus('ACKNOWLEDGED')).toBe('ACKNOWLEDGED');
+    expect(normalizeIncidentStatus('ACTIVE')).toBeUndefined();
+  });
+
+  it('supports strict status, assignee, and service drill-down filters', () => {
+    expect(
+      buildIncidentWhere({
+        filter: 'all',
+        status: 'ACKNOWLEDGED',
+        assignee: 'unassigned',
+        serviceId: 'service-1',
+      })
+    ).toEqual({
+      status: 'ACKNOWLEDGED',
+      assigneeId: null,
+      serviceId: 'service-1',
+    });
+  });
+
+  it('applies historical metric date bounds', () => {
+    const createdAfter = new Date('2026-08-01T00:00:00.000Z');
+    const createdBefore = new Date('2026-08-26T00:00:00.000Z');
+    expect(buildIncidentWhere({ filter: 'all', createdAfter, createdBefore }).createdAt).toEqual({
+      gte: createdAfter,
+      lte: createdBefore,
     });
   });
 

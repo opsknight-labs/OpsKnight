@@ -15,6 +15,7 @@ import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import { UserAvatarProvider } from '@/contexts/UserAvatarContext';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import MobileBiometricGuard from '@/components/mobile/MobileBiometricGuard';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 
 // Force all app routes to be dynamic
 export const dynamic = 'force-dynamic';
@@ -53,7 +54,7 @@ export default async function MobileLayout({ children }: { children: React.React
     const openUrgencyCounts = await prisma.incident.groupBy({
       by: ['urgency'],
       where: {
-        status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] as const },
+        status: { in: activeIncidentStatuses() },
       },
       _count: { _all: true },
     });

@@ -11,6 +11,7 @@ import {
 } from './analytics-metrics';
 import { getServiceDynamicStatus } from './service-status';
 import { logger } from './logger';
+import { activeIncidentStatuses, activeIncidentStatusesForFilter } from './incident-status';
 import {
   getRetentionPolicy,
   getQueryDateBounds,
@@ -79,7 +80,11 @@ function buildIncidentFilterSql(filters: SLAMetricsFilter, tableAlias: string = 
     );
   }
 
-  if (filters.status) {
+  if (filters.status === 'ACTIVE') {
+    predicates.push(
+      Prisma.sql`${Prisma.raw(`${prefix}"status"`)} = ANY(${activeIncidentStatuses()}::"IncidentStatus"[])`
+    );
+  } else if (filters.status) {
     predicates.push(
       Prisma.sql`${Prisma.raw(`${prefix}"status"`)} = ${filters.status}::"IncidentStatus"`
     );
@@ -170,7 +175,7 @@ export type SLAMetricsFilter = {
   assigneeId?: string | null;
   urgency?: 'HIGH' | 'MEDIUM' | 'LOW';
   priority?: string | string[];
-  status?: 'OPEN' | 'ACKNOWLEDGED' | 'SNOOZED' | 'SUPPRESSED' | 'RESOLVED';
+  status?: 'ACTIVE' | 'OPEN' | 'ACKNOWLEDGED' | 'SNOOZED' | 'SUPPRESSED' | 'RESOLVED';
   startDate?: Date;
   endDate?: Date;
   windowDays?: number;
@@ -199,6 +204,80 @@ export type SLAMetricsFilter = {
 };
 
 const allowedStatus = ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED', 'RESOLVED'] as const;
+
+async function getCurrentIncidentSnapshot(filters: SLAMetricsFilter) {
+  const { default: prisma } = await import('./prisma');
+  const scopeWhere: Prisma.IncidentWhereInput = {};
+
+  if (filters.serviceId) {
+    scopeWhere.serviceId = Array.isArray(filters.serviceId)
+      ? { in: filters.serviceId }
+      : filters.serviceId;
+  }
+  if (filters.teamId) {
+    const teamIds = Array.isArray(filters.teamId) ? filters.teamId : [filters.teamId];
+    if (filters.useOrScope) {
+      scopeWhere.OR = [{ teamId: { in: teamIds } }, { service: { teamId: { in: teamIds } } }];
+    } else {
+      scopeWhere.service = { teamId: { in: teamIds } };
+    }
+  }
+  if (filters.priority) {
+    scopeWhere.priority = Array.isArray(filters.priority)
+      ? { in: filters.priority }
+      : filters.priority;
+  }
+  if (filters.visibility && filters.visibility !== 'ALL') {
+    scopeWhere.visibility = filters.visibility;
+  }
+
+  const activeWhere: Prisma.IncidentWhereInput = {
+    ...scopeWhere,
+    status: { in: activeIncidentStatuses() },
+  };
+  const [statusCounts, urgencyCounts, unassignedActive, mutedCounts] = await Promise.all([
+    prisma.incident.groupBy({
+      by: ['status'],
+      where: activeWhere,
+      _count: { _all: true },
+    }),
+    prisma.incident.groupBy({
+      by: ['urgency'],
+      where: activeWhere,
+      _count: { _all: true },
+    }),
+    prisma.incident.count({ where: { ...activeWhere, assigneeId: null } }),
+    prisma.incident.groupBy({
+      by: ['status'],
+      where: { ...scopeWhere, status: { in: ['SNOOZED', 'SUPPRESSED'] } },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const statusMap = new Map(statusCounts.map(row => [row.status, row._count._all]));
+  const urgencyMap = new Map(urgencyCounts.map(row => [row.urgency, row._count._all]));
+  const mutedMap = new Map(mutedCounts.map(row => [row.status, row._count._all]));
+  const openCount = statusMap.get('OPEN') ?? 0;
+  const acknowledgedCount = statusMap.get('ACKNOWLEDGED') ?? 0;
+  const activeIncidents = openCount + acknowledgedCount;
+  const criticalCount = urgencyMap.get('HIGH') ?? 0;
+
+  return {
+    activeIncidents,
+    activeCount: activeIncidents,
+    openCount,
+    acknowledgedCount,
+    unassignedActive,
+    criticalCount,
+    highUrgencyCount: criticalCount,
+    mediumUrgencyCount: urgencyMap.get('MEDIUM') ?? 0,
+    lowUrgencyCount: urgencyMap.get('LOW') ?? 0,
+    snoozedCount: mutedMap.get('SNOOZED') ?? 0,
+    suppressedCount: mutedMap.get('SUPPRESSED') ?? 0,
+    dynamicStatus:
+      criticalCount > 0 ? 'CRITICAL' : activeIncidents > 0 ? 'DEGRADED' : 'OPERATIONAL',
+  } as const;
+}
 
 // Default SLA targets (in minutes)
 const DEFAULT_ACK_TARGET_MINUTES = 15;
@@ -710,7 +789,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   //   (rollups aren't generated for today). `shouldUseRollups(start, end)`
   //   enforces this.
   const hasIncompatibleFilters =
-    filters.urgency || filters.assigneeId || filters.status || filters.visibility === 'PRIVATE';
+    filters.urgency ||
+    filters.assigneeId ||
+    filters.status ||
+    (filters.visibility && filters.visibility !== 'ALL');
   const useRollups =
     !filters._forceLive &&
     !hasIncompatibleFilters &&
@@ -843,15 +925,17 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         priority: filters.priority,
       }
     );
+    const currentSnapshot = await getCurrentIncidentSnapshot(filters);
+    const scopedRollupMetrics = { ...rollupMetrics, ...currentSnapshot };
 
     const totalQueryDuration = Date.now() - queryStartTime;
     logger.info('[SLA] Query performance (rollups)', {
       duration: totalQueryDuration,
-      incidentCount: rollupMetrics.totalIncidents,
+      incidentCount: scopedRollupMetrics.totalIncidents,
       dataSource: 'rollup',
     });
 
-    return rollupMetrics;
+    return scopedRollupMetrics;
   }
 
   // Calculate actual window duration for previous period comparison
@@ -889,21 +973,29 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
   const assigneeWhere =
     filters.assigneeId !== undefined ? { assigneeId: filters.assigneeId } : null;
-  const statusWhere = filters.status ? { status: filters.status } : null;
+  const statusWhere = filters.status
+    ? filters.status === 'ACTIVE'
+      ? { status: { in: activeIncidentStatuses() } }
+      : { status: filters.status }
+    : null;
   const urgencyWhere = filters.urgency ? { urgency: filters.urgency } : null;
+  const priorityWhere = filters.priority
+    ? {
+        priority: Array.isArray(filters.priority) ? { in: filters.priority } : filters.priority,
+      }
+    : {};
   const visibilityWhere =
     filters.visibility && filters.visibility !== 'ALL'
       ? { visibility: filters.visibility as any } // Cast to any to avoid type errors until client updates
       : {};
 
   const mutedStatusList = ['SNOOZED', 'SUPPRESSED'] as const;
-  const activeStatusWhere = filters.status
-    ? { status: filters.status }
-    : { status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] as const } };
+  const activeStatusWhere = { status: { in: activeIncidentStatusesForFilter(filters.status) } };
 
   let activeWhere: Prisma.IncidentWhereInput = {
     ...activeStatusWhere,
     ...(urgencyWhere ?? {}),
+    ...priorityWhere,
     ...(visibilityWhere ?? {}),
   } as any;
 
@@ -934,6 +1026,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   let mutedWhere: Prisma.IncidentWhereInput = {
     status: { in: mutedStatusFilter },
     ...(urgencyWhere ?? {}),
+    ...priorityWhere,
     ...(visibilityWhere ?? {}),
   } as any;
 
@@ -955,6 +1048,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   const recentIncidentWhere: Prisma.IncidentWhereInput = {
     createdAt: { gte: finalStart, lte: finalEnd },
     ...(urgencyWhere ?? {}),
+    ...priorityWhere,
     ...(statusWhere ?? {}),
     ...(visibilityWhere ?? {}),
   } as any;
@@ -1114,9 +1208,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     prisma.incident.groupBy({
       by: ['assigneeId'],
       where: {
-        ...recentIncidentWhere,
+        ...activeWhere,
         assigneeId: { not: null },
-        status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] as const },
       },
       _count: { _all: true },
       // Order by the count of the grouped field; `id` here doesn't match
@@ -1939,7 +2032,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
             ? 'Degraded'
             : 'Critical',
       dynamicStatus: getServiceDynamicStatus({
-        openIncidentCount: s.activeCount,
+        activeIncidentCount: s.activeCount,
         hasCritical: s.criticalCount > 0,
       }),
       activeCount: s.activeCount,
@@ -2636,7 +2729,7 @@ export async function calculateMultiServiceUptime(
           OR: [
             { resolvedAt: { gte: effectiveStart } },
             { updatedAt: { gte: effectiveStart } },
-            { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
+            { status: { in: activeIncidentStatuses() } },
           ],
         },
       ],
@@ -2801,7 +2894,7 @@ export async function calculateSLAMetricsFromRollups(
   const currentDynamicStatus = await (async () => {
     try {
       const where: Record<string, unknown> = {
-        status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] as const },
+        status: { in: activeIncidentStatuses() },
       };
       if (filters.serviceId) {
         where.serviceId = Array.isArray(filters.serviceId)
@@ -2818,7 +2911,7 @@ export async function calculateSLAMetricsFromRollups(
         prisma.incident.count({ where: { ...where, urgency: 'HIGH' } }),
       ]);
       return getServiceDynamicStatus({
-        openIncidentCount: openCount,
+        activeIncidentCount: openCount,
         hasCritical: criticalCount > 0,
       });
     } catch (err) {

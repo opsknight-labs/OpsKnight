@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 import MobileTeamsClient from '@/components/mobile/MobileTeamsClient';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export default async function MobileTeamsPage({
         select: {
           members: true,
           incidents: {
-            where: { status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] } },
+            where: { status: { in: activeIncidentStatuses() } },
           },
         },
       },
