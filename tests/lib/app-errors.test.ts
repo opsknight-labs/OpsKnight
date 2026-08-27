@@ -36,6 +36,19 @@ describe('AppError', () => {
     expect(error.userMessage).toBe('This responder is already assigned to Layer 1.');
   });
 
+  it('keeps registry status authoritative even when runtime input contains a status property', () => {
+    const legacyShapedOptions = {
+      code: 'RESOURCE_NOT_FOUND' as const,
+      status: 500,
+    };
+
+    const error = new AppError(legacyShapedOptions);
+
+    expect(error.code).toBe('RESOURCE_NOT_FOUND');
+    expect(error.status).toBe(ERROR_REGISTRY.RESOURCE_NOT_FOUND.status);
+    expect(error.status).toBe(404);
+  });
+
   it('normalizes unknown exceptions to a safe internal error', () => {
     const source = new Error('postgres://user:secret@db.internal/opsknight');
     const error = normalizeError(source);
@@ -79,6 +92,36 @@ describe('AppError', () => {
       fields: undefined,
     });
     expect(JSON.stringify(publicError)).not.toContain('do-not-expose');
+  });
+
+  it('enforces internal exposure and cannot leak caller-supplied public data', () => {
+    const error = new AppError({
+      code: 'INTERNAL_ERROR',
+      userMessage: 'secret-provider-response',
+      action: 'send-secret-token',
+      fields: [
+        {
+          field: 'token',
+          message: 'secret-field-value',
+        },
+      ],
+      details: { token: 'secret-details-token' },
+    });
+
+    const publicError = toPublicAppError(error);
+    const serialized = JSON.stringify(publicError);
+
+    expect(publicError).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: ERROR_REGISTRY.INTERNAL_ERROR.userMessage,
+      action: ERROR_REGISTRY.INTERNAL_ERROR.action,
+      retryable: true,
+      fields: undefined,
+    });
+    expect(serialized).not.toContain('secret-provider-response');
+    expect(serialized).not.toContain('send-secret-token');
+    expect(serialized).not.toContain('secret-field-value');
+    expect(serialized).not.toContain('secret-details-token');
   });
 
   it('supports structured validation fields', () => {

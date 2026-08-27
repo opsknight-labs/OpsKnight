@@ -14,7 +14,6 @@ export type ErrorField = {
 
 export type AppErrorOptions = {
   code: AppErrorCode;
-  status?: number;
   userMessage?: string;
   action?: string;
   fields?: ErrorField[];
@@ -50,7 +49,9 @@ export class AppError extends Error {
     super(userMessage);
     this.name = 'AppError';
     this.code = options.code;
-    this.status = options.status ?? definition.status;
+    // HTTP semantics are registry-owned for first-class AppError instances.
+    // Callers cannot create the same machine code with conflicting statuses.
+    this.status = definition.status;
     this.userMessage = userMessage;
     this.action = options.action ?? definition.action;
     this.fields = options.fields;
@@ -71,18 +72,13 @@ export function normalizeError(error: unknown): AppError {
   if (isAppError(error)) return error;
 
   // Compatibility for existing typed errors (for example AuthorizationError)
-  // while domains migrate onto AppError directly.
+  // while domains migrate onto AppError directly. Once a legacy code maps to
+  // the registry, the registry owns its HTTP status as well.
   if (error instanceof Error && 'code' in error) {
     const code = (error as Error & { code?: unknown }).code;
     if (isAppErrorCode(code)) {
-      const status =
-        'status' in error && typeof (error as Error & { status?: unknown }).status === 'number'
-          ? (error as Error & { status: number }).status
-          : undefined;
-
       return new AppError({
         code,
-        status,
         userMessage: error.message || undefined,
         cause: error,
       });
@@ -97,6 +93,19 @@ export function normalizeError(error: unknown): AppError {
 
 export function toPublicAppError(error: unknown): PublicAppError {
   const appError = normalizeError(error);
+
+  // `internal` is an enforceable serialization boundary, not metadata.
+  // Never expose caller-supplied message/action/fields for an internal error.
+  if (appError.exposure === 'internal') {
+    const definition: ErrorDefinition = ERROR_REGISTRY.INTERNAL_ERROR;
+    return {
+      code: 'INTERNAL_ERROR',
+      message: definition.userMessage,
+      action: definition.action,
+      retryable: definition.retryable ?? false,
+      fields: undefined,
+    };
+  }
 
   return {
     code: appError.code,
