@@ -11,7 +11,7 @@
  * - Channel priority
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import prisma from '@/lib/prisma';
 import { sendServiceNotifications } from '@/lib/service-notifications';
 import { executeEscalation, resolveEscalationTarget } from '@/lib/escalation';
@@ -39,6 +39,7 @@ vi.mock('@/lib/prisma', () => ({
     notification: { create: vi.fn() },
     user: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
     },
     onCallSchedule: { findUnique: vi.fn() },
@@ -100,7 +101,7 @@ describe('Notification System Tests', () => {
     });
   });
 
-  describe('Incident Notifications', () => {
+  describe('Incident Notifications & Lifecycle Routing', () => {
     it('should still trigger service notifications when there are no user recipients', async () => {
       const incidentId = 'inc-1';
       const serviceId = 'svc-1';
@@ -130,6 +131,101 @@ describe('Notification System Tests', () => {
       expect(serviceSpy).toHaveBeenCalledWith(incidentId, 'triggered');
       expect(result.success).toBe(true);
       serviceSpy.mockRestore();
+    });
+
+    it('should restrict external push/SMS alerts for acknowledged events to assignee and watchers, while team gets in-app notifications', async () => {
+      const incidentId = 'inc-2';
+      const serviceId = 'svc-2';
+      const assigneeUserId = 'user-assignee';
+      const watcherUserId = 'user-watcher';
+      const offDutyTeamMemberId = 'user-team-member';
+
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        id: incidentId,
+        title: 'DB Latency High',
+        urgency: 'HIGH',
+        serviceId,
+        assigneeId: assigneeUserId,
+        assignee: { id: assigneeUserId, name: 'Assignee User' },
+        watchers: [{ id: 'w-1', incidentId, userId: watcherUserId, role: 'FOLLOWER' }],
+        service: {
+          id: serviceId,
+          name: 'DB Service',
+          slackWebhookUrl: null,
+          serviceNotificationChannels: [],
+          team: {
+            id: 'team-1',
+            name: 'Backend Team',
+            members: [
+              { userId: assigneeUserId, user: { id: assigneeUserId, name: 'Assignee User' } },
+              {
+                userId: offDutyTeamMemberId,
+                user: { id: offDutyTeamMemberId, name: 'Off Duty Member' },
+              },
+            ],
+          },
+        },
+      } as unknown as Awaited<ReturnType<typeof prisma.incident.findUnique>>);
+
+      vi.mocked(prisma.user.findMany).mockResolvedValue([
+        {
+          id: assigneeUserId,
+          emailNotificationsEnabled: false,
+          smsNotificationsEnabled: false,
+          pushNotificationsEnabled: true,
+          whatsappNotificationsEnabled: false,
+          phoneNumber: null,
+          email: 'assignee@example.com',
+          timeZone: 'UTC',
+          quietHoursEnabled: false,
+        },
+        {
+          id: watcherUserId,
+          emailNotificationsEnabled: false,
+          smsNotificationsEnabled: false,
+          pushNotificationsEnabled: true,
+          whatsappNotificationsEnabled: false,
+          phoneNumber: null,
+          email: 'watcher@example.com',
+          timeZone: 'UTC',
+          quietHoursEnabled: false,
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.user.findMany>>);
+
+      const inAppModule = await import('@/lib/in-app-notifications');
+      const inAppSpy = vi
+        .spyOn(inAppModule, 'createInAppNotifications')
+        .mockResolvedValue(
+          [] as unknown as Awaited<ReturnType<typeof inAppModule.createInAppNotifications>>
+        );
+
+      const notifModule = await import('@/lib/notifications');
+      const sendNotifSpy = vi
+        .spyOn(notifModule, 'sendNotification')
+        .mockResolvedValue({ success: true, notificationId: 'notif-1' });
+
+      vi.spyOn(notificationProviders, 'isChannelAvailable').mockResolvedValue(true);
+
+      const result = await sendIncidentNotifications(incidentId, 'acknowledged');
+
+      expect(result.success).toBe(true);
+
+      // In-app notifications are delivered to assignee, watcher, and team members
+      expect(inAppSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userIds: expect.arrayContaining([assigneeUserId, watcherUserId, offDutyTeamMemberId]),
+          title: 'Incident Acknowledged',
+        })
+      );
+
+      // External personal notifications (PUSH/SMS) are sent ONLY to assignee and watcher, NOT off-duty team member
+      const notifiedUserIds = sendNotifSpy.mock.calls.map(call => call[1]);
+      expect(notifiedUserIds).toContain(assigneeUserId);
+      expect(notifiedUserIds).toContain(watcherUserId);
+      expect(notifiedUserIds).not.toContain(offDutyTeamMemberId);
+
+      inAppSpy.mockRestore();
+      sendNotifSpy.mockRestore();
     });
   });
 
