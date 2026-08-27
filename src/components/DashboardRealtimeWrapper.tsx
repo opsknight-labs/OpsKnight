@@ -30,15 +30,10 @@ export default function DashboardRealtimeWrapper({
   const [showDisconnected, setShowDisconnected] = useState(false);
 
   useEffect(() => {
-    if (isConnected) {
-      setShowDisconnected(false); // eslint-disable-line react-hooks/set-state-in-effect
-      return;
-    }
-    if (error) {
-      setShowDisconnected(true); // eslint-disable-line react-hooks/set-state-in-effect
-      return;
-    }
-    const timer = window.setTimeout(() => setShowDisconnected(true), 10_000);
+    const timer = window.setTimeout(
+      () => setShowDisconnected(!isConnected),
+      isConnected || error ? 0 : 10_000
+    );
     return () => window.clearTimeout(timer);
   }, [isConnected, error]);
 

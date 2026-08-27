@@ -136,30 +136,28 @@ export const INCIDENT_METRIC_DEFINITIONS = {
 
 export type IncidentMetricDefinitionKey = keyof typeof INCIDENT_METRIC_DEFINITIONS;
 
-const SERVER_METRIC_DEFINITION_KEYS = {
-  totalIncidents: 'totalIncidents',
-  activeIncidents: 'activeIncidents',
-  activeCount: 'activeIncidents',
-  openCount: 'triggeredIncidents',
-  acknowledgedCount: 'acknowledgedIncidents',
-  unassignedActive: 'unassignedActive',
-  highUrgencyCount: 'highUrgencyPeriod',
-  criticalCount: 'highUrgencyActive',
-  resolved24h: 'resolved24h',
-  ackRate: 'ackRate',
-  resolveRate: 'resolveRate',
-  ackCompliance: 'ackCompliance',
-  resolveCompliance: 'resolveCompliance',
-  mttd: 'mtta',
-  mtta: 'mtta',
-  mttr: 'mttr',
-  coveragePercent: 'onCallCoverage',
-} as const satisfies Record<string, IncidentMetricDefinitionKey>;
+const SERVER_METRIC_DEFINITIONS = new Map<string, MetricDefinition>([
+  ['totalIncidents', INCIDENT_METRIC_DEFINITIONS.totalIncidents],
+  ['activeIncidents', INCIDENT_METRIC_DEFINITIONS.activeIncidents],
+  ['activeCount', INCIDENT_METRIC_DEFINITIONS.activeIncidents],
+  ['openCount', INCIDENT_METRIC_DEFINITIONS.triggeredIncidents],
+  ['acknowledgedCount', INCIDENT_METRIC_DEFINITIONS.acknowledgedIncidents],
+  ['unassignedActive', INCIDENT_METRIC_DEFINITIONS.unassignedActive],
+  ['highUrgencyCount', INCIDENT_METRIC_DEFINITIONS.highUrgencyPeriod],
+  ['criticalCount', INCIDENT_METRIC_DEFINITIONS.highUrgencyActive],
+  ['resolved24h', INCIDENT_METRIC_DEFINITIONS.resolved24h],
+  ['ackRate', INCIDENT_METRIC_DEFINITIONS.ackRate],
+  ['resolveRate', INCIDENT_METRIC_DEFINITIONS.resolveRate],
+  ['ackCompliance', INCIDENT_METRIC_DEFINITIONS.ackCompliance],
+  ['resolveCompliance', INCIDENT_METRIC_DEFINITIONS.resolveCompliance],
+  ['mttd', INCIDENT_METRIC_DEFINITIONS.mtta],
+  ['mtta', INCIDENT_METRIC_DEFINITIONS.mtta],
+  ['mttr', INCIDENT_METRIC_DEFINITIONS.mttr],
+  ['coveragePercent', INCIDENT_METRIC_DEFINITIONS.onCallCoverage],
+]);
 
 export function getMetricDefinition(metricKey: string): MetricDefinition | undefined {
-  const definitionKey =
-    SERVER_METRIC_DEFINITION_KEYS[metricKey as keyof typeof SERVER_METRIC_DEFINITION_KEYS];
-  return definitionKey ? INCIDENT_METRIC_DEFINITIONS[definitionKey] : undefined;
+  return SERVER_METRIC_DEFINITIONS.get(metricKey);
 }
 
 export function metricScopeLabel(scope: MetricScope, selectedPeriodLabel?: string): string {
