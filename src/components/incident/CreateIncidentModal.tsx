@@ -171,9 +171,6 @@ function CreateIncidentModalContent({
   useEffect(() => {
     let cancelled = false;
 
-    setLoading(true);
-    setContextError(false);
-
     getIncidentCreationContext()
       .then(data => {
         if (cancelled) return;
