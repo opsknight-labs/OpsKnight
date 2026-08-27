@@ -231,6 +231,12 @@ export default function UserFilters({ teams }: UserFiltersProps) {
                     <span>Responder</span>
                   </div>
                 </SelectItem>
+                <SelectItem value="AUDITOR">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    <span>Auditor</span>
+                  </div>
+                </SelectItem>
                 <SelectItem value="USER">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-sky-500" />

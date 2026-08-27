@@ -139,6 +139,7 @@ export default function BulkUserActionsForm({
               <SelectContent>
                 <SelectItem value="ADMIN">Admin</SelectItem>
                 <SelectItem value="RESPONDER">Responder</SelectItem>
+                <SelectItem value="AUDITOR">Auditor</SelectItem>
                 <SelectItem value="USER">User</SelectItem>
               </SelectContent>
             </Select>

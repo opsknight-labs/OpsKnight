@@ -137,6 +137,7 @@ export async function getIfChanged<T>(
 // ============================================================================
 
 import prisma from './prisma';
+import { CAPABILITIES, hasCapability, isAppRole } from './authorization';
 
 /**
  * Cache key generators
@@ -159,14 +160,15 @@ export async function getCachedDashboardMetrics(
   teamIds: string[],
   lastHash?: string
 ): Promise<{ data: any; changed: boolean; hash: string } | null> {
-  const scope = role === 'ADMIN' || role === 'RESPONDER' ? 'global' : `user:${userId}`;
+  const hasGlobalMetrics = isAppRole(role) && hasCapability(role, CAPABILITIES.METRICS_READ_ALL);
+  const scope = hasGlobalMetrics ? 'global' : `user:${userId}`;
   const key = CacheKeys.dashboardMetrics(userId, scope);
 
   const fetcher = async () => {
     const { calculateSLAMetrics } = await import('./sla-server');
     const slaFilters: any = { useOrScope: true };
 
-    if (role !== 'ADMIN' && role !== 'RESPONDER') {
+    if (!hasGlobalMetrics) {
       slaFilters.assigneeId = userId;
       if (teamIds.length > 0) slaFilters.teamId = teamIds;
     }
@@ -201,7 +203,7 @@ export async function getCachedRecentIncidents(
   teamIds: string[],
   lastHash?: string
 ): Promise<{ data: any; changed: boolean; hash: string } | null> {
-  const isPrivileged = role === 'ADMIN' || role === 'RESPONDER';
+  const isPrivileged = isAppRole(role) && hasCapability(role, CAPABILITIES.INCIDENT_READ_ALL);
   const key = isPrivileged
     ? CacheKeys.recentIncidents(teamIds.join(',') || 'global')
     : `recent-incidents:${userId}:${teamIds.slice().sort().join(',')}`;

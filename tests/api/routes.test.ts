@@ -99,6 +99,29 @@ describe('API Routes - Incidents', () => {
       expect(data.incidents).toHaveLength(1);
       expect(data.incidents[0].title).toBe('Test 1');
     });
+
+    it('gives Auditor organization-wide read access', async () => {
+      vi.mocked(apiAuth.authenticateApiKey).mockResolvedValue({
+        id: 'key-audit',
+        userId: 'auditor-1',
+        scopes: ['incidents:read'],
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(apiAuth.hasApiScopes).mockReturnValue(true);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: 'auditor-1',
+        role: 'AUDITOR',
+        teamMemberships: [],
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
+
+      const req = await createMockRequest('GET', '/api/incidents');
+      const res = await incidentRoute.GET(req);
+
+      expect(res.status).toBe(200);
+      expect(prisma.incident.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: undefined })
+      );
+    });
   });
 
   describe('POST /api/incidents', () => {
@@ -177,6 +200,32 @@ describe('API Routes - Incidents', () => {
 
       expect(status).toBe(400);
       expect(data.error).toBeDefined();
+    });
+
+    it('denies incident writes when an old write key belongs to an Auditor', async () => {
+      vi.mocked(apiAuth.authenticateApiKey).mockResolvedValue({
+        id: 'key-audit',
+        userId: 'auditor-1',
+        scopes: ['incidents:write'],
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(apiAuth.hasApiScopes).mockReturnValue(true);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: 'auditor-1',
+        role: 'AUDITOR',
+        teamMemberships: [],
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      const req = await createMockRequest('POST', '/api/incidents', {
+        title: 'Must not be created',
+        serviceId: 'svc-1',
+        urgency: 'HIGH',
+      });
+      const res = await incidentRoute.POST(req);
+      const { data } = await parseResponse(res);
+
+      expect(res.status).toBe(403);
+      expect(data.error).toContain('cannot manage incidents');
+      expect(prisma.incident.create).not.toHaveBeenCalled();
     });
   });
 });

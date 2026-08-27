@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       select: { role: true, status: true, teamMemberships: { select: { teamId: true } } },
     });
     if (!apiUser || apiUser.status !== 'ACTIVE') return jsonError('Unauthorized.', 401);
-    const hasGlobalRead = apiUser.role === 'ADMIN' || apiUser.role === 'RESPONDER';
+    const hasGlobalRead = hasCapability(apiUser.role, CAPABILITIES.SERVICE_READ_ALL);
     const teamIds = apiUser.teamMemberships.map(membership => membership.teamId);
     const service = await prisma.service.findFirst({
       where: { id, ...(hasGlobalRead ? {} : { teamId: { in: teamIds } }) },

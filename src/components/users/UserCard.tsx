@@ -26,12 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/shadcn/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/shadcn/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/shadcn/select';
 import {
   Dialog,
   DialogContent,
@@ -96,6 +91,7 @@ type UserCardProps = {
 const roleAccentColors = {
   ADMIN: 'border-l-rose-500',
   RESPONDER: 'border-l-indigo-500',
+  AUDITOR: 'border-l-violet-500',
   USER: 'border-l-sky-500',
 };
 
@@ -165,12 +161,14 @@ export function UserCard({
   const roleVariants = {
     ADMIN: 'danger',
     RESPONDER: 'warning',
+    AUDITOR: 'neutral',
     USER: 'info',
   } as const;
 
   const roleTriggerColors = {
     ADMIN: 'bg-red-100 text-red-800 border-red-200',
     RESPONDER: 'bg-amber-100 text-amber-800 border-amber-200',
+    AUDITOR: 'bg-violet-100 text-violet-800 border-violet-200',
     USER: 'bg-blue-100 text-blue-800 border-blue-200',
   };
 
@@ -284,7 +282,9 @@ export function UserCard({
                       ? 'Admin'
                       : user.role === 'RESPONDER'
                         ? 'Responder'
-                        : 'User'}
+                        : user.role === 'AUDITOR'
+                          ? 'Auditor'
+                          : 'User'}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -298,6 +298,12 @@ export function UserCard({
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
                       <span>Responder</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="AUDITOR" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                      <span>Auditor</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="USER" className="text-xs">

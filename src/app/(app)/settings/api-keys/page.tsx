@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import ApiKeysPanel from '@/components/settings/ApiKeysPanel';
 import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 export default async function ApiKeysSettingsPage() {
   const session = await getServerSession(await getAuthOptions());
@@ -51,7 +52,7 @@ export default async function ApiKeysSettingsPage() {
             : null,
           expired: !!key.expiresAt && key.expiresAt <= new Date(),
         }))}
-        canCreateWriteKeys={user?.role === 'ADMIN' || user?.role === 'RESPONDER'}
+        canCreateWriteKeys={user ? hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE) : false}
       />
     </div>
   );

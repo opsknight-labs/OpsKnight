@@ -4,6 +4,14 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import type { Role } from '@prisma/client';
+import {
+  AuthorizationError,
+  CAPABILITIES,
+  getRoleCapabilities,
+  hasCapability,
+  type AppRole,
+  type Capability,
+} from '@/lib/authorization';
 
 export async function getCurrentUser() {
   const session = await getServerSession(await getAuthOptions());
@@ -35,17 +43,23 @@ export async function getCurrentUser() {
 }
 
 export async function assertAdmin() {
-  const user = await getCurrentUser();
-  if (user.role !== 'ADMIN') {
-    throw new Error('Unauthorized. Admin access required.');
-  }
-  return user;
+  return assertCapability(CAPABILITIES.ADMIN_MANAGE, 'Unauthorized. Admin access required.');
 }
 
 export async function assertAdminOrResponder() {
+  return assertCapability(
+    CAPABILITIES.OPERATIONS_MANAGE,
+    'Unauthorized. Admin or Responder access required.'
+  );
+}
+
+export async function assertCapability(capability: Capability, message?: string) {
   const user = await getCurrentUser();
-  if (user.role !== 'ADMIN' && user.role !== 'RESPONDER') {
-    throw new Error('Unauthorized. Admin or Responder access required.');
+  if (!hasCapability(user.role as AppRole, capability)) {
+    throw new AuthorizationError(
+      message ?? `Unauthorized. Missing required capability: ${capability}.`,
+      capability
+    );
   }
   return user;
 }
@@ -73,11 +87,17 @@ export async function assertAdminOrTeamOwner(teamId: string) {
 }
 
 export async function assertResponderOrAbove() {
-  const user = await getCurrentUser();
-  if (user.role !== 'ADMIN' && user.role !== 'RESPONDER') {
-    throw new Error('Unauthorized. Responder access or above required.');
-  }
-  return user;
+  return assertCapability(
+    CAPABILITIES.OPERATIONS_MANAGE,
+    'Unauthorized. Responder access or above required.'
+  );
+}
+
+export async function assertAuditorOrAdmin() {
+  return assertCapability(
+    CAPABILITIES.AUDIT_READ,
+    'Unauthorized. Auditor or Admin access required.'
+  );
 }
 
 export async function assertNotSelf(currentUserId: string, targetUserId: string, action: string) {
@@ -105,7 +125,7 @@ export async function assertCanReadServiceMetrics(opts: {
   const user = await getCurrentUser();
 
   // ADMIN/RESPONDER bypass — they have global read for ops dashboards.
-  if (user.role === 'ADMIN' || user.role === 'RESPONDER') {
+  if (hasCapability(user.role as AppRole, CAPABILITIES.METRICS_READ_ALL)) {
     return user;
   }
 
@@ -166,17 +186,23 @@ export async function getUserPermissions() {
     return {
       id: user.id,
       role: user.role as Role,
+      capabilities: getRoleCapabilities(user.role as AppRole),
       authenticated: true,
       isAdmin: user.role === 'ADMIN',
+      isAuditor: user.role === 'AUDITOR',
       isAdminOrResponder: user.role === 'ADMIN' || user.role === 'RESPONDER',
       isResponderOrAbove: user.role === 'ADMIN' || user.role === 'RESPONDER',
     };
   } catch {
     return {
       id: '',
-      role: 'VIEWER' as Role,
+      // Backward-compatible unauthenticated sentinel. VIEWER is intentionally
+      // not an assignable database role and receives no capabilities.
+      role: 'VIEWER' as const,
+      capabilities: [] as readonly Capability[],
       authenticated: false,
       isAdmin: false,
+      isAuditor: false,
       isAdminOrResponder: false,
       isResponderOrAbove: false,
     };
@@ -194,7 +220,7 @@ export async function assertCanModifyIncident(incidentId: string) {
   const user = await getCurrentUser();
 
   // Only global admins bypass team boundaries.
-  if (user.role === 'ADMIN') {
+  if (hasCapability(user.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE)) {
     return user;
   }
 
@@ -241,7 +267,7 @@ export async function assertCanViewIncident(incidentId: string) {
   const user = await getCurrentUser();
 
   // Only global admins bypass incident visibility and team boundaries.
-  if (user.role === 'ADMIN') {
+  if (hasCapability(user.role as AppRole, CAPABILITIES.INCIDENT_READ_ALL)) {
     return user;
   }
 
@@ -338,7 +364,7 @@ export async function assertCanModifyService(serviceId: string) {
 export async function assertCanViewSchedule(scheduleId: string) {
   const user = await getCurrentUser();
 
-  if (user.role === 'ADMIN' || user.role === 'RESPONDER') {
+  if (hasCapability(user.role as AppRole, CAPABILITIES.SCHEDULE_READ_ALL)) {
     return user;
   }
 

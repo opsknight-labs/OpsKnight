@@ -21,6 +21,7 @@ import { UserAvatarProvider } from '@/contexts/UserAvatarContext';
 import { logger } from '@/lib/logger';
 import SessionTimeoutWarning from '@/components/auth/SessionTimeoutWarning';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -152,7 +153,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const userGender = dbUser?.gender || null;
   const userId = dbUser?.id || 'user';
 
-  const canCreate = userRole === 'ADMIN' || userRole === 'RESPONDER';
+  const canCreate = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
 
   let criticalOpenCount = 0;
   let mediumOpenCount = 0;

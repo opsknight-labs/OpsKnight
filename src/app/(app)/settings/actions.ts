@@ -16,6 +16,13 @@ import {
 import { logger } from '@/lib/logger';
 import { getDefaultAvatar, isDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
+import {
+  API_SCOPES,
+  CAPABILITIES,
+  hasCapability,
+  isApiScope,
+  isWriteApiScope,
+} from '@/lib/authorization';
 
 type ActionState = {
   error?: string | null;
@@ -374,24 +381,17 @@ export async function createApiKey(
     const name = (formData.get('name') as string | null)?.trim() ?? '';
     const scopes = formData.getAll('scopes').filter(Boolean) as string[];
     const expirationDays = Number(formData.get('expirationDays') || 90);
-    const allowedScopes = new Set([
-      'events:write',
-      'incidents:read',
-      'incidents:write',
-      'services:read',
-      'schedules:read',
-    ]);
-    const requestedScopes = scopes.filter(scope => allowedScopes.has(scope));
-    const userAllowedScopes = new Set(['incidents:read', 'services:read', 'schedules:read']);
-    if (user.role === 'USER' && requestedScopes.some(scope => !userAllowedScopes.has(scope))) {
+    const requestedScopes = scopes.filter(isApiScope);
+    const canWrite = hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE);
+    if (!canWrite && requestedScopes.some(isWriteApiScope)) {
       return { error: 'Write scopes require Responder or Admin access.' };
     }
     const finalScopes =
       requestedScopes.length > 0
         ? requestedScopes
-        : user.role === 'USER'
-          ? ['incidents:read']
-          : ['events:write'];
+        : canWrite
+          ? [API_SCOPES.EVENTS_WRITE]
+          : [API_SCOPES.INCIDENTS_READ];
 
     if (!name) {
       return { error: 'Name is required.' };

@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { Prisma } from '@prisma/client';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 const RATE_LIMIT_MAX = 30; // 30 requests per minute
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
@@ -44,7 +45,7 @@ export async function GET() {
     };
 
     // Apply Scope Permissions
-    if (user.role !== 'ADMIN' && user.role !== 'RESPONDER') {
+    if (!hasCapability(user.role, CAPABILITIES.INCIDENT_READ_ALL)) {
       const teamIds = user.teamMemberships.map(membership => membership.teamId);
 
       // Use OR scope: Assigned to user OR Assigned to user's teams OR Service owned by user's teams

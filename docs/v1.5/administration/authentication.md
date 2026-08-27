@@ -115,7 +115,7 @@ Rules are evaluated in order; the first exact scalar or array-value match wins:
 ]
 ```
 
-Valid targets are `USER`, `RESPONDER`, and `ADMIN`. A newly provisioned user begins as `USER`; if no rule matches, an existing user's current role is retained. Mapping can both promote and demote on later login, so use a dedicated, tightly governed Admin group.
+Valid targets are `USER`, `AUDITOR`, `RESPONDER`, and `ADMIN`. A newly provisioned user begins as `USER`; if no rule matches, an existing user's current role is retained. Mapping can both promote and demote on later login, so use dedicated, tightly governed Auditor and Admin groups.
 
 ### Profile mapping
 

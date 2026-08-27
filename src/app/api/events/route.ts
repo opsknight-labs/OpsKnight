@@ -10,6 +10,7 @@ import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
 } from '@/lib/integrations/request-security';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 120;
 
@@ -101,10 +102,8 @@ async function postEvent(req: NextRequest) {
       if (!apiUser) {
         return jsonError('Unauthorized. API key user not found.', 401);
       }
-      if (apiUser.role !== 'ADMIN' && apiUser.role !== 'RESPONDER') {
-        if (!service.teamId || !apiUser.teamIds.includes(service.teamId)) {
-          return jsonError('Forbidden. Service access denied.', 403);
-        }
+      if (!hasCapability(apiUser.role, CAPABILITIES.OPERATIONS_MANAGE)) {
+        return jsonError('Forbidden. API key owner cannot create events.', 403);
       }
       serviceId = service.id;
       integrationId = 'api-key';

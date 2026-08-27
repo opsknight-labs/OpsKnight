@@ -3,6 +3,7 @@ import {
   getCurrentUser,
   assertAdmin,
   assertAdminOrResponder,
+  assertAuditorOrAdmin,
   assertAdminOrTeamOwner,
   assertNotSelf,
   getUserPermissions,
@@ -61,6 +62,13 @@ describe('RBAC Functions', () => {
     email: 'resp@example.com',
     role: 'RESPONDER',
     name: 'Responder User',
+  };
+
+  const mockAuditor = {
+    id: 'audit-1',
+    email: 'auditor@example.com',
+    role: 'AUDITOR',
+    name: 'Audit User',
   };
 
   beforeEach(() => {
@@ -123,6 +131,24 @@ describe('RBAC Functions', () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       await expect(assertAdminOrResponder()).rejects.toThrow(
         'Unauthorized. Admin or Responder access required.'
+      );
+    });
+  });
+
+  describe('assertAuditorOrAdmin', () => {
+    it('allows Auditor to read audit evidence', async () => {
+      vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockAuditor.email } });
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockAuditor as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      expect(await assertAuditorOrAdmin()).toEqual(mockAuditor);
+    });
+
+    it('does not grant audit evidence to Responder', async () => {
+      vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockResponder.email } });
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockResponder as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      await expect(assertAuditorOrAdmin()).rejects.toThrow(
+        'Unauthorized. Auditor or Admin access required.'
       );
     });
   });
