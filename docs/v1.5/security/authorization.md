@@ -71,6 +71,14 @@ Consult the task guide because some workflows add stricter checks. The Audit Log
 
 API key scopes narrow the owning user's current authority; they never expand it. A write scope owned by a user who is later changed to `AUDITOR` or `USER` cannot continue performing global incident mutations. Revoke unused keys and retest integrations after role changes.
 
+## Auditor data boundary
+
+Auditors can read organization-wide operational summaries and audit evidence, but do not receive opt-in sensitive incident descriptions or unpublished postmortem drafts. Schedule views include responder identity and contact information required to verify on-call coverage; treat Auditor assignment as privileged access to operational evidence.
+
+## Deployment and rollback
+
+Deploy the database migration before assigning the first Auditor. During a rolling deployment, do not assign `AUDITOR` until every application instance runs a version that recognizes the role. Before rolling back to a version without Auditor support, reassign every Auditor account to a role supported by that version, verify no `AUDITOR` rows remain, and only then roll back the application. The PostgreSQL enum value remains in the database and is harmless when unused.
+
 ## OIDC role-mapping warning
 
 Role mapping runs on OIDC login and can change application roles. Protect mapped claims at the IdP, put Admin rules first only when intentional, and test both promotion and demotion. Team roles are not assigned by the OIDC role-mapping rules.

@@ -105,13 +105,13 @@ describe('API Routes - Incidents', () => {
         id: 'key-audit',
         userId: 'auditor-1',
         scopes: ['incidents:read'],
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never);
       vi.mocked(apiAuth.hasApiScopes).mockReturnValue(true);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: 'auditor-1',
         role: 'AUDITOR',
         teamMemberships: [],
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never);
       vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
 
       const req = await createMockRequest('GET', '/api/incidents');
@@ -207,13 +207,13 @@ describe('API Routes - Incidents', () => {
         id: 'key-audit',
         userId: 'auditor-1',
         scopes: ['incidents:write'],
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never);
       vi.mocked(apiAuth.hasApiScopes).mockReturnValue(true);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: 'auditor-1',
         role: 'AUDITOR',
         teamMemberships: [],
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never);
 
       const req = await createMockRequest('POST', '/api/incidents', {
         title: 'Must not be created',
