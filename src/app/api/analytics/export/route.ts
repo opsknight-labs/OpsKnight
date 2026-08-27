@@ -13,6 +13,8 @@ import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { getQueryDateBounds } from '@/lib/retention-policy';
 import { calculateSLAMetrics } from '@/lib/sla-server';
+import { INCIDENT_METRIC_DEFINITIONS, metricScopeLabel } from '@/lib/metric-contract';
+import { incidentStatusLabel } from '@/lib/incident-status';
 
 const incidentStatusValues = new Set<string>(Object.values(IncidentStatusEnum));
 const incidentUrgencyValues = new Set<string>(Object.values(IncidentUrgencyEnum));
@@ -174,9 +176,10 @@ export async function GET(req: NextRequest) {
       metrics.statusMix.map(entry => [entry.status as IncidentStatus, entry.count])
     );
     const resolvedIncidentCount = statusMap.get('RESOLVED') ?? 0;
-    const triggeredIncidentCount = statusMap.get('OPEN') ?? 0;
-    const acknowledgedIncidentCount = statusMap.get('ACKNOWLEDGED') ?? 0;
-    const activeIncidentCount = triggeredIncidentCount + acknowledgedIncidentCount;
+    const triggeredIncidentCount = metrics.openCount;
+    const acknowledgedIncidentCount = metrics.acknowledgedCount;
+    const activeIncidentCount = metrics.activeIncidents;
+    const mutedIncidentCount = metrics.snoozedCount + metrics.suppressedCount;
     const highUrgencyCount = metrics.highUrgencyCount;
 
     const mttaMs = metrics.mttd === null ? null : metrics.mttd * 60 * 1000;
@@ -195,6 +198,7 @@ export async function GET(req: NextRequest) {
     csvRows.push(['===============================================================']);
     csvRows.push(['']);
     csvRows.push(['Report Generated:', formatDate(now, userTimeZone)]);
+    csvRows.push(['Metric Data State:', 'Available']);
     csvRows.push(['Time Window:', `Last ${windowDays} day${windowDays !== 1 ? 's' : ''}`]);
     csvRows.push([
       'Report Period:',
@@ -244,7 +248,7 @@ export async function GET(req: NextRequest) {
     csvRows.push(['---------------------------------------------------------------']);
     csvRows.push(['KEY PERFORMANCE INDICATORS (KPIs)']);
     csvRows.push(['---------------------------------------------------------------']);
-    csvRows.push(['Metric', 'Value', 'Status']);
+    csvRows.push(['Metric', 'Value', 'Scope', 'Status']);
 
     // Add status indicators with ASCII-compatible characters
     const getStatusIndicator = (value: number, thresholds: { good: number; warning: number }) => {
@@ -253,18 +257,52 @@ export async function GET(req: NextRequest) {
       return '[X] Needs Attention';
     };
 
-    csvRows.push(['Total Incidents', totalIncidents.toString(), '']);
     csvRows.push([
-      'Active Incidents (created in selected period)',
+      'Total Incidents',
+      totalIncidents.toString(),
+      metricScopeLabel(INCIDENT_METRIC_DEFINITIONS.totalIncidents.scope, `Last ${windowDays} days`),
+      '',
+    ]);
+    csvRows.push([
+      'Active Incidents',
       activeIncidentCount.toString(),
+      metricScopeLabel(INCIDENT_METRIC_DEFINITIONS.activeIncidents.scope),
       activeIncidentCount > 10 ? '[!] High' : '[OK] Normal',
     ]);
-    csvRows.push(['Triggered Incidents', triggeredIncidentCount.toString(), '']);
-    csvRows.push(['Acknowledged Incidents', acknowledgedIncidentCount.toString(), '']);
-    csvRows.push(['Resolved Incidents', resolvedIncidentCount.toString(), '']);
+    csvRows.push([
+      'Triggered Incidents',
+      triggeredIncidentCount.toString(),
+      metricScopeLabel(INCIDENT_METRIC_DEFINITIONS.triggeredIncidents.scope),
+      '',
+    ]);
+    csvRows.push([
+      'Acknowledged Incidents',
+      acknowledgedIncidentCount.toString(),
+      metricScopeLabel(INCIDENT_METRIC_DEFINITIONS.acknowledgedIncidents.scope),
+      '',
+    ]);
+    csvRows.push([
+      'Muted Incidents',
+      mutedIncidentCount.toString(),
+      metricScopeLabel(INCIDENT_METRIC_DEFINITIONS.mutedIncidents.scope),
+      '',
+    ]);
+    csvRows.push([
+      'Resolved Incidents',
+      resolvedIncidentCount.toString(),
+      metricScopeLabel(
+        INCIDENT_METRIC_DEFINITIONS.resolvedIncidents.scope,
+        `Last ${windowDays} days`
+      ),
+      '',
+    ]);
     csvRows.push([
       'High Urgency Incidents',
       highUrgencyCount.toString(),
+      metricScopeLabel(
+        INCIDENT_METRIC_DEFINITIONS.highUrgencyPeriod.scope,
+        `Last ${windowDays} days`
+      ),
       highUrgencyCount > 5 ? '[!] High' : '[OK] Normal',
     ]);
 
@@ -275,7 +313,12 @@ export async function GET(req: NextRequest) {
         : mttaMs != null && mttaMs < 30 * 60 * 1000
           ? '[!] Review'
           : '[X] Needs Attention';
-    csvRows.push(['MTTA (Mean Time to Acknowledge)', formatMinutes(mttaMs), mttaStatus]);
+    csvRows.push([
+      'MTTA (Mean Time to Acknowledge)',
+      formatMinutes(mttaMs),
+      `Last ${windowDays} days`,
+      mttaStatus,
+    ]);
 
     // MTTR with visual indicator
     const mttrStatus =
@@ -284,23 +327,30 @@ export async function GET(req: NextRequest) {
         : mttrMs != null && mttrMs < 240 * 60 * 1000
           ? '[!] Review'
           : '[X] Needs Attention';
-    csvRows.push(['MTTR (Mean Time to Resolve)', formatMinutes(mttrMs), mttrStatus]);
+    csvRows.push([
+      'MTTR (Mean Time to Resolve)',
+      formatMinutes(mttrMs),
+      `Last ${windowDays} days`,
+      mttrStatus,
+    ]);
 
     csvRows.push([
       'Acknowledgment Rate',
       formatPercent(ackRate),
+      `Last ${windowDays} days`,
       getStatusIndicator(ackRate, { good: 90, warning: 70 }),
     ]);
     csvRows.push([
       'Resolution Rate',
       formatPercent(resolutionRate),
+      `Last ${windowDays} days`,
       getStatusIndicator(resolutionRate, { good: 80, warning: 60 }),
     ]);
     csvRows.push(['']);
 
     // Status breakdown with visual bars
     csvRows.push(['---------------------------------------------------------------']);
-    csvRows.push(['INCIDENT STATUS BREAKDOWN']);
+    csvRows.push(['INCIDENT STATUS BREAKDOWN (SELECTED-PERIOD COHORT)']);
     csvRows.push(['---------------------------------------------------------------']);
     csvRows.push(['Status', 'Count', 'Percentage', 'Visual Bar']);
     const statusOrder: IncidentStatus[] = [
@@ -317,7 +367,12 @@ export async function GET(req: NextRequest) {
         ? parseFloat(((count / totalIncidents) * 100).toFixed(1))
         : 0;
       const progressBar = createProgressBar(count, maxStatusCount, 30);
-      csvRows.push([status, count.toString(), `${percentage.toFixed(1)}%`, progressBar]);
+      csvRows.push([
+        `${incidentStatusLabel(status)} (${status})`,
+        count.toString(),
+        `${percentage.toFixed(1)}%`,
+        progressBar,
+      ]);
     });
     csvRows.push(['']);
 

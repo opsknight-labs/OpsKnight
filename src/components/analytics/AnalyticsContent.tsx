@@ -3,6 +3,8 @@ import { formatTimeMinutesMs } from '@/lib/time-format';
 import { smoothSeries } from '@/lib/analytics-metrics';
 import { formatDateTime } from '@/lib/timezone';
 import { buildIncidentListHref } from '@/lib/incident-links';
+import { INCIDENT_METRIC_DEFINITIONS, metricDefinitionTooltip } from '@/lib/metric-contract';
+import { logger } from '@/lib/logger';
 import MetricCard from '@/components/analytics/MetricCard';
 import MetricIcon from '@/components/analytics/MetricIcon';
 import GaugeChart from '@/components/analytics/GaugeChart';
@@ -94,7 +96,31 @@ export default async function AnalyticsContent({
     urgency: urgencyFilter,
     windowDays,
     userTimeZone,
+  }).catch(error => {
+    logger.error('analytics.metricsUnavailable', {
+      component: 'AnalyticsContent',
+      error,
+    });
+    return null;
   });
+
+  if (!metrics) {
+    return (
+      <div className="analytics-content">
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900"
+          role="alert"
+        >
+          <strong>Analytics data is unavailable.</strong>
+          <p className="mt-1">
+            OpsKnight could not calculate this metric set. Zero values are intentionally hidden so a
+            database or aggregation failure cannot be mistaken for healthy performance.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  const metricsAsOf = new Date();
 
   const formatMinutes = (val: number | null) =>
     val === null ? '--' : formatTimeMinutesMs(val * 60 * 1000);
@@ -115,11 +141,9 @@ export default async function AnalyticsContent({
     },
     { high: 0, medium: 0, low: 0 }
   );
-  const highUrgencyCount = urgencyCounts.high || metrics.highUrgencyCount || 0;
+  const highUrgencyCount = urgencyCounts.high;
   const mediumUrgencyCount = urgencyCounts.medium;
-  const lowUrgencyCount =
-    urgencyCounts.low ||
-    Math.max(0, metrics.totalIncidents - highUrgencyCount - mediumUrgencyCount);
+  const lowUrgencyCount = urgencyCounts.low;
   const highUrgencyPercent = metrics.totalIncidents
     ? (highUrgencyCount / metrics.totalIncidents) * 100
     : 0;
@@ -165,14 +189,6 @@ export default async function AnalyticsContent({
       ? currentIncidentHref({ status: statusFilter })
       : undefined
     : currentIncidentHref({ filter: 'all_open' });
-  const resolvedIncidentHref =
-    !statusFilter || statusFilter === 'RESOLVED'
-      ? periodIncidentHref({ filter: 'resolved' })
-      : undefined;
-  const acknowledgedIncidentHref =
-    !statusFilter || statusFilter === 'ACKNOWLEDGED'
-      ? periodIncidentHref({ status: 'ACKNOWLEDGED' })
-      : undefined;
   const highUrgencyIncidentHref =
     !urgencyFilter || urgencyFilter === 'HIGH'
       ? periodIncidentHref({ urgency: 'HIGH' })
@@ -182,6 +198,17 @@ export default async function AnalyticsContent({
       ? currentIncidentHref({ status: statusFilter, assignee: 'unassigned' })
       : undefined
     : currentIncidentHref({ filter: 'all_open', assignee: 'unassigned' });
+  const triggeredIncidentHref =
+    !statusFilter || statusFilter === 'OPEN' ? currentIncidentHref({ status: 'OPEN' }) : undefined;
+  const currentAcknowledgedIncidentHref =
+    !statusFilter || statusFilter === 'ACKNOWLEDGED'
+      ? currentIncidentHref({ status: 'ACKNOWLEDGED' })
+      : undefined;
+  const mutedIncidentHref = statusFilter
+    ? statusFilter === 'SNOOZED' || statusFilter === 'SUPPRESSED'
+      ? currentIncidentHref({ status: statusFilter })
+      : undefined
+    : currentIncidentHref({ filter: 'muted' });
 
   const getDelta = (current: number | null, previous: number | null) => {
     if (current === null || previous === null || previous === 0) return null;
@@ -199,6 +226,11 @@ export default async function AnalyticsContent({
     if (delta > 0) return 'up';
     if (delta < 0) return 'down';
     return 'neutral';
+  };
+
+  const lowerIsBetterIntent = (delta: number | null) => {
+    if (delta === null || delta === 0) return 'neutral' as const;
+    return delta < 0 ? ('positive' as const) : ('negative' as const);
   };
 
   const previousPeriodAvailable = metrics.previousPeriod.available !== false;
@@ -222,10 +254,6 @@ export default async function AnalyticsContent({
   );
   const mttrSeries = smoothSeries(
     metrics.trendSeries.map(entry => entry.mttr),
-    smoothingWindow
-  );
-  const activeSeries = smoothSeries(
-    metrics.trendSeries.map(entry => entry.count),
     smoothingWindow
   );
   const ackComplianceSeries = smoothSeries(
@@ -310,6 +338,9 @@ export default async function AnalyticsContent({
             <span className="analytics-context-pill">
               Last {windowLabelDays} days{windowLabelSuffix}
             </span>
+            <span className="analytics-context-pill">
+              Calculated {formatDateTime(metricsAsOf, userTimeZone, { format: 'datetime' })}
+            </span>
             {metrics.isClipped ? (
               <span className="analytics-context-pill">
                 Retention {formatDate(metrics.effectiveStart)} - {formatDate(metrics.effectiveEnd)}
@@ -332,10 +363,15 @@ export default async function AnalyticsContent({
           value={metrics.totalIncidents.toLocaleString()}
           detail="New incidents"
           trend={getTrend(incidentDelta)}
+          trendIntent={lowerIsBetterIntent(incidentDelta)}
           trendValue={formatDelta(incidentDelta)}
           variant={incidentDelta !== null && incidentDelta > 0 ? 'warning' : 'default'}
           icon={<MetricIcon type="incidents" />}
           href={periodIncidentHref()}
+          tooltip={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.totalIncidents,
+            `Last ${windowLabelDays} days`
+          )}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -346,30 +382,28 @@ export default async function AnalyticsContent({
           </div>
         </MetricCard>
         <MetricCard
-          label="Active Incidents (excludes snoozed/suppressed)"
+          label="Active Incidents · Current"
           value={metrics.activeIncidents.toLocaleString()}
           detail="Current backlog"
           variant={metrics.activeIncidents > 5 ? 'danger' : 'default'}
           icon={<MetricIcon type="incidents" />}
           href={activeIncidentHref}
+          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.activeIncidents)}
           className="analytics-card-large"
-        >
-          <div className="analytics-kpi-meta">
-            <svg className="analytics-sparkline analytics-sparkline-blue" viewBox="0 0 72 24">
-              <path className="analytics-sparkline-area" d={buildSparklineAreaPath(activeSeries)} />
-              <path className="analytics-sparkline-line" d={buildSparklinePath(activeSeries)} />
-            </svg>
-          </div>
-        </MetricCard>
+        />
         <MetricCard
           label={`MTTA (${windowLabelDays}d)${windowLabelSuffix}`}
           value={formatMinutes(metrics.mttd)}
           detail="Avg response time"
           trend={getTrend(mttaDelta)}
+          trendIntent={lowerIsBetterIntent(mttaDelta)}
           trendValue={formatDelta(mttaDelta)}
           variant="primary"
           icon={<MetricIcon type="MTTA" />}
-          href={periodIncidentHref()}
+          tooltip={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.mtta,
+            `Last ${windowLabelDays} days`
+          )}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -384,10 +418,14 @@ export default async function AnalyticsContent({
           value={formatMinutes(metrics.mttr)}
           detail="Avg resolution time"
           trend={getTrend(mttrDelta)}
+          trendIntent={lowerIsBetterIntent(mttrDelta)}
           trendValue={formatDelta(mttrDelta)}
           variant="primary"
           icon={<MetricIcon type="MTTR" />}
-          href={resolvedIncidentHref}
+          tooltip={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.mttr,
+            `Last ${windowLabelDays} days`
+          )}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -409,7 +447,10 @@ export default async function AnalyticsContent({
               | 'default'
           }
           icon={<Shield className="w-5 h-5" />}
-          href={resolvedIncidentHref}
+          tooltip={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.resolveCompliance,
+            `Last ${windowLabelDays} days`
+          )}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -435,7 +476,10 @@ export default async function AnalyticsContent({
               | 'default'
           }
           icon={<Shield className="w-5 h-5" />}
-          href={periodIncidentHref()}
+          tooltip={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.ackCompliance,
+            `Last ${windowLabelDays} days`
+          )}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -461,7 +505,10 @@ export default async function AnalyticsContent({
           detail="Completion"
           variant={metrics.resolveRate > 80 ? 'success' : 'default'}
           icon={<CheckCircle className="w-5 h-5 text-green-500" />}
-          href={resolvedIncidentHref}
+          tooltip={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.resolveRate,
+            `Last ${windowLabelDays} days`
+          )}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -487,7 +534,6 @@ export default async function AnalyticsContent({
           detail="Incidents escalated"
           variant={metrics.escalationRate > 20 ? 'warning' : 'default'}
           icon={<TrendingUp className="w-5 h-5" />}
-          href={periodIncidentHref()}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -512,12 +558,45 @@ export default async function AnalyticsContent({
       <section className="v2-grid-4 mb-8">
         <MetricCard
           className="analytics-card-compact"
+          label="Triggered · Current"
+          value={metrics.openCount.toLocaleString()}
+          detail="Awaiting acknowledgment"
+          variant={metrics.openCount > 0 ? 'warning' : 'success'}
+          icon={<AlertCircle className="w-5 h-5 text-rose-500" />}
+          href={triggeredIncidentHref}
+          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.triggeredIncidents)}
+        />
+        <MetricCard
+          className="analytics-card-compact"
+          label="Acknowledged · Current"
+          value={metrics.acknowledgedCount.toLocaleString()}
+          detail="Work in progress"
+          variant="default"
+          icon={<CheckCircle className="w-5 h-5 text-blue-500" />}
+          href={currentAcknowledgedIncidentHref}
+          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.acknowledgedIncidents)}
+        />
+        <MetricCard
+          className="analytics-card-compact"
+          label="Muted · Current"
+          value={(metrics.snoozedCount + metrics.suppressedCount).toLocaleString()}
+          detail={`${metrics.snoozedCount.toLocaleString()} Snoozed · ${metrics.suppressedCount.toLocaleString()} Suppressed`}
+          variant="default"
+          icon={<Moon className="w-5 h-5 text-violet-500" />}
+          href={mutedIncidentHref}
+          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.mutedIncidents)}
+        />
+        <MetricCard
+          className="analytics-card-compact"
           label="Ack Rate"
           value={formatPercent(metrics.ackRate)}
           detail="Acknowledgment"
           variant={metrics.ackRate > 90 ? 'success' : 'warning'}
           icon={<CheckCircle className="w-5 h-5 text-blue-500" />}
-          href={acknowledgedIncidentHref}
+          tooltip={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.ackRate,
+            `Last ${windowLabelDays} days`
+          )}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -526,7 +605,6 @@ export default async function AnalyticsContent({
           detail="SLA misses"
           variant={metrics.resolveBreaches > 0 ? 'warning' : 'success'}
           icon={<AlertCircle className="w-5 h-5 text-rose-500" />}
-          href={resolvedIncidentHref}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -536,6 +614,10 @@ export default async function AnalyticsContent({
           variant={metrics.highUrgencyRate > 50 ? 'warning' : 'default'}
           icon={<AlertTriangle className="w-5 h-5 text-orange-500" />}
           href={highUrgencyIncidentHref}
+          tooltip={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.highUrgencyPeriod,
+            `Last ${windowLabelDays} days`
+          )}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -544,7 +626,6 @@ export default async function AnalyticsContent({
           detail="SLA misses"
           variant={metrics.ackBreaches > 0 ? 'warning' : 'success'}
           icon={<AlertCircle className="w-5 h-5 text-orange-500" />}
-          href={periodIncidentHref()}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -553,7 +634,6 @@ export default async function AnalyticsContent({
           detail="Total Signals"
           variant="default"
           icon={<Bell className="w-5 h-5 text-gray-500" />}
-          href="/alerts"
         />
         <MetricCard
           className="analytics-card-compact"
@@ -562,16 +642,16 @@ export default async function AnalyticsContent({
           detail="Alerts/Incident"
           variant="default"
           icon={<Zap className="w-5 h-5 text-yellow-500" />}
-          href="/alerts"
         />
         <MetricCard
           className="analytics-card-compact"
-          label="Unassigned"
+          label="Unassigned · Current"
           value={metrics.unassignedActive.toLocaleString()}
           detail="Needs Owner"
           variant={metrics.unassignedActive > 0 ? 'warning' : 'success'}
           icon={<Users className="w-5 h-5" />}
           href={unassignedActiveIncidentHref}
+          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.unassignedActive)}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -580,7 +660,7 @@ export default async function AnalyticsContent({
           detail="Days uncovered"
           variant={metrics.coverageGapDays > 0 ? 'warning' : 'success'}
           icon={<AlertTriangle className="w-5 h-5 text-orange-500" />}
-          href="/on-call"
+          href="/schedules"
         />
         <MetricCard
           className="analytics-card-compact"
@@ -589,7 +669,6 @@ export default async function AnalyticsContent({
           detail="Off-Business Hours"
           variant="default"
           icon={<Moon className="w-5 h-5 text-indigo-500" />}
-          href="/on-call"
         />
         <MetricCard
           className="analytics-card-compact"
@@ -598,7 +677,7 @@ export default async function AnalyticsContent({
           detail="On-Call Schedule"
           variant={metrics.coveragePercent > 95 ? 'success' : 'danger'}
           icon={<Shield className="w-5 h-5" />}
-          href="/on-call"
+          href="/schedules"
         />
         <MetricCard
           className="analytics-card-compact"
@@ -607,7 +686,7 @@ export default async function AnalyticsContent({
           detail="Total Scheduled"
           variant="primary"
           icon={<Clock className="w-5 h-5" />}
-          href="/on-call"
+          href="/schedules"
         />
         <MetricCard
           className="analytics-card-compact"
@@ -616,7 +695,6 @@ export default async function AnalyticsContent({
           detail="Mean Time Between"
           variant="default"
           icon={<Activity className="w-5 h-5" />}
-          href={periodIncidentHref()}
         />
       </section>
 

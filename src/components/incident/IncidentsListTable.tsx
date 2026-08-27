@@ -419,7 +419,7 @@ export default function IncidentsListTable({
                     <option value="" disabled>
                       Status
                     </option>
-                    <option value="OPEN">OPEN</option>
+                    <option value="OPEN">TRIGGERED (OPEN)</option>
                     <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
                     <option value="RESOLVED">RESOLVED</option>
                     <option value="SNOOZED">SNOOZED</option>

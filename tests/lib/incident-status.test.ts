@@ -3,6 +3,7 @@ import {
   activeIncidentStatuses,
   activeIncidentStatusesForFilter,
   isActiveIncidentStatus,
+  incidentStatusLabel,
   mutedIncidentStatuses,
 } from '@/lib/incident-status';
 
@@ -24,5 +25,10 @@ describe('incident status contract', () => {
     expect(activeIncidentStatusesForFilter('ACKNOWLEDGED')).toEqual(['ACKNOWLEDGED']);
     expect(isActiveIncidentStatus('ACKNOWLEDGED')).toBe(true);
     expect(isActiveIncidentStatus('RESOLVED')).toBe(false);
+  });
+
+  it('uses Triggered as the user-facing name for strict OPEN state', () => {
+    expect(incidentStatusLabel('OPEN')).toBe('Triggered');
+    expect(incidentStatusLabel('ACKNOWLEDGED')).toBe('Acknowledged');
   });
 });

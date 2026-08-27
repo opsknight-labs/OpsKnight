@@ -29,3 +29,11 @@ export function activeIncidentStatusesForFilter(
 export function isActiveIncidentStatus(status: IncidentStatus): boolean {
   return ACTIVE_INCIDENT_STATUSES.includes(status as (typeof ACTIVE_INCIDENT_STATUSES)[number]);
 }
+
+export function incidentStatusLabel(status: IncidentStatus): string {
+  if (status === 'OPEN') return 'Triggered';
+  if (status === 'ACKNOWLEDGED') return 'Acknowledged';
+  if (status === 'RESOLVED') return 'Resolved';
+  if (status === 'SNOOZED') return 'Snoozed';
+  return 'Suppressed';
+}

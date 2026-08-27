@@ -3,6 +3,7 @@
 import { memo } from 'react';
 import { formatTimeMinutesMs } from '@/lib/time-format';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { getMetricDefinition } from '@/lib/metric-contract';
 
 type MetricWidgetProps = {
   value: number | null;
@@ -72,14 +73,17 @@ const MetricWidget = memo(function MetricWidget({
 
   // For time metrics, lower is better (so negative trend is good)
   // For count metrics like breaches, lower is also better
-  const lowerIsBetter =
-    isTimeMetric ||
-    metricKey.includes('Breaches') ||
-    metricKey === 'unassignedActive' ||
-    metricKey === 'escalationRate' ||
-    metricKey === 'coverageGapDays';
+  const definition = getMetricDefinition(metricKey);
+  const lowerIsBetter = definition
+    ? definition.direction === 'lower_is_better'
+    : isTimeMetric ||
+      metricKey.includes('Breaches') ||
+      metricKey === 'unassignedActive' ||
+      metricKey === 'escalationRate' ||
+      metricKey === 'coverageGapDays';
 
   const trendIsGood = lowerIsBetter ? isNegative : isPositive;
+  const trendIsContextOnly = definition?.direction === 'context_only';
 
   // Variant colors
   const variantStyles = {
@@ -95,7 +99,13 @@ const MetricWidget = memo(function MetricWidget({
 
       {showTrend && delta !== null && (
         <div
-          className={`flex items-center gap-1 mt-1 text-sm ${trendIsGood ? 'text-green-500' : 'text-red-500'}`}
+          className={`flex items-center gap-1 mt-1 text-sm ${
+            trendIsContextOnly
+              ? 'text-muted-foreground'
+              : trendIsGood
+                ? 'text-green-500'
+                : 'text-red-500'
+          }`}
         >
           {isPositive ? (
             <TrendingUp className="h-3 w-3" />

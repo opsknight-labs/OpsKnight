@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
     );
     const uptimeMetrics = services.map(service => ({
       serviceId: service.id,
-      uptime: parseFloat((uptimeMap[service.id] || 100).toFixed(3)),
+      uptime: parseFloat((uptimeMap[service.id] ?? 100).toFixed(3)),
     }));
 
     const headers: Record<string, string> = {

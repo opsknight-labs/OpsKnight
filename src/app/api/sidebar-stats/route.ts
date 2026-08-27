@@ -74,6 +74,8 @@ export async function GET() {
         mediumIncidentsCount,
         lowIncidentsCount,
         scope: 'current',
+        dataState: 'available',
+        calculatedAt: new Date().toISOString(),
       },
       200,
       {

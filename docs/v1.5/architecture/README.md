@@ -21,6 +21,7 @@ Start with these two guides:
 - [Dashboard](./dashboard) — dashboard rendering and interaction design.
 - [System settings](./settings) — settings boundaries, roles, API keys, and secret handling.
 - [Analytics surface matrix](./analytics-parity-audit) — desktop, mobile, executive, and export behavior.
+- [Incident metric contract](./metric-contract) — canonical formulas, scopes, data states, drill-downs, and trend semantics.
 
 ## Important boundaries
 

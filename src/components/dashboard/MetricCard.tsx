@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, memo } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import type { MetricDataState } from '@/lib/metric-contract';
 
 type MetricCardProps = {
   label: string;
@@ -12,6 +13,9 @@ type MetricCardProps = {
   variant?: 'default' | 'hero';
   description?: string;
   href?: string;
+  tooltip?: string;
+  dataState?: MetricDataState;
+  asOf?: string;
 };
 
 /**
@@ -88,6 +92,9 @@ const MetricCard = memo(function MetricCard({
   variant = 'default',
   description,
   href,
+  tooltip,
+  dataState = 'available',
+  asOf,
 }: MetricCardProps) {
   // Parse value and determine if we should animate
   const { shouldAnimate, numericEnd, displayString } = React.useMemo(() => {
@@ -121,7 +128,12 @@ const MetricCard = memo(function MetricCard({
   const animatedValue = useCountUp(shouldAnimate ? numericEnd : 0);
 
   // Format the display value
-  const formattedDisplay = shouldAnimate ? animatedValue.toLocaleString() : displayString;
+  const formattedDisplay =
+    dataState === 'unavailable' || dataState === 'no_data'
+      ? 'N/A'
+      : shouldAnimate
+        ? animatedValue.toLocaleString()
+        : displayString;
 
   const isHero = variant === 'hero';
 
@@ -142,6 +154,7 @@ const MetricCard = memo(function MetricCard({
       )}
       role="figure"
       aria-label={`${label}: ${formattedDisplay}${description ? `. ${description}` : ''}${rangeLabel ? ` ${rangeLabel}` : ''}`}
+      title={tooltip}
     >
       {/* Accent bar for default variant */}
       {!isDark && !isHero && (
@@ -178,6 +191,24 @@ const MetricCard = memo(function MetricCard({
         >
           {description}
         </div>
+      )}
+      {dataState !== 'available' && (
+        <div
+          className={cn(
+            'mt-1 text-[0.65rem] font-semibold uppercase tracking-wide relative z-10',
+            isDark || isHero ? 'text-amber-100' : 'text-amber-700'
+          )}
+          role="status"
+        >
+          {dataState === 'unavailable'
+            ? 'Data unavailable'
+            : dataState === 'no_data'
+              ? 'No qualifying data'
+              : `${dataState} data`}
+        </div>
+      )}
+      {asOf && dataState !== 'unavailable' && (
+        <span className="sr-only">Data calculated at {asOf}</span>
       )}
     </div>
   );

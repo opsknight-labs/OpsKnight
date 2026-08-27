@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
     const assigneeId = searchParams.get('assigneeId') || undefined;
     const urgency = searchParams.get('urgency') as 'HIGH' | 'MEDIUM' | 'LOW' | undefined;
     const status = searchParams.get('status') as
+      | 'ACTIVE'
       | 'OPEN'
       | 'ACKNOWLEDGED'
       | 'SNOOZED'
@@ -92,6 +93,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: serialized,
+      meta: {
+        dataState: 'available',
+        calculatedAt: new Date().toISOString(),
+        source: (metrics as { dataSource?: string }).dataSource || 'live',
+        scope: {
+          backlog: 'current',
+          analysis: 'selected_period',
+        },
+      },
       filters: {
         windowDays,
         teamId,

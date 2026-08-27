@@ -3,7 +3,7 @@ import MobileIncidentList, { type IncidentFilter } from '@/components/mobile/Mob
 import MobileListControls from '@/components/mobile/MobileListControls';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { activeIncidentStatuses } from '@/lib/incident-status';
+import { activeIncidentStatuses, mutedIncidentStatuses } from '@/lib/incident-status';
 import { normalizeIncidentStatus } from '@/lib/incidents-query';
 import { AlertTriangle, Plus, ChevronLeft, ChevronRight, SearchX } from 'lucide-react';
 
@@ -15,6 +15,7 @@ type MobileIncidentSort = 'created_desc' | 'created_asc' | 'urgency';
 const normalizeFilter = (value?: string): IncidentFilter => {
   if (
     value === 'all_open' ||
+    value === 'muted' ||
     value === 'open' ||
     value === 'acknowledged' ||
     value === 'resolved'
@@ -40,6 +41,10 @@ export default async function MobileIncidentsPage(props: {
     status?: string;
     assignee?: string;
     serviceId?: string;
+    urgency?: string;
+    resolvedAfter?: string;
+    createdAfter?: string;
+    createdBefore?: string;
   }>;
 }) {
   const searchParams = await props.searchParams;
@@ -49,6 +54,18 @@ export default async function MobileIncidentsPage(props: {
   const status = normalizeIncidentStatus(searchParams?.status);
   const assignee = searchParams?.assignee;
   const serviceId = searchParams?.serviceId;
+  const urgency =
+    searchParams?.urgency === 'HIGH' ||
+    searchParams?.urgency === 'MEDIUM' ||
+    searchParams?.urgency === 'LOW'
+      ? searchParams.urgency
+      : undefined;
+  const resolvedAfterValue = searchParams?.resolvedAfter;
+  const resolvedAfter = resolvedAfterValue ? new Date(resolvedAfterValue) : undefined;
+  const createdAfterValue = searchParams?.createdAfter;
+  const createdBeforeValue = searchParams?.createdBefore;
+  const createdAfter = createdAfterValue ? new Date(createdAfterValue) : undefined;
+  const createdBefore = createdBeforeValue ? new Date(createdBeforeValue) : undefined;
   const page = Math.max(1, parseInt(searchParams?.page || '1', 10));
 
   const where: Prisma.IncidentWhereInput = {};
@@ -59,6 +76,8 @@ export default async function MobileIncidentsPage(props: {
 
   if (filter === 'all_open') {
     where.status = { in: activeIncidentStatuses() };
+  } else if (filter === 'muted') {
+    where.status = { in: mutedIncidentStatuses() };
   } else if (filter === 'open') {
     where.status = 'OPEN';
   } else if (filter === 'acknowledged') {
@@ -70,6 +89,16 @@ export default async function MobileIncidentsPage(props: {
   if (status) where.status = status;
   if (assignee) where.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
   if (serviceId) where.serviceId = serviceId;
+  if (urgency) where.urgency = urgency;
+  if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime())) {
+    where.resolvedAt = { gte: resolvedAfter };
+  }
+  if (createdAfter && !Number.isNaN(createdAfter.getTime())) {
+    where.createdAt = { ...(where.createdAt as Prisma.DateTimeFilter), gte: createdAfter };
+  }
+  if (createdBefore && !Number.isNaN(createdBefore.getTime())) {
+    where.createdAt = { ...(where.createdAt as Prisma.DateTimeFilter), lte: createdBefore };
+  }
 
   const orderBy: Prisma.IncidentOrderByWithRelationInput[] =
     sort === 'created_asc'
@@ -109,6 +138,16 @@ export default async function MobileIncidentsPage(props: {
     if (status) params.set('status', status);
     if (assignee) params.set('assignee', assignee);
     if (serviceId) params.set('serviceId', serviceId);
+    if (urgency) params.set('urgency', urgency);
+    if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime())) {
+      params.set('resolvedAfter', resolvedAfter.toISOString());
+    }
+    if (createdAfter && !Number.isNaN(createdAfter.getTime())) {
+      params.set('createdAfter', createdAfter.toISOString());
+    }
+    if (createdBefore && !Number.isNaN(createdBefore.getTime())) {
+      params.set('createdBefore', createdBefore.toISOString());
+    }
     params.set('page', newPage.toString());
     return `/m/incidents?${params.toString()}`;
   };
@@ -135,6 +174,7 @@ export default async function MobileIncidentsPage(props: {
         filters={[
           { label: 'All', value: 'all' },
           { label: 'Active', value: 'all_open' },
+          { label: 'Muted', value: 'muted' },
           { label: 'Triggered', value: 'open' },
           { label: 'Acknowledged', value: 'acknowledged' },
           { label: 'Resolved', value: 'resolved' },

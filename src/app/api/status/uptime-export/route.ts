@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
       return {
         id: sp.service.id,
         name: sp.displayName || sp.service.name,
-        uptime: Math.max(0, Math.min(100, uptimeMap[sp.service.id] || 100)),
+        uptime: Math.max(0, Math.min(100, uptimeMap[sp.service.id] ?? 100)),
       };
     });
 

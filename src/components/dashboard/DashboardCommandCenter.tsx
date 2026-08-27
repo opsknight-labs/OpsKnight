@@ -8,6 +8,12 @@ import LiveClock from './LiveClock';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  INCIDENT_METRIC_DEFINITIONS,
+  metricDefinitionTooltip,
+  metricScopeLabel,
+  type MetricDataState,
+} from '@/lib/metric-contract';
 
 type SystemStatus = {
   label: string;
@@ -34,6 +40,13 @@ type DashboardCommandCenterProps = {
   userTimeZone?: string;
   isClipped?: boolean;
   retentionDays?: number;
+  metricDataState?: MetricDataState;
+  metricsAsOf?: string;
+  totalHref?: string;
+  activeHref?: string;
+  mutedHref?: string;
+  resolvedHref?: string;
+  unassignedHref?: string;
 };
 
 export default function DashboardCommandCenter({
@@ -54,6 +67,13 @@ export default function DashboardCommandCenter({
   userTimeZone = 'UTC',
   isClipped,
   retentionDays,
+  metricDataState = 'available',
+  metricsAsOf,
+  totalHref,
+  activeHref,
+  mutedHref,
+  resolvedHref,
+  unassignedHref,
 }: DashboardCommandCenterProps) {
   // Determine status badge color
   const statusVariant =
@@ -64,6 +84,15 @@ export default function DashboardCommandCenter({
         : systemStatus.label === 'OPERATIONAL'
           ? 'success'
           : 'neutral';
+  const dataAsOfLabel = metricsAsOf
+    ? new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: userTimeZone,
+        timeZoneName: 'short',
+      }).format(new Date(metricsAsOf))
+    : null;
 
   return (
     <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-4 md:p-6 mb-6 shadow-lg">
@@ -109,6 +138,13 @@ export default function DashboardCommandCenter({
             >
               Range {rangeLabel}
             </Badge>
+            {metricDataState === 'unavailable' ? (
+              <Badge variant="warning" size="xs" className="text-xs">
+                Metric data unavailable
+              </Badge>
+            ) : dataAsOfLabel ? (
+              <span className="text-xs text-primary-foreground/70">Updated {dataAsOfLabel}</span>
+            ) : null}
             {/* Retention Warning */}
             {isClipped && (
               <Badge
@@ -142,6 +178,7 @@ export default function DashboardCommandCenter({
                 totalResolved: metricsResolvedCount,
                 totalAcknowledged: currentAcknowledgedCount,
                 unassigned: unassignedCount,
+                dataState: metricDataState,
               }}
             />
           </Suspense>
@@ -149,34 +186,60 @@ export default function DashboardCommandCenter({
       </div>
 
       <div className="relative z-10 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
-        <MetricCard label="TOTAL" value={totalInRange} rangeLabel={rangeLabel} variant="hero" />
+        <MetricCard
+          label="TOTAL"
+          value={totalInRange}
+          rangeLabel={metricScopeLabel('selected_period', rangeLabel)}
+          variant="hero"
+          href={totalHref}
+          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.totalIncidents, rangeLabel)}
+          dataState={metricDataState}
+          asOf={metricsAsOf}
+        />
         <MetricCard
           label="ACTIVE"
           value={currentActiveCount}
-          rangeLabel="(CURRENT)"
+          rangeLabel={metricScopeLabel('current')}
           description={`${currentTriggeredCount.toLocaleString()} Triggered · ${currentAcknowledgedCount.toLocaleString()} Acknowledged`}
-          href="/incidents?filter=all_open"
+          href={activeHref}
           variant="hero"
+          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.activeIncidents)}
+          dataState={metricDataState}
+          asOf={metricsAsOf}
         />
         <MetricCard
           label="MUTED"
           value={currentMutedCount}
-          rangeLabel="(CURRENT)"
+          rangeLabel={metricScopeLabel('current')}
           description={`${currentSnoozedCount.toLocaleString()} Snoozed · ${currentSuppressedCount.toLocaleString()} Suppressed`}
-          href="/incidents?filter=muted"
+          href={mutedHref}
           variant="hero"
+          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.mutedIncidents)}
+          dataState={metricDataState}
+          asOf={metricsAsOf}
         />
         <MetricCard
           label="RESOLVED"
           value={metricsResolvedCount}
-          rangeLabel={rangeLabel}
+          rangeLabel={metricScopeLabel('selected_period', rangeLabel)}
           variant="hero"
+          href={resolvedHref}
+          tooltip={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.resolvedIncidents,
+            rangeLabel
+          )}
+          dataState={metricDataState}
+          asOf={metricsAsOf}
         />
         <MetricCard
           label="UNASSIGNED"
           value={unassignedCount}
-          rangeLabel="(CURRENT)"
+          rangeLabel={metricScopeLabel('current')}
           variant="hero"
+          href={unassignedHref}
+          tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.unassignedActive)}
+          dataState={metricDataState}
+          asOf={metricsAsOf}
         />
       </div>
     </div>
