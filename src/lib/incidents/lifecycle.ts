@@ -65,11 +65,7 @@ export interface IncidentLifecycleInput {
   snoozedUntil?: Date | null;
   snoozeReason?: string | null;
   eventMessage?: string;
-  /**
-   * Primarily a test seam. Production callers should normally use the DB/server
-   * clock at command execution time rather than calculating lifecycle timestamps
-   * at the HTTP/UI edge.
-   */
+  /** Test seam. Production callers should use the server/DB clock. */
   now?: Date;
 }
 
@@ -83,7 +79,6 @@ export interface IncidentLifecycleResult {
 }
 
 type IncidentLifecycleSnapshot = {
-  id: string;
   status: IncidentStatus;
   acknowledgedAt: Date | null;
   resolvedAt: Date | null;
@@ -95,35 +90,6 @@ type IncidentLifecycleSnapshot = {
       steps: Array<{ delayMinutes: number }>;
     } | null;
   };
-};
-
-const ACTIVE_STATUSES: readonly IncidentStatus[] = [
-  'OPEN',
-  'ACKNOWLEDGED',
-  'SNOOZED',
-  'SUPPRESSED',
-];
-
-const TARGET_STATUS: Record<IncidentLifecycleCommand, IncidentStatus> = {
-  ACKNOWLEDGE: 'ACKNOWLEDGED',
-  RESOLVE: 'RESOLVED',
-  REOPEN: 'OPEN',
-  UNACKNOWLEDGE: 'OPEN',
-  SNOOZE: 'SNOOZED',
-  UNSNOOZE: 'OPEN',
-  SUPPRESS: 'SUPPRESSED',
-  UNSUPPRESS: 'OPEN',
-};
-
-const ALLOWED_FROM: Record<IncidentLifecycleCommand, readonly IncidentStatus[]> = {
-  ACKNOWLEDGE: ACTIVE_STATUSES,
-  RESOLVE: ACTIVE_STATUSES,
-  REOPEN: ['RESOLVED'],
-  UNACKNOWLEDGE: ['ACKNOWLEDGED'],
-  SNOOZE: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'],
-  UNSNOOZE: ['SNOOZED'],
-  SUPPRESS: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'],
-  UNSUPPRESS: ['SUPPRESSED'],
 };
 
 const MAX_BATCH_SIZE = 100;
@@ -157,7 +123,10 @@ function assertInput(input: IncidentLifecycleInput): void {
     );
   }
 
-  if (input.eventMessage !== undefined && input.eventMessage.trim().length > MAX_EVENT_MESSAGE_LENGTH) {
+  if (
+    input.eventMessage !== undefined &&
+    input.eventMessage.trim().length > MAX_EVENT_MESSAGE_LENGTH
+  ) {
     throw new IncidentLifecycleError(
       'INCIDENT_INVALID_ARGUMENT',
       `Lifecycle event message must be ${MAX_EVENT_MESSAGE_LENGTH} characters or fewer.`,
@@ -219,7 +188,44 @@ function assertSnoozeInput(input: IncidentLifecycleInput, now: Date): void {
 }
 
 function targetStatusFor(command: IncidentLifecycleCommand): IncidentStatus {
-  return TARGET_STATUS[command];
+  switch (command) {
+    case 'ACKNOWLEDGE':
+      return 'ACKNOWLEDGED';
+    case 'RESOLVE':
+      return 'RESOLVED';
+    case 'SNOOZE':
+      return 'SNOOZED';
+    case 'SUPPRESS':
+      return 'SUPPRESSED';
+    case 'REOPEN':
+    case 'UNACKNOWLEDGE':
+    case 'UNSNOOZE':
+    case 'UNSUPPRESS':
+      return 'OPEN';
+  }
+}
+
+function isAllowedFrom(command: IncidentLifecycleCommand, status: IncidentStatus): boolean {
+  switch (command) {
+    case 'ACKNOWLEDGE':
+    case 'RESOLVE':
+    case 'SNOOZE':
+    case 'SUPPRESS':
+      return (
+        status === 'OPEN' ||
+        status === 'ACKNOWLEDGED' ||
+        status === 'SNOOZED' ||
+        status === 'SUPPRESSED'
+      );
+    case 'REOPEN':
+      return status === 'RESOLVED';
+    case 'UNACKNOWLEDGE':
+      return status === 'ACKNOWLEDGED';
+    case 'UNSNOOZE':
+      return status === 'SNOOZED';
+    case 'UNSUPPRESS':
+      return status === 'SUPPRESSED';
+  }
 }
 
 function isAlreadyApplied(
@@ -229,9 +235,8 @@ function isAlreadyApplied(
 ): boolean {
   if (incident.status !== targetStatus) return false;
 
-  // An explicit SNOOZE command may legitimately extend/change an existing
-  // snooze. Treat it as an idempotent no-op only when the supplied metadata is
-  // already present as well.
+  // SNOOZE can update metadata while staying SNOOZED. It is idempotent only
+  // when the requested metadata is already committed.
   if (input.command === 'SNOOZE') {
     if (
       input.snoozedUntil !== undefined &&
@@ -300,8 +305,19 @@ async function assertRequiredCustomFieldsPresent(
 }
 
 function escalationDelayMinutes(incident: IncidentLifecycleSnapshot, stepIndex: number): number {
-  const raw = incident.service.policy?.steps?.[stepIndex]?.delayMinutes ?? 0;
-  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  if (!Number.isInteger(stepIndex) || stepIndex < 0) return 0;
+
+  const steps = incident.service.policy?.steps ?? [];
+  let index = 0;
+  for (const step of steps) {
+    if (index === stepIndex) {
+      const raw = step.delayMinutes;
+      return Number.isFinite(raw) && raw > 0 ? raw : 0;
+    }
+    index += 1;
+  }
+
+  return 0;
 }
 
 function atDelay(now: Date, delayMinutes: number): Date {
@@ -314,15 +330,20 @@ function eventForCommand(
 ): { type: IncidentEventType; message: string } {
   const suppliedMessage = input.eventMessage?.trim();
   if (suppliedMessage) {
-    const type: IncidentEventType =
-      input.command === 'ACKNOWLEDGE'
-        ? 'ACKNOWLEDGED'
-        : input.command === 'RESOLVE'
-          ? 'MANUAL_RESOLVED'
-          : input.command === 'REOPEN'
-            ? 'REOPENED'
-            : 'STATUS_CHANGE';
-    return { type, message: suppliedMessage };
+    switch (input.command) {
+      case 'ACKNOWLEDGE':
+        return { type: 'ACKNOWLEDGED', message: suppliedMessage };
+      case 'RESOLVE':
+        return { type: 'MANUAL_RESOLVED', message: suppliedMessage };
+      case 'REOPEN':
+        return { type: 'REOPENED', message: suppliedMessage };
+      case 'UNACKNOWLEDGE':
+      case 'SNOOZE':
+      case 'UNSNOOZE':
+      case 'SUPPRESS':
+      case 'UNSUPPRESS':
+        return { type: 'STATUS_CHANGE', message: suppliedMessage };
+    }
   }
 
   const suffix = actorSuffix(input.actor);
@@ -375,8 +396,8 @@ function updateDataForCommand(
 
   switch (input.command) {
     case 'ACKNOWLEDGE':
-      // acknowledgedAt represents first acknowledgement for SLA/MTTA and must
-      // never be erased/re-written by unacknowledge/reopen operations.
+      // acknowledgedAt records first acknowledgement for SLA/MTTA and is not
+      // erased by later unacknowledge/reopen operations.
       if (!incident.acknowledgedAt) data.acknowledgedAt = now;
       data.escalationStatus = 'COMPLETED';
       data.nextEscalationAt = null;
@@ -405,9 +426,8 @@ function updateDataForCommand(
 
     case 'UNACKNOWLEDGE': {
       const stepIndex = incident.currentEscalationStep ?? 0;
-      const delayMinutes = escalationDelayMinutes(incident, stepIndex);
       data.escalationStatus = 'ESCALATING';
-      data.nextEscalationAt = atDelay(now, delayMinutes);
+      data.nextEscalationAt = atDelay(now, escalationDelayMinutes(incident, stepIndex));
       data.snoozedUntil = null;
       data.snoozeReason = null;
       break;
@@ -422,9 +442,8 @@ function updateDataForCommand(
 
     case 'UNSNOOZE': {
       const stepIndex = incident.currentEscalationStep ?? 0;
-      const delayMinutes = escalationDelayMinutes(incident, stepIndex);
       data.escalationStatus = 'ESCALATING';
-      data.nextEscalationAt = atDelay(now, delayMinutes);
+      data.nextEscalationAt = atDelay(now, escalationDelayMinutes(incident, stepIndex));
       data.snoozedUntil = null;
       data.snoozeReason = null;
       break;
@@ -455,7 +474,6 @@ async function loadSnapshot(
   const incident = await tx.incident.findUnique({
     where: { id: incidentId },
     select: {
-      id: true,
       status: true,
       acknowledgedAt: true,
       resolvedAt: true,
@@ -485,12 +503,8 @@ async function loadSnapshot(
 }
 
 /**
- * Transaction-bound primitive for adapters that need lifecycle state changes
- * to commit atomically with adjacent database-only changes.
- *
- * Authorization intentionally does not live here. Every entry adapter must
- * authenticate/authorize before invoking the domain command, so the domain
- * service remains reusable by web, API, bulk and future ChatOps adapters.
+ * Transaction-bound primitive. Authentication/authorization intentionally
+ * belongs to the application adapter before this domain command is invoked.
  */
 export async function applyIncidentLifecycleCommand(
   tx: Prisma.TransactionClient,
@@ -503,12 +517,11 @@ export async function applyIncidentLifecycleCommand(
   const incident = await loadSnapshot(tx, input.incidentId);
   const targetStatus = targetStatusFor(input.command);
 
-  // Idempotent retry semantics come before optimistic concurrency checks.
-  // A retry after a successful commit must be a no-op even if the caller's
-  // expected source state is now stale.
+  // Idempotency must precede optimistic concurrency. A retry after a successful
+  // commit is a successful no-op even when its expected source state is stale.
   if (isAlreadyApplied(incident, input, targetStatus)) {
     return {
-      incidentId: incident.id,
+      incidentId: input.incidentId,
       command: input.command,
       source: input.source,
       previousStatus: incident.status,
@@ -526,7 +539,7 @@ export async function applyIncidentLifecycleCommand(
     );
   }
 
-  if (!ALLOWED_FROM[input.command].includes(incident.status)) {
+  if (!isAllowedFrom(input.command, incident.status)) {
     throw new IncidentLifecycleError(
       'INCIDENT_INVALID_TRANSITION',
       `Cannot ${input.command.toLowerCase()} an incident while it is ${incident.status}.`,
@@ -536,26 +549,26 @@ export async function applyIncidentLifecycleCommand(
   }
 
   if (input.command === 'RESOLVE') {
-    await assertRequiredCustomFieldsPresent(tx, incident.id);
+    await assertRequiredCustomFieldsPresent(tx, input.incidentId);
   }
 
   const updateData = updateDataForCommand(incident, input, now);
   const lifecycleEvent = eventForCommand(input, resolutionNote);
 
   await tx.incident.update({
-    where: { id: incident.id },
+    where: { id: input.incidentId },
     data: {
       ...updateData,
       events: { create: lifecycleEvent },
     },
   });
 
-  // Resolution state, resolution note and timeline metadata are one atomic
-  // domain operation. A repeated resolve becomes a no-op before reaching here.
+  // Resolution state, note and timeline metadata share this transaction. A
+  // repeated resolve returns above and therefore cannot duplicate any of them.
   if (input.command === 'RESOLVE' && resolutionNote && input.actor?.id) {
     await tx.incidentNote.create({
       data: {
-        incidentId: incident.id,
+        incidentId: input.incidentId,
         userId: input.actor.id,
         content: `Resolution: ${resolutionNote}`,
       },
@@ -563,7 +576,7 @@ export async function applyIncidentLifecycleCommand(
 
     await tx.incidentEvent.create({
       data: {
-        incidentId: incident.id,
+        incidentId: input.incidentId,
         type: 'COMMENT',
         message: `Resolution note added by ${input.actor.name?.trim() || 'responder'}`,
       },
@@ -571,7 +584,7 @@ export async function applyIncidentLifecycleCommand(
   }
 
   return {
-    incidentId: incident.id,
+    incidentId: input.incidentId,
     command: input.command,
     source: input.source,
     previousStatus: incident.status,
@@ -668,11 +681,7 @@ function validateBatchIds(inputs: readonly { incidentId: string }[]): void {
   }
 }
 
-/**
- * Bulk commands are all-or-nothing. Any authorization failure happens before
- * this call; any invalid lifecycle transition rolls back the full batch rather
- * than leaving operators with a partially mutated selection.
- */
+/** All commands in a batch share one serializable transaction. */
 export async function executeIncidentLifecycleBatch(
   inputs: readonly IncidentLifecycleInput[]
 ): Promise<IncidentLifecycleResult[]> {
