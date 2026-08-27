@@ -22,9 +22,11 @@ Shows the current actionable backlog: Triggered (`OPEN`) plus Acknowledged incid
 
 Dashboard scopes are explicit:
 
-- **Current** applies to Active, current urgency, and unassigned Active counts.
+- **Current** applies to Active, Muted, current urgency, and unassigned Active counts.
 - The displayed range applies to Total, Resolved, trends, MTTA, MTTR, and other historical analysis.
 - Retention can clip historical analysis but does not hide current Active incidents.
+
+The **Muted** card shows the current non-actionable backlog: Snoozed plus Suppressed incidents. Its drill-down preserves both states so the displayed total always matches the incident list.
 
 Each active incident includes:
 

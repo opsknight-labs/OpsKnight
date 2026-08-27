@@ -17,7 +17,14 @@ describe('incidents-query helpers', () => {
     expect(normalizeIncidentFilter('mine')).toBe('mine');
     expect(normalizeIncidentFilter('acknowledged')).toBe('acknowledged');
     expect(normalizeIncidentFilter('open')).toBe('open');
+    expect(normalizeIncidentFilter('muted')).toBe('muted');
     expect(normalizeIncidentSort('updated')).toBe('updated');
+  });
+
+  it('builds the combined muted filter from snoozed and suppressed states', () => {
+    expect(buildIncidentWhere({ filter: 'muted' })).toEqual({
+      status: { in: ['SNOOZED', 'SUPPRESSED'] },
+    });
   });
 
   it('builds acknowledged and open filters correctly', () => {

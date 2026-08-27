@@ -21,6 +21,9 @@ type DashboardCommandCenterProps = {
   totalInRange: number;
   currentActiveCount: number;
   currentTriggeredCount: number;
+  currentMutedCount: number;
+  currentSnoozedCount: number;
+  currentSuppressedCount: number;
   metricsResolvedCount: number;
   unassignedCount: number;
   rangeLabel: string;
@@ -39,6 +42,9 @@ export default function DashboardCommandCenter({
   totalInRange,
   currentActiveCount,
   currentTriggeredCount,
+  currentMutedCount,
+  currentSnoozedCount,
+  currentSuppressedCount,
   metricsResolvedCount,
   unassignedCount,
   rangeLabel,
@@ -130,6 +136,9 @@ export default function DashboardCommandCenter({
               metrics={{
                 totalActive: currentActiveCount,
                 totalTriggered: currentTriggeredCount,
+                totalMuted: currentMutedCount,
+                totalSnoozed: currentSnoozedCount,
+                totalSuppressed: currentSuppressedCount,
                 totalResolved: metricsResolvedCount,
                 totalAcknowledged: currentAcknowledgedCount,
                 unassigned: unassignedCount,
@@ -139,7 +148,7 @@ export default function DashboardCommandCenter({
         </div>
       </div>
 
-      <div className="relative z-10 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <div className="relative z-10 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
         <MetricCard label="TOTAL" value={totalInRange} rangeLabel={rangeLabel} variant="hero" />
         <MetricCard
           label="ACTIVE"
@@ -147,6 +156,14 @@ export default function DashboardCommandCenter({
           rangeLabel="(CURRENT)"
           description={`${currentTriggeredCount.toLocaleString()} Triggered · ${currentAcknowledgedCount.toLocaleString()} Acknowledged`}
           href="/incidents?filter=all_open"
+          variant="hero"
+        />
+        <MetricCard
+          label="MUTED"
+          value={currentMutedCount}
+          rangeLabel="(CURRENT)"
+          description={`${currentSnoozedCount.toLocaleString()} Snoozed · ${currentSuppressedCount.toLocaleString()} Suppressed`}
+          href="/incidents?filter=muted"
           variant="hero"
         />
         <MetricCard

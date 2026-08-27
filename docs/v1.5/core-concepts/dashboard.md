@@ -20,13 +20,13 @@ The top-level status is calculated from active incidents:
 | Degraded    | Active incidents exist, but none is High urgency |
 | Operational | No active incidents                              |
 
-“Active” refers to incident work that has not been resolved and excludes states that the current metric explicitly omits. Always open the filtered incident list before treating the badge as a full service-health diagnosis.
+“Active” means Triggered (`OPEN`) plus Acknowledged. Snoozed, Suppressed, and Resolved incidents are excluded. Always open the filtered incident list before treating the badge as a full service-health diagnosis.
 
 ## Command Center summary
 
-The header summarizes the selected range and current workload, including total incidents, active/open work, resolved and acknowledged counts, unassigned incidents, and High-urgency active incidents. A retention indicator appears when the requested history is clipped by the installation's retention policy.
+The header summarizes the selected range and current workload, including total incidents, Active work, Muted work, Resolved incidents, unassigned incidents, and High-urgency Active incidents. **Muted** is the current combined count of Snoozed plus Suppressed incidents and shows both values in its breakdown. A retention indicator appears when the requested history is clipped by the installation's retention policy.
 
-Selecting a summary link opens the corresponding incident view.
+Selecting a summary link opens the corresponding incident view. The Muted link uses the combined muted filter, so its incident list matches the card total.
 
 ## Filter the incident preview
 
