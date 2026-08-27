@@ -8,7 +8,7 @@ import {
   assertResponderOrAbove,
   getCurrentUser,
 } from '@/lib/rbac';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
+import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import {
   executeIncidentLifecycleCommand,
@@ -56,9 +56,7 @@ async function dispatchLifecycleSideEffects(result: IncidentLifecycleResult): Pr
                 ? 'suppressed'
                 : null;
 
-    if (event) {
-      await scheduleStatusPageNotification(incidentId, event);
-    }
+    if (event) await scheduleStatusPageNotification(incidentId, event);
   } catch (error) {
     logger.error('Status page subscriber notification failed', {
       component: 'incident-lifecycle',
@@ -127,6 +125,7 @@ async function dispatchLifecycleSideEffects(result: IncidentLifecycleResult): Pr
 /**
  * Internal application service for human/operator lifecycle changes.
  * Authorization is deliberately performed before the domain command.
+ * Typed authorization failures are allowed to cross this boundary unchanged.
  */
 export async function updateIncidentStatus(
   id: string,
@@ -134,15 +133,8 @@ export async function updateIncidentStatus(
   expectedStatus: IncidentStatus | undefined,
   source: OperatorLifecycleSource
 ): Promise<void> {
-  try {
-    // Preserve the centralized authorization contract introduced in #405:
-    // scoped users may ACK incidents they can access; every other lifecycle
-    // mutation requires responder-or-above.
-    if (status === 'ACKNOWLEDGED') await assertCanAcknowledgeIncident(id);
-    else await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
+  if (status === 'ACKNOWLEDGED') await assertCanAcknowledgeIncident(id);
+  else await assertResponderOrAbove();
 
   const result = await transitionIncidentToStatus({
     incidentId: id,
@@ -159,22 +151,33 @@ export async function resolveIncidentWithNote(
   resolution: string,
   source: OperatorLifecycleSource = 'WEB'
 ): Promise<void> {
-  try {
-    await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
+  await assertResponderOrAbove();
 
   const trimmedResolution = resolution?.trim();
   if (!trimmedResolution || trimmedResolution.length < 10) {
-    throw new Error(
-      'Resolution note must be at least 10 characters. Please provide more details about how the incident was resolved.'
-    );
+    throw new AppError({
+      code: 'INCIDENT_INVALID_ARGUMENT',
+      userMessage:
+        'Resolution note must be at least 10 characters. Please provide more details about how the incident was resolved.',
+      fields: [{
+        field: 'resolution',
+        code: 'too_short',
+        message: 'Resolution note must be at least 10 characters.',
+      }],
+      details: { minLength: 10 },
+    });
   }
   if (trimmedResolution.length > 1000) {
-    throw new Error(
-      'Resolution note must be 1000 characters or fewer. Please shorten your description.'
-    );
+    throw new AppError({
+      code: 'INCIDENT_INVALID_ARGUMENT',
+      userMessage: 'Resolution note must be 1000 characters or fewer. Please shorten your description.',
+      fields: [{
+        field: 'resolution',
+        code: 'too_long',
+        message: 'Resolution note must be 1000 characters or fewer.',
+      }],
+      details: { maxLength: 1000 },
+    });
   }
 
   const user = await getCurrentUser();
