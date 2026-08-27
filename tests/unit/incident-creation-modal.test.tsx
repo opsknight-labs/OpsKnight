@@ -80,6 +80,19 @@ describe('Incident Creation Modal System', () => {
       expect(screen.getByTestId('modal-state').textContent).toBe('open');
       expect(screen.getByTestId('service-id').textContent).toBe('srv-999');
     });
+
+    it('triggers openCreateIncident with templateId on click', () => {
+      render(
+        <IncidentCreationModalProvider>
+          <TestConsumer />
+          <CreateIncidentButton templateId="tmpl-888">Use Template Button</CreateIncidentButton>
+        </IncidentCreationModalProvider>
+      );
+
+      fireEvent.click(screen.getByText('Use Template Button'));
+      expect(screen.getByTestId('modal-state').textContent).toBe('open');
+      expect(screen.getByTestId('template-id').textContent).toBe('tmpl-888');
+    });
   });
 
   describe('CreateIncidentMenuItem', () => {

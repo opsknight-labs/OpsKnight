@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createIncident, getIncidentCreationContext } from '@/app/(app)/incidents/actions';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import CustomFieldInput from '@/components/CustomFieldInput';
@@ -51,6 +52,8 @@ import {
   X,
   Loader2,
   LayoutTemplate,
+  ArrowUpRight,
+  Sparkles,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
 
@@ -60,6 +63,7 @@ type Team = { id: string; name: string };
 type Template = {
   id: string;
   name: string;
+  description?: string | null;
   title: string;
   descriptionText?: string | null;
   defaultUrgency: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -254,6 +258,7 @@ function CreateIncidentModalContent({
   const teams = contextData?.teams || [];
   const templates = contextData?.templates || [];
   const customFields = contextData?.customFields || [];
+  const activeTemplate = templates.find(t => t.id === selectedTemplateId);
 
   return (
     <DialogPrimitive.Content
@@ -280,29 +285,6 @@ function CreateIncidentModalContent({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Template Quick-Picker */}
-            {templates.length > 0 && (
-              <Select
-                value={selectedTemplateId}
-                onValueChange={val => {
-                  setSelectedTemplateId(val);
-                  const template = templates.find((t: Template) => t.id === val);
-                  if (template) applyTemplate(template);
-                }}
-              >
-                <SelectTrigger className="h-8 w-[180px] text-xs bg-muted/40 border-border/50">
-                  <LayoutTemplate className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                  <SelectValue placeholder="Use template..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map((t: Template) => (
-                    <SelectItem key={t.id} value={t.id} className="text-xs">
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
             <DialogPrimitive.Close className="rounded-lg p-1.5 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
@@ -316,7 +298,7 @@ function CreateIncidentModalContent({
         <div className="flex-1 flex items-center justify-center py-20">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary/60" />
-            <p className="text-sm text-muted-foreground">Loading form data...</p>
+            <p className="text-sm text-muted-foreground">Loading incident context...</p>
           </div>
         </div>
       )}
@@ -326,6 +308,124 @@ function CreateIncidentModalContent({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+              {/* Template Picker & Helper */}
+              <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <LayoutTemplate className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      Start with a Template
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">(Optional)</span>
+                  </div>
+                  <Link
+                    href="/incidents/templates"
+                    onClick={onClose}
+                    className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 inline-flex items-center gap-1 hover:underline"
+                  >
+                    Manage Templates
+                    <ArrowUpRight className="h-3 w-3" />
+                  </Link>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={selectedTemplateId || 'none'}
+                    onValueChange={val => {
+                      if (val === 'none') {
+                        setSelectedTemplateId('');
+                        form.reset({
+                          title: '',
+                          description: '',
+                          serviceId: openOptions?.serviceId || '',
+                          urgency: 'HIGH',
+                          priority: '',
+                          assigneeId: 'unassigned',
+                          dedupKey: '',
+                        });
+                      } else {
+                        setSelectedTemplateId(val);
+                        const template = templates.find((t: Template) => t.id === val);
+                        if (template) applyTemplate(template);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="flex-1 h-9 text-xs bg-background border-border/70 shadow-sm">
+                      <SelectValue placeholder="Select a template or start from scratch..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value="none"
+                        className="text-xs font-medium text-muted-foreground"
+                      >
+                        ✨ No template (start from scratch)
+                      </SelectItem>
+                      {templates.map((t: Template) => (
+                        <SelectItem key={t.id} value={t.id} className="text-xs">
+                          <div className="flex items-center gap-2 py-0.5">
+                            <span className="font-semibold text-foreground">{t.name}</span>
+                            {t.defaultService && (
+                              <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                                {t.defaultService.name}
+                              </span>
+                            )}
+                            <span
+                              className={cn(
+                                'text-[9px] uppercase font-bold px-1.5 py-0.2 rounded',
+                                t.defaultUrgency === 'HIGH'
+                                  ? 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300'
+                                  : t.defaultUrgency === 'MEDIUM'
+                                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                              )}
+                            >
+                              {t.defaultUrgency}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {selectedTemplateId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setSelectedTemplateId('');
+                        form.reset({
+                          title: '',
+                          description: '',
+                          serviceId: openOptions?.serviceId || '',
+                          urgency: 'HIGH',
+                          priority: '',
+                          assigneeId: 'unassigned',
+                          dedupKey: '',
+                        });
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+
+                {/* Active Template Applied Banner */}
+                {activeTemplate && (
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs">
+                    <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    <p className="text-[11px] text-foreground font-medium truncate">
+                      Applied template{' '}
+                      <strong className="text-indigo-700 dark:text-indigo-300">
+                        {activeTemplate.name}
+                      </strong>
+                      {activeTemplate.description ? ` — ${activeTemplate.description}` : ''}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Intelligent Deduplication Info */}
               <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3.5 flex gap-3 text-sm text-yellow-600 dark:text-yellow-500">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
