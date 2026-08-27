@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +45,7 @@ type QuickActionsProps = {
 
 export default function QuickActions({ canCreate = true }: QuickActionsProps) {
   const router = useRouter();
+  const { openCreateIncident } = useCreateIncidentModal();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -150,7 +151,13 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
             <React.Fragment key={action.href}>
               {index === 2 && <DropdownMenuSeparator className="my-0.5 bg-border/60" />}
               <DropdownMenuItem
-                onClick={() => router.push(action.href)}
+                onClick={() => {
+                  if (action.label === 'New Incident') {
+                    openCreateIncident();
+                  } else {
+                    router.push(action.href);
+                  }
+                }}
                 className="group cursor-pointer focus:bg-muted/60 data-[highlighted]:bg-muted/60 rounded py-1 px-1.5"
               >
                 <div

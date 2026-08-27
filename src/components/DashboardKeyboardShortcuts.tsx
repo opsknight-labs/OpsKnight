@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import KeyboardShortcuts from './KeyboardShortcuts';
 
 type DashboardKeyboardShortcutsProps = {
@@ -14,6 +15,7 @@ export default function DashboardKeyboardShortcuts({
   onExport,
 }: DashboardKeyboardShortcutsProps) {
   const router = useRouter();
+  const { openCreateIncident } = useCreateIncidentModal();
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export default function DashboardKeyboardShortcuts({
       // New incident
       if (e.key === 'n' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        router.push('/incidents/create');
+        openCreateIncident();
       }
 
       // Quick navigation
@@ -95,7 +97,7 @@ export default function DashboardKeyboardShortcuts({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [router, onRefresh, onExport]);
+  }, [router, onRefresh, onExport, openCreateIncident]);
 
   return (
     <>

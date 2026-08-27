@@ -7,10 +7,12 @@ import { Plus, Trash2, ArrowUpRight, Copy, MoreHorizontal, LayoutTemplate } from
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
+import CreateIncidentButton, {
+  CreateIncidentMenuItem,
+} from '@/components/incident/CreateIncidentButton';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 
@@ -199,15 +201,14 @@ export default async function TemplatesPage() {
 
                   {/* Action Buttons (Right Side) */}
                   <div className="flex items-center gap-1 self-start sm:self-center pl-2 border-l border-slate-100 ml-1">
-                    <Link href={`/incidents/create?template=${template.id}`}>
-                      <Button
-                        size="sm"
-                        className="h-8 shadow-sm bg-slate-900 text-white hover:bg-indigo-600 transition-colors"
-                      >
-                        Use Template
-                        <ArrowUpRight className="w-3.5 h-3.5 ml-1.5 opacity-70" />
-                      </Button>
-                    </Link>
+                    <CreateIncidentButton
+                      templateId={template.id}
+                      size="sm"
+                      className="h-8 shadow-sm bg-slate-900 text-white hover:bg-indigo-600 transition-colors"
+                    >
+                      Use Template
+                      <ArrowUpRight className="w-3.5 h-3.5 ml-1.5 opacity-70" />
+                    </CreateIncidentButton>
 
                     {canManageTemplates && template.createdById === permissions.id && (
                       <DropdownMenu>
@@ -221,12 +222,10 @@ export default async function TemplatesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <Link href={`/incidents/create?template=${template.id}`}>
-                            <DropdownMenuItem>
-                              <Copy className="w-4 h-4 mr-2" />
-                              Use Template
-                            </DropdownMenuItem>
-                          </Link>
+                          <CreateIncidentMenuItem templateId={template.id}>
+                            <Copy className="w-4 h-4 mr-2" />
+                            Use Template
+                          </CreateIncidentMenuItem>
                           <form action={handleDelete}>
                             <input type="hidden" name="templateId" value={template.id} />
                             <ConfirmSubmitButton

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
+import CreateIncidentButton from '@/components/incident/CreateIncidentButton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -157,9 +158,7 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
         <p className="text-slate-500 max-w-sm mb-6">
           This service is running smoothly with no recorded incidents.
         </p>
-        <Button asChild>
-          <Link href={`/incidents/create?serviceId=${serviceId}`}>Create Incident</Link>
-        </Button>
+        <CreateIncidentButton serviceId={serviceId} />
       </div>
     );
   }

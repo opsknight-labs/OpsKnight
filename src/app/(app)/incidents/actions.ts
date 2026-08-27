@@ -1127,3 +1127,47 @@ export async function updateIncidentVisibility(id: string, visibility: 'PUBLIC' 
   revalidatePath('/incidents');
   revalidatePath('/');
 }
+
+export async function getIncidentCreationContext() {
+  const { getUserPermissions } = await import('@/lib/rbac');
+  const permissions = await getUserPermissions();
+
+  const canCreateIncident = permissions.capabilities.some(
+    (capability: string) =>
+      capability === 'incident.create.all' || capability === 'incident.create.scoped'
+  );
+
+  if (!canCreateIncident) {
+    return {
+      canCreateIncident: false as const,
+      services: [],
+      users: [],
+      teams: [],
+      customFields: [],
+      templates: [],
+    };
+  }
+
+  const { getAllTemplates } = await import('./template-actions');
+
+  const [services, users, customFields, teams, templates] = await Promise.all([
+    prisma.service.findMany({ orderBy: { name: 'asc' } }),
+    prisma.user.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.customField.findMany({ orderBy: { order: 'asc' } }),
+    prisma.team.findMany({ orderBy: { name: 'asc' } }),
+    getAllTemplates(permissions.id),
+  ]);
+
+  return {
+    canCreateIncident: true as const,
+    services,
+    users,
+    teams,
+    customFields,
+    templates,
+  };
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 
 type KeyboardHandlerProps = {
   onShortcutsToggle: () => void;
@@ -10,12 +11,14 @@ type KeyboardHandlerProps = {
 export default function GlobalKeyboardHandler({ onShortcutsToggle }: KeyboardHandlerProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { openCreateIncident } = useCreateIncidentModal();
   const [gPressed, setGPressed] = useState(false);
 
   // Use refs to avoid re-attaching event listeners when state/callbacks change
   const gPressedRef = useRef(gPressed);
   const pathnameRef = useRef(pathname);
   const onShortcutsToggleRef = useRef(onShortcutsToggle);
+  const openCreateIncidentRef = useRef(openCreateIncident);
 
   // Keep refs in sync
   useEffect(() => {
@@ -29,6 +32,10 @@ export default function GlobalKeyboardHandler({ onShortcutsToggle }: KeyboardHan
   useEffect(() => {
     onShortcutsToggleRef.current = onShortcutsToggle;
   }, [onShortcutsToggle]);
+
+  useEffect(() => {
+    openCreateIncidentRef.current = openCreateIncident;
+  }, [openCreateIncident]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -120,7 +127,7 @@ export default function GlobalKeyboardHandler({ onShortcutsToggle }: KeyboardHan
         pathnameRef.current?.startsWith('/incidents')
       ) {
         e.preventDefault();
-        router.push('/incidents/create');
+        openCreateIncidentRef.current();
       }
     };
 
