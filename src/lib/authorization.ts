@@ -12,6 +12,8 @@ export type AppRole = (typeof APP_ROLES)[number];
 export const CAPABILITIES = {
   ADMIN_MANAGE: 'admin.manage',
   OPERATIONS_MANAGE: 'operations.manage',
+  INCIDENT_CREATE_ALL: 'incident.create.all',
+  INCIDENT_CREATE_SCOPED: 'incident.create.scoped',
   INCIDENT_READ_ALL: 'incident.read.all',
   INCIDENT_READ_SCOPED: 'incident.read.scoped',
   INCIDENT_EXPORT: 'incident.export',
@@ -51,6 +53,7 @@ export function isWriteApiScope(scope: ApiScope): boolean {
 const ADMIN_CAPABILITIES = new Set<Capability>(Object.values(CAPABILITIES));
 const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.OPERATIONS_MANAGE,
+  CAPABILITIES.INCIDENT_CREATE_ALL,
   CAPABILITIES.INCIDENT_READ_ALL,
   CAPABILITIES.INCIDENT_EXPORT,
   CAPABILITIES.INCIDENT_SENSITIVE_READ,
@@ -71,6 +74,7 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.REPORT_EXPORT,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.INCIDENT_CREATE_SCOPED,
   CAPABILITIES.INCIDENT_READ_SCOPED,
   CAPABILITIES.SERVICE_READ_SCOPED,
   CAPABILITIES.METRICS_READ_SCOPED,

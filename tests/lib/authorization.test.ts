@@ -37,6 +37,8 @@ describe('central authorization contract', () => {
   });
 
   it('keeps User access scoped', () => {
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_CREATE_SCOPED)).toBe(true);
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_CREATE_ALL)).toBe(false);
     expect(hasCapability('USER', CAPABILITIES.INCIDENT_READ_SCOPED)).toBe(true);
     expect(hasCapability('USER', CAPABILITIES.SERVICE_READ_SCOPED)).toBe(true);
     expect(hasCapability('USER', CAPABILITIES.INCIDENT_READ_ALL)).toBe(false);

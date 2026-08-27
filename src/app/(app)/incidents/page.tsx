@@ -56,7 +56,9 @@ export default async function IncidentsPage({
   const skip = (currentPage - 1) * ITEMS_PER_PAGE;
 
   const permissions = await getUserPermissions();
-  const canCreateIncident = permissions.isResponderOrAbove;
+  const canCreateIncident = permissions.capabilities.some(
+    capability => capability === 'incident.create.all' || capability === 'incident.create.scoped'
+  );
 
   const currentUser = await prisma.user.findUnique({
     where: { id: permissions.id },

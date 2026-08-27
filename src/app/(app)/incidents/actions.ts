@@ -4,7 +4,12 @@ import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { revalidatePath } from 'next/cache';
 import { IncidentStatus, IncidentUrgency } from '@prisma/client';
-import { getCurrentUser, assertResponderOrAbove, assertCanModifyIncident } from '@/lib/rbac';
+import {
+  getCurrentUser,
+  assertResponderOrAbove,
+  assertCanModifyIncident,
+  assertCanCreateIncidentForService,
+} from '@/lib/rbac';
 import { getUserFriendlyError } from '@/lib/user-friendly-errors';
 import { logger } from '@/lib/logger';
 
@@ -475,15 +480,15 @@ export async function updateIncidentPriority(id: string, priority: string | null
 }
 
 export async function createIncident(formData: FormData) {
-  try {
-    await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
   const urgency = parseIncidentUrgency(formData.get('urgency') as string);
   const serviceId = formData.get('serviceId') as string;
+  try {
+    await assertCanCreateIncidentForService(serviceId);
+  } catch (error) {
+    throw new Error(getUserFriendlyError(error));
+  }
   const priority = formData.get('priority') as string | null;
   const dedupKey = formData.get('dedupKey') as string | null;
   const assigneeId = formData.get('assigneeId') as string | null;

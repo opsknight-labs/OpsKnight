@@ -175,6 +175,24 @@ export async function assertCanReadServiceMetrics(opts: {
   return user;
 }
 
+export async function assertCanCreateIncidentForService(serviceId: string) {
+  const user = await getCurrentUser();
+  if (hasCapability(user.role as AppRole, CAPABILITIES.INCIDENT_CREATE_ALL)) return user;
+  if (!hasCapability(user.role as AppRole, CAPABILITIES.INCIDENT_CREATE_SCOPED)) {
+    throw new AuthorizationError(
+      'Unauthorized. Incident creation access required.',
+      CAPABILITIES.INCIDENT_CREATE_SCOPED
+    );
+  }
+  const service = await prisma.service.findFirst({
+    where: { id: serviceId, team: { members: { some: { userId: user.id } } } },
+    select: { id: true },
+  });
+  if (!service)
+    throw new Error('Unauthorized. You can only create incidents for your team services.');
+  return user;
+}
+
 export async function getUserPermissions() {
   try {
     const user = await getCurrentUser();

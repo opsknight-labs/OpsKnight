@@ -26,7 +26,9 @@ export default async function CreateIncidentPage({
 
   const templates = await getAllTemplates(permissions.id);
 
-  const canCreateIncident = permissions.isResponderOrAbove;
+  const canCreateIncident = permissions.capabilities.some(
+    capability => capability === 'incident.create.all' || capability === 'incident.create.scoped'
+  );
 
   if (!canCreateIncident) {
     return (
