@@ -16,10 +16,10 @@ describe('MetricCard', () => {
 
     expect(screen.getByText('ACTIVE')).toBeInTheDocument();
     expect(screen.getByText('187 Triggered · 209 Acknowledged')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View active incidents' })).toHaveAttribute(
-      'href',
-      '/incidents?filter=all_open'
-    );
+    const link = screen.getByRole('link', { name: 'View active incidents' });
+    expect(link).toHaveAttribute('href', '/incidents?filter=all_open');
+    expect(link).toHaveClass('h-full');
+    expect(screen.getByRole('figure')).toHaveClass('h-full', 'min-h-32');
   });
 
   it('shows the muted breakdown and links to the combined muted filter', () => {
