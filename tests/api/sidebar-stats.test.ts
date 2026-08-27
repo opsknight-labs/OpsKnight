@@ -59,7 +59,11 @@ describe('API Route - Sidebar Stats', () => {
 
     expect(status).toBe(200);
     expect(data.activeIncidentsCount).toBe(3);
-    expect(prisma.incident.groupBy).toHaveBeenCalled();
+    expect(prisma.incident.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ['OPEN', 'ACKNOWLEDGED'] } }),
+      })
+    );
   });
 
   it('scopes active incidents for standard users', async () => {

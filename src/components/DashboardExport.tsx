@@ -86,11 +86,11 @@ export default function DashboardExport({ incidents, filters, metrics }: ExportP
 
     // Metrics Summary
     csvRows.push('Metrics Summary:');
-    csvRows.push(`Active Incidents,${metrics.totalActive}`);
-    csvRows.push(`Triggered Incidents,${metrics.totalTriggered}`);
-    csvRows.push(`Resolved Incidents,${metrics.totalResolved}`);
-    csvRows.push(`Acknowledged Incidents,${metrics.totalAcknowledged}`);
-    csvRows.push(`Unassigned Incidents,${metrics.unassigned}`);
+    csvRows.push(`Active Incidents (current),${metrics.totalActive}`);
+    csvRows.push(`Triggered Incidents (current),${metrics.totalTriggered}`);
+    csvRows.push(`Acknowledged Incidents (current),${metrics.totalAcknowledged}`);
+    csvRows.push(`Unassigned Active Incidents (current),${metrics.unassigned}`);
+    csvRows.push(`Resolved Incidents (selected period),${metrics.totalResolved}`);
     csvRows.push('');
 
     // Incidents Data

@@ -19,13 +19,13 @@ Use this guide for work in the OpsKnight interface. For supported automation, se
 
 ## Incident lifecycle
 
-| Status           | Meaning                              | Escalation behavior                                                                                   |
-| ---------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| **Open**         | Response is required.                | The service policy can continue escalating.                                                           |
-| **Acknowledged** | A responder has taken ownership.     | The active escalation is completed.                                                                   |
-| **Snoozed**      | Response is paused temporarily.      | Escalation is paused until the incident is returned to Open. A timed snooze can reopen automatically. |
-| **Suppressed**   | The incident is intentionally muted. | Escalation is paused until the incident is unsuppressed.                                              |
-| **Resolved**     | Response is complete.                | Escalation is completed and resolution time is recorded.                                              |
+| Status                 | Meaning                                             | Escalation behavior                                                                                   |
+| ---------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Triggered (`OPEN`)** | New and not yet acknowledged; response is required. | The service policy can continue escalating.                                                           |
+| **Acknowledged**       | A responder has taken ownership.                    | The active escalation is completed.                                                                   |
+| **Snoozed**            | Response is paused temporarily.                     | Escalation is paused until the incident is returned to Open. A timed snooze can reopen automatically. |
+| **Suppressed**         | The incident is intentionally muted.                | Escalation is paused until the incident is unsuppressed.                                              |
+| **Resolved**           | Response is complete.                               | Escalation is completed and resolution time is recorded.                                              |
 
 Returning a resolved incident to **Open** reopens it. Status changes are recorded in the timeline and may notify configured service channels, status-page subscribers, and webhooks.
 
@@ -48,7 +48,7 @@ OpsKnight uses the event deduplication key for integration-created incidents. A 
 
 ## Find and triage incidents
 
-The Incidents page displays 50 records per page and provides counts for Mine, Open, Resolved, Snoozed, and Suppressed.
+The Incidents page displays 50 records per page and provides counts for Mine, Active, Resolved, Snoozed, and Suppressed. Active is exactly Triggered (`OPEN`) plus Acknowledged; Snoozed and Suppressed are muted and excluded.
 
 Use the controls to:
 

@@ -19,15 +19,15 @@ type DashboardCommandCenterProps = {
   systemStatus: SystemStatus;
   allActiveIncidentsCount: number;
   totalInRange: number;
-  metricsActiveCount: number;
-  metricsOpenCount: number;
+  currentActiveCount: number;
+  currentTriggeredCount: number;
   metricsResolvedCount: number;
   unassignedCount: number;
   rangeLabel: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   incidents: any[];
   filters: Record<string, string | undefined>;
-  currentPeriodAcknowledged: number;
+  currentAcknowledgedCount: number;
   userTimeZone?: string;
   isClipped?: boolean;
   retentionDays?: number;
@@ -37,14 +37,14 @@ export default function DashboardCommandCenter({
   systemStatus,
   allActiveIncidentsCount,
   totalInRange,
-  metricsActiveCount,
-  metricsOpenCount,
+  currentActiveCount,
+  currentTriggeredCount,
   metricsResolvedCount,
   unassignedCount,
   rangeLabel,
   incidents,
   filters,
-  currentPeriodAcknowledged,
+  currentAcknowledgedCount,
   userTimeZone = 'UTC',
   isClipped,
   retentionDays,
@@ -128,10 +128,10 @@ export default function DashboardCommandCenter({
               incidents={incidents}
               filters={filters}
               metrics={{
-                totalActive: metricsActiveCount,
-                totalTriggered: metricsOpenCount,
+                totalActive: currentActiveCount,
+                totalTriggered: currentTriggeredCount,
                 totalResolved: metricsResolvedCount,
-                totalAcknowledged: currentPeriodAcknowledged,
+                totalAcknowledged: currentAcknowledgedCount,
                 unassigned: unassignedCount,
               }}
             />
@@ -143,9 +143,9 @@ export default function DashboardCommandCenter({
         <MetricCard label="TOTAL" value={totalInRange} rangeLabel={rangeLabel} variant="hero" />
         <MetricCard
           label="ACTIVE"
-          value={metricsActiveCount}
-          rangeLabel={rangeLabel}
-          description={`${metricsOpenCount.toLocaleString()} Triggered · ${currentPeriodAcknowledged.toLocaleString()} Acknowledged`}
+          value={currentActiveCount}
+          rangeLabel="(CURRENT)"
+          description={`${currentTriggeredCount.toLocaleString()} Triggered · ${currentAcknowledgedCount.toLocaleString()} Acknowledged`}
           href="/incidents?filter=all_open"
           variant="hero"
         />
@@ -158,7 +158,7 @@ export default function DashboardCommandCenter({
         <MetricCard
           label="UNASSIGNED"
           value={unassignedCount}
-          rangeLabel={isClipped ? `(Max ${retentionDays}d)` : '(ALL TIME)'}
+          rangeLabel="(CURRENT)"
           variant="hero"
         />
       </div>

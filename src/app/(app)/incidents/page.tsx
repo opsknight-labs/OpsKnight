@@ -9,9 +9,9 @@ import {
   incidentListSelect,
   normalizeIncidentFilter,
   normalizeIncidentSort,
+  normalizeIncidentStatus,
 } from '@/lib/incidents-query';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/shadcn/card';
-import { Button } from '@/components/ui/shadcn/button';
 import { AlertTriangle } from 'lucide-react';
 
 export const revalidate = 0;
@@ -29,6 +29,11 @@ export default async function IncidentsPage({
     sort?: string;
     page?: string;
     teamId?: string;
+    status?: string;
+    assignee?: string;
+    serviceId?: string;
+    createdAfter?: string;
+    createdBefore?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -38,6 +43,15 @@ export default async function IncidentsPage({
   const currentUrgency = params.urgency || 'all';
   const currentSort = normalizeIncidentSort(params.sort);
   const currentTeamId = params.teamId || 'all';
+  const currentStatus = normalizeIncidentStatus(params.status);
+  const currentAssignee = params.assignee;
+  const currentServiceId = params.serviceId;
+  const createdAfter = params.createdAfter ? new Date(params.createdAfter) : undefined;
+  const createdBefore = params.createdBefore ? new Date(params.createdBefore) : undefined;
+  const validCreatedAfter =
+    createdAfter && !Number.isNaN(createdAfter.getTime()) ? createdAfter : undefined;
+  const validCreatedBefore =
+    createdBefore && !Number.isNaN(createdBefore.getTime()) ? createdBefore : undefined;
   const currentPage = parseInt(params.page || '1', 10);
   const skip = (currentPage - 1) * ITEMS_PER_PAGE;
 
@@ -68,6 +82,11 @@ export default async function IncidentsPage({
     priority: currentPriority,
     urgency: currentUrgency,
     assigneeId: currentUser?.id ?? permissions.id,
+    assignee: currentAssignee,
+    serviceId: currentServiceId,
+    status: currentStatus,
+    createdAfter: validCreatedAfter,
+    createdBefore: validCreatedBefore,
   });
 
   if (currentTeamId !== 'all') {
@@ -81,10 +100,17 @@ export default async function IncidentsPage({
     priority: currentPriority,
     urgency: currentUrgency,
     assigneeId: currentUser?.id ?? permissions.id,
+    assignee: currentAssignee,
+    serviceId: currentServiceId,
+    createdAfter: validCreatedAfter,
+    createdBefore: validCreatedBefore,
   };
 
   // Optimized: Use groupBy for status counts instead of 5 separate count() queries
   const baseWhere = buildIncidentWhere({ filter: 'all', ...statsBase });
+  if (currentTeamId !== 'all') {
+    baseWhere.teamId = currentTeamId === 'mine' ? { in: userTeamIds } : currentTeamId;
+  }
   const [statusCounts, mineCount] = await Promise.all([
     // Single groupBy query for all status counts
     prisma.incident.groupBy({
@@ -124,6 +150,19 @@ export default async function IncidentsPage({
 
   const showingFrom = totalCount === 0 ? 0 : skip + 1;
   const showingTo = Math.min(skip + ITEMS_PER_PAGE, totalCount);
+  const drilldownScope = [
+    currentStatus
+      ? `Status: ${currentStatus === 'OPEN' ? 'Triggered' : currentStatus.toLowerCase()}`
+      : null,
+    currentAssignee
+      ? currentAssignee.toLowerCase() === 'unassigned'
+        ? 'Assignee: Unassigned'
+        : 'Assignee: Specific responder'
+      : null,
+    currentServiceId ? 'Service: Specific service' : null,
+    validCreatedAfter ? `Created after: ${validCreatedAfter.toISOString().slice(0, 10)}` : null,
+    validCreatedBefore ? `Created before: ${validCreatedBefore.toISOString().slice(0, 10)}` : null,
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
@@ -136,7 +175,9 @@ export default async function IncidentsPage({
               Incidents
             </h1>
             <p className="text-xs md:text-sm opacity-90 mt-1 text-white">
-              Triage, assign, and resolve operational issues
+              {validCreatedAfter || validCreatedBefore
+                ? 'Counts scoped to the selected incident creation period'
+                : 'Current-state counts across all retained incident records'}
             </p>
           </div>
 
@@ -180,6 +221,16 @@ export default async function IncidentsPage({
           </div>
         </div>
       </div>
+
+      {drilldownScope.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+          <span className="font-semibold text-foreground">Metric drill-down:</span>
+          <span className="text-muted-foreground">{drilldownScope.join(' · ')}</span>
+          <Link href="/incidents" className="ml-auto font-semibold text-primary hover:underline">
+            Clear scope
+          </Link>
+        </div>
+      )}
 
       {/* Single-column layout with inline filters */}
       <div className="space-y-4 md:space-y-5">

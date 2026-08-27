@@ -18,14 +18,14 @@ All timestamps are displayed in the signed-in user's profile time zone. The afte
 
 The Analytics URL supports these filters:
 
-| Filter   | Values                                                          |
-| -------- | --------------------------------------------------------------- |
-| Window   | 1, 3, 7, 14, 30, 60, 90, 180, or 365 days                       |
-| Team     | One team or all teams                                           |
-| Service  | One service or all services; selecting a team narrows this list |
-| Assignee | One user or all users                                           |
-| Status   | Open, Acknowledged, Snoozed, Suppressed, Resolved, or all       |
-| Urgency  | High, Medium, Low, or all                                       |
+| Filter   | Values                                                                  |
+| -------- | ----------------------------------------------------------------------- |
+| Window   | 1, 3, 7, 14, 30, 60, 90, 180, or 365 days                               |
+| Team     | One team or all teams                                                   |
+| Service  | One service or all services; selecting a team narrows this list         |
+| Assignee | One user or all users                                                   |
+| Status   | Triggered (`OPEN`), Acknowledged, Snoozed, Suppressed, Resolved, or all |
+| Urgency  | High, Medium, Low, or all                                               |
 
 The default window is seven days. Active filter chips below the filter bar show the current scope.
 
@@ -33,10 +33,10 @@ When a requested window extends beyond incident retention, OpsKnight clips the q
 
 ## Metric definitions
 
-| Metric                 | v1.4 meaning                                                                                |
+| Metric                 | Meaning                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------- |
 | Total incidents        | Incidents created in the effective filtered period                                          |
-| Active incidents       | Current Open or Acknowledged work; Snoozed and Suppressed incidents are excluded            |
+| Active incidents       | Current Triggered (`OPEN`) or Acknowledged work; no historical date cutoff                  |
 | Unassigned active      | Active incidents with no user assignee                                                      |
 | MTTA                   | Mean time from incident creation to `acknowledgedAt`, for incidents with an acknowledgement |
 | MTTR                   | Mean time from incident creation to `resolvedAt`, for resolved incidents                    |
@@ -51,6 +51,14 @@ When a requested window extends beyond incident retention, OpsKnight clips the q
 | Alerts per incident    | Stored inbound alerts divided by incidents in scope                                         |
 | After-hours rate       | Share created outside Monday–Friday 08:00–18:00 in the configured business-hours time zone  |
 | Coverage               | Scheduled on-call coverage calculated for the window                                        |
+
+### Metric scope contract
+
+- **Current** metrics describe the actionable backlog now. Active, unassigned active, and current urgency counts use only `OPEN` + `ACKNOWLEDGED` and are not cut off by historical retention.
+- **Selected-period** metrics describe incidents created inside the effective filtered window. Total, resolved, status/urgency mix, MTTA, MTTR, SLA compliance, rates, trends, and heatmaps use this scope.
+- **Muted** means `SNOOZED` + `SUPPRESSED`; muted incidents never count as Active or make a service unhealthy.
+- **Triggered** is the user-facing name for the strict database state `OPEN`. It is not a synonym for Active.
+- Incident drill-downs preserve the applicable team, service, assignee, urgency, status, and effective creation-date scope.
 
 Service defaults are 15 minutes to acknowledge and 120 minutes to resolve unless the service has different targets. SLA calculations use service targets; urgency alone does not define the target.
 

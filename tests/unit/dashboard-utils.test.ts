@@ -40,6 +40,11 @@ describe('dashboard-utils', () => {
       expect(result.status).toBe('OPEN');
     });
 
+    it('maps ACTIVE to the canonical actionable statuses', () => {
+      const result = buildIncidentWhere({ status: 'ACTIVE', range: '30' });
+      expect(result.status).toEqual({ in: ['OPEN', 'ACKNOWLEDGED'] });
+    });
+
     it('excludes status when includeStatus is false', () => {
       const result = buildIncidentWhere({ status: 'OPEN', range: '30' }, { includeStatus: false });
       expect(result.status).toBeUndefined();

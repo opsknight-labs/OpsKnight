@@ -11,6 +11,7 @@ import CreateServiceForm from '@/components/service/CreateServiceForm';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Server, AlertTriangle, XCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 
 export const revalidate = 0;
 
@@ -110,7 +111,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   if (teamFilter) andConditions.push({ teamId: teamFilter });
   if (statusFilter !== 'all') {
     const active = {
-      status: { in: ['OPEN', 'ACKNOWLEDGED'] as import('@prisma/client').IncidentStatus[] },
+      status: { in: activeIncidentStatuses() },
     };
     if (statusFilter === 'CRITICAL') {
       andConditions.push({ incidents: { some: { ...active, urgency: 'HIGH' } } });
@@ -198,7 +199,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   // If we need total stats, we can't get it without fetching all. Let's just keep stats based on what we have, or leave it. Wait, the user didn't mention stats, but they said "Remove the in-memory .filter(), .sort(), .slice() operations".
   const totalServices = totalFilteredItems;
   const active = {
-    status: { in: ['OPEN', 'ACKNOWLEDGED'] as import('@prisma/client').IncidentStatus[] },
+    status: { in: activeIncidentStatuses() },
   };
   const [operationalCount, degradedCount, criticalCount] = await Promise.all([
     prisma.service.count({ where: { incidents: { none: active } } }),

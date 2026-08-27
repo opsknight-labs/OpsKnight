@@ -2,6 +2,7 @@ import { calculateSLAMetrics } from '@/lib/sla-server';
 import { formatTimeMinutesMs } from '@/lib/time-format';
 import { smoothSeries } from '@/lib/analytics-metrics';
 import { formatDateTime } from '@/lib/timezone';
+import { buildIncidentListHref } from '@/lib/incident-links';
 import MetricCard from '@/components/analytics/MetricCard';
 import MetricIcon from '@/components/analytics/MetricIcon';
 import GaugeChart from '@/components/analytics/GaugeChart';
@@ -140,6 +141,47 @@ export default async function AnalyticsContent({
   const windowLabelDays = metrics.isClipped ? effectiveWindowDays : windowDays;
   const windowLabelSuffix = metrics.isClipped ? ' (retention limit)' : '';
   const formatDate = (date: Date) => formatDateTime(date, userTimeZone, { format: 'short' });
+  const currentIncidentScope = {
+    teamId,
+    serviceId,
+    assignee: assigneeId,
+    status: statusFilter,
+    urgency: urgencyFilter,
+  };
+  const periodIncidentScope = {
+    ...currentIncidentScope,
+    createdAfter: metrics.effectiveStart.toISOString(),
+    createdBefore: metrics.effectiveEnd.toISOString(),
+  };
+  const currentIncidentHref = (
+    overrides: NonNullable<Parameters<typeof buildIncidentListHref>[0]> = {}
+  ) => buildIncidentListHref({ ...currentIncidentScope, ...overrides });
+  const periodIncidentHref = (
+    overrides: NonNullable<Parameters<typeof buildIncidentListHref>[0]> = {}
+  ) => buildIncidentListHref({ ...periodIncidentScope, ...overrides });
+  const hasActiveStatusFilter = statusFilter === 'OPEN' || statusFilter === 'ACKNOWLEDGED';
+  const activeIncidentHref = statusFilter
+    ? hasActiveStatusFilter
+      ? currentIncidentHref({ status: statusFilter })
+      : undefined
+    : currentIncidentHref({ filter: 'all_open' });
+  const resolvedIncidentHref =
+    !statusFilter || statusFilter === 'RESOLVED'
+      ? periodIncidentHref({ filter: 'resolved' })
+      : undefined;
+  const acknowledgedIncidentHref =
+    !statusFilter || statusFilter === 'ACKNOWLEDGED'
+      ? periodIncidentHref({ status: 'ACKNOWLEDGED' })
+      : undefined;
+  const highUrgencyIncidentHref =
+    !urgencyFilter || urgencyFilter === 'HIGH'
+      ? periodIncidentHref({ urgency: 'HIGH' })
+      : undefined;
+  const unassignedActiveIncidentHref = statusFilter
+    ? hasActiveStatusFilter
+      ? currentIncidentHref({ status: statusFilter, assignee: 'unassigned' })
+      : undefined
+    : currentIncidentHref({ filter: 'all_open', assignee: 'unassigned' });
 
   const getDelta = (current: number | null, previous: number | null) => {
     if (current === null || previous === null || previous === 0) return null;
@@ -293,7 +335,7 @@ export default async function AnalyticsContent({
           trendValue={formatDelta(incidentDelta)}
           variant={incidentDelta !== null && incidentDelta > 0 ? 'warning' : 'default'}
           icon={<MetricIcon type="incidents" />}
-          href="/incidents"
+          href={periodIncidentHref()}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -309,7 +351,7 @@ export default async function AnalyticsContent({
           detail="Current backlog"
           variant={metrics.activeIncidents > 5 ? 'danger' : 'default'}
           icon={<MetricIcon type="incidents" />}
-          href="/incidents?status=OPEN"
+          href={activeIncidentHref}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -327,7 +369,7 @@ export default async function AnalyticsContent({
           trendValue={formatDelta(mttaDelta)}
           variant="primary"
           icon={<MetricIcon type="MTTA" />}
-          href="/incidents"
+          href={periodIncidentHref()}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -345,7 +387,7 @@ export default async function AnalyticsContent({
           trendValue={formatDelta(mttrDelta)}
           variant="primary"
           icon={<MetricIcon type="MTTR" />}
-          href="/incidents?status=RESOLVED"
+          href={resolvedIncidentHref}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -367,7 +409,7 @@ export default async function AnalyticsContent({
               | 'default'
           }
           icon={<Shield className="w-5 h-5" />}
-          href="/incidents?status=RESOLVED"
+          href={resolvedIncidentHref}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -393,7 +435,7 @@ export default async function AnalyticsContent({
               | 'default'
           }
           icon={<Shield className="w-5 h-5" />}
-          href="/incidents"
+          href={periodIncidentHref()}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -419,7 +461,7 @@ export default async function AnalyticsContent({
           detail="Completion"
           variant={metrics.resolveRate > 80 ? 'success' : 'default'}
           icon={<CheckCircle className="w-5 h-5 text-green-500" />}
-          href="/incidents?status=RESOLVED"
+          href={resolvedIncidentHref}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -445,7 +487,7 @@ export default async function AnalyticsContent({
           detail="Incidents escalated"
           variant={metrics.escalationRate > 20 ? 'warning' : 'default'}
           icon={<TrendingUp className="w-5 h-5" />}
-          href="/incidents"
+          href={periodIncidentHref()}
           className="analytics-card-large"
         >
           <div className="analytics-kpi-meta">
@@ -475,7 +517,7 @@ export default async function AnalyticsContent({
           detail="Acknowledgment"
           variant={metrics.ackRate > 90 ? 'success' : 'warning'}
           icon={<CheckCircle className="w-5 h-5 text-blue-500" />}
-          href="/incidents?status=ACKNOWLEDGED"
+          href={acknowledgedIncidentHref}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -484,7 +526,7 @@ export default async function AnalyticsContent({
           detail="SLA misses"
           variant={metrics.resolveBreaches > 0 ? 'warning' : 'success'}
           icon={<AlertCircle className="w-5 h-5 text-rose-500" />}
-          href="/incidents?status=RESOLVED"
+          href={resolvedIncidentHref}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -493,7 +535,7 @@ export default async function AnalyticsContent({
           detail="Share of Total"
           variant={metrics.highUrgencyRate > 50 ? 'warning' : 'default'}
           icon={<AlertTriangle className="w-5 h-5 text-orange-500" />}
-          href="/incidents?urgency=HIGH"
+          href={highUrgencyIncidentHref}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -502,7 +544,7 @@ export default async function AnalyticsContent({
           detail="SLA misses"
           variant={metrics.ackBreaches > 0 ? 'warning' : 'success'}
           icon={<AlertCircle className="w-5 h-5 text-orange-500" />}
-          href="/incidents"
+          href={periodIncidentHref()}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -529,7 +571,7 @@ export default async function AnalyticsContent({
           detail="Needs Owner"
           variant={metrics.unassignedActive > 0 ? 'warning' : 'success'}
           icon={<Users className="w-5 h-5" />}
-          href="/incidents?assignee=UNASSIGNED"
+          href={unassignedActiveIncidentHref}
         />
         <MetricCard
           className="analytics-card-compact"
@@ -574,7 +616,7 @@ export default async function AnalyticsContent({
           detail="Mean Time Between"
           variant="default"
           icon={<Activity className="w-5 h-5" />}
-          href="/incidents"
+          href={periodIncidentHref()}
         />
       </section>
 
@@ -699,7 +741,7 @@ export default async function AnalyticsContent({
             <span className="analytics-narrative-kicker">Narrative</span>
             <h3 className="analytics-narrative-title">Key changes vs previous period</h3>
           </div>
-          <a href="/incidents" className="analytics-narrative-link">
+          <a href={periodIncidentHref()} className="analytics-narrative-link">
             View incidents
           </a>
         </div>

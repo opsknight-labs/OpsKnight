@@ -164,11 +164,7 @@ export default function Sidebar(
   const currentRole = (session?.user as any)?.role || userRole;
   const currentGender = (session?.user as any)?.gender || userGender;
 
-  const [stats, setStats] = useState<{
-    count: number;
-    isClipped?: boolean;
-    retentionDays?: number;
-  } | null>(null);
+  const [stats, setStats] = useState<{ count: number } | null>(null);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useModalState('sidebarMobileMenu');
 
@@ -181,8 +177,6 @@ export default function Sidebar(
       .then(data =>
         setStats({
           count: data.activeIncidentsCount || 0,
-          isClipped: data.isClipped,
-          retentionDays: data.retentionDays,
         })
       )
       .catch(() => setStats({ count: 0 }));

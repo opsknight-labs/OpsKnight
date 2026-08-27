@@ -5,6 +5,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { Prisma } from '@prisma/client';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 
 const RATE_LIMIT_MAX = 30; // 30 requests per minute
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
@@ -39,7 +40,7 @@ export async function GET() {
 
     // Build efficient Where clause for Active Incidents
     const where: Prisma.IncidentWhereInput = {
-      status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] },
+      status: { in: activeIncidentStatuses() },
     };
 
     // Apply Scope Permissions
@@ -66,20 +67,13 @@ export async function GET() {
     const mediumIncidentsCount = urgencyCounts.find(u => u.urgency === 'MEDIUM')?._count._all || 0;
     const lowIncidentsCount = urgencyCounts.find(u => u.urgency === 'LOW')?._count._all || 0;
 
-    // Retention info (Mocking or fetching separately if needed, but sidebar usually doesn't need strict retention info)
-    // We'll return nulls or defaults as this is just for the badge
-    const retentionInfo = {
-      isClipped: false,
-      retentionDays: 90, // Default assumption
-    };
-
     return jsonOk(
       {
         activeIncidentsCount,
         criticalIncidentsCount,
         mediumIncidentsCount,
         lowIncidentsCount,
-        ...retentionInfo,
+        scope: 'current',
       },
       200,
       {

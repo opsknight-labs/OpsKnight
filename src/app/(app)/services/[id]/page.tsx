@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -162,7 +163,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   // Define status filter based on active tab
   const incidentWhere =
     tab === 'incidents'
-      ? { status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] as const } }
+      ? { status: { in: activeIncidentStatuses() } }
       : { status: 'RESOLVED' as const };
 
   // Parallelize data fetching

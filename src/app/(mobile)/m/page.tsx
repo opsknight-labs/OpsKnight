@@ -37,11 +37,7 @@ export default async function MobileDashboard() {
   const openIncidents = slaMetrics.openCount;
   const criticalIncidents = slaMetrics.criticalCount;
   const resolved24h = slaMetrics.resolved24h;
-  const totalActive =
-    slaMetrics.openCount +
-    slaMetrics.acknowledgedCount +
-    slaMetrics.snoozedCount +
-    slaMetrics.suppressedCount;
+  const totalActive = slaMetrics.openCount + slaMetrics.acknowledgedCount;
 
   const activeIncidentList = (slaMetrics.activeIncidentSummaries || [])
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -182,8 +178,8 @@ export default async function MobileDashboard() {
         </div>
       </div>
       <p className="text-[11px] font-medium text-[color:var(--text-muted)] mobile-enter delay-300">
-        <strong>Open</strong>: New & Unacknowledged. <strong>Total Active</strong>: All unresolved
-        incidents.
+        <strong>Triggered</strong>: New and unacknowledged. <strong>Total Active</strong>: Triggered
+        plus acknowledged incidents; snoozed and suppressed incidents are excluded.
       </p>
       <p className="text-[11px] text-[color:var(--text-muted)] mobile-enter delay-300">
         Last updated <MobileTime value={lastUpdated} format="time" />

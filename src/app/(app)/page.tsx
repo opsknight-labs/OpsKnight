@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { IncidentHeatmapWidget } from '@/components/dashboard/widgets/IncidentHeatmapWidget';
 import { IncidentStatus, IncidentUrgency } from '@prisma/client';
+import { buildIncidentListHref } from '@/lib/incident-links';
 
 export const revalidate = 0;
 
@@ -61,7 +62,7 @@ export default async function Dashboard({
     typeof awaitedSearchParams.status === 'string' ? awaitedSearchParams.status : undefined;
   const status =
     statusParam &&
-    ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'].includes(statusParam)
+    ['ACTIVE', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'].includes(statusParam)
       ? statusParam
       : undefined;
   const assigneeParam =
@@ -202,7 +203,7 @@ export default async function Dashboard({
       serviceId: service,
       assigneeId: assigneeFilter,
       urgency: urgency as 'HIGH' | 'MEDIUM' | 'LOW' | undefined,
-      status: status as IncidentStatus | undefined,
+      status: status as 'ACTIVE' | IncidentStatus | undefined,
       startDate: metricsStartDate,
       endDate: metricsEndDate,
       includeAllTime: range === 'all',
@@ -249,7 +250,7 @@ export default async function Dashboard({
           serviceId: service,
           assigneeId: assigneeFilter,
           urgency: urgency as 'HIGH' | 'MEDIUM' | 'LOW' | undefined,
-          status: status as IncidentStatus | undefined,
+          status: status as 'ACTIVE' | IncidentStatus | undefined,
           startDate: metricsStartDate,
           endDate: metricsEndDate,
           includeAllTime: range === 'all',
@@ -276,18 +277,16 @@ export default async function Dashboard({
   // Map SLA Server metrics to Dashboard variables
   const activeShifts = slaMetrics.currentShifts;
   const metricsTotalCount = slaMetrics.totalIncidents;
-  const metricsOpenCount = slaMetrics.statusMix.find(s => s.status === 'OPEN')?.count ?? 0;
+  const currentTriggeredCount = slaMetrics.openCount;
   const metricsResolvedCount = slaMetrics.statusMix.find(s => s.status === 'RESOLVED')?.count ?? 0;
-  const currentPeriodAcknowledged =
-    slaMetrics.statusMix.find(s => s.status === 'ACKNOWLEDGED')?.count ?? 0;
-  const metricsActiveCount = metricsOpenCount + currentPeriodAcknowledged;
+  const currentAcknowledgedCount = slaMetrics.acknowledgedCount;
+  const currentActiveCount = currentTriggeredCount + currentAcknowledgedCount;
   const unassignedCount = slaMetrics.unassignedActive;
 
   const allActiveIncidentsCount =
     slaMetrics.activeIncidents ??
     slaMetrics.activeCount ??
     slaMetrics.openCount + slaMetrics.acknowledgedCount;
-  const allAcknowledgedCount = slaMetrics.acknowledgedCount;
   const currentCriticalActive = slaMetrics.criticalCount;
   const mttaMinutes = slaMetrics.mttd;
 
@@ -414,8 +413,8 @@ export default async function Dashboard({
           systemStatus={systemStatus}
           allActiveIncidentsCount={allActiveIncidentsCount}
           totalInRange={totalInRange}
-          metricsActiveCount={metricsActiveCount}
-          metricsOpenCount={metricsOpenCount}
+          currentActiveCount={currentActiveCount}
+          currentTriggeredCount={currentTriggeredCount}
           metricsResolvedCount={metricsResolvedCount}
           unassignedCount={unassignedCount}
           rangeLabel={getRangeLabel(range)}
@@ -430,7 +429,7 @@ export default async function Dashboard({
             startDate: customStart,
             endDate: customEnd,
           }}
-          currentPeriodAcknowledged={currentPeriodAcknowledged}
+          currentAcknowledgedCount={currentAcknowledgedCount}
           userTimeZone={userTimeZone}
           isClipped={slaMetrics.isClipped}
           retentionDays={slaMetrics.retentionDays}
@@ -439,7 +438,7 @@ export default async function Dashboard({
         {/* Smart Insights Banner - Auto-generated alerts */}
         <SmartInsightsBanner
           totalIncidents={totalInRange}
-          openIncidents={allActiveIncidentsCount}
+          activeIncidents={allActiveIncidentsCount}
           criticalIncidents={currentCriticalActive}
           unassignedIncidents={unassignedCount}
           topServiceName={topServiceByVolume?.name}
@@ -547,7 +546,11 @@ export default async function Dashboard({
                         </div>
                       )}
                       <Link
-                        href={user ? `/?status=OPEN&assignee=${user.id}` : '/incidents?status=OPEN'}
+                        href={
+                          user
+                            ? `/?status=ACTIVE&assignee=${user.id}`
+                            : buildIncidentListHref({ filter: 'all_open' })
+                        }
                         className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100/70 rounded-lg transition-colors"
                       >
                         View my queue &rarr;
@@ -607,7 +610,7 @@ export default async function Dashboard({
                         </div>
                       )}
                       <Link
-                        href="/incidents?status=OPEN&urgency=HIGH"
+                        href={buildIncidentListHref({ filter: 'all_open', urgency: 'HIGH' })}
                         className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50/50 hover:bg-rose-100/70 rounded-lg transition-colors"
                       >
                         View critical &rarr;

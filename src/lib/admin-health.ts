@@ -122,8 +122,15 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       label: 'Database',
       status: latency > 1000 ? 'degraded' : 'healthy',
       summary: `PostgreSQL responded in ${latency} ms.`,
-      details: [latency > 1000 ? 'Latency exceeds the 1-second health threshold.' : 'Connection check passed.'],
-      action: { label: 'Monitoring guide', href: 'https://opsknight.com/docs/v1.3/deployment/monitoring' },
+      details: [
+        latency > 1000
+          ? 'Latency exceeds the 1-second health threshold.'
+          : 'Connection check passed.',
+      ],
+      action: {
+        label: 'Monitoring guide',
+        href: 'https://opsknight.com/docs/v1.3/deployment/monitoring',
+      },
     });
   } catch {
     checks.push({
@@ -131,7 +138,9 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       label: 'Database',
       status: 'unhealthy',
       summary: 'PostgreSQL is unavailable to this application instance.',
-      details: ['Check DATABASE_URL, network policy, credentials, TLS, capacity, and PostgreSQL logs.'],
+      details: [
+        'Check DATABASE_URL, network policy, credentials, TLS, capacity, and PostgreSQL logs.',
+      ],
     });
   }
 
@@ -158,14 +167,13 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'database-capacity',
         label: 'Database capacity',
-        status:
-          !capacity
-            ? 'unknown'
-            : utilization >= 95 || capacity.longTransactions > 0
-              ? 'unhealthy'
-              : utilization >= 80
-                ? 'degraded'
-                : 'healthy',
+        status: !capacity
+          ? 'unknown'
+          : utilization >= 95 || capacity.longTransactions > 0
+            ? 'unhealthy'
+            : utilization >= 80
+              ? 'degraded'
+              : 'healthy',
         summary: capacity
           ? `${capacity.usedConnections} of ${capacity.maxConnections} connections in use (${Math.round(utilization)}%).`
           : 'Database capacity could not be measured.',
@@ -188,7 +196,9 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         label: 'Database capacity',
         status: 'unknown',
         summary: 'Database capacity statistics could not be read.',
-        details: ['The application remains usable; inspect PostgreSQL and platform telemetry directly.'],
+        details: [
+          'The application remains usable; inspect PostgreSQL and platform telemetry directly.',
+        ],
       });
     }
 
@@ -222,9 +232,19 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         details: [
           `Applied records: ${applied.size}`,
           `Last applied: ${lastApplied ? ageLabel(lastApplied) : 'none recorded'}`,
-          ...(failed.length ? [`Failed: ${failed.slice(0, 3).map(row => row.migration_name).join(', ')}`] : []),
+          ...(failed.length
+            ? [
+                `Failed: ${failed
+                  .slice(0, 3)
+                  .map(row => row.migration_name)
+                  .join(', ')}`,
+              ]
+            : []),
         ],
-        action: { label: 'Migration runbook', href: 'https://opsknight.com/docs/v1.3/deployment/database-migrations' },
+        action: {
+          label: 'Migration runbook',
+          href: 'https://opsknight.com/docs/v1.3/deployment/database-migrations',
+        },
       });
     } catch {
       checks.push({
@@ -232,7 +252,9 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         label: 'Database migrations',
         status: 'unknown',
         summary: 'Migration history could not be inspected.',
-        details: ['Confirm that the Prisma migration table exists and the application role can read it.'],
+        details: [
+          'Confirm that the Prisma migration table exists and the application role can read it.',
+        ],
       });
     }
 
@@ -256,9 +278,14 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
           `Last run: ${ageLabel(state?.lastRunAt || null)}`,
           `Next run: ${state?.nextRunAt?.toISOString() || 'not scheduled'}`,
           `Lock holder: ${state?.lockedBy || 'none'}`,
-          ...(state?.lastError ? ['A last-error marker is present; review restricted server logs for details.'] : []),
+          ...(state?.lastError
+            ? ['A last-error marker is present; review restricted server logs for details.']
+            : []),
         ],
-        action: { label: 'Maintenance guide', href: 'https://opsknight.com/docs/v1.3/deployment/maintenance' },
+        action: {
+          label: 'Maintenance guide',
+          href: 'https://opsknight.com/docs/v1.3/deployment/maintenance',
+        },
       });
     } catch {
       checks.push({
@@ -371,9 +398,12 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         id: 'escalations',
         label: 'Escalation backlog',
         status: locked > 0 ? 'unhealthy' : due > 0 ? 'degraded' : 'healthy',
-        summary: due === 0 ? 'No escalation steps are overdue.' : `${due} escalation step(s) are due or overdue.`,
+        summary:
+          due === 0
+            ? 'No escalation steps are overdue.'
+            : `${due} escalation step(s) are due or overdue.`,
         details: [`Stale processing locks: ${locked}`],
-        action: { label: 'Open incidents', href: '/incidents?status=OPEN' },
+        action: { label: 'View active incidents', href: '/incidents?filter=all_open' },
       });
     } catch {
       checks.push({
@@ -446,7 +476,8 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'notifications',
         label: 'Notification providers',
-        status: incomplete.length > 0 || pending > 0 ? 'unhealthy' : failed > 0 ? 'degraded' : 'healthy',
+        status:
+          incomplete.length > 0 || pending > 0 ? 'unhealthy' : failed > 0 ? 'degraded' : 'healthy',
         summary: `${enabled.length} enabled provider(s); ${failed} failed delivery record(s) in 24 hours.`,
         details: [
           `Pending longer than 5 minutes: ${pending}`,
@@ -501,14 +532,25 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         select: { appUrl: true },
       });
       const values = [settings?.appUrl, process.env.NEXT_PUBLIC_APP_URL, process.env.NEXTAUTH_URL];
-      const origins = values.map(normalizeOrigin).filter((value): value is string => Boolean(value));
+      const origins = values
+        .map(normalizeOrigin)
+        .filter((value): value is string => Boolean(value));
       const consistent = origins.length >= 2 && new Set(origins).size === 1;
-      const productionHttps = process.env.NODE_ENV !== 'production' || origins.every(value => value.startsWith('https://'));
+      const productionHttps =
+        process.env.NODE_ENV !== 'production' ||
+        origins.every(value => value.startsWith('https://'));
       checks.push({
         id: 'public-url',
         label: 'Public URL',
-        status: origins.length === 0 || !productionHttps ? 'unhealthy' : consistent ? 'healthy' : 'degraded',
-        summary: consistent ? `Canonical origin: ${origins[0]}` : 'Configured public origins do not fully agree.',
+        status:
+          origins.length === 0 || !productionHttps
+            ? 'unhealthy'
+            : consistent
+              ? 'healthy'
+              : 'degraded',
+        summary: consistent
+          ? `Canonical origin: ${origins[0]}`
+          : 'Configured public origins do not fully agree.',
         details: [
           `Database setting: ${normalizeOrigin(settings?.appUrl) || 'unset'}`,
           `NEXT_PUBLIC_APP_URL: ${normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL) || 'unset'}`,
@@ -532,12 +574,19 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
   checks.push({
     id: 'encryption',
     label: 'Encryption configuration',
-    status: encryptionValid ? 'healthy' : process.env.NODE_ENV === 'development' ? 'degraded' : 'unhealthy',
+    status: encryptionValid
+      ? 'healthy'
+      : process.env.NODE_ENV === 'development'
+        ? 'degraded'
+        : 'unhealthy',
     summary: encryptionValid
       ? 'A valid 32-byte hexadecimal encryption key is configured.'
       : 'A valid ENCRYPTION_KEY is not configured.',
     details: ['Key material and fingerprints are never displayed on this page.'],
-    action: { label: 'Encryption guide', href: 'https://opsknight.com/docs/v1.3/security/encryption' },
+    action: {
+      label: 'Encryption guide',
+      href: 'https://opsknight.com/docs/v1.3/security/encryption',
+    },
   });
 
   const latest = await latestRelease();
@@ -551,8 +600,13 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       : comparison < 0
         ? `Running ${APP_VERSION}; ${latest} is available.`
         : `Running ${APP_VERSION}; no newer stable release was found.`,
-    details: ['Release discovery uses the public GitHub Releases API and can be unavailable in restricted networks.'],
-    action: { label: 'Upgrade runbook', href: 'https://opsknight.com/docs/v1.3/deployment/upgrade-rollback' },
+    details: [
+      'Release discovery uses the public GitHub Releases API and can be unavailable in restricted networks.',
+    ],
+    action: {
+      label: 'Upgrade runbook',
+      href: 'https://opsknight.com/docs/v1.3/deployment/upgrade-rollback',
+    },
   });
 
   return { generatedAt: now.toISOString(), overall: overallStatus(checks), checks };

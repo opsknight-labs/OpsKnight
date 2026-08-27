@@ -5,6 +5,7 @@ import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { getDefaultAvatar } from '@/lib/avatar';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ export default async function MobileTeamDetailPage({ params }: PageProps) {
       _count: {
         select: {
           incidents: {
-            where: { status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] } },
+            where: { status: { in: activeIncidentStatuses() } },
           },
         },
       },

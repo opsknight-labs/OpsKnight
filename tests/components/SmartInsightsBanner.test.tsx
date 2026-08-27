@@ -9,7 +9,7 @@ describe('SmartInsightsBanner', () => {
     render(
       <SmartInsightsBanner
         totalIncidents={100}
-        openIncidents={50}
+        activeIncidents={50}
         criticalIncidents={0}
         unassignedIncidents={0}
         topServiceName="Github Alert"
@@ -29,7 +29,7 @@ describe('SmartInsightsBanner', () => {
     render(
       <SmartInsightsBanner
         totalIncidents={200}
-        openIncidents={50}
+        activeIncidents={50}
         criticalIncidents={0}
         unassignedIncidents={0}
         topServiceName="Authentication Service"
@@ -48,14 +48,14 @@ describe('SmartInsightsBanner', () => {
     render(
       <SmartInsightsBanner
         totalIncidents={50}
-        openIncidents={20}
+        activeIncidents={20}
         criticalIncidents={0}
         unassignedIncidents={10}
       />
     );
 
     expect(
-      screen.getByText('50% of open incidents are unassigned. Consider distributing workload.')
+      screen.getByText('50% of active incidents are unassigned. Consider distributing workload.')
     ).toBeDefined();
   });
 
@@ -63,7 +63,7 @@ describe('SmartInsightsBanner', () => {
     render(
       <SmartInsightsBanner
         totalIncidents={50}
-        openIncidents={10}
+        activeIncidents={10}
         criticalIncidents={5}
         unassignedIncidents={0}
       />
@@ -78,7 +78,7 @@ describe('SmartInsightsBanner', () => {
     render(
       <SmartInsightsBanner
         totalIncidents={0}
-        openIncidents={0}
+        activeIncidents={0}
         criticalIncidents={0}
         unassignedIncidents={0}
       />
@@ -91,7 +91,7 @@ describe('SmartInsightsBanner', () => {
     render(
       <SmartInsightsBanner
         totalIncidents={50}
-        openIncidents={10}
+        activeIncidents={10}
         criticalIncidents={4}
         unassignedIncidents={0}
       />

@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { logger } from './logger';
 import { getActiveOnCallShifts } from './oncall-shifts';
 import { createInAppNotifications } from './in-app-notifications';
+import { activeIncidentStatuses } from './incident-status';
 
 export interface ShiftHandoffResult {
   remindersSent: number;
@@ -117,11 +118,11 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
 
         const serviceIds = policies.flatMap(p => p.services.map(s => s.id));
         if (serviceIds.length > 0) {
-          // Find active, unacknowledged or open incidents on these services
+          // Find active (triggered or acknowledged) incidents on these services
           const activeIncidents = await prisma.incident.findMany({
             where: {
               serviceId: { in: serviceIds },
-              status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+              status: { in: activeIncidentStatuses() },
             },
             select: { id: true, title: true, status: true, assigneeId: true },
           });

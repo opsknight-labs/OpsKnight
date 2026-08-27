@@ -306,13 +306,13 @@ export default function IncidentsFilters({
                 <SelectItem value="all_open">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                    <span>Active (All Open)</span>
+                    <span>Active</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="open">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                    <span>Triggered / Open</span>
+                    <span>Triggered</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="acknowledged">

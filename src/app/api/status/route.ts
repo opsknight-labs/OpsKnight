@@ -6,6 +6,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { serializeRecentIncidents } from '@/lib/sla';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 
 /**
  * Status Page API
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
           select: {
             incidents: {
               where: {
-                status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+                status: { in: activeIncidentStatuses() },
                 visibility: 'PUBLIC',
               },
             },

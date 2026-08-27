@@ -170,8 +170,13 @@ export async function GET(req: NextRequest) {
 
     // Calculate metrics
     const totalIncidents = metrics.totalIncidents;
-    const resolvedIncidents = recentIncidents.filter(i => i.status === 'RESOLVED');
-    const openIncidents = recentIncidents.filter(i => i.status === 'OPEN');
+    const statusMap = new Map<IncidentStatus, number>(
+      metrics.statusMix.map(entry => [entry.status as IncidentStatus, entry.count])
+    );
+    const resolvedIncidentCount = statusMap.get('RESOLVED') ?? 0;
+    const triggeredIncidentCount = statusMap.get('OPEN') ?? 0;
+    const acknowledgedIncidentCount = statusMap.get('ACKNOWLEDGED') ?? 0;
+    const activeIncidentCount = triggeredIncidentCount + acknowledgedIncidentCount;
     const highUrgencyCount = metrics.highUrgencyCount;
 
     const mttaMs = metrics.mttd === null ? null : metrics.mttd * 60 * 1000;
@@ -250,11 +255,13 @@ export async function GET(req: NextRequest) {
 
     csvRows.push(['Total Incidents', totalIncidents.toString(), '']);
     csvRows.push([
-      'Open Incidents',
-      openIncidents.length.toString(),
-      openIncidents.length > 10 ? '[!] High' : '[OK] Normal',
+      'Active Incidents (created in selected period)',
+      activeIncidentCount.toString(),
+      activeIncidentCount > 10 ? '[!] High' : '[OK] Normal',
     ]);
-    csvRows.push(['Resolved Incidents', resolvedIncidents.length.toString(), '']);
+    csvRows.push(['Triggered Incidents', triggeredIncidentCount.toString(), '']);
+    csvRows.push(['Acknowledged Incidents', acknowledgedIncidentCount.toString(), '']);
+    csvRows.push(['Resolved Incidents', resolvedIncidentCount.toString(), '']);
     csvRows.push([
       'High Urgency Incidents',
       highUrgencyCount.toString(),
@@ -296,9 +303,6 @@ export async function GET(req: NextRequest) {
     csvRows.push(['INCIDENT STATUS BREAKDOWN']);
     csvRows.push(['---------------------------------------------------------------']);
     csvRows.push(['Status', 'Count', 'Percentage', 'Visual Bar']);
-    const statusMap = new Map<IncidentStatus, number>(
-      metrics.statusMix.map(entry => [entry.status as IncidentStatus, entry.count])
-    );
     const statusOrder: IncidentStatus[] = [
       'OPEN',
       'ACKNOWLEDGED',

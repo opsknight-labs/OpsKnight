@@ -16,7 +16,7 @@ type IncidentListItem = {
   service: { name: string };
 };
 
-export type IncidentFilter = 'all' | 'open' | 'acknowledged' | 'resolved';
+export type IncidentFilter = 'all' | 'all_open' | 'open' | 'acknowledged' | 'resolved';
 
 export default function MobileIncidentList({
   incidents,
@@ -71,6 +71,9 @@ export default function MobileIncidentList({
         incident.id === id ? { ...incident, status } : incident
       );
       if (filter === 'open') {
+        return updated.filter(incident => incident.id !== id);
+      }
+      if (filter === 'all_open' && status !== 'ACKNOWLEDGED') {
         return updated.filter(incident => incident.id !== id);
       }
       if (filter === 'acknowledged' && status !== 'ACKNOWLEDGED') {

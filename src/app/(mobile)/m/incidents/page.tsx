@@ -3,6 +3,8 @@ import MobileIncidentList, { type IncidentFilter } from '@/components/mobile/Mob
 import MobileListControls from '@/components/mobile/MobileListControls';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { activeIncidentStatuses } from '@/lib/incident-status';
+import { normalizeIncidentStatus } from '@/lib/incidents-query';
 import { AlertTriangle, Plus, ChevronLeft, ChevronRight, SearchX } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +13,12 @@ const PAGE_SIZE = 20;
 type MobileIncidentSort = 'created_desc' | 'created_asc' | 'urgency';
 
 const normalizeFilter = (value?: string): IncidentFilter => {
-  if (value === 'open' || value === 'acknowledged' || value === 'resolved') {
+  if (
+    value === 'all_open' ||
+    value === 'open' ||
+    value === 'acknowledged' ||
+    value === 'resolved'
+  ) {
     return value;
   }
   return 'all';
@@ -25,12 +32,23 @@ const normalizeSort = (value?: string): MobileIncidentSort => {
 };
 
 export default async function MobileIncidentsPage(props: {
-  searchParams?: Promise<{ q?: string; filter?: string; page?: string; sort?: string }>;
+  searchParams?: Promise<{
+    q?: string;
+    filter?: string;
+    page?: string;
+    sort?: string;
+    status?: string;
+    assignee?: string;
+    serviceId?: string;
+  }>;
 }) {
   const searchParams = await props.searchParams;
   const query = searchParams?.q || '';
   const filter = normalizeFilter(searchParams?.filter);
   const sort = normalizeSort(searchParams?.sort);
+  const status = normalizeIncidentStatus(searchParams?.status);
+  const assignee = searchParams?.assignee;
+  const serviceId = searchParams?.serviceId;
   const page = Math.max(1, parseInt(searchParams?.page || '1', 10));
 
   const where: Prisma.IncidentWhereInput = {};
@@ -39,13 +57,19 @@ export default async function MobileIncidentsPage(props: {
     where.title = { contains: query, mode: 'insensitive' };
   }
 
-  if (filter === 'open') {
+  if (filter === 'all_open') {
+    where.status = { in: activeIncidentStatuses() };
+  } else if (filter === 'open') {
     where.status = 'OPEN';
   } else if (filter === 'acknowledged') {
     where.status = 'ACKNOWLEDGED';
   } else if (filter === 'resolved') {
     where.status = 'RESOLVED';
   }
+
+  if (status) where.status = status;
+  if (assignee) where.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
+  if (serviceId) where.serviceId = serviceId;
 
   const orderBy: Prisma.IncidentOrderByWithRelationInput[] =
     sort === 'created_asc'
@@ -82,6 +106,9 @@ export default async function MobileIncidentsPage(props: {
     if (query) params.set('q', query);
     if (filter && filter !== 'all') params.set('filter', filter);
     if (sort && sort !== 'created_desc') params.set('sort', sort);
+    if (status) params.set('status', status);
+    if (assignee) params.set('assignee', assignee);
+    if (serviceId) params.set('serviceId', serviceId);
     params.set('page', newPage.toString());
     return `/m/incidents?${params.toString()}`;
   };
@@ -107,7 +134,8 @@ export default async function MobileIncidentsPage(props: {
         placeholder="Search incidents..."
         filters={[
           { label: 'All', value: 'all' },
-          { label: 'Open', value: 'open' },
+          { label: 'Active', value: 'all_open' },
+          { label: 'Triggered', value: 'open' },
           { label: 'Acknowledged', value: 'acknowledged' },
           { label: 'Resolved', value: 'resolved' },
         ]}

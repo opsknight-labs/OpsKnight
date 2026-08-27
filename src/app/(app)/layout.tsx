@@ -20,6 +20,7 @@ import { SidebarProvider } from '@/contexts/SidebarContext';
 import { UserAvatarProvider } from '@/contexts/UserAvatarContext';
 import { logger } from '@/lib/logger';
 import SessionTimeoutWarning from '@/components/auth/SessionTimeoutWarning';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -161,7 +162,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const openUrgencyCounts = await prisma.incident.groupBy({
       by: ['urgency'],
       where: {
-        status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] as const },
+        status: { in: activeIncidentStatuses() },
       },
       _count: { _all: true },
     });

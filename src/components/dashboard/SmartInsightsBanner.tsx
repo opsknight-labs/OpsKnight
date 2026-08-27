@@ -16,7 +16,7 @@ type Insight = {
 
 type SmartInsightsBannerProps = {
   totalIncidents: number;
-  openIncidents: number;
+  activeIncidents: number;
   criticalIncidents: number;
   unassignedIncidents: number;
   avgIncidentsPerDay?: number;
@@ -26,7 +26,7 @@ type SmartInsightsBannerProps = {
 
 export default function SmartInsightsBanner({
   totalIncidents,
-  openIncidents,
+  activeIncidents,
   criticalIncidents,
   unassignedIncidents,
   avgIncidentsPerDay = 0,
@@ -39,16 +39,16 @@ export default function SmartInsightsBanner({
     const results: Insight[] = [];
 
     // High unassigned ratio
-    if (openIncidents > 0 && unassignedIncidents / openIncidents > 0.3) {
+    if (activeIncidents > 0 && unassignedIncidents / activeIncidents > 0.3) {
       const unassignedPct = Math.min(
         100,
-        Math.max(0, Math.round((unassignedIncidents / openIncidents) * 100))
+        Math.max(0, Math.round((unassignedIncidents / activeIncidents) * 100))
       );
       results.push({
         id: 'unassigned',
         type: 'warning',
         icon: <AlertTriangle className="h-4 w-4" />,
-        message: `${unassignedPct}% of open incidents are unassigned. Consider distributing workload.`,
+        message: `${unassignedPct}% of active incidents are unassigned. Consider distributing workload.`,
       });
     }
 
@@ -90,7 +90,7 @@ export default function SmartInsightsBanner({
     }
 
     // All clear
-    if (results.length === 0 && openIncidents === 0) {
+    if (results.length === 0 && activeIncidents === 0) {
       results.push({
         id: 'all-clear',
         type: 'success',
@@ -102,7 +102,7 @@ export default function SmartInsightsBanner({
     return results.filter(insight => !dismissedIds.has(insight.id));
   }, [
     totalIncidents,
-    openIncidents,
+    activeIncidents,
     criticalIncidents,
     unassignedIncidents,
     avgIncidentsPerDay,
