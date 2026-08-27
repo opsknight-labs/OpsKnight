@@ -1125,3 +1125,50 @@ export async function updateIncidentVisibility(id: string, visibility: 'PUBLIC' 
   revalidatePath('/incidents');
   revalidatePath('/');
 }
+
+export async function getIncidentCreationContext() {
+  const { getUserPermissions } = await import('@/lib/rbac');
+  const permissions = await getUserPermissions();
+  const canCreateAll = permissions.capabilities.includes('incident.create.all');
+  const canCreateIncident =
+    canCreateAll || permissions.capabilities.includes('incident.create.scoped');
+
+  if (!canCreateIncident) {
+    return {
+      canCreateIncident: false as const,
+      services: [],
+      users: [],
+      teams: [],
+      customFields: [],
+      templates: [],
+    };
+  }
+
+  const { getAllTemplates } = await import('./template-actions');
+  const teamScope = canCreateAll ? undefined : { members: { some: { userId: permissions.id } } };
+  const [services, users, customFields, teams, templates] = await Promise.all([
+    prisma.service.findMany({
+      where: canCreateAll ? undefined : { team: teamScope },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.user.findMany({
+      where: {
+        status: 'ACTIVE',
+        ...(canCreateAll
+          ? {}
+          : {
+              teamMemberships: {
+                some: { team: { members: { some: { userId: permissions.id } } } },
+              },
+            }),
+      },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.customField.findMany({ orderBy: { order: 'asc' } }),
+    prisma.team.findMany({ where: teamScope, orderBy: { name: 'asc' } }),
+    getAllTemplates(permissions.id),
+  ]);
+
+  return { canCreateIncident: true as const, services, users, teams, customFields, templates };
+}

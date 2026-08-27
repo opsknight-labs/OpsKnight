@@ -22,6 +22,8 @@ import { logger } from '@/lib/logger';
 import SessionTimeoutWarning from '@/components/auth/SessionTimeoutWarning';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
+import { IncidentCreationModalProvider } from '@/contexts/IncidentCreationModalContext';
+import CreateIncidentModal from '@/components/incident/CreateIncidentModal';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -208,51 +210,54 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           currentUserName={userName}
         >
           <SidebarProvider>
-            <GlobalKeyboardHandlerWrapper />
-            <SkipLinks />
-            <div className="app-shell">
-              <Sidebar
-                userName={userName}
-                userEmail={userEmail}
-                userRole={userRole}
-                userAvatar={userAvatar}
-                userGender={userGender}
-                userId={userId}
-              />
-              <div className="content-shell">
-                <header className="fixed top-0 right-0 left-[var(--sidebar-width)] z-30 flex h-14 items-center gap-3 border-b bg-background px-4">
-                  <div className="flex items-center gap-4">
-                    <OperationalStatus
-                      tone={statusTone}
-                      label={statusLabel}
-                      detail={statusDetail}
-                      criticalCount={criticalOpenCount}
-                      mediumCount={mediumOpenCount}
-                      lowCount={lowOpenCount}
-                    />
-                    <TopbarBreadcrumbs />
-                  </div>
-                  <div className="flex flex-1 items-center justify-center px-4">
-                    <SidebarSearch />
-                  </div>
-                  <div className="flex items-center gap-4 ml-auto">
-                    <TopbarNotifications />
-                    <QuickActions canCreate={canCreate} />
-                    <TopbarUserMenu
-                      name={userName}
-                      email={userEmail}
-                      role={userRole}
-                      avatarUrl={userAvatar}
-                      gender={userGender}
-                      userId={userId}
-                    />
-                  </div>
-                </header>
-                <main id="main-content" className="page-shell pt-14">
-                  {children}
-                </main>
+            <IncidentCreationModalProvider>
+              <GlobalKeyboardHandlerWrapper />
+              <SkipLinks />
+              <div className="app-shell">
+                <Sidebar
+                  userName={userName}
+                  userEmail={userEmail}
+                  userRole={userRole}
+                  userAvatar={userAvatar}
+                  userGender={userGender}
+                  userId={userId}
+                />
+                <div className="content-shell">
+                  <header className="fixed top-0 right-0 left-[var(--sidebar-width)] z-30 flex h-14 items-center gap-3 border-b bg-background px-4">
+                    <div className="flex items-center gap-4">
+                      <OperationalStatus
+                        tone={statusTone}
+                        label={statusLabel}
+                        detail={statusDetail}
+                        criticalCount={criticalOpenCount}
+                        mediumCount={mediumOpenCount}
+                        lowCount={lowOpenCount}
+                      />
+                      <TopbarBreadcrumbs />
+                    </div>
+                    <div className="flex flex-1 items-center justify-center px-4">
+                      <SidebarSearch />
+                    </div>
+                    <div className="flex items-center gap-4 ml-auto">
+                      <TopbarNotifications />
+                      <QuickActions canCreate={canCreate} />
+                      <TopbarUserMenu
+                        name={userName}
+                        email={userEmail}
+                        role={userRole}
+                        avatarUrl={userAvatar}
+                        gender={userGender}
+                        userId={userId}
+                      />
+                    </div>
+                  </header>
+                  <main id="main-content" className="page-shell pt-14">
+                    {children}
+                  </main>
+                </div>
               </div>
-            </div>
+              <CreateIncidentModal />
+            </IncidentCreationModalProvider>
           </SidebarProvider>
         </UserAvatarProvider>
       </TimezoneProvider>
