@@ -165,7 +165,7 @@ describe('Notification System Tests', () => {
             ],
           },
         },
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as unknown as Awaited<ReturnType<typeof prisma.incident.findUnique>>);
 
       vi.mocked(prisma.user.findMany).mockResolvedValue([
         {
@@ -190,12 +190,14 @@ describe('Notification System Tests', () => {
           timeZone: 'UTC',
           quietHoursEnabled: false,
         },
-      ] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      ] as unknown as Awaited<ReturnType<typeof prisma.user.findMany>>);
 
       const inAppModule = await import('@/lib/in-app-notifications');
       const inAppSpy = vi
         .spyOn(inAppModule, 'createInAppNotifications')
-        .mockResolvedValue([] as any);
+        .mockResolvedValue(
+          [] as unknown as Awaited<ReturnType<typeof inAppModule.createInAppNotifications>>
+        );
 
       const notifModule = await import('@/lib/notifications');
       const sendNotifSpy = vi
