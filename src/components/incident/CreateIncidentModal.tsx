@@ -1,16 +1,42 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useEffect, useActionState, useCallback, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import * as z from 'zod';
+import {
+  Activity,
+  AlertCircle,
+  AlertTriangle,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  ChevronsUpDown,
+  Hash,
+  Info,
+  LayoutTemplate,
+  Loader2,
+  Users,
+  X,
+  Zap,
+} from 'lucide-react';
+
 import { createIncident, getIncidentCreationContext } from '@/app/(app)/incidents/actions';
-import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import CustomFieldInput from '@/components/CustomFieldInput';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
 import { Button } from '@/components/ui/shadcn/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/shadcn/command';
 import {
   Form,
   FormControl,
@@ -20,15 +46,6 @@ import {
   FormMessage,
 } from '@/components/ui/shadcn/form';
 import { Input } from '@/components/ui/shadcn/input';
-import { Textarea } from '@/components/ui/shadcn/textarea';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/shadcn/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import {
   Select,
@@ -37,25 +54,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { cn } from '@/lib/utils';
-import {
-  Check,
-  ChevronsUpDown,
-  AlertTriangle,
-  AlertCircle,
-  Info,
-  Activity,
-  Hash,
-  Users,
-  Zap,
-  X,
-  Loader2,
-  LayoutTemplate,
-  ArrowUpRight,
-  Sparkles,
-} from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
 
 type Service = { id: string; name: string };
 type UserRecord = { id: string; name: string; email: string; avatarUrl?: string | null };
@@ -103,21 +104,26 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+type OpenOptions = { serviceId?: string; templateId?: string } | null;
+
+const FIELD_LABEL_CLASS = 'text-xs font-semibold text-foreground';
+const CONTROL_CLASS =
+  'h-10 rounded-lg border-border/70 bg-background shadow-sm transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-primary/20';
+
 function CreateIncidentModalContent({
   onClose,
   openOptions,
 }: {
   onClose: () => void;
-  openOptions: { serviceId?: string; templateId?: string } | null;
+  openOptions: OpenOptions;
 }) {
   const router = useRouter();
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const [contextData, setContextData] = useState<ContextData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
-    openOptions?.templateId || ''
-  );
+  const [contextError, setContextError] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(openOptions?.templateId || '');
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [serviceOpen, setServiceOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
@@ -135,6 +141,18 @@ function CreateIncidentModalContent({
     },
   });
 
+  const resetForm = useCallback(() => {
+    form.reset({
+      title: '',
+      description: '',
+      serviceId: openOptions?.serviceId || '',
+      urgency: 'HIGH',
+      priority: '',
+      assigneeId: 'unassigned',
+      dedupKey: '',
+    });
+  }, [form, openOptions?.serviceId]);
+
   const applyTemplate = useCallback(
     (template: Template) => {
       form.reset({
@@ -150,9 +168,11 @@ function CreateIncidentModalContent({
     [form]
   );
 
-  // Fetch context data on mount
   useEffect(() => {
     let cancelled = false;
+
+    setLoading(true);
+    setContextError(false);
 
     getIncidentCreationContext()
       .then(data => {
@@ -161,25 +181,22 @@ function CreateIncidentModalContent({
         setContextData(ctx);
         setLoading(false);
 
-        // Pre-apply template if specified in openOptions
         if (openOptions?.templateId) {
-          const matched = ctx.templates.find((t: Template) => t.id === openOptions.templateId);
-          if (matched) {
-            applyTemplate(matched);
-          }
+          const matched = ctx.templates.find(template => template.id === openOptions.templateId);
+          if (matched) applyTemplate(matched);
         }
       })
       .catch(() => {
         if (cancelled) return;
+        setContextError(true);
         setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [openOptions, applyTemplate]);
+  }, [applyTemplate, openOptions]);
 
-  // Auto-focus title input once data is loaded
   useEffect(() => {
     if (contextData && !loading) {
       const timer = setTimeout(() => titleInputRef.current?.focus(), 100);
@@ -187,7 +204,6 @@ function CreateIncidentModalContent({
     }
   }, [contextData, loading]);
 
-  // Server Action State
   const [state, formAction, isPending] = useActionState(
     async (_prevState: { id: string } | null, formData: FormData) => {
       return await createIncident(formData);
@@ -195,7 +211,6 @@ function CreateIncidentModalContent({
     null
   );
 
-  // Handle successful creation
   useEffect(() => {
     if (state?.id) {
       onClose();
@@ -203,7 +218,6 @@ function CreateIncidentModalContent({
     }
   }, [state, router, onClose]);
 
-  // Custom submit handler to bridge RHF and Server Actions
   const onSubmit = useCallback(
     (data: FormValues) => {
       const formData = new FormData();
@@ -212,6 +226,7 @@ function CreateIncidentModalContent({
       formData.append('serviceId', data.serviceId);
       formData.append('urgency', data.urgency);
       if (data.priority) formData.append('priority', data.priority);
+
       if (data.assigneeId && data.assigneeId !== 'unassigned') {
         if (data.assigneeId.startsWith('team:')) {
           formData.append('teamId', data.assigneeId.replace('team:', ''));
@@ -221,6 +236,7 @@ function CreateIncidentModalContent({
           formData.append('assigneeId', data.assigneeId);
         }
       }
+
       if (data.dedupKey) formData.append('dedupKey', data.dedupKey);
 
       Object.entries(customFieldValues).forEach(([key, value]) => {
@@ -234,11 +250,10 @@ function CreateIncidentModalContent({
     [customFieldValues, formAction]
   );
 
-  // Keyboard shortcut: Cmd+Enter to submit
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
+    (event: React.KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
         form.handleSubmit(onSubmit)();
       }
     },
@@ -248,7 +263,7 @@ function CreateIncidentModalContent({
   const getInitials = (name: string) =>
     name
       .split(' ')
-      .map(n => n[0])
+      .map(part => part[0])
       .join('')
       .substring(0, 2)
       .toUpperCase();
@@ -258,72 +273,98 @@ function CreateIncidentModalContent({
   const teams = contextData?.teams || [];
   const templates = contextData?.templates || [];
   const customFields = contextData?.customFields || [];
-  const activeTemplate = templates.find(t => t.id === selectedTemplateId);
+  const activeTemplate = templates.find(template => template.id === selectedTemplateId);
 
   return (
     <DialogPrimitive.Content
-      className="fixed left-[50%] top-[50%] z-50 w-[92vw] max-w-3xl max-h-[88vh] translate-x-[-50%] translate-y-[-50%] rounded-2xl border border-border shadow-2xl bg-card/95 backdrop-blur-xl p-0 flex flex-col overflow-hidden gap-0 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]"
+      className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[94vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-primary/15 bg-card shadow-2xl outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
       onKeyDown={handleKeyDown}
     >
-      {/* Decorative strip */}
-      <div className="h-1.5 w-full bg-gradient-to-r from-primary via-rose-500 to-amber-500 shrink-0" />
+      <div className="h-1 w-full shrink-0 bg-gradient-to-r from-primary to-primary/60" />
 
-      {/* Header */}
-      <div className="px-6 pt-5 pb-4 border-b border-border/40 shrink-0">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/10 border border-primary/20">
-              <Zap className="h-5 w-5 text-primary" />
+      <div className="relative shrink-0 overflow-hidden border-b border-border/70 bg-gradient-to-br from-primary/[0.07] via-card to-card px-6 py-5">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 shadow-sm">
+              <Zap className="h-4 w-4 text-primary" />
             </div>
-            <div>
+            <div className="min-w-0">
               <DialogPrimitive.Title className="text-lg font-bold tracking-tight text-foreground">
                 Create Incident
               </DialogPrimitive.Title>
-              <DialogPrimitive.Description className="text-xs text-muted-foreground mt-0.5">
-                Log a new incident and trigger response workflows.
+              <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
+                Log an incident and start the response workflow.
               </DialogPrimitive.Description>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <DialogPrimitive.Close className="rounded-lg p-1.5 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-              <X className="h-4 w-4" />
-              <span className="sr-only">Close</span>
-            </DialogPrimitive.Close>
-          </div>
+
+          <DialogPrimitive.Close className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
         </div>
       </div>
 
-      {/* Loading state */}
       {loading && (
-        <div className="flex-1 flex items-center justify-center py-20">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary/60" />
-            <p className="text-sm text-muted-foreground">Loading incident context...</p>
+        <div className="flex min-h-72 flex-1 items-center justify-center px-6 py-16">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/5">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Preparing incident form</p>
+              <p className="mt-1 text-xs text-muted-foreground">Loading services and responders...</p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Form body */}
-      {!loading && contextData && (
+      {!loading && (contextError || !contextData) && (
+        <div className="flex min-h-72 flex-1 items-center justify-center px-6 py-16">
+          <div className="max-w-sm text-center">
+            <AlertTriangle className="mx-auto h-6 w-6 text-muted-foreground" />
+            <p className="mt-3 text-sm font-semibold text-foreground">Unable to load incident context</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Close this dialog and try again. No incident has been created.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!loading && contextData && !contextData.canCreateIncident && (
+        <div className="flex min-h-72 flex-1 items-center justify-center px-6 py-16">
+          <div className="max-w-sm text-center">
+            <AlertTriangle className="mx-auto h-6 w-6 text-muted-foreground" />
+            <p className="mt-3 text-sm font-semibold text-foreground">Incident creation unavailable</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Your current permissions do not allow incident creation.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!loading && contextData?.canCreateIncident && (
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-              {/* Template Picker & Helper */}
-              <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <LayoutTemplate className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground">
-                      Start with a Template
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">(Optional)</span>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+            <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
+              <section className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.05] via-background to-background p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <LayoutTemplate className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground">Incident template</p>
+                      <p className="text-[11px] text-muted-foreground">Optional · prefill common incident details</p>
+                    </div>
                   </div>
                   <Link
                     href="/incidents/templates"
                     onClick={onClose}
-                    className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 inline-flex items-center gap-1 hover:underline"
+                    className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-primary transition-opacity hover:opacity-80"
                   >
-                    Manage Templates
+                    Manage
                     <ArrowUpRight className="h-3 w-3" />
                   </Link>
                 </div>
@@ -331,56 +372,32 @@ function CreateIncidentModalContent({
                 <div className="flex items-center gap-2">
                   <Select
                     value={selectedTemplateId || 'none'}
-                    onValueChange={val => {
-                      if (val === 'none') {
+                    onValueChange={value => {
+                      if (value === 'none') {
                         setSelectedTemplateId('');
-                        form.reset({
-                          title: '',
-                          description: '',
-                          serviceId: openOptions?.serviceId || '',
-                          urgency: 'HIGH',
-                          priority: '',
-                          assigneeId: 'unassigned',
-                          dedupKey: '',
-                        });
-                      } else {
-                        setSelectedTemplateId(val);
-                        const template = templates.find((t: Template) => t.id === val);
-                        if (template) applyTemplate(template);
+                        resetForm();
+                        return;
                       }
+
+                      setSelectedTemplateId(value);
+                      const template = templates.find(item => item.id === value);
+                      if (template) applyTemplate(template);
                     }}
                   >
-                    <SelectTrigger className="flex-1 h-9 text-xs bg-background border-border/70 shadow-sm">
-                      <SelectValue placeholder="Select a template or start from scratch..." />
+                    <SelectTrigger className={cn('flex-1 text-sm', CONTROL_CLASS)}>
+                      <SelectValue placeholder="Start from scratch" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem
-                        value="none"
-                        className="text-xs font-medium text-muted-foreground"
-                      >
-                        ✨ No template (start from scratch)
-                      </SelectItem>
-                      {templates.map((t: Template) => (
-                        <SelectItem key={t.id} value={t.id} className="text-xs">
-                          <div className="flex items-center gap-2 py-0.5">
-                            <span className="font-semibold text-foreground">{t.name}</span>
-                            {t.defaultService && (
-                              <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                                {t.defaultService.name}
+                      <SelectItem value="none">Start from scratch</SelectItem>
+                      {templates.map(template => (
+                        <SelectItem key={template.id} value={template.id}>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate font-medium">{template.name}</span>
+                            {template.defaultService && (
+                              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                {template.defaultService.name}
                               </span>
                             )}
-                            <span
-                              className={cn(
-                                'text-[9px] uppercase font-bold px-1.5 py-0.2 rounded',
-                                t.defaultUrgency === 'HIGH'
-                                  ? 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300'
-                                  : t.defaultUrgency === 'MEDIUM'
-                                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
-                                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                              )}
-                            >
-                              {t.defaultUrgency}
-                            </span>
                           </div>
                         </SelectItem>
                       ))}
@@ -391,19 +408,10 @@ function CreateIncidentModalContent({
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
-                      className="h-9 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                      className="h-10 rounded-lg px-3 text-xs"
                       onClick={() => {
                         setSelectedTemplateId('');
-                        form.reset({
-                          title: '',
-                          description: '',
-                          serviceId: openOptions?.serviceId || '',
-                          urgency: 'HIGH',
-                          priority: '',
-                          assigneeId: 'unassigned',
-                          dedupKey: '',
-                        });
+                        resetForm();
                       }}
                     >
                       Clear
@@ -411,59 +419,37 @@ function CreateIncidentModalContent({
                   )}
                 </div>
 
-                {/* Active Template Applied Banner */}
                 {activeTemplate && (
-                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs">
-                    <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                    <p className="text-[11px] text-foreground font-medium truncate">
-                      Applied template{' '}
-                      <strong className="text-indigo-700 dark:text-indigo-300">
-                        {activeTemplate.name}
-                      </strong>
-                      {activeTemplate.description ? ` — ${activeTemplate.description}` : ''}
+                  <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-primary/10 bg-primary/[0.04] px-3 py-2">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      <span className="font-semibold text-foreground">{activeTemplate.name}</span> applied
+                      {activeTemplate.description ? ` · ${activeTemplate.description}` : ''}
                     </p>
                   </div>
                 )}
-              </div>
+              </section>
 
-              {/* Intelligent Deduplication Info */}
-              <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3.5 flex gap-3 text-sm text-yellow-600 dark:text-yellow-500">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-semibold text-xs">Intelligent Merging Active</p>
-                  <p className="opacity-90 text-[11px]">
-                    If you use a <strong>Deduplication Key</strong> that matches an existing
-                    incident:
-                  </p>
-                  <ul className="list-disc pl-4 text-[11px] space-y-0.5 opacity-80 mt-1">
-                    <li>
-                      <strong>Open Incident:</strong> Your report will be added as a note to it.
-                    </li>
-                    <li>
-                      <strong>Recently Resolved:</strong> It will re-open the incident (if resolved
-                      &lt; 30m ago).
-                    </li>
-                  </ul>
+              <section className="space-y-4">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Incident details</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Describe what is happening and the current impact.</p>
                 </div>
-              </div>
 
-              {/* Section 1: Core Content */}
-              <div className="space-y-4">
                 <FormField
                   control={form.control}
                   name="title"
                   render={({ field }) => (
                     <FormItem>
+                      <FormLabel className={FIELD_LABEL_CLASS}>Title</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="What's broken? e.g. API Latency Spike in EU"
-                          className="text-base md:text-lg font-medium py-5 px-4 bg-background/50 border-input/50 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all duration-300 shadow-sm"
+                          placeholder="API latency spike in EU"
+                          className={cn(CONTROL_CLASS, 'px-3.5 text-sm font-medium')}
                           {...field}
-                          ref={e => {
-                            field.ref(e);
-                            (
-                              titleInputRef as React.MutableRefObject<HTMLInputElement | null>
-                            ).current = e;
+                          ref={element => {
+                            field.ref(element);
+                            (titleInputRef as React.MutableRefObject<HTMLInputElement | null>).current = element;
                           }}
                         />
                       </FormControl>
@@ -477,10 +463,11 @@ function CreateIncidentModalContent({
                   name="description"
                   render={({ field }) => (
                     <FormItem>
+                      <FormLabel className={FIELD_LABEL_CLASS}>Description</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="Provide context... Impact, symptoms, triggered alerts."
-                          className="min-h-[80px] resize-y bg-background/50 border-input/50 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all duration-300 shadow-inner px-4 py-3 leading-relaxed text-sm"
+                          placeholder="Add impact, symptoms, alerts, or any context responders should know..."
+                          className="min-h-[88px] resize-y rounded-lg border-border/70 bg-background px-3.5 py-3 text-sm leading-relaxed shadow-sm transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-primary/20"
                           {...field}
                         />
                       </FormControl>
@@ -488,60 +475,45 @@ function CreateIncidentModalContent({
                     </FormItem>
                   )}
                 />
-              </div>
+              </section>
 
-              {/* Divider */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border/40" />
+              <section className="space-y-4 border-t border-border/70 pt-5">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Routing & impact</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Choose the affected service and how the incident should be routed.</p>
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground font-semibold tracking-widest text-[10px]">
-                    Context & Routing
-                  </span>
-                </div>
-              </div>
 
-              {/* Section 2: Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Left Column: Routing */}
-                <div className="space-y-5">
-                  {/* Service Selector */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="serviceId"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel className="text-[10px] uppercase tracking-wide text-foreground/70 font-bold mb-1.5 pl-1">
-                          Affected Service
-                        </FormLabel>
+                        <FormLabel className={FIELD_LABEL_CLASS}>Service</FormLabel>
                         <Popover open={serviceOpen} onOpenChange={setServiceOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
+                                type="button"
                                 variant="outline"
                                 role="combobox"
-                                className={cn(
-                                  'w-full justify-between h-9 bg-background/50 hover:bg-background border-dashed border-input active:scale-[0.98] transition-all text-sm',
-                                  !field.value && 'text-muted-foreground'
-                                )}
+                                className={cn(CONTROL_CLASS, 'w-full justify-between px-3 text-sm font-normal')}
                               >
                                 {field.value ? (
-                                  <span className="flex items-center gap-2 font-medium">
-                                    <Activity className="h-3.5 w-3.5 text-primary" />
-                                    {services.find(s => s.id === field.value)?.name}
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <Activity className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                    <span className="truncate font-medium">
+                                      {services.find(service => service.id === field.value)?.name}
+                                    </span>
                                   </span>
                                 ) : (
-                                  'Select service...'
+                                  <span className="text-muted-foreground">Select service...</span>
                                 )}
-                                <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent
-                            className="w-[var(--radix-popover-trigger-width)] p-0 shadow-xl border-border/50"
-                            align="start"
-                          >
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                             <Command>
                               <CommandInput placeholder="Search services..." className="h-9" />
                               <CommandList>
@@ -549,22 +521,22 @@ function CreateIncidentModalContent({
                                 <CommandGroup>
                                   {services.map(service => (
                                     <CommandItem
-                                      value={service.name}
                                       key={service.id}
+                                      value={service.name}
                                       onSelect={() => {
-                                        form.setValue('serviceId', service.id);
+                                        form.setValue('serviceId', service.id, { shouldValidate: true });
                                         setServiceOpen(false);
                                       }}
-                                      className="flex items-center gap-2 py-2 cursor-pointer text-sm"
+                                      className="cursor-pointer"
                                     >
                                       <Check
                                         className={cn(
-                                          'mr-1.5 h-3 w-3',
+                                          'mr-2 h-3.5 w-3.5',
                                           service.id === field.value ? 'opacity-100' : 'opacity-0'
                                         )}
                                       />
-                                      <div className="h-2 w-2 rounded-full bg-green-500 mr-1.5" />
-                                      <span className="font-medium">{service.name}</span>
+                                      <Activity className="mr-2 h-3.5 w-3.5 text-primary" />
+                                      <span>{service.name}</span>
                                     </CommandItem>
                                   ))}
                                 </CommandGroup>
@@ -577,105 +549,87 @@ function CreateIncidentModalContent({
                     )}
                   />
 
-                  {/* Assignee Selector */}
                   <FormField
                     control={form.control}
                     name="assigneeId"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel className="text-[10px] uppercase tracking-wide text-foreground/70 font-bold mb-1.5 pl-1">
-                          Assignee
-                        </FormLabel>
+                        <FormLabel className={FIELD_LABEL_CLASS}>Assignee</FormLabel>
                         <Popover open={assigneeOpen} onOpenChange={setAssigneeOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
+                                type="button"
                                 variant="outline"
                                 role="combobox"
-                                className={cn(
-                                  'w-full justify-between h-9 bg-background/50 hover:bg-background border-dashed border-input active:scale-[0.98] transition-all text-sm',
-                                  !field.value && 'text-muted-foreground'
-                                )}
+                                className={cn(CONTROL_CLASS, 'w-full justify-between px-3 text-sm font-normal')}
                               >
                                 {field.value && field.value !== 'unassigned' ? (
-                                  <span className="flex items-center gap-2 font-medium">
+                                  <span className="flex min-w-0 items-center gap-2">
                                     {field.value.startsWith('team:') ? (
                                       <>
-                                        <div className="h-5 w-5 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center border border-indigo-200">
+                                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                                           <Users className="h-3 w-3" />
-                                        </div>
-                                        {teams.find(t => `team:${t.id}` === field.value)?.name}
+                                        </span>
+                                        <span className="truncate font-medium">
+                                          {teams.find(team => `team:${team.id}` === field.value)?.name}
+                                        </span>
                                       </>
                                     ) : (
                                       <>
-                                        <Avatar className="h-5 w-5 border border-slate-200">
+                                        <Avatar className="h-5 w-5 shrink-0 border border-border">
                                           <AvatarImage
                                             src={
                                               users.find(
-                                                u =>
-                                                  `user:${u.id}` === field.value ||
-                                                  u.id === field.value
+                                                user => `user:${user.id}` === field.value || user.id === field.value
                                               )?.avatarUrl || undefined
                                             }
                                           />
-                                          <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+                                          <AvatarFallback className="bg-primary/10 text-[9px] text-primary">
                                             {getInitials(
                                               users.find(
-                                                u =>
-                                                  `user:${u.id}` === field.value ||
-                                                  u.id === field.value
+                                                user => `user:${user.id}` === field.value || user.id === field.value
                                               )?.name || '?'
                                             )}
                                           </AvatarFallback>
                                         </Avatar>
-                                        {
-                                          users.find(
-                                            u =>
-                                              `user:${u.id}` === field.value || u.id === field.value
-                                          )?.name
-                                        }
+                                        <span className="truncate font-medium">
+                                          {
+                                            users.find(
+                                              user => `user:${user.id}` === field.value || user.id === field.value
+                                            )?.name
+                                          }
+                                        </span>
                                       </>
                                     )}
                                   </span>
                                 ) : (
-                                  <span className="flex items-center gap-2 text-muted-foreground italic">
-                                    <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[10px] border border-border">
-                                      <Hash className="h-3 w-3" />
-                                    </div>
-                                    Auto-assign (via ELP)
+                                  <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                                    <Users className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="truncate">Auto-assign via escalation policy</span>
                                   </span>
                                 )}
-                                <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent
-                            className="w-[300px] p-0 shadow-xl border-border/50"
-                            align="start"
-                          >
+                          <PopoverContent className="w-[320px] p-0" align="start">
                             <Command>
-                              <CommandInput
-                                placeholder="Search users or teams..."
-                                className="h-9"
-                              />
+                              <CommandInput placeholder="Search users or teams..." className="h-9" />
                               <CommandList>
                                 <CommandEmpty>No assignee found.</CommandEmpty>
-                                <CommandGroup heading="Suggestions">
+                                <CommandGroup heading="Automatic">
                                   <CommandItem
                                     value="unassigned"
                                     onSelect={() => {
                                       form.setValue('assigneeId', 'unassigned');
                                       setAssigneeOpen(false);
                                     }}
-                                    className="flex items-center gap-2 cursor-pointer"
+                                    className="cursor-pointer"
                                   >
-                                    <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[10px] border border-border">
-                                      <Hash className="h-3 w-3" />
-                                    </div>
-                                    <span>Auto-assign (via ELP)</span>
-                                    {field.value === 'unassigned' && (
-                                      <Check className="ml-auto h-3 w-3 opacity-100" />
-                                    )}
+                                    <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                                    <span>Auto-assign via escalation policy</span>
+                                    {field.value === 'unassigned' && <Check className="ml-auto h-3.5 w-3.5" />}
                                   </CommandItem>
                                 </CommandGroup>
 
@@ -689,15 +643,13 @@ function CreateIncidentModalContent({
                                           form.setValue('assigneeId', `team:${team.id}`);
                                           setAssigneeOpen(false);
                                         }}
-                                        className="flex items-center gap-2 cursor-pointer"
+                                        className="cursor-pointer"
                                       >
-                                        <div className="h-6 w-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center border border-indigo-200">
+                                        <span className="mr-2 flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
                                           <Users className="h-3.5 w-3.5" />
-                                        </div>
+                                        </span>
                                         <span>{team.name}</span>
-                                        {field.value === `team:${team.id}` && (
-                                          <Check className="ml-auto h-3 w-3 opacity-100" />
-                                        )}
+                                        {field.value === `team:${team.id}` && <Check className="ml-auto h-3.5 w-3.5" />}
                                       </CommandItem>
                                     ))}
                                   </CommandGroup>
@@ -712,18 +664,17 @@ function CreateIncidentModalContent({
                                         form.setValue('assigneeId', `user:${user.id}`);
                                         setAssigneeOpen(false);
                                       }}
-                                      className="flex items-center gap-2 cursor-pointer"
+                                      className="cursor-pointer"
                                     >
-                                      <Avatar className="h-6 w-6 border border-slate-200">
+                                      <Avatar className="mr-2 h-6 w-6 border border-border">
                                         <AvatarImage src={user.avatarUrl || undefined} />
-                                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-bold">
+                                        <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
                                           {getInitials(user.name)}
                                         </AvatarFallback>
                                       </Avatar>
                                       <span>{user.name}</span>
-                                      {(field.value === `user:${user.id}` ||
-                                        field.value === user.id) && (
-                                        <Check className="ml-auto h-3 w-3 opacity-100" />
+                                      {(field.value === `user:${user.id}` || field.value === user.id) && (
+                                        <Check className="ml-auto h-3.5 w-3.5" />
                                       )}
                                     </CommandItem>
                                   ))}
@@ -738,83 +689,40 @@ function CreateIncidentModalContent({
                   />
                 </div>
 
-                {/* Right Column: Impact */}
-                <div className="space-y-5">
-                  {/* Urgency Cards */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1.4fr_1fr]">
                   <FormField
                     control={form.control}
                     name="urgency"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-[10px] uppercase tracking-wide text-foreground/70 font-bold mb-1.5 pl-1 block">
-                          Urgency
-                        </FormLabel>
+                        <FormLabel className={FIELD_LABEL_CLASS}>Urgency</FormLabel>
                         <FormControl>
-                          <div className="grid grid-cols-3 gap-2.5">
+                          <div className="grid grid-cols-3 gap-2">
                             {[
-                              {
-                                value: 'LOW',
-                                label: 'Low',
-                                icon: Info,
-                                color: 'text-emerald-600',
-                                active:
-                                  'ring-2 ring-emerald-500 bg-emerald-500/5 shadow-[0_0_15px_-3px_rgba(16,185,129,0.3)]',
-                              },
-                              {
-                                value: 'MEDIUM',
-                                label: 'Medium',
-                                icon: AlertCircle,
-                                color: 'text-amber-600',
-                                active:
-                                  'ring-2 ring-amber-500 bg-amber-500/5 shadow-[0_0_15px_-3px_rgba(245,158,11,0.3)]',
-                              },
-                              {
-                                value: 'HIGH',
-                                label: 'High',
-                                icon: AlertTriangle,
-                                color: 'text-rose-600',
-                                active:
-                                  'ring-2 ring-rose-500 bg-rose-500/5 shadow-[0_0_15px_-3px_rgba(244,63,94,0.3)]',
-                              },
-                            ].map(option => (
-                              <div
-                                key={option.value}
-                                className={cn(
-                                  'group cursor-pointer rounded-xl border p-2.5 transition-all duration-300 relative overflow-hidden active:scale-95',
-                                  field.value === option.value
-                                    ? `border-transparent ${option.active}`
-                                    : 'border-input bg-background/50 hover:bg-accent hover:border-accent-foreground/30'
-                                )}
-                                onClick={() => field.onChange(option.value)}
-                              >
-                                {field.value === option.value && (
-                                  <div
-                                    className={cn(
-                                      'absolute inset-0 opacity-10 blur-xl',
-                                      option.color.replace('text-', 'bg-')
-                                    )}
-                                  />
-                                )}
-                                <div className="relative flex flex-col items-center gap-1.5">
-                                  <option.icon
-                                    className={cn(
-                                      'h-4 w-4 transition-transform duration-300 group-hover:scale-110',
-                                      option.color
-                                    )}
-                                  />
-                                  <span
-                                    className={cn(
-                                      'text-[10px] font-bold tracking-wide',
-                                      field.value === option.value
-                                        ? option.color
-                                        : 'text-muted-foreground'
-                                    )}
-                                  >
-                                    {option.label}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+                              { value: 'LOW', label: 'Low', icon: Info },
+                              { value: 'MEDIUM', label: 'Medium', icon: AlertCircle },
+                              { value: 'HIGH', label: 'High', icon: AlertTriangle },
+                            ].map(option => {
+                              const selected = field.value === option.value;
+                              const Icon = option.icon;
+
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => field.onChange(option.value)}
+                                  className={cn(
+                                    'flex h-10 items-center justify-center gap-1.5 rounded-lg border text-xs font-semibold transition-all',
+                                    selected
+                                      ? 'border-primary/40 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/10'
+                                      : 'border-border/70 bg-background text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground'
+                                  )}
+                                >
+                                  <Icon className="h-3.5 w-3.5" />
+                                  {option.label}
+                                </button>
+                              );
+                            })}
                           </div>
                         </FormControl>
                         <FormMessage />
@@ -822,32 +730,30 @@ function CreateIncidentModalContent({
                     )}
                   />
 
-                  {/* Priority Selector */}
                   <FormField
                     control={form.control}
                     name="priority"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-[10px] uppercase tracking-wide text-foreground/70 font-bold mb-1.5 pl-1 block">
-                          Priority
-                        </FormLabel>
+                        <FormLabel className={FIELD_LABEL_CLASS}>Priority</FormLabel>
                         <FormControl>
-                          <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg border border-border/50">
-                            {['P1', 'P2', 'P3', 'P4', 'P5'].map(p => {
-                              const isSelected = field.value === p;
+                          <div className="flex h-10 items-center gap-1 rounded-lg border border-border/70 bg-muted/30 p-1">
+                            {['P1', 'P2', 'P3', 'P4', 'P5'].map(priority => {
+                              const selected = field.value === priority;
                               return (
-                                <div
-                                  key={p}
-                                  onClick={() => field.onChange(isSelected ? '' : p)}
+                                <button
+                                  key={priority}
+                                  type="button"
+                                  onClick={() => field.onChange(selected ? '' : priority)}
                                   className={cn(
-                                    'flex-1 cursor-pointer py-1.5 text-center rounded-md text-xs font-bold transition-all duration-200 select-none',
-                                    isSelected
-                                      ? 'bg-background shadow-sm text-foreground ring-1 ring-border'
-                                      : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                                    'h-full flex-1 rounded-md text-[11px] font-semibold transition-all',
+                                    selected
+                                      ? 'bg-background text-primary shadow-sm ring-1 ring-border'
+                                      : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
                                   )}
                                 >
-                                  {p}
-                                </div>
+                                  {priority}
+                                </button>
                               );
                             })}
                           </div>
@@ -857,111 +763,112 @@ function CreateIncidentModalContent({
                     )}
                   />
                 </div>
-              </div>
+              </section>
 
-              {/* Advanced Options */}
-              <div className="rounded-lg border bg-muted/20 px-4 py-3">
-                <div className="flex flex-wrap gap-x-8 gap-y-4 items-center">
-                  <div className="flex-1 min-w-[240px]">
-                    <FormField
-                      control={form.control}
-                      name="dedupKey"
-                      render={({ field }) => (
-                        <FormItem className="space-y-1">
-                          <FormLabel className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                            <Hash className="h-3 w-3" /> Deduplication Key
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="auto-generated-if-empty"
-                              className="h-8 text-xs bg-transparent border-transparent hover:border-input focus:border-primary focus:bg-background transition-colors placeholder:text-muted-foreground/50"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+              <details className="group rounded-xl border border-border/70 bg-muted/20">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 [&::-webkit-details-marker]:hidden">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Advanced details</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">Deduplication and routing metadata</p>
                   </div>
-                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <Info className="h-3 w-3" />
-                    Notifications follow escalation and service rules automatically.
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+
+                <div className="border-t border-border/60 px-4 py-4">
+                  <FormField
+                    control={form.control}
+                    name="dedupKey"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className={cn(FIELD_LABEL_CLASS, 'flex items-center gap-1.5')}>
+                          <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                          Deduplication key
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Leave empty to create without a manual key"
+                            className={cn(CONTROL_CLASS, 'font-mono text-xs')}
+                          />
+                        </FormControl>
+                        <p className="text-[11px] leading-relaxed text-muted-foreground">
+                          A matching open incident is merged. A matching incident resolved within 30 minutes may be reopened.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-border/60 bg-background/70 px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                    Notifications, escalation, and service routing are applied automatically after creation.
                   </div>
                 </div>
-              </div>
+              </details>
 
-              {/* Custom Fields */}
               {customFields.length > 0 && (
-                <div className="pt-2 border-t border-dashed">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 mt-2">
-                    Additional Fields
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
+                <section className="space-y-4 border-t border-border/70 pt-5">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Custom fields</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">Additional incident metadata configured for your workspace.</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {customFields.map(field => (
-                      <div key={field.id}>
-                        <CustomFieldInput
-                          field={field}
-                          value={customFieldValues[field.id] || ''}
-                          onChange={value =>
-                            setCustomFieldValues(prev => ({
-                              ...prev,
-                              [field.id]: value,
-                            }))
-                          }
-                        />
-                      </div>
+                      <CustomFieldInput
+                        key={field.id}
+                        field={field}
+                        value={customFieldValues[field.id] || ''}
+                        onChange={value =>
+                          setCustomFieldValues(previous => ({
+                            ...previous,
+                            [field.id]: value,
+                          }))
+                        }
+                      />
                     ))}
                   </div>
-                </div>
+                </section>
               )}
             </div>
 
-            {/* Footer Actions */}
-            <div className="p-4 bg-muted/30 border-t flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center justify-between gap-4 border-t border-border/70 bg-muted/25 px-6 py-4">
+              <div className="hidden items-center gap-1.5 text-[10px] text-muted-foreground sm:flex">
+                <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono shadow-sm">Esc</kbd>
+                <span>close</span>
+              </div>
+
+              <div className="ml-auto flex items-center gap-2.5">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={onClose}
-                  className="text-muted-foreground hover:text-foreground hover:bg-background"
+                  className="h-9 px-4 text-muted-foreground hover:text-foreground"
                 >
                   Cancel
                 </Button>
-                <span className="text-[10px] text-muted-foreground hidden sm:inline">
-                  <kbd className="font-mono bg-muted border border-border/50 px-1 rounded text-[9px]">
-                    Esc
-                  </kbd>{' '}
-                  to close
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] text-muted-foreground hidden sm:inline">
-                  <kbd className="font-mono bg-muted border border-border/50 px-1 rounded text-[9px]">
-                    ⌘
-                  </kbd>
-                  <kbd className="font-mono bg-muted border border-border/50 px-1 rounded text-[9px] ml-0.5">
-                    Enter
-                  </kbd>{' '}
-                  to submit
-                </span>
                 <Button
                   type="submit"
                   size="sm"
                   disabled={isPending}
-                  className={cn(
-                    'px-6 font-semibold shadow-lg transition-all duration-300',
-                    isPending ? 'opacity-80' : 'hover:shadow-primary/20 hover:scale-[1.02]'
-                  )}
+                  className="h-9 min-w-36 bg-primary px-5 font-semibold shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
                 >
                   {isPending ? (
                     <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Creating...
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Creating...
                     </span>
                   ) : (
-                    'Create Incident'
+                    <span className="flex items-center gap-2">
+                      <Zap className="h-3.5 w-3.5" />
+                      Create Incident
+                    </span>
                   )}
                 </Button>
+                <span className="hidden text-[10px] text-muted-foreground md:inline">
+                  <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono shadow-sm">⌘</kbd>
+                  <kbd className="ml-0.5 rounded border border-border bg-background px-1 py-0.5 font-mono shadow-sm">Enter</kbd>
+                </span>
               </div>
             </div>
           </form>
@@ -982,7 +889,7 @@ export default function CreateIncidentModal() {
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         {isOpen && (
           <CreateIncidentModalContent onClose={closeCreateIncident} openOptions={openOptions} />
         )}
