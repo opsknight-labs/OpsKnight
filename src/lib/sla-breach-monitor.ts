@@ -142,15 +142,15 @@ export async function checkSLABreaches(
             incidentId: { in: incidentIds },
             OR: [
               // Breach events are deduplicated for the full lifetime of the open incident
-              { message: { startsWith: '🚨 SLA ACK Breached' } },
-              { message: { startsWith: '🚨 SLA RESOLVE Breached' } },
+              { message: { contains: 'SLA ACK Breached', mode: 'insensitive' } },
+              { message: { contains: 'SLA RESOLVE Breached', mode: 'insensitive' } },
               // Warning events are deduplicated within the recent threshold window
               {
-                message: { startsWith: '⏰ SLA ACK Warning' },
+                message: { contains: 'SLA ACK Warning', mode: 'insensitive' },
                 createdAt: { gte: new Date(now.getTime() - maxThreshold) },
               },
               {
-                message: { startsWith: '⚠️ SLA RESOLVE Warning' },
+                message: { contains: 'SLA RESOLVE Warning', mode: 'insensitive' },
                 createdAt: { gte: new Date(now.getTime() - maxThreshold) },
               },
             ],
@@ -161,13 +161,12 @@ export async function checkSLABreaches(
 
   const recentWarningMap = new Set<string>();
   for (const evt of recentWarningEvents) {
-    if (evt.message.startsWith('🚨 SLA ACK Breached'))
-      recentWarningMap.add(`${evt.incidentId}:ack:breached`);
-    if (evt.message.startsWith('⏰ SLA ACK Warning'))
-      recentWarningMap.add(`${evt.incidentId}:ack:warning`);
-    if (evt.message.startsWith('🚨 SLA RESOLVE Breached'))
+    const msg = (evt.message || '').toUpperCase();
+    if (msg.includes('SLA ACK BREACHED')) recentWarningMap.add(`${evt.incidentId}:ack:breached`);
+    if (msg.includes('SLA ACK WARNING')) recentWarningMap.add(`${evt.incidentId}:ack:warning`);
+    if (msg.includes('SLA RESOLVE BREACHED'))
       recentWarningMap.add(`${evt.incidentId}:resolve:breached`);
-    if (evt.message.startsWith('⚠️ SLA RESOLVE Warning'))
+    if (msg.includes('SLA RESOLVE WARNING'))
       recentWarningMap.add(`${evt.incidentId}:resolve:warning`);
   }
 
@@ -279,6 +278,7 @@ export async function checkSLABreaches(
             await prisma.incidentEvent.create({
               data: {
                 incidentId: incident.id,
+                type: isBreached ? 'ESCALATED' : 'COMMENT',
                 message: isBreached
                   ? `🚨 SLA RESOLVE Breached: target was ${resolveTargetMinutes} min`
                   : `⚠️ SLA RESOLVE Warning: ${Math.max(1, Math.round(resolveRemainingMs / 60000))} min remaining`,

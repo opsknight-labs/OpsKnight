@@ -14,6 +14,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     incidentEvent: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
     },
   },
@@ -30,9 +31,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('sla-breach-monitor', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    const { default: prisma } = await import('@/lib/prisma');
+    vi.mocked(prisma.incidentEvent.findMany).mockResolvedValue([]);
   });
 
   describe('checkSLABreaches', () => {
@@ -78,8 +81,8 @@ describe('sla-breach-monitor', () => {
             slackWebhookUrl: null,
             serviceNotifyOnSlaBreach: true,
           },
-        } as any,
-      ] as any);
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
       const result = await checkSLABreaches();
 
@@ -119,7 +122,7 @@ describe('sla-breach-monitor', () => {
             serviceNotifyOnSlaBreach: true,
           },
         },
-      ] as any);
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
       const result = await checkSLABreaches();
 
@@ -153,11 +156,52 @@ describe('sla-breach-monitor', () => {
             slackWebhookUrl: null,
           },
         },
-      ] as any);
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
 
       const result = await checkSLABreaches();
 
       expect(result.warnings).toHaveLength(0);
+    });
+
+    it('deduplicates SLA ACK and RESOLVE breach events when already logged', async () => {
+      const { default: prisma } = await import('@/lib/prisma');
+
+      const now = new Date('2026-01-05T12:00:00Z');
+      vi.setSystemTime(now);
+
+      // Incident created 3 hours ago (both 15m ack and 120m resolve targets breached)
+      const createdAt = new Date(now.getTime() - 180 * 60 * 1000);
+
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([
+        {
+          id: 'inc-1',
+          title: 'Breached Incident',
+          serviceId: 'svc-1',
+          urgency: 'HIGH',
+          status: 'OPEN',
+          createdAt,
+          acknowledgedAt: null,
+          service: {
+            id: 'svc-1',
+            name: 'Test Service',
+            targetAckMinutes: 15,
+            targetResolveMinutes: 120,
+            serviceNotifyOnSlaBreach: true,
+          },
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
+
+      // Existing breach events in DB
+      vi.mocked(prisma.incidentEvent.findMany).mockResolvedValue([
+        { incidentId: 'inc-1', message: '🚨 SLA ACK Breached: target was 15 min' },
+        { incidentId: 'inc-1', message: '🚨 SLA RESOLVE Breached: target was 120 min' },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incidentEvent.findMany>>);
+
+      const result = await checkSLABreaches();
+
+      // No new warnings or duplicate events created
+      expect(result.warnings).toHaveLength(0);
+      expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     });
   });
 

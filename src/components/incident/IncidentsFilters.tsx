@@ -161,6 +161,19 @@ export default function IncidentsFilters({
           >
             Mine
           </Badge>
+          <Badge
+            variant={currentFilter === 'acknowledged' ? 'warning' : 'outline'}
+            size="sm"
+            className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-amber-100 hover:text-amber-800 transition-colors"
+            onClick={() =>
+              updateParams({
+                filter: currentFilter === 'acknowledged' ? 'all' : 'acknowledged',
+                teamId: 'all',
+              })
+            }
+          >
+            Acknowledged
+          </Badge>
           {teams.length > 0 && (
             <Badge
               variant={currentTeamId === 'mine' ? 'info' : 'outline'}
@@ -294,6 +307,18 @@ export default function IncidentsFilters({
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
                     <span>Active</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="open">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                    <span>Triggered</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="acknowledged">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    <span>Acknowledged</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="mine">

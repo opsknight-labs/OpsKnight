@@ -46,7 +46,7 @@ export async function updateIncidentStatus(
   } catch (error) {
     throw new Error(getUserFriendlyError(error));
   }
-  const currentIncident = await runSerializableTransaction(async tx => {
+  const transition = await runSerializableTransaction(async tx => {
     // Get current incident to check if we're setting acknowledgedAt for the first time
     const incident = await tx.incident.findUnique({
       where: { id },
@@ -59,7 +59,7 @@ export async function updateIncidentStatus(
     // A retry whose desired result already exists is successful even if its
     // expected source state is now stale because the first attempt committed.
     if (incident.status === status) {
-      return incident;
+      return { previousStatus: incident.status, changed: false };
     }
     if (expectedStatus && incident.status !== expectedStatus) {
       throw new Error(
@@ -173,8 +173,12 @@ export async function updateIncidentStatus(
       data: updateData,
     });
 
-    return incident;
+    return { previousStatus: incident.status, changed: true };
   });
+
+  if (!transition.changed) {
+    return;
+  }
 
   // Send service-level notifications for status changes
   // Uses user preferences for each recipient
@@ -184,7 +188,7 @@ export async function updateIncidentStatus(
       await sendIncidentNotifications(id, 'acknowledged');
     } else if (status === 'RESOLVED') {
       await sendIncidentNotifications(id, 'resolved');
-    } else if (status === 'OPEN' && currentIncident?.status !== 'OPEN') {
+    } else if (status === 'OPEN' && transition.previousStatus !== 'OPEN') {
       // Status changed to OPEN (e.g., from snoozed/acknowledged)
       await sendIncidentNotifications(id, 'updated');
     }
@@ -287,7 +291,7 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
   }
   const user = await getCurrentUser();
 
-  await runSerializableTransaction(async tx => {
+  const resolvedNow = await runSerializableTransaction(async tx => {
     // Get current incident to check if we're setting resolvedAt for the first time
     const currentIncident = await tx.incident.findUnique({ where: { id } });
     if (!currentIncident) {
@@ -296,7 +300,7 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
 
     // Idempotency check: If already resolved, prevent duplicate resolution notes
     if (currentIncident.status === 'RESOLVED') {
-      return;
+      return false;
     }
     await assertRequiredCustomFieldsPresent(tx, id);
 
@@ -341,7 +345,13 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
         },
       });
     }
+
+    return true;
   });
+
+  if (!resolvedNow) {
+    return;
+  }
 
   // Send service-level notifications for resolution
   // Uses user preferences for each recipient

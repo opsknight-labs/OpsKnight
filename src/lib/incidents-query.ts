@@ -5,6 +5,8 @@ export type IncidentListFilter =
   | 'all'
   | 'mine'
   | 'all_open'
+  | 'open'
+  | 'acknowledged'
   | 'resolved'
   | 'snoozed'
   | 'suppressed';
@@ -14,6 +16,8 @@ const incidentFilters: IncidentListFilter[] = [
   'all',
   'mine',
   'all_open',
+  'open',
+  'acknowledged',
   'resolved',
   'snoozed',
   'suppressed',
@@ -78,6 +82,10 @@ export function buildIncidentWhere({
     where.status = { in: activeIncidentStatuses() };
   } else if (filter === 'all_open') {
     where.status = { in: activeIncidentStatuses() };
+  } else if (filter === 'open') {
+    where.status = 'OPEN';
+  } else if (filter === 'acknowledged') {
+    where.status = 'ACKNOWLEDGED';
   } else if (filter === 'resolved') {
     where.status = 'RESOLVED';
   } else if (filter === 'snoozed') {

@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
   };
 
   const statusMeta: Record<string, { label: string; color: string }> = {
-    OPEN: { label: 'Open', color: '#DC2626' },
+    OPEN: { label: 'Triggered', color: '#DC2626' },
     ACKNOWLEDGED: { label: 'Acknowledged', color: '#D97706' },
     RESOLVED: { label: 'Resolved', color: '#059669' },
     SNOOZED: { label: 'Snoozed', color: '#64748B' },
