@@ -16,7 +16,7 @@ export function MobileStatusBadge({
     switch (status) {
       case 'open':
         return {
-          label: 'Open',
+          label: 'Triggered',
           classes: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
         };
       case 'acknowledged':

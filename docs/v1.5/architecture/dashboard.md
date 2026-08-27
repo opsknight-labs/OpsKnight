@@ -14,6 +14,7 @@ modular UI widgets from `src/components/dashboard`.
 Primary data sources:
 
 - `calculateSLAMetrics` (`src/lib/sla-server.ts`)
+- `INCIDENT_METRIC_DEFINITIONS` (`src/lib/metric-contract.ts`)
 - `getWidgetData` (`src/lib/widget-data-provider.ts`)
 - Direct Prisma queries for incidents, services, users, and teams
 
@@ -38,7 +39,6 @@ src/components/dashboard/
 └── compact/
     ├── CompactOnCallStatus.tsx
     ├── CompactPerformanceMetrics.tsx
-    ├── CompactStatsOverview.tsx
     └── CompactTeamLoad.tsx
 ```
 
@@ -58,6 +58,10 @@ Additional dashboard helpers:
    widget-specific views (service health, team load, breach alerts).
 4. **Real-time refresh**: `DashboardRealtimeWrapper` listens to `/api/realtime/stream` and
    calls `router.refresh()` when new metrics or incidents arrive.
+
+Headline values follow the [incident metric contract](./metric-contract). The page must render
+`N/A` and an explicit warning when the aggregation engine is unavailable; a failed calculation
+must never be converted to an operational status or a row of healthy zeroes.
 
 ---
 

@@ -40,4 +40,27 @@ describe('MetricCard', () => {
       '/incidents?filter=muted'
     );
   });
+
+  it('does not present an aggregation failure as a healthy zero', () => {
+    render(
+      <MetricCard
+        label="ACTIVE"
+        value={0}
+        variant="hero"
+        dataState="unavailable"
+        tooltip="Current actionable backlog"
+      />
+    );
+
+    expect(screen.getByText('N/A')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Data unavailable');
+    expect(screen.getByRole('figure')).toHaveAttribute('title', 'Current actionable backlog');
+  });
+
+  it('distinguishes no qualifying data from a measured zero', () => {
+    render(<MetricCard label="MTTR" value={0} dataState="no_data" />);
+
+    expect(screen.getByText('N/A')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('No qualifying data');
+  });
 });

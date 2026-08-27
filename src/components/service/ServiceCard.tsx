@@ -344,7 +344,7 @@ function ServiceCard({ service, compact = false }: ServiceCardProps) {
                   fontSize: '0.95rem',
                 }}
               >
-                {openIncidentCount} open
+                {openIncidentCount} active
               </span>
             ) : (
               <span style={{ color: 'var(--success)', fontWeight: 700, fontSize: '0.95rem' }}>

@@ -59,10 +59,14 @@ When a requested window extends beyond incident retention, OpsKnight clips the q
 - **Muted** means `SNOOZED` + `SUPPRESSED`; muted incidents never count as Active or make a service unhealthy.
 - **Triggered** is the user-facing name for the strict database state `OPEN`. It is not a synonym for Active.
 - Incident drill-downs preserve the applicable team, service, assignee, urgency, status, and effective creation-date scope.
+- A metric links to incidents only when the destination reproduces the metric's population. Rates,
+  averages, and breach aggregates remain unlinked when no exact detail view exists.
 
 Service defaults are 15 minutes to acknowledge and 120 minutes to resolve unless the service has different targets. SLA calculations use service targets; urgency alone does not define the target.
 
-When no qualifying sample exists, a time or compliance metric can display `--`/null. That is different from zero.
+When no qualifying sample exists, a time or compliance metric can display `--`/null. That is
+different from zero. If the metric engine fails, the surface displays **Data unavailable** and
+does not replace the result with zero-valued cards, healthy compliance, or an Operational status.
 
 ## What the page shows
 

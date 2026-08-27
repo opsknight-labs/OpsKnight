@@ -6,6 +6,7 @@ interface MetricCardProps {
   detail: string;
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
+  trendIntent?: 'positive' | 'negative' | 'neutral';
   icon?: React.ReactNode;
   variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger';
   className?: string;
@@ -20,6 +21,7 @@ function MetricCard({
   detail,
   trend,
   trendValue,
+  trendIntent,
   icon,
   variant = 'default',
   className = '',
@@ -42,6 +44,16 @@ function MetricCard({
   };
 
   const trendLabel = trend === 'up' ? 'UP' : trend === 'down' ? 'DOWN' : 'FLAT';
+  const trendColorClass =
+    trendIntent === 'positive'
+      ? trendColors.up
+      : trendIntent === 'negative'
+        ? trendColors.down
+        : trendIntent === 'neutral'
+          ? trendColors.neutral
+          : trend
+            ? trendColors[trend]
+            : trendColors.neutral;
 
   return (
     <article
@@ -63,7 +75,7 @@ function MetricCard({
           <div className="analytics-card-body">
             <span className="analytics-value">{value}</span>
             {trend && trendValue && (
-              <div className={`analytics-trend ${trendColors[trend]}`}>
+              <div className={`analytics-trend ${trendColorClass}`}>
                 <span className="analytics-trend-icon">{trendLabel}</span>
                 <span>{trendValue}</span>
               </div>
@@ -88,7 +100,7 @@ function MetricCard({
           <div className="analytics-card-body">
             <span className="analytics-value">{value}</span>
             {trend && trendValue && (
-              <div className={`analytics-trend ${trendColors[trend]}`}>
+              <div className={`analytics-trend ${trendColorClass}`}>
                 <span className="analytics-trend-icon">{trendLabel}</span>
                 <span>{trendValue}</span>
               </div>

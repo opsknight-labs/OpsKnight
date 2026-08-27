@@ -24,9 +24,9 @@ vi.mock('next/navigation', () => ({
 
 describe('Mobile Components', () => {
   describe('MobileStatusBadge', () => {
-    it('renders correct label for OPEN status', () => {
+    it('renders the canonical Triggered label for OPEN status', () => {
       render(<MobileStatusBadge status="open" />);
-      expect(screen.getByText('Open')).toBeInTheDocument();
+      expect(screen.getByText('Triggered')).toBeInTheDocument();
     });
 
     it('renders correct label for RESOLVED status', () => {

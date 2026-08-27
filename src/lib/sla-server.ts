@@ -269,9 +269,6 @@ async function getCurrentIncidentSnapshot(filters: SLAMetricsFilter) {
     acknowledgedCount,
     unassignedActive,
     criticalCount,
-    highUrgencyCount: criticalCount,
-    mediumUrgencyCount: urgencyMap.get('MEDIUM') ?? 0,
-    lowUrgencyCount: urgencyMap.get('LOW') ?? 0,
     snoozedCount: mutedMap.get('SNOOZED') ?? 0,
     suppressedCount: mutedMap.get('SUPPRESSED') ?? 0,
     dynamicStatus:
@@ -790,7 +787,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   //   enforces this.
   const hasIncompatibleFilters =
     filters.urgency ||
-    filters.assigneeId ||
+    filters.assigneeId !== undefined ||
     filters.status ||
     (filters.visibility && filters.visibility !== 'ALL');
   const useRollups =

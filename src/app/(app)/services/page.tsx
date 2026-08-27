@@ -172,9 +172,10 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     serviceId: services.map(s => s.id),
   }).catch(err => {
     console.error('Failed to load SLA metrics for services:', err);
-    return { serviceMetrics: [] };
+    return null;
   });
   const slaServiceMap = new Map((slaMetrics?.serviceMetrics || []).map(s => [s.id, s]));
+  const metricDataState = slaMetrics ? ('available' as const) : ('unavailable' as const);
 
   const paginatedServices = services.map(service => {
     const slaData = slaServiceMap.get(service.id);
@@ -192,6 +193,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       openIncidentCount,
       hasCritical,
       incidentCount,
+      metricDataState,
     };
   });
 

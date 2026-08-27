@@ -113,19 +113,21 @@ export async function GET(request: NextRequest) {
                   startDate,
                   now
                 );
-                currentValue = uptimeMap[def.serviceId] ?? 100;
+                currentValue = uptimeMap[def.serviceId] ?? null;
                 const previousStart = new Date(startDate.getTime() - windowDays * 86400000);
                 const previousMap = await calculateMultiServiceUptime(
                   [def.serviceId],
                   previousStart,
                   startDate
                 );
-                previousUptime = previousMap[def.serviceId] ?? 100;
+                previousUptime = previousMap[def.serviceId] ?? null;
               } else {
-                currentValue = 100;
+                currentValue = null;
               }
-              currentValue = Math.max(0, Math.min(100, currentValue));
-              breached = currentValue < def.target;
+              if (currentValue !== null) {
+                currentValue = Math.max(0, Math.min(100, currentValue));
+                breached = currentValue < def.target;
+              }
               break;
             case 'MTTA':
               // MTTA in minutes - lower is better
@@ -177,6 +179,7 @@ export async function GET(request: NextRequest) {
             window: def.window,
             currentValue,
             breached,
+            dataState: currentValue === null ? ('no_data' as const) : ('available' as const),
             trend,
             totalIncidents: metrics.totalIncidents,
             activeIncidents: metrics.activeIncidents,
@@ -196,10 +199,11 @@ export async function GET(request: NextRequest) {
             target: def.target,
             window: def.window,
             currentValue: null,
-            breached: false,
+            breached: null,
             trend: 'stable' as const,
-            totalIncidents: 0,
-            activeIncidents: 0,
+            totalIncidents: null,
+            activeIncidents: null,
+            dataState: 'unavailable' as const,
             error: 'Failed to calculate',
             lastUpdated: new Date().toISOString(),
           };
@@ -209,8 +213,11 @@ export async function GET(request: NextRequest) {
 
     // Calculate overall stats
     const totalDefinitions = complianceData.length;
-    const breachedCount = complianceData.filter(c => c.breached).length;
-    const healthyCount = totalDefinitions - breachedCount;
+    const availableDefinitions = complianceData.filter(c => c.dataState === 'available');
+    const breachedCount = availableDefinitions.filter(c => c.breached === true).length;
+    const healthyCount = availableDefinitions.length - breachedCount;
+    const unavailableCount = complianceData.filter(c => c.dataState === 'unavailable').length;
+    const noDataCount = complianceData.filter(c => c.dataState === 'no_data').length;
     const complianceValues = complianceData
       .filter(
         c =>
@@ -225,6 +232,9 @@ export async function GET(request: NextRequest) {
       definitions: complianceData,
       summary: {
         total: totalDefinitions,
+        available: availableDefinitions.length,
+        unavailable: unavailableCount,
+        noData: noDataCount,
         healthy: healthyCount,
         breached: breachedCount,
         avgCompliance: avgCompliance === null ? null : Math.round(avgCompliance * 100) / 100,

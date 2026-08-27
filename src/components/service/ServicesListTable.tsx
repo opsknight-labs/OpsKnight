@@ -36,6 +36,7 @@ export type ServiceListItem = {
   openIncidentCount: number;
   hasCritical: boolean;
   incidentCount?: number;
+  metricDataState?: 'available' | 'unavailable';
   team?: { id: string; name: string } | null;
   _count?: { incidents: number };
 };
@@ -135,6 +136,15 @@ export default function ServicesListTable({
 
       {/* Content */}
       <div className="p-3 md:p-4 lg:p-5 bg-white">
+        {services.some(service => service.metricDataState === 'unavailable') && (
+          <div
+            className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            role="alert"
+          >
+            Live service incident statistics are unavailable. Zero counts are hidden until metrics
+            recover.
+          </div>
+        )}
         {services.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-white p-10 text-center">
             <div className="text-4xl opacity-30 mb-3">!</div>
@@ -232,7 +242,11 @@ export default function ServicesListTable({
                         )}
 
                         <div className="flex items-center gap-1.5 ml-1">
-                          {service.openIncidentCount > 0 ? (
+                          {service.metricDataState === 'unavailable' ? (
+                            <span className="text-amber-700 font-semibold">
+                              Metrics unavailable
+                            </span>
+                          ) : service.openIncidentCount > 0 ? (
                             <span className="text-red-600 font-semibold">
                               {service.openIncidentCount} active incidents
                             </span>

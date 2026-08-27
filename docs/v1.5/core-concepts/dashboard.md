@@ -19,6 +19,7 @@ The top-level status is calculated from active incidents:
 | Critical    | At least one active High-urgency incident        |
 | Degraded    | Active incidents exist, but none is High urgency |
 | Operational | No active incidents                              |
+| Unavailable | The metric calculation failed                    |
 
 “Active” means Triggered (`OPEN`) plus Acknowledged. Snoozed, Suppressed, and Resolved incidents are excluded. Always open the filtered incident list before treating the badge as a full service-health diagnosis.
 
@@ -26,7 +27,13 @@ The top-level status is calculated from active incidents:
 
 The header summarizes the selected range and current workload, including total incidents, Active work, Muted work, Resolved incidents, unassigned incidents, and High-urgency Active incidents. **Muted** is the current combined count of Snoozed plus Suppressed incidents and shows both values in its breakdown. A retention indicator appears when the requested history is clipped by the installation's retention policy.
 
-Selecting a summary link opens the corresponding incident view. The Muted link uses the combined muted filter, so its incident list matches the card total.
+Selecting a summary link opens the corresponding incident view. The destination preserves the
+card's service, assignee, urgency, strict status, and effective date scope. The Muted link uses the
+combined muted filter. A card remains unlinked when the incident list cannot reproduce its value.
+
+Each metric group shows when it was calculated. `N/A` with **Data unavailable** means the query
+failed; **No qualifying data** means the query succeeded but the metric has no eligible sample.
+Neither state is a measured zero.
 
 ## Filter the incident preview
 
@@ -133,14 +140,14 @@ The application includes skip links, visible focus handling, semantic controls, 
 
 ## Troubleshooting
 
-| Problem                                    | Check                                                                                                   |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Counts differ from the incident list       | Match status, urgency, service, assignee, range, and retention scope. The dashboard preview is limited. |
-| A card is empty                            | Clear filters and confirm qualifying data exists. Empty data is not necessarily an error.               |
-| My Queue is empty                          | It shows incidents directly assigned to your user, not every incident owned by your teams or schedules. |
-| Status looks stale                         | Open the incident, verify connectivity to the real-time stream, and refresh.                            |
-| Historical range is shorter than requested | Read the retention notice and ask an administrator to review data-retention settings.                   |
-| Export omits older matches                 | The Command Center exports rows loaded by its view; use Analytics export for a larger filtered set.     |
+| Problem                                    | Check                                                                                                      |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Counts differ from the incident list       | Match status, urgency, service, assignee, range, and retention scope. The dashboard preview is limited.    |
+| A card shows `N/A`                         | Read its state label. Unavailable indicates a query failure; no qualifying data indicates an empty sample. |
+| My Queue is empty                          | It shows incidents directly assigned to your user, not every incident owned by your teams or schedules.    |
+| Status looks stale                         | Open the incident, verify connectivity to the real-time stream, and refresh.                               |
+| Historical range is shorter than requested | Read the retention notice and ask an administrator to review data-retention settings.                      |
+| Export omits older matches                 | The Command Center exports rows loaded by its view; use Analytics export for a larger filtered set.        |
 
 ## Related guides
 

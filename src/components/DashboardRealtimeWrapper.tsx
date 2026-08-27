@@ -1,7 +1,7 @@
 'use client';
 
 import { useRealtime } from '@/hooks/useRealtime';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { logger } from '@/lib/logger';
 
@@ -27,6 +27,20 @@ export default function DashboardRealtimeWrapper({
 }: DashboardRealtimeWrapperProps) {
   const { isConnected, metrics, recentIncidents, error } = useRealtime();
   const router = useRouter();
+  const [showDisconnected, setShowDisconnected] = useState(false);
+
+  useEffect(() => {
+    if (isConnected) {
+      setShowDisconnected(false); // eslint-disable-line react-hooks/set-state-in-effect
+      return;
+    }
+    if (error) {
+      setShowDisconnected(true); // eslint-disable-line react-hooks/set-state-in-effect
+      return;
+    }
+    const timer = window.setTimeout(() => setShowDisconnected(true), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [isConnected, error]);
 
   useEffect(() => {
     if (metrics && onMetricsUpdate) {
@@ -67,7 +81,7 @@ export default function DashboardRealtimeWrapper({
   return (
     <>
       {children}
-      {!isConnected && (
+      {showDisconnected && !isConnected && (
         <div
           style={{
             position: 'fixed',
@@ -79,12 +93,11 @@ export default function DashboardRealtimeWrapper({
             borderRadius: 'var(--radius-md)',
             fontSize: '0.875rem',
             zIndex: 1000,
-            display: 'none', // Hidden by default, can be enabled for debugging
           }}
           aria-live="polite"
           aria-atomic="true"
         >
-          Real-time updates disconnected
+          Live updates paused. Refresh to verify the latest statistics.
         </div>
       )}
     </>

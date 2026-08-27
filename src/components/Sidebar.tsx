@@ -164,7 +164,7 @@ export default function Sidebar(
   const currentRole = (session?.user as any)?.role || userRole;
   const currentGender = (session?.user as any)?.gender || userGender;
 
-  const [stats, setStats] = useState<{ count: number } | null>(null);
+  const [stats, setStats] = useState<{ count: number; calculatedAt?: string } | null>(null);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useModalState('sidebarMobileMenu');
 
@@ -173,13 +173,20 @@ export default function Sidebar(
 
   useEffect(() => {
     fetch('/api/sidebar-stats')
-      .then(res => res.json())
-      .then(data =>
+      .then(async res => {
+        if (!res.ok) throw new Error('Sidebar statistics unavailable');
+        return res.json();
+      })
+      .then(data => {
+        if (!Number.isFinite(data.activeIncidentsCount)) {
+          throw new Error('Sidebar statistics response is invalid');
+        }
         setStats({
-          count: data.activeIncidentsCount || 0,
-        })
-      )
-      .catch(() => setStats({ count: 0 }));
+          count: data.activeIncidentsCount,
+          calculatedAt: data.calculatedAt,
+        });
+      })
+      .catch(() => setStats(null));
   }, []);
 
   useEffect(() => {
@@ -256,6 +263,7 @@ export default function Sidebar(
               variant="sidebar-danger"
               size="xs"
               aria-label={`${stats!.count} active incidents`}
+              title={stats?.calculatedAt ? `Current as of ${stats.calculatedAt}` : 'Current'}
               className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full p-0"
             >
               <span className="sr-only">{stats!.count > 99 ? '99+' : stats!.count}</span>
@@ -265,6 +273,7 @@ export default function Sidebar(
               variant="sidebar-danger"
               size="xs"
               aria-label={`${stats!.count} active incidents`}
+              title={stats?.calculatedAt ? `Current as of ${stats.calculatedAt}` : 'Current'}
               className="ml-auto h-5 min-w-5 rounded-full px-1.5"
             >
               {stats!.count > 99 ? '99+' : stats!.count}
