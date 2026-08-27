@@ -110,6 +110,69 @@ const FIELD_LABEL_CLASS = 'text-xs font-semibold text-foreground';
 const CONTROL_CLASS =
   'h-10 rounded-lg border-border/70 bg-background shadow-sm transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-primary/20';
 
+const URGENCY_OPTIONS = [
+  {
+    value: 'LOW' as const,
+    label: 'Low',
+    icon: Info,
+    selectedClass:
+      'border-emerald-500/60 bg-emerald-500/12 text-emerald-700 shadow-sm ring-1 ring-emerald-500/20 dark:text-emerald-300',
+    idleClass:
+      'border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-700/80 hover:border-emerald-500/40 hover:bg-emerald-500/[0.08] dark:text-emerald-300/80',
+  },
+  {
+    value: 'MEDIUM' as const,
+    label: 'Medium',
+    icon: AlertCircle,
+    selectedClass:
+      'border-amber-500/60 bg-amber-500/12 text-amber-700 shadow-sm ring-1 ring-amber-500/20 dark:text-amber-300',
+    idleClass:
+      'border-amber-500/20 bg-amber-500/[0.04] text-amber-700/80 hover:border-amber-500/40 hover:bg-amber-500/[0.08] dark:text-amber-300/80',
+  },
+  {
+    value: 'HIGH' as const,
+    label: 'High',
+    icon: AlertTriangle,
+    selectedClass:
+      'border-rose-500/60 bg-rose-500/12 text-rose-700 shadow-sm ring-1 ring-rose-500/20 dark:text-rose-300',
+    idleClass:
+      'border-rose-500/20 bg-rose-500/[0.04] text-rose-700/80 hover:border-rose-500/40 hover:bg-rose-500/[0.08] dark:text-rose-300/80',
+  },
+];
+
+const PRIORITY_OPTIONS = [
+  {
+    value: 'P1',
+    selectedClass:
+      'bg-rose-500/12 text-rose-700 ring-1 ring-rose-500/30 shadow-sm dark:text-rose-300',
+    dotClass: 'bg-rose-500',
+  },
+  {
+    value: 'P2',
+    selectedClass:
+      'bg-orange-500/12 text-orange-700 ring-1 ring-orange-500/30 shadow-sm dark:text-orange-300',
+    dotClass: 'bg-orange-500',
+  },
+  {
+    value: 'P3',
+    selectedClass:
+      'bg-amber-500/12 text-amber-700 ring-1 ring-amber-500/30 shadow-sm dark:text-amber-300',
+    dotClass: 'bg-amber-500',
+  },
+  {
+    value: 'P4',
+    selectedClass:
+      'bg-sky-500/12 text-sky-700 ring-1 ring-sky-500/30 shadow-sm dark:text-sky-300',
+    dotClass: 'bg-sky-500',
+  },
+  {
+    value: 'P5',
+    selectedClass:
+      'bg-slate-500/12 text-slate-700 ring-1 ring-slate-500/30 shadow-sm dark:text-slate-300',
+    dotClass: 'bg-slate-400',
+  },
+];
+
 function CreateIncidentModalContent({
   onClose,
   openOptions,
@@ -280,7 +343,6 @@ function CreateIncidentModalContent({
       <div className="h-1 w-full shrink-0 bg-gradient-to-r from-primary to-primary/60" />
 
       <div className="relative shrink-0 overflow-hidden border-b border-border/70 bg-gradient-to-br from-primary/[0.07] via-card to-card px-6 py-5">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 shadow-sm">
@@ -296,8 +358,12 @@ function CreateIncidentModalContent({
             </div>
           </div>
 
-          <DialogPrimitive.Close className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30">
-            <X className="h-4 w-4" />
+          <DialogPrimitive.Close
+            aria-label="Close create incident dialog"
+            title="Close"
+            className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/80 bg-background/85 text-muted-foreground shadow-sm backdrop-blur-sm transition-all hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-600 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:ring-offset-2 focus:ring-offset-card dark:hover:text-rose-300"
+          >
+            <X className="h-4 w-4 transition-transform group-hover:rotate-90" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         </div>
@@ -695,11 +761,7 @@ function CreateIncidentModalContent({
                         <FormLabel className={FIELD_LABEL_CLASS}>Urgency</FormLabel>
                         <FormControl>
                           <div className="grid grid-cols-3 gap-2">
-                            {[
-                              { value: 'LOW', label: 'Low', icon: Info },
-                              { value: 'MEDIUM', label: 'Medium', icon: AlertCircle },
-                              { value: 'HIGH', label: 'High', icon: AlertTriangle },
-                            ].map(option => {
+                            {URGENCY_OPTIONS.map(option => {
                               const selected = field.value === option.value;
                               const Icon = option.icon;
 
@@ -707,12 +769,11 @@ function CreateIncidentModalContent({
                                 <button
                                   key={option.value}
                                   type="button"
+                                  aria-pressed={selected}
                                   onClick={() => field.onChange(option.value)}
                                   className={cn(
                                     'flex h-10 items-center justify-center gap-1.5 rounded-lg border text-xs font-semibold transition-all',
-                                    selected
-                                      ? 'border-primary/40 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/10'
-                                      : 'border-border/70 bg-background text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground'
+                                    selected ? option.selectedClass : option.idleClass
                                   )}
                                 >
                                   <Icon className="h-3.5 w-3.5" />
@@ -735,21 +796,23 @@ function CreateIncidentModalContent({
                         <FormLabel className={FIELD_LABEL_CLASS}>Priority</FormLabel>
                         <FormControl>
                           <div className="flex h-10 items-center gap-1 rounded-lg border border-border/70 bg-muted/30 p-1">
-                            {['P1', 'P2', 'P3', 'P4', 'P5'].map(priority => {
-                              const selected = field.value === priority;
+                            {PRIORITY_OPTIONS.map(priority => {
+                              const selected = field.value === priority.value;
                               return (
                                 <button
-                                  key={priority}
+                                  key={priority.value}
                                   type="button"
-                                  onClick={() => field.onChange(selected ? '' : priority)}
+                                  aria-pressed={selected}
+                                  onClick={() => field.onChange(selected ? '' : priority.value)}
                                   className={cn(
-                                    'h-full flex-1 rounded-md text-[11px] font-semibold transition-all',
+                                    'flex h-full flex-1 items-center justify-center gap-1 rounded-md text-[11px] font-semibold transition-all',
                                     selected
-                                      ? 'bg-background text-primary shadow-sm ring-1 ring-border'
+                                      ? priority.selectedClass
                                       : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
                                   )}
                                 >
-                                  {priority}
+                                  <span className={cn('h-1.5 w-1.5 rounded-full', priority.dotClass)} />
+                                  {priority.value}
                                 </button>
                               );
                             })}
