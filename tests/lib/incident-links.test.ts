@@ -14,6 +14,10 @@ describe('buildIncidentListHref', () => {
     );
   });
 
+  it('builds the combined muted incident drill-down', () => {
+    expect(buildIncidentListHref({ filter: 'muted' })).toBe('/incidents?filter=muted');
+  });
+
   it('supports mobile service drill-downs', () => {
     expect(
       buildIncidentListHref({ basePath: '/m/incidents', filter: 'all_open', serviceId: 'svc-1' })

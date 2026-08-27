@@ -333,6 +333,12 @@ export default function IncidentsFilters({
                     <span>Resolved</span>
                   </div>
                 </SelectItem>
+                <SelectItem value="muted">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                    <span>Muted (Snoozed + Suppressed)</span>
+                  </div>
+                </SelectItem>
                 <SelectItem value="snoozed">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-yellow-500" />

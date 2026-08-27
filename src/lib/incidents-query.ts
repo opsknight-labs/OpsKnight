@@ -1,10 +1,11 @@
 import type { IncidentStatus, IncidentUrgency, Prisma } from '@prisma/client';
-import { activeIncidentStatuses } from './incident-status';
+import { activeIncidentStatuses, mutedIncidentStatuses } from './incident-status';
 
 export type IncidentListFilter =
   | 'all'
   | 'mine'
   | 'all_open'
+  | 'muted'
   | 'open'
   | 'acknowledged'
   | 'resolved'
@@ -16,6 +17,7 @@ const incidentFilters: IncidentListFilter[] = [
   'all',
   'mine',
   'all_open',
+  'muted',
   'open',
   'acknowledged',
   'resolved',
@@ -82,6 +84,8 @@ export function buildIncidentWhere({
     where.status = { in: activeIncidentStatuses() };
   } else if (filter === 'all_open') {
     where.status = { in: activeIncidentStatuses() };
+  } else if (filter === 'muted') {
+    where.status = { in: mutedIncidentStatuses() };
   } else if (filter === 'open') {
     where.status = 'OPEN';
   } else if (filter === 'acknowledged') {

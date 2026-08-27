@@ -219,6 +219,8 @@ export default async function Dashboard({
         activeCount: 0,
         openCount: 0,
         acknowledgedCount: 0,
+        snoozedCount: 0,
+        suppressedCount: 0,
         resolvedCount: 0,
         criticalCount: 0,
         highUrgencyCount: 0,
@@ -281,6 +283,9 @@ export default async function Dashboard({
   const metricsResolvedCount = slaMetrics.statusMix.find(s => s.status === 'RESOLVED')?.count ?? 0;
   const currentAcknowledgedCount = slaMetrics.acknowledgedCount;
   const currentActiveCount = currentTriggeredCount + currentAcknowledgedCount;
+  const currentSnoozedCount = slaMetrics.snoozedCount;
+  const currentSuppressedCount = slaMetrics.suppressedCount;
+  const currentMutedCount = currentSnoozedCount + currentSuppressedCount;
   const unassignedCount = slaMetrics.unassignedActive;
 
   const allActiveIncidentsCount =
@@ -415,6 +420,9 @@ export default async function Dashboard({
           totalInRange={totalInRange}
           currentActiveCount={currentActiveCount}
           currentTriggeredCount={currentTriggeredCount}
+          currentMutedCount={currentMutedCount}
+          currentSnoozedCount={currentSnoozedCount}
+          currentSuppressedCount={currentSuppressedCount}
           metricsResolvedCount={metricsResolvedCount}
           unassignedCount={unassignedCount}
           rangeLabel={getRangeLabel(range)}
