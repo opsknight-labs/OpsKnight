@@ -1,5 +1,6 @@
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 export async function getScheduleApiScope(
   userId: string
@@ -9,7 +10,7 @@ export async function getScheduleApiScope(
     select: { role: true },
   });
   if (!user) return { id: '__unauthorized__' };
-  if (user.role === 'ADMIN' || user.role === 'RESPONDER') return {};
+  if (hasCapability(user.role, CAPABILITIES.SCHEDULE_READ_ALL)) return {};
 
   return {
     OR: [

@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { calculateSLAMetrics, calculateMultiServiceUptime } from '@/lib/sla-server';
 import { logger } from '@/lib/logger';
+import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
 
 /**
  * Restricts the visible SLA-definition set to ones whose service belongs to
@@ -12,7 +13,7 @@ import { logger } from '@/lib/logger';
  * service-scoped definitions whose owning team they're in.
  */
 async function getDefinitionWhereForUser(userId: string, role: string) {
-  if (role === 'ADMIN' || role === 'RESPONDER') {
+  if (isAppRole(role) && hasCapability(role, CAPABILITIES.METRICS_READ_ALL)) {
     return { activeTo: null } as const;
   }
   const memberships = await prisma.teamMember.findMany({

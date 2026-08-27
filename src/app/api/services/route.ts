@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 function parseLimit(value: string | null) {
   const limit = Number(value);
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
       select: { role: true, status: true, teamMemberships: { select: { teamId: true } } },
     });
     if (!apiUser || apiUser.status !== 'ACTIVE') return jsonError('Unauthorized.', 401);
-    const hasGlobalRead = apiUser.role === 'ADMIN' || apiUser.role === 'RESPONDER';
+    const hasGlobalRead = hasCapability(apiUser.role, CAPABILITIES.SERVICE_READ_ALL);
     const teamIds = apiUser.teamMemberships.map(membership => membership.teamId);
 
     const services = await prisma.service.findMany({

@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { assertCanReadServiceMetrics } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,12 +70,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 403 });
     }
 
-    // `?include=description` is opt-in PII. Only honored for ADMIN /
-    // RESPONDER — regular USERs get description=null even when they
+    // `?include=description` is opt-in PII. It requires the centralized
+    // sensitive-incident capability; regular USERs get description=null even when they
     // pass the flag, since their team scope might still expose them to
     // descriptions they shouldn't read.
     const effectiveIncludeDescription =
-      includeDescription && (user.role === 'ADMIN' || user.role === 'RESPONDER');
+      includeDescription && hasCapability(user.role, CAPABILITIES.INCIDENT_SENSITIVE_READ);
 
     // Calculate metrics using the centralized SLA server
     const metrics = await calculateSLAMetrics({

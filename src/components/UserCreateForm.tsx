@@ -43,6 +43,7 @@ type Props = {
 const ROLE_DESCRIPTIONS = {
   ADMIN: 'Full access to all settings and users',
   RESPONDER: 'Can manage incidents and view reports',
+  AUDITOR: 'Organization-wide read-only access and audit evidence',
   USER: 'Standard access to view status and dashboards',
 };
 
@@ -219,6 +220,19 @@ export default function UserCreateForm({ action, className = '', disabled = fals
                     <div className="flex flex-col">
                       <span className="font-medium text-sm">Responder</span>
                       <span className="text-[10px] text-muted-foreground">Manage incidents</span>
+                    </div>
+                  </div>
+                </SelectItem>
+                <SelectItem value="AUDITOR" className="py-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="p-1 bg-amber-100 rounded-md text-amber-700">
+                      <Shield className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm">Auditor</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Organization-wide read access
+                      </span>
                     </div>
                   </div>
                 </SelectItem>

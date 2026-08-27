@@ -30,10 +30,10 @@ function isValidDomain(domain: string) {
 type RoleMappingRule = {
   claim: string;
   value: string;
-  role: 'ADMIN' | 'RESPONDER' | 'USER';
+  role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
 };
 
-const allowedRoles = new Set<RoleMappingRule['role']>(['ADMIN', 'RESPONDER', 'USER']);
+const allowedRoles = new Set<RoleMappingRule['role']>(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']);
 
 function parseRoleMapping(input: string): RoleMappingRule[] | null {
   const parsed: unknown = JSON.parse(input);

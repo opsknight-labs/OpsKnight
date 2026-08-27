@@ -7,6 +7,7 @@ import { IncidentCreateSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { executeEscalation } from '@/lib/escalation';
 import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 function parseLimit(value: string | null) {
   const limit = Number(value);
@@ -67,12 +68,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const limit = parseLimit(searchParams.get('limit'));
 
-  const accessFilter =
-    apiUser.role === 'ADMIN' || apiUser.role === 'RESPONDER'
-      ? undefined
-      : {
-          OR: [{ assigneeId: apiUser.id }, { service: { teamId: { in: apiUser.teamIds } } }],
-        };
+  const accessFilter = hasCapability(apiUser.role, CAPABILITIES.INCIDENT_READ_ALL)
+    ? undefined
+    : {
+        OR: [{ assigneeId: apiUser.id }, { service: { teamId: { in: apiUser.teamIds } } }],
+      };
 
   const incidents = await prisma.incident.findMany({
     where: accessFilter,
@@ -126,6 +126,9 @@ export async function POST(req: NextRequest) {
   if (!apiUser) {
     return jsonError('Unauthorized. API key user not found.', 401);
   }
+  if (!hasCapability(apiUser.role, CAPABILITIES.OPERATIONS_MANAGE)) {
+    return jsonError('Forbidden. API key owner cannot manage incidents.', 403);
+  }
 
   let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
@@ -150,12 +153,6 @@ export async function POST(req: NextRequest) {
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!service) {
     return jsonError('Service not found.', 404);
-  }
-
-  if (apiUser.role !== 'ADMIN' && apiUser.role !== 'RESPONDER') {
-    if (!service.teamId || !apiUser.teamIds.includes(service.teamId)) {
-      return jsonError('Forbidden. Service access denied.', 403);
-    }
   }
 
   // Use include in create() to fetch relations in single query instead of separate findUnique

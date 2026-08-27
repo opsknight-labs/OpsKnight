@@ -13,10 +13,11 @@ OpsKnight has workspace-wide application roles and independent team-scoped roles
 | Role        | Operational boundary                                                                                                            |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `USER`      | Standard signed-in user. Resource checks may allow incidents, services, schedules, or metrics related to their assignment/team. |
+| `AUDITOR`   | Read-only organization-wide incidents, services, schedules, reports, metrics, and audit evidence. No operational mutations.     |
 | `RESPONDER` | Global response operations, including broad incident and operational-resource management, but not Admin-only governance.        |
 | `ADMIN`     | Workspace governance, users, providers, system/security settings, and destructive administrative operations.                    |
 
-The implementation uses action-specific checks; a role name is not a guarantee that every route has identical behavior. Test critical controls after each release.
+The implementation uses a central capability registry in `src/lib/authorization.ts`. Server guards enforce capabilities and then apply resource scope where required. UI checks are usability hints only; server enforcement remains authoritative.
 
 ## Resource checks for a User
 
@@ -27,7 +28,7 @@ The central v1.5 checks allow a regular `USER` to:
 - view a schedule when assigned to a layer or referenced by an override;
 - read scoped service/team metrics only for teams they belong to.
 
-Responders and Admins bypass those central resource checks for global operational access. An unscoped metrics request from a regular User is denied.
+Responders and Admins bypass those central resource checks for global operational access. Auditors bypass read scope only and cannot mutate operational resources. An unscoped metrics request from a regular User is denied.
 
 ## Team roles
 
@@ -46,6 +47,7 @@ Application Admins and Responders can create/edit teams and add Members. Only ap
 | Manage workspace users and application roles                  | Application Admin                                            |
 | Configure OIDC, providers, retention, and system settings     | Application Admin                                            |
 | View System Logs                                              | Application Admin                                            |
+| View audit evidence organization-wide                         | Auditor or Application Admin                                 |
 | Create/manage incidents globally                              | Responder or Admin                                           |
 | Create/edit services, schedules, policies, and teams globally | Responder or Admin                                           |
 | Delete a team or perform protected destructive governance     | Application Admin                                            |
@@ -59,10 +61,23 @@ Consult the task guide because some workflows add stricter checks. The Audit Log
 1. Grant `USER` by default.
 2. Use team membership and assignment for scoped participation.
 3. Grant `RESPONDER` only for people who need workspace-wide response operations.
-4. Grant `ADMIN` only for governance and security duties.
-5. Keep at least two active Admins and two Owners on critical teams.
-6. Review application roles, team roles, assignments, OIDC mappings, and API keys separately.
-7. Revoke sessions and IdP access for urgent removals; then test affected response paths.
+4. Grant `AUDITOR` for compliance personnel who require evidence without operational control.
+5. Grant `ADMIN` only for governance and security duties.
+6. Keep at least two active Admins and two Owners on critical teams.
+7. Review application roles, team roles, assignments, OIDC mappings, and API keys separately.
+8. Revoke sessions and IdP access for urgent removals; then test affected response paths.
+
+## API keys
+
+API key scopes narrow the owning user's current authority; they never expand it. A write scope owned by a user who is later changed to `AUDITOR` or `USER` cannot continue performing global incident mutations. Revoke unused keys and retest integrations after role changes.
+
+## Auditor data boundary
+
+Auditors can read organization-wide operational summaries and audit evidence, but do not receive opt-in sensitive incident descriptions or unpublished postmortem drafts. Schedule views include responder identity and contact information required to verify on-call coverage; treat Auditor assignment as privileged access to operational evidence.
+
+## Deployment and rollback
+
+Deploy the database migration before assigning the first Auditor. During a rolling deployment, do not assign `AUDITOR` until every application instance runs a version that recognizes the role. Before rolling back to a version without Auditor support, reassign every Auditor account to a role supported by that version, verify no `AUDITOR` rows remain, and only then roll back the application. The PostgreSQL enum value remains in the database and is harmless when unused.
 
 ## OIDC role-mapping warning
 
@@ -73,6 +88,7 @@ Role mapping runs on OIDC login and can change application roles. Protect mapped
 - [ ] A User cannot open Admin-only settings or system logs.
 - [ ] A User can access only expected assigned/team resources.
 - [ ] A Responder can operate incidents without administering identity or providers.
+- [ ] An Auditor can inspect organization-wide evidence but cannot change incidents or settings.
 - [ ] Team Owner does not imply workspace Admin.
 - [ ] Removing membership removes the expected resource scope.
 - [ ] OIDC group removal changes access as designed on the next login.

@@ -125,7 +125,7 @@ const navigationItems: NavItem[] = [
     label: 'Audit Log',
     icon: <ClipboardList />,
     section: 'INSIGHTS',
-    requiresRole: ['ADMIN'],
+    requiresRole: ['ADMIN', 'AUDITOR'],
   },
   {
     href: '/reports',

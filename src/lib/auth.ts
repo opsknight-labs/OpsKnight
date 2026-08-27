@@ -900,7 +900,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               const mapping = activeConfig.roleMapping as Array<{
                 claim: string;
                 value: string;
-                role: 'ADMIN' | 'RESPONDER' | 'USER';
+                role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
               }>;
               for (const rule of mapping) {
                 const claimValue = (profile as any)[rule.claim];

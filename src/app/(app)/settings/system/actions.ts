@@ -212,7 +212,7 @@ function isValidDomain(domain: string) {
 type RoleMappingRule = {
   claim: string;
   value: string;
-  role: 'ADMIN' | 'RESPONDER' | 'USER';
+  role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
 };
 
 function parseRoleMapping(input: string): RoleMappingRule[] {
@@ -225,7 +225,11 @@ function parseRoleMapping(input: string): RoleMappingRule[] {
     const claim = typeof candidate.claim === 'string' ? candidate.claim.trim() : '';
     const value = typeof candidate.value === 'string' ? candidate.value.trim() : '';
     const role = candidate.role;
-    if (!claim || !value || (role !== 'ADMIN' && role !== 'RESPONDER' && role !== 'USER')) {
+    if (
+      !claim ||
+      !value ||
+      (role !== 'ADMIN' && role !== 'RESPONDER' && role !== 'AUDITOR' && role !== 'USER')
+    ) {
       throw new Error('Role mappings require a claim, value, and valid role.');
     }
     return { claim, value, role };

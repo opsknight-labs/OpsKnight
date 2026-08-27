@@ -6,6 +6,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 const INSENSITIVE_MODE = 'insensitive' as const;
 
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
       return jsonError('Unauthorized', 401);
     }
 
-    const isPrivileged = currentUser.role === 'ADMIN' || currentUser.role === 'RESPONDER';
+    const isPrivileged = hasCapability(currentUser.role, CAPABILITIES.INCIDENT_READ_ALL);
     const teamIds = currentUser.teamMemberships.map(membership => membership.teamId);
     const incidentAccess = isPrivileged
       ? {}

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   getCachedDashboardMetrics,
   getCachedServiceIncidents,
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
   const incidentId = searchParams.get('incidentId');
   const serviceId = searchParams.get('serviceId');
 
-  const isPrivileged = user.role === 'ADMIN' || user.role === 'RESPONDER';
+  const isPrivileged = hasCapability(user.role, CAPABILITIES.INCIDENT_READ_ALL);
   const hasTeamAccess = (teamId?: string | null) => {
     if (isPrivileged) return true;
     if (!teamId) return false;
@@ -143,8 +144,9 @@ export async function GET(req: NextRequest) {
             let stillAuthorized =
               currentUser?.status === 'ACTIVE' &&
               (currentUser.tokenVersion ?? 0) === sessionTokenVersion;
-            const currentlyPrivileged =
-              currentUser?.role === 'ADMIN' || currentUser?.role === 'RESPONDER';
+            const currentlyPrivileged = currentUser
+              ? hasCapability(currentUser.role, CAPABILITIES.INCIDENT_READ_ALL)
+              : false;
             if (stillAuthorized && !currentlyPrivileged && incidentId) {
               const target = await prisma.incident.findUnique({
                 where: { id: incidentId },

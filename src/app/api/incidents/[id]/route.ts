@@ -6,6 +6,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { IncidentPatchSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 type IncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return jsonError('Incident not found.', 404);
   }
 
-  if (apiUser.role !== 'ADMIN' && apiUser.role !== 'RESPONDER') {
+  if (!hasCapability(apiUser.role, CAPABILITIES.INCIDENT_READ_ALL)) {
     const teamId = incident.service?.teamId || null;
     const hasTeamMembership = teamId ? apiUser.teamIds.includes(teamId) : false;
     if (incident.assignee?.id !== apiUser.id && !hasTeamMembership) {
@@ -114,6 +115,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!apiUser) {
     return jsonError('Unauthorized. API key user not found.', 401);
   }
+  if (!hasCapability(apiUser.role, CAPABILITIES.OPERATIONS_MANAGE)) {
+    return jsonError('Forbidden. API key owner cannot manage incidents.', 403);
+  }
 
   let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
@@ -143,13 +147,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return jsonError('Incident not found.', 404);
   }
 
-  if (apiUser.role !== 'ADMIN' && apiUser.role !== 'RESPONDER') {
-    const teamId = currentIncident.service?.teamId || null;
-    const hasTeamMembership = teamId ? apiUser.teamIds.includes(teamId) : false;
-    if (currentIncident.assigneeId !== apiUser.id && !hasTeamMembership) {
-      return jsonError('Forbidden. Incident access denied.', 403);
-    }
-  }
   const status: IncidentStatus | null = parsed.data.status ?? null;
   const urgency: IncidentUrgency | null = parsed.data.urgency ?? null;
   const hasAssigneeUpdate = Object.prototype.hasOwnProperty.call(body, 'assigneeId');

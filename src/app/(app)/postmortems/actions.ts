@@ -3,6 +3,7 @@
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser, assertResponderOrAbove, getUserPermissions } from '@/lib/rbac';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   getStoredActionItemId,
   normalizeLegacyActionItems,
@@ -207,7 +208,7 @@ export async function upsertPostmortem(incidentId: string, data: PostmortemData)
  */
 export async function getPostmortem(incidentId: string) {
   const user = await getCurrentUser();
-  const canViewDrafts = user.role === 'ADMIN' || user.role === 'RESPONDER';
+  const canViewDrafts = hasCapability(user.role, CAPABILITIES.POSTMORTEM_DRAFT_READ);
   const postmortem = await prisma.postmortem.findUnique({
     where: {
       incidentId,
