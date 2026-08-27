@@ -7,6 +7,8 @@ vi.mock('@/lib/rbac', () => ({
   assertResponderOrAbove: vi.fn().mockResolvedValue(true),
   assertCanCreateIncidentForService: vi.fn().mockResolvedValue(true),
   assertCanModifyIncident: vi.fn().mockResolvedValue(true),
+  assertCanAcknowledgeIncident: vi.fn().mockResolvedValue(true),
+  assertCanAddIncidentNote: vi.fn().mockResolvedValue(true),
   getCurrentUser: vi.fn().mockResolvedValue({ id: 'user-1', name: 'Test User' }),
 }));
 

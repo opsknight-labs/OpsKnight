@@ -9,6 +9,8 @@ import {
   assertResponderOrAbove,
   assertCanModifyIncident,
   assertCanCreateIncidentForService,
+  assertCanAcknowledgeIncident,
+  assertCanAddIncidentNote,
 } from '@/lib/rbac';
 import { getUserFriendlyError } from '@/lib/user-friendly-errors';
 import { logger } from '@/lib/logger';
@@ -47,7 +49,8 @@ export async function updateIncidentStatus(
 ) {
   try {
     // Check resource-level authorization
-    await assertCanModifyIncident(id);
+    if (status === 'ACKNOWLEDGED') await assertCanAcknowledgeIncident(id);
+    else await assertResponderOrAbove();
   } catch (error) {
     throw new Error(getUserFriendlyError(error));
   }
@@ -275,7 +278,7 @@ export async function updateIncidentStatus(
 export async function resolveIncidentWithNote(id: string, resolution: string) {
   try {
     // Check resource-level authorization
-    await assertCanModifyIncident(id);
+    await assertResponderOrAbove();
   } catch (error) {
     throw new Error(getUserFriendlyError(error));
   }
@@ -403,7 +406,7 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
 export async function updateIncidentUrgency(id: string, urgency: string) {
   try {
     // Check resource-level authorization
-    await assertCanModifyIncident(id);
+    await assertResponderOrAbove();
   } catch (error) {
     throw new Error(getUserFriendlyError(error));
   }
@@ -442,7 +445,7 @@ export async function updateIncidentUrgency(id: string, urgency: string) {
 
 export async function updateIncidentPriority(id: string, priority: string | null) {
   try {
-    await assertCanModifyIncident(id);
+    await assertResponderOrAbove();
   } catch (error) {
     throw new Error(getUserFriendlyError(error));
   }
@@ -799,12 +802,7 @@ export async function createIncident(formData: FormData) {
 }
 
 export async function addNote(incidentId: string, content: string) {
-  try {
-    await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
-  await assertCanModifyIncident(incidentId);
+  await assertCanAddIncidentNote(incidentId);
   const user = await getCurrentUser();
 
   await prisma.$transaction(async tx => {
@@ -851,7 +849,7 @@ export async function addNote(incidentId: string, content: string) {
 export async function reassignIncident(incidentId: string, assigneeId: string, teamId?: string) {
   try {
     // Check resource-level authorization
-    await assertCanModifyIncident(incidentId);
+    await assertResponderOrAbove();
   } catch (error) {
     throw new Error(getUserFriendlyError(error));
   }
@@ -1105,7 +1103,7 @@ export async function removeWatcher(incidentId: string, watcherId: string) {
 
 export async function updateIncidentVisibility(id: string, visibility: 'PUBLIC' | 'PRIVATE') {
   try {
-    await assertCanModifyIncident(id);
+    await assertResponderOrAbove();
   } catch (error) {
     throw new Error(getUserFriendlyError(error));
   }

@@ -101,6 +101,8 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   ]);
   const permissions = await getUserPermissions();
   const canManageIncident = permissions.isResponderOrAbove;
+  const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
+  const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
 
   // Check if postmortem exists for this incident
   const postmortem = incident.status === 'RESOLVED' ? await getPostmortem(id) : null;
@@ -539,7 +541,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
                             user: n.user,
                             createdAt: n.createdAt,
                           }))}
-                          canManage={canManageIncident}
+                          canManage={canManageIncident || canAddIncidentNote}
                           onAddNote={handleAddNote}
                         />
                       </CardContent>
@@ -592,6 +594,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
               color: t.tag.color,
             }))}
             canManage={canManageIncident}
+            canAcknowledge={canManageIncident || canAcknowledgeIncident}
             onAcknowledge={handleAcknowledge}
             onUnacknowledge={handleUnacknowledge}
             onSnooze={handleSnooze}
