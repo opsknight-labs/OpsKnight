@@ -1,178 +1,93 @@
 ---
-order: 1
 title: Installation
-description: Install OpsKnight with Docker Compose, Helm, Kustomize, or a Node.js development checkout and verify the complete incident path.
+description: Choose the shortest install path for evaluation or the deployment path that matches production needs.
+order: 2
 ---
 
 # Installation
 
-For the fastest evaluation, use Docker Compose. For production, choose the deployment method whose database, secrets, ingress, monitoring, backup, upgrade, and recovery lifecycle your team can own.
+Use the installation method that matches what you are trying to prove.
 
-If you want the shortest end-to-end tutorial, follow [Getting started](./README). This page covers installation choices and source development.
+For a first evaluation, prefer Docker Compose. It has the fewest moving parts and is the path used by [Getting Started](./README).
 
-## Choose a method
+## Choose an install path
 
-| Method                       | Intended use                                                       | Next guide                             |
-| ---------------------------- | ------------------------------------------------------------------ | -------------------------------------- |
-| Docker Compose               | Evaluation, development, or an accepted single-host topology.      | [Docker Compose](../deployment/docker) |
-| Helm                         | Values-driven Kubernetes release managed by a platform team.       | [Helm](../deployment/helm)             |
-| Kustomize                    | Raw Kubernetes manifests with reviewed environment overlays.       | [Kustomize](../deployment/kustomize)   |
-| Node.js development checkout | Application development and local testing, not a packaged release. | [From source](#install-from-source)    |
+| Goal | Recommended path |
+| --- | --- |
+| Evaluate OpsKnight locally | Docker Compose |
+| Validate Kubernetes behavior | Kustomize profile |
+| Operate with configurable Kubernetes packaging | Helm |
+| Develop OpsKnight itself | From source |
 
-All methods require PostgreSQL. The published Compose and Kubernetes examples use PostgreSQL 15; the project declares PostgreSQL 14+ support. The production image and source package use Node.js 20 (`>=20 <21`).
+Do not start with a production-style Kubernetes deployment if your only goal is to understand the incident workflow. Prove the application path first, then introduce infrastructure complexity.
 
-## Install with Docker Compose
+## Docker Compose
 
-### 1. Prepare the repository and secrets
+Clone the repository and create a local environment file:
 
 ```bash
 git clone https://github.com/opsknight-labs/OpsKnight.git
 cd OpsKnight
 cp env.example .env
+```
+
+Generate the required application secrets:
+
+```bash
 openssl rand -base64 32
 openssl rand -hex 32
 ```
 
-Edit `.env` and paste the generated values. Dotenv files do not evaluate `$(...)` shell substitutions.
+Set at least:
 
 ```dotenv
-POSTGRES_USER=opsknight
-POSTGRES_PASSWORD=replace-with-a-long-database-password
-POSTGRES_DB=opsknight_db
-NEXTAUTH_URL=http://localhost:3000
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXTAUTH_SECRET=replace-with-the-base64-output
-ENCRYPTION_KEY=replace-with-the-64-hex-character-output
-APP_PORT=3000
-```
-
-For a production origin, use the exact public HTTPS URL for both URL settings and store the secrets outside the repository. Keep `ENCRYPTION_KEY` stable and backed up; it is required to decrypt stored provider credentials.
-
-### 2. Render, start, and inspect
-
-```bash
-docker compose config
-docker compose pull
-docker compose up -d
-docker compose ps
-docker compose logs --tail=200 opsknight-app
-curl --fail 'http://localhost:3000/api/health?mode=readiness'
-```
-
-The Compose stack runs the application plus PostgreSQL 15 in the `opsknight_postgres_data` named volume. The application startup attempts database migrations. Inspect migration logs even when the container is running, because startup can continue after repeated migration failure.
-
-### 3. Bootstrap the first Admin
-
-Open `http://localhost:3000`. When no users exist, OpsKnight redirects to `/setup`.
-
-1. Enter the first Admin's name and email.
-2. Create the account.
-3. Copy the generated password; it is shown once.
-4. Sign in, change the generated password, and create a second Admin.
-
-Setup stops accepting another bootstrap after the first user exists.
-
-### 4. Verify a product workflow
-
-Do not stop at the login page:
-
-1. Create a team, schedule, escalation policy, and service.
-2. Create a controlled incident for that service.
-3. Confirm the expected assignment/escalation state.
-4. Acknowledge and resolve it.
-5. After configuring a provider, verify an external notification and its history.
-
-The [15-minute getting-started path](./README) gives the exact UI sequence.
-
-## Install on Kubernetes
-
-Use one packaging path:
-
-- [Helm](../deployment/helm) for the chart at `helm/opsknight`.
-- [Kustomize](../deployment/kustomize) for overlays based on `k8s/kustomization.yaml`.
-
-Both checked-in defaults contain example or placeholder values. Before applying, pin an image, replace every secret, configure the exact public HTTPS origin, choose an owned PostgreSQL topology, render/server-dry-run resources, and define backup/recovery. See [Kubernetes deployment](../deployment/kubernetes) for the shared runtime and scaling boundaries.
-
-## Install from source
-
-Use this path for contribution and development. It is not a substitute for the tested production image/entrypoint.
-
-### Prerequisites
-
-- Node.js 20 and npm.
-- PostgreSQL 14+ reachable from the host.
-- Build tools required by Node dependencies on your operating system.
-
-### Set up the application
-
-```bash
-git clone https://github.com/opsknight-labs/OpsKnight.git
-cd OpsKnight
-npm ci
-cp env.example .env
-openssl rand -base64 32
-openssl rand -hex 32
-```
-
-Edit `.env`. For PostgreSQL exposed from Compose to the development host, the hostname is `localhost`, not the container-only `opsknight-db` name:
-
-```dotenv
-DATABASE_URL=postgresql://opsknight:YOUR_PASSWORD@localhost:5432/opsknight_db?sslmode=prefer
 NEXTAUTH_URL=http://localhost:3000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXTAUTH_SECRET=PASTE_BASE64_OUTPUT
 ENCRYPTION_KEY=PASTE_64_HEX_CHARACTER_OUTPUT
 ```
 
-Create or select a disposable development database, then:
+Then start OpsKnight:
 
 ```bash
-npx prisma validate
-npx prisma generate
-npx prisma migrate deploy
-npm run dev
+docker compose up -d
 ```
 
-Open `http://localhost:3000`, bootstrap the Admin, and run the same controlled incident workflow. Production builds use `npm run build`; use the packaged deployment guides for an operated installation.
+Open `http://localhost:3000` and complete `/setup`.
 
-## Common installation failures
+For the complete first-run workflow, return to [Getting Started](./README).
 
-### PostgreSQL is unhealthy or unreachable
+## Kubernetes
+
+OpsKnight includes Kubernetes deployment assets for environments that need separate runtime roles, horizontal web scaling, and database connection management.
+
+Before production use:
+
+- use a persistent PostgreSQL deployment appropriate for your environment;
+- configure secrets through your platform's secret-management mechanism rather than committing them;
+- set the public application URLs to the externally reachable HTTPS address;
+- verify web, worker, and scheduler roles are healthy;
+- test ingress, DNS, TLS, storage, and backup behavior independently of the application;
+- run a synthetic incident after deployment to verify the entire path.
+
+Use the [Deployment](../deployment) documentation for the specific profile and operational details.
+
+## From source
+
+Use a source install when developing OpsKnight or debugging application behavior.
+
+Follow the repository's development prerequisites and environment example rather than treating a development server as a production deployment.
+
+## Verify any installation
+
+After startup, check the application health endpoint:
 
 ```bash
-docker compose ps
-docker compose logs --tail=200 opsknight-db
-docker compose exec -T opsknight-db \
-  pg_isready -U "${POSTGRES_USER:-opsknight}" -d "${POSTGRES_DB:-opsknight_db}"
+curl -s http://localhost:3000/api/health
 ```
 
-Check database credentials, hostname, port, disk/volume state, TLS requirements, and application migration logs. Inside the application container, `localhost` refers to that container, not PostgreSQL.
+Then create a synthetic incident. Infrastructure health alone does not prove that service ownership, escalation, event ingestion, and incident lifecycle behavior are configured correctly.
 
-### Port 3000 is already used
+## Next step
 
-Set a different host port without changing the container port:
-
-```dotenv
-APP_PORT=3001
-NEXTAUTH_URL=http://localhost:3001
-NEXT_PUBLIC_APP_URL=http://localhost:3001
-```
-
-Recreate the application and open port 3001.
-
-### Login redirects repeatedly
-
-The browser origin must exactly match `NEXTAUTH_URL`, including scheme and port. Behind a proxy, forward the original host and scheme. Keep the same `NEXTAUTH_SECRET` across restarts/replicas; replacing it invalidates existing sessions and does not fix an origin mismatch.
-
-### You need a clean disposable database
-
-Do not use `docker compose down -v` as a routine troubleshooting command: `-v` deletes the named PostgreSQL volume. For a disposable install only, first confirm the Compose project/volume target and that no data or backup is needed. Production recovery must use the [backup and restore](../deployment/backup-restore) runbook.
-
-## Next steps
-
-- [First steps](./first-steps) — first-week configuration.
-- [Configuration reference](./configuration) — supported environment behavior.
-- [Authentication](../administration/authentication) — bootstrap, OIDC, sessions, and recovery.
-- [Monitoring](../deployment/monitoring) — readiness, logs, and synthetic validation.
-- [Upgrade and rollback](../deployment/upgrade-rollback) — controlled release workflow.
-- [Troubleshooting](../troubleshooting) — application and integration diagnosis.
+Continue with [Getting Started](./README) and verify one complete incident lifecycle before adding optional integrations or production controls.
