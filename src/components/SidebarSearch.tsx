@@ -3,6 +3,7 @@
 import { logger } from '@/lib/logger';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { useModalState } from '@/hooks/useModalState';
 import { Command as CommandPrimitive } from 'cmdk';
 import {
@@ -145,6 +146,7 @@ export default function SidebarSearch() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const router = useRouter();
+  const { openCreateIncident } = useCreateIncidentModal();
 
   useEffect(() => {
     try {
@@ -239,7 +241,11 @@ export default function SidebarSearch() {
   const handleSelect = useCallback(
     (value: string, item?: any) => {
       if (item?.href) {
-        router.push(item.href);
+        if (item.href === '/incidents/create' || item.id === 'qa-create') {
+          openCreateIncident();
+        } else {
+          router.push(item.href);
+        }
         if (query.length >= 2) {
           saveRecentSearch(query, results.length);
         }
@@ -251,7 +257,7 @@ export default function SidebarSearch() {
         // Ensure it triggers search
       }
     },
-    [router, query, results.length, saveRecentSearch]
+    [router, openCreateIncident, query, results.length, saveRecentSearch]
   );
 
   const groupedResults = useMemo(() => {

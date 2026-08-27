@@ -2,6 +2,7 @@
 
 import { useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import {
@@ -55,6 +56,7 @@ export default function IncidentsFilters({
   canCreateIncident = false,
 }: IncidentsFiltersProps) {
   const router = useRouter();
+  const { openCreateIncident } = useCreateIncidentModal();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
@@ -132,7 +134,7 @@ export default function IncidentsFilters({
                 size="sm"
                 className="h-7 px-3 text-xs"
                 onClick={() => {
-                  router.push('/incidents/create');
+                  openCreateIncident();
                 }}
               >
                 Create incident
