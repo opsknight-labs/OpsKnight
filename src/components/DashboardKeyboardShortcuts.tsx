@@ -97,7 +97,7 @@ export default function DashboardKeyboardShortcuts({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [router, onRefresh, onExport]);
+  }, [router, onRefresh, onExport, openCreateIncident]);
 
   return (
     <>

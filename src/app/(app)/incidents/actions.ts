@@ -1168,6 +1168,6 @@ export async function getIncidentCreationContext() {
     users,
     teams,
     customFields,
-    templates: templates as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    templates,
   };
 }
