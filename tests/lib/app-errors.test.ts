@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
 import {
   AppError,
   ERROR_REGISTRY,
   normalizeError,
   toPublicAppError,
 } from '@/lib/errors';
+import { getUserFriendlyError } from '@/lib/user-friendly-errors';
 
 describe('AppError', () => {
   it('derives stable defaults from the error registry', () => {
@@ -71,6 +73,33 @@ describe('AppError', () => {
     expect(error.status).toBe(403);
     expect(error.userMessage).toBe('Access denied by policy.');
     expect(error.cause).toBe(legacyTypedError);
+  });
+
+  it('uses AppError as the authorization contract without changing legacy messages', () => {
+    const error = new AuthorizationError(
+      'Unauthorized. Responder access or above required.',
+      CAPABILITIES.OPERATIONS_MANAGE
+    );
+
+    expect(error).toBeInstanceOf(AppError);
+    expect(error.code).toBe('AUTHORIZATION_DENIED');
+    expect(error.status).toBe(403);
+    expect(error.details).toEqual({ capability: CAPABILITIES.OPERATIONS_MANAGE });
+    expect(getUserFriendlyError(error)).toBe('Unauthorized. Responder access or above required.');
+  });
+
+  it('registers lifecycle codes so existing domain errors normalize without losing identity', () => {
+    const lifecycleError = Object.assign(new Error('Incident changed; refresh before updating.'), {
+      code: 'INCIDENT_STATE_CONFLICT' as const,
+      status: 409,
+      details: { incidentId: 'inc-1', expectedStatus: 'OPEN', actualStatus: 'ACKNOWLEDGED' },
+    });
+
+    const error = normalizeError(lifecycleError);
+
+    expect(error.code).toBe('INCIDENT_STATE_CONFLICT');
+    expect(error.status).toBe(409);
+    expect(error.userMessage).toBe('Incident changed; refresh before updating.');
   });
 
   it('keeps internal details out of the public serializer', () => {
@@ -143,5 +172,14 @@ describe('AppError', () => {
         message: 'Title is required.',
       },
     ]);
+  });
+
+  it('uses distinct machine identities for core incident and schedule access failures', () => {
+    expect(ERROR_REGISTRY.INCIDENT_NOT_FOUND.status).toBe(404);
+    expect(ERROR_REGISTRY.INCIDENT_ACCESS_DENIED.status).toBe(403);
+    expect(ERROR_REGISTRY.INCIDENT_MODIFY_DENIED.status).toBe(403);
+    expect(ERROR_REGISTRY.SCHEDULE_NOT_FOUND.status).toBe(404);
+    expect(ERROR_REGISTRY.SCHEDULE_ACCESS_DENIED.status).toBe(403);
+    expect(ERROR_REGISTRY.SCHEDULE_LAYER_USER_DUPLICATE.status).toBe(409);
   });
 });
