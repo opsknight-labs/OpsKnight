@@ -5,6 +5,75 @@ import { revalidatePath } from 'next/cache';
 import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
+import {
+  executeIncidentLifecycleBatch,
+  executeIncidentLifecycleTargetBatch,
+  type IncidentLifecycleCommand,
+  type IncidentLifecycleResult,
+} from '@/lib/incidents/lifecycle';
+
+type BulkLifecycleStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
+
+function changedIncidentIds(results: readonly IncidentLifecycleResult[]): string[] {
+  return results.filter(result => result.changed).map(result => result.incidentId);
+}
+
+type BulkLifecycleActor = { id: string; name?: string };
+
+async function runBulkLifecycleCommand(
+  incidentIds: string[],
+  command: IncidentLifecycleCommand,
+  actor: BulkLifecycleActor,
+  eventMessage: string,
+  extra: Partial<{
+    snoozedUntil: Date;
+    snoozeReason: string | null;
+  }> = {}
+): Promise<string[]> {
+  const results = await executeIncidentLifecycleBatch(
+    incidentIds.map(incidentId => ({
+      incidentId,
+      command,
+      source: 'BULK' as const,
+      actor,
+      eventMessage,
+      ...extra,
+    }))
+  );
+  return changedIncidentIds(results);
+}
+
+async function runBulkLifecycleTarget(
+  incidentIds: string[],
+  status: BulkLifecycleStatus,
+  actor: BulkLifecycleActor,
+  eventMessage: string
+): Promise<string[]> {
+  const results = await executeIncidentLifecycleTargetBatch(
+    incidentIds.map(incidentId => ({
+      incidentId,
+      status,
+      source: 'BULK' as const,
+      actor,
+      eventMessage,
+    }))
+  );
+  return changedIncidentIds(results);
+}
+
+async function loadIncidentsForLifecycleEffects(incidentIds: string[]) {
+  if (incidentIds.length === 0) return [];
+
+  return prisma.incident.findMany({
+    where: { id: { in: incidentIds } },
+    include: {
+      service: { select: { id: true, name: true } },
+      assignee: {
+        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+      },
+    },
+  });
+}
 
 export async function bulkAcknowledge(incidentIds: string[]) {
   if (!incidentIds || incidentIds.length === 0) {
@@ -19,48 +88,15 @@ export async function bulkAcknowledge(incidentIds: string[]) {
 
   try {
     const user = await getCurrentUser();
-    const changedIncidentIds = await prisma.$transaction(async tx => {
-      const eligible = await tx.incident.findMany({
-        where: {
-          id: { in: incidentIds },
-          status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] },
-        },
-        select: { id: true },
-      });
-      const eligibleIds = eligible.map(incident => incident.id);
-      if (eligibleIds.length === 0) return [];
+    const changedIds = await runBulkLifecycleCommand(
+      incidentIds,
+      'ACKNOWLEDGE',
+      { id: user.id, name: user.name ?? undefined },
+      `Bulk acknowledged${user ? ` by ${user.name}` : ''}`
+    );
 
-      await tx.incident.updateMany({
-        where: { id: { in: eligibleIds } },
-        data: {
-          status: 'ACKNOWLEDGED',
-          acknowledgedAt: new Date(),
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-        },
-      });
-      await tx.incidentEvent.createMany({
-        data: eligibleIds.map(incidentId => ({
-          incidentId,
-          type: 'ACKNOWLEDGED',
-          message: `Bulk acknowledged${user ? ` by ${user.name}` : ''}`,
-        })),
-      });
-      return eligibleIds;
-    });
+    const incidents = await loadIncidentsForLifecycleEffects(changedIds);
 
-    // Notify only incidents that were actually eligible and changed.
-    const incidents = await prisma.incident.findMany({
-      where: { id: { in: changedIncidentIds } },
-      include: {
-        service: { select: { id: true, name: true } },
-        assignee: {
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-        },
-      },
-    });
-
-    // Send notifications in parallel
     const { sendIncidentNotifications } = await import('@/lib/user-notifications');
     const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
     const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
@@ -84,11 +120,11 @@ export async function bulkAcknowledge(incidentIds: string[]) {
               acknowledgedAt: incident.acknowledgedAt?.toISOString() || new Date().toISOString(),
             }),
           ]);
-        } catch (e) {
+        } catch (error) {
           logger.error('Failed to send notifications for incident', {
             component: 'bulk-actions',
             action: 'acknowledge',
-            error: e,
+            error,
             incidentId: incident.id,
           });
         }
@@ -97,7 +133,7 @@ export async function bulkAcknowledge(incidentIds: string[]) {
 
     revalidatePath('/incidents');
     revalidatePath('/');
-    return { success: true, count: changedIncidentIds.length };
+    return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk acknowledge failed', { component: 'bulk-actions', error, incidentIds });
     return { success: false, error: 'Failed to acknowledge incidents' };
@@ -117,37 +153,15 @@ export async function bulkResolve(incidentIds: string[]) {
 
   try {
     const user = await getCurrentUser();
-    await prisma.$transaction(async tx => {
-      await tx.incident.updateMany({
-        where: { id: { in: incidentIds } },
-        data: {
-          status: 'RESOLVED',
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-          resolvedAt: new Date(),
-        },
-      });
-      await tx.incidentEvent.createMany({
-        data: incidentIds.map(incidentId => ({
-          incidentId,
-          type: 'MANUAL_RESOLVED',
-          message: `Bulk resolved${user ? ` by ${user.name}` : ''}`,
-        })),
-      });
-    });
+    const changedIds = await runBulkLifecycleCommand(
+      incidentIds,
+      'RESOLVE',
+      { id: user.id, name: user.name ?? undefined },
+      `Bulk resolved${user ? ` by ${user.name}` : ''}`
+    );
 
-    // Fetch all incidents in a single query for notifications and webhooks
-    const incidents = await prisma.incident.findMany({
-      where: { id: { in: incidentIds } },
-      include: {
-        service: { select: { id: true, name: true } },
-        assignee: {
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-        },
-      },
-    });
+    const incidents = await loadIncidentsForLifecycleEffects(changedIds);
 
-    // Send notifications & archive war-room channels in parallel
     const { sendIncidentNotifications } = await import('@/lib/user-notifications');
     const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
     const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
@@ -159,10 +173,10 @@ export async function bulkResolve(incidentIds: string[]) {
           await Promise.all([
             sendIncidentNotifications(incident.id, 'resolved'),
             notifyStatusPageSubscribers(incident.id, 'resolved'),
-            archiveWarRoomChannel(incident.id).catch(err =>
+            archiveWarRoomChannel(incident.id).catch(error =>
               logger.warn('[ChatOps] Failed to archive war-room channel on bulk resolve', {
                 incidentId: incident.id,
-                error: err,
+                error,
               })
             ),
             triggerWebhooksForService(incident.serviceId, 'incident.resolved', {
@@ -178,11 +192,11 @@ export async function bulkResolve(incidentIds: string[]) {
               resolvedAt: incident.resolvedAt?.toISOString() || new Date().toISOString(),
             }),
           ]);
-        } catch (e) {
+        } catch (error) {
           logger.error('Failed to send notifications for incident', {
             component: 'bulk-actions',
             action: 'resolve',
-            error: e,
+            error,
             incidentId: incident.id,
           });
         }
@@ -191,7 +205,7 @@ export async function bulkResolve(incidentIds: string[]) {
 
     revalidatePath('/incidents');
     revalidatePath('/');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk resolve failed', { component: 'bulk-actions', error, incidentIds });
     return { success: false, error: 'Failed to resolve incidents' };
@@ -233,7 +247,6 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
       });
     });
 
-    // Fetch all incidents in a single query for notifications and webhooks
     const incidents = await prisma.incident.findMany({
       where: { id: { in: incidentIds } },
       include: {
@@ -244,7 +257,6 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
       },
     });
 
-    // Send notifications in parallel
     const { sendIncidentNotifications } = await import('@/lib/user-notifications');
     const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
 
@@ -265,11 +277,11 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
               createdAt: incident.createdAt.toISOString(),
             }),
           ]);
-        } catch (e) {
+        } catch (error) {
           logger.error('Failed to send notifications for incident', {
             component: 'bulk-actions',
             action: 'reassign',
-            error: e,
+            error,
             incidentId: incident.id,
           });
         }
@@ -344,38 +356,19 @@ export async function bulkSnooze(
   }
 
   try {
-    const snoozedUntil = new Date(Date.now() + durationMinutes * 60 * 1000);
-
-    // Update all selected incidents
-    await prisma.incident.updateMany({
-      where: {
-        id: { in: incidentIds },
-        status: { notIn: ['RESOLVED'] }, // Don't snooze resolved incidents
-      },
-      data: {
-        status: 'SNOOZED',
-        snoozedUntil,
-        snoozeReason: reason,
-        escalationStatus: 'PAUSED',
-        nextEscalationAt: null,
-      },
-    });
-
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
+    const snoozedUntil = new Date(Date.now() + durationMinutes * 60 * 1000);
     const userTimeZone = getUserTimeZone(user ?? undefined);
-    await prisma.incidentEvent
-      .createMany({
-        data: incidentIds.map(incidentId => ({
-          incidentId,
-          message: `Bulk snoozed until ${formatDateTime(snoozedUntil, userTimeZone, { format: 'datetime' })}${reason ? `: ${reason}` : ''}${user ? ` by ${user.name}` : ''}`,
-        })),
-        skipDuplicates: true,
-      })
-      .catch(() => {}); // Ignore errors if incident was already resolved
+    const changedIds = await runBulkLifecycleCommand(
+      incidentIds,
+      'SNOOZE',
+      { id: user.id, name: user.name ?? undefined },
+      `Bulk snoozed until ${formatDateTime(snoozedUntil, userTimeZone, { format: 'datetime' })}${reason ? `: ${reason}` : ''}${user ? ` by ${user.name}` : ''}`,
+      { snoozedUntil, snoozeReason: reason }
+    );
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk snooze failed', {
       component: 'bulk-actions',
@@ -399,35 +392,16 @@ export async function bulkUnsnooze(incidentIds: string[]) {
   }
 
   try {
-    // Update all selected incidents
-    await prisma.incident.updateMany({
-      where: {
-        id: { in: incidentIds },
-        status: 'SNOOZED',
-      },
-      data: {
-        status: 'OPEN',
-        snoozedUntil: null,
-        snoozeReason: null,
-        escalationStatus: 'ESCALATING',
-        nextEscalationAt: new Date(),
-      },
-    });
-
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
-    await prisma.incidentEvent
-      .createMany({
-        data: incidentIds.map(incidentId => ({
-          incidentId,
-          message: `Bulk unsnoozed${user ? ` by ${user.name}` : ''}`,
-        })),
-        skipDuplicates: true,
-      })
-      .catch(() => {}); // Ignore errors if incident wasn't snoozed
+    const changedIds = await runBulkLifecycleCommand(
+      incidentIds,
+      'UNSNOOZE',
+      { id: user.id, name: user.name ?? undefined },
+      `Bulk unsnoozed${user ? ` by ${user.name}` : ''}`
+    );
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk unsnooze failed', { component: 'bulk-actions', error, incidentIds });
     return { success: false, error: 'Failed to unsnooze incidents' };
@@ -446,33 +420,16 @@ export async function bulkSuppress(incidentIds: string[]) {
   }
 
   try {
-    // Update all selected incidents
-    await prisma.incident.updateMany({
-      where: {
-        id: { in: incidentIds },
-        status: { notIn: ['RESOLVED'] }, // Don't suppress resolved incidents
-      },
-      data: {
-        status: 'SUPPRESSED',
-        escalationStatus: 'PAUSED',
-        nextEscalationAt: null,
-      },
-    });
-
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
-    await prisma.incidentEvent
-      .createMany({
-        data: incidentIds.map(incidentId => ({
-          incidentId,
-          message: `Bulk suppressed${user ? ` by ${user.name}` : ''}`,
-        })),
-        skipDuplicates: true,
-      })
-      .catch(() => {}); // Ignore errors if incident was already resolved
+    const changedIds = await runBulkLifecycleCommand(
+      incidentIds,
+      'SUPPRESS',
+      { id: user.id, name: user.name ?? undefined },
+      `Bulk suppressed${user ? ` by ${user.name}` : ''}`
+    );
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk suppress failed', { component: 'bulk-actions', error, incidentIds });
     return { success: false, error: 'Failed to suppress incidents' };
@@ -491,33 +448,16 @@ export async function bulkUnsuppress(incidentIds: string[]) {
   }
 
   try {
-    // Update all selected incidents
-    await prisma.incident.updateMany({
-      where: {
-        id: { in: incidentIds },
-        status: 'SUPPRESSED',
-      },
-      data: {
-        status: 'OPEN',
-        escalationStatus: 'ESCALATING',
-        nextEscalationAt: new Date(),
-      },
-    });
-
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
-    await prisma.incidentEvent
-      .createMany({
-        data: incidentIds.map(incidentId => ({
-          incidentId,
-          message: `Bulk unsuppressed${user ? ` by ${user.name}` : ''}`,
-        })),
-        skipDuplicates: true,
-      })
-      .catch(() => {}); // Ignore errors if incident wasn't suppressed
+    const changedIds = await runBulkLifecycleCommand(
+      incidentIds,
+      'UNSUPPRESS',
+      { id: user.id, name: user.name ?? undefined },
+      `Bulk unsuppressed${user ? ` by ${user.name}` : ''}`
+    );
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk unsuppress failed', { component: 'bulk-actions', error, incidentIds });
     return { success: false, error: 'Failed to unsuppress incidents' };
@@ -536,7 +476,6 @@ export async function bulkUpdateUrgency(incidentIds: string[], urgency: 'HIGH' |
   }
 
   try {
-    // Update all selected incidents
     await prisma.incident.updateMany({
       where: {
         id: { in: incidentIds },
@@ -544,7 +483,6 @@ export async function bulkUpdateUrgency(incidentIds: string[], urgency: 'HIGH' |
       data: { urgency },
     });
 
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
     await prisma.incidentEvent.createMany({
       data: incidentIds.map(incidentId => ({
@@ -566,10 +504,7 @@ export async function bulkUpdateUrgency(incidentIds: string[], urgency: 'HIGH' |
   }
 }
 
-export async function bulkUpdateStatus(
-  incidentIds: string[],
-  status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED'
-) {
+export async function bulkUpdateStatus(incidentIds: string[], status: BulkLifecycleStatus) {
   if (!incidentIds || incidentIds.length === 0) {
     return { success: false, error: 'No incidents selected' };
   }
@@ -581,106 +516,19 @@ export async function bulkUpdateStatus(
   }
 
   try {
-    if (status === 'OPEN') {
-      const incidents = await prisma.incident.findMany({
-        where: { id: { in: incidentIds } },
-        select: {
-          id: true,
-          status: true,
-          currentEscalationStep: true,
-          acknowledgedAt: true,
-          resolvedAt: true,
-          service: {
-            select: {
-              policy: {
-                select: {
-                  steps: {
-                    orderBy: { stepOrder: 'asc' },
-                    select: { delayMinutes: true },
-                  },
-                },
-              },
-            },
-          },
-        },
-      });
-
-      for (const incident of incidents) {
-        let nextEscalationAt: Date | null = new Date();
-        if (incident.status === 'ACKNOWLEDGED') {
-          const stepIndex = incident.currentEscalationStep ?? 0;
-          const steps = incident.service?.policy?.steps ?? [];
-          const step = steps.find((_, index) => index === stepIndex);
-          const delayMinutes = step?.delayMinutes ?? 0;
-          nextEscalationAt = new Date(Date.now() + delayMinutes * 60 * 1000);
-        }
-
-        await prisma.incident.update({
-          where: { id: incident.id },
-          data: {
-            status,
-            escalationStatus: 'ESCALATING',
-            nextEscalationAt,
-            acknowledgedAt:
-              incident.status === 'ACKNOWLEDGED' || incident.status === 'RESOLVED'
-                ? null
-                : incident.acknowledgedAt,
-            resolvedAt: incident.status === 'RESOLVED' ? null : incident.resolvedAt,
-            currentEscalationStep:
-              incident.status === 'RESOLVED' ? 0 : incident.currentEscalationStep,
-          },
-        });
-      }
-    } else {
-      const updateData: any = { status }; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-      if (status === 'ACKNOWLEDGED') {
-        updateData.acknowledgedAt = new Date();
-        updateData.escalationStatus = 'COMPLETED';
-        updateData.nextEscalationAt = null;
-      } else if (status === 'RESOLVED') {
-        updateData.resolvedAt = new Date();
-        updateData.escalationStatus = 'COMPLETED';
-        updateData.nextEscalationAt = null;
-      } else if (status === 'SNOOZED' || status === 'SUPPRESSED') {
-        updateData.escalationStatus = 'PAUSED';
-        updateData.nextEscalationAt = null;
-      }
-
-      await prisma.incident.updateMany({
-        where: {
-          id: { in: incidentIds },
-        },
-        data: updateData,
-      });
-    }
-
-    // Log events for each incident (batch create)
     const user = await getCurrentUser();
-    await prisma.incidentEvent.createMany({
-      data: incidentIds.map(incidentId => ({
-        incidentId,
-        message: `Bulk status updated to ${status}${user ? ` by ${user.name}` : ''}`,
-      })),
-    });
+    const changedIds = await runBulkLifecycleTarget(
+      incidentIds,
+      status,
+      { id: user.id, name: user.name ?? undefined },
+      `Bulk status updated to ${status}${user ? ` by ${user.name}` : ''}`
+    );
 
-    // Fetch all incidents in a single query for notifications and webhooks
-    const incidents = await prisma.incident.findMany({
-      where: { id: { in: incidentIds } },
-      include: {
-        service: { select: { id: true, name: true } },
-        assignee: {
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-        },
-      },
-    });
-
-    // Send notifications in parallel
+    const incidents = await loadIncidentsForLifecycleEffects(changedIds);
     const { sendIncidentNotifications } = await import('@/lib/user-notifications');
     const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
     const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
 
-    // Determine event type once
     let eventType = 'incident.updated';
     if (status === 'RESOLVED') eventType = 'incident.resolved';
     else if (status === 'ACKNOWLEDGED') eventType = 'incident.acknowledged';
@@ -702,10 +550,10 @@ export async function bulkUpdateStatus(
             notificationPromises.push(
               sendIncidentNotifications(incident.id, 'resolved'),
               notifyStatusPageSubscribers(incident.id, 'resolved'),
-              archiveWarRoomChannel(incident.id).catch(err =>
+              archiveWarRoomChannel(incident.id).catch(error =>
                 logger.warn('[ChatOps] Failed to archive war-room channel on bulk status update', {
                   incidentId: incident.id,
-                  error: err,
+                  error,
                 })
               )
             );
@@ -730,11 +578,11 @@ export async function bulkUpdateStatus(
           );
 
           await Promise.all(notificationPromises);
-        } catch (e) {
+        } catch (error) {
           logger.error('Failed to send notifications for incident', {
             component: 'bulk-actions',
             action: 'status-update',
-            error: e,
+            error,
             incidentId: incident.id,
             status,
           });
@@ -743,7 +591,7 @@ export async function bulkUpdateStatus(
     );
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: changedIds.length };
   } catch (error) {
     logger.error('Bulk status update failed', {
       component: 'bulk-actions',
