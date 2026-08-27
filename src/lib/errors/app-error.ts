@@ -1,4 +1,10 @@
-import { ERROR_REGISTRY, isAppErrorCode, type AppErrorCode, type ErrorExposure } from './registry';
+import {
+  ERROR_REGISTRY,
+  isAppErrorCode,
+  type AppErrorCode,
+  type ErrorDefinition,
+  type ErrorExposure,
+} from './registry';
 
 export type ErrorField = {
   field: string;
@@ -38,7 +44,7 @@ export class AppError extends Error {
   readonly cause?: unknown;
 
   constructor(options: AppErrorOptions) {
-    const definition = ERROR_REGISTRY[options.code];
+    const definition: ErrorDefinition = ERROR_REGISTRY[options.code];
     const userMessage = options.userMessage ?? definition.userMessage;
 
     super(userMessage);
