@@ -193,6 +193,30 @@ export async function assertCanCreateIncidentForService(serviceId: string) {
   return user;
 }
 
+export async function assertCanAcknowledgeIncident(incidentId: string) {
+  const user = await getCurrentUser();
+  if (hasCapability(user.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE)) return user;
+  if (!hasCapability(user.role as AppRole, CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED)) {
+    throw new AuthorizationError(
+      'Unauthorized. Incident acknowledgement access required.',
+      CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED
+    );
+  }
+  return assertCanViewIncident(incidentId);
+}
+
+export async function assertCanAddIncidentNote(incidentId: string) {
+  const user = await getCurrentUser();
+  if (hasCapability(user.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE)) return user;
+  if (!hasCapability(user.role as AppRole, CAPABILITIES.INCIDENT_NOTE_SCOPED)) {
+    throw new AuthorizationError(
+      'Unauthorized. Incident note access required.',
+      CAPABILITIES.INCIDENT_NOTE_SCOPED
+    );
+  }
+  return assertCanViewIncident(incidentId);
+}
+
 export async function getUserPermissions() {
   try {
     const user = await getCurrentUser();

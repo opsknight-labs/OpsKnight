@@ -23,7 +23,9 @@ The implementation uses a central capability registry in `src/lib/authorization.
 
 The central v1.5 checks allow a regular `USER` to:
 
-- view or modify an incident when assigned to it or a member of the service's owning team;
+- create incidents for services owned by teams they belong to;
+- acknowledge and add notes to incidents available through their assignment or team scope;
+- view an incident when assigned to it or a member of the service's owning team;
 - modify a service when a member of its owning team;
 - view a schedule when assigned to a layer or referenced by an override;
 - read scoped service/team metrics only for teams they belong to.

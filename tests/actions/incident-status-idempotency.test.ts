@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   runSerializableTransaction: vi.fn(),
   assertCanModifyIncident: vi.fn(),
+  assertCanAcknowledgeIncident: vi.fn(),
   getCurrentUser: vi.fn(),
   sendIncidentNotifications: vi.fn(),
   scheduleStatusPageNotification: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('@/lib/db-utils', () => ({
 
 vi.mock('@/lib/rbac', () => ({
   assertCanModifyIncident: mocks.assertCanModifyIncident,
+  assertCanAcknowledgeIncident: mocks.assertCanAcknowledgeIncident,
   assertResponderOrAbove: vi.fn(),
   getCurrentUser: mocks.getCurrentUser,
 }));

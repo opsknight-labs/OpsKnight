@@ -14,6 +14,8 @@ export const CAPABILITIES = {
   OPERATIONS_MANAGE: 'operations.manage',
   INCIDENT_CREATE_ALL: 'incident.create.all',
   INCIDENT_CREATE_SCOPED: 'incident.create.scoped',
+  INCIDENT_ACKNOWLEDGE_SCOPED: 'incident.acknowledge.scoped',
+  INCIDENT_NOTE_SCOPED: 'incident.note.scoped',
   INCIDENT_READ_ALL: 'incident.read.all',
   INCIDENT_READ_SCOPED: 'incident.read.scoped',
   INCIDENT_EXPORT: 'incident.export',
@@ -75,6 +77,8 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.INCIDENT_CREATE_SCOPED,
+  CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED,
+  CAPABILITIES.INCIDENT_NOTE_SCOPED,
   CAPABILITIES.INCIDENT_READ_SCOPED,
   CAPABILITIES.SERVICE_READ_SCOPED,
   CAPABILITIES.METRICS_READ_SCOPED,
