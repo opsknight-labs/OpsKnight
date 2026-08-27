@@ -8,6 +8,12 @@ interface StatusPageSubscribeProps {
     onSuccess?: () => void;
 }
 
+function getApiErrorMessage(payload: unknown): string | null {
+    if (!payload || typeof payload !== 'object' || !('error' in payload)) return null;
+    const message = (payload as { error?: unknown }).error;
+    return typeof message === 'string' && message.trim() ? message : null;
+}
+
 export default function StatusPageSubscribe({ statusPageId, onSuccess }: StatusPageSubscribeProps) {
     const [email, setEmail] = useState('');
     const [isPending, startTransition] = useTransition();
@@ -35,8 +41,17 @@ export default function StatusPageSubscribe({ statusPageId, onSuccess }: StatusP
                 });
 
                 if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(data.error || 'Failed to subscribe');
+                    // The API response contract owns the public error message. Do not
+                    // re-wrap it as an arbitrary Error because unmatched exception
+                    // messages are intentionally treated as untrusted by AppError.
+                    let message = 'Failed to subscribe';
+                    try {
+                        message = getApiErrorMessage(await response.json()) ?? message;
+                    } catch {
+                        // Malformed/non-JSON error responses fall back to generic copy.
+                    }
+                    setError(message);
+                    return;
                 }
 
                 setSuccess(true);
@@ -44,7 +59,7 @@ export default function StatusPageSubscribe({ statusPageId, onSuccess }: StatusP
                 if (onSuccess) {
                     onSuccess();
                 }
-            } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+            } catch (err: unknown) {
                 const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
                 setError(getUserFriendlyError(err) || 'Failed to subscribe');
             }
@@ -99,4 +114,3 @@ export default function StatusPageSubscribe({ statusPageId, onSuccess }: StatusP
         </form>
     );
 }
-
