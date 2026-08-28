@@ -7,7 +7,7 @@ import {
 } from '@/lib/errors';
 
 export type ScheduleActionState = {
-  error?: string | null;
+  error?: string;
   success?: boolean;
   code?: AppErrorCode;
   action?: string;
