@@ -142,7 +142,7 @@ describe('incident lifecycle command engine', () => {
         expectedStatus: 'OPEN',
         now: NOW,
       })
-    ).rejects.toMatchObject({ code: 'INCIDENT_STATE_CONFLICT', status: 409 });
+    ).rejects.toMatchObject({ code: 'INCIDENT_TRANSITION_CONFLICT', status: 409 });
 
     expect(tx.incident.update).not.toHaveBeenCalled();
   });

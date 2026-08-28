@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { IncidentEventType, IncidentStatus, Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import { AppError } from '@/lib/errors';
 
 export const INCIDENT_LIFECYCLE_COMMANDS = [
   'ACKNOWLEDGE',
@@ -23,32 +24,6 @@ export type IncidentLifecycleSource =
   | 'BULK'
   | 'CHATOPS'
   | 'SYSTEM';
-
-export type IncidentLifecycleErrorCode =
-  | 'INCIDENT_NOT_FOUND'
-  | 'INCIDENT_STATE_CONFLICT'
-  | 'INCIDENT_INVALID_TRANSITION'
-  | 'INCIDENT_REQUIRED_FIELDS_MISSING'
-  | 'INCIDENT_INVALID_ARGUMENT';
-
-export class IncidentLifecycleError extends Error {
-  readonly code: IncidentLifecycleErrorCode;
-  readonly status: 400 | 404 | 409 | 422;
-  readonly details?: Readonly<Record<string, unknown>>;
-
-  constructor(
-    code: IncidentLifecycleErrorCode,
-    message: string,
-    status: 400 | 404 | 409 | 422,
-    details?: Readonly<Record<string, unknown>>
-  ) {
-    super(message);
-    this.name = 'IncidentLifecycleError';
-    this.code = code;
-    this.status = status;
-    this.details = details;
-  }
-}
 
 export interface IncidentLifecycleActor {
   id?: string;
@@ -99,6 +74,14 @@ const MAX_SNOOZE_REASON_LENGTH = 1000;
 const MIN_RESOLUTION_NOTE_LENGTH = 10;
 const MAX_RESOLUTION_NOTE_LENGTH = 1000;
 
+function invalidArgument(userMessage: string, details?: Record<string, unknown>): AppError {
+  return new AppError({
+    code: 'INCIDENT_INVALID_ARGUMENT',
+    userMessage,
+    details,
+  });
+}
+
 function actorSuffix(actor?: IncidentLifecycleActor): string {
   const name = actor?.name?.trim();
   return name ? ` by ${name}` : '';
@@ -116,38 +99,24 @@ function assertInput(input: IncidentLifecycleInput): void {
     input.incidentId.length === 0 ||
     input.incidentId.length > MAX_ID_LENGTH
   ) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_INVALID_ARGUMENT',
-      'A valid incident ID is required.',
-      400
-    );
+    throw invalidArgument('A valid incident ID is required.');
   }
 
   if (
     input.eventMessage !== undefined &&
     input.eventMessage.trim().length > MAX_EVENT_MESSAGE_LENGTH
   ) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_INVALID_ARGUMENT',
-      `Lifecycle event message must be ${MAX_EVENT_MESSAGE_LENGTH} characters or fewer.`,
-      400
+    throw invalidArgument(
+      `Lifecycle event message must be ${MAX_EVENT_MESSAGE_LENGTH} characters or fewer.`
     );
   }
 
   if ((input.snoozeReason?.length ?? 0) > MAX_SNOOZE_REASON_LENGTH) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_INVALID_ARGUMENT',
-      `Snooze reason must be ${MAX_SNOOZE_REASON_LENGTH} characters or fewer.`,
-      400
-    );
+    throw invalidArgument(`Snooze reason must be ${MAX_SNOOZE_REASON_LENGTH} characters or fewer.`);
   }
 
   if (input.now !== undefined && !Number.isFinite(input.now.getTime())) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_INVALID_ARGUMENT',
-      'Lifecycle execution time is invalid.',
-      400
-    );
+    throw invalidArgument('Lifecycle execution time is invalid.');
   }
 }
 
@@ -160,10 +129,8 @@ function normalizeResolutionNote(note: string | undefined): string | undefined {
     normalized.length < MIN_RESOLUTION_NOTE_LENGTH ||
     normalized.length > MAX_RESOLUTION_NOTE_LENGTH
   ) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_INVALID_ARGUMENT',
+    throw invalidArgument(
       `Resolution note must be between ${MIN_RESOLUTION_NOTE_LENGTH} and ${MAX_RESOLUTION_NOTE_LENGTH} characters.`,
-      400,
       {
         minLength: MIN_RESOLUTION_NOTE_LENGTH,
         maxLength: MAX_RESOLUTION_NOTE_LENGTH,
@@ -179,11 +146,7 @@ function assertSnoozeInput(input: IncidentLifecycleInput, now: Date): void {
 
   const value = input.snoozedUntil.getTime();
   if (!Number.isFinite(value) || value <= now.getTime()) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_INVALID_ARGUMENT',
-      'Snooze end time must be a valid future date.',
-      400
-    );
+    throw invalidArgument('Snooze end time must be a valid future date.');
   }
 }
 
@@ -274,11 +237,7 @@ export function commandForTargetStatus(
     return null;
   }
 
-  throw new IncidentLifecycleError(
-    'INCIDENT_INVALID_ARGUMENT',
-    `Unsupported incident target status: ${targetStatus}.`,
-    400
-  );
+  throw invalidArgument(`Unsupported incident target status: ${targetStatus}.`);
 }
 
 async function assertRequiredCustomFieldsPresent(
@@ -296,12 +255,11 @@ async function assertRequiredCustomFieldsPresent(
   if (missing.length === 0) return;
 
   const fields = missing.map(field => field.name);
-  throw new IncidentLifecycleError(
-    'INCIDENT_REQUIRED_FIELDS_MISSING',
-    `Complete required custom fields before resolving: ${fields.join(', ')}`,
-    422,
-    { fields }
-  );
+  throw new AppError({
+    code: 'INCIDENT_REQUIRED_FIELDS_MISSING',
+    userMessage: `Complete required custom fields before resolving: ${fields.join(', ')}`,
+    details: { fields },
+  });
 }
 
 function escalationDelayMinutes(incident: IncidentLifecycleSnapshot, stepIndex: number): number {
@@ -396,8 +354,6 @@ function updateDataForCommand(
 
   switch (input.command) {
     case 'ACKNOWLEDGE':
-      // acknowledgedAt records first acknowledgement for SLA/MTTA and is not
-      // erased by later unacknowledge/reopen operations.
       if (!incident.acknowledgedAt) data.acknowledgedAt = now;
       data.escalationStatus = 'COMPLETED';
       data.nextEscalationAt = null;
@@ -496,7 +452,11 @@ async function loadSnapshot(
   });
 
   if (!incident) {
-    throw new IncidentLifecycleError('INCIDENT_NOT_FOUND', 'Incident not found.', 404);
+    throw new AppError({
+      code: 'INCIDENT_NOT_FOUND',
+      userMessage: 'Incident not found.',
+      details: { incidentId },
+    });
   }
 
   return incident;
@@ -517,8 +477,6 @@ export async function applyIncidentLifecycleCommand(
   const incident = await loadSnapshot(tx, input.incidentId);
   const targetStatus = targetStatusFor(input.command);
 
-  // Idempotency must precede optimistic concurrency. A retry after a successful
-  // commit is a successful no-op even when its expected source state is stale.
   if (isAlreadyApplied(incident, input, targetStatus)) {
     return {
       incidentId: input.incidentId,
@@ -531,21 +489,19 @@ export async function applyIncidentLifecycleCommand(
   }
 
   if (input.expectedStatus && incident.status !== input.expectedStatus) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_STATE_CONFLICT',
-      `Incident changed from ${input.expectedStatus} to ${incident.status}; refresh before applying this update.`,
-      409,
-      { expectedStatus: input.expectedStatus, actualStatus: incident.status }
-    );
+    throw new AppError({
+      code: 'INCIDENT_TRANSITION_CONFLICT',
+      userMessage: `Incident changed from ${input.expectedStatus} to ${incident.status}; refresh before applying this update.`,
+      details: { expectedStatus: input.expectedStatus, actualStatus: incident.status },
+    });
   }
 
   if (!isAllowedFrom(input.command, incident.status)) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_INVALID_TRANSITION',
-      `Cannot ${input.command.toLowerCase()} an incident while it is ${incident.status}.`,
-      409,
-      { command: input.command, status: incident.status }
-    );
+    throw new AppError({
+      code: 'INCIDENT_INVALID_TRANSITION',
+      userMessage: `Cannot ${input.command.toLowerCase()} an incident while it is ${incident.status}.`,
+      details: { command: input.command, status: incident.status },
+    });
   }
 
   if (input.command === 'RESOLVE') {
@@ -563,8 +519,6 @@ export async function applyIncidentLifecycleCommand(
     },
   });
 
-  // Resolution state, note and timeline metadata share this transaction. A
-  // repeated resolve returns above and therefore cannot duplicate any of them.
   if (input.command === 'RESOLVE' && resolutionNote && input.actor?.id) {
     await tx.incidentNote.create({
       data: {
@@ -608,11 +562,7 @@ export async function applyIncidentLifecycleTargetStatus(
     input.incidentId.length === 0 ||
     input.incidentId.length > MAX_ID_LENGTH
   ) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_INVALID_ARGUMENT',
-      'A valid incident ID is required.',
-      400
-    );
+    throw invalidArgument('A valid incident ID is required.');
   }
 
   const current = await tx.incident.findUnique({
@@ -621,7 +571,11 @@ export async function applyIncidentLifecycleTargetStatus(
   });
 
   if (!current) {
-    throw new IncidentLifecycleError('INCIDENT_NOT_FOUND', 'Incident not found.', 404);
+    throw new AppError({
+      code: 'INCIDENT_NOT_FOUND',
+      userMessage: 'Incident not found.',
+      details: { incidentId: input.incidentId },
+    });
   }
 
   const command = commandForTargetStatus(current.status, input.status);
@@ -647,10 +601,8 @@ export async function transitionIncidentToStatus(
 
 function validateBatchIds(inputs: readonly { incidentId: string }[]): void {
   if (inputs.length > MAX_BATCH_SIZE) {
-    throw new IncidentLifecycleError(
-      'INCIDENT_INVALID_ARGUMENT',
+    throw invalidArgument(
       `Bulk lifecycle operations are limited to ${MAX_BATCH_SIZE} incidents per request.`,
-      400,
       { maxBatchSize: MAX_BATCH_SIZE, requested: inputs.length }
     );
   }
@@ -662,26 +614,18 @@ function validateBatchIds(inputs: readonly { incidentId: string }[]): void {
       incidentId.length === 0 ||
       incidentId.length > MAX_ID_LENGTH
     ) {
-      throw new IncidentLifecycleError(
-        'INCIDENT_INVALID_ARGUMENT',
-        'Bulk lifecycle operations require valid incident IDs.',
-        400
-      );
+      throw invalidArgument('Bulk lifecycle operations require valid incident IDs.');
     }
 
     if (seen.has(incidentId)) {
-      throw new IncidentLifecycleError(
-        'INCIDENT_INVALID_ARGUMENT',
-        'Bulk lifecycle operations cannot contain duplicate incident IDs.',
-        400,
-        { incidentId }
-      );
+      throw invalidArgument('Bulk lifecycle operations cannot contain duplicate incident IDs.', {
+        incidentId,
+      });
     }
     seen.add(incidentId);
   }
 }
 
-/** All commands in a batch share one serializable transaction. */
 export async function executeIncidentLifecycleBatch(
   inputs: readonly IncidentLifecycleInput[]
 ): Promise<IncidentLifecycleResult[]> {
