@@ -12,9 +12,13 @@ const DB_NOW = new Date('2026-08-28T07:00:00.000Z');
 function createTx() {
   return {
     $queryRaw: vi.fn().mockResolvedValue([{ now: DB_NOW }]),
+    incident: {
+      findUnique: vi.fn(),
+    },
     backgroundJob: {
       createMany: vi.fn().mockResolvedValue({ count: 0 }),
-      create: vi.fn().mockResolvedValue({ id: 'job-unsnooze' }),
+      create: vi.fn().mockResolvedValue({ id: 'job-1' }),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   };
 }
@@ -40,6 +44,21 @@ describe('durable lifecycle outbox', () => {
       'LIFECYCLE_WEBHOOK',
       'LIFECYCLE_USER_NOTIFICATION',
       'LIFECYCLE_WAR_ROOM_SYNC',
+    ]);
+  });
+
+  it('ensures a live war-room when an interactive incident is reopened', () => {
+    expect(
+      getLifecycleSideEffects({
+        command: 'REOPEN',
+        source: 'WEB',
+        status: 'OPEN',
+      })
+    ).toEqual([
+      'LIFECYCLE_STATUS_PAGE',
+      'LIFECYCLE_WEBHOOK',
+      'LIFECYCLE_USER_NOTIFICATION',
+      'LIFECYCLE_WAR_ROOM_ENSURE',
     ]);
   });
 
@@ -96,6 +115,52 @@ describe('durable lifecycle outbox', () => {
           job.payload.eventOrderAt === DB_NOW.toISOString()
       )
     ).toBe(true);
+  });
+
+  it('replaces stale delayed escalation work with the canonical reopen escalation job', async () => {
+    const tx = createTx();
+    const nextEscalationAt = new Date('2026-08-28T07:05:00.000Z');
+    const transitionAt = new Date('2026-08-28T07:00:01.000Z');
+    tx.incident.findUnique.mockResolvedValue({
+      status: 'OPEN',
+      escalationStatus: 'ESCALATING',
+      currentEscalationStep: 0,
+      nextEscalationAt,
+    });
+
+    await enqueueLifecycleSideEffects(asTransactionClient(tx), {
+      incidentId: 'inc-reopen',
+      command: 'REOPEN',
+      source: 'WEB',
+      previousStatus: 'RESOLVED',
+      status: 'OPEN',
+      transitionAt,
+    });
+
+    expect(tx.backgroundJob.updateMany).toHaveBeenCalledWith({
+      where: {
+        type: 'ESCALATION',
+        status: 'PENDING',
+        payload: { path: ['incidentId'], equals: 'inc-reopen' },
+      },
+      data: {
+        status: 'CANCELLED',
+        error: 'Superseded by incident reopen',
+      },
+    });
+    expect(tx.backgroundJob.create).toHaveBeenCalledWith({
+      data: {
+        type: 'ESCALATION',
+        status: 'PENDING',
+        scheduledAt: nextEscalationAt,
+        maxAttempts: 3,
+        payload: {
+          incidentId: 'inc-reopen',
+          stepIndex: 0,
+          lifecycleTransitionAt: transitionAt.toISOString(),
+        },
+      },
+    });
   });
 
   it('persists finite auto-unsnooze timing in the same transaction as snooze effects', async () => {

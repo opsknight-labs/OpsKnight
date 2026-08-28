@@ -263,6 +263,75 @@ async function syncLifecycleWarRoom(payload: EventSideEffectPayload): Promise<vo
   ]);
 }
 
+async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<void> {
+  const lifecycle = lifecycleContext(payload);
+  if (lifecycle.command !== 'REOPEN' || lifecycle.status !== 'OPEN') {
+    throw new Error('War-room ensure is only valid for an OPEN reopen transition');
+  }
+
+  // A later resolve may already have committed while this job was waiting in
+  // the WAR_ROOM lane. Do not recreate a room for a stale reopen effect.
+  const incident = await prisma.incident.findUnique({
+    where: { id: payload.incidentId },
+    select: { status: true },
+  });
+  if (!incident || incident.status !== 'OPEN') {
+    logger.info('lifecycle.outbox.stale_war_room_ensure_skipped', {
+      incidentId: payload.incidentId,
+      currentStatus: incident?.status,
+      transitionAt: lifecycle.transitionAt,
+    });
+    return;
+  }
+
+  const { createIncidentWarRoom } = await import('./chatops/war-room');
+  const result = await createIncidentWarRoom(payload.incidentId);
+  if (!result.success) {
+    logger.info('lifecycle.outbox.war_room_ensure_not_applicable', {
+      incidentId: payload.incidentId,
+      error: result.error,
+    });
+    return;
+  }
+
+  await syncLifecycleWarRoom(payload);
+}
+
+async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): Promise<void> {
+  const lifecycle = payload.lifecycle;
+  const incident = await prisma.incident.findUnique({
+    where: { id: payload.incidentId },
+    select: { status: true, resolvedAt: true },
+  });
+
+  if (!incident || incident.status !== 'RESOLVED') {
+    logger.info('lifecycle.outbox.stale_war_room_archive_skipped', {
+      incidentId: payload.incidentId,
+      currentStatus: incident?.status,
+      transitionAt: lifecycle?.transitionAt,
+    });
+    return;
+  }
+
+  // Lifecycle archives are tied to the exact resolve commit. If the incident
+  // was resolved, reopened, and resolved again while this job was delayed, the
+  // old archive must not act on the newer lifecycle generation.
+  if (
+    lifecycle?.status === 'RESOLVED' &&
+    incident.resolvedAt?.toISOString() !== lifecycle.transitionAt
+  ) {
+    logger.info('lifecycle.outbox.superseded_war_room_archive_skipped', {
+      incidentId: payload.incidentId,
+      resolvedAt: incident.resolvedAt?.toISOString(),
+      transitionAt: lifecycle.transitionAt,
+    });
+    return;
+  }
+
+  const { archiveWarRoomChannel } = await import('./chatops/war-room');
+  await archiveWarRoomChannel(payload.incidentId);
+}
+
 export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {
   if (
     payload.task !== 'EVENT_SIDE_EFFECT' ||
@@ -311,11 +380,9 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       await notifySlackForIncident(payload.incidentId, 'resolved');
       return;
 
-    case 'RESOLVE_WAR_ROOM_ARCHIVE': {
-      const { archiveWarRoomChannel } = await import('./chatops/war-room');
-      await archiveWarRoomChannel(payload.incidentId);
+    case 'RESOLVE_WAR_ROOM_ARCHIVE':
+      await archiveWarRoomIfStillResolved(payload);
       return;
-    }
 
     case 'ACK_SLACK':
       await notifySlackForIncident(payload.incidentId, 'acknowledged');
@@ -357,6 +424,10 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       await syncLifecycleWarRoom(payload);
       return;
 
+    case 'LIFECYCLE_WAR_ROOM_ENSURE':
+      await ensureLifecycleWarRoom(payload);
+      return;
+
     case 'LIFECYCLE_WAR_ROOM_TOPIC': {
       const lifecycle = lifecycleContext(payload);
       const { updateWarRoomTopic } = await import('./chatops/war-room');
@@ -364,11 +435,9 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     }
 
-    case 'LIFECYCLE_WAR_ROOM_ARCHIVE': {
-      const { archiveWarRoomChannel } = await import('./chatops/war-room');
-      await archiveWarRoomChannel(payload.incidentId);
+    case 'LIFECYCLE_WAR_ROOM_ARCHIVE':
+      await archiveWarRoomIfStillResolved(payload);
       return;
-    }
   }
 
   throw new Error(

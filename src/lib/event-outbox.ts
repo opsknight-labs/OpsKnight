@@ -18,6 +18,7 @@ export type EventSideEffect =
   | 'LIFECYCLE_STATUS_PAGE'
   | 'LIFECYCLE_WEBHOOK'
   | 'LIFECYCLE_WAR_ROOM_SYNC'
+  | 'LIFECYCLE_WAR_ROOM_ENSURE'
   | 'LIFECYCLE_WAR_ROOM_TOPIC'
   | 'LIFECYCLE_WAR_ROOM_ARCHIVE';
 
@@ -124,6 +125,10 @@ export function getLifecycleSideEffects(
 
     if (input.status === 'RESOLVED') {
       effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');
+    } else if (input.command === 'REOPEN') {
+      // A resolved incident may have an archived war-room. Reopen must ensure a
+      // live room exists instead of trying to post into the archived channel.
+      effects.add('LIFECYCLE_WAR_ROOM_ENSURE');
     } else {
       effects.add('LIFECYCLE_WAR_ROOM_SYNC');
     }
@@ -184,6 +189,7 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
     case 'TRIGGER_WAR_ROOM':
     case 'RESOLVE_WAR_ROOM_ARCHIVE':
     case 'LIFECYCLE_WAR_ROOM_SYNC':
+    case 'LIFECYCLE_WAR_ROOM_ENSURE':
     case 'LIFECYCLE_WAR_ROOM_TOPIC':
     case 'LIFECYCLE_WAR_ROOM_ARCHIVE':
       return 'WAR_ROOM';
@@ -248,6 +254,61 @@ async function enqueueSideEffects(
   });
 }
 
+async function enqueueReopenEscalation(
+  tx: Prisma.TransactionClient,
+  input: LifecycleOutboxInput
+): Promise<void> {
+  if (input.command !== 'REOPEN') return;
+
+  const incident = await tx.incident.findUnique({
+    where: { id: input.incidentId },
+    select: {
+      status: true,
+      escalationStatus: true,
+      currentEscalationStep: true,
+      nextEscalationAt: true,
+    },
+  });
+
+  if (
+    !incident ||
+    incident.status !== 'OPEN' ||
+    incident.escalationStatus !== 'ESCALATING' ||
+    !incident.nextEscalationAt
+  ) {
+    return;
+  }
+
+  // Resolve/reopen can leave an older delayed escalation job behind. Cancel
+  // pending copies before persisting the canonical post-reopen job so an old
+  // generation cannot page responders early after the incident becomes OPEN.
+  await tx.backgroundJob.updateMany({
+    where: {
+      type: 'ESCALATION',
+      status: 'PENDING',
+      payload: { path: ['incidentId'], equals: input.incidentId },
+    },
+    data: {
+      status: 'CANCELLED',
+      error: 'Superseded by incident reopen',
+    },
+  });
+
+  await tx.backgroundJob.create({
+    data: {
+      type: 'ESCALATION',
+      status: 'PENDING',
+      scheduledAt: incident.nextEscalationAt,
+      maxAttempts: 3,
+      payload: {
+        incidentId: input.incidentId,
+        stepIndex: incident.currentEscalationStep ?? 0,
+        lifecycleTransitionAt: input.transitionAt.toISOString(),
+      },
+    },
+  });
+}
+
 /**
  * Persist event-ingestion side-effects in the same database transaction as the
  * incident state change/creation. The existing SCHEDULED_TASK job type is the
@@ -296,6 +357,7 @@ export async function enqueueLifecycleSideEffects(
   };
 
   await enqueueSideEffects(tx, input.incidentId, getLifecycleSideEffects(input), lifecycle);
+  await enqueueReopenEscalation(tx, input);
 
   if (input.command === 'SNOOZE' && input.snoozedUntil) {
     await tx.backgroundJob.create({
