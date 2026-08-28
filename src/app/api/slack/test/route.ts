@@ -1,8 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { assertAdminOrResponder } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
 import { getSlackBotToken } from '@/lib/slack';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
+import { integrationProviderError, jsonProviderError } from '@/lib/provider-errors';
 
 /**
  * POST /api/slack/test
@@ -12,25 +15,39 @@ export async function POST(request: NextRequest) {
   try {
     const user = await assertAdminOrResponder();
 
-    const body = await request.json();
-    const channelId = typeof body?.channelId === 'string' ? body.channelId : null;
-    const channelName = typeof body?.channelName === 'string' ? body.channelName : null;
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
+    }
+    const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    const channelId = typeof payload.channelId === 'string' ? payload.channelId : null;
+    const channelName = typeof payload.channelName === 'string' ? payload.channelName : null;
 
     if (!channelId) {
-      return NextResponse.json({ error: 'Channel ID is required' }, { status: 400 });
-    }
-
-    // Get bot token (global or env fallback)
-    const botToken = await getSlackBotToken();
-
-    if (!botToken) {
-      return NextResponse.json(
-        { error: 'Slack not configured. Connect Slack workspace first.' },
-        { status: 503 }
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'Channel ID is required.',
+          fields: [{ field: 'channelId', code: 'required', message: 'Channel ID is required' }],
+        })
       );
     }
 
-    // Send test message
+    const botToken = await getSlackBotToken();
+    if (!botToken) {
+      return jsonError(
+        new AppError({
+          code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+          userMessage: 'Slack is not configured.',
+          action: 'Connect a Slack workspace before sending a test notification.',
+          retryable: false,
+          details: { provider: 'slack', reason: 'not_configured' },
+        })
+      );
+    }
+
     const testMessage = {
       channel: channelId,
       blocks: [
@@ -53,47 +70,58 @@ export async function POST(request: NextRequest) {
       ],
     };
 
-    const response = await retryFetch(
-      'https://slack.com/api/chat.postMessage',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${botToken}`,
-          'Content-Type': 'application/json',
+    let response: Response;
+    try {
+      response = await retryFetch(
+        'https://slack.com/api/chat.postMessage',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${botToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(testMessage),
         },
-        body: JSON.stringify(testMessage),
-      },
-      { maxAttempts: 2, initialDelayMs: 500 }
-    );
+        { maxAttempts: 2, initialDelayMs: 500 }
+      );
+    } catch (error) {
+      throw integrationProviderError({
+        provider: 'slack',
+        operation: 'chat.postMessage',
+        cause: error,
+      });
+    }
 
     const data = await response.json();
 
     if (!data.ok) {
-      logger.warn('[Slack] Test notification failed', { error: data.error, channelId });
-
-      const friendlyError =
-        data.error === 'channel_not_found'
-          ? 'Channel not found.'
-          : data.error === 'not_in_channel'
-            ? 'Bot is not a member of this channel.'
-            : data.error === 'is_archived'
-              ? 'Channel is archived.'
-              : data.error === 'invalid_auth'
-                ? 'Invalid Slack token. Reconnect workspace.'
-                : `Slack error: ${data.error}`;
-
-      return NextResponse.json({ error: friendlyError }, { status: 400 });
+      const providerCode = typeof data.error === 'string' ? data.error : undefined;
+      logger.warn('[Slack] Test notification failed', { error: providerCode, channelId });
+      const providerError = integrationProviderError({
+        provider: 'slack',
+        operation: 'chat.postMessage',
+        providerCode,
+        status: response.status,
+      });
+      return jsonProviderError(providerError, {
+        legacyError: providerCode || 'Failed to send test notification',
+        provider: 'slack',
+        providerCode,
+      });
     }
 
     logger.info('[Slack] Test notification sent', { channelId, channelName, userId: user.id });
 
-    return NextResponse.json({
+    return jsonOk({
       ok: true,
       message: `Test notification sent to #${channelName || channelId}`,
     });
-  } catch (error: unknown) {
-    const err = error as { message?: string };
-    logger.error('[Slack] Test notification error', { error: err.message });
-    return NextResponse.json({ error: 'Failed to send test notification' }, { status: 500 });
+  } catch (error) {
+    logger.error('[Slack] Test notification error', {
+      error,
+      errorCode: isAppError(error) ? error.code : 'INTERNAL_ERROR',
+    });
+    if (isAppError(error)) return jsonError(error);
+    return jsonError('Failed to send test notification', 500);
   }
 }

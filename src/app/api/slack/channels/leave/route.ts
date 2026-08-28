@@ -1,11 +1,14 @@
 'use server';
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
 import { decrypt } from '@/lib/encryption';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
+import { integrationProviderError, jsonProviderError } from '@/lib/provider-errors';
 
 /**
  * POST /api/slack/channels/leave
@@ -15,17 +18,28 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
     }
 
-    const body = await request.json();
-    const channelId = body?.channelId;
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
+    }
+    const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    const channelId = typeof payload.channelId === 'string' ? payload.channelId : null;
 
     if (!channelId) {
-      return NextResponse.json({ error: 'Channel ID is required' }, { status: 400 });
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'Channel ID is required.',
+          fields: [{ field: 'channelId', code: 'required', message: 'Channel ID is required' }],
+        })
+      );
     }
 
-    // Get bot token
     const globalIntegration = await prisma.slackIntegration.findFirst({
       where: {
         enabled: true,
@@ -34,55 +48,76 @@ export async function POST(request: NextRequest) {
     });
 
     if (!globalIntegration?.botToken) {
-      return NextResponse.json({ error: 'Slack not configured.' }, { status: 503 });
+      return jsonError(
+        new AppError({
+          code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+          userMessage: 'Slack is not configured.',
+          action: 'Connect a Slack workspace before managing channels.',
+          retryable: false,
+          details: { provider: 'slack', reason: 'not_configured' },
+        })
+      );
     }
 
     let botToken: string;
     try {
       botToken = await decrypt(globalIntegration.botToken);
-    } catch {
-      return NextResponse.json({ error: 'Failed to decrypt Slack token.' }, { status: 500 });
+    } catch (error) {
+      throw new AppError({
+        code: 'INTERNAL_ERROR',
+        details: { provider: 'slack', operation: 'decrypt_token' },
+        cause: error,
+      });
     }
 
-    // Leave channel
-    const response = await retryFetch(
-      'https://slack.com/api/conversations.leave',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${botToken}`,
-          'Content-Type': 'application/json',
+    let response: Response;
+    try {
+      response = await retryFetch(
+        'https://slack.com/api/conversations.leave',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${botToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ channel: channelId }),
         },
-        body: JSON.stringify({ channel: channelId }),
-      },
-      { maxAttempts: 2, initialDelayMs: 500 }
-    );
+        { maxAttempts: 2, initialDelayMs: 500 }
+      );
+    } catch (error) {
+      throw integrationProviderError({
+        provider: 'slack',
+        operation: 'conversations.leave',
+        cause: error,
+      });
+    }
 
     const data = await response.json();
 
     if (!data.ok) {
-      logger.warn('[Slack] Failed to leave channel', { error: data.error, channelId });
-
-      const friendlyError =
-        data.error === 'channel_not_found'
-          ? 'Channel not found.'
-          : data.error === 'not_in_channel'
-            ? 'Bot is not in this channel.'
-            : data.error === 'is_archived'
-              ? 'Channel is archived.'
-              : data.error === 'cant_leave_general'
-                ? 'Cannot leave the #general channel.'
-                : `Slack error: ${data.error}`;
-
-      return NextResponse.json({ error: friendlyError }, { status: 400 });
+      const providerCode = typeof data.error === 'string' ? data.error : undefined;
+      logger.warn('[Slack] Failed to leave channel', { error: providerCode, channelId });
+      const providerError = integrationProviderError({
+        provider: 'slack',
+        operation: 'conversations.leave',
+        providerCode,
+        status: response.status,
+      });
+      return jsonProviderError(providerError, {
+        legacyError: providerCode || 'Failed to leave channel',
+        provider: 'slack',
+        providerCode,
+      });
     }
 
     logger.info('[Slack] Bot left channel', { channelId, userId: user.id });
-
-    return NextResponse.json({ ok: true });
-  } catch (error: unknown) {
-    const err = error as { message?: string };
-    logger.error('[Slack] Leave channel error', { error: err.message });
-    return NextResponse.json({ error: 'Failed to leave channel' }, { status: 500 });
+    return jsonOk({ ok: true });
+  } catch (error) {
+    logger.error('[Slack] Leave channel error', {
+      error,
+      errorCode: isAppError(error) ? error.code : 'INTERNAL_ERROR',
+    });
+    if (isAppError(error)) return jsonError(error);
+    return jsonError('Failed to leave channel', 500);
   }
 }
