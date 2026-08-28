@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { processEvent, EventPayload } from '@/lib/events';
 import { authenticateApiKey } from '@/lib/api-auth';
@@ -12,12 +12,20 @@ import {
 } from '@/lib/integrations/request-security';
 import { resolveApiKeyActor } from '@/lib/authorization-actors';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import { authorizationDecisionError } from '@/lib/api-authorization-error';
+import { AppError } from '@/lib/errors';
+
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 120;
+const LEGACY_UNAUTHORIZED_MESSAGE =
+  'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
+const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
+const LEGACY_REQUIRED_MESSAGE = 'Please fill in all required fields.';
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
 async function postEvent(req: NextRequest) {
   try {
-    // 1. Validate Integration Key or API Key
     const authHeader = req.headers.get('Authorization');
     let integrationId: string | null = null;
     let serviceId: string | null = null;
@@ -28,69 +36,109 @@ async function postEvent(req: NextRequest) {
       const key = authHeader.split('Token token=')[1];
       const integration = await prisma.integration.findUnique({ where: { key } });
       if (!integration) {
-        return jsonError('Invalid Integration Key', 403);
+        return jsonError(new AppError({ code: 'INTEGRATION_KEY_INVALID', userMessage: LEGACY_INVALID_INPUT_MESSAGE }));
       }
       if (!integration.enabled) {
-        return jsonError('Integration is disabled', 403);
+        return jsonError(
+          new AppError({
+            code: 'INTEGRATION_DISABLED',
+            userMessage: 'Integration is disabled',
+            details: { integrationId: integration.id },
+          })
+        );
       }
       integrationId = integration.id;
       serviceId = integration.serviceId;
     } else {
       const apiKey = await authenticateApiKey(req);
       if (!apiKey) {
-        return jsonError('Unauthorized. Missing or invalid API key.', 401);
+        return jsonError(new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
       }
       apiKeyIdentity = apiKey;
       apiKeyId = apiKey.id;
     }
 
-    // 2. Parse Body
     let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     try {
       const rawBody = await readIntegrationBody(req);
       body = JSON.parse(rawBody);
     } catch (error) {
       if (error instanceof IntegrationBodyTooLargeError) {
-        return jsonError('Payload too large.', 413);
+        return jsonError(new AppError({ code: 'PAYLOAD_TOO_LARGE', userMessage: 'Payload too large.' }));
       }
-      return jsonError('Invalid JSON in request body.', 400);
+      return jsonError(new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE }));
     }
 
     const parsed = EventSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
+      return jsonError(
+        new AppError({ code: 'VALIDATION_FAILED', userMessage: LEGACY_INVALID_INPUT_MESSAGE }),
+        undefined,
+        { issues: parsed.error.issues }
+      );
     }
     const eventAction = parsed.data.event_action;
     const dedupKey = parsed.data.dedup_key;
 
     if (!serviceId) {
       if (!apiKeyIdentity) {
-        return jsonError('Unauthorized. API key user not found.', 401);
+        return jsonError(new AppError({ code: 'API_KEY_USER_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
       }
       const actor = await resolveApiKeyActor(apiKeyIdentity);
       if (!actor) {
-        return jsonError('Unauthorized. API key user not found.', 401);
+        return jsonError(
+          new AppError({
+            code: 'API_KEY_USER_INVALID',
+            userMessage: LEGACY_UNAUTHORIZED_MESSAGE,
+            details: { apiKeyId: apiKeyIdentity.id, userId: apiKeyIdentity.userId },
+          })
+        );
       }
-      if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.EVENT_CREATE }).allowed) {
-        return jsonError('Forbidden. API key owner cannot create events.', 403);
+
+      const createDecision = authorize({ actor, action: AUTHORIZATION_ACTIONS.EVENT_CREATE });
+      if (!createDecision.allowed) {
+        return jsonError(
+          authorizationDecisionError(createDecision, {
+            forbiddenMessage: 'Forbidden. API key owner cannot create events.',
+          })
+        );
       }
+
       const candidate = body.service_id || body.serviceId;
       if (!candidate || typeof candidate !== 'string') {
-        return jsonError('service_id is required when using API keys.', 400);
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: LEGACY_REQUIRED_MESSAGE,
+            fields: [{ field: 'service_id', code: 'required', message: 'service_id is required when using API keys.' }],
+          })
+        );
       }
       const service = await prisma.service.findUnique({ where: { id: candidate } });
       if (!service) {
-        return jsonError('Service not found.', 404);
+        return jsonError(
+          new AppError({
+            code: 'SERVICE_NOT_FOUND',
+            userMessage: LEGACY_NOT_FOUND_MESSAGE,
+            details: { serviceId: candidate },
+          })
+        );
       }
-      if (
-        !authorize({
-          actor,
-          action: AUTHORIZATION_ACTIONS.EVENT_CREATE,
-          resource: { type: 'service', teamId: service.teamId },
-        }).allowed
-      ) {
-        return jsonError('Forbidden. API key owner cannot create events.', 403);
+
+      const serviceDecision = authorize({
+        actor,
+        action: AUTHORIZATION_ACTIONS.EVENT_CREATE,
+        resource: { type: 'service', teamId: service.teamId },
+      });
+      if (!serviceDecision.allowed) {
+        return jsonError(
+          authorizationDecisionError(serviceDecision, {
+            forbiddenCode: 'SERVICE_ACCESS_DENIED',
+            forbiddenMessage: 'Forbidden. API key owner cannot create events.',
+          })
+        );
       }
+
       serviceId = service.id;
       integrationId = 'api-key';
     }
@@ -103,13 +151,14 @@ async function postEvent(req: NextRequest) {
     const rate = await checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
     if (!rate.allowed) {
       const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-      return NextResponse.json(
-        { error: 'Rate limit exceeded.' },
-        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+      return jsonError(
+        new AppError({ code: 'RATE_LIMIT_EXCEEDED', userMessage: 'Rate limit exceeded.', details: { retryAfter } }),
+        undefined,
+        undefined,
+        { 'Retry-After': String(retryAfter) }
       );
     }
 
-    // 3. Process Event
     const result = await processEvent(
       { ...parsed.data, event_action: eventAction, dedup_key: dedupKey } as EventPayload,
       serviceId,
