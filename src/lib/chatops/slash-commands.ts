@@ -8,6 +8,10 @@ import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getSlackBotToken } from '@/lib/slack';
 import { retryFetch } from '@/lib/retry';
+import {
+  chatOpsLifecycleErrorMessage,
+  executeChatOpsLifecycleCommand,
+} from '@/lib/incidents/chatops-lifecycle';
 
 export interface SlashCommandPayload {
   command: string;
@@ -27,10 +31,7 @@ interface SlackResponse {
 }
 
 /**
- * Resolve a Slack user ID to an OpsKnight user with robust multi-level fallback:
- * 1. Match by email (case-insensitive)
- * 2. Match by Slack display_name / real_name / user_name against OpsKnight user name
- * 3. Fallback to incident assignee or first admin user so commands never fail
+ * Resolve a Slack user ID to an active OpsKnight user by verified Slack email.
  */
 async function resolveOpsKnightUser(slackUserId: string, botToken: string) {
   try {
@@ -54,7 +55,6 @@ async function resolveOpsKnightUser(slackUserId: string, botToken: string) {
       }
     }
 
-    // 1. Try match by email
     if (slackEmail) {
       const userByEmail = await prisma.user.findFirst({
         where: {
@@ -163,52 +163,39 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
   switch (subcommand) {
     case 'ack':
     case 'acknowledge': {
-      let updated = false;
-      if (typeof prisma.incident.updateMany === 'function') {
-        const updateResult = await prisma.incident.updateMany({
-          where: { id: incident.id, status: 'OPEN' },
-          data: {
-            status: 'ACKNOWLEDGED',
-            acknowledgedAt: incident.acknowledgedAt ?? new Date(),
-            escalationStatus: 'COMPLETED',
-            nextEscalationAt: null,
-          },
+      let lifecycleResult;
+      try {
+        lifecycleResult = await executeChatOpsLifecycleCommand({
+          incidentId: incident.id,
+          command: 'ACKNOWLEDGE',
+          actor: { id: actor!.id, name: actor!.name },
+          eventMessage: `Acknowledged via Slack ChatOps by ${actor!.name}`,
         });
-        updated = updateResult.count > 0;
-      } else {
-        await prisma.incident.update({
-          where: { id: incident.id },
-          data: {
-            status: 'ACKNOWLEDGED',
-            acknowledgedAt: incident.acknowledgedAt ?? new Date(),
-            escalationStatus: 'COMPLETED',
-            nextEscalationAt: null,
-          },
+      } catch (error) {
+        logger.warn('[ChatOps] Slash acknowledge rejected', {
+          incidentId: incident.id,
+          userId: actor!.id,
+          error,
         });
-        updated = true;
-      }
-
-      if (!updated) {
         return {
           response_type: 'ephemeral',
-          text: `ℹ️ Incident is already ${incident.status.toLowerCase()}.`,
+          text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}`,
         };
       }
 
-      await prisma.incidentEvent.create({
-        data: {
-          incidentId: incident.id,
-          type: 'ACKNOWLEDGED',
-          message: `Acknowledged via Slack ChatOps by ${actor!.name}`,
-        },
-      });
+      if (!lifecycleResult.changed) {
+        return {
+          response_type: 'ephemeral',
+          text: `ℹ️ Incident is already ${lifecycleResult.status.toLowerCase()}.`,
+        };
+      }
 
       logger.info('[ChatOps] Incident acknowledged via slash command', {
         incidentId: incident.id,
         slackUser: payload.user_name,
       });
 
-      // Dispatch incident notifications
+      // Dispatch incident notifications only after a real lifecycle change.
       import('@/lib/user-notifications')
         .then(({ sendIncidentNotifications }) =>
           sendIncidentNotifications(incident.id, 'acknowledged')
@@ -238,66 +225,41 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
 
     case 'resolve': {
       const resolution = args || 'Resolved via Slack ChatOps';
+      let lifecycleResult;
 
-      let resolved = false;
-      if (typeof prisma.incident.updateMany === 'function') {
-        const updateResult = await prisma.incident.updateMany({
-          where: { id: incident.id, status: { not: 'RESOLVED' } },
-          data: {
-            status: 'RESOLVED',
-            resolvedAt: incident.resolvedAt ?? new Date(),
-            escalationStatus: 'COMPLETED',
-            nextEscalationAt: null,
-          },
+      try {
+        lifecycleResult = await executeChatOpsLifecycleCommand({
+          incidentId: incident.id,
+          command: 'RESOLVE',
+          actor: { id: actor!.id, name: actor!.name },
+          resolutionNote: resolution,
+          eventMessage: `Resolved via Slack ChatOps by ${actor!.name}: ${resolution}`,
         });
-        resolved = updateResult.count > 0;
-      } else {
-        await prisma.incident.update({
-          where: { id: incident.id },
-          data: {
-            status: 'RESOLVED',
-            resolvedAt: incident.resolvedAt ?? new Date(),
-            escalationStatus: 'COMPLETED',
-            nextEscalationAt: null,
-          },
+      } catch (error) {
+        logger.warn('[ChatOps] Slash resolve rejected', {
+          incidentId: incident.id,
+          userId: actor!.id,
+          error,
         });
-        resolved = true;
+        return {
+          response_type: 'ephemeral',
+          text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}`,
+        };
       }
 
-      if (!resolved) {
+      if (!lifecycleResult.changed) {
         return {
           response_type: 'ephemeral',
           text: 'ℹ️ Incident is already resolved.',
         };
       }
 
-      // Create resolution note
-      const noteUserId = actor!.id;
-
-      if (noteUserId) {
-        await prisma.incidentNote.create({
-          data: {
-            incidentId: incident.id,
-            userId: noteUserId,
-            content: `[Resolution] ${resolution}`,
-          },
-        });
-      }
-
-      await prisma.incidentEvent.create({
-        data: {
-          incidentId: incident.id,
-          type: 'MANUAL_RESOLVED',
-          message: `Resolved via Slack ChatOps by ${actor!.name}: ${resolution}`,
-        },
-      });
-
       logger.info('[ChatOps] Incident resolved via slash command', {
         incidentId: incident.id,
         slackUser: payload.user_name,
       });
 
-      // Dispatch incident notifications
+      // Dispatch incident notifications only after a real lifecycle change.
       import('@/lib/user-notifications')
         .then(({ sendIncidentNotifications }) => sendIncidentNotifications(incident.id, 'resolved'))
         .catch(err =>
