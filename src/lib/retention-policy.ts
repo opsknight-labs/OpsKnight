@@ -318,6 +318,17 @@ export async function getQueryDateBounds(
   return { ...window.effective, isClipped: window.isClipped };
 }
 
+/** Resolves a relative reporting period through the same retention-aware clock. */
+export async function getReportingWindowForDays(
+  days: number,
+  dataType: RetainedDataType = 'incident',
+  now: Date = new Date()
+): Promise<{ start: Date; end: Date; isClipped: boolean }> {
+  const normalizedDays = Number.isFinite(days) ? Math.max(0, Math.floor(days)) : 0;
+  const requestedStart = new Date(now.getTime() - normalizedDays * 24 * 60 * 60 * 1000);
+  return getQueryDateBounds(requestedStart, now, dataType, now);
+}
+
 /**
  * Get pagination info based on date range and expected volume
  * Helps UI decide page size and total pages

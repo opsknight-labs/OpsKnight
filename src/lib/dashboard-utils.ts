@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { getQueryDateBounds, getReportingWindowForDays } from './retention-policy';
 
 // Type for filter parameters
 export interface DashboardFilters {
@@ -16,6 +17,31 @@ export interface DashboardFilters {
 interface DateFilter {
   gte?: Date;
   lte?: Date;
+}
+
+export async function buildRetainedDateFilter(
+  range?: string,
+  customStart?: string,
+  customEnd?: string,
+  now: Date = new Date()
+): Promise<{ createdAt: DateFilter; isClipped: boolean }> {
+  let bounds;
+  if (range === 'custom') {
+    const requestedStart = customStart ? new Date(customStart) : undefined;
+    const requestedEnd = customEnd ? new Date(customEnd) : undefined;
+    bounds = await getQueryDateBounds(requestedStart, requestedEnd, 'incident', now);
+  } else if (!range || range === 'all') {
+    bounds = await getQueryDateBounds(undefined, now, 'incident', now);
+  } else {
+    const days = Number.parseInt(range, 10);
+    bounds = Number.isFinite(days)
+      ? await getReportingWindowForDays(days, 'incident', now)
+      : await getReportingWindowForDays(30, 'incident', now);
+  }
+  return {
+    createdAt: { gte: bounds.start, lte: bounds.end },
+    isClipped: bounds.isClipped,
+  };
 }
 
 /**
@@ -61,9 +87,11 @@ export function buildIncidentWhere(
   options: {
     includeStatus?: boolean;
     includeUrgency?: boolean;
+    dateFilter?: { createdAt?: DateFilter };
   } = { includeStatus: true, includeUrgency: true }
 ): Prisma.IncidentWhereInput {
-  const dateFilter = buildDateFilter(filters.range, filters.customStart, filters.customEnd);
+  const dateFilter =
+    options.dateFilter ?? buildDateFilter(filters.range, filters.customStart, filters.customEnd);
 
   const where: Prisma.IncidentWhereInput = { ...dateFilter };
 

@@ -14,7 +14,7 @@ import CompactPerformanceMetrics from '@/components/dashboard/compact/CompactPer
 import CompactTeamLoad from '@/components/dashboard/compact/CompactTeamLoad';
 import SmartInsightsBanner from '@/components/dashboard/SmartInsightsBanner';
 import {
-  buildDateFilter,
+  buildRetainedDateFilter,
   buildIncidentWhere,
   buildIncidentOrderBy,
   getRangeLabel,
@@ -121,12 +121,12 @@ export default async function Dashboard({
   };
 
   // Main query where clause (includes status filter)
-  const where = buildIncidentWhere(filterParams);
+  const dateFilter = await buildRetainedDateFilter(range, customStart, customEnd);
+  const where = buildIncidentWhere(filterParams, { dateFilter });
 
   // Date filter for SLA calculations
-  const dateFilter = buildDateFilter(range, customStart, customEnd);
-  const metricsStartDate = dateFilter.createdAt?.gte;
-  const metricsEndDate = dateFilter.createdAt?.lte;
+  const metricsStartDate = dateFilter.createdAt.gte;
+  const metricsEndDate = dateFilter.createdAt.lte;
   const assigneeFilter = assignee !== undefined ? (assignee === '' ? null : assignee) : undefined;
   const incidentSelect = {
     id: true,

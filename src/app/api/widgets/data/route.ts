@@ -5,7 +5,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { getWidgetData } from '@/lib/widget-data-provider';
 import prisma from '@/lib/prisma';
-import { buildDateFilter } from '@/lib/dashboard-utils';
+import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
 
 /**
  * Unified Widget Data API
@@ -37,22 +37,22 @@ export async function GET(req: NextRequest) {
     const assigneeParam = searchParams.get('assignee');
     const serviceParam = searchParams.get('service');
 
-    const dateFilter = buildDateFilter(range, startDate, endDate);
+    const dateFilter = await buildRetainedDateFilter(range, startDate, endDate);
 
     const widgetData = await getWidgetData(user.id, user.role, {
       serviceId: serviceParam && serviceParam !== 'all' ? serviceParam : undefined,
-      assigneeId:
-        assigneeParam === null ? undefined : assigneeParam === '' ? null : assigneeParam,
+      assigneeId: assigneeParam === null ? undefined : assigneeParam === '' ? null : assigneeParam,
       urgency: (searchParams.get('urgency') as 'HIGH' | 'MEDIUM' | 'LOW' | null) || undefined,
-      status: (searchParams.get('status') as
-        | 'OPEN'
-        | 'ACKNOWLEDGED'
-        | 'SNOOZED'
-        | 'SUPPRESSED'
-        | 'RESOLVED'
-        | null) || undefined,
-      startDate: dateFilter.createdAt?.gte,
-      endDate: dateFilter.createdAt?.lte,
+      status:
+        (searchParams.get('status') as
+          | 'OPEN'
+          | 'ACKNOWLEDGED'
+          | 'SNOOZED'
+          | 'SUPPRESSED'
+          | 'RESOLVED'
+          | null) || undefined,
+      startDate: dateFilter.createdAt.gte,
+      endDate: dateFilter.createdAt.lte,
       includeAllTime: range === 'all',
     });
 
