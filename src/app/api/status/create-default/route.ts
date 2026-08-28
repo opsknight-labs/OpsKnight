@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { assertAdmin } from '@/lib/rbac';
+
+function errorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object' || !('code' in error)) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
 
 /**
  * Create default status page if it doesn't exist
@@ -15,10 +22,8 @@ export async function POST() {
       try {
         await assertAdmin();
       } catch (error) {
-        return jsonError(
-          error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
-          403
-        );
+        if (isAppError(error)) return jsonError(error);
+        return jsonError('Unauthorized. Admin access required.', 403);
       }
     }
 
@@ -55,14 +60,16 @@ export async function POST() {
       },
       200
     );
-  } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('api.status.create_default_error', {
       error: error instanceof Error ? error.message : String(error),
+      errorCode: errorCode(error),
     });
 
-    // If table doesn't exist, provide helpful error
-    if (error.message?.includes('does not exist') || error.code === '42P01') {
+    // PostgreSQL undefined-table and Prisma missing-table errors are structured.
+    // Do not infer deployment state from exception wording.
+    const code = errorCode(error);
+    if (code === '42P01' || code === 'P2021') {
       return NextResponse.json(
         {
           error: 'Database tables not found. Please run: npx prisma db push',

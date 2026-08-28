@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { AppError } from '@/lib/errors';
 
 // Use vi.hoisted to define mocks that will be available when vi.mock is hoisted
 const mockPrisma = vi.hoisted(() => ({
@@ -44,6 +45,7 @@ import { POST } from '@/app/api/admin/generate-reset-link/route';
 describe('API: Admin Generate Reset Link', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.auditLog.count.mockResolvedValue(0);
     mockAssertAdmin.mockResolvedValue({
       id: 'admin-id',
       email: 'admin@example.com',
@@ -82,8 +84,13 @@ describe('API: Admin Generate Reset Link', () => {
     expect(mockPrisma.auditLog.create).toHaveBeenCalled();
   });
 
-  it('rejects non-admin users', async () => {
-    mockAssertAdmin.mockRejectedValue(new Error('Unauthorized. Admin access required.'));
+  it('rejects non-admin users using the typed authorization contract', async () => {
+    mockAssertAdmin.mockRejectedValue(
+      new AppError({
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'Unauthorized. Admin access required.',
+      })
+    );
 
     const req = new NextRequest('http://localhost:3000/api/admin/generate-reset-link', {
       method: 'POST',
@@ -91,6 +98,25 @@ describe('API: Admin Generate Reset Link', () => {
     });
 
     const res = await POST(req);
+    const data = await res.json();
     expect(res.status).toBe(403);
+    expect(data.code).toBe('AUTHORIZATION_DENIED');
+  });
+
+  it('maps password-reset rate limiting by code instead of matching error text', async () => {
+    mockPrisma.auditLog.count.mockResolvedValueOnce(5);
+
+    const req = new NextRequest('http://localhost:3000/api/admin/generate-reset-link', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'target-id' }),
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(data.error).toBe('Too many requests');
+    expect(data.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(data.retryable).toBe(true);
   });
 });

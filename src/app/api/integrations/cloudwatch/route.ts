@@ -5,6 +5,7 @@ import { processEvent } from '@/lib/events';
 import { transformCloudWatchToEvent, CloudWatchAlarmMessage } from '@/lib/integrations/cloudwatch';
 
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIntegrationMiddleware } from '@/lib/integrations/handler';
 import {
@@ -16,6 +17,11 @@ import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
 } from '@/lib/integrations/request-security';
+
+const LEGACY_REQUIRED_MESSAGE = 'Please fill in all required fields.';
+const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
 /**
  * AWS CloudWatch Webhook Endpoint
@@ -35,7 +41,19 @@ export async function POST(req: NextRequest) {
       const integrationId = searchParams.get('integrationId');
 
       if (!integrationId) {
-        return jsonError('integrationId is required', 400);
+        return jsonError(
+          new AppError({
+            code: 'INTEGRATION_PAYLOAD_INVALID',
+            userMessage: LEGACY_REQUIRED_MESSAGE,
+            fields: [
+              {
+                field: 'integrationId',
+                code: 'required',
+                message: 'integrationId is required',
+              },
+            ],
+          })
+        );
       }
 
       // Verify integration exists and get service
@@ -45,11 +63,23 @@ export async function POST(req: NextRequest) {
       });
 
       if (!integration) {
-        return jsonError('Integration not found', 404);
+        return jsonError(
+          new AppError({
+            code: 'INTEGRATION_NOT_FOUND',
+            userMessage: LEGACY_NOT_FOUND_MESSAGE,
+            details: { integrationId },
+          })
+        );
       }
 
       if (!integration.enabled) {
-        return jsonError('Integration is disabled', 403);
+        return jsonError(
+          new AppError({
+            code: 'INTEGRATION_DISABLED',
+            userMessage: 'Integration is disabled',
+            details: { integrationId },
+          })
+        );
       }
 
       interface SNSMessage {
@@ -64,8 +94,14 @@ export async function POST(req: NextRequest) {
       let body: SNSMessage;
       try {
         body = JSON.parse(await readIntegrationBody(req)) as SNSMessage;
-      } catch (_error) {
-        return jsonError('Invalid JSON in request body.', 400);
+      } catch (error) {
+        if (error instanceof IntegrationBodyTooLargeError) throw error;
+        return jsonError(
+          new AppError({
+            code: 'INTEGRATION_PAYLOAD_INVALID',
+            userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+          })
+        );
       }
 
       // Handle SNS SubscriptionConfirmation (auto-confirm)
@@ -75,7 +111,6 @@ export async function POST(req: NextRequest) {
           topicArn: body.TopicArn,
         });
 
-        // Automatically confirm the subscription by visiting the SubscribeURL
         // Automatically confirm the subscription by visiting the SubscribeURL
         try {
           // Strict SSRF protection: only allow well-formed AWS SNS HTTPS endpoints
@@ -155,11 +190,22 @@ export async function POST(req: NextRequest) {
               errors: messageValidation.errors,
               integrationId,
             });
-            return jsonError('Invalid CloudWatch message in SNS payload', 400);
+            return jsonError(
+              new AppError({
+                code: 'INTEGRATION_VALIDATION_FAILED',
+                userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+                details: { integrationId, errors: messageValidation.errors },
+              })
+            );
           }
           alarmMessage = messageValidation.data;
         } catch {
-          return jsonError('Invalid CloudWatch message in SNS payload', 400);
+          return jsonError(
+            new AppError({
+              code: 'INTEGRATION_PAYLOAD_INVALID',
+              userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+            })
+          );
         }
       } else if (body.AlarmName) {
         // Direct CloudWatch format - validate
@@ -169,11 +215,22 @@ export async function POST(req: NextRequest) {
             errors: validation.errors,
             integrationId,
           });
-          return jsonError('Invalid CloudWatch payload format', 400);
+          return jsonError(
+            new AppError({
+              code: 'INTEGRATION_VALIDATION_FAILED',
+              userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+              details: { integrationId, errors: validation.errors },
+            })
+          );
         }
         alarmMessage = validation.data;
       } else {
-        return jsonError('Invalid CloudWatch payload format', 400);
+        return jsonError(
+          new AppError({
+            code: 'INTEGRATION_PAYLOAD_INVALID',
+            userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+          })
+        );
       }
 
       // Transform to standard event format
@@ -190,12 +247,22 @@ export async function POST(req: NextRequest) {
 
       return jsonOk({ status: 'success', result }, 202);
     } catch (error: unknown) {
-      if (error instanceof IntegrationBodyTooLargeError) return jsonError(error.message, 413);
+      if (error instanceof IntegrationBodyTooLargeError) {
+        return jsonError(
+          new AppError({ code: 'PAYLOAD_TOO_LARGE', userMessage: error.message, cause: error })
+        );
+      }
       logger.error('api.integration.cloudwatch_error', {
         error: error instanceof Error ? error.message : String(error),
       });
-      if (error instanceof ZodError || (error instanceof Error && error.message.includes('JSON'))) {
-        return jsonError('Validation Error', 400);
+      if (error instanceof ZodError) {
+        return jsonError(
+          new AppError({
+            code: 'INTEGRATION_VALIDATION_FAILED',
+            userMessage: 'Validation Error',
+            cause: error,
+          })
+        );
       }
       return jsonError('Internal Server Error', 500);
     }

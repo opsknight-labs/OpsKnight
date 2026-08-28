@@ -5,6 +5,7 @@ import { createHash } from 'crypto';
 
 import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { updateIncidentStatus } from '@/app/(app)/incidents/actions';
 import prisma from '@/lib/prisma';
@@ -14,29 +15,66 @@ const StatusSchema = z.object({
   expectedStatus: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']).optional(),
 });
 
+const LEGACY_UNAUTHORIZED_MESSAGE =
+  'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
+const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
+
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session?.user?.email) {
-      return jsonError('Unauthorized', 401);
+      return jsonError(
+        new AppError({
+          code: 'AUTHENTICATION_REQUIRED',
+          userMessage: LEGACY_UNAUTHORIZED_MESSAGE,
+        })
+      );
     }
 
     let body: unknown;
     try {
       body = await req.json();
     } catch {
-      return jsonError('Invalid JSON in request body.', 400);
+      return jsonError(
+        new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE })
+      );
     }
 
     const parsed = StatusSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+          fields: parsed.error.issues.map(issue => ({
+            field: issue.path.join('.') || 'request',
+            code: issue.code,
+            message: issue.message,
+          })),
+        }),
+        undefined,
+        { issues: parsed.error.issues }
+      );
     }
 
     const idempotencyKey = req.headers.get('idempotency-key')?.trim();
     if (idempotencyKey) {
-      if (idempotencyKey.length > 200) return jsonError('Idempotency key is too long.', 400);
+      if (idempotencyKey.length > 200) {
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: 'Idempotency key is too long.',
+            fields: [
+              {
+                field: 'idempotency-key',
+                code: 'too_long',
+                message: 'Idempotency key must be 200 characters or fewer.',
+              },
+            ],
+          })
+        );
+      }
       const fingerprint = createHash('sha256')
         .update(`${session.user.email}\0${idempotencyKey}`)
         .digest('hex');
@@ -69,24 +107,14 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     }
     return jsonOk({ success: true }, 200);
   } catch (error) {
-    const message = error instanceof Error ? error.message : '';
     logger.error('api.mobile.incident.update_failed', {
       component: 'mobile-incident-status',
       error,
       incidentId: params.id,
+      errorCode: isAppError(error) ? error.code : 'INTERNAL_ERROR',
     });
-    if (message.includes('Incident not found')) {
-      return jsonError('Incident not found.', 404);
-    }
-    if (message.includes('Unauthorized') || message.includes('permission')) {
-      return jsonError('Forbidden.', 403);
-    }
-    if (
-      message.includes('resolved incident cannot be acknowledged') ||
-      message.includes('Incident changed from')
-    ) {
-      return jsonError(message, 409);
-    }
+
+    if (isAppError(error)) return jsonError(error);
     return jsonError('Failed to update incident.', 500);
   }
 }
