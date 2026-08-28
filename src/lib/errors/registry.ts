@@ -342,6 +342,22 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  SCHEDULE_RESPONDER_NOT_ACTIVE: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'This responder is not active and cannot be assigned to an on-call schedule.',
+    action: 'Activate the responder or choose an active responder.',
+    retryable: false,
+    exposure: 'public',
+  },
+  SCHEDULE_OVERRIDE_CONFLICT: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'This override conflicts with an existing override for the same coverage period.',
+    action: 'Choose a non-overlapping period or remove the existing override first.',
+    retryable: false,
+    exposure: 'public',
+  },
   STATUS_PAGE_WEBHOOK_NOT_FOUND: {
     status: 404,
     category: 'not_found',

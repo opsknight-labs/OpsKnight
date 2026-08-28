@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import {
   addDaysToDateKey,
   formatDateKeyInTimeZone,
@@ -10,18 +10,19 @@ import {
   startOfDayFromDateKey,
   startOfNextDayFromDateKey,
 } from '@/lib/timezone';
-import { getDefaultAvatar } from '@/lib/avatar';
+import {
+  groupCalendarShiftsForDay,
+  type CalendarDayShift,
+  type CalendarShiftIdentity,
+} from '@/lib/schedules/calendar';
+import UserAvatar from '@/components/UserAvatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { ChevronLeft, ChevronRight, Calendar, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type CalendarShift = {
-  id: string;
-  start: string;
-  end: string;
-  label: string;
+type CalendarShift = CalendarShiftIdentity & {
   user?: {
     name: string;
     avatarUrl?: string | null;
@@ -32,7 +33,7 @@ type CalendarShift = {
 type CalendarCell = {
   date: Date;
   inMonth: boolean;
-  shifts: CalendarShift[];
+  shifts: CalendarDayShift<CalendarShift>[];
 };
 
 type ScheduleCalendarProps = {
@@ -41,6 +42,18 @@ type ScheduleCalendarProps = {
 };
 
 const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function subscribeToHydration() {
+  return () => undefined;
+}
+
+function getClientSnapshot() {
+  return true;
+}
+
+function getServerSnapshot() {
+  return false;
+}
 
 function getWeekdayIndex(dateKey: string, timeZone: string): number {
   const day = new Intl.DateTimeFormat('en-US', {
@@ -65,43 +78,48 @@ function buildCalendar(baseDate: Date, shifts: CalendarShift[], timeZone: string
   const firstCellKey = addDaysToDateKey(firstDayKey, -firstDayIndex);
   const cells: CalendarCell[] = [];
 
-  const shiftsForDateKey = (dateKey: string) => {
-    const dayStart = startOfDayFromDateKey(dateKey, timeZone);
-    const dayEnd = startOfNextDayFromDateKey(dateKey, timeZone);
-
-    // Filter shifts that overlap with this day
-    const overlapping = shifts.filter(shift => {
-      const start = new Date(shift.start);
-      const end = new Date(shift.end);
-      return start < dayEnd && end > dayStart;
-    });
-
-    // Return all active shifts for this day, sorted by start time and layer name
-    return overlapping.sort((a, b) => {
-      const timeDiff = new Date(a.start).getTime() - new Date(b.start).getTime();
-      if (timeDiff !== 0) return timeDiff;
-      const layerA = a.label.split(':')[0].trim();
-      const layerB = b.label.split(':')[0].trim();
-      return layerA.localeCompare(layerB);
-    });
-  };
-
   for (let i = 0; i < totalCells; i++) {
     const dateKey = addDaysToDateKey(firstCellKey, i);
     const date = startOfDayFromDateKey(dateKey, timeZone);
+    const dayEnd = startOfNextDayFromDateKey(dateKey, timeZone);
     const inMonth = dateKey.startsWith(`${year}-${String(month).padStart(2, '0')}-`);
-    cells.push({ date, inMonth, shifts: shiftsForDateKey(dateKey) });
+
+    cells.push({
+      date,
+      inMonth,
+      shifts: groupCalendarShiftsForDay(shifts, date, dayEnd),
+    });
   }
 
   return cells;
 }
 
-export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarProps) {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true); // eslint-disable-line react-hooks/set-state-in-effect -- intentional hydration safety
-  }, []);
+function CalendarSkeleton() {
+  return (
+    <Card className="shadow-sm" aria-busy="true" aria-label="Loading on-call calendar">
+      <CardHeader className="pb-3 border-b">
+        <div className="h-6 w-44 rounded bg-muted animate-pulse" />
+        <div className="h-4 w-72 max-w-full rounded bg-muted animate-pulse" />
+      </CardHeader>
+      <CardContent className="p-6 overflow-x-auto">
+        <div className="grid grid-cols-7 gap-1 min-w-[700px]">
+          {Array.from({ length: 35 }, (_, index) => (
+            <div key={index} className="min-h-24 rounded-lg border bg-muted/20 p-2">
+              <div className="h-3 w-4 rounded bg-muted animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
+export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarProps) {
+  const isHydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getClientSnapshot,
+    getServerSnapshot
+  );
   const [cursor, setCursor] = useState(() => new Date());
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
 
@@ -124,11 +142,8 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
   const toggleExpand = (dateKey: string) => {
     setExpandedDates(prev => {
       const next = new Set(prev);
-      if (next.has(dateKey)) {
-        next.delete(dateKey);
-      } else {
-        next.add(dateKey);
-      }
+      if (next.has(dateKey)) next.delete(dateKey);
+      else next.add(dateKey);
       return next;
     });
   };
@@ -159,7 +174,7 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
     setCursor(startOfDayInTimeZone(new Date(), timeZone));
   };
 
-  if (!isMounted) return null;
+  if (!isHydrated) return <CalendarSkeleton />;
 
   return (
     <Card className="shadow-sm">
@@ -171,7 +186,8 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
               On-call Calendar
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Shows all active layers. Multiple layers can be active simultaneously.
+              One entry per responder and layer each day. Overnight coverage is grouped into a
+              single entry.
             </p>
           </div>
           <Badge variant="secondary" size="xs" className="gap-1.5 shrink-0">
@@ -182,153 +198,181 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
       </CardHeader>
 
       <CardContent className="p-6">
-        {/* Navigation Controls */}
         <div className="flex justify-end gap-2 mb-4">
-          <Button variant="outline" size="sm" onClick={handlePrev} className="h-8 px-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrev}
+            className="h-8 px-3"
+            aria-label="Previous month"
+          >
             <ChevronLeft className="h-4 w-4 mr-1" />
             Prev
           </Button>
           <Button variant="outline" size="sm" onClick={handleToday} className="h-8 px-3">
             Today
           </Button>
-          <Button variant="outline" size="sm" onClick={handleNext} className="h-8 px-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNext}
+            className="h-8 px-3"
+            aria-label="Next month"
+          >
             Next
             <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
 
-        {/* Calendar Grid */}
-        <div className="space-y-2">
-          {/* Weekday Headers */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {weekdayLabels.map(day => (
-              <div
-                key={day}
-                className="text-center text-sm font-semibold text-muted-foreground py-2"
-              >
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Calendar Days */}
-          <div className="grid grid-cols-7 gap-1">
-            {calendarCells.map(cell => {
-              const dateKey = formatDateKeyInTimeZone(cell.date, timeZone);
-              const isToday = dateKey === todayKey;
-              const isExpanded = expandedDates.has(dateKey);
-              const preview = cell.shifts.slice(0, 2);
-              const remaining = cell.shifts.length - preview.length;
-              const showAll = isExpanded || cell.shifts.length <= 2;
-
-              return (
+        <div className="overflow-x-auto pb-1">
+          <div className="space-y-2 min-w-[700px]">
+            <div className="grid grid-cols-7 gap-1 mb-2">
+              {weekdayLabels.map(day => (
                 <div
-                  key={dateKey}
-                  className={cn(
-                    'min-h-24 p-2 rounded-lg border transition-all',
-                    cell.inMonth
-                      ? 'bg-card border-border hover:border-primary/30'
-                      : 'bg-muted/30 border-transparent',
-                    isToday && 'ring-2 ring-primary bg-primary/5'
-                  )}
+                  key={day}
+                  className="text-center text-sm font-semibold text-muted-foreground py-2"
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span
-                      className={cn(
-                        'text-sm font-medium',
-                        !cell.inMonth && 'text-muted-foreground',
-                        isToday && 'text-primary font-bold'
-                      )}
-                    >
-                      {getDayNumber(dateKey)}
-                    </span>
-                    {isToday && (
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1">
+              {calendarCells.map(cell => {
+                const dateKey = formatDateKeyInTimeZone(cell.date, timeZone);
+                const isToday = dateKey === todayKey;
+                const isExpanded = expandedDates.has(dateKey);
+                const preview = cell.shifts.slice(0, 2);
+                const remaining = cell.shifts.length - preview.length;
+                const showAll = isExpanded || cell.shifts.length <= 2;
+
+                return (
+                  <div
+                    key={dateKey}
+                    className={cn(
+                      'min-h-24 p-2 rounded-lg border transition-all',
+                      cell.inMonth
+                        ? 'bg-card border-border hover:border-primary/30'
+                        : 'bg-muted/30 border-transparent',
+                      isToday && 'ring-2 ring-primary bg-primary/5'
                     )}
-                  </div>
-
-                  {cell.shifts.length > 0 && (
-                    <div className="space-y-1.5">
-                      {(showAll ? cell.shifts : preview).map(shift => {
-                        const start = new Date(shift.start);
-                        const end = new Date(shift.end);
-                        const startTime = formatDateTime(start, timeZone, { format: 'time' });
-                        const endTime = formatDateTime(end, timeZone, { format: 'time' });
-                        const isMultiDay =
-                          formatDateTime(start, timeZone, { format: 'date' }) !==
-                          formatDateTime(end, timeZone, { format: 'date' });
-
-                        return (
-                          <div
-                            key={shift.id}
-                            className="group relative rounded-md bg-primary/10 border border-primary/20 p-1.5 text-xs hover:bg-primary/15 transition-colors cursor-default"
-                            title={`${startTime} - ${endTime}${isMultiDay ? ' (spans multiple days)' : ''}`}
-                          >
-                            {shift.user ? (
-                              <div className="flex items-center gap-1.5">
-                                <img
-                                  src={
-                                    shift.user.avatarUrl ||
-                                    getDefaultAvatar(shift.user.gender, shift.user.name)
-                                  }
-                                  alt={`Avatar of ${shift.user.name}`}
-                                  className="h-4 w-4 rounded-full object-cover flex-shrink-0 ring-1 ring-white/50"
-                                />
-                                <span className="font-medium text-foreground truncate flex-1 min-w-0">
-                                  {shift.user.name}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="font-medium text-foreground truncate block">
-                                {shift.label}
-                              </span>
-                            )}
-                            {isMultiDay && (
-                              <Badge
-                                variant="outline"
-                                size="xs"
-                                className="mt-1 h-4 border-primary/30"
-                              >
-                                multi-day
-                              </Badge>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {/* Show More/Less Button */}
-                      {remaining > 0 && !isExpanded && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={e => {
-                            e.stopPropagation();
-                            toggleExpand(dateKey);
-                          }}
-                          className="w-full h-6 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 gap-1"
-                        >
-                          <ChevronDown className="h-3 w-3" />+{remaining} more
-                        </Button>
-                      )}
-                      {isExpanded && cell.shifts.length > 2 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={e => {
-                            e.stopPropagation();
-                            toggleExpand(dateKey);
-                          }}
-                          className="w-full h-6 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 gap-1"
-                        >
-                          <ChevronUp className="h-3 w-3" />
-                          Show less
-                        </Button>
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span
+                        className={cn(
+                          'text-sm font-medium',
+                          !cell.inMonth && 'text-muted-foreground',
+                          isToday && 'text-primary font-bold'
+                        )}
+                      >
+                        {getDayNumber(dateKey)}
+                      </span>
+                      {isToday && (
+                        <div
+                          className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse"
+                          aria-label="Today"
+                        />
                       )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+
+                    {cell.shifts.length > 0 && (
+                      <div className="space-y-1.5">
+                        {(showAll ? cell.shifts : preview).map(shift => {
+                          const windows = shift.segments.map(segment => {
+                            const startTime = formatDateTime(new Date(segment.start), timeZone, {
+                              format: 'time',
+                            });
+                            const endTime = formatDateTime(new Date(segment.end), timeZone, {
+                              format: 'time',
+                            });
+                            return `${startTime} - ${endTime}`;
+                          });
+                          const coverageLabel = windows.join(', ');
+
+                          return (
+                            <div
+                              key={shift.groupKey}
+                              className="group relative rounded-md bg-primary/10 border border-primary/20 p-1.5 text-xs hover:bg-primary/15 transition-colors cursor-default"
+                              title={coverageLabel}
+                              aria-label={`${shift.label}, ${coverageLabel}`}
+                            >
+                              {shift.user ? (
+                                <div className="flex items-center gap-1.5">
+                                  {shift.userId && (
+                                    <UserAvatar
+                                      userId={shift.userId}
+                                      name={shift.user.name}
+                                      avatarUrl={shift.user.avatarUrl}
+                                      gender={shift.user.gender}
+                                      size="xs"
+                                      className="h-4 w-4 ring-1 ring-white/50"
+                                    />
+                                  )}
+                                  <span className="font-medium text-foreground truncate flex-1 min-w-0">
+                                    {shift.user.name}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="font-medium text-foreground truncate block">
+                                  {shift.label}
+                                </span>
+                              )}
+                              {shift.segments.length > 1 ? (
+                                <Badge
+                                  variant="outline"
+                                  size="xs"
+                                  className="mt-1 h-4 border-primary/30"
+                                >
+                                  {shift.segments.length} windows
+                                </Badge>
+                              ) : shift.spansDayBoundary ? (
+                                <Badge
+                                  variant="outline"
+                                  size="xs"
+                                  className="mt-1 h-4 border-primary/30"
+                                >
+                                  overnight
+                                </Badge>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+
+                        {remaining > 0 && !isExpanded && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={event => {
+                              event.stopPropagation();
+                              toggleExpand(dateKey);
+                            }}
+                            className="w-full h-6 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 gap-1"
+                            aria-label={`Show ${remaining} more on-call entries for ${dateKey}`}
+                          >
+                            <ChevronDown className="h-3 w-3" />+{remaining} more
+                          </Button>
+                        )}
+                        {isExpanded && cell.shifts.length > 2 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={event => {
+                              event.stopPropagation();
+                              toggleExpand(dateKey);
+                            }}
+                            className="w-full h-6 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 gap-1"
+                            aria-label={`Show fewer on-call entries for ${dateKey}`}
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                            Show less
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </CardContent>
