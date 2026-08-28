@@ -8,6 +8,7 @@ import { AppError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { assertAdmin } from '@/lib/rbac';
 import { getClientIp } from '@/lib/client-ip';
+import { emitAuditEvent } from '@/lib/audit';
 
 export async function POST(req: NextRequest) {
   try {
@@ -106,16 +107,20 @@ export async function POST(req: NextRequest) {
     const resetLink = `${appUrl}/reset-password?token=${token}`;
 
     // 5. Audit Log
-    await prisma.auditLog.create({
-      data: {
-        action: 'ADMIN_GENERATED_RESET_LINK',
-        entityType: 'USER',
-        entityId: user.id,
-        actorId: sessionUser.id,
-        targetEmail: sessionUser.email,
-        ip,
-        details: { targetEmail: user.email, generatedFor: user.id },
+    await emitAuditEvent({
+      action: 'ADMIN_GENERATED_RESET_LINK',
+      source: 'API',
+      target: { type: 'USER', id: user.id },
+      actor: {
+        type: 'USER',
+        id: sessionUser.id,
+        email: sessionUser.email,
+        name: sessionUser.name,
       },
+      requestId: req.headers.get('x-request-id'),
+      targetEmail: user.email,
+      ip,
+      metadata: { generatedFor: user.id },
     });
 
     return jsonOk({ link: resetLink }, 200);

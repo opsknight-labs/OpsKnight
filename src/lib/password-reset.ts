@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { emitAuditEvent } from '@/lib/audit';
 import { validatePasswordStrength } from '@/lib/passwords';
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const MAX_ATTEMPTS_PER_WINDOW = 5;
@@ -123,7 +124,7 @@ export async function initiatePasswordReset(
             message: `Reset your password: ${resetLink}`,
           });
           notificationSent = true;
-        } catch (e) {
+        } catch (_error) {
           logger.warn('[PasswordReset] SMS sending failed', {
             component: 'password-reset',
           });
@@ -204,16 +205,14 @@ async function logAttempt(
   userId: string | undefined = undefined
 ) {
   try {
-    await prisma.auditLog.create({
-      data: {
-        action,
-        entityType: 'USER',
-        entityId: userId || 'unknown',
-        actorId: userId,
-        targetEmail: email, // Populate optimized column
-        ip: ip, // Populate optimized column
-        details: { targetEmail: email, ip }, // Keep JSON for potential extra data
-      },
+    await emitAuditEvent({
+      action,
+      source: 'AUTH',
+      target: { type: 'USER', id: userId || 'unknown' },
+      actor: userId ? { type: 'USER', id: userId, email } : { type: 'SYSTEM' },
+      targetEmail: email,
+      ip,
+      metadata: { targetEmail: email },
     });
   } catch (e) {
     logger.error('password.reset.audit.error', {
@@ -240,7 +239,7 @@ export async function simulateWork(startTime: number) {
 export async function completePasswordReset(
   token: string,
   password: string,
-  ip?: string
+  _ip?: string
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   // Basic implementation needed to satisfy export if used elsewhere
   // Assuming completePasswordReset wasn't the cause of initiation crash.
@@ -310,12 +309,12 @@ export async function completePasswordReset(
     });
 
     return { success: true, message: 'Password reset successfully' };
-  } catch (e: any) {
-    if (e?.message === 'TOKEN_EXPIRED_OR_USED') {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'TOKEN_EXPIRED_OR_USED') {
       return { success: false, error: 'Invalid or expired token' };
     }
     logger.error('password.reset.complete.error', {
-      error: e instanceof Error ? e.message : String(e),
+      error: error instanceof Error ? error.message : String(error),
     });
     return { success: false, error: 'Internal error' };
   }

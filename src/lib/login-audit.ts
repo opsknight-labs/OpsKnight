@@ -6,6 +6,7 @@
  */
 
 import { logger } from '@/lib/logger';
+import { emitAuditEvent } from '@/lib/audit';
 import prisma from '@/lib/prisma';
 
 export type LoginEventType =
@@ -69,19 +70,21 @@ export async function logLoginEvent(data: LoginAuditData): Promise<void> {
   // Also store in database for compliance and reporting
   // Using the existing AuditLog model with entityType: AUTH_SESSION
   try {
-    await prisma.auditLog.create({
-      data: {
-        action: data.eventType,
-        entityType: 'USER', // Using USER for login events since AUTH_SESSION isn't in enum
-        entityId: data.email, // Use email as the entity identifier
-        actorId: data.userId || null, // Link to user if known
-        details: {
-          ip: data.ip,
-          userAgent: truncateUserAgent(data.userAgent),
-          success: data.success,
-          failureReason: data.failureReason || null,
-          ...data.metadata,
-        },
+    await emitAuditEvent({
+      action: data.eventType,
+      source: 'AUTH',
+      target: { type: 'USER', id: data.userId ?? data.email },
+      actor: data.userId
+        ? { type: 'USER', id: data.userId, email: data.email }
+        : { type: 'SYSTEM' },
+      occurredAt: timestamp,
+      targetEmail: data.email,
+      ip: data.ip,
+      metadata: {
+        userAgent: truncateUserAgent(data.userAgent),
+        success: data.success,
+        failureReason: data.failureReason || null,
+        ...data.metadata,
       },
     });
   } catch (error) {
