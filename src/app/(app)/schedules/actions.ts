@@ -7,10 +7,14 @@ import { logAudit } from '@/lib/audit';
 import { createInAppNotifications, getScheduleUserIds } from '@/lib/in-app-notifications';
 import { parseDateTimeInTimeZone, isValidTimeZone } from '@/lib/timezone';
 import { assertScheduleNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
-type ScheduleFormState = {
-  error?: string | null;
-  success?: boolean;
-};
+import { AppError } from '@/lib/errors';
+import {
+  scheduleActionError,
+  scheduleValidationError,
+  type ScheduleActionState,
+} from '@/lib/schedule-action-errors';
+
+type ScheduleFormState = ScheduleActionState;
 
 async function getScheduleName(scheduleId: string) {
   const schedule = await prisma.onCallSchedule.findUnique({
@@ -48,9 +52,12 @@ async function assertCanCreateScheduleOverride(scheduleId: string) {
   });
 
   if (!accessible) {
-    throw new Error(
-      'Unauthorized. Only an administrator, owning team lead, or assigned schedule member can create overrides.'
-    );
+    throw new AppError({
+      code: 'SCHEDULE_OVERRIDE_ACCESS_DENIED',
+      userMessage:
+        'Unauthorized. Only an administrator, owning team lead, or assigned schedule member can create overrides.',
+      details: { scheduleId, userId: user.id },
+    });
   }
   return user;
 }
@@ -96,22 +103,21 @@ export async function createSchedule(
   try {
     actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   const name = (formData.get('name') as string)?.trim() || '';
   const timeZone = (formData.get('timeZone') as string) || 'UTC';
 
   if (!name) {
-    return { error: 'Schedule name is required.' };
+    return scheduleValidationError('Schedule name is required.', [
+      { field: 'name', code: 'required', message: 'Schedule name is required.' },
+    ]);
   }
 
   if (timeZone && !isValidTimeZone(timeZone)) {
-    return { error: 'Invalid IANA timezone specified.' };
+    return scheduleValidationError('Invalid IANA timezone specified.', [
+      { field: 'timeZone', code: 'invalid', message: 'Invalid IANA timezone specified.' },
+    ]);
   }
 
   try {
@@ -131,37 +137,43 @@ export async function createSchedule(
     return { success: true };
   } catch (error) {
     if (error instanceof UniqueNameConflictError) {
-      return { error: 'A schedule with that name already exists.' };
+      return scheduleActionError(
+        new AppError({
+          code: 'SCHEDULE_NAME_CONFLICT',
+          userMessage: 'A schedule with that name already exists.',
+          details: { name },
+        }),
+        'A schedule with that name already exists.'
+      );
     }
-    return { error: error instanceof Error ? error.message : 'Failed to create schedule.' };
+    return scheduleActionError(error, 'Failed to create schedule.');
   }
 }
 
 export async function updateSchedule(
   scheduleId: string,
   formData: FormData
-): Promise<{ error?: string } | undefined> {
+): Promise<ScheduleFormState | undefined> {
   let actorId: string;
   try {
     actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
 
   const name = (formData.get('name') as string)?.trim();
   const timeZone = (formData.get('timeZone') as string) || 'UTC';
 
   if (!name) {
-    return { error: 'Schedule name is required.' };
+    return scheduleValidationError('Schedule name is required.', [
+      { field: 'name', code: 'required', message: 'Schedule name is required.' },
+    ]);
   }
 
   if (timeZone && !isValidTimeZone(timeZone)) {
-    return { error: 'Invalid IANA timezone specified.' };
+    return scheduleValidationError('Invalid IANA timezone specified.', [
+      { field: 'timeZone', code: 'invalid', message: 'Invalid IANA timezone specified.' },
+    ]);
   }
 
   try {
@@ -190,26 +202,28 @@ export async function updateSchedule(
     return undefined;
   } catch (error) {
     if (error instanceof UniqueNameConflictError) {
-      return { error: 'A schedule with that name already exists.' };
+      return scheduleActionError(
+        new AppError({
+          code: 'SCHEDULE_NAME_CONFLICT',
+          userMessage: 'A schedule with that name already exists.',
+          details: { scheduleId, name },
+        }),
+        'A schedule with that name already exists.'
+      );
     }
-    return { error: error instanceof Error ? error.message : 'Failed to update schedule.' };
+    return scheduleActionError(error, 'Failed to update schedule.');
   }
 }
 
 export async function createLayer(
   scheduleId: string,
   formData: FormData
-): Promise<{ error?: string } | undefined> {
+): Promise<ScheduleFormState | undefined> {
   let actorId: string;
   try {
     actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   const name = formData.get('name') as string;
   const start = formData.get('start') as string;
@@ -218,7 +232,6 @@ export async function createLayer(
   const shiftLengthValue = formData.get('shiftLengthHours');
   const shiftLength = shiftLengthValue ? Number(shiftLengthValue) : null;
 
-  // Parse restrictions
   const daysOfWeek = formData.getAll('daysOfWeek').map(Number);
   const restrictStartHour = formData.get('restrictStartHour');
   const restrictEndHour = formData.get('restrictEndHour');
@@ -227,7 +240,7 @@ export async function createLayer(
   const endHourNum = restrictEndHour ? Number(restrictEndHour) : undefined;
 
   if (daysOfWeek.some(d => Number.isNaN(d) || d < 0 || d > 6)) {
-    return { error: 'Days of week must be between 0 (Sun) and 6 (Sat).' };
+    return scheduleValidationError('Days of week must be between 0 (Sun) and 6 (Sat).');
   }
   if (
     (startHourNum ?? 0) < 0 ||
@@ -235,7 +248,7 @@ export async function createLayer(
     (endHourNum ?? 0) < 0 ||
     (endHourNum ?? 0) > 23
   ) {
-    return { error: 'Hours must be between 0 and 23.' };
+    return scheduleValidationError('Hours must be between 0 and 23.');
   }
   const restrictions =
     daysOfWeek.length > 0 || restrictStartHour || restrictEndHour
@@ -247,13 +260,15 @@ export async function createLayer(
       : undefined;
 
   if (!name || !start || Number.isNaN(rotationLength) || rotationLength <= 0) {
-    return { error: 'Invalid layer data. Name, start date, and rotation length are required.' };
+    return scheduleValidationError(
+      'Invalid layer data. Name, start date, and rotation length are required.'
+    );
   }
   if (shiftLength !== null && (Number.isNaN(shiftLength) || shiftLength <= 0)) {
-    return { error: 'Shift length must be greater than 0 hours.' };
+    return scheduleValidationError('Shift length must be greater than 0 hours.');
   }
   if (shiftLength !== null && shiftLength > rotationLength) {
-    return { error: 'Shift length cannot exceed rotation length.' };
+    return scheduleValidationError('Shift length cannot exceed rotation length.');
   }
   const schedule = await prisma.onCallSchedule.findUnique({
     where: { id: scheduleId },
@@ -261,20 +276,27 @@ export async function createLayer(
   });
 
   if (!schedule) {
-    return { error: 'Schedule not found.' };
+    return scheduleActionError(
+      new AppError({
+        code: 'SCHEDULE_NOT_FOUND',
+        userMessage: 'Schedule not found.',
+        details: { scheduleId },
+      }),
+      'Schedule not found.'
+    );
   }
 
   const startDate = parseDateTimeInTimeZone(start, schedule.timeZone);
   const endDate = end ? parseDateTimeInTimeZone(end, schedule.timeZone) : null;
 
   if (!startDate) {
-    return { error: 'Invalid start date.' };
+    return scheduleValidationError('Invalid start date.');
   }
   if (end && !endDate) {
-    return { error: 'Invalid end date.' };
+    return scheduleValidationError('Invalid end date.');
   }
   if (endDate && endDate <= startDate) {
-    return { error: 'End date must be after start date.' };
+    return scheduleValidationError('End date must be after start date.');
   }
 
   try {
@@ -307,24 +329,19 @@ export async function createLayer(
     revalidatePath(`/schedules/${scheduleId}`);
     revalidatePath('/schedules');
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Failed to create layer.' };
+    return scheduleActionError(error, 'Failed to create layer.');
   }
 }
 
 export async function deleteLayer(
   scheduleId: string,
   layerId: string
-): Promise<{ error?: string } | undefined> {
+): Promise<ScheduleFormState | undefined> {
   let actorId: string;
   try {
     actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   try {
     const layer = await prisma.onCallLayer.findFirst({
@@ -333,7 +350,14 @@ export async function deleteLayer(
     });
 
     if (!layer) {
-      return { error: 'Layer not found for this schedule.' };
+      return scheduleActionError(
+        new AppError({
+          code: 'SCHEDULE_LAYER_NOT_FOUND',
+          userMessage: 'Layer not found for this schedule.',
+          details: { scheduleId, layerId },
+        }),
+        'Layer not found for this schedule.'
+      );
     }
 
     await prisma.$transaction([
@@ -362,29 +386,26 @@ export async function deleteLayer(
     revalidatePath(`/schedules/${scheduleId}`);
     revalidatePath('/schedules');
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Failed to delete layer.' };
+    return scheduleActionError(error, 'Failed to delete layer.');
   }
 }
 
 export async function addLayerUser(
   layerId: string,
   formData: FormData
-): Promise<{ error?: string } | undefined> {
+): Promise<ScheduleFormState | undefined> {
   let actorId: string;
   try {
     actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   const userId = formData.get('userId') as string;
 
   if (!userId) {
-    return { error: 'User is required.' };
+    return scheduleValidationError('User is required.', [
+      { field: 'userId', code: 'required', message: 'User is required.' },
+    ]);
   }
 
   const layer = await prisma.onCallLayer.findUnique({
@@ -393,7 +414,14 @@ export async function addLayerUser(
   });
 
   if (!layer) {
-    return { error: 'Layer not found.' };
+    return scheduleActionError(
+      new AppError({
+        code: 'SCHEDULE_LAYER_NOT_FOUND',
+        userMessage: 'Layer not found.',
+        details: { layerId },
+      }),
+      'Layer not found.'
+    );
   }
 
   const existingAssignment = await prisma.onCallLayerUser.findFirst({
@@ -410,12 +438,24 @@ export async function addLayerUser(
 
   if (existingAssignment) {
     const responderName = existingAssignment.user.name || 'This responder';
-    if (existingAssignment.layerId === layerId) {
-      return { error: `${responderName} is already assigned to "${layer.name}".` };
-    }
-    return {
-      error: `${responderName} is already assigned to "${existingAssignment.layer.name}" in this schedule. Remove them from that layer before adding them to "${layer.name}".`,
-    };
+    const userMessage =
+      existingAssignment.layerId === layerId
+        ? `${responderName} is already assigned to "${layer.name}".`
+        : `${responderName} is already assigned to "${existingAssignment.layer.name}" in this schedule. Remove them from that layer before adding them to "${layer.name}".`;
+
+    return scheduleActionError(
+      new AppError({
+        code: 'SCHEDULE_LAYER_USER_DUPLICATE',
+        userMessage,
+        details: {
+          scheduleId: layer.scheduleId,
+          requestedLayerId: layerId,
+          existingLayerId: existingAssignment.layerId,
+          userId,
+        },
+      }),
+      userMessage
+    );
   }
 
   const maxPosition = await prisma.onCallLayerUser.aggregate({
@@ -468,17 +508,12 @@ export async function addLayerUser(
 export async function updateLayer(
   layerId: string,
   formData: FormData
-): Promise<{ error?: string } | undefined> {
+): Promise<ScheduleFormState | undefined> {
   let actorId: string;
   try {
     actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   const name = formData.get('name') as string;
   const start = formData.get('start') as string;
@@ -487,7 +522,6 @@ export async function updateLayer(
   const shiftLengthValue = formData.get('shiftLengthHours');
   const shiftLength = shiftLengthValue ? Number(shiftLengthValue) : null;
 
-  // Parse restrictions
   const daysOfWeek = formData.getAll('daysOfWeek').map(Number);
   const restrictStartHour = formData.get('restrictStartHour');
   const restrictEndHour = formData.get('restrictEndHour');
@@ -496,7 +530,7 @@ export async function updateLayer(
   const endHourNum = restrictEndHour ? Number(restrictEndHour) : undefined;
 
   if (daysOfWeek.some(d => Number.isNaN(d) || d < 0 || d > 6)) {
-    return { error: 'Days of week must be between 0 (Sun) and 6 (Sat).' };
+    return scheduleValidationError('Days of week must be between 0 (Sun) and 6 (Sat).');
   }
   if (
     (startHourNum ?? 0) < 0 ||
@@ -504,7 +538,7 @@ export async function updateLayer(
     (endHourNum ?? 0) < 0 ||
     (endHourNum ?? 0) > 23
   ) {
-    return { error: 'Hours must be between 0 and 23.' };
+    return scheduleValidationError('Hours must be between 0 and 23.');
   }
   const restrictions =
     daysOfWeek.length > 0 || restrictStartHour || restrictEndHour
@@ -516,13 +550,15 @@ export async function updateLayer(
       : undefined;
 
   if (!name || !start || Number.isNaN(rotationLength) || rotationLength <= 0) {
-    return { error: 'Invalid layer data. Name, start date, and rotation length are required.' };
+    return scheduleValidationError(
+      'Invalid layer data. Name, start date, and rotation length are required.'
+    );
   }
   if (shiftLength !== null && (Number.isNaN(shiftLength) || shiftLength <= 0)) {
-    return { error: 'Shift length must be greater than 0 hours.' };
+    return scheduleValidationError('Shift length must be greater than 0 hours.');
   }
   if (shiftLength !== null && shiftLength > rotationLength) {
-    return { error: 'Shift length cannot exceed rotation length.' };
+    return scheduleValidationError('Shift length cannot exceed rotation length.');
   }
 
   const layerMeta = await prisma.onCallLayer.findUnique({
@@ -531,20 +567,27 @@ export async function updateLayer(
   });
 
   if (!layerMeta) {
-    return { error: 'Layer not found.' };
+    return scheduleActionError(
+      new AppError({
+        code: 'SCHEDULE_LAYER_NOT_FOUND',
+        userMessage: 'Layer not found.',
+        details: { layerId },
+      }),
+      'Layer not found.'
+    );
   }
 
   const startDate = parseDateTimeInTimeZone(start, layerMeta.schedule.timeZone);
   const endDate = end ? parseDateTimeInTimeZone(end, layerMeta.schedule.timeZone) : null;
 
   if (!startDate) {
-    return { error: 'Invalid start date.' };
+    return scheduleValidationError('Invalid start date.');
   }
   if (end && !endDate) {
-    return { error: 'Invalid end date.' };
+    return scheduleValidationError('Invalid end date.');
   }
   if (endDate && endDate <= startDate) {
-    return { error: 'End date must be after start date.' };
+    return scheduleValidationError('End date must be after start date.');
   }
 
   try {
@@ -577,24 +620,20 @@ export async function updateLayer(
     revalidatePath(`/schedules/${layerMeta.scheduleId}`);
     revalidatePath('/schedules');
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Failed to update layer.' };
+    return scheduleActionError(error, 'Failed to update layer.');
   }
 }
+
 export async function moveLayerUser(
   layerId: string,
   userId: string,
   direction: 'up' | 'down'
-): Promise<{ error?: string } | undefined> {
+): Promise<ScheduleFormState | undefined> {
   let actorId: string;
   try {
     actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   try {
     const layer = await prisma.onCallLayer.findUnique({
@@ -603,7 +642,14 @@ export async function moveLayerUser(
     });
 
     if (!layer) {
-      return { error: 'Layer not found.' };
+      return scheduleActionError(
+        new AppError({
+          code: 'SCHEDULE_LAYER_NOT_FOUND',
+          userMessage: 'Layer not found.',
+          details: { layerId },
+        }),
+        'Layer not found.'
+      );
     }
 
     const users = await prisma.onCallLayerUser.findMany({
@@ -614,7 +660,7 @@ export async function moveLayerUser(
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
 
     if (index === -1 || targetIndex < 0 || targetIndex >= users.length) {
-      return { error: 'Cannot move user in that direction.' };
+      return scheduleValidationError('Cannot move user in that direction.');
     }
 
     const current = users[index];
@@ -641,24 +687,19 @@ export async function moveLayerUser(
     revalidatePath(`/schedules/${layer.scheduleId}`);
     revalidatePath('/schedules');
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Failed to move user.' };
+    return scheduleActionError(error, 'Failed to move user.');
   }
 }
 
 export async function removeLayerUser(
   layerId: string,
   userId: string
-): Promise<{ error?: string } | undefined> {
+): Promise<ScheduleFormState | undefined> {
   let actorId: string;
   try {
     actorId = (await assertAdminOrResponder()).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   try {
     const layer = await prisma.onCallLayer.findUnique({
@@ -667,7 +708,14 @@ export async function removeLayerUser(
     });
 
     if (!layer) {
-      return { error: 'Layer not found.' };
+      return scheduleActionError(
+        new AppError({
+          code: 'SCHEDULE_LAYER_NOT_FOUND',
+          userMessage: 'Layer not found.',
+          details: { layerId },
+        }),
+        'Layer not found.'
+      );
     }
 
     await prisma.onCallLayerUser.delete({
@@ -705,24 +753,19 @@ export async function removeLayerUser(
 
     revalidatePath(`/schedules/${layer.scheduleId}`);
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Failed to remove user from layer.' };
+    return scheduleActionError(error, 'Failed to remove user from layer.');
   }
 }
 
 export async function createOverride(
   scheduleId: string,
   formData: FormData
-): Promise<{ error?: string } | undefined> {
+): Promise<ScheduleFormState | undefined> {
   let actorId: string;
   try {
     actorId = (await assertCanCreateScheduleOverride(scheduleId)).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   const userId = formData.get('userId') as string;
   const replacesUserId = (formData.get('replacesUserId') as string) || null;
@@ -730,7 +773,7 @@ export async function createOverride(
   const end = formData.get('end') as string;
 
   if (!userId || !start || !end) {
-    return { error: 'User, start date, and end date are required.' };
+    return scheduleValidationError('User, start date, and end date are required.');
   }
 
   const schedule = await prisma.onCallSchedule.findUnique({
@@ -739,27 +782,40 @@ export async function createOverride(
   });
 
   if (!schedule) {
-    return { error: 'Schedule not found.' };
+    return scheduleActionError(
+      new AppError({
+        code: 'SCHEDULE_NOT_FOUND',
+        userMessage: 'Schedule not found.',
+        details: { scheduleId },
+      }),
+      'Schedule not found.'
+    );
   }
 
   const startDate = parseDateTimeInTimeZone(start, schedule.timeZone);
   const endDate = parseDateTimeInTimeZone(end, schedule.timeZone);
 
   if (!startDate || !endDate) {
-    return { error: 'Invalid date format.' };
+    return scheduleValidationError('Invalid date format.');
   }
 
   if (endDate <= startDate) {
-    return { error: 'End date must be after start date.' };
+    return scheduleValidationError('End date must be after start date.');
   }
 
-  // Validate the override target user is active
   const targetUser = await prisma.user.findUnique({
     where: { id: userId },
     select: { status: true },
   });
   if (!targetUser || targetUser.status !== 'ACTIVE') {
-    return { error: 'Cannot create an override for a deactivated or non-existent user.' };
+    return scheduleValidationError(
+      'Cannot create an override for a deactivated or non-existent user.',
+      [{
+        field: 'userId',
+        code: 'inactive_or_missing',
+        message: 'Cannot create an override for a deactivated or non-existent user.',
+      }]
+    );
   }
 
   try {
@@ -798,24 +854,19 @@ export async function createOverride(
 
     revalidatePath(`/schedules/${scheduleId}`);
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Failed to create override.' };
+    return scheduleActionError(error, 'Failed to create override.');
   }
 }
 
 export async function deleteOverride(
   scheduleId: string,
   overrideId: string
-): Promise<{ error?: string } | undefined> {
+): Promise<ScheduleFormState | undefined> {
   let actorId: string;
   try {
     actorId = (await assertCanCreateScheduleOverride(scheduleId)).id;
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
   try {
     const override = await prisma.onCallOverride.findFirst({
@@ -824,7 +875,14 @@ export async function deleteOverride(
     });
 
     if (!override) {
-      return { error: 'Override not found for this schedule.' };
+      return scheduleActionError(
+        new AppError({
+          code: 'SCHEDULE_OVERRIDE_NOT_FOUND',
+          userMessage: 'Override not found for this schedule.',
+          details: { scheduleId, overrideId },
+        }),
+        'Override not found for this schedule.'
+      );
     }
 
     await prisma.onCallOverride.delete({
@@ -838,22 +896,20 @@ export async function deleteOverride(
       details: { overrideId, userId: override.userId, replacesUserId: override.replacesUserId },
     });
 
-    if (override) {
-      const scheduleName = await getScheduleName(scheduleId);
-      const recipientIds =
-        override.replacesUserId && override.replacesUserId !== override.userId
-          ? [override.userId, override.replacesUserId]
-          : [override.userId];
-      await notifyScheduleMembers(
-        scheduleId,
-        'Schedule override',
-        `Override removed from ${scheduleName}`,
-        recipientIds
-      );
-    }
+    const scheduleName = await getScheduleName(scheduleId);
+    const recipientIds =
+      override.replacesUserId && override.replacesUserId !== override.userId
+        ? [override.userId, override.replacesUserId]
+        : [override.userId];
+    await notifyScheduleMembers(
+      scheduleId,
+      'Schedule override',
+      `Override removed from ${scheduleName}`,
+      recipientIds
+    );
 
     revalidatePath(`/schedules/${scheduleId}`);
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Failed to delete override.' };
+    return scheduleActionError(error, 'Failed to delete override.');
   }
 }
