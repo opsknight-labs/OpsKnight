@@ -14,6 +14,7 @@ import { isChannelAvailable } from './notification-providers';
 import { createInAppNotifications } from './in-app-notifications';
 import { logger } from './logger';
 import { filterChannelsForQuietHours } from './quiet-hours';
+import type { NotificationEventType } from './notification-delivery';
 
 /**
  * Get user's enabled notification channels based on their preferences
@@ -95,6 +96,7 @@ export async function sendUserNotification(
   options: {
     excludedChannels?: NotificationChannel[];
     createInApp?: boolean;
+    eventType?: NotificationEventType;
   } = {}
 ): Promise<{
   success: boolean;
@@ -176,7 +178,14 @@ export async function sendUserNotification(
       break;
     }
 
-    const result = await sendNotification(incidentId, userId, channel, message);
+    const result = await sendNotification(
+      incidentId,
+      userId,
+      channel,
+      message,
+      undefined,
+      options.eventType ?? 'triggered'
+    );
     if (result.success) {
       channelsUsed.push(channel);
       logger.info(`[UserNotification] Successfully delivered via ${channel}`, {
@@ -197,7 +206,14 @@ export async function sendUserNotification(
       ch => !channels.includes(ch) && !quietHoursBlockedChannels.has(ch)
     );
     for (const fbChannel of fallbackChannels) {
-      const fbResult = await sendNotification(incidentId, userId, fbChannel, message);
+      const fbResult = await sendNotification(
+        incidentId,
+        userId,
+        fbChannel,
+        message,
+        undefined,
+        options.eventType ?? 'triggered'
+      );
       if (fbResult.success) {
         channelsUsed.push(fbChannel);
         logger.warn(`[UserNotification] Fallback delivery succeeded via ${fbChannel}`, {
@@ -442,7 +458,14 @@ export async function sendIncidentNotifications(
             }
           }
 
-          const result = await sendNotification(incidentId, userId, channel, message);
+          const result = await sendNotification(
+            incidentId,
+            userId,
+            channel,
+            message,
+            incidentRecord,
+            eventType
+          );
 
           if (result.success) {
             successful.push({ channel, result });

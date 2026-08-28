@@ -389,7 +389,7 @@ export function generateIncidentEmailHTML(
     incidentUrl?: string;
   },
   timeZone: string = 'UTC',
-  eventType?: 'triggered' | 'acknowledged' | 'resolved'
+  eventType?: 'triggered' | 'acknowledged' | 'resolved' | 'updated'
 ): string {
   const baseUrl = getBaseUrl();
   const incidentUrl = incident.incidentUrl || `${baseUrl}/incidents/${incident.id}`;
@@ -635,7 +635,7 @@ export function generateIncidentEmailHTML(
 export async function sendIncidentEmail(
   userId: string,
   incidentId: string,
-  eventType: 'triggered' | 'acknowledged' | 'resolved'
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated'
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const [user, incident] = await Promise.all([
@@ -662,11 +662,13 @@ export async function sendIncidentEmail(
         ? 'RESOLVED'
         : eventType === 'acknowledged'
           ? 'ACKNOWLEDGED'
-          : incident.urgency === 'HIGH'
-            ? 'CRITICAL'
-            : incident.urgency === 'MEDIUM'
-              ? 'ELEVATED'
-              : 'NEW';
+          : eventType === 'updated'
+            ? 'UPDATED'
+            : incident.urgency === 'HIGH'
+              ? 'CRITICAL'
+              : incident.urgency === 'MEDIUM'
+                ? 'ELEVATED'
+                : 'NEW';
     const subject = `[${subjectTag}] ${incident.title}`;
     const userTimeZone = getUserTimeZone(user ?? undefined);
     const html = generateIncidentEmailHTML(

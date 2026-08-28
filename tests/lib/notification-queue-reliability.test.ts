@@ -53,4 +53,26 @@ describe('notification queue delivery reliability', () => {
 
     expect(queueNotification('incident-2', 'user-2', 'SMS', 'Incident opened')).toBe(true);
   });
+
+  it('does not retry a terminally skipped delivery', async () => {
+    sendNotification.mockResolvedValue({
+      success: false,
+      skipped: true,
+      terminal: true,
+      error: 'No registered device',
+    });
+    queueNotification('incident-3', 'user-3', 'PUSH', 'Incident acknowledged', 2, 'acknowledged');
+
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(sendNotification).toHaveBeenCalledWith(
+      'incident-3',
+      'user-3',
+      'PUSH',
+      'Incident acknowledged',
+      undefined,
+      'acknowledged'
+    );
+  });
 });

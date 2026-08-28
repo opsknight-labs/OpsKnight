@@ -87,7 +87,7 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
     it('gives notification delivery all three claimed attempts', async () => {
       const user = await createTestUser();
       const service = await testPrisma.service.create({
-        data: { name: `Retry Service ${Date.now()}` },
+        data: { name: `Retry Service ${Date.now()}`, webhookUrl: 'http://127.0.0.1:9' },
       });
       const incident = await testPrisma.incident.create({
         data: { title: 'Retry notification incident', status: 'OPEN', serviceId: service.id },

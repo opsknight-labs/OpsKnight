@@ -17,6 +17,7 @@ import {
   notificationDedupeKey,
   notificationRetryDelayMs,
   NOTIFICATION_RETRY_POLICY,
+  type NotificationEventType,
 } from './notification-delivery';
 
 // Queue configuration
@@ -44,6 +45,7 @@ interface QueuedNotification {
   createdAt: number;
   dedupeKey: string;
   retryCount?: number;
+  eventType: NotificationEventType;
 }
 
 interface ChannelState {
@@ -134,7 +136,8 @@ export function queueNotification(
   userId: string,
   channel: NotificationChannel,
   message: string,
-  priority: number = 2
+  priority: number = 2,
+  eventType: NotificationEventType = 'triggered'
 ): boolean {
   // Check queue size limit
   if (queue.length >= MAX_QUEUE_SIZE) {
@@ -176,6 +179,7 @@ export function queueNotification(
     priority,
     createdAt: Date.now(),
     dedupeKey,
+    eventType,
   });
 
   // Start flush timer if not running
@@ -194,6 +198,7 @@ export function queueBulkNotifications(
     channel: NotificationChannel;
     message: string;
     priority?: number;
+    eventType?: NotificationEventType;
   }>
 ): { queued: number; dropped: number; duplicates: number } {
   let queued = 0;
@@ -222,6 +227,7 @@ export function queueBulkNotifications(
       priority: n.priority || 2,
       createdAt: Date.now(),
       dedupeKey,
+      eventType: n.eventType ?? 'triggered',
     });
     queued++;
   }
@@ -328,12 +334,19 @@ async function processChannelNotifications(
     const results = await Promise.allSettled(
       toProcess.map(async n => {
         try {
-          const result = await sendNotification(n.incidentId, n.userId, n.channel, n.message);
+          const result = await sendNotification(
+            n.incidentId,
+            n.userId,
+            n.channel,
+            n.message,
+            undefined,
+            n.eventType
+          );
 
           // Notification providers report expected delivery failures in their
           // result instead of throwing. Treat those results as failures so the
           // queue's retry policy is actually applied.
-          if (!result.success) {
+          if (!result.success && !result.terminal) {
             throw new Error(result.error || `${n.channel} notification delivery failed`);
           }
 

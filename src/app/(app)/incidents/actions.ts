@@ -15,10 +15,7 @@ import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
-import {
-  executeIncidentCreation,
-  type IncidentCreationSource,
-} from '@/lib/incidents/creation';
+import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
 
 const LEGACY_NOT_FOUND_MESSAGE =
   'The requested item could not be found. It may have been deleted or you may not have access to it.';
@@ -315,7 +312,9 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
 
         const message = `[OpsKnight] ${incident?.title || 'Incident'} assigned to your team: ${teamWithMembers.name}`;
         for (const member of teamWithMembers.members) {
-          await sendUserNotification(incidentId, member.userId, message);
+          await sendUserNotification(incidentId, member.userId, message, undefined, {
+            eventType: 'updated',
+          });
         }
 
         // --- ADDED: Send Service-Level Notification for Reassignment (Team) ---
