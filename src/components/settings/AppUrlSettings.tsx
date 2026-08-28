@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-product-notification';
+import { errorFromResponse } from '@/lib/client-error';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
@@ -47,15 +48,14 @@ export default function AppUrlSettings({ appUrl, fallback }: Props) {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to update app URL');
+        throw await errorFromResponse(response, 'Failed to update app URL');
       }
 
       showToast('Application URL updated successfully', 'success');
       setLastSaved(new Date().toLocaleString());
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to update app URL', 'error');
+      showToast(error, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -159,10 +159,7 @@ export default function AppUrlSettings({ appUrl, fallback }: Props) {
             Reset
           </Button>
         )}
-        <Button
-          type="submit"
-          disabled={isLoading || !isDirty}
-        >
+        <Button type="submit" disabled={isLoading || !isDirty}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Save URL
         </Button>

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
+import { errorFromResponse } from '@/lib/client-error';
+import { toUserFacingError } from '@/lib/user-facing-error';
 import { Loader2, Key, Copy, Check, X, AlertCircle, Link as LinkIcon } from 'lucide-react';
 
 type Props = {
@@ -38,16 +40,26 @@ export default function GenerateResetLinkButton({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
       });
-      const data = await res.json();
 
-      if (res.ok && data.link) {
+      if (!res.ok) {
+        const friendly = toUserFacingError(
+          await errorFromResponse(res, 'Failed to generate link')
+        );
+        setError(friendly.description || friendly.title);
+        setConfirming(false);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.link) {
         setResetLink(data.link);
       } else {
-        setError(data.error || 'Failed to generate link');
+        setError('Failed to generate link');
         setConfirming(false);
       }
-    } catch (_err) {
-      setError('An error occurred');
+    } catch (err) {
+      const friendly = toUserFacingError(err, 'Failed to generate link');
+      setError(friendly.description || friendly.title);
       setConfirming(false);
     } finally {
       setIsLoading(false);

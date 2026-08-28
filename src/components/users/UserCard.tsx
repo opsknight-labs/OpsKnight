@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import UserAvatar from '@/components/UserAvatar';
 import OidcLinkingApprovalButton from './OidcLinkingApprovalButton';
 import { Button } from '@/components/ui/shadcn/button';
+import { errorFromResponse } from '@/lib/client-error';
+import { toUserFacingError } from '@/lib/user-facing-error';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -130,15 +132,24 @@ export function UserCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
       });
-      const data = await res.json();
 
-      if (res.ok && data.link) {
+      if (!res.ok) {
+        const friendly = toUserFacingError(
+          await errorFromResponse(res, 'Failed to generate link')
+        );
+        setLinkError(friendly.description || friendly.title);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.link) {
         setInviteLink(data.link);
       } else {
-        setLinkError(data.error || 'Failed to generate link');
+        setLinkError('Failed to generate link');
       }
-    } catch (_err) {
-      setLinkError('An error occurred');
+    } catch (err) {
+      const friendly = toUserFacingError(err, 'Failed to generate link');
+      setLinkError(friendly.description || friendly.title);
     } finally {
       setIsLoadingLink(false);
     }
@@ -217,7 +228,6 @@ export function UserCard({
           size="lg"
           className="ring-2 ring-background shadow-md transition-transform duration-300 group-hover:scale-105"
         />
-
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-semibold text-sm truncate">{user.name}</h3>
