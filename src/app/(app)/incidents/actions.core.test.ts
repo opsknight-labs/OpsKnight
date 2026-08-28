@@ -127,13 +127,9 @@ describe('createIncident Action', () => {
     };
     const reopenedAt = new Date(Date.now() + 60_000);
 
-    vi.mocked(prisma.incident.findFirst).mockImplementation(async args => {
-      if (args?.where?.status && typeof args.where.status === 'object' && 'in' in args.where.status) {
-        return null;
-      }
-      if (args?.where?.status === 'RESOLVED') return recentResolved as never;
-      return null;
-    });
+    vi.mocked(prisma.incident.findFirst)
+      .mockResolvedValueOnce(null as never)
+      .mockResolvedValueOnce(recentResolved as never);
 
     // The lifecycle engine owns the mutation; this action only reloads the committed incident.
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
