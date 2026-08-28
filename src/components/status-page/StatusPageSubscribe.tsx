@@ -60,8 +60,8 @@ export default function StatusPageSubscribe({ statusPageId, onSuccess }: StatusP
                     onSuccess();
                 }
             } catch (err: unknown) {
-                const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-                setError(getUserFriendlyError(err) || 'Failed to subscribe');
+                const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+                setError(getUserFacingErrorMessage(err) || 'Failed to subscribe');
             }
         });
     };

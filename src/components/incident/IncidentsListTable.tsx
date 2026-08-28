@@ -136,8 +136,8 @@ export default function IncidentsListTable({
         showToast(`Incident ${status.toLowerCase()} successfully`, 'success');
         router.refresh();
       } catch (error) {
-        const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-        showToast(getUserFriendlyError(error) || 'Failed to update status', 'error');
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        showToast(getUserFacingErrorMessage(error) || 'Failed to update status', 'error');
       }
     });
   };
@@ -227,8 +227,8 @@ export default function IncidentsListTable({
           showToast(result?.error || 'Failed to update incidents', 'error');
         }
       } catch (error) {
-        const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-        showToast(getUserFriendlyError(error) || 'Failed to update incidents', 'error');
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        showToast(getUserFacingErrorMessage(error) || 'Failed to update incidents', 'error');
       }
     });
   };
@@ -276,8 +276,8 @@ export default function IncidentsListTable({
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-      showToast(getUserFriendlyError(error) || 'Failed to export incidents', 'error');
+      const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+      showToast(getUserFacingErrorMessage(error) || 'Failed to export incidents', 'error');
     }
   };
 

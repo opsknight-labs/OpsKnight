@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { getEmailValidationError } from '@/lib/form-validation';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
+import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import {
@@ -265,7 +265,7 @@ export default function UserCreateForm({ action, className = '', disabled = fals
         {state?.error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-100 flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            <p>{getUserFriendlyError(state.error)}</p>
+            <p>{getUserFacingErrorMessage(state.error)}</p>
           </div>
         )}
 

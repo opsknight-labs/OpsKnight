@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
 import { AppError, ERROR_REGISTRY, normalizeError, toPublicAppError } from '@/lib/errors';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
+import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 
 describe('AppError', () => {
   it('derives stable defaults from the error registry', () => {
@@ -80,7 +80,7 @@ describe('AppError', () => {
     expect(error.code).toBe('AUTHORIZATION_DENIED');
     expect(error.status).toBe(403);
     expect(error.details).toEqual({ capability: CAPABILITIES.OPERATIONS_MANAGE });
-    expect(getUserFriendlyError(error)).toBe('You do not have permission to do that');
+    expect(getUserFacingErrorMessage(error)).toBe('You do not have permission to do that');
   });
 
   it('registers lifecycle codes so existing domain errors normalize without losing identity', () => {
