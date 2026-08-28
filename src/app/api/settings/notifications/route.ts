@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { getCurrentUser } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
 import prisma from '@/lib/prisma';
 import {
   SECRET_MASK,
@@ -106,7 +105,7 @@ export async function GET(_req: NextRequest) {
       whatsapp: whatsappConfig,
     });
   } catch (error) {
-    return jsonError(getUserFriendlyError(error), 500);
+    return jsonError(error, 500);
   }
 }
 
@@ -278,6 +277,6 @@ export async function POST(req: NextRequest) {
       message: 'Notification provider settings saved successfully',
     });
   } catch (error) {
-    return jsonError(getUserFriendlyError(error), 500);
+    return jsonError(error, 500);
   }
 }

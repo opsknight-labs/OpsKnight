@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
 import { assertResponderOrAbove } from '@/lib/rbac';
 import { GET } from '@/app/api/teams/[id]/available-users/route';
 
@@ -59,13 +60,18 @@ describe('team available-user directory search', () => {
 
   it('does not expose the directory to unauthorized users', async () => {
     vi.mocked(assertResponderOrAbove).mockRejectedValue(
-      new Error('Unauthorized. Responder access or above required.')
+      new AuthorizationError(
+        'Unauthorized. Responder access or above required.',
+        CAPABILITIES.OPERATIONS_MANAGE
+      )
     );
     const request = new NextRequest('http://localhost/api/teams/team-1/available-users');
 
     const response = await GET(request, { params: Promise.resolve({ id: 'team-1' }) });
+    const body = await response.json();
 
     expect(response.status).toBe(403);
+    expect(body.code).toBe('AUTHORIZATION_DENIED');
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 });

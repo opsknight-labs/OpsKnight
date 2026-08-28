@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from 'crypto';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { validatePasswordStrength } from '@/lib/passwords';
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
@@ -169,7 +170,11 @@ export async function checkRateLimit(
   });
 
   if (emailCount >= MAX_ATTEMPTS_PER_WINDOW) {
-    throw new Error('Too many requests. Please try again later.');
+    throw new AppError({
+      code: 'RATE_LIMIT_EXCEEDED',
+      userMessage: 'Too many requests. Please try again later.',
+      details: { scope: 'email', action },
+    });
   }
 
   // Check by IP using new Indexed Column
@@ -183,7 +188,11 @@ export async function checkRateLimit(
     });
 
     if (ipCount >= MAX_ATTEMPTS_PER_WINDOW * 2) {
-      throw new Error('Too many requests from this IP.');
+      throw new AppError({
+        code: 'RATE_LIMIT_EXCEEDED',
+        userMessage: 'Too many requests from this IP.',
+        details: { scope: 'ip', action },
+      });
     }
   }
 }
