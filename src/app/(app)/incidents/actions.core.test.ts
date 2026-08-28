@@ -20,19 +20,21 @@ vi.mock('@/lib/escalation', () => ({
   executeEscalation: vi.fn().mockResolvedValue({ escalated: false }),
 }));
 
-const applyIncidentLifecycleCommandMock = vi.fn().mockResolvedValue({
-  incidentId: 'inc-resolved',
-  command: 'REOPEN',
-  source: 'WEB',
-  previousStatus: 'RESOLVED',
-  status: 'OPEN',
-  changed: true,
-});
+const { applyIncidentLifecycleCommandMock, scheduleEscalationMock } = vi.hoisted(() => ({
+  applyIncidentLifecycleCommandMock: vi.fn().mockResolvedValue({
+    incidentId: 'inc-resolved',
+    command: 'REOPEN',
+    source: 'WEB',
+    previousStatus: 'RESOLVED',
+    status: 'OPEN',
+    changed: true,
+  }),
+  scheduleEscalationMock: vi.fn().mockResolvedValue('job-1'),
+}));
 vi.mock('@/lib/incidents/lifecycle', () => ({
   applyIncidentLifecycleCommand: applyIncidentLifecycleCommandMock,
 }));
 
-const scheduleEscalationMock = vi.fn().mockResolvedValue('job-1');
 vi.mock('@/lib/jobs/queue', () => ({
   scheduleEscalation: scheduleEscalationMock,
 }));
@@ -172,11 +174,7 @@ describe('createIncident Action', () => {
       })
     );
 
-    expect(scheduleEscalationMock).toHaveBeenCalledWith(
-      'inc-resolved',
-      0,
-      expect.any(Number)
-    );
+    expect(scheduleEscalationMock).toHaveBeenCalledWith('inc-resolved', 0, expect.any(Number));
     expect(result).toHaveProperty('id', 'inc-resolved');
   });
 });
