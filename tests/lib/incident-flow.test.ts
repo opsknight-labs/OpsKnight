@@ -63,6 +63,8 @@ describe('incident flow safeguards', () => {
     prismaMock.incident.findMany.mockReset().mockResolvedValue([]);
     prismaMock.incidentEvent.create = vi.fn().mockResolvedValue({});
     prismaMock.incidentEvent.createMany = vi.fn().mockResolvedValue({ count: 0 });
+    prismaMock.$queryRaw = vi.fn().mockResolvedValue([{ now: new Date() }]);
+    prismaMock.backgroundJob.createMany = vi.fn().mockResolvedValue({ count: 0 });
   });
 
   it('bulk acknowledge stops escalation through the lifecycle engine', async () => {

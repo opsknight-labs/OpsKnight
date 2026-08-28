@@ -1,8 +1,5 @@
 import { IncidentStatus, Prisma } from '@prisma/client';
-import type {
-  IncidentLifecycleCommand,
-  IncidentLifecycleSource,
-} from './incidents/lifecycle';
+import type { IncidentLifecycleCommand, IncidentLifecycleSource } from './incidents/lifecycle';
 
 export type EventOutboxAction = 'triggered' | 'resolved' | 'acknowledged';
 
@@ -89,11 +86,7 @@ export function getLifecycleSideEffects(
     effects.add('LIFECYCLE_STATUS_PAGE');
     effects.add('LIFECYCLE_WEBHOOK');
 
-    if (
-      input.status === 'ACKNOWLEDGED' ||
-      input.status === 'RESOLVED' ||
-      input.status === 'OPEN'
-    ) {
+    if (input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED' || input.status === 'OPEN') {
       effects.add('LIFECYCLE_USER_NOTIFICATION');
     }
 
@@ -107,11 +100,7 @@ export function getLifecycleSideEffects(
 
   if (input.source === 'BULK') {
     effects.add('LIFECYCLE_WEBHOOK');
-    if (
-      input.status === 'ACKNOWLEDGED' ||
-      input.status === 'RESOLVED' ||
-      input.status === 'OPEN'
-    ) {
+    if (input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED' || input.status === 'OPEN') {
       effects.add('LIFECYCLE_USER_NOTIFICATION');
     }
     if (input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED') {
@@ -124,11 +113,7 @@ export function getLifecycleSideEffects(
   if (input.source === 'REST_API') {
     effects.add('LIFECYCLE_SERVICE_NOTIFICATION');
     effects.add('LIFECYCLE_WEBHOOK');
-    if (
-      input.status === 'ACKNOWLEDGED' ||
-      input.status === 'RESOLVED' ||
-      input.status === 'OPEN'
-    ) {
+    if (input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED' || input.status === 'OPEN') {
       effects.add('LIFECYCLE_STATUS_PAGE');
     }
     return Array.from(effects);
@@ -211,8 +196,19 @@ async function enqueueSideEffects(
         lane: getEventSideEffectLane(effect),
         incidentId,
         eventOrderAt: eventOrderAtIso,
-        ...(lifecycle ? { lifecycle } : {}),
-      } satisfies EventSideEffectPayload,
+        ...(lifecycle
+          ? {
+              lifecycle: {
+                command: lifecycle.command,
+                source: lifecycle.source,
+                previousStatus: lifecycle.previousStatus,
+                status: lifecycle.status,
+                transitionAt: lifecycle.transitionAt,
+                snoozedUntil: lifecycle.snoozedUntil,
+              },
+            }
+          : {}),
+      } satisfies EventSideEffectPayload & Prisma.InputJsonObject,
     })),
   });
 }
