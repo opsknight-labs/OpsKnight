@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toUserFacingError } from '@/lib/user-facing-error';
 
 describe('toUserFacingError', () => {
-  it('preserves clear product guidance', () => {
+  it('preserves explicit public product guidance', () => {
     expect(
       toUserFacingError('Alex is already assigned to Primary. Remove them there before continuing.')
     ).toEqual({
@@ -10,24 +10,29 @@ describe('toUserFacingError', () => {
     });
   });
 
-  it('hides database implementation details', () => {
+  it('hides technical implementation details without classifying their semantics', () => {
     expect(toUserFacingError('Prisma P2002: Unique constraint failed')).toEqual({
-      title: 'That item already exists',
-      description: 'Choose a different value or update the existing item instead.',
+      title: "We couldn't complete that action",
+      description: 'Please try again. If the problem continues, contact an administrator.',
     });
   });
 
-  it('turns network failures into recovery guidance', () => {
+  it('does not infer network semantics from arbitrary exception text', () => {
     expect(toUserFacingError(new Error('Failed to fetch'))).toEqual({
-      title: 'Connection problem',
-      description: 'Check your connection and try again. Your changes may not have been saved.',
+      title: "We couldn't complete that action",
+      description: 'Please try again. If the problem continues, contact an administrator.',
     });
   });
 
-  it('explains legacy authorization failures without exposing server text', () => {
+  it('does not infer authorization semantics from untyped public text', () => {
     expect(toUserFacingError('Unauthorized. Admin access required.')).toEqual({
-      title: 'You do not have permission to do that',
-      description: 'Ask an administrator for access, or sign in with an account that has permission.',
+      title: 'Unauthorized. Admin access required.',
+    });
+  });
+
+  it('preserves an explicit legacy API error field without deriving semantics from it', () => {
+    expect(toUserFacingError({ error: 'Legacy public API message' })).toEqual({
+      title: 'Legacy public API message',
     });
   });
 

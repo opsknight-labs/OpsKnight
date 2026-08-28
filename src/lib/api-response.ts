@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getUserFriendlyError } from './user-friendly-errors';
-import { isAppError, toPublicAppError, type AppError } from './errors';
+import { isAppError, normalizeError, toPublicAppError, type AppError } from './errors';
 
 export function jsonError(
   error: string | AppError | unknown,
@@ -26,8 +25,26 @@ export function jsonError(
     );
   }
 
-  const friendlyMessage = getUserFriendlyError(error);
-  return NextResponse.json({ error: friendlyMessage, meta }, { status: status ?? 500, headers });
+  // Plain strings are an explicit legacy public contract. Do not reinterpret
+  // their English wording. Unexpected exceptions are normalized to the safe
+  // INTERNAL_ERROR contract instead of passing through a text translator.
+  if (typeof error === 'string') {
+    return NextResponse.json({ error, meta }, { status: status ?? 500, headers });
+  }
+
+  const normalized = normalizeError(error);
+  const publicError = toPublicAppError(normalized);
+  return NextResponse.json(
+    {
+      error: publicError.message,
+      code: publicError.code,
+      action: publicError.action,
+      retryable: publicError.retryable,
+      fields: publicError.fields,
+      meta,
+    },
+    { status: normalized.status, headers }
+  );
 }
 
 export function jsonOk<T>(payload: T, status: number = 200, headers?: HeadersInit) {
