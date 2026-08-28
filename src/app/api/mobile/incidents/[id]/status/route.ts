@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
-import { logger } from '@/lib/logger';
+import { logger, withRequestContext } from '@/lib/logger';
 import { updateIncidentStatus } from '@/lib/incidents/operator-lifecycle';
 
 const StatusSchema = z.object({
@@ -17,7 +17,7 @@ const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
 const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
 
-export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+async function patchIncidentStatus(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
     const session = await getServerSession(await getAuthOptions());
@@ -85,4 +85,5 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
   }
 }
 
+export const PATCH = withRequestContext(patchIncidentStatus, 'api.mobile.incident.status');
 export const POST = PATCH;

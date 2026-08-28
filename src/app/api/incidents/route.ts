@@ -4,7 +4,7 @@ import { authenticateApiKey } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { IncidentCreateSchema } from '@/lib/validation';
-import { logger } from '@/lib/logger';
+import { logger, withRequestContext } from '@/lib/logger';
 import { resolveApiKeyActor } from '@/lib/authorization-actors';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
@@ -41,7 +41,7 @@ function rateLimitError(retryAfter: number) {
   );
 }
 
-export async function GET(req: NextRequest) {
+async function getIncidents(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
     return jsonError(
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-export async function POST(req: NextRequest) {
+async function postIncident(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
     return jsonError(
@@ -232,3 +232,6 @@ export async function POST(req: NextRequest) {
     return jsonError(error);
   }
 }
+
+export const GET = withRequestContext(getIncidents, 'api.incidents.list');
+export const POST = withRequestContext(postIncident, 'api.incidents.create');
