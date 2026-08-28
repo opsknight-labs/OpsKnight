@@ -89,7 +89,12 @@ describe('audit event contract', () => {
       data: expect.objectContaining({
         targetEmail: 'target@example.com',
         ip: '127.0.0.1',
-        details: expect.objectContaining({ source: 'UI', contractVersion: 1 }),
+        details: expect.objectContaining({
+          source: 'UI',
+          contractVersion: 1,
+          targetEmail: 'target@example.com',
+          ip: '127.0.0.1',
+        }),
       }),
     });
   });

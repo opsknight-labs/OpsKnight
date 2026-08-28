@@ -72,6 +72,8 @@ export async function emitAuditEvent(
   const resolvedEmail = input.actor?.email ?? actorSnapshot?.email ?? null;
   const resolvedName = input.actor?.name ?? actorSnapshot?.name ?? null;
   const correlationId = resolveRequestId(input.requestId);
+  const targetEmail = input.targetEmail?.toLowerCase().trim() || null;
+  const ip = input.ip || null;
 
   await client.auditLog.create({
     data: {
@@ -81,8 +83,8 @@ export async function emitAuditEvent(
       actorId,
       actorEmail: resolvedEmail,
       actorName: resolvedName,
-      targetEmail: input.targetEmail?.toLowerCase().trim() || null,
-      ip: input.ip || null,
+      targetEmail,
+      ip,
       details: {
         contractVersion: 1,
         source: input.source,
@@ -98,6 +100,10 @@ export async function emitAuditEvent(
         oldValue: jsonValue(input.oldValue),
         newValue: jsonValue(input.newValue),
         metadata: jsonValue(input.metadata),
+        // Preserve the legacy lookup paths while consumers migrate to the
+        // versioned envelope and indexed columns.
+        ...(targetEmail ? { targetEmail } : {}),
+        ...(ip ? { ip } : {}),
       },
     },
   });
