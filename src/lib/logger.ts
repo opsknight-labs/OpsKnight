@@ -1,9 +1,4 @@
-import {
-  getRequestContext,
-  runWithContext,
-  requestContextStorage,
-  type RequestContext,
-} from './request-context';
+import { runWithContext, requestContextStorage } from './request-context';
 
 export {
   getRequestContext,

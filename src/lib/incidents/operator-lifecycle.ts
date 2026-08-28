@@ -9,11 +9,12 @@ import {
   getCurrentUser,
 } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
+import type { IdempotencyContext } from '@/lib/idempotency';
+import type { IncidentLifecycleSource } from '@/lib/incidents/lifecycle';
 import {
-  executeIncidentLifecycleCommand,
-  transitionIncidentToStatus,
-  type IncidentLifecycleSource,
-} from '@/lib/incidents/lifecycle';
+  executeIdempotentIncidentLifecycleCommand,
+  transitionIncidentToStatusIdempotent,
+} from '@/lib/incidents/idempotent-commands';
 
 type OperatorLifecycleSource = Extract<IncidentLifecycleSource, 'WEB' | 'MOBILE'>;
 
@@ -33,26 +34,32 @@ export async function updateIncidentStatus(
   id: string,
   status: IncidentStatus,
   expectedStatus: IncidentStatus | undefined,
-  source: OperatorLifecycleSource
-): Promise<void> {
+  source: OperatorLifecycleSource,
+  idempotency?: IdempotencyContext
+): Promise<{ replayed: boolean }> {
   if (status === 'ACKNOWLEDGED') await assertCanAcknowledgeIncident(id);
   else await assertResponderOrAbove();
 
-  const result = await transitionIncidentToStatus({
-    incidentId: id,
-    status,
-    expectedStatus,
-    source,
-  });
+  const result = await transitionIncidentToStatusIdempotent(
+    {
+      incidentId: id,
+      status,
+      expectedStatus,
+      source,
+    },
+    idempotency
+  );
 
-  if (result.changed) revalidateIncident(id);
+  if (result.value.changed && !result.replayed) revalidateIncident(id);
+  return { replayed: result.replayed };
 }
 
 export async function resolveIncidentWithNote(
   id: string,
   resolution: string,
-  source: OperatorLifecycleSource = 'WEB'
-): Promise<void> {
+  source: OperatorLifecycleSource = 'WEB',
+  idempotency?: IdempotencyContext
+): Promise<{ replayed: boolean }> {
   await assertResponderOrAbove();
 
   const trimmedResolution = resolution?.trim();
@@ -87,13 +94,17 @@ export async function resolveIncidentWithNote(
   }
 
   const user = await getCurrentUser();
-  const result = await executeIncidentLifecycleCommand({
-    incidentId: id,
-    command: 'RESOLVE',
-    source,
-    actor: { id: user.id, name: user.name ?? undefined },
-    resolutionNote: trimmedResolution,
-  });
+  const result = await executeIdempotentIncidentLifecycleCommand(
+    {
+      incidentId: id,
+      command: 'RESOLVE',
+      source,
+      actor: { id: user.id, name: user.name ?? undefined },
+      resolutionNote: trimmedResolution,
+    },
+    idempotency
+  );
 
-  if (result.changed) revalidateIncident(id);
+  if (result.value.changed && !result.replayed) revalidateIncident(id);
+  return { replayed: result.replayed };
 }

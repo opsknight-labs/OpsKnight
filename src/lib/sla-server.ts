@@ -21,6 +21,7 @@ import {
 import { incidentEventSqlPredicate, incidentEventWhereFor } from './incident-event-classifier';
 import { mergeHybridMetrics } from './sla-hybrid-merge';
 import { getActiveOnCallShifts, getWindowOnCallShifts } from './oncall-shifts';
+import { createTimeContractContext, resolveReportingWindow } from './time-retention-contract';
 
 // UUID validation regex - prevents SQL injection in dynamic CASE statements
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -727,35 +728,33 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   const coverageWindowDays = 14;
   const userTimeZone = normalizeTimeZone(filters.userTimeZone);
 
-  // Calculate time window with retention policy
-  let requestedStart = filters.startDate;
+  // Calculate every reporting boundary from the same clock and retention contract.
+  const requestedStart = filters.startDate;
   const requestedEnd = filters.endDate || now;
-
-  if (!requestedStart) {
-    if (filters.includeAllTime) {
-      // "All Time" means within retention policy - NOT hardcoded!
-      requestedStart = new Date(now);
-      requestedStart.setDate(requestedStart.getDate() - retentionPolicy.incidentRetentionDays);
-    } else {
-      requestedStart = new Date(now);
-      requestedStart.setDate(now.getDate() - windowDays);
-    }
-  }
-  const requestedStartDate = requestedStart ?? now;
+  const timeContext = createTimeContractContext({
+    now,
+    userTimeZone,
+    businessTimeZone: retentionPolicy.businessHoursTimeZone,
+  });
+  const incidentWindow = resolveReportingWindow({
+    context: timeContext,
+    policy: retentionPolicy,
+    dataType: 'incident',
+    requestedStart,
+    requestedEnd,
+    defaultWindowDays: filters.includeAllTime ? undefined : windowDays,
+  });
+  const { start, end } = incidentWindow.effective;
+  const { isClipped } = incidentWindow;
+  const requestedStartDate = incidentWindow.requested.start ?? incidentWindow.effective.start;
   const requestedEndDate = requestedEnd;
-
-  // Apply retention policy bounds - this ensures we never query beyond retained data
-  const { start, end, isClipped } = await getQueryDateBounds(
-    requestedStartDate,
-    requestedEndDate,
-    'incident'
-  );
 
   if (isClipped) {
     logger.info('[SLA] Date range clipped to retention policy', {
       requested: { start: requestedStart?.toISOString(), end: requestedEnd?.toISOString() },
       actual: { start: start.toISOString(), end: end.toISOString() },
       retentionDays: retentionPolicy.incidentRetentionDays,
+      clipReasons: incidentWindow.clipReasons,
     });
   }
 
@@ -767,11 +766,13 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     [finalStart, finalEnd] = [finalEnd, finalStart];
   }
 
-  const { start: alertStart, end: alertEnd } = await getQueryDateBounds(
-    requestedStartDate,
-    requestedEndDate,
-    'alert'
-  );
+  const { start: alertStart, end: alertEnd } = resolveReportingWindow({
+    context: timeContext,
+    policy: retentionPolicy,
+    dataType: 'alert',
+    requestedStart: requestedStartDate,
+    requestedEnd: requestedEndDate,
+  }).effective;
 
   // Check if we should use rollup data for this historical query.
   // Rollups are pre-aggregated daily snapshots — much faster than live queries
