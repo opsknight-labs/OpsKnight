@@ -234,7 +234,40 @@ export async function getWidgetData(
   }));
 
   // Recent activity from IncidentEvents (minimal query, sla-server doesn't include this)
+  const activityIncidentWhere = filters.serviceId
+    ? {
+        serviceId: Array.isArray(filters.serviceId)
+          ? { in: filters.serviceId }
+          : filters.serviceId,
+      }
+    : filters.teamId
+      ? filters.useOrScope
+        ? {
+            OR: [
+              {
+                teamId: {
+                  in: Array.isArray(filters.teamId) ? filters.teamId : [filters.teamId],
+                },
+              },
+              {
+                service: {
+                  teamId: {
+                    in: Array.isArray(filters.teamId) ? filters.teamId : [filters.teamId],
+                  },
+                },
+              },
+            ],
+          }
+        : {
+            service: {
+              teamId: {
+                in: Array.isArray(filters.teamId) ? filters.teamId : [filters.teamId],
+              },
+            },
+          }
+      : undefined;
   const recentIncidentEvents = await prisma.incidentEvent.findMany({
+    ...(activityIncidentWhere ? { where: { incident: activityIncidentWhere } } : {}),
     take: 10,
     orderBy: { createdAt: 'desc' },
     select: {
