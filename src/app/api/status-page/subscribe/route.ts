@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 import { sendEmail } from '@/lib/email';
@@ -14,6 +15,10 @@ import {
   getStatusPageVerificationUrl,
 } from '@/lib/status-page-url';
 
+function rateLimitError(retryAfter: number) {
+  return jsonError(new AppError({ code: 'RATE_LIMIT_EXCEEDED' }), undefined, { retryAfter });
+}
+
 /**
  * Subscribe to Status Page Updates
  * POST /api/status-page/subscribe
@@ -23,54 +28,71 @@ export async function POST(req: NextRequest) {
     const ip = getClientIp(req.headers);
     const ipRate = await checkRateLimit(`api:status-page:subscribe:ip:${ip}`, 10, 60_000);
     if (!ipRate.allowed) {
-      const retryAfter = Math.ceil((ipRate.resetAt - Date.now()) / 1000);
-      return jsonError('Rate limit exceeded', 429, { retryAfter });
+      return rateLimitError(Math.max(1, Math.ceil((ipRate.resetAt - Date.now()) / 1000)));
     }
 
-    const body = await req.json();
-    const { statusPageId, email } = body;
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch (error) {
+      return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
+    }
+    const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    const statusPageId = typeof payload.statusPageId === 'string' ? payload.statusPageId : '';
+    const email = typeof payload.email === 'string' ? payload.email.trim() : '';
 
     if (!statusPageId || !email || !email.includes('@')) {
-      return jsonError('Valid statusPageId and email are required', 400);
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'Valid statusPageId and email are required',
+          fields: [
+            ...(!statusPageId
+              ? [{ field: 'statusPageId', code: 'required', message: 'statusPageId is required' }]
+              : []),
+            ...(!email || !email.includes('@')
+              ? [{ field: 'email', code: 'invalid', message: 'A valid email is required' }]
+              : []),
+          ],
+        })
+      );
     }
 
-    const emailKey = `${statusPageId}:${email.trim().toLowerCase()}`;
+    const normalizedEmail = email.toLowerCase();
+    const emailKey = `${statusPageId}:${normalizedEmail}`;
     const emailRate = await checkRateLimit(
       `api:status-page:subscribe:email:${emailKey}`,
       3,
       60_000
     );
     if (!emailRate.allowed) {
-      const retryAfter = Math.ceil((emailRate.resetAt - Date.now()) / 1000);
-      return jsonError('Rate limit exceeded', 429, { retryAfter });
+      return rateLimitError(Math.max(1, Math.ceil((emailRate.resetAt - Date.now()) / 1000)));
     }
 
-    // Verify status page exists and is enabled
     const statusPage = await prisma.statusPage.findFirst({
       where: { id: statusPageId, enabled: true },
     });
 
     if (!statusPage) {
-      return jsonError('Status page not found or disabled', 404);
+      return jsonError(
+        new AppError({
+          code: 'RESOURCE_NOT_FOUND',
+          userMessage: 'Status page not found or disabled',
+        })
+      );
     }
 
-    // Generate tokens
     const token = randomBytes(32).toString('hex');
     const verificationToken = randomBytes(32).toString('hex');
 
-    // Check if subscription already exists
     const existing = await prisma.statusPageSubscription.findUnique({
       where: {
-        statusPageId_email: {
-          statusPageId,
-          email: email.trim().toLowerCase(),
-        },
+        statusPageId_email: { statusPageId, email: normalizedEmail },
       },
     });
 
     if (existing) {
       if (existing.unsubscribedAt) {
-        // Resubscribe
         await prisma.statusPageSubscription.update({
           where: { id: existing.id },
           data: {
@@ -91,19 +113,16 @@ export async function POST(req: NextRequest) {
           200
         );
       } else {
-        // Rotate stale verification credentials and resend so an attacker cannot
-        // permanently reserve somebody else's email address.
         await prisma.statusPageSubscription.update({
           where: { id: existing.id },
           data: { token, verificationToken },
         });
       }
     } else {
-      // Create new subscription
       await prisma.statusPageSubscription.create({
         data: {
           statusPageId,
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           token,
           verificationToken,
           verified: false,
@@ -111,14 +130,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Send verification email using status page's preferred email provider
     try {
       const { getStatusPageEmailConfig } = await import('@/lib/notification-providers');
       const emailConfig = await getStatusPageEmailConfig(statusPageId);
 
       if (!emailConfig.enabled || !emailConfig.provider) {
         logger.warn('api.status_page.subscription.no_email_provider', { statusPageId });
-        // Continue - subscription created but no email sent
       } else {
         const appBaseUrl = getBaseUrl();
         const statusPageUrl = getStatusPagePublicUrl(statusPage, appBaseUrl);
@@ -150,39 +167,42 @@ export async function POST(req: NextRequest) {
 
         await sendEmail(
           {
-            to: email.trim().toLowerCase(),
+            to: normalizedEmail,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
             text: emailTemplate.text,
           },
           emailConfig
-        ); // Pass the config
+        );
 
         logger.info('api.status_page.subscription.verification_email_sent', {
           statusPageId,
-          email,
+          email: normalizedEmail,
           provider: emailConfig.provider,
         });
       }
-    } catch (emailError: any) {
-      // Log error but don't fail the subscription - email can be resent later
+    } catch (emailError) {
+      // Subscription creation remains successful when delivery fails. The email
+      // can be retried later; do not roll back the subscription contract.
       logger.error('api.status_page.subscription.verification_email_failed', {
         statusPageId,
-        email,
+        email: normalizedEmail,
         error: emailError instanceof Error ? emailError.message : String(emailError),
       });
     }
 
-    logger.info('api.status_page.subscription.created', { statusPageId, email });
+    logger.info('api.status_page.subscription.created', {
+      statusPageId,
+      email: normalizedEmail,
+    });
 
     return jsonOk(
       { success: true, message: 'Subscription created. Please check your email to verify.' },
       200
     );
-  } catch (error: any) {
-    logger.error('api.status_page.subscription.error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch (error) {
+    if (isAppError(error)) return jsonError(error);
+    logger.error('api.status_page.subscription.error', { error });
     return jsonError('Failed to create subscription', 500);
   }
 }

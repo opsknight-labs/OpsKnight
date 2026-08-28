@@ -5,6 +5,7 @@ import { basename, join, relative } from 'node:path';
 const API_ROOT = join(process.cwd(), 'src', 'app', 'api');
 const APP_ROOT = join(process.cwd(), 'src', 'app');
 const ERROR_IDENTIFIER = String.raw`(?:error|err|e|[A-Za-z_$][\w$]*(?:Error|Err))`;
+const MESSAGE_ALIAS = String.raw`(?:message|msg)`;
 
 function sourceFiles(root: string): string[] {
   const files: string[] = [];
@@ -45,11 +46,11 @@ describe('public API error contract architecture', () => {
       'g'
     );
     const normalizedMethodMatching = new RegExp(
-      String.raw`\bconst\s+message\s*=\s*${ERROR_IDENTIFIER}\s+instanceof\s+Error\s*\?\s*${ERROR_IDENTIFIER}(?:\?\.|\.)message[\s\S]{0,1600}?\bmessage(?:\?\.|\.)(?:includes|startsWith|endsWith|match|search)\s*\(`,
+      String.raw`\bconst\s+${MESSAGE_ALIAS}\s*=\s*${ERROR_IDENTIFIER}\s+instanceof\s+Error\s*\?\s*${ERROR_IDENTIFIER}(?:\?\.|\.)message[\s\S]{0,1600}?\b${MESSAGE_ALIAS}(?:\?\.|\.)(?:includes|startsWith|endsWith|match|search)\s*\(`,
       'g'
     );
     const normalizedComparison = new RegExp(
-      String.raw`\bconst\s+message\s*=\s*${ERROR_IDENTIFIER}\s+instanceof\s+Error\s*\?\s*${ERROR_IDENTIFIER}(?:\?\.|\.)message[\s\S]{0,1600}?\bmessage\s*(?:===|!==|==|!=)\s*['"\x60]`,
+      String.raw`\bconst\s+${MESSAGE_ALIAS}\s*=\s*${ERROR_IDENTIFIER}\s+instanceof\s+Error\s*\?\s*${ERROR_IDENTIFIER}(?:\?\.|\.)message[\s\S]{0,1600}?\b${MESSAGE_ALIAS}\s*(?:===|!==|==|!=)\s*['"\x60]`,
       'g'
     );
 

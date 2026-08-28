@@ -1,47 +1,41 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { saveSlackOAuthConfig } from '@/app/(app)/settings/slack-oauth/actions';
-import { assertAdmin } from '@/lib/rbac';
+import { assertAdmin, getCurrentUser } from '@/lib/rbac';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
 
 export async function POST(request: NextRequest) {
   try {
     await assertAdmin();
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.' },
-      { status: 403 }
-    );
-  }
 
-  try {
     const formData = await request.formData();
     const result = await saveSlackOAuthConfig(formData);
 
     if (result?.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: result.error,
+        })
+      );
     }
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to save configuration' }, { status: 500 });
+    return jsonOk({ success: true });
+  } catch (error) {
+    if (isAppError(error)) return jsonError(error);
+    return jsonError('Failed to save configuration', 500);
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(_request: NextRequest) {
   try {
     await assertAdmin();
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unauthorized' },
-      { status: 403 }
-    );
-  }
 
-  try {
     const prisma = (await import('@/lib/prisma')).default;
     await prisma.slackOAuthConfig.deleteMany({});
 
     const { logAudit } = await import('@/lib/audit');
-    const user = await import('@/lib/rbac').then(m => m.getCurrentUser());
+    const user = await getCurrentUser();
 
     await logAudit({
       action: 'slack.oauth.config.deleted',
@@ -51,8 +45,9 @@ export async function DELETE(request: NextRequest) {
       details: { configType: 'slack-oauth' },
     });
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to delete configuration' }, { status: 500 });
+    return jsonOk({ success: true });
+  } catch (error) {
+    if (isAppError(error)) return jsonError(error);
+    return jsonError('Failed to delete configuration', 500);
   }
 }

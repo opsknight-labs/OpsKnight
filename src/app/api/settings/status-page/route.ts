@@ -3,10 +3,45 @@ import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
+import { prismaToAppError } from '@/lib/prisma-errors';
 import { StatusPageSettingsSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 import { assertStatusPageNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
+
+function statusPageUniqueError(fields: string[]) {
+  if (fields.includes('subdomain')) {
+    return {
+      code: 'VALIDATION_FAILED' as const,
+      userMessage: 'This subdomain is already in use. Please choose a different one.',
+      fields: [
+        {
+          field: 'subdomain',
+          code: 'duplicate',
+          message: 'This subdomain is already in use. Please choose a different one.',
+        },
+      ],
+    };
+  }
+  if (fields.includes('customDomain')) {
+    return {
+      code: 'VALIDATION_FAILED' as const,
+      userMessage: 'This custom domain is already in use. Please choose a different one.',
+      fields: [
+        {
+          field: 'customDomain',
+          code: 'duplicate',
+          message: 'This custom domain is already in use. Please choose a different one.',
+        },
+      ],
+    };
+  }
+  return {
+    code: 'VALIDATION_FAILED' as const,
+    userMessage: 'A record with this value already exists.',
+  };
+}
 
 /**
  * Update Status Page Settings
@@ -15,21 +50,31 @@ import { assertStatusPageNameAvailable, UniqueNameConflictError } from '@/lib/un
 export async function POST(req: NextRequest) {
   try {
     await assertAdmin();
-  } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
-  }
 
-  try {
-    let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let body: unknown;
     try {
       body = await req.json();
-    } catch (_error) {
-      return jsonError('Invalid JSON in request body.', 400);
+    } catch (error) {
+      return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
     }
+
     const parsed = StatusPageSettingsSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'Invalid request body.',
+          fields: parsed.error.issues.map(issue => ({
+            field: issue.path.join('.') || 'request',
+            code: issue.code,
+            message: issue.message,
+          })),
+        }),
+        undefined,
+        { issues: parsed.error.issues }
+      );
     }
+
     const {
       name,
       organizationName,
@@ -48,7 +93,6 @@ export async function POST(req: NextRequest) {
       branding,
       serviceIds = [],
       serviceConfigs = {},
-      // Privacy settings
       privacyMode,
       showIncidentDetails,
       showIncidentTitles,
@@ -84,11 +128,9 @@ export async function POST(req: NextRequest) {
       statusApiRateLimitWindowSec,
     } = parsed.data;
 
-    // Get or create status page
     let statusPage = await prisma.statusPage.findFirst({});
 
     if (!statusPage) {
-      // Create new status page
       statusPage = await prisma.statusPage.create({
         data: {
           name: name?.trim() || 'Status Page',
@@ -102,7 +144,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Update status page
     const updateData: Prisma.StatusPageUpdateInput = {
       organizationName:
         organizationName !== undefined
@@ -124,16 +165,34 @@ export async function POST(req: NextRequest) {
       contactUrl: contactUrl && contactUrl.trim() ? contactUrl.trim() : null,
     };
 
-    // Only update name if it's provided and not empty - exclude current status page from duplicate check
     if (name !== undefined && name !== null && name.trim().length > 0) {
       try {
         const uniqueName = await assertStatusPageNameAvailable(name, { excludeId: statusPage.id });
         updateData.name = uniqueName;
       } catch (error) {
         if (error instanceof UniqueNameConflictError) {
-          return jsonError('A status page with this name already exists.', 400);
+          return jsonError(
+            new AppError({
+              code: 'VALIDATION_FAILED',
+              userMessage: 'A status page with this name already exists.',
+              fields: [
+                {
+                  field: 'name',
+                  code: 'duplicate',
+                  message: 'A status page with this name already exists.',
+                },
+              ],
+            })
+          );
         }
-        return jsonError(error instanceof Error ? error.message : 'Invalid status page name.', 400);
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: 'Invalid status page name.',
+            fields: [{ field: 'name', code: 'invalid', message: 'Invalid status page name.' }],
+            cause: error,
+          })
+        );
       }
     }
 
@@ -142,7 +201,6 @@ export async function POST(req: NextRequest) {
         branding === null ? Prisma.JsonNull : (branding as Prisma.InputJsonValue);
     }
 
-    // Privacy settings
     if (privacyMode !== undefined) updateData.privacyMode = privacyMode;
     if (showIncidentDetails !== undefined) updateData.showIncidentDetails = showIncidentDetails;
     if (showIncidentTitles !== undefined) updateData.showIncidentTitles = showIncidentTitles;
@@ -201,14 +259,9 @@ export async function POST(req: NextRequest) {
       data: updateData,
     });
 
-    // Update services
     if (Array.isArray(serviceIds)) {
-      // Delete existing services
-      await prisma.statusPageService.deleteMany({
-        where: { statusPageId: statusPage.id },
-      });
+      await prisma.statusPageService.deleteMany({ where: { statusPageId: statusPage.id } });
 
-      // Create new services with configurations
       if (serviceIds.length > 0) {
         await prisma.statusPageService.createMany({
           data: serviceIds.map((serviceId: string) => {
@@ -225,33 +278,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Purge cache for the public status page to ensure updates are reflected immediately
     revalidatePath('/status');
-    // Also revalidate the root path in case of rewrites or home page links
     revalidatePath('/');
 
     logger.info('api.status_page.updated', { statusPageId: statusPage.id });
     return jsonOk({ success: true }, 200);
-  } catch (error: any) {
-    logger.error('api.status_page.update_error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch (error) {
+    const prismaError = prismaToAppError(error, { unique: statusPageUniqueError });
+    if (prismaError) return jsonError(prismaError);
+    if (isAppError(error)) return jsonError(error);
 
-    // Handle Prisma unique constraint violations
-    if (error.code === 'P2002') {
-      const field = error.meta?.target?.[0];
-      if (field === 'subdomain') {
-        return jsonError('This subdomain is already in use. Please choose a different one.', 400);
-      }
-      if (field === 'customDomain') {
-        return jsonError(
-          'This custom domain is already in use. Please choose a different one.',
-          400
-        );
-      }
-      return jsonError('A record with this value already exists.', 400);
-    }
-
+    logger.error('api.status_page.update_error', { error });
     return jsonError('Failed to update status page', 500);
   }
 }

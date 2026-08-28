@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getIncidentContext } from '@/lib/incident-enrichment';
 import { assertCanViewIncident } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
+import { jsonError } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
 
 /**
  * GET: Fetch telemetry context for an incident
@@ -14,9 +16,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   try {
     await assertCanViewIncident(id);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unauthorized';
-    return NextResponse.json({ error: msg }, { status: msg === 'Incident not found' ? 404 : 403 });
+  } catch (error) {
+    if (isAppError(error)) return jsonError(error);
+
+    logger.error('api.incident_context.authorization_failed', { error, incidentId: id });
+    return jsonError(
+      new AppError({
+        code: 'INTERNAL_ERROR',
+        details: { incidentId: id },
+        cause: error,
+      })
+    );
   }
 
   const { searchParams } = new URL(request.url);

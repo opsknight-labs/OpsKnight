@@ -1,10 +1,16 @@
 import { NextRequest } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
+import { prismaToAppError } from '@/lib/prisma-errors';
 import { logger } from '@/lib/logger';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { assertAdmin } from '@/lib/rbac';
+
+const SUBSCRIPTION_NOT_FOUND = {
+  code: 'RESOURCE_NOT_FOUND' as const,
+  userMessage: 'Subscription not found',
+};
 
 /**
  * Get Status Page Subscribers
@@ -12,64 +18,57 @@ import { assertAdmin } from '@/lib/rbac';
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session) {
-      return jsonError('Unauthorized', 401);
-    }
-
-    // Require admin role
-    try {
-      await assertAdmin();
-    } catch {
-      return jsonError('Admin access required', 403);
-    }
+    await assertAdmin();
 
     const searchParams = req.nextUrl.searchParams;
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const page = Number.parseInt(searchParams.get('page') || '1', 10);
+    const limit = Number.parseInt(searchParams.get('limit') || '10', 10);
     const statusPageId = searchParams.get('statusPageId');
-    const verifiedFilter = searchParams.get('verified'); // 'true', 'false', or null (all)
-    const searchEmail = searchParams.get('email'); // Search by email
+    const verifiedFilter = searchParams.get('verified');
+    const searchEmail = searchParams.get('email');
+
+    if (!Number.isFinite(page) || page < 1 || !Number.isFinite(limit) || limit < 1 || limit > 100) {
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'Invalid pagination parameters.',
+          fields: [
+            ...(page < 1 || !Number.isFinite(page)
+              ? [{ field: 'page', code: 'invalid', message: 'page must be a positive integer' }]
+              : []),
+            ...(limit < 1 || limit > 100 || !Number.isFinite(limit)
+              ? [
+                  {
+                    field: 'limit',
+                    code: 'invalid',
+                    message: 'limit must be between 1 and 100',
+                  },
+                ]
+              : []),
+          ],
+        })
+      );
+    }
 
     const skip = (page - 1) * limit;
+    const where: Prisma.StatusPageSubscriptionWhereInput = {};
 
-    // Build where clause
-    const where: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-    if (statusPageId) {
-      where.statusPageId = statusPageId;
-    }
-
-    if (verifiedFilter === 'true') {
-      where.verified = true;
-    } else if (verifiedFilter === 'false') {
-      where.verified = false;
-    }
-
+    if (statusPageId) where.statusPageId = statusPageId;
+    if (verifiedFilter === 'true') where.verified = true;
+    else if (verifiedFilter === 'false') where.verified = false;
     if (searchEmail) {
-      where.email = {
-        contains: searchEmail,
-        mode: 'insensitive',
-      };
+      where.email = { contains: searchEmail, mode: 'insensitive' };
     }
 
-    // Get total count
     const total = await prisma.statusPageSubscription.count({ where });
-
-    // Get paginated subscribers
     const subscribers = await prisma.statusPageSubscription.findMany({
       where,
       include: {
         statusPage: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
       },
-      orderBy: {
-        subscribedAt: 'desc',
-      },
+      orderBy: { subscribedAt: 'desc' },
       skip,
       take: limit,
     });
@@ -83,21 +82,10 @@ export async function GET(req: NextRequest) {
       verified: verifiedFilter,
     });
 
-    return jsonOk(
-      {
-        subscribers,
-        total,
-        page,
-        limit,
-        totalPages,
-      },
-      200
-    );
-  } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('api.status_page.subscribers.error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    return jsonOk({ subscribers, total, page, limit, totalPages }, 200);
+  } catch (error) {
+    if (isAppError(error)) return jsonError(error);
+    logger.error('api.status_page.subscribers.error', { error });
     return jsonError('Failed to fetch subscribers', 500);
   }
 }
@@ -108,40 +96,31 @@ export async function GET(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session) {
-      return jsonError('Unauthorized', 401);
-    }
+    await assertAdmin();
 
-    // Require admin role
-    try {
-      await assertAdmin();
-    } catch {
-      return jsonError('Admin access required', 403);
-    }
-
-    const searchParams = req.nextUrl.searchParams;
-    const subscriptionId = searchParams.get('id');
-
+    const subscriptionId = req.nextUrl.searchParams.get('id');
     if (!subscriptionId) {
-      return jsonError('Subscription ID is required', 400);
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'Subscription ID is required',
+          fields: [
+            { field: 'id', code: 'required', message: 'Subscription ID is required' },
+          ],
+        })
+      );
     }
 
-    // Check if subscription exists
     const subscription = await prisma.statusPageSubscription.findUnique({
       where: { id: subscriptionId },
     });
-
     if (!subscription) {
-      return jsonError('Subscription not found', 404);
+      return jsonError(new AppError(SUBSCRIPTION_NOT_FOUND));
     }
 
-    // Mark as unsubscribed instead of deleting
     await prisma.statusPageSubscription.update({
       where: { id: subscriptionId },
-      data: {
-        unsubscribedAt: new Date(),
-      },
+      data: { unsubscribedAt: new Date() },
     });
 
     logger.info('api.status_page.subscriber.unsubscribed', {
@@ -150,11 +129,12 @@ export async function DELETE(req: NextRequest) {
     });
 
     return jsonOk({ success: true, message: 'Subscriber unsubscribed successfully' }, 200);
-  } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('api.status_page.subscriber.delete.error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch (error) {
+    const prismaError = prismaToAppError(error, { notFound: SUBSCRIPTION_NOT_FOUND });
+    if (prismaError) return jsonError(prismaError);
+    if (isAppError(error)) return jsonError(error);
+
+    logger.error('api.status_page.subscriber.delete.error', { error });
     return jsonError('Failed to unsubscribe', 500);
   }
 }
