@@ -1,44 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
+import { authenticateApiKey } from '@/lib/api-auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { IncidentPatchSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { resolveApiKeyActor } from '@/lib/authorization-actors';
+import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 type IncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH';
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;
 
-async function getApiUserContext(apiKeyUserId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: apiKeyUserId },
-    select: {
-      id: true,
-      role: true,
-      teamMemberships: { select: { teamId: true } },
-    },
-  });
-
-  if (!user) return null;
-
-  return {
-    id: user.id,
-    role: user.role,
-    teamIds: user.teamMemberships.map(membership => membership.teamId),
-  };
-}
-
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
     return jsonError('Unauthorized. Missing or invalid API key.', 401);
-  }
-  if (!hasApiScopes(apiKey.scopes, ['incidents:read'])) {
-    return jsonError('API key missing scope: incidents:read.', 403);
   }
 
   const rate = await checkRateLimit(
@@ -54,9 +33,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     );
   }
 
-  const apiUser = await getApiUserContext(apiKey.userId);
-  if (!apiUser) {
+  const actor = await resolveApiKeyActor(apiKey);
+  if (!actor) {
     return jsonError('Unauthorized. API key user not found.', 401);
+  }
+  if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ }).allowed) {
+    return jsonError('Forbidden. Incident access denied.', 403);
   }
 
   const { id } = await params;
@@ -64,6 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     where: { id },
     include: {
       service: { select: { id: true, name: true, teamId: true } },
+      watchers: { select: { userId: true } },
       assignee: {
         select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
       },
@@ -74,17 +57,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return jsonError('Incident not found.', 404);
   }
 
-  if (!hasCapability(apiUser.role, CAPABILITIES.INCIDENT_READ_ALL)) {
-    const teamId = incident.service?.teamId || null;
-    const hasTeamMembership = teamId ? apiUser.teamIds.includes(teamId) : false;
-    if (incident.assignee?.id !== apiUser.id && !hasTeamMembership) {
-      return jsonError('Forbidden. Incident access denied.', 403);
-    }
-  }
+  const decision = authorize({
+    actor,
+    action: AUTHORIZATION_ACTIONS.INCIDENT_READ,
+    resource: {
+      type: 'incident',
+      assigneeId: incident.assigneeId,
+      watcherIds: incident.watchers.map(watcher => watcher.userId),
+      visibility: incident.visibility,
+      serviceTeamId: incident.service?.teamId,
+      assignedTeamId: incident.teamId,
+    },
+  });
+  if (!decision.allowed) return jsonError('Forbidden. Incident access denied.', 403);
 
-  const responseIncident = incident.service
-    ? { ...incident, service: { id: incident.service.id, name: incident.service.name } }
-    : incident;
+  const { watchers: _watchers, ...visibleIncident } = incident;
+  const responseIncident = visibleIncident.service
+    ? {
+        ...visibleIncident,
+        service: { id: visibleIncident.service.id, name: visibleIncident.service.name },
+      }
+    : visibleIncident;
 
   return jsonOk({ incident: responseIncident }, 200);
 }
@@ -93,9 +86,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
     return jsonError('Unauthorized. Missing or invalid API key.', 401);
-  }
-  if (!hasApiScopes(apiKey.scopes, ['incidents:write'])) {
-    return jsonError('API key missing scope: incidents:write.', 403);
   }
 
   const rate = await checkRateLimit(
@@ -111,11 +101,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     );
   }
 
-  const apiUser = await getApiUserContext(apiKey.userId);
-  if (!apiUser) {
+  const actor = await resolveApiKeyActor(apiKey);
+  if (!actor) {
     return jsonError('Unauthorized. API key user not found.', 401);
   }
-  if (!hasCapability(apiUser.role, CAPABILITIES.OPERATIONS_MANAGE)) {
+  if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_MANAGE }).allowed) {
     return jsonError('Forbidden. API key owner cannot manage incidents.', 403);
   }
 

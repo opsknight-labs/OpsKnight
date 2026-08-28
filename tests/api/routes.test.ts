@@ -61,6 +61,12 @@ describe('API Routes - Incidents', () => {
         scopes: ['read:other'],
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       vi.mocked(apiAuth.hasApiScopes).mockReturnValue(false);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: 'user-1',
+        role: 'USER',
+        status: 'ACTIVE',
+        teamMemberships: [],
+      } as never);
 
       const req = await createMockRequest('GET', '/api/incidents');
       const res = await incidentRoute.GET(req);
@@ -86,6 +92,7 @@ describe('API Routes - Incidents', () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: 'user-1',
         role: 'ADMIN',
+        status: 'ACTIVE',
         teamMemberships: [],
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -110,6 +117,7 @@ describe('API Routes - Incidents', () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: 'auditor-1',
         role: 'AUDITOR',
+        status: 'ACTIVE',
         teamMemberships: [],
       } as never);
       vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
@@ -118,9 +126,7 @@ describe('API Routes - Incidents', () => {
       const res = await incidentRoute.GET(req);
 
       expect(res.status).toBe(200);
-      expect(prisma.incident.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: undefined })
-      );
+      expect(prisma.incident.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
     });
   });
 
@@ -142,6 +148,7 @@ describe('API Routes - Incidents', () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: 'user-1',
         role: 'ADMIN',
+        status: 'ACTIVE',
         teamMemberships: [],
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -191,6 +198,7 @@ describe('API Routes - Incidents', () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: 'user-1',
         role: 'ADMIN',
+        status: 'ACTIVE',
         teamMemberships: [],
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -212,7 +220,12 @@ describe('API Routes - Incidents', () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: 'auditor-1',
         role: 'AUDITOR',
+        status: 'ACTIVE',
         teamMemberships: [],
+      } as never);
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        id: 'svc-1',
+        teamId: 'team-1',
       } as never);
 
       const req = await createMockRequest('POST', '/api/incidents', {
@@ -224,7 +237,7 @@ describe('API Routes - Incidents', () => {
       const { data } = await parseResponse(res);
 
       expect(res.status).toBe(403);
-      expect(data.error).toContain('cannot manage incidents');
+      expect(data.error).toContain('Incident creation access denied');
       expect(prisma.incident.create).not.toHaveBeenCalled();
     });
   });
