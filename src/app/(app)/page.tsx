@@ -122,11 +122,11 @@ export default async function Dashboard({
 
   // Main query where clause (includes status filter)
   const dateFilter = await buildRetainedDateFilter(range, customStart, customEnd);
-  const where = buildIncidentWhere(filterParams, { dateFilter });
+  const where = buildIncidentWhere(filterParams, { dateFilter: dateFilter.where });
 
   // Date filter for SLA calculations
-  const metricsStartDate = dateFilter.createdAt.gte;
-  const metricsEndDate = dateFilter.createdAt.lte;
+  const metricsStartDate = dateFilter.window.start;
+  const metricsEndDate = dateFilter.window.end;
   const assigneeFilter = assignee !== undefined ? (assignee === '' ? null : assignee) : undefined;
   const incidentSelect = {
     id: true,

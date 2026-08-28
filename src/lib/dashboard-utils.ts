@@ -19,12 +19,23 @@ interface DateFilter {
   lte?: Date;
 }
 
+type IncidentDateWhere = Pick<Prisma.IncidentWhereInput, 'createdAt'>;
+
+export interface RetainedDateFilterResult {
+  where: IncidentDateWhere;
+  window: {
+    start: Date;
+    end: Date;
+    isClipped: boolean;
+  };
+}
+
 export async function buildRetainedDateFilter(
   range?: string,
   customStart?: string,
   customEnd?: string,
   now: Date = new Date()
-): Promise<{ createdAt: DateFilter; isClipped: boolean }> {
+): Promise<RetainedDateFilterResult> {
   let bounds;
   if (range === 'custom') {
     const requestedStart = customStart ? new Date(customStart) : undefined;
@@ -39,8 +50,12 @@ export async function buildRetainedDateFilter(
       : await getReportingWindowForDays(30, 'incident', now);
   }
   return {
-    createdAt: { gte: bounds.start, lte: bounds.end },
-    isClipped: bounds.isClipped,
+    where: { createdAt: { gte: bounds.start, lte: bounds.end } },
+    window: {
+      start: bounds.start,
+      end: bounds.end,
+      isClipped: bounds.isClipped,
+    },
   };
 }
 
@@ -87,15 +102,17 @@ export function buildIncidentWhere(
   options: {
     includeStatus?: boolean;
     includeUrgency?: boolean;
-    dateFilter?: { createdAt?: DateFilter };
-  } = { includeStatus: true, includeUrgency: true }
+    dateFilter?: IncidentDateWhere;
+  } = {}
 ): Prisma.IncidentWhereInput {
+  const includeStatus = options.includeStatus ?? true;
+  const includeUrgency = options.includeUrgency ?? true;
   const dateFilter =
     options.dateFilter ?? buildDateFilter(filters.range, filters.customStart, filters.customEnd);
 
   const where: Prisma.IncidentWhereInput = { ...dateFilter };
 
-  if (options.includeStatus && filters.status && filters.status !== 'ALL') {
+  if (includeStatus && filters.status && filters.status !== 'ALL') {
     where.status =
       filters.status === 'ACTIVE'
         ? { in: ['OPEN', 'ACKNOWLEDGED'] }
@@ -110,7 +127,7 @@ export function buildIncidentWhere(
     where.serviceId = filters.service;
   }
 
-  if (options.includeUrgency && filters.urgency) {
+  if (includeUrgency && filters.urgency) {
     where.urgency = filters.urgency as Prisma.EnumIncidentUrgencyFilter;
   }
 
