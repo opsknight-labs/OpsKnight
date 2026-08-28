@@ -41,6 +41,13 @@ import {
 import { IncidentHeatmapWidget } from '@/components/dashboard/widgets/IncidentHeatmapWidget';
 import { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { buildIncidentListHref } from '@/lib/incident-links';
+import {
+  dashboardMetricsScope,
+  dashboardUserReadWhere,
+  incidentReadWhere,
+  serviceReadWhere,
+} from '@/lib/authorization-filters';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 export const revalidate = 0;
 
@@ -102,11 +109,31 @@ export default async function Dashboard({
   const user = email
     ? await prisma.user.findUnique({
         where: { email },
-        select: { id: true, name: true, timeZone: true },
+        select: {
+          id: true,
+          name: true,
+          timeZone: true,
+          role: true,
+          status: true,
+          teamMemberships: { select: { teamId: true } },
+        },
       })
     : null;
   const userName = user?.name || 'there';
   const userTimeZone = user?.timeZone || 'UTC';
+  if (!user || user.status !== 'ACTIVE') {
+    throw new Error('Authenticated dashboard user is unavailable.');
+  }
+  const actor: AuthorizationActor = {
+    id: user.id,
+    role: user.role,
+    status: user.status,
+    teamIds: user.teamMemberships.map(membership => membership.teamId),
+  };
+  const incidentAccess = incidentReadWhere(actor);
+  const serviceAccess = serviceReadWhere(actor);
+  const userAccess = dashboardUserReadWhere(actor);
+  const metricsScope = dashboardMetricsScope(actor);
 
   // Build filters using utility functions
   const filterParams: DashboardFilterParams = {
@@ -122,7 +149,8 @@ export default async function Dashboard({
 
   // Main query where clause (includes status filter)
   const dateFilter = await buildRetainedDateFilter(range, customStart, customEnd);
-  const where = buildIncidentWhere(filterParams, { dateFilter: dateFilter.where });
+  const dashboardWhere = buildIncidentWhere(filterParams, { dateFilter: dateFilter.where });
+  const where = { AND: [incidentAccess, dashboardWhere] };
 
   // Date filter for SLA calculations
   const metricsStartDate = dateFilter.window.start;
@@ -178,6 +206,7 @@ export default async function Dashboard({
       take: DASHBOARD_RECENT_INCIDENTS_LIMIT,
     }),
     prisma.service.findMany({
+      where: serviceAccess,
       select: {
         id: true,
         name: true,
@@ -185,6 +214,7 @@ export default async function Dashboard({
       },
     }),
     prisma.user.findMany({
+      where: userAccess,
       select: {
         id: true,
         name: true,
@@ -208,6 +238,7 @@ export default async function Dashboard({
       includeIncidents: true,
       includeActiveIncidents: true,
       incidentLimit: 5,
+      ...metricsScope,
     }).catch(err => {
       console.error('Failed to load SLA metrics:', err);
       // Return safe default object matching return type
@@ -260,6 +291,7 @@ export default async function Dashboard({
             startDate: metricsStartDate,
             endDate: metricsEndDate,
             includeAllTime: range === 'all',
+            ...metricsScope,
           },
           slaMetrics
         ).catch(err => {
