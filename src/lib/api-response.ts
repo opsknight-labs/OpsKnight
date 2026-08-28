@@ -212,12 +212,18 @@ export function jsonError(
   );
 }
 
-export function jsonOk<T>(payload: T, status: number = 200, headers?: HeadersInit) {
+export function jsonOk<T>(
+  payload: T,
+  status: number = 200,
+  headers?: HeadersInit,
+  legacyAliases?: Record<string, unknown>
+) {
   const context = createApiResponseContext();
   const aliases =
-    payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+    legacyAliases ??
+    (payload !== null && typeof payload === 'object' && !Array.isArray(payload)
       ? (payload as Record<string, unknown>)
-      : {};
+      : {});
   const body: ApiSuccessEnvelope<T> & Record<string, unknown> = {
     ...aliases,
     success: true,
