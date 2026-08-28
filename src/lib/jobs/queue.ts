@@ -313,6 +313,7 @@ export async function processJob(job: any): Promise<boolean> {
           success: boolean;
           error?: string;
           terminal?: boolean;
+          skipped?: boolean;
         };
         if (job.payload.mode === 'CHANNEL_FALLBACK') {
           const { getUserNotificationChannels, sendUserNotification } =
@@ -368,9 +369,21 @@ export async function processJob(job: any): Promise<boolean> {
             job.payload.eventType || 'triggered'
           );
         }
-        if (notificationResult.success || notificationResult.terminal) {
+        if (notificationResult.success || notificationResult.skipped) {
           await markJobCompleted(job.id);
           return true;
+        }
+
+        if (notificationResult.terminal) {
+          await prisma.backgroundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'FAILED',
+              failedAt: new Date(),
+              error: notificationResult.error || 'Notification permanently failed',
+            },
+          });
+          return false;
         }
 
         // Cap notification retries to avoid infinite loops on bad payloads or spamming users
