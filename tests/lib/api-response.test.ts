@@ -134,20 +134,24 @@ describe('API Response Utilities', () => {
       expect(body.retryable).toBe(true);
     });
 
-    it('keeps plain string compatibility', async () => {
-      const response = jsonError('Custom legacy message', 422);
+    it('keeps explicit plain string compatibility without reclassifying the text', async () => {
+      const response = jsonError('Unauthorized legacy message', 422);
       const body = await response.json();
 
       expect(response.status).toBe(422);
-      expect(body.error).toBe('Custom legacy message');
+      expect(body.error).toBe('Unauthorized legacy message');
+      expect(body.code).toBeUndefined();
     });
 
-    it('normalizes an unknown Error to a generic 500 without leaking its message', async () => {
+    it('normalizes an unknown Error to the typed INTERNAL_ERROR contract without leaking its message', async () => {
       const response = jsonError(new Error('postgres-secret-connection-string'));
       const body = await response.json();
 
       expect(response.status).toBe(500);
-      expect(body.error).toBe('An unexpected error occurred. Please try again.');
+      expect(body.error).toBe(ERROR_REGISTRY.INTERNAL_ERROR.userMessage);
+      expect(body.code).toBe('INTERNAL_ERROR');
+      expect(body.action).toBe(ERROR_REGISTRY.INTERNAL_ERROR.action);
+      expect(body.retryable).toBe(true);
       expect(JSON.stringify(body)).not.toContain('postgres-secret-connection-string');
     });
 

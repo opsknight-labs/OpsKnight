@@ -4,7 +4,7 @@ import {
   type ErrorDefinition,
   type ErrorField,
 } from '@/lib/errors';
-import { extractStructuredError } from '@/lib/client-error';
+import { ClientAppError, extractStructuredError } from '@/lib/client-error';
 
 export type UserFacingError = {
   title: string;
@@ -35,12 +35,23 @@ const GENERIC_AUTHORIZATION_CODES = new Set<AppErrorCode>([
   'SCHEDULE_OVERRIDE_ACCESS_DENIED',
 ]);
 
-function errorText(error: unknown): string {
+function isTechnicalMessage(message: string): boolean {
+  return TECHNICAL_ERROR_PATTERNS.some(pattern => pattern.test(message));
+}
+
+function legacyPublicText(error: unknown): string {
   if (typeof error === 'string') return error.trim();
-  if (error instanceof Error) return error.message.trim();
+
+  // ClientAppError is created from the public REST/server-action wire contract,
+  // so an untyped legacy `error` field remains displayable during compatibility
+  // cleanup. Arbitrary Error.message values are not trusted.
+  if (error instanceof ClientAppError) return error.message.trim();
+
   if (error && typeof error === 'object' && 'error' in error) {
-    return errorText((error as { error?: unknown }).error);
+    const value = (error as { error?: unknown }).error;
+    return typeof value === 'string' ? value.trim() : '';
   }
+
   return '';
 }
 
@@ -124,50 +135,19 @@ export function toUserFacingError(
   error: unknown,
   fallback = 'Please try again. If the problem continues, contact an administrator.'
 ): UserFacingError {
-  // Stable machine-readable semantics always win. Regex/string inference below
-  // is retained only as a compatibility bridge for legacy/untyped failures.
+  // Stable machine-readable semantics always win. Untyped values below are
+  // compatibility display only; they never determine auth/conflict/network/etc.
   const typed = typedUserFacingError(error, fallback);
   if (typed) return typed;
 
-  const message = errorText(error);
-
-  if (!message) {
-    return { title: "We couldn't complete that action", description: fallback };
+  const message = legacyPublicText(error);
+  if (message && !isTechnicalMessage(message)) {
+    return { title: message };
   }
 
-  if (/unauthori[sz]ed|permission|forbidden|access required/i.test(message)) {
-    return {
-      title: 'You do not have permission to do that',
-      description: 'Ask an administrator for access, or sign in with an account that has permission.',
-    };
-  }
+  return { title: "We couldn't complete that action", description: fallback };
+}
 
-  if (/network|failed to fetch|fetch failed|ECONN(?:REFUSED|RESET)|offline/i.test(message)) {
-    return {
-      title: 'Connection problem',
-      description: 'Check your connection and try again. Your changes may not have been saved.',
-    };
-  }
-
-  if (/session.*expired|sign in again|authentication/i.test(message)) {
-    return {
-      title: 'Your session has expired',
-      description: 'Sign in again, then retry the action.',
-    };
-  }
-
-  if (/unique constraint|already exists|duplicate/i.test(message)) {
-    return {
-      title: 'That item already exists',
-      description: TECHNICAL_ERROR_PATTERNS.some(pattern => pattern.test(message))
-        ? 'Choose a different value or update the existing item instead.'
-        : message,
-    };
-  }
-
-  if (TECHNICAL_ERROR_PATTERNS.some(pattern => pattern.test(message))) {
-    return { title: "We couldn't complete that action", description: fallback };
-  }
-
-  return { title: message };
+export function getUserFacingErrorMessage(error: unknown, fallback?: string): string {
+  return toUserFacingError(error, fallback).title;
 }

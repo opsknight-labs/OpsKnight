@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
-import {
-  AppError,
-  ERROR_REGISTRY,
-  normalizeError,
-  toPublicAppError,
-} from '@/lib/errors';
+import { AppError, ERROR_REGISTRY, normalizeError, toPublicAppError } from '@/lib/errors';
 import { getUserFriendlyError } from '@/lib/user-friendly-errors';
 
 describe('AppError', () => {
@@ -75,7 +70,7 @@ describe('AppError', () => {
     expect(error.cause).toBe(legacyTypedError);
   });
 
-  it('uses AppError as the authorization contract without changing legacy messages', () => {
+  it('uses AppError codes as the authorization presentation contract', () => {
     const error = new AuthorizationError(
       'Unauthorized. Responder access or above required.',
       CAPABILITIES.OPERATIONS_MANAGE
@@ -85,7 +80,7 @@ describe('AppError', () => {
     expect(error.code).toBe('AUTHORIZATION_DENIED');
     expect(error.status).toBe(403);
     expect(error.details).toEqual({ capability: CAPABILITIES.OPERATIONS_MANAGE });
-    expect(getUserFriendlyError(error)).toBe('Unauthorized. Responder access or above required.');
+    expect(getUserFriendlyError(error)).toBe('You do not have permission to do that');
   });
 
   it('registers lifecycle codes so existing domain errors normalize without losing identity', () => {

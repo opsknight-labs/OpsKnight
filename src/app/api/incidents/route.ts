@@ -44,10 +44,16 @@ function rateLimitError(retryAfter: number) {
 export async function GET(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError(new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
+    return jsonError(
+      new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+    );
   }
 
-  const rate = await checkRateLimit(`api:${apiKey.id}:incidents:get`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  const rate = await checkRateLimit(
+    `api:${apiKey.id}:incidents:get`,
+    RATE_LIMIT_MAX,
+    RATE_LIMIT_WINDOW_MS
+  );
   if (!rate.allowed) {
     return rateLimitError(Math.ceil((rate.resetAt - Date.now()) / 1000));
   }
@@ -94,10 +100,16 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError(new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
+    return jsonError(
+      new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+    );
   }
 
-  const rate = await checkRateLimit(`api:${apiKey.id}:incidents:post`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  const rate = await checkRateLimit(
+    `api:${apiKey.id}:incidents:post`,
+    RATE_LIMIT_MAX,
+    RATE_LIMIT_WINDOW_MS
+  );
   if (!rate.allowed || rate.count > RATE_LIMIT_BURST) {
     return rateLimitError(Math.ceil((rate.resetAt - Date.now()) / 1000));
   }
@@ -126,7 +138,9 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch (_error) {
-    return jsonError(new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE }));
+    return jsonError(
+      new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE })
+    );
   }
 
   const parsed = IncidentCreateSchema.safeParse(body);
@@ -167,10 +181,10 @@ export async function POST(req: NextRequest) {
   try {
     const creation = await executeIncidentCreation({
       title,
-      description,
+      description: description ?? null,
       serviceId,
       urgency,
-      priority,
+      priority: priority ?? null,
       source: 'REST_API',
       actor: { id: actor.id },
     });

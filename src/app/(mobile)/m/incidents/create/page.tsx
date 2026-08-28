@@ -1,7 +1,4 @@
-import {
-  createMobileIncident,
-  getIncidentCreationContext,
-} from '@/app/(app)/incidents/actions';
+import { createMobileIncident, getIncidentCreationContext } from '@/app/(app)/incidents/actions';
 import MobileCreateIncidentClient from './client';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +14,7 @@ export default async function MobileCreateIncidentPage() {
             New Incident
           </h1>
           <p className="mt-1 text-sm text-[color:var(--text-muted)]">
-            You don't have access to create incidents for any service.
+            You don&apos;t have access to create incidents for any service.
           </p>
         </div>
       </div>

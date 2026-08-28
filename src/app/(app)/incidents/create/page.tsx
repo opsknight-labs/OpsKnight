@@ -58,7 +58,7 @@ export default async function CreateIncidentPage({
                 Create Incident
               </h1>
               <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                ⚠️ You don't have access to create incidents for any service.
+                ⚠️ You don&apos;t have access to create incidents for any service.
               </p>
             </div>
             <Link href="/incidents" className="glass-button" style={{ textDecoration: 'none' }}>
@@ -113,7 +113,7 @@ export default async function CreateIncidentPage({
       </div>
 
       <CreateIncidentFormModern
-        templates={context.templates as any}
+        templates={context.templates}
         services={context.services}
         users={context.users}
         selectedTemplateId={templateId}
