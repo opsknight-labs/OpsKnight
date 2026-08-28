@@ -1,8 +1,107 @@
 import { describe, it, expect } from 'vitest';
-import { jsonOk, jsonError } from '@/lib/api-response';
+import {
+  createApiResponseContext,
+  jsonApiError,
+  jsonApiOk,
+  jsonOk,
+  jsonError,
+} from '@/lib/api-response';
 import { AppError, ERROR_REGISTRY } from '@/lib/errors';
 
 describe('API Response Utilities', () => {
+  describe('canonical contract', () => {
+    it('creates stable request metadata from a trusted incoming request id', () => {
+      const context = createApiResponseContext(
+        new Request('https://opsknight.test/api/test', {
+          headers: { 'x-request-id': 'request-123' },
+        }),
+        new Date('2026-08-28T10:00:00.000Z')
+      );
+
+      expect(context).toEqual({
+        requestId: 'request-123',
+        timestamp: '2026-08-28T10:00:00.000Z',
+      });
+    });
+
+    it('rejects untrusted incoming request ids', () => {
+      const context = createApiResponseContext(
+        new Request('https://opsknight.test/api/test', {
+          headers: { 'x-request-id': 'invalid request id' },
+        })
+      );
+
+      expect(context.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it('returns the canonical success envelope with pagination and warnings', async () => {
+      const context = {
+        requestId: 'request-success',
+        timestamp: '2026-08-28T10:00:00.000Z',
+      };
+      const response = jsonApiOk(
+        { incidents: [{ id: 'incident-1' }] },
+        {
+          context,
+          dataState: 'partial',
+          pagination: {
+            mode: 'offset',
+            page: 2,
+            pageSize: 25,
+            totalItems: 60,
+            totalPages: 3,
+          },
+          warnings: [{ code: 'RETENTION_CLIPPED', message: 'Older records were excluded.' }],
+        }
+      );
+
+      await expect(response.json()).resolves.toEqual({
+        success: true,
+        data: { incidents: [{ id: 'incident-1' }] },
+        dataState: 'partial',
+        requestId: 'request-success',
+        timestamp: '2026-08-28T10:00:00.000Z',
+        pagination: {
+          mode: 'offset',
+          page: 2,
+          pageSize: 25,
+          totalItems: 60,
+          totalPages: 3,
+        },
+        warnings: [{ code: 'RETENTION_CLIPPED', message: 'Older records were excluded.' }],
+      });
+      expect(response.headers.get('x-request-id')).toBe('request-success');
+    });
+
+    it('uses no_data for a null success payload', async () => {
+      const response = jsonApiOk(null, {
+        context: { requestId: 'request-empty', timestamp: '2026-08-28T10:00:00.000Z' },
+      });
+
+      const body = await response.json();
+      expect(body.dataState).toBe('no_data');
+      expect(body.data).toBeNull();
+    });
+
+    it('returns a safe canonical typed error with matching correlation metadata', async () => {
+      const response = jsonApiError(new Error('database-password'), {
+        context: { requestId: 'request-error', timestamp: '2026-08-28T10:00:00.000Z' },
+      });
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('x-request-id')).toBe('request-error');
+      expect(body).toMatchObject({
+        success: false,
+        dataState: 'unavailable',
+        code: 'INTERNAL_ERROR',
+        requestId: 'request-error',
+        timestamp: '2026-08-28T10:00:00.000Z',
+      });
+      expect(JSON.stringify(body)).not.toContain('database-password');
+    });
+  });
+
   describe('jsonOk', () => {
     it('should return successful JSON response with data', () => {
       const data = { message: 'Success', id: '123' };
@@ -23,14 +122,21 @@ describe('API Response Utilities', () => {
       const response = jsonOk(data);
       const body = await response.json();
 
-      expect(body).toEqual(data);
+      expect(body).toMatchObject({
+        ...data,
+        success: true,
+        data,
+        dataState: 'available',
+      });
+      expect(body.requestId).toBeTypeOf('string');
+      expect(body.timestamp).toBeTypeOf('string');
     });
 
     it('should handle null data', async () => {
       const response = jsonOk(null);
       const body = await response.json();
 
-      expect(body).toBeNull();
+      expect(body).toMatchObject({ success: true, data: null, dataState: 'no_data' });
     });
 
     it('should handle arrays', async () => {
@@ -38,7 +144,7 @@ describe('API Response Utilities', () => {
       const response = jsonOk(data);
       const body = await response.json();
 
-      expect(body).toEqual(data);
+      expect(body).toMatchObject({ success: true, data, dataState: 'available' });
     });
 
     it('should allow custom status code', () => {
@@ -140,7 +246,9 @@ describe('API Response Utilities', () => {
 
       expect(response.status).toBe(422);
       expect(body.error).toBe('Unauthorized legacy message');
-      expect(body.code).toBeUndefined();
+      expect(body.code).toBe('LEGACY_API_ERROR');
+      expect(body.success).toBe(false);
+      expect(body.dataState).toBe('unavailable');
     });
 
     it('normalizes an unknown Error to the typed INTERNAL_ERROR contract without leaking its message', async () => {
