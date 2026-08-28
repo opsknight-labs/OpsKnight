@@ -9,6 +9,18 @@ import { ESCALATION_LOCK_TIMEOUT_MS } from './config';
 import { startOfDayInTimeZone, startOfNextDayInTimeZone } from './timezone';
 // import { formatDateTime } from './timezone'; // Unused
 
+export interface EscalationExecutionResult {
+  escalated: boolean;
+  reason?: string;
+  nextEscalationAt?: Date;
+  targetName?: string;
+  targetType?: string;
+  targetCount?: number;
+  stepIndex?: number;
+  notifications?: unknown[];
+  nextStepScheduled?: boolean;
+}
+
 function escalationWorkerInvalidated(
   currentLock: Date | null | undefined,
   workerToken: Date
@@ -20,7 +32,7 @@ function escalationWorkerInvalidated(
   return currentLock instanceof Date && currentLock.getTime() !== workerToken.getTime();
 }
 
-function supersededEscalationResult() {
+function supersededEscalationResult(): EscalationExecutionResult {
   return {
     escalated: false,
     reason: 'Escalation superseded by lifecycle transition',
@@ -245,7 +257,10 @@ export async function resolveEscalationTarget(
  * Execute escalation policy for an incident.
  * Handles multiple steps with delays and different target types.
  */
-export async function executeEscalation(incidentId: string, stepIndex?: number) {
+export async function executeEscalation(
+  incidentId: string,
+  stepIndex?: number
+): Promise<EscalationExecutionResult> {
   const lockTimeoutMs = ESCALATION_LOCK_TIMEOUT_MS;
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
