@@ -1,10 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { calculateSLAMetrics, calculateMultiServiceUptime } from '@/lib/sla-server';
 import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError } from '@/lib/errors';
 
 /**
  * Restricts the visible SLA-definition set to ones whose service belongs to
@@ -41,10 +43,10 @@ async function getDefinitionWhereForUser(userId: string, role: string) {
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
   }
 
   try {
@@ -54,7 +56,7 @@ export async function GET(request: NextRequest) {
       select: { id: true, role: true },
     });
     if (!sessionUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
     }
 
     const whereClause = await getDefinitionWhereForUser(sessionUser.id, sessionUser.role);
@@ -229,7 +231,7 @@ export async function GET(request: NextRequest) {
       ? complianceValues.reduce((sum, value) => sum + value, 0) / complianceValues.length
       : null;
 
-    return NextResponse.json({
+    return jsonOk({
       definitions: complianceData,
       summary: {
         total: totalDefinitions,
@@ -244,6 +246,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     logger.error('SLA compliance calculation error', { error });
-    return NextResponse.json({ error: 'Failed to calculate SLA compliance' }, { status: 500 });
+    return jsonError(new AppError({ code: 'INTERNAL_ERROR', cause: error }));
   }
 }

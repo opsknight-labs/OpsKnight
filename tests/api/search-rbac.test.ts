@@ -40,7 +40,7 @@ describe('global search RBAC', () => {
   it('adds team and assignee scope for regular users', async () => {
     mocks.userFindUnique.mockResolvedValue({
       id: 'user-1',
-      role: 'VIEWER',
+      role: 'USER',
       status: 'ACTIVE',
       teamMemberships: [{ teamId: 'team-1' }],
     });
@@ -54,12 +54,31 @@ describe('global search RBAC', () => {
         { assigneeId: 'user-1' },
         { watchers: { some: { userId: 'user-1' } } },
         {
-          AND: [{ visibility: 'PUBLIC' }, { service: { teamId: { in: ['team-1'] } } }],
+          AND: [
+            { visibility: 'PUBLIC' },
+            {
+              OR: [{ teamId: { in: ['team-1'] } }, { service: { teamId: { in: ['team-1'] } } }],
+            },
+          ],
         },
       ],
     });
     const serviceQuery = mocks.findMany.mock.calls[1][0];
     expect(serviceQuery.where.AND[0]).toEqual({ teamId: { in: ['team-1'] } });
+  });
+
+  it('rejects invited actors before any resource search executes', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'invited-1',
+      role: 'USER',
+      status: 'INVITED',
+      teamMemberships: [{ teamId: 'team-1' }],
+    });
+
+    const response = await GET(new NextRequest('http://localhost/api/search?q=database'));
+
+    expect(response.status).toBe(401);
+    expect(mocks.findMany).not.toHaveBeenCalled();
   });
 
   it('preserves global search for responders', async () => {

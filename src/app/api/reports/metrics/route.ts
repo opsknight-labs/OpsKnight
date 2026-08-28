@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { calculateSLAMetrics } from '@/lib/sla-server';
 import { serializeSlaMetrics } from '@/lib/sla';
 import { getServerSession } from 'next-auth';
@@ -6,6 +6,8 @@ import { getAuthOptions } from '@/lib/auth';
 import { assertCanReadServiceMetrics } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError } from '@/lib/errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
     }
 
     const { searchParams } = new URL(request.url);
@@ -66,8 +68,13 @@ export async function GET(request: NextRequest) {
     try {
       user = await assertCanReadServiceMetrics({ serviceId, teamId });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unauthorized';
-      return NextResponse.json({ error: message }, { status: 403 });
+      return jsonError(
+        new AppError({
+          code: 'AUTHORIZATION_DENIED',
+          details: { cause: err instanceof Error ? err.name : 'unknown' },
+          cause: err,
+        })
+      );
     }
 
     // `?include=description` is opt-in PII. It requires the centralized
@@ -91,7 +98,7 @@ export async function GET(request: NextRequest) {
     // Serialize dates for JSON response
     const serialized = serializeSlaMetrics(metrics);
 
-    return NextResponse.json({
+    return jsonOk({
       success: true,
       data: serialized,
       meta: {
@@ -117,6 +124,6 @@ export async function GET(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     });
     // Don't expose internal error details to clients
-    return NextResponse.json({ error: 'Failed to fetch metrics' }, { status: 500 });
+    return jsonError(new AppError({ code: 'INTERNAL_ERROR', cause: error }));
   }
 }
