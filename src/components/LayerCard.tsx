@@ -103,19 +103,39 @@ function formatShortTime(date: Date, timeZone: string): string {
   }).format(date);
 }
 
+function getDayName(day: number): string {
+  switch (day) {
+    case 0:
+      return 'Sun';
+    case 1:
+      return 'Mon';
+    case 2:
+      return 'Tue';
+    case 3:
+      return 'Wed';
+    case 4:
+      return 'Thu';
+    case 5:
+      return 'Fri';
+    case 6:
+      return 'Sat';
+    default:
+      return '';
+  }
+}
+
 function formatRestrictions(restrictions: LayerRestrictions | null | undefined): string[] {
   if (!restrictions) return [];
 
   const badges: string[] = [];
   if (restrictions.daysOfWeek && restrictions.daysOfWeek.length > 0) {
     const days = [...restrictions.daysOfWeek].sort((a, b) => a - b);
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const isWeekdays = days.length === 5 && [1, 2, 3, 4, 5].every(d => days.includes(d));
     const isWeekends = days.length === 2 && days.includes(0) && days.includes(6);
 
     if (isWeekdays) badges.push('Mon-Fri');
     else if (isWeekends) badges.push('Sat-Sun');
-    else if (days.length <= 3) badges.push(days.map(d => dayNames[d]).join(', '));
+    else if (days.length <= 3) badges.push(days.map(d => getDayName(d)).filter(Boolean).join(', '));
     else badges.push(`${days.length} days`);
   }
 
