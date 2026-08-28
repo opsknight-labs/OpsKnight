@@ -3,6 +3,7 @@
 import { useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-product-notification';
+import type { ScheduleActionState } from '@/lib/schedule-action-errors';
 import ConfirmDialog from './ConfirmDialog';
 import { formatDateTime } from '@/lib/timezone';
 import { Card } from '@/components/ui/shadcn/card';
@@ -28,7 +29,7 @@ type OverrideListProps = {
   deleteOverride: (
     scheduleId: string,
     overrideId: string
-  ) => Promise<{ error?: string } | undefined>;
+  ) => Promise<ScheduleActionState | undefined>;
   timeZone: string;
   title: string;
   emptyMessage: string;
@@ -51,12 +52,16 @@ export default function OverrideList({
   const handleDelete = async (overrideId: string) => {
     setDeleteOverrideId(null);
     startTransition(async () => {
-      const result = await deleteOverride(scheduleId, overrideId);
-      if (result?.error) {
-        showToast(result.error, 'error');
-      } else {
-        showToast('Override deleted successfully', 'success');
-        router.refresh();
+      try {
+        const result = await deleteOverride(scheduleId, overrideId);
+        if (result?.error) {
+          showToast(result, 'error');
+        } else {
+          showToast('Override deleted successfully', 'success');
+          router.refresh();
+        }
+      } catch (error) {
+        showToast(error, 'error');
       }
     });
   };

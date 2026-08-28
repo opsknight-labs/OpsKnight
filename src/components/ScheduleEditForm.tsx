@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-product-notification';
+import type { ScheduleActionState } from '@/lib/schedule-action-errors';
 import TimeZoneSelect from './TimeZoneSelect';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -17,7 +18,7 @@ type ScheduleEditFormProps = {
   updateSchedule: (
     scheduleId: string,
     formData: FormData
-  ) => Promise<{ error?: string } | undefined>;
+  ) => Promise<ScheduleActionState | undefined>;
   canManageSchedules: boolean;
 };
 
@@ -40,15 +41,14 @@ export default function ScheduleEditForm({
       try {
         const result = await updateSchedule(scheduleId, formData);
         if (result?.error) {
-          showToast(result.error, 'error');
+          showToast(result, 'error');
         } else {
           showToast('Schedule updated successfully', 'success');
           setIsEditing(false);
           router.refresh();
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        showToast(errorMessage || 'Failed to update schedule', 'error');
+        showToast(error, 'error');
       }
     });
   };

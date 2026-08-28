@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import MobileCard from '@/components/mobile/MobileCard';
+import { errorFromResponse } from '@/lib/client-error';
+import { toUserFacingError } from '@/lib/user-facing-error';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 
@@ -31,6 +33,11 @@ function normalizeVapidKey(rawKey: string) {
   }
 
   return { key: cleaned };
+}
+
+function displayError(error: unknown, fallback: string): string {
+  const friendly = toUserFacingError(error, fallback);
+  return friendly.description || friendly.title;
 }
 
 export default function PushNotificationToggle() {
@@ -129,7 +136,12 @@ export default function PushNotificationToggle() {
 
       // Fetch VAPID Key from API (supports DB or Env)
       const keyRes = await fetch('/api/system/vapid-public-key');
-      if (!keyRes.ok) throw new Error('VAPID Configuration missing. Please contact admin.');
+      if (!keyRes.ok) {
+        throw await errorFromResponse(
+          keyRes,
+          'VAPID Configuration missing. Please contact admin.'
+        );
+      }
       const { key: vapidKey } = await keyRes.json();
       const normalized = normalizeVapidKey(String(vapidKey || ''));
       if (normalized.error || !normalized.key) {
@@ -158,14 +170,15 @@ export default function PushNotificationToggle() {
         body: JSON.stringify(subscription),
       });
 
-      if (!res.ok) throw new Error('Failed to save subscription');
+      if (!res.ok) {
+        throw await errorFromResponse(res, 'Failed to save subscription');
+      }
 
       setIsSubscribed(true);
       setError('');
     } catch (error: unknown) {
       logger.error('Push subscription failed', { component: 'PushNotificationToggle', error });
-      const message = error instanceof Error ? error.message : 'Failed to subscribe';
-      setError(message);
+      setError(displayError(error, 'Failed to subscribe'));
       if (Notification.permission === 'denied') {
         setError('Notifications blocked. Please enable in browser settings.');
       }
@@ -194,7 +207,7 @@ export default function PushNotificationToggle() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to remove subscription');
+        throw await errorFromResponse(response, 'Failed to remove subscription');
       }
       setIsSubscribed(false);
     } catch (error: unknown) {
@@ -202,9 +215,7 @@ export default function PushNotificationToggle() {
         component: 'PushNotificationToggle',
         error,
       });
-      setError(
-        error instanceof Error ? error.message : 'Failed to unsubscribe from push notifications'
-      );
+      setError(displayError(error, 'Failed to unsubscribe from push notifications'));
     } finally {
       setLoading(false);
     }
@@ -215,15 +226,14 @@ export default function PushNotificationToggle() {
     setTestMessage('');
     try {
       const response = await fetch('/api/notifications/test-push', { method: 'POST' });
-      const data = (await response.json()) as { message?: string; error?: string };
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to send test push.');
+        throw await errorFromResponse(response, 'Failed to send test push.');
       }
+      const data = (await response.json()) as { message?: string };
       setTestMessage(data.message || 'Test push sent. Check your device.');
     } catch (error: unknown) {
       logger.error('Push test failed', { component: 'PushNotificationToggle', error });
-      const message = error instanceof Error ? error.message : 'Failed to send test push.';
-      setTestMessage(message);
+      setTestMessage(displayError(error, 'Failed to send test push.'));
     } finally {
       setIsTesting(false);
     }

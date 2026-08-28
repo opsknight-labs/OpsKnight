@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 
 const API_ROOT = join(process.cwd(), 'src', 'app', 'api');
+const APP_ROOT = join(process.cwd(), 'src', 'app');
 const ERROR_IDENTIFIER = String.raw`(?:error|err|e|[A-Za-z_$][\w$]*(?:Error|Err))`;
 
 function sourceFiles(root: string): string[] {
@@ -16,9 +17,16 @@ function sourceFiles(root: string): string[] {
   return files;
 }
 
-function findViolations(pattern: RegExp): string[] {
+function serverActionFiles(): string[] {
+  return sourceFiles(APP_ROOT).filter(file => {
+    const name = basename(file);
+    return name === 'actions.ts' || name.endsWith('-actions.ts');
+  });
+}
+
+function findViolations(pattern: RegExp, files = sourceFiles(API_ROOT)): string[] {
   const violations: string[] = [];
-  for (const file of sourceFiles(API_ROOT)) {
+  for (const file of files) {
     const source = readFileSync(file, 'utf8');
     if (pattern.test(source)) violations.push(relative(process.cwd(), file));
     pattern.lastIndex = 0;
@@ -63,6 +71,14 @@ describe('public API error contract architecture', () => {
     expect(
       violations,
       'getUserFriendlyError is a compatibility boundary; API routes should use AppError + jsonError.'
+    ).toEqual([]);
+  });
+
+  it('does not flatten server-action errors through the legacy friendly-error translator', () => {
+    const violations = findViolations(/\bgetUserFriendlyError\s*\(/g, serverActionFiles());
+    expect(
+      violations,
+      'Server actions should preserve AppError identity instead of translating it back into string-only errors.'
     ).toEqual([]);
   });
 });

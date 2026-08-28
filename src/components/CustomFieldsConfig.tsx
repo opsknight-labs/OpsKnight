@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { errorFromResponse } from '@/lib/client-error';
+import { toUserFacingError } from '@/lib/user-facing-error';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -12,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { EmptyState } from '@/components/settings/feedback/EmptyState';
 import ConfirmDialog from '@/components/settings/ConfirmDialog';
-import { FileText, Plus, Trash2, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { FileText, Plus, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 
 type CustomField = {
     id: string;
@@ -32,6 +34,11 @@ type CustomField = {
 type CustomFieldsConfigProps = {
     customFields: CustomField[];
 };
+
+function displayError(error: unknown, fallback: string): string {
+    const friendly = toUserFacingError(error, fallback);
+    return friendly.description || friendly.title;
+}
 
 export default function CustomFieldsConfig({ customFields: initialFields }: CustomFieldsConfigProps) {
     const router = useRouter();
@@ -76,8 +83,7 @@ export default function CustomFieldsConfig({ customFields: initialFields }: Cust
                 });
 
                 if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(data.error || 'Failed to save custom field');
+                    throw await errorFromResponse(response, 'Failed to save custom field');
                 }
 
                 router.refresh();
@@ -91,8 +97,8 @@ export default function CustomFieldsConfig({ customFields: initialFields }: Cust
                     options: '',
                     showInList: false,
                 });
-            } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-                setError(err.message || 'Failed to save custom field');
+            } catch (err: unknown) {
+                setError(displayError(err, 'Failed to save custom field'));
             }
         });
     };
@@ -105,14 +111,13 @@ export default function CustomFieldsConfig({ customFields: initialFields }: Cust
                 });
 
                 if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(data.error || 'Failed to delete custom field');
+                    throw await errorFromResponse(response, 'Failed to delete custom field');
                 }
 
                 setDeleteId(null);
                 router.refresh();
-            } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-                setError(err.message || 'Failed to delete custom field');
+            } catch (err: unknown) {
+                setError(displayError(err, 'Failed to delete custom field'));
                 setDeleteId(null);
             }
         });
