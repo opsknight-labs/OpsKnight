@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   runSerializableTransaction: vi.fn(),
   applyIncidentLifecycleTargetStatus: vi.fn(),
+  executeIdempotentOperation: vi.fn(),
 }));
 
 vi.mock('@/lib/db-utils', () => ({
@@ -11,6 +12,10 @@ vi.mock('@/lib/db-utils', () => ({
 
 vi.mock('@/lib/incidents/lifecycle', () => ({
   applyIncidentLifecycleTargetStatus: mocks.applyIncidentLifecycleTargetStatus,
+}));
+
+vi.mock('@/lib/idempotency', () => ({
+  executeIdempotentOperation: mocks.executeIdempotentOperation,
 }));
 
 import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
@@ -52,6 +57,12 @@ describe('REST incident patch transaction', () => {
     mocks.runSerializableTransaction.mockImplementation(
       async (callback: (client: Tx) => Promise<unknown>) => callback(tx)
     );
+    mocks.executeIdempotentOperation.mockImplementation(
+      async (_client: Tx, input: { execute: () => Promise<unknown> }) => ({
+        value: await input.execute(),
+        replayed: false,
+      })
+    );
   });
 
   it('keeps lifecycle and non-lifecycle fields in one serializable transaction', async () => {
@@ -88,6 +99,10 @@ describe('REST incident patch transaction', () => {
     });
 
     expect(mocks.runSerializableTransaction).toHaveBeenCalledOnce();
+    expect(mocks.executeIdempotentOperation).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ scope: 'INCIDENT_REST_PATCH', context: undefined })
+    );
     expect(mocks.applyIncidentLifecycleTargetStatus).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
@@ -111,8 +126,71 @@ describe('REST incident patch transaction', () => {
       changed: true,
       urgencyChanged: true,
       assigneeChanged: true,
+      idempotencyReplayed: false,
       lifecycle: { changed: true, status: 'ACKNOWLEDGED' },
     });
+  });
+
+  it('passes the entire mixed mutation through one persistent idempotency key', async () => {
+    tx.incident.findUnique
+      .mockResolvedValueOnce({ id: 'inc-key', status: 'OPEN', urgency: 'LOW', assigneeId: null })
+      .mockResolvedValueOnce({ id: 'inc-key', status: 'ACKNOWLEDGED', urgency: 'HIGH', assigneeId: null });
+    mocks.applyIncidentLifecycleTargetStatus.mockResolvedValue({
+      incidentId: 'inc-key',
+      command: 'ACKNOWLEDGE',
+      source: 'REST_API',
+      previousStatus: 'OPEN',
+      status: 'ACKNOWLEDGED',
+      changed: true,
+    });
+
+    await applyRestIncidentPatch({
+      incidentId: 'inc-key',
+      status: 'ACKNOWLEDGED',
+      urgency: 'HIGH',
+      hasAssigneeUpdate: false,
+      actor: { id: 'api-user' },
+      idempotency: { key: 'patch-42', principalId: 'api-key-1' },
+    });
+
+    expect(mocks.executeIdempotentOperation).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        scope: 'INCIDENT_REST_PATCH',
+        context: { key: 'patch-42', principalId: 'api-key-1' },
+        payload: expect.objectContaining({
+          incidentId: 'inc-key',
+          status: 'ACKNOWLEDGED',
+          urgency: 'HIGH',
+          hasAssigneeUpdate: false,
+        }),
+      })
+    );
+  });
+
+  it('returns a persisted replay without executing mutation code again', async () => {
+    const replayValue = {
+      incident: { id: 'inc-replay', status: 'ACKNOWLEDGED', urgency: 'HIGH' },
+      lifecycle: { changed: true, status: 'ACKNOWLEDGED' },
+      urgencyChanged: true,
+      assigneeChanged: false,
+      changed: true,
+    };
+    mocks.executeIdempotentOperation.mockResolvedValue({ value: replayValue, replayed: true });
+
+    const result = await applyRestIncidentPatch({
+      incidentId: 'inc-replay',
+      status: 'ACKNOWLEDGED',
+      urgency: 'HIGH',
+      hasAssigneeUpdate: false,
+      actor: { id: 'api-user' },
+      idempotency: { key: 'patch-replay', principalId: 'api-key-1' },
+    });
+
+    expect(result).toEqual({ ...replayValue, idempotencyReplayed: true });
+    expect(tx.incident.findUnique).not.toHaveBeenCalled();
+    expect(tx.incident.update).not.toHaveBeenCalled();
+    expect(mocks.applyIncidentLifecycleTargetStatus).not.toHaveBeenCalled();
   });
 
   it('preserves lifecycle no-op semantics without writing duplicate metadata or events', async () => {
