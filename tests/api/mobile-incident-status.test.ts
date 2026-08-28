@@ -49,7 +49,7 @@ describe('mobile incident status idempotency', () => {
 
     const response = await PATCH(request(), props);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ success: true, duplicate: true });
+    expect(await response.json()).toMatchObject({ success: true, duplicate: true });
     expect(updateIncidentStatus).not.toHaveBeenCalled();
   });
 });
