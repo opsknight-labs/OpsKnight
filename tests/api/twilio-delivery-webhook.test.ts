@@ -2,10 +2,19 @@ import { createHmac } from 'crypto';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { findFirst, update } = vi.hoisted(() => ({ findFirst: vi.fn(), update: vi.fn() }));
+const { findFirst, update, updateMany, backgroundJobCreate, transaction } = vi.hoisted(() => ({
+  findFirst: vi.fn(),
+  update: vi.fn(),
+  updateMany: vi.fn(),
+  backgroundJobCreate: vi.fn(),
+  transaction: vi.fn(),
+}));
 
 vi.mock('@/lib/prisma', () => ({
-  default: { notification: { findFirst, update } },
+  default: {
+    notification: { findFirst, update },
+    $transaction: transaction,
+  },
 }));
 
 vi.mock('@/lib/notification-providers', () => ({
@@ -46,8 +55,17 @@ describe('Twilio delivery receipt webhook', () => {
       userId: 'user-1',
       channel: 'SMS',
       message: 'message',
+      eventType: 'resolved',
     });
     update.mockResolvedValue({ id: 'notif-1' });
+    updateMany.mockResolvedValue({ count: 1 });
+    backgroundJobCreate.mockResolvedValue({ id: 'job-1' });
+    transaction.mockImplementation(async callback =>
+      callback({
+        notification: { updateMany },
+        backgroundJob: { create: backgroundJobCreate },
+      })
+    );
   });
 
   it('verifies the callback and records delivered messages', async () => {
@@ -75,5 +93,22 @@ describe('Twilio delivery receipt webhook', () => {
 
     expect(response.status).toBe(401);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('preserves notification intent when scheduling a failed-delivery fallback', async () => {
+    const response = await POST(
+      signedRequest('MessageSid=SM123&MessageStatus=undelivered&ErrorCode=30003')
+    );
+
+    expect(response.status).toBe(204);
+    expect(backgroundJobCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'NOTIFICATION',
+        payload: expect.objectContaining({
+          sourceNotificationId: 'notif-1',
+          eventType: 'resolved',
+        }),
+      }),
+    });
   });
 });

@@ -8,6 +8,7 @@ describe('dashboard retained date-filter boundary', () => {
     expect(source).toContain('where: IncidentDateWhere');
     expect(source).toContain('window: {');
     expect(source).not.toMatch(/return\s*{\s*createdAt:[\s\S]{0,160}isClipped:/);
+    expect(source).not.toContain('{ ...dateFilter }');
   });
 
   it('passes only the nested Prisma filter into buildIncidentWhere', () => {

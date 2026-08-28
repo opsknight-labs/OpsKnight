@@ -350,8 +350,15 @@ async function processChannelNotifications(
             throw new Error(result.error || `${n.channel} notification delivery failed`);
           }
 
-          // A failed attempt must not suppress a later enqueue of the same
-          // notification. Record the dedupe key only after confirmed delivery.
+          // Permanent failures are terminal for this attempt, but they are not
+          // successful deliveries and must not poison the in-memory dedupe
+          // cache. A configuration fix (for example, adding a webhook URL)
+          // should allow the same notification to be enqueued immediately.
+          if (!result.success && result.terminal && !result.skipped) {
+            return { notification: n, result, terminalFailure: true };
+          }
+
+          // Record dedupe only after confirmed delivery or an intentional skip.
           processedDedupeKeys.set(n.dedupeKey, Date.now());
 
           // Clean old dedupe keys periodically (keep last 10 minutes)
@@ -374,8 +381,23 @@ async function processChannelNotifications(
     state.processing -= toProcess.length;
 
     // Log batch results
-    const succeeded = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    const succeeded = results.filter(
+      r => r.status === 'fulfilled' && !r.value.terminalFailure
+    ).length;
+    const terminalFailures = results.filter(
+      r => r.status === 'fulfilled' && r.value.terminalFailure
+    );
+    const failed = results.filter(r => r.status === 'rejected').length + terminalFailures.length;
+
+    for (const failure of terminalFailures) {
+      if (failure.status !== 'fulfilled') continue;
+      logger.error('[NotificationQueue] Notification permanently failed', {
+        incidentId: failure.value.notification.incidentId,
+        userId: failure.value.notification.userId,
+        channel: failure.value.notification.channel,
+        error: failure.value.result.error,
+      });
+    }
 
     for (const result of results) {
       if (result.status === 'rejected') {
