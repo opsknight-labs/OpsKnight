@@ -13,6 +13,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 import { emitAuditEvent, logAudit } from '@/lib/audit';
+import { runWithContext } from '@/lib/request-context';
 
 describe('audit event contract', () => {
   beforeEach(() => {
@@ -74,6 +75,22 @@ describe('audit event contract', () => {
     expect(serialized).not.toContain('secret-token');
     expect(serialized).not.toContain('secret-password');
     expect(serialized).toContain('[REDACTED]');
+  });
+
+  it('inherits the active request correlation id when none is supplied', async () => {
+    await runWithContext({ requestId: 'request-from-middleware' }, () =>
+      emitAuditEvent({
+        action: 'incident.viewed',
+        source: 'API',
+        target: { type: 'SYSTEM_CONFIG', id: 'incident-1' },
+      })
+    );
+
+    expect(mocks.auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        details: expect.objectContaining({ requestId: 'request-from-middleware' }),
+      }),
+    });
   });
 
   it('adapts legacy logAudit calls into the versioned contract', async () => {

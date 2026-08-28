@@ -5,12 +5,12 @@ import { getAppUrl } from '@/lib/app-url';
 import { randomBytes, createHash } from 'crypto';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
-import { logger } from '@/lib/logger';
+import { logger, withRequestContext } from '@/lib/logger';
 import { assertAdmin } from '@/lib/rbac';
 import { getClientIp } from '@/lib/client-ip';
 import { emitAuditEvent } from '@/lib/audit';
 
-export async function POST(req: NextRequest) {
+async function postGenerateResetLink(req: NextRequest) {
   try {
     // Re-resolve the user from the database so role demotion and account
     // deactivation take effect without waiting for the JWT to expire.
@@ -117,7 +117,6 @@ export async function POST(req: NextRequest) {
         email: sessionUser.email,
         name: sessionUser.name,
       },
-      requestId: req.headers.get('x-request-id'),
       targetEmail: user.email,
       ip,
       metadata: { generatedFor: user.id },
@@ -133,3 +132,5 @@ export async function POST(req: NextRequest) {
     return jsonError('Internal Server Error', 500);
   }
 }
+
+export const POST = withRequestContext(postGenerateResetLink, 'api.admin.generate-reset-link');

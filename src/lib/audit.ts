@@ -1,6 +1,7 @@
 import type { AuditEntityType, Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { sanitizeContext } from './logger';
+import { getRequestContext } from './request-context';
 
 export type AuditDetails = Prisma.InputJsonValue;
 export type AuditEventSource =
@@ -42,10 +43,11 @@ export interface AuditEventInput {
 type AuditClient = Pick<Prisma.TransactionClient, 'auditLog' | 'user'>;
 
 function resolveRequestId(value: string | null | undefined): string {
-  const normalized = value?.trim();
-  return normalized && /^[A-Za-z0-9._:-]{1,128}$/.test(normalized)
-    ? normalized
-    : crypto.randomUUID();
+  for (const candidate of [value, getRequestContext().requestId]) {
+    const normalized = candidate?.trim();
+    if (normalized && /^[A-Za-z0-9._:-]{1,128}$/.test(normalized)) return normalized;
+  }
+  return crypto.randomUUID();
 }
 
 function jsonValue(value: AuditDetails | null | undefined): Prisma.InputJsonValue | null {
