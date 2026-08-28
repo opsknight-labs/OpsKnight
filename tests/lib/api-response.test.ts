@@ -160,6 +160,19 @@ describe('API Response Utilities', () => {
 
       expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
     });
+
+    it('can preserve selected legacy top-level aliases without nesting an existing envelope', async () => {
+      const metrics = { mtta: 12, mttr: 34 };
+      const meta = { source: 'live' };
+      const response = jsonOk(metrics, 200, undefined, { meta });
+
+      await expect(response.json()).resolves.toMatchObject({
+        success: true,
+        data: metrics,
+        dataState: 'available',
+        meta,
+      });
+    });
   });
 
   describe('jsonError', () => {

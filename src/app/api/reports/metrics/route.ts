@@ -98,27 +98,28 @@ export async function GET(request: NextRequest) {
     // Serialize dates for JSON response
     const serialized = serializeSlaMetrics(metrics);
 
-    return jsonOk({
-      success: true,
-      data: serialized,
-      meta: {
-        dataState: 'available',
-        calculatedAt: new Date().toISOString(),
-        source: (metrics as { dataSource?: string }).dataSource || 'live',
-        scope: {
-          backlog: 'current',
-          analysis: 'selected_period',
-        },
+    const meta = {
+      dataState: 'available',
+      calculatedAt: new Date().toISOString(),
+      source: (metrics as { dataSource?: string }).dataSource || 'live',
+      scope: {
+        backlog: 'current',
+        analysis: 'selected_period',
       },
-      filters: {
-        windowDays,
-        teamId,
-        serviceId,
-        assigneeId,
-        urgency,
-        status,
-      },
-    });
+    };
+    const filters = {
+      windowDays,
+      teamId,
+      serviceId,
+      assigneeId,
+      urgency,
+      status,
+    };
+
+    // Keep the legacy `data: metrics`, `meta`, and `filters` shape while the
+    // shared helper adds canonical request metadata. Passing an already-wrapped
+    // payload to jsonOk would otherwise turn this into `data.data`.
+    return jsonOk(serialized, 200, undefined, { meta, filters });
   } catch (error) {
     logger.error('api.reports.metrics.error', {
       error: error instanceof Error ? error.message : String(error),
