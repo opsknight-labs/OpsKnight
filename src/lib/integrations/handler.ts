@@ -12,11 +12,13 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError } from '@/lib/errors';
 import { logger, withRequestContext } from '@/lib/logger';
 import { checkRateLimit, createRateLimitHeaders } from './rate-limiter';
 import { verifyWebhookSignature } from './signature-verification';
 import { recordWebhookReceived } from './metrics';
 import { IntegrationErrors, isIntegrationError } from './errors';
+import { integrationErrorToAppError } from './app-error';
 import { validatePayload, IntegrationSchemas } from './schemas';
 import { isIntegrationAuthorized } from './auth';
 import type { z } from 'zod';
@@ -27,9 +29,13 @@ import {
   rejectWebhookReplay,
 } from './request-security';
 
-// Environment configuration
 const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
 const RATE_LIMIT_ENABLED = process.env.INTEGRATION_RATE_LIMIT !== 'false';
+
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
+const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
+const LEGACY_REQUIRED_MESSAGE = 'Please fill in all required fields.';
 
 export interface IntegrationContext<T> {
   integration: {
@@ -45,28 +51,14 @@ export interface IntegrationContext<T> {
 }
 
 export interface HandlerOptions<T> {
-  /** Integration type for schema lookup */
   integrationType: keyof typeof IntegrationSchemas;
-
-  /** Custom schema override (optional) */
   schema?: z.ZodSchema<T>;
-
-  /** Provider for signature verification */
   signatureProvider?: 'github' | 'gitlab' | 'sentry' | 'slack' | 'grafana' | 'vercel' | 'generic';
-
-  /** Skip rate limiting for this integration */
   skipRateLimit?: boolean;
-
-  /** Skip signature verification for this integration */
   skipSignatureVerification?: boolean;
-
-  /** Custom payload parser (for non-JSON formats) */
   parsePayload?: (body: string) => T;
 }
 
-/**
- * Create a standardized integration webhook handler
- */
 export function createIntegrationHandler<T>(
   options: HandlerOptions<T>,
   processor: (ctx: IntegrationContext<T>) => Promise<{ action: string; incident?: unknown }>
@@ -77,7 +69,6 @@ export function createIntegrationHandler<T>(
     let integrationType: string = options.integrationType;
 
     try {
-      // 1. Extract integration ID
       const { searchParams } = new URL(req.url);
       integrationId = searchParams.get('integrationId');
 
@@ -85,9 +76,6 @@ export function createIntegrationHandler<T>(
         throw IntegrationErrors.invalidPayload('integrationId is required');
       }
 
-      // 2. Lookup integration before touching the per-integration limiter.
-      // The integration ID is caller-controlled, so rate limiting it first lets
-      // unauthenticated requests create arbitrary DB-backed rate-limit buckets.
       const integration = await prisma.integration.findUnique({
         where: { id: integrationId },
         select: {
@@ -120,9 +108,6 @@ export function createIntegrationHandler<T>(
 
       integrationType = integration.type;
 
-      // 3. Apply the DB-backed limiter only after the integration is authenticated.
-      // This prevents invalid IDs/keys from generating arbitrary rate-limit rows
-      // or consuming a valid integration's quota.
       if (RATE_LIMIT_ENABLED && !options.skipRateLimit) {
         const rateResult = await checkRateLimit(integrationId);
 
@@ -136,6 +121,7 @@ export function createIntegrationHandler<T>(
             'RATE_LIMITED'
           );
 
+          // Preserve the integration-specific wire contract for rate limits.
           return new Response(
             JSON.stringify({ error: 'RATE_LIMITED', message: 'Rate limit exceeded' }),
             {
@@ -146,10 +132,8 @@ export function createIntegrationHandler<T>(
         }
       }
 
-      // 4. Get raw body for signature verification
       const rawPayload = await readIntegrationBody(req);
 
-      // 6. Collect headers for signature verification
       const headers: Record<string, string | null> = {
         'x-hub-signature-256': req.headers.get('x-hub-signature-256'),
         'x-gitlab-token': req.headers.get('x-gitlab-token'),
@@ -162,7 +146,6 @@ export function createIntegrationHandler<T>(
         'x-webhook-signature': req.headers.get('x-webhook-signature'),
       };
 
-      // 7. Signature verification (if enabled and secret configured)
       if (VERIFY_SIGNATURES && !options.skipSignatureVerification && integration.signatureSecret) {
         const provider = options.signatureProvider || 'generic';
         const signatureSecret = await decryptStoredSecret(integration.signatureSecret);
@@ -203,7 +186,6 @@ export function createIntegrationHandler<T>(
         }
       }
 
-      // 8. Parse JSON payload
       let body: unknown;
       try {
         if (options.parsePayload) {
@@ -215,7 +197,6 @@ export function createIntegrationHandler<T>(
         throw IntegrationErrors.invalidPayload('Invalid JSON in request body');
       }
 
-      // 9. Schema validation
       const schema = options.schema || IntegrationSchemas[options.integrationType];
       if (schema) {
         const validation = validatePayload(schema as any, body); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -225,7 +206,6 @@ export function createIntegrationHandler<T>(
         body = validation.data;
       }
 
-      // 10. Process the webhook
       const ctx: IntegrationContext<T> = {
         integration: {
           id: integration.id,
@@ -241,17 +221,21 @@ export function createIntegrationHandler<T>(
 
       const result = await processor(ctx);
 
-      // 11. Record success metrics
       recordWebhookReceived(integrationType, integrationId, true, performance.now() - startTime);
 
       return jsonOk({ status: 'success', result }, 202);
     } catch (error) {
       if (error instanceof IntegrationBodyTooLargeError) {
-        return jsonError(error.message, 413);
+        return jsonError(
+          new AppError({
+            code: 'PAYLOAD_TOO_LARGE',
+            userMessage: error.message,
+            cause: error,
+          })
+        );
       }
       const latency = performance.now() - startTime;
 
-      // Handle known integration errors
       if (isIntegrationError(error)) {
         if (integrationId) {
           recordWebhookReceived(integrationType, integrationId, false, latency, error.code);
@@ -263,10 +247,14 @@ export function createIntegrationHandler<T>(
           message: error.message,
         });
 
+        const appError = integrationErrorToAppError(error);
+        if (appError) return jsonError(appError);
+
+        // Preserve legacy behavior for the internal/rate-limited variants that
+        // have dedicated handling or should not expose new semantics here.
         return jsonError(error.message, error.statusCode);
       }
 
-      // Handle unexpected errors
       logger.error('integration.webhook_unexpected_error', {
         integrationId,
         error: error instanceof Error ? error.message : String(error),
@@ -283,17 +271,6 @@ export function createIntegrationHandler<T>(
   return withRequestContext(handler, `api.integration.${options.integrationType}`);
 }
 
-/**
- * Industry-Standard Integration Middleware
- *
- * Security features (matching PagerDuty/OpsGenie):
- * - Integration key validation (URL param or header)
- * - Rate limiting per integration
- * - Metrics recording
- *
- * HMAC signature verification is handled in individual route handlers
- * for providers that support it (GitHub, Sentry, Grafana, Slack).
- */
 export async function withIntegrationMiddleware(
   req: NextRequest,
   integrationType: string,
@@ -305,18 +282,27 @@ export async function withIntegrationMiddleware(
 
   const declaredLength = Number(req.headers.get('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > 1024 * 1024) {
-    return jsonError('Webhook body exceeds 1048576 bytes', 413);
+    return jsonError(
+      new AppError({
+        code: 'PAYLOAD_TOO_LARGE',
+        userMessage: 'Webhook body exceeds 1048576 bytes',
+        details: { maxBytes: 1024 * 1024 },
+      })
+    );
   }
 
-  // 1. Require integrationId
   if (!integrationId) {
-    return jsonError('integrationId is required', 400);
+    return jsonError(
+      new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: LEGACY_REQUIRED_MESSAGE,
+        fields: [
+          { field: 'integrationId', code: 'required', message: 'integrationId is required' },
+        ],
+      })
+    );
   }
 
-  // 2. Integration key validation (required - industry standard)
-  // All webhook URLs include the key, so we always validate it
-  // This provides baseline security for non-HMAC providers (Datadog, New Relic, etc.)
-  // HMAC providers (GitHub, Sentry) get additional signature verification in route handlers
   const integration = await prisma.integration.findUnique({
     where: { id: integrationId },
     select: { key: true, enabled: true },
@@ -331,7 +317,13 @@ export async function withIntegrationMiddleware(
       performance.now() - startTime,
       'NOT_FOUND'
     );
-    return jsonError('Integration not found', 404);
+    return jsonError(
+      new AppError({
+        code: 'INTEGRATION_NOT_FOUND',
+        userMessage: LEGACY_NOT_FOUND_MESSAGE,
+        details: { integrationId },
+      })
+    );
   }
 
   if (!integration.enabled) {
@@ -343,10 +335,15 @@ export async function withIntegrationMiddleware(
       performance.now() - startTime,
       'DISABLED'
     );
-    return jsonError('Integration is disabled', 403);
+    return jsonError(
+      new AppError({
+        code: 'INTEGRATION_DISABLED',
+        userMessage: 'Integration is disabled',
+        details: { integrationId },
+      })
+    );
   }
 
-  // Validate integration key (from URL param or header)
   if (!isIntegrationAuthorized(req, integration.key)) {
     logger.warn('integration.invalid_key', { integrationId });
     recordWebhookReceived(
@@ -356,11 +353,15 @@ export async function withIntegrationMiddleware(
       performance.now() - startTime,
       'UNAUTHORIZED'
     );
-    return jsonError('Invalid integration key', 401);
+    return jsonError(
+      new AppError({
+        code: 'INTEGRATION_AUTHENTICATION_FAILED',
+        userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+        details: { integrationId },
+      })
+    );
   }
 
-  // 3. Apply the DB-backed limiter only after authentication so arbitrary
-  // integration IDs/keys cannot create rate-limit rows or burn valid quotas.
   if (RATE_LIMIT_ENABLED) {
     const rateResult = await checkRateLimit(integrationId);
     if (!rateResult.allowed) {
@@ -388,7 +389,13 @@ export async function withIntegrationMiddleware(
     return response;
   } catch (error) {
     if (error instanceof IntegrationBodyTooLargeError) {
-      return jsonError(error.message, 413);
+      return jsonError(
+        new AppError({
+          code: 'PAYLOAD_TOO_LARGE',
+          userMessage: error.message,
+          cause: error,
+        })
+      );
     }
     logger.error('integration.handler_error', {
       integrationId,

@@ -5,12 +5,18 @@ import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
+import { AppError } from '@/lib/errors';
+
+const LEGACY_UNAUTHORIZED_MESSAGE =
+  'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session?.user?.email) {
-      return jsonError('Unauthorized', 401);
+      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
     }
 
     const user = await prisma.user.findUnique({
@@ -19,7 +25,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!user) {
-      return jsonError('User not found', 404);
+      return jsonError(new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: LEGACY_NOT_FOUND_MESSAGE }));
     }
 
     const userTimeZone = getUserTimeZone(user ?? undefined);
@@ -160,7 +166,6 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // Add cache headers for notification history (short cache, private)
     return jsonOk(
       {
         notifications: formattedNotifications,
