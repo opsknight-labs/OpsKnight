@@ -4,6 +4,7 @@ import { basename, join, relative } from 'node:path';
 
 const API_ROOT = join(process.cwd(), 'src', 'app', 'api');
 const APP_ROOT = join(process.cwd(), 'src', 'app');
+const LEGACY_FRIENDLY_ERROR_PATH = join(process.cwd(), 'src', 'lib', 'user-friendly-errors.ts');
 const ERROR_IDENTIFIER = String.raw`(?:error|err|e|[A-Za-z_$][\w$]*(?:Error|Err))`;
 const MESSAGE_ALIAS = String.raw`(?:message|msg)`;
 
@@ -67,19 +68,41 @@ describe('public API error contract architecture', () => {
     ).toEqual([]);
   });
 
-  it('does not call the legacy friendly-error translator from route handlers', () => {
+  it('does not call the legacy friendly-error compatibility shim from route handlers', () => {
     const violations = findViolations(/\bgetUserFriendlyError\s*\(/g);
     expect(
       violations,
-      'getUserFriendlyError is a compatibility boundary; API routes should use AppError + jsonError.'
+      'API routes should use AppError + jsonError instead of legacy presentation helpers.'
     ).toEqual([]);
   });
 
-  it('does not flatten server-action errors through the legacy friendly-error translator', () => {
+  it('does not flatten server-action errors through the legacy compatibility shim', () => {
     const violations = findViolations(/\bgetUserFriendlyError\s*\(/g, serverActionFiles());
     expect(
       violations,
       'Server actions should preserve AppError identity instead of translating it back into string-only errors.'
     ).toEqual([]);
+  });
+
+  it('keeps the legacy compatibility shim free of semantic message inference', () => {
+    const source = readFileSync(LEGACY_FRIENDLY_ERROR_PATH, 'utf8');
+
+    expect(source).not.toMatch(/\.(?:includes|startsWith|endsWith|match|search)\s*\(/);
+    expect(source).not.toMatch(
+      /unauthori[sz]ed|required|not found|network|timeout|unique constraint|foreign key constraint/i
+    );
+  });
+
+  it('keeps shared API and integration boundaries independent of the legacy shim', () => {
+    const files = [
+      join(process.cwd(), 'src', 'lib', 'api-response.ts'),
+      join(process.cwd(), 'src', 'lib', 'integrations', 'app-error.ts'),
+    ];
+
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8');
+      expect(source).not.toContain('user-friendly-errors');
+      expect(source).not.toContain('getUserFriendlyError');
+    }
   });
 });
