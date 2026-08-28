@@ -2,10 +2,10 @@
 
 import { useEffect } from 'react';
 import { logger } from '@/lib/logger';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
+import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
-export default function TeamsError({
+export default function PolicyDetailError({
   error,
   reset,
 }: {
@@ -13,7 +13,7 @@ export default function TeamsError({
   reset: () => void;
 }) {
   useEffect(() => {
-    logger.error('[Teams] Render error', {
+    logger.error('[Policy Detail] Render error', {
       message: error.message,
       stack: error.stack,
       name: error.name,
@@ -28,8 +28,10 @@ export default function TeamsError({
           <AlertCircle className="w-6 h-6 text-rose-600" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Teams couldn&apos;t load</h2>
-          <p className="text-sm text-slate-600 mt-1">{getUserFriendlyError(error)}</p>
+          <h2 className="text-lg font-semibold text-slate-900">
+            Escalation policy couldn&apos;t load
+          </h2>
+          <p className="text-sm text-slate-600 mt-1">{getUserFacingErrorMessage(error)}</p>
         </div>
         <button
           type="button"

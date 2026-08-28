@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 
-const API_ROOT = join(process.cwd(), 'src', 'app', 'api');
-const APP_ROOT = join(process.cwd(), 'src', 'app');
+const SRC_ROOT = join(process.cwd(), 'src');
+const API_ROOT = join(SRC_ROOT, 'app', 'api');
+const APP_ROOT = join(SRC_ROOT, 'app');
+const LEGACY_FRIENDLY_ERROR_PATH = join(SRC_ROOT, 'lib', 'user-friendly-errors.ts');
 const ERROR_IDENTIFIER = String.raw`(?:error|err|e|[A-Za-z_$][\w$]*(?:Error|Err))`;
 const MESSAGE_ALIAS = String.raw`(?:message|msg)`;
 
@@ -67,40 +69,37 @@ describe('public API error contract architecture', () => {
     ).toEqual([]);
   });
 
-  it('does not call the legacy friendly-error compatibility shim from route handlers', () => {
-    const violations = findViolations(/\bgetUserFriendlyError\s*\(/g);
+  it('does not flatten server-action errors through presentation helpers', () => {
+    const violations = findViolations(/\bgetUserFacingErrorMessage\s*\(/g, serverActionFiles());
     expect(
       violations,
-      'API routes should use AppError + jsonError instead of legacy presentation helpers.'
+      'Server actions should preserve AppError identity instead of translating it into presentation strings.'
     ).toEqual([]);
   });
 
-  it('does not flatten server-action errors through the legacy compatibility shim', () => {
-    const violations = findViolations(/\bgetUserFriendlyError\s*\(/g, serverActionFiles());
+  it('removes the legacy friendly-error shim and prevents source from importing it again', () => {
+    expect(existsSync(LEGACY_FRIENDLY_ERROR_PATH)).toBe(false);
+
+    const violations = sourceFiles(SRC_ROOT).filter(file => {
+      const source = readFileSync(file, 'utf8');
+      return source.includes('user-friendly-errors') || /\bgetUserFriendlyError\b/.test(source);
+    });
+
     expect(
-      violations,
-      'Server actions should preserve AppError identity instead of translating it back into string-only errors.'
+      violations.map(file => relative(process.cwd(), file)),
+      'Production source must use the code-first user-facing-error API directly.'
     ).toEqual([]);
   });
 
-  it('keeps the legacy compatibility shim free of semantic message inference', () => {
-    const source = readFileSync('src/lib/user-friendly-errors.ts', 'utf8');
-
-    expect(source).not.toMatch(/\.(?:includes|startsWith|endsWith|match|search)\s*\(/);
-    expect(source).not.toMatch(
-      /unauthori[sz]ed|required|not found|network|timeout|unique constraint|foreign key constraint/i
-    );
-  });
-
-  it('keeps shared API and integration boundaries independent of the legacy shim', () => {
+  it('keeps shared API and integration boundaries independent of presentation helpers', () => {
     const sources = [
       readFileSync('src/lib/api-response.ts', 'utf8'),
       readFileSync('src/lib/integrations/app-error.ts', 'utf8'),
     ];
 
     for (const source of sources) {
-      expect(source).not.toContain('user-friendly-errors');
-      expect(source).not.toContain('getUserFriendlyError');
+      expect(source).not.toContain('user-facing-error');
+      expect(source).not.toContain('getUserFacingErrorMessage');
     }
   });
 });
