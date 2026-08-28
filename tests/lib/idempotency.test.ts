@@ -48,7 +48,7 @@ describe('persistent idempotency journal', () => {
     expect(tx.backgroundJob.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          id: expect.stringMatching(/^idem_[a-f0-9]{64}$/),
+          id: 'idem:INCIDENT_CREATION:api-key-1:request-1',
           type: 'SCHEDULED_TASK',
           status: 'COMPLETED',
           maxAttempts: 1,
@@ -66,7 +66,9 @@ describe('persistent idempotency journal', () => {
   });
 
   it('replays the original result without executing the command again', async () => {
-    const firstExecute = vi.fn().mockResolvedValue({ changed: true, at: new Date('2026-08-28T10:00:00Z') });
+    const firstExecute = vi
+      .fn()
+      .mockResolvedValue({ changed: true, at: new Date('2026-08-28T10:00:00Z') });
     await executeIdempotentOperation(asTransactionClient(tx), {
       scope: 'INCIDENT_LIFECYCLE',
       context: { key: 'request-2', principalId: 'user-1' },

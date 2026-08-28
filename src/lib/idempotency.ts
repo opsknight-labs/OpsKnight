@@ -90,10 +90,7 @@ export function fingerprintIdempotencyPayload(payload: unknown): string {
 }
 
 function recordId(scope: string, context: IdempotencyContext): string {
-  const digest = createHash('sha256')
-    .update(`${scope}\0${context.principalId}\0${context.key}`)
-    .digest('hex');
-  return `idem_${digest}`;
+  return `idem:${scope}:${context.principalId}:${context.key}`;
 }
 
 function encodeJson(value: unknown): Prisma.InputJsonValue {
