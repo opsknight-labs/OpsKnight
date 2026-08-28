@@ -9,6 +9,36 @@ import { ESCALATION_LOCK_TIMEOUT_MS } from './config';
 import { startOfDayInTimeZone, startOfNextDayInTimeZone } from './timezone';
 // import { formatDateTime } from './timezone'; // Unused
 
+export interface EscalationExecutionResult {
+  escalated: boolean;
+  reason?: string;
+  nextEscalationAt?: Date;
+  targetName?: string;
+  targetType?: string;
+  targetCount?: number;
+  stepIndex?: number;
+  notifications?: unknown[];
+  nextStepScheduled?: boolean;
+}
+
+function escalationWorkerInvalidated(
+  currentLock: Date | null | undefined,
+  workerToken: Date
+): boolean {
+  // Production selects always include this field. `undefined` is tolerated for
+  // partial test doubles and older adapters; a persisted NULL explicitly means
+  // a lifecycle transition invalidated the worker generation.
+  if (currentLock === null) return true;
+  return currentLock instanceof Date && currentLock.getTime() !== workerToken.getTime();
+}
+
+function supersededEscalationResult(): EscalationExecutionResult {
+  return {
+    escalated: false,
+    reason: 'Escalation superseded by lifecycle transition',
+  } as const;
+}
+
 /**
  * Get all active on-call users for a schedule at a given time
  * Returns array of all users who are on-call across all active layers
@@ -227,7 +257,10 @@ export async function resolveEscalationTarget(
  * Execute escalation policy for an incident.
  * Handles multiple steps with delays and different target types.
  */
-export async function executeEscalation(incidentId: string, stepIndex?: number) {
+export async function executeEscalation(
+  incidentId: string,
+  stepIndex?: number
+): Promise<EscalationExecutionResult> {
   const lockTimeoutMs = ESCALATION_LOCK_TIMEOUT_MS;
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
@@ -438,6 +471,11 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
     return { escalated: false, reason: 'Escalation already in progress' };
   }
 
+  // The claim timestamp is also the lifecycle-generation token. Any real
+  // lifecycle transition clears escalationProcessingAt; a timed-out reclaim
+  // replaces it. Either event makes this worker stale before it can continue.
+  const workerToken = now;
+
   // Resolve target based on target type
   let targetId: string | null = null;
   let targetName: string = 'Unknown';
@@ -525,15 +563,23 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
     targetUserIds.push(manualAssigneeId);
   }
 
-  // Assign the incident immediately when the escalation step runs (before notifications)
-  await runSerializableTransaction(async tx => {
+  // Assign the incident immediately when the escalation step runs (before notifications),
+  // but only while this worker still owns the generation it atomically claimed.
+  const assignmentGenerationIsCurrent = await runSerializableTransaction(async tx => {
     const currentIncident = await tx.incident.findUnique({
       where: { id: incidentId },
-      select: { assigneeId: true, teamId: true },
+      select: { assigneeId: true, teamId: true, escalationProcessingAt: true },
     });
 
-    if (currentIncident?.assigneeId || currentIncident?.teamId) {
-      return;
+    if (
+      !currentIncident ||
+      escalationWorkerInvalidated(currentIncident.escalationProcessingAt, workerToken)
+    ) {
+      return false;
+    }
+
+    if (currentIncident.assigneeId || currentIncident.teamId) {
+      return true;
     }
 
     if (step.targetType === 'TEAM' && targetId) {
@@ -544,7 +590,7 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
           assignee: { disconnect: true },
         },
       });
-      return;
+      return true;
     }
 
     if (targetUserIds.length > 0) {
@@ -556,7 +602,13 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
         },
       });
     }
+
+    return true;
   });
+
+  if (!assignmentGenerationIsCurrent) {
+    return supersededEscalationResult();
+  }
 
   if (targetUserIds.length === 0) {
     const errorMessage = `Escalation step ${currentStepIndex + 1} (${step.targetType}: ${targetName}) resolved to no users.`;
@@ -624,14 +676,15 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
     try {
       const latestState = await prisma.incident.findUnique({
         where: { id: incidentId },
-        select: { status: true, escalationStatus: true },
+        select: { status: true, escalationStatus: true, escalationProcessingAt: true },
       });
       if (
         !latestState ||
         !['OPEN'].includes(latestState.status) ||
-        latestState.escalationStatus === 'COMPLETED'
+        latestState.escalationStatus === 'COMPLETED' ||
+        escalationWorkerInvalidated(latestState.escalationProcessingAt, workerToken)
       ) {
-        break;
+        return supersededEscalationResult();
       }
       const message = `[OpsKnight] Incident: ${incident.title}${currentStepIndex > 0 ? ` (Escalation Level ${currentStepIndex + 1})` : ''}`;
       const result = await sendUserNotification(incidentId, userId, message, escalationChannels);
@@ -677,24 +730,38 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
 
   let shouldScheduleNextJob = Boolean(nextStep && nextEscalationAt);
 
-  await runSerializableTransaction(async tx => {
+  const finalGenerationIsCurrent = await runSerializableTransaction(async tx => {
     // Check current state from database to avoid race conditions
     const currentIncident = await tx.incident.findUnique({
       where: { id: incidentId },
-      select: { assigneeId: true, teamId: true, status: true, escalationStatus: true },
+      select: {
+        assigneeId: true,
+        teamId: true,
+        status: true,
+        escalationStatus: true,
+        escalationProcessingAt: true,
+      },
     });
+
+    if (
+      !currentIncident ||
+      escalationWorkerInvalidated(currentIncident.escalationProcessingAt, workerToken)
+    ) {
+      shouldScheduleNextJob = false;
+      return false;
+    }
 
     // Race condition guard: If the incident was acknowledged, resolved, snoozed, or suppressed while notifications
     // were being dispatched, do NOT schedule further escalation steps or overwrite to ESCALATING.
     const isStopped =
-      currentIncident?.status === 'ACKNOWLEDGED' ||
-      currentIncident?.status === 'RESOLVED' ||
-      currentIncident?.escalationStatus === 'COMPLETED';
+      currentIncident.status === 'ACKNOWLEDGED' ||
+      currentIncident.status === 'RESOLVED' ||
+      currentIncident.escalationStatus === 'COMPLETED';
 
     const isPaused =
-      currentIncident?.status === 'SNOOZED' ||
-      currentIncident?.status === 'SUPPRESSED' ||
-      currentIncident?.escalationStatus === 'PAUSED';
+      currentIncident.status === 'SNOOZED' ||
+      currentIncident.status === 'SUPPRESSED' ||
+      currentIncident.escalationStatus === 'PAUSED';
 
     const finalEscalationStatus = isStopped ? 'COMPLETED' : isPaused ? 'PAUSED' : escalationStatus;
 
@@ -715,7 +782,7 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
 
     // Assign based on target type
     // Only assign if the incident doesn't already have an assignee or team
-    if (!currentIncident?.assigneeId && !currentIncident?.teamId && targetUserIds.length > 0) {
+    if (!currentIncident.assigneeId && !currentIncident.teamId && targetUserIds.length > 0) {
       if (step.targetType === 'TEAM' && targetId) {
         // Assign to team
         updateData.team = { connect: { id: targetId } };
@@ -760,7 +827,13 @@ export async function executeEscalation(incidentId: string, stepIndex?: number) 
         },
       });
     }
+
+    return true;
   });
+
+  if (!finalGenerationIsCurrent) {
+    return supersededEscalationResult();
+  }
 
   // Schedule next escalation step using PostgreSQL job queue
   if (shouldScheduleNextJob && nextStep && nextEscalationAt) {
@@ -875,11 +948,12 @@ export async function processPendingEscalations(
             reason.includes('no escalation policy') ||
             reason.includes('no users to notify') ||
             reason.includes('invalid target') ||
-            reason.includes('step not found');
+            reason.includes('step not found') ||
+            reason.includes('superseded by lifecycle transition');
 
-          // executeEscalation persists terminal states itself (including FAILED).
-          // Do not reinterpret those human-readable reasons here and overwrite
-          // the state that the executor just committed.
+          // executeEscalation persists terminal states itself (including FAILED),
+          // or intentionally no-ops when a newer lifecycle generation supersedes
+          // the worker. Do not overwrite either authoritative state here.
           if (stateAlreadyHandled) continue;
 
           await prisma.incident.update({

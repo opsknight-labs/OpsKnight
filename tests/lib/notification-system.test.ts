@@ -577,6 +577,7 @@ describe('Notification System Tests', () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: incidentId,
         title: 'Test Incident',
+        status: 'OPEN',
         currentEscalationStep: 0,
         escalationStatus: 'ESCALATING',
         service: {

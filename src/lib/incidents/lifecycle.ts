@@ -356,6 +356,10 @@ function updateDataForCommand(
 ): Prisma.IncidentUpdateInput {
   const data: Prisma.IncidentUpdateInput = {
     status: targetStatusFor(input.command),
+    // Any real lifecycle transition invalidates a worker that claimed the
+    // previous escalation generation. The worker re-checks this lock token
+    // before assignment, notification delivery, and final state mutation.
+    escalationProcessingAt: null,
   };
 
   switch (input.command) {
