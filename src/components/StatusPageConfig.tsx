@@ -1024,8 +1024,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
         setTimeout(() => setSuccessMessage(null), 3000);
         router.refresh();
       } catch (err: any) {
-        const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-        setError(getUserFriendlyError(err) || 'Failed to save settings');
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        setError(getUserFacingErrorMessage(err) || 'Failed to save settings');
       }
     });
   };
@@ -1128,8 +1128,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
           affectedServiceIds: [],
         });
       } catch (err: any) {
-        const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-        setAnnouncementError(getUserFriendlyError(err) || 'Failed to create announcement');
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        setAnnouncementError(getUserFacingErrorMessage(err) || 'Failed to create announcement');
       }
     });
   };
@@ -1152,8 +1152,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
 
         setAnnouncements(current => current.filter(announcement => announcement.id !== id));
       } catch (err: any) {
-        const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-        setAnnouncementError(getUserFriendlyError(err) || 'Failed to delete announcement');
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        setAnnouncementError(getUserFacingErrorMessage(err) || 'Failed to delete announcement');
       }
     });
   };
@@ -1215,8 +1215,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
         setApiTokenValue(data?.token || null);
         setApiTokenName('');
       } catch (err: any) {
-        const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-        setApiTokenError(getUserFriendlyError(err) || 'Failed to create token');
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        setApiTokenError(getUserFacingErrorMessage(err) || 'Failed to create token');
       }
     });
   };
@@ -1245,8 +1245,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
           );
         }
       } catch (err: any) {
-        const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-        setApiTokenError(getUserFriendlyError(err) || 'Failed to revoke token');
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        setApiTokenError(getUserFacingErrorMessage(err) || 'Failed to revoke token');
       }
     });
   };

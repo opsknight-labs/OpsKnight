@@ -2,7 +2,7 @@
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import ErrorState from './ErrorState';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
+import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 import { logger } from '@/lib/logger';
 
 interface Props {
@@ -82,7 +82,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <ErrorState
           title="Something went wrong"
-          message={this.state.error ? getUserFriendlyError(this.state.error) : 'An unexpected error occurred'}
+          message={this.state.error ? getUserFacingErrorMessage(this.state.error) : 'An unexpected error occurred'}
           onRetry={() => {
             this.setState({ hasError: false, error: null });
           }}
