@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
+import { authenticateApiKey } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { IncidentCreateSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { executeEscalation } from '@/lib/escalation';
 import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { resolveApiKeyActor } from '@/lib/authorization-actors';
+import { incidentReadWhere } from '@/lib/authorization-filters';
+import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 
 function parseLimit(value: string | null) {
   const limit = Number(value);
@@ -19,32 +21,10 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;
 const RATE_LIMIT_BURST = 120; // short burst protection
 
-async function getApiUserContext(apiKeyUserId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: apiKeyUserId },
-    select: {
-      id: true,
-      role: true,
-      teamMemberships: { select: { teamId: true } },
-    },
-  });
-
-  if (!user) return null;
-
-  return {
-    id: user.id,
-    role: user.role,
-    teamIds: user.teamMemberships.map(membership => membership.teamId),
-  };
-}
-
 export async function GET(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
     return jsonError('Unauthorized. Missing or invalid API key.', 401);
-  }
-  if (!hasApiScopes(apiKey.scopes, ['incidents:read'])) {
-    return jsonError('API key missing scope: incidents:read.', 403);
   }
 
   const rate = await checkRateLimit(
@@ -60,19 +40,20 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const apiUser = await getApiUserContext(apiKey.userId);
-  if (!apiUser) {
+  const actor = await resolveApiKeyActor(apiKey);
+  if (!actor) {
     return jsonError('Unauthorized. API key user not found.', 401);
   }
 
   const { searchParams } = new URL(req.url);
   const limit = parseLimit(searchParams.get('limit'));
 
-  const accessFilter = hasCapability(apiUser.role, CAPABILITIES.INCIDENT_READ_ALL)
-    ? undefined
-    : {
-        OR: [{ assigneeId: apiUser.id }, { service: { teamId: { in: apiUser.teamIds } } }],
-      };
+  let accessFilter;
+  try {
+    accessFilter = incidentReadWhere(actor);
+  } catch {
+    return jsonError('Forbidden. Incident access denied.', 403);
+  }
 
   const incidents = await prisma.incident.findMany({
     where: accessFilter,
@@ -97,9 +78,6 @@ export async function POST(req: NextRequest) {
   if (!apiKey) {
     return jsonError('Unauthorized. Missing or invalid API key.', 401);
   }
-  if (!hasApiScopes(apiKey.scopes, ['incidents:write'])) {
-    return jsonError('API key missing scope: incidents:write.', 403);
-  }
 
   const rate = await checkRateLimit(
     `api:${apiKey.id}:incidents:post`,
@@ -122,12 +100,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const apiUser = await getApiUserContext(apiKey.userId);
-  if (!apiUser) {
+  const actor = await resolveApiKeyActor(apiKey);
+  if (!actor) {
     return jsonError('Unauthorized. API key user not found.', 401);
   }
-  if (!hasCapability(apiUser.role, CAPABILITIES.OPERATIONS_MANAGE)) {
-    return jsonError('Forbidden. API key owner cannot manage incidents.', 403);
+  if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE }).allowed) {
+    return jsonError('Forbidden. Incident creation access denied.', 403);
   }
 
   let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -154,6 +132,12 @@ export async function POST(req: NextRequest) {
   if (!service) {
     return jsonError('Service not found.', 404);
   }
+  const decision = authorize({
+    actor,
+    action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+    resource: { type: 'service', teamId: service.teamId },
+  });
+  if (!decision.allowed) return jsonError('Forbidden. Service access denied.', 403);
 
   // Use include in create() to fetch relations in single query instead of separate findUnique
   const incident = await prisma.incident.create({

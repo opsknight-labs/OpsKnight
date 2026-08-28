@@ -1,17 +1,15 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
+import { authenticateApiKey } from '@/lib/api-auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { resolveApiKeyActor } from '@/lib/authorization-actors';
+import { serviceReadWhere } from '@/lib/authorization-filters';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const apiKey = await authenticateApiKey(req);
     if (!apiKey) {
       return jsonError('Unauthorized. Missing or invalid API key.', 401);
-    }
-    if (!hasApiScopes(apiKey.scopes, ['services:read'])) {
-      return jsonError('API key missing scope: services:read.', 403);
     }
 
     const { checkRateLimit } = await import('@/lib/rate-limit');
@@ -24,15 +22,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
     }
     const { id } = await params;
-    const apiUser = await prisma.user.findUnique({
-      where: { id: apiKey.userId },
-      select: { role: true, status: true, teamMemberships: { select: { teamId: true } } },
-    });
-    if (!apiUser || apiUser.status !== 'ACTIVE') return jsonError('Unauthorized.', 401);
-    const hasGlobalRead = hasCapability(apiUser.role, CAPABILITIES.SERVICE_READ_ALL);
-    const teamIds = apiUser.teamMemberships.map(membership => membership.teamId);
+    const actor = await resolveApiKeyActor(apiKey);
+    if (!actor) return jsonError('Unauthorized.', 401);
+    let accessFilter;
+    try {
+      accessFilter = serviceReadWhere(actor);
+    } catch {
+      return jsonError('Forbidden. Service access denied.', 403);
+    }
     const service = await prisma.service.findFirst({
-      where: { id, ...(hasGlobalRead ? {} : { teamId: { in: teamIds } }) },
+      where: { id, ...accessFilter },
       select: {
         id: true,
         name: true,

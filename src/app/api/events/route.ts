@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { processEvent, EventPayload } from '@/lib/events';
-import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
+import { authenticateApiKey } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { EventSchema } from '@/lib/validation';
@@ -10,28 +10,10 @@ import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
 } from '@/lib/integrations/request-security';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { resolveApiKeyActor } from '@/lib/authorization-actors';
+import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 120;
-
-async function getApiUserContext(apiKeyUserId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: apiKeyUserId },
-    select: {
-      id: true,
-      role: true,
-      teamMemberships: { select: { teamId: true } },
-    },
-  });
-
-  if (!user) return null;
-
-  return {
-    id: user.id,
-    role: user.role,
-    teamIds: user.teamMemberships.map(membership => membership.teamId),
-  };
-}
 
 async function postEvent(req: NextRequest) {
   try {
@@ -39,8 +21,7 @@ async function postEvent(req: NextRequest) {
     const authHeader = req.headers.get('Authorization');
     let integrationId: string | null = null;
     let serviceId: string | null = null;
-    let apiKeyScopes: string[] | null = null;
-    let apiKeyUserId: string | null = null;
+    let apiKeyIdentity: Awaited<ReturnType<typeof authenticateApiKey>> = null;
     let apiKeyId: string | null = null;
 
     if (authHeader?.startsWith('Token token=')) {
@@ -59,8 +40,7 @@ async function postEvent(req: NextRequest) {
       if (!apiKey) {
         return jsonError('Unauthorized. Missing or invalid API key.', 401);
       }
-      apiKeyScopes = apiKey.scopes;
-      apiKeyUserId = apiKey.userId;
+      apiKeyIdentity = apiKey;
       apiKeyId = apiKey.id;
     }
 
@@ -84,8 +64,15 @@ async function postEvent(req: NextRequest) {
     const dedupKey = parsed.data.dedup_key;
 
     if (!serviceId) {
-      if (!hasApiScopes(apiKeyScopes, ['events:write'])) {
-        return jsonError('API key missing scope: events:write.', 403);
+      if (!apiKeyIdentity) {
+        return jsonError('Unauthorized. API key user not found.', 401);
+      }
+      const actor = await resolveApiKeyActor(apiKeyIdentity);
+      if (!actor) {
+        return jsonError('Unauthorized. API key user not found.', 401);
+      }
+      if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.EVENT_CREATE }).allowed) {
+        return jsonError('Forbidden. API key owner cannot create events.', 403);
       }
       const candidate = body.service_id || body.serviceId;
       if (!candidate || typeof candidate !== 'string') {
@@ -95,14 +82,13 @@ async function postEvent(req: NextRequest) {
       if (!service) {
         return jsonError('Service not found.', 404);
       }
-      if (!apiKeyUserId) {
-        return jsonError('Unauthorized. API key user not found.', 401);
-      }
-      const apiUser = await getApiUserContext(apiKeyUserId);
-      if (!apiUser) {
-        return jsonError('Unauthorized. API key user not found.', 401);
-      }
-      if (!hasCapability(apiUser.role, CAPABILITIES.OPERATIONS_MANAGE)) {
+      if (
+        !authorize({
+          actor,
+          action: AUTHORIZATION_ACTIONS.EVENT_CREATE,
+          resource: { type: 'service', teamId: service.teamId },
+        }).allowed
+      ) {
         return jsonError('Forbidden. API key owner cannot create events.', 403);
       }
       serviceId = service.id;

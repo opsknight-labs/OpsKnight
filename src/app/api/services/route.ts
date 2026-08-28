@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
+import { authenticateApiKey } from '@/lib/api-auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { resolveApiKeyActor } from '@/lib/authorization-actors';
+import { serviceReadWhere } from '@/lib/authorization-filters';
 
 function parseLimit(value: string | null) {
   const limit = Number(value);
@@ -16,9 +17,6 @@ export async function GET(req: NextRequest) {
     if (!apiKey) {
       return jsonError('Unauthorized. Missing or invalid API key.', 401);
     }
-    if (!hasApiScopes(apiKey.scopes, ['services:read'])) {
-      return jsonError('API key missing scope: services:read.', 403);
-    }
 
     const { checkRateLimit } = await import('@/lib/rate-limit');
     const rate = await checkRateLimit(`api:${apiKey.id}:services:list`, 60, 60_000);
@@ -31,16 +29,17 @@ export async function GET(req: NextRequest) {
     }
     const { searchParams } = new URL(req.url);
     const limit = parseLimit(searchParams.get('limit'));
-    const apiUser = await prisma.user.findUnique({
-      where: { id: apiKey.userId },
-      select: { role: true, status: true, teamMemberships: { select: { teamId: true } } },
-    });
-    if (!apiUser || apiUser.status !== 'ACTIVE') return jsonError('Unauthorized.', 401);
-    const hasGlobalRead = hasCapability(apiUser.role, CAPABILITIES.SERVICE_READ_ALL);
-    const teamIds = apiUser.teamMemberships.map(membership => membership.teamId);
+    const actor = await resolveApiKeyActor(apiKey);
+    if (!actor) return jsonError('Unauthorized.', 401);
+    let accessFilter;
+    try {
+      accessFilter = serviceReadWhere(actor);
+    } catch {
+      return jsonError('Forbidden. Service access denied.', 403);
+    }
 
     const services = await prisma.service.findMany({
-      where: hasGlobalRead ? {} : { teamId: { in: teamIds } },
+      where: accessFilter,
       orderBy: { createdAt: 'desc' },
       take: limit,
       select: {

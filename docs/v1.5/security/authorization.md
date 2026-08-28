@@ -19,6 +19,14 @@ OpsKnight has workspace-wide application roles and independent team-scoped roles
 
 The implementation uses a central capability registry in `src/lib/authorization.ts`. Server guards enforce capabilities and then apply resource scope where required. UI checks are usability hints only; server enforcement remains authoritative.
 
+## Policy contract and adapters
+
+`src/lib/authorization-policy.ts` is the shared decision contract. Callers provide a normalized actor, an action, and—when required—a resource. It returns an allow/deny decision with global or resource scope and a stable denial reason.
+
+Browser sessions and API keys use the same role capabilities and resource rules for reading, creating, acknowledging, annotating, and managing incidents. `authorization-actors.ts` resolves the user's current database role, status, and team memberships; API-key actors additionally carry key scopes. A key is allowed only when both its scope and its owner's current permission allow the action. Disabled, invited, missing, or downgraded owners fail closed.
+
+Collection endpoints use filters generated from the same policy contract. Incident filters include assignee, watcher, public service-team, and public assigned-team access while preventing team membership alone from exposing private incidents. Avoid introducing route-local role comparisons or independent Prisma authorization filters.
+
 ## Resource checks for a User
 
 The central v1.5 checks allow a regular `USER` to:

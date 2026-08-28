@@ -1,26 +1,30 @@
-import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
+import {
+  AUTHORIZATION_ACTIONS,
+  authorize,
+  type AuthorizationActor,
+} from '@/lib/authorization-policy';
 
-export async function getScheduleApiScope(
-  userId: string
-): Promise<Prisma.OnCallScheduleWhereInput> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true },
-  });
-  if (!user) return { id: '__unauthorized__' };
-  if (hasCapability(user.role, CAPABILITIES.SCHEDULE_READ_ALL)) return {};
+export function getScheduleApiScope(actor: AuthorizationActor): Prisma.OnCallScheduleWhereInput {
+  const decision = authorize({ actor, action: AUTHORIZATION_ACTIONS.SCHEDULE_READ });
+  if (!decision.allowed) {
+    throw new AuthorizationError(
+      'Forbidden. Schedule access denied.',
+      CAPABILITIES.SCHEDULE_READ_SCOPED
+    );
+  }
+  if (decision.scope === 'global') return {};
 
   return {
     OR: [
-      { layers: { some: { users: { some: { userId } } } } },
+      { layers: { some: { users: { some: { userId: actor.id } } } } },
       {
         escalationRules: {
           some: {
             policy: {
               services: {
-                some: { team: { members: { some: { userId } } } },
+                some: { team: { members: { some: { userId: actor.id } } } },
               },
             },
           },
