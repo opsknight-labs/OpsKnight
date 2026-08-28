@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   resolveApiKeyActor: vi.fn(),
   authorize: vi.fn(),
   applyRestIncidentPatch: vi.fn(),
-  scheduleStatusPageNotification: vi.fn(),
   sendServiceNotifications: vi.fn(),
   triggerWebhooksForService: vi.fn(),
   incidentFindUnique: vi.fn(),
@@ -26,9 +25,6 @@ vi.mock('@/lib/authorization-policy', () => ({
 }));
 vi.mock('@/lib/incidents/rest-patch', () => ({
   applyRestIncidentPatch: mocks.applyRestIncidentPatch,
-}));
-vi.mock('@/lib/jobs/queue', () => ({
-  scheduleStatusPageNotification: mocks.scheduleStatusPageNotification,
 }));
 vi.mock('@/lib/service-notifications', () => ({
   sendServiceNotifications: mocks.sendServiceNotifications,
@@ -88,11 +84,10 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
     });
     mocks.authorize.mockReturnValue({ allowed: true, scope: 'global' });
     mocks.sendServiceNotifications.mockResolvedValue({ success: true });
-    mocks.scheduleStatusPageNotification.mockResolvedValue(undefined);
     mocks.triggerWebhooksForService.mockResolvedValue(undefined);
   });
 
-  it('routes status changes through the REST lifecycle transaction and dispatches changed-only effects', async () => {
+  it('routes status changes through the REST lifecycle transaction without post-commit lifecycle dispatch', async () => {
     const patchedIncident = incident('ACKNOWLEDGED');
     mocks.applyRestIncidentPatch.mockResolvedValue({
       incident: patchedIncident,
@@ -107,11 +102,6 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
       urgencyChanged: false,
       assigneeChanged: false,
       changed: true,
-    });
-    mocks.incidentFindUnique.mockResolvedValue({
-      ...patchedIncident,
-      service: { id: 'svc-1', name: 'Database' },
-      assignee: null,
     });
 
     const req = await createMockRequest('PATCH', '/api/incidents/inc-1', {
@@ -130,13 +120,38 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
       hasAssigneeUpdate: false,
       actor: { id: 'user-1' },
     });
+    expect(mocks.incidentFindUnique).not.toHaveBeenCalled();
+    expect(mocks.triggerWebhooksForService).not.toHaveBeenCalled();
+    expect(mocks.sendServiceNotifications).not.toHaveBeenCalled();
+  });
+
+  it('keeps immediate updated effects for a pure non-lifecycle urgency patch', async () => {
+    const patchedIncident = { ...incident('OPEN'), urgency: 'HIGH' };
+    mocks.applyRestIncidentPatch.mockResolvedValue({
+      incident: patchedIncident,
+      lifecycle: null,
+      urgencyChanged: true,
+      assigneeChanged: false,
+      changed: true,
+    });
+    mocks.incidentFindUnique.mockResolvedValue({
+      ...patchedIncident,
+      service: { id: 'svc-1', name: 'Database' },
+      assignee: null,
+    });
+
+    const req = await createMockRequest('PATCH', '/api/incidents/inc-1', {
+      urgency: 'HIGH',
+    });
+    const res = await PATCH(req, context);
+
+    expect(res.status).toBe(200);
     expect(mocks.triggerWebhooksForService).toHaveBeenCalledWith(
       'svc-1',
-      'incident.acknowledged',
-      expect.objectContaining({ id: 'inc-1', status: 'ACKNOWLEDGED' })
+      'incident.updated',
+      expect.objectContaining({ id: 'inc-1', status: 'OPEN' })
     );
-    expect(mocks.sendServiceNotifications).toHaveBeenCalledWith('inc-1', 'acknowledged');
-    expect(mocks.scheduleStatusPageNotification).toHaveBeenCalledWith('inc-1', 'acknowledged');
+    expect(mocks.sendServiceNotifications).toHaveBeenCalledWith('inc-1', 'updated');
   });
 
   it('does not repeat lifecycle side effects for an idempotent status retry', async () => {
@@ -164,7 +179,6 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
     expect(mocks.incidentFindUnique).not.toHaveBeenCalled();
     expect(mocks.triggerWebhooksForService).not.toHaveBeenCalled();
     expect(mocks.sendServiceNotifications).not.toHaveBeenCalled();
-    expect(mocks.scheduleStatusPageNotification).not.toHaveBeenCalled();
   });
 
   it('returns the typed lifecycle validation contract at the API boundary', async () => {

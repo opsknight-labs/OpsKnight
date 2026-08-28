@@ -34,6 +34,10 @@ vi.mock('@/lib/status-page-webhooks', () => ({
   triggerWebhooksForService: vi.fn(),
 }));
 
+vi.mock('@/lib/status-page-notifications', () => ({
+  notifyStatusPageSubscribers: vi.fn(),
+}));
+
 vi.mock('@/lib/slack', () => ({
   notifySlackForIncident: vi.fn(),
 }));
@@ -50,6 +54,8 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/lib/chatops/war-room', () => ({
   createIncidentWarRoom: vi.fn(),
   archiveWarRoomChannel: vi.fn(),
+  postWarRoomUpdate: vi.fn(),
+  updateWarRoomTopic: vi.fn(),
 }));
 
 const executeEscalationMock = mockedExecuteEscalation as unknown as TestMock;
@@ -60,14 +66,16 @@ const prismaMock = prisma as unknown as { incident: { findUnique: TestMock } };
 
 function payload(
   effect: EventSideEffectPayload['effect'],
-  lane: EventSideEffectPayload['lane'] = 'ESCALATION'
+  lane: EventSideEffectPayload['lane'] = 'ESCALATION',
+  lifecycle?: EventSideEffectPayload['lifecycle']
 ): EventSideEffectPayload {
   return {
     task: 'EVENT_SIDE_EFFECT',
     effect,
     lane,
     incidentId: 'inc-1',
-    eventOrderAt: new Date().toISOString(),
+    eventOrderAt: '2026-08-28T07:00:00.000Z',
+    ...(lifecycle ? { lifecycle } : {}),
   };
 }
 
@@ -127,6 +135,59 @@ describe('event durable side effects', () => {
       'incident.created',
       expect.objectContaining({ status: 'OPEN' })
     );
+  });
+
+  it('replays the queued lifecycle state instead of leaking a newer current state into webhooks', async () => {
+    prismaMock.incident.findUnique.mockResolvedValue({
+      id: 'inc-1',
+      title: 'Incident',
+      description: null,
+      status: 'RESOLVED',
+      urgency: 'HIGH',
+      priority: 'P1',
+      visibility: 'PUBLIC',
+      serviceId: 'svc-1',
+      service: { id: 'svc-1', name: 'Service' },
+      assignee: null,
+      createdAt: new Date('2026-08-28T06:00:00.000Z'),
+      acknowledgedAt: new Date('2026-08-28T06:01:00.000Z'),
+      resolvedAt: new Date('2026-08-28T06:02:00.000Z'),
+    });
+    triggerWebhooksForServiceMock.mockResolvedValue(undefined);
+
+    await processEventSideEffect(
+      payload('LIFECYCLE_WEBHOOK', 'WEBHOOK', {
+        command: 'ACKNOWLEDGE',
+        source: 'REST_API',
+        previousStatus: 'OPEN',
+        status: 'ACKNOWLEDGED',
+        transitionAt: '2026-08-28T06:01:00.000Z',
+        snoozedUntil: null,
+      })
+    );
+
+    expect(triggerWebhooksForServiceMock).toHaveBeenCalledWith(
+      'svc-1',
+      'incident.acknowledged',
+      expect.objectContaining({ id: 'inc-1', status: 'ACKNOWLEDGED' })
+    );
+  });
+
+  it('lets lifecycle notification failures escape to the durable job retry path', async () => {
+    sendIncidentNotificationsMock.mockRejectedValue(new Error('notification unavailable'));
+
+    await expect(
+      processEventSideEffect(
+        payload('LIFECYCLE_USER_NOTIFICATION', 'NOTIFICATION', {
+          command: 'RESOLVE',
+          source: 'WEB',
+          previousStatus: 'ACKNOWLEDGED',
+          status: 'RESOLVED',
+          transitionAt: '2026-08-28T06:02:00.000Z',
+          snoozedUntil: null,
+        })
+      )
+    ).rejects.toThrow('notification unavailable');
   });
 
   it('rejects an unknown effect instead of silently completing it', async () => {

@@ -5,8 +5,6 @@ import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
 } from '@/lib/incidents/chatops-lifecycle';
-import { scheduleAutoUnsnooze } from '@/lib/jobs/queue';
-import { sendIncidentNotifications } from '@/lib/user-notifications';
 
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -47,16 +45,7 @@ vi.mock('@/lib/incidents/chatops-lifecycle', () => ({
   ),
 }));
 
-vi.mock('@/lib/jobs/queue', () => ({
-  scheduleAutoUnsnooze: vi.fn().mockResolvedValue('job-1'),
-}));
-
-vi.mock('@/lib/user-notifications', () => ({
-  sendIncidentNotifications: vi.fn().mockResolvedValue({ success: true }),
-}));
-
 vi.mock('@/lib/chatops/war-room', () => ({
-  archiveWarRoomChannel: vi.fn().mockResolvedValue(undefined),
   updateWarRoomTopic: vi.fn().mockResolvedValue(undefined),
   slackApiCall: vi.fn().mockResolvedValue({ ok: true }),
 }));
@@ -123,7 +112,7 @@ describe('Slack interactive lifecycle actions', () => {
     expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
   });
 
-  it('does not repeat notifications for an idempotent lifecycle retry', async () => {
+  it('keeps an idempotent lifecycle retry side-effect free at the adapter', async () => {
     vi.mocked(executeChatOpsLifecycleCommand).mockResolvedValue({
       incidentId: 'inc-1',
       command: 'ACKNOWLEDGE',
@@ -137,10 +126,10 @@ describe('Slack interactive lifecycle actions', () => {
     const body = await response.json();
 
     expect(body.text).toContain('already acknowledged');
-    expect(sendIncidentNotifications).not.toHaveBeenCalled();
+    expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
   });
 
-  it('routes resolve through the lifecycle adapter', async () => {
+  it('routes resolve through the lifecycle adapter without post-commit lifecycle work', async () => {
     const response = await handleSlackActionRequest(payload('resolve'));
     const body = await response.json();
 
@@ -154,7 +143,7 @@ describe('Slack interactive lifecycle actions', () => {
     expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
   });
 
-  it('routes snooze through the lifecycle adapter and schedules durable auto-unsnooze', async () => {
+  it('routes snooze through the lifecycle adapter with the durable timer owned by the lifecycle transaction', async () => {
     const before = Date.now();
     const response = await handleSlackActionRequest(payload('snooze', { minutes: 30 }));
     const body = await response.json();
@@ -171,7 +160,6 @@ describe('Slack interactive lifecycle actions', () => {
     );
     const call = vi.mocked(executeChatOpsLifecycleCommand).mock.calls[0]?.[0];
     expect(call?.snoozedUntil?.getTime()).toBeGreaterThanOrEqual(before + 30 * 60 * 1000);
-    expect(scheduleAutoUnsnooze).toHaveBeenCalledWith('inc-1', call?.snoozedUntil);
     expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
   });
 

@@ -195,28 +195,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         slackUser: payload.user_name,
       });
 
-      // Dispatch incident notifications only after a real lifecycle change.
-      import('@/lib/user-notifications')
-        .then(({ sendIncidentNotifications }) =>
-          sendIncidentNotifications(incident.id, 'acknowledged')
-        )
-        .catch(err =>
-          logger.error('[ChatOps] Failed to send ack notifications', {
-            error: err,
-            incidentId: incident.id,
-          })
-        );
-
-      // Update channel topic to ACKNOWLEDGED
-      try {
-        const { updateWarRoomTopic } = await import('@/lib/chatops/war-room');
-        updateWarRoomTopic(incident.id, 'ACKNOWLEDGED').catch(err =>
-          logger.warn('[ChatOps] Failed to update topic on ack', { error: err })
-        );
-      } catch (e) {
-        logger.warn('[ChatOps] Failed to load war-room module', { error: e });
-      }
-
+      // Notifications/topic updates are persisted by the lifecycle outbox.
       return {
         response_type: 'in_channel',
         text: `👀 *Incident Acknowledged* by <@${user_id}>\n_${incident.title}_`,
@@ -259,26 +238,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         slackUser: payload.user_name,
       });
 
-      // Dispatch incident notifications only after a real lifecycle change.
-      import('@/lib/user-notifications')
-        .then(({ sendIncidentNotifications }) => sendIncidentNotifications(incident.id, 'resolved'))
-        .catch(err =>
-          logger.error('[ChatOps] Failed to send resolve notifications', {
-            error: err,
-            incidentId: incident.id,
-          })
-        );
-
-      // Archive war-room channel on resolve
-      try {
-        const { archiveWarRoomChannel } = await import('@/lib/chatops/war-room');
-        archiveWarRoomChannel(incident.id).catch(err =>
-          logger.warn('[ChatOps] Failed to archive war-room after slash resolve', { error: err })
-        );
-      } catch (e) {
-        logger.warn('[ChatOps] Failed to load war-room module', { error: e });
-      }
-
+      // Notifications/archive are persisted by the lifecycle outbox.
       return {
         response_type: 'in_channel',
         text: `✅ *Incident Resolved* by <@${user_id}>\n_${resolution}_`,

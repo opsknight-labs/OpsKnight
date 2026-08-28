@@ -3,10 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   runSerializableTransaction: vi.fn(),
   applyIncidentLifecycleCommand: vi.fn(),
-  sendIncidentNotifications: vi.fn(),
-  notifyStatusPageSubscribers: vi.fn(),
-  triggerWebhooksForService: vi.fn(),
-  loggerError: vi.fn(),
 }));
 
 const prismaMock = vi.hoisted(() => ({
@@ -27,22 +23,6 @@ vi.mock('@/lib/incidents/lifecycle', () => ({
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: prismaMock,
-}));
-
-vi.mock('@/lib/user-notifications', () => ({
-  sendIncidentNotifications: mocks.sendIncidentNotifications,
-}));
-
-vi.mock('@/lib/status-page-notifications', () => ({
-  notifyStatusPageSubscribers: mocks.notifyStatusPageSubscribers,
-}));
-
-vi.mock('@/lib/status-page-webhooks', () => ({
-  triggerWebhooksForService: mocks.triggerWebhooksForService,
-}));
-
-vi.mock('@/lib/logger', () => ({
-  logger: { error: mocks.loggerError },
 }));
 
 import {
@@ -121,66 +101,28 @@ describe('system auto-unsnooze lifecycle adapter', () => {
     expect(mocks.applyIncidentLifecycleCommand).not.toHaveBeenCalled();
   });
 
-  it('emits post-commit effects only after a real lifecycle change', async () => {
+  it('returns after the lifecycle transaction because external effects are already durable', async () => {
     tx.incident.findUnique.mockResolvedValue({
       status: 'SNOOZED',
       snoozedUntil: new Date('2026-08-28T04:00:00.000Z'),
     });
-    prismaMock.incident.findUnique.mockResolvedValue({
-      id: 'inc-1',
-      title: 'Database latency',
-      description: 'p99 elevated',
-      status: 'OPEN',
-      urgency: 'HIGH',
-      priority: 'P1',
-      serviceId: 'svc-1',
-      service: { id: 'svc-1', name: 'Database' },
-      assignee: null,
-      createdAt: new Date('2026-08-28T03:00:00.000Z'),
-      acknowledgedAt: null,
-      resolvedAt: null,
-    });
-    mocks.sendIncidentNotifications.mockResolvedValue({ success: true });
-    mocks.notifyStatusPageSubscribers.mockResolvedValue(undefined);
-    mocks.triggerWebhooksForService.mockResolvedValue(undefined);
 
     await expect(processAutoUnsnoozeIncidentInternal('inc-1', NOW)).resolves.toEqual({
       outcome: 'changed',
     });
 
-    expect(mocks.sendIncidentNotifications).toHaveBeenCalledWith('inc-1', 'updated');
-    expect(mocks.notifyStatusPageSubscribers).toHaveBeenCalledWith('inc-1', 'investigating');
-    expect(mocks.triggerWebhooksForService).toHaveBeenCalledWith(
-      'svc-1',
-      'incident.updated',
-      expect.objectContaining({ id: 'inc-1', status: 'OPEN' })
-    );
+    expect(mocks.applyIncidentLifecycleCommand).toHaveBeenCalledTimes(1);
+    expect(prismaMock.incident.findUnique).not.toHaveBeenCalled();
   });
 
-  it('does not repeat effects for an already-applied retry', async () => {
+  it('does not perform any post-commit work for an already-applied retry', async () => {
     tx.incident.findUnique.mockResolvedValue({ status: 'OPEN', snoozedUntil: null });
 
     await expect(processAutoUnsnoozeIncidentInternal('inc-1', NOW)).resolves.toEqual({
       outcome: 'noop',
     });
 
+    expect(mocks.applyIncidentLifecycleCommand).not.toHaveBeenCalled();
     expect(prismaMock.incident.findUnique).not.toHaveBeenCalled();
-    expect(mocks.sendIncidentNotifications).not.toHaveBeenCalled();
-    expect(mocks.notifyStatusPageSubscribers).not.toHaveBeenCalled();
-    expect(mocks.triggerWebhooksForService).not.toHaveBeenCalled();
-  });
-
-  it('suppresses stale OPEN effects if the incident changed again after commit', async () => {
-    tx.incident.findUnique.mockResolvedValue({
-      status: 'SNOOZED',
-      snoozedUntil: new Date('2026-08-28T04:00:00.000Z'),
-    });
-    prismaMock.incident.findUnique.mockResolvedValue({ status: 'SNOOZED' });
-
-    await processAutoUnsnoozeIncidentInternal('inc-1', NOW);
-
-    expect(mocks.sendIncidentNotifications).not.toHaveBeenCalled();
-    expect(mocks.notifyStatusPageSubscribers).not.toHaveBeenCalled();
-    expect(mocks.triggerWebhooksForService).not.toHaveBeenCalled();
   });
 });
