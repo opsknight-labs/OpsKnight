@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateApiKey } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -10,6 +10,14 @@ import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
 import { resolveApiKeyActor } from '@/lib/authorization-actors';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import { authorizationDecisionError } from '@/lib/api-authorization-error';
+import { AppError } from '@/lib/errors';
+
+const LEGACY_UNAUTHORIZED_MESSAGE =
+  'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
+const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
 function parseLimit(value: string | null) {
   const limit = Number(value);
@@ -19,41 +27,55 @@ function parseLimit(value: string | null) {
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;
-const RATE_LIMIT_BURST = 120; // short burst protection
+const RATE_LIMIT_BURST = 120;
+
+function rateLimitError(retryAfter: number) {
+  return jsonError(
+    new AppError({
+      code: 'RATE_LIMIT_EXCEEDED',
+      userMessage: 'Rate limit exceeded.',
+      details: { retryAfter },
+    }),
+    undefined,
+    undefined,
+    { 'Retry-After': String(retryAfter) }
+  );
+}
 
 export async function GET(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError('Unauthorized. Missing or invalid API key.', 401);
+    return jsonError(new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
   }
 
-  const rate = await checkRateLimit(
-    `api:${apiKey.id}:incidents:get`,
-    RATE_LIMIT_MAX,
-    RATE_LIMIT_WINDOW_MS
-  );
+  const rate = await checkRateLimit(`api:${apiKey.id}:incidents:get`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
   if (!rate.allowed) {
-    const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
-    );
+    return rateLimitError(Math.ceil((rate.resetAt - Date.now()) / 1000));
   }
 
   const actor = await resolveApiKeyActor(apiKey);
   if (!actor) {
-    return jsonError('Unauthorized. API key user not found.', 401);
+    return jsonError(
+      new AppError({
+        code: 'API_KEY_USER_INVALID',
+        userMessage: LEGACY_UNAUTHORIZED_MESSAGE,
+        details: { apiKeyId: apiKey.id, userId: apiKey.userId },
+      })
+    );
+  }
+
+  const readDecision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ });
+  if (!readDecision.allowed) {
+    return jsonError(
+      authorizationDecisionError(readDecision, {
+        forbiddenMessage: 'Forbidden. Incident access denied.',
+      })
+    );
   }
 
   const { searchParams } = new URL(req.url);
   const limit = parseLimit(searchParams.get('limit'));
-
-  let accessFilter;
-  try {
-    accessFilter = incidentReadWhere(actor);
-  } catch {
-    return jsonError('Forbidden. Incident access denied.', 403);
-  }
+  const accessFilter = incidentReadWhere(actor);
 
   const incidents = await prisma.incident.findMany({
     where: accessFilter,
@@ -61,13 +83,10 @@ export async function GET(req: NextRequest) {
     take: limit,
     include: {
       service: { select: { id: true, name: true } },
-      assignee: {
-        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-      },
+      assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
     },
   });
 
-  // Add cache headers for incidents list (short cache, private)
   return jsonOk({ incidents }, 200, {
     'Cache-Control': 'private, max-age=5, stale-while-revalidate=15',
   });
@@ -76,44 +95,41 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError('Unauthorized. Missing or invalid API key.', 401);
+    return jsonError(new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
   }
 
-  const rate = await checkRateLimit(
-    `api:${apiKey.id}:incidents:post`,
-    RATE_LIMIT_MAX,
-    RATE_LIMIT_WINDOW_MS
-  );
-  // Simple burst guard: if attempts exceed burst, block immediately
+  const rate = await checkRateLimit(`api:${apiKey.id}:incidents:post`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
   if (!rate.allowed || rate.count > RATE_LIMIT_BURST) {
-    const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
-    );
-  }
-  if (!rate.allowed) {
-    const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
-    );
+    return rateLimitError(Math.ceil((rate.resetAt - Date.now()) / 1000));
   }
 
   const actor = await resolveApiKeyActor(apiKey);
   if (!actor) {
-    return jsonError('Unauthorized. API key user not found.', 401);
+    return jsonError(
+      new AppError({
+        code: 'API_KEY_USER_INVALID',
+        userMessage: LEGACY_UNAUTHORIZED_MESSAGE,
+        details: { apiKeyId: apiKey.id, userId: apiKey.userId },
+      })
+    );
   }
-  if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE }).allowed) {
-    return jsonError('Forbidden. Incident creation access denied.', 403);
+
+  const createDecision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE });
+  if (!createDecision.allowed) {
+    return jsonError(
+      authorizationDecisionError(createDecision, {
+        forbiddenMessage: 'Forbidden. Incident creation access denied.',
+      })
+    );
   }
 
   let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
     body = await req.json();
   } catch (_error) {
-    return jsonError('Invalid JSON in request body.', 400);
+    return jsonError(new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE }));
   }
+
   const parsed = IncidentCreateSchema.safeParse({
     title: body.title,
     description: body.description ?? null,
@@ -123,37 +139,44 @@ export async function POST(req: NextRequest) {
   });
 
   if (!parsed.success) {
-    return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
+    return jsonError(
+      new AppError({ code: 'VALIDATION_FAILED', userMessage: LEGACY_INVALID_INPUT_MESSAGE }),
+      undefined,
+      { issues: parsed.error.issues }
+    );
   }
 
   const { title, description, serviceId, urgency, priority } = parsed.data;
-
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!service) {
-    return jsonError('Service not found.', 404);
+    return jsonError(
+      new AppError({
+        code: 'SERVICE_NOT_FOUND',
+        userMessage: LEGACY_NOT_FOUND_MESSAGE,
+        details: { serviceId },
+      })
+    );
   }
-  const decision = authorize({
+
+  const serviceDecision = authorize({
     actor,
     action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
     resource: { type: 'service', teamId: service.teamId },
   });
-  if (!decision.allowed) return jsonError('Forbidden. Service access denied.', 403);
+  if (!serviceDecision.allowed) {
+    return jsonError(
+      authorizationDecisionError(serviceDecision, {
+        forbiddenCode: 'SERVICE_ACCESS_DENIED',
+        forbiddenMessage: 'Forbidden. Service access denied.',
+      })
+    );
+  }
 
-  // Use include in create() to fetch relations in single query instead of separate findUnique
   const incident = await prisma.incident.create({
-    data: {
-      title,
-      description,
-      urgency,
-      priority,
-      status: 'OPEN',
-      serviceId,
-    },
+    data: { title, description, urgency, priority, status: 'OPEN', serviceId },
     include: {
       service: { select: { id: true, name: true } },
-      assignee: {
-        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-      },
+      assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
     },
   });
 
@@ -163,7 +186,6 @@ export async function POST(req: NextRequest) {
     apiKeyId: apiKey.id,
   });
 
-  // Execute escalation policy to assign/notify per policy steps
   let escalationResult: { escalated?: boolean; reason?: string } | null = null;
   try {
     escalationResult = await executeEscalation(incident.id);
@@ -174,7 +196,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Trigger status page webhooks for incident.created event
   try {
     const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
     await triggerWebhooksForService(incident.serviceId, 'incident.created', {
@@ -184,24 +205,17 @@ export async function POST(req: NextRequest) {
       status: incident.status,
       urgency: incident.urgency,
       priority: incident.priority,
-      service: {
-        id: incident.service.id,
-        name: incident.service.name,
-      },
+      service: { id: incident.service.id, name: incident.service.name },
       assignee: incident.assignee,
       createdAt: incident.createdAt.toISOString(),
     });
   } catch (e) {
-    // Log but don't fail the request
     logger.error('api.incident.webhook_trigger_failed', {
       error: e instanceof Error ? e.message : String(e),
     });
   }
 
   const hasEscalationPolicy = escalationResult?.reason !== 'No escalation policy configured';
-
-  // Trigger service-level notifications (Slack, Webhooks),
-  // or fall back to user notifications when no policy is configured.
   try {
     if (hasEscalationPolicy) {
       const { sendServiceNotifications } = await import('@/lib/service-notifications');
@@ -216,7 +230,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Subscriber fan-out is durable and processed outside the request path.
   try {
     await scheduleStatusPageNotification(incident.id, 'triggered');
   } catch (e) {
@@ -226,7 +239,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ChatOps: Auto-create war-room for qualifying incidents.
   try {
     const { createIncidentWarRoom } = await import('@/lib/chatops/war-room');
     await createIncidentWarRoom(incident.id);

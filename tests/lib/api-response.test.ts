@@ -119,6 +119,21 @@ describe('API Response Utilities', () => {
       expect(body.code).toBe('VALIDATION_FAILED');
     });
 
+    it('preserves response headers for typed errors', async () => {
+      const error = new AppError({
+        code: 'RATE_LIMIT_EXCEEDED',
+        userMessage: 'Rate limit exceeded.',
+      });
+      const response = jsonError(error, undefined, undefined, { 'Retry-After': '30' });
+      const body = await response.json();
+
+      expect(response.status).toBe(429);
+      expect(response.headers.get('Retry-After')).toBe('30');
+      expect(body.error).toBe('Rate limit exceeded.');
+      expect(body.code).toBe('RATE_LIMIT_EXCEEDED');
+      expect(body.retryable).toBe(true);
+    });
+
     it('keeps plain string compatibility', async () => {
       const response = jsonError('Custom legacy message', 422);
       const body = await response.json();

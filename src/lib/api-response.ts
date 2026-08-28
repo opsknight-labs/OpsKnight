@@ -5,7 +5,8 @@ import { isAppError, toPublicAppError, type AppError } from './errors';
 export function jsonError(
   error: string | AppError | unknown,
   status?: number,
-  meta?: Record<string, unknown>
+  meta?: Record<string, unknown>,
+  headers?: HeadersInit
 ) {
   if (isAppError(error)) {
     const publicError = toPublicAppError(error);
@@ -21,12 +22,12 @@ export function jsonError(
         fields: publicError.fields,
         meta,
       },
-      { status: error.status }
+      { status: error.status, headers }
     );
   }
 
   const friendlyMessage = getUserFriendlyError(error);
-  return NextResponse.json({ error: friendlyMessage, meta }, { status: status ?? 500 });
+  return NextResponse.json({ error: friendlyMessage, meta }, { status: status ?? 500, headers });
 }
 
 export function jsonOk<T>(payload: T, status: number = 200, headers?: HeadersInit) {
