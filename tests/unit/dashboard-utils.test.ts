@@ -71,6 +71,18 @@ describe('dashboard-utils', () => {
       expect(where.status).toEqual({ in: ['OPEN', 'ACKNOWLEDGED'] });
       expect(where.urgency).toBe('HIGH');
     });
+
+    it('copies only supported Prisma fields from caller-supplied date filters', () => {
+      const unsafeFilter = {
+        createdAt: { gte: new Date('2026-08-01T00:00:00.000Z') },
+        isClipped: true,
+      };
+
+      const where = buildIncidentWhere({}, { dateFilter: unsafeFilter });
+
+      expect(where).toEqual({ createdAt: unsafeFilter.createdAt });
+      expect(where).not.toHaveProperty('isClipped');
+    });
   });
 
   describe('buildDateFilter', () => {

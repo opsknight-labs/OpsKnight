@@ -110,7 +110,12 @@ export function buildIncidentWhere(
   const dateFilter =
     options.dateFilter ?? buildDateFilter(filters.range, filters.customStart, filters.customEnd);
 
-  const where: Prisma.IncidentWhereInput = { ...dateFilter };
+  // Copy only the Prisma field we explicitly support. TypeScript permits values
+  // with additional properties to satisfy IncidentDateWhere, so spreading the
+  // caller object would let retention metadata leak back into a Prisma query.
+  const where: Prisma.IncidentWhereInput = dateFilter.createdAt
+    ? { createdAt: dateFilter.createdAt }
+    : {};
 
   if (includeStatus && filters.status && filters.status !== 'ALL') {
     where.status =
