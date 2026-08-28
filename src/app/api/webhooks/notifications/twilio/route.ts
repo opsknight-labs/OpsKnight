@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
         userId: true,
         channel: true,
         message: true,
+        eventType: true,
       },
     });
 
@@ -102,6 +103,7 @@ export async function POST(request: NextRequest) {
               message: notification.message || 'Incident notification delivery failed',
               failedChannel: notification.channel,
               sourceNotificationId: notification.id,
+              eventType: notification.eventType,
             },
           },
         });

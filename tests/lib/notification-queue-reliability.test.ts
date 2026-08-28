@@ -75,4 +75,18 @@ describe('notification queue delivery reliability', () => {
       'acknowledged'
     );
   });
+
+  it('does not deduplicate a permanent failure after its configuration is corrected', async () => {
+    sendNotification.mockResolvedValue({
+      success: false,
+      terminal: true,
+      error: 'No webhook URL configured for service',
+    });
+    queueNotification('incident-4', 'user-4', 'WEBHOOK', 'Incident opened');
+
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(queueNotification('incident-4', 'user-4', 'WEBHOOK', 'Incident opened')).toBe(true);
+  });
 });
