@@ -4,6 +4,7 @@ import {
   dashboardUserReadWhere,
 } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { buildWidgetActivityIncidentWhere } from '@/lib/widget-data-provider';
 
 const user: AuthorizationActor = {
   id: 'user-1',
@@ -36,5 +37,25 @@ describe('dashboard authorization filters', () => {
 
     expect(dashboardMetricsScope(responder)).toEqual({});
     expect(dashboardUserReadWhere(responder)).toEqual({});
+  });
+
+  it('intersects a requested service with the caller team scope for widget activity', () => {
+    expect(
+      buildWidgetActivityIncidentWhere({
+        serviceId: 'service-outside-team',
+        teamId: ['team-1'],
+        useOrScope: true,
+      })
+    ).toEqual({
+      AND: [
+        { serviceId: 'service-outside-team' },
+        {
+          OR: [
+            { teamId: { in: ['team-1'] } },
+            { service: { teamId: { in: ['team-1'] } } },
+          ],
+        },
+      ],
+    });
   });
 });
