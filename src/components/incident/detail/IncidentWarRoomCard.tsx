@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { errorFromResponse } from '@/lib/client-error';
+import { toUserFacingError } from '@/lib/user-facing-error';
 import { MessageCircle, Video, ExternalLink, Archive, Hash, Loader2 } from 'lucide-react';
 
 interface IncidentWarRoomCardProps {
@@ -20,6 +22,11 @@ interface IncidentWarRoomCardProps {
     };
   };
   canManage: boolean;
+}
+
+function displayError(error: unknown, fallback: string): string {
+  const friendly = toUserFacingError(error, fallback);
+  return friendly.description ? `${friendly.title} ${friendly.description}` : friendly.title;
 }
 
 export default function IncidentWarRoomCard({ incident, canManage }: IncidentWarRoomCardProps) {
@@ -38,14 +45,13 @@ export default function IncidentWarRoomCard({ incident, canManage }: IncidentWar
         });
 
         if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || 'Failed to create war-room');
+          throw await errorFromResponse(response, 'Failed to create war-room');
         }
 
         // Refresh page to show updated war-room state
         router.refresh();
-      } catch (err: any) {
-        setError(err.message || 'An error occurred');
+      } catch (err: unknown) {
+        setError(displayError(err, 'Failed to create war-room'));
       }
     });
   };
@@ -61,14 +67,13 @@ export default function IncidentWarRoomCard({ incident, canManage }: IncidentWar
         });
 
         if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || 'Failed to archive war-room');
+          throw await errorFromResponse(response, 'Failed to archive war-room');
         }
 
         // Refresh page to show updated war-room state
         router.refresh();
-      } catch (err: any) {
-        setError(err.message || 'An error occurred');
+      } catch (err: unknown) {
+        setError(displayError(err, 'Failed to archive war-room'));
       }
     });
   };
