@@ -8,9 +8,8 @@ import { logger } from '@/lib/logger';
 import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
 import { resolveApiKeyActor } from '@/lib/authorization-actors';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
 
-type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
-type IncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH';
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;
 
@@ -109,277 +108,137 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return jsonError('Forbidden. API key owner cannot manage incidents.', 403);
   }
 
-  let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  let body: unknown;
   try {
     body = await req.json();
-  } catch (_error) {
+  } catch {
     return jsonError('Invalid JSON in request body.', 400);
   }
+
   const parsed = IncidentPatchSchema.safeParse(body);
   if (!parsed.success) {
     return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
   }
-  const { id } = await params;
-  const currentIncident = await prisma.incident.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      status: true,
-      urgency: true,
-      acknowledgedAt: true,
-      resolvedAt: true,
-      assigneeId: true,
-      service: { select: { teamId: true } },
-    },
-  });
 
-  if (!currentIncident) {
-    return jsonError('Incident not found.', 404);
-  }
-
-  const status: IncidentStatus | null = parsed.data.status ?? null;
-  const urgency: IncidentUrgency | null = parsed.data.urgency ?? null;
-  const hasAssigneeUpdate = Object.prototype.hasOwnProperty.call(body, 'assigneeId');
-  const assigneeId = hasAssigneeUpdate ? (parsed.data.assigneeId ?? null) : undefined;
-
-  const updates: Record<string, unknown> = {};
-  if (status) {
-    const valid = ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED'].includes(status);
-    if (!valid) {
-      return jsonError('Invalid status.', 400);
-    }
-    updates.status = status;
-    if (status === 'ACKNOWLEDGED' && !currentIncident.acknowledgedAt) {
-      updates.acknowledgedAt = new Date();
-    }
-    if (status === 'RESOLVED' && !currentIncident.resolvedAt) {
-      updates.resolvedAt = new Date();
-    }
-    if (currentIncident.status === 'RESOLVED' && status !== 'RESOLVED') {
-      updates.resolvedAt = null;
-    }
-    if (status === 'ACKNOWLEDGED' || status === 'RESOLVED') {
-      updates.escalationStatus = 'COMPLETED';
-      updates.nextEscalationAt = null;
-    } else if (status === 'SNOOZED' || status === 'SUPPRESSED') {
-      updates.escalationStatus = 'PAUSED';
-      updates.nextEscalationAt = null;
-    } else if (
-      status === 'OPEN' &&
-      ['SNOOZED', 'SUPPRESSED', 'ACKNOWLEDGED', 'RESOLVED'].includes(currentIncident.status)
-    ) {
-      updates.escalationStatus = 'ESCALATING';
-      if (currentIncident.status === 'ACKNOWLEDGED') {
-        const policyData = await prisma.incident.findUnique({
-          where: { id },
-          select: {
-            currentEscalationStep: true,
-            service: {
-              select: {
-                policy: {
-                  select: {
-                    steps: {
-                      orderBy: { stepOrder: 'asc' },
-                      select: { delayMinutes: true },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        });
-        const stepIndex = policyData?.currentEscalationStep ?? 0;
-        const delayMinutes = policyData?.service?.policy?.steps?.[stepIndex]?.delayMinutes ?? 0;
-        updates.nextEscalationAt = new Date(Date.now() + delayMinutes * 60 * 1000);
-      } else {
-        updates.nextEscalationAt = new Date();
-      }
-      if (currentIncident.status === 'ACKNOWLEDGED' || currentIncident.status === 'RESOLVED') {
-        updates.acknowledgedAt = null;
-      }
-      if (currentIncident.status === 'RESOLVED') {
-        updates.resolvedAt = null;
-        updates.currentEscalationStep = 0;
-      }
-    }
-  }
-  if (urgency) {
-    const valid = ['LOW', 'MEDIUM', 'HIGH'].includes(urgency);
-    if (!valid) {
-      return jsonError('Invalid urgency.', 400);
-    }
-    updates.urgency = urgency;
-  }
-  if (hasAssigneeUpdate) {
-    updates.assigneeId = assigneeId;
-  }
-
-  if (Object.keys(updates).length === 0) {
+  const hasAssigneeUpdate =
+    typeof body === 'object' && body !== null && Object.prototype.hasOwnProperty.call(body, 'assigneeId');
+  if (parsed.data.status === undefined && parsed.data.urgency === undefined && !hasAssigneeUpdate) {
     return jsonError('No valid fields to update.', 400);
   }
 
-  const incident = await prisma.incident.update({
-    where: { id },
-    data: updates,
+  const { id } = await params;
+  let result: Awaited<ReturnType<typeof applyRestIncidentPatch>>;
+  try {
+    result = await applyRestIncidentPatch({
+      incidentId: id,
+      status: parsed.data.status,
+      urgency: parsed.data.urgency,
+      assigneeId: hasAssigneeUpdate ? (parsed.data.assigneeId ?? null) : undefined,
+      hasAssigneeUpdate,
+      actor: { id: actor.id },
+    });
+  } catch (error) {
+    logger.warn('api.incident.patch_rejected', {
+      incidentId: id,
+      apiKeyId: apiKey.id,
+      error,
+    });
+    return jsonError(error);
+  }
+
+  const { incident, lifecycle } = result;
+  logger.info('api.incident.updated', {
+    incidentId: incident.id,
+    apiKeyId: apiKey.id,
+    changed: result.changed,
   });
 
-  logger.info('api.incident.updated', { incidentId: incident.id, apiKeyId: apiKey.id });
-
-  if (status) {
-    const eventMessage =
-      status === 'SNOOZED'
-        ? 'Incident snoozed (escalation paused)'
-        : status === 'SUPPRESSED'
-          ? 'Incident suppressed (escalation paused)'
-          : status === 'OPEN' && currentIncident.status === 'ACKNOWLEDGED'
-            ? 'Incident unacknowledged (escalation resumed)'
-            : status === 'OPEN' &&
-                (currentIncident.status === 'SNOOZED' || currentIncident.status === 'SUPPRESSED')
-              ? 'Incident unsnoozed/unsuppressed (escalation resumed)'
-              : `Status updated to ${status}${status === 'ACKNOWLEDGED' || status === 'RESOLVED' ? ' (escalation stopped)' : ''}`;
-
-    await prisma.incidentEvent.create({
-      data: {
-        incidentId: incident.id,
-        message: eventMessage,
-      },
-    });
-  }
-
-  if (urgency && urgency !== currentIncident.urgency) {
-    await prisma.incidentEvent.create({
-      data: {
-        incidentId: incident.id,
-        message: `Urgency updated to ${urgency}`,
-      },
-    });
-  }
-
-  if (hasAssigneeUpdate && assigneeId !== currentIncident.assigneeId) {
-    if (!assigneeId) {
-      await prisma.incidentEvent.create({
-        data: {
-          incidentId: incident.id,
-          message: 'Incident unassigned',
-        },
-      });
-    } else {
-      const assignee = await prisma.user.findUnique({
-        where: { id: assigneeId },
-        select: { name: true },
-      });
-      await prisma.incidentEvent.create({
-        data: {
-          incidentId: incident.id,
-          message: `Incident manually reassigned to ${assignee?.name || 'user'}`,
-        },
-      });
-    }
-  }
-
-  // If incident was reopened, ensure escalation is triggered if due
-  if (
-    status === 'OPEN' &&
-    ['SNOOZED', 'SUPPRESSED', 'ACKNOWLEDGED', 'RESOLVED'].includes(currentIncident.status)
-  ) {
+  if (result.changed) {
     try {
-      const { executeEscalation } = await import('@/lib/escalation');
-      await executeEscalation(incident.id, 0);
-    } catch (err) {
-      logger.warn('[Incidents API] Failed to trigger escalation on reopen', {
-        error: err,
-        incidentId: incident.id,
-      });
-    }
-  }
-
-  // Trigger status page webhooks for incident updates
-  try {
-    const updatedIncident = await prisma.incident.findUnique({
-      where: { id },
-      include: {
-        service: { select: { id: true, name: true } },
-        assignee: {
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+      const updatedIncident = await prisma.incident.findUnique({
+        where: { id },
+        include: {
+          service: { select: { id: true, name: true } },
+          assignee: {
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+          },
         },
-      },
-    });
+      });
 
-    if (updatedIncident) {
-      const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-      let eventType = 'incident.updated';
+      if (updatedIncident) {
+        const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
+        let eventType = 'incident.updated';
+        if (lifecycle?.changed) {
+          if (lifecycle.status === 'RESOLVED') eventType = 'incident.resolved';
+          else if (lifecycle.status === 'ACKNOWLEDGED') eventType = 'incident.acknowledged';
+          else if (lifecycle.status === 'SNOOZED') eventType = 'incident.snoozed';
+          else if (lifecycle.status === 'SUPPRESSED') eventType = 'incident.suppressed';
+        }
 
-      if (updatedIncident.status === 'RESOLVED') {
-        eventType = 'incident.resolved';
-      } else if (updatedIncident.status === 'ACKNOWLEDGED') {
-        eventType = 'incident.acknowledged';
-      } else if (updatedIncident.status === 'SNOOZED') {
-        eventType = 'incident.snoozed';
-      } else if (updatedIncident.status === 'SUPPRESSED') {
-        eventType = 'incident.suppressed';
+        await triggerWebhooksForService(updatedIncident.serviceId, eventType, {
+          id: updatedIncident.id,
+          title: updatedIncident.title,
+          description: updatedIncident.description,
+          status: updatedIncident.status,
+          urgency: updatedIncident.urgency,
+          priority: updatedIncident.priority,
+          service: {
+            id: updatedIncident.service.id,
+            name: updatedIncident.service.name,
+          },
+          assignee: updatedIncident.assignee,
+          createdAt: updatedIncident.createdAt.toISOString(),
+          acknowledgedAt: updatedIncident.acknowledgedAt?.toISOString() || null,
+          resolvedAt: updatedIncident.resolvedAt?.toISOString() || null,
+        });
       }
-
-      await triggerWebhooksForService(updatedIncident.serviceId, eventType, {
-        id: updatedIncident.id,
-        title: updatedIncident.title,
-        description: updatedIncident.description,
-        status: updatedIncident.status,
-        urgency: updatedIncident.urgency,
-        priority: updatedIncident.priority,
-        service: {
-          id: updatedIncident.service.id,
-          name: updatedIncident.service.name,
-        },
-        assignee: updatedIncident.assignee,
-        createdAt: updatedIncident.createdAt.toISOString(),
-        acknowledgedAt: updatedIncident.acknowledgedAt?.toISOString() || null,
-        resolvedAt: updatedIncident.resolvedAt?.toISOString() || null,
+    } catch (error) {
+      logger.error('api.incident.webhook_trigger_failed', {
+        error: error instanceof Error ? error.message : String(error),
+        incidentId: id,
       });
     }
-  } catch (e) {
-    // Log but don't fail the request
-    logger.error('api.incident.webhook_trigger_failed', {
-      error: e instanceof Error ? e.message : String(e),
-    });
-  }
 
-  // Trigger service-level notifications (Slack, Webhooks)
-  try {
-    // Determine event type based on status change
-    let eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' = 'updated';
-    if (status === 'ACKNOWLEDGED') eventType = 'acknowledged';
-    else if (status === 'RESOLVED') eventType = 'resolved';
-    // If status didn't change but we had an update, it's 'updated'
+    try {
+      let eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' = 'updated';
+      if (lifecycle?.changed && lifecycle.status === 'ACKNOWLEDGED') eventType = 'acknowledged';
+      else if (lifecycle?.changed && lifecycle.status === 'RESOLVED') eventType = 'resolved';
 
-    const { sendServiceNotifications } = await import('@/lib/service-notifications');
-    // Run in background
-    sendServiceNotifications(incident.id, eventType).catch(err => {
-      logger.error('api.incident.service_notification_failed', {
-        error: err.message,
+      const { sendServiceNotifications } = await import('@/lib/service-notifications');
+      sendServiceNotifications(incident.id, eventType).catch(error => {
+        logger.error('api.incident.service_notification_failed', {
+          error: error instanceof Error ? error.message : String(error),
+          incidentId: incident.id,
+        });
+      });
+    } catch (error) {
+      logger.error('api.incident.service_notification_import_failed', {
+        error: error instanceof Error ? error.message : String(error),
         incidentId: incident.id,
       });
-    });
-  } catch (e) {
-    logger.error('api.incident.service_notification_import_failed', {
-      error: e instanceof Error ? e.message : String(e),
-    });
+    }
   }
 
-  // Notify status page subscribers (Email)
-  try {
-    let notifyEvent: 'acknowledged' | 'resolved' | 'investigating' | null = null;
-    if (status === 'ACKNOWLEDGED') notifyEvent = 'acknowledged';
-    else if (status === 'RESOLVED') notifyEvent = 'resolved';
-    else if (status === 'OPEN') notifyEvent = 'investigating';
+  if (lifecycle?.changed) {
+    try {
+      const notifyEvent =
+        lifecycle.status === 'ACKNOWLEDGED'
+          ? 'acknowledged'
+          : lifecycle.status === 'RESOLVED'
+            ? 'resolved'
+            : lifecycle.status === 'OPEN'
+              ? 'investigating'
+              : null;
 
-    if (notifyEvent) {
-      await scheduleStatusPageNotification(incident.id, notifyEvent);
+      if (notifyEvent) {
+        await scheduleStatusPageNotification(incident.id, notifyEvent);
+      }
+    } catch (error) {
+      logger.error('api.incident.status_page_notification_failed', {
+        error: error instanceof Error ? error.message : String(error),
+        incidentId: incident.id,
+      });
     }
-  } catch (e) {
-    logger.error('api.incident.status_page_notification_failed', {
-      error: e instanceof Error ? e.message : String(e),
-      incidentId: incident.id,
-    });
   }
 
   return jsonOk({ incident }, 200);
