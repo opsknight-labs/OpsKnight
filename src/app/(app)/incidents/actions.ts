@@ -10,12 +10,15 @@ import {
   assertCanCreateIncidentForService,
   assertCanAddIncidentNote,
 } from '@/lib/rbac';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
+import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
+
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
 const allowedUrgencies = new Set<IncidentUrgency>(['LOW', 'MEDIUM', 'HIGH']);
 
@@ -23,7 +26,12 @@ function parseIncidentUrgency(value: string): IncidentUrgency {
   if (allowedUrgencies.has(value as IncidentUrgency)) {
     return value as IncidentUrgency;
   }
-  throw new Error('Invalid incident urgency.');
+  throw new AppError({
+    code: 'INCIDENT_INVALID_ARGUMENT',
+    userMessage: 'Invalid incident urgency.',
+    fields: [{ field: 'urgency', code: 'invalid', message: 'Invalid incident urgency.' }],
+    details: { urgency: value },
+  });
 }
 
 export async function updateIncidentStatus(
@@ -39,12 +47,7 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
 }
 
 export async function updateIncidentUrgency(id: string, urgency: string) {
-  try {
-    // Check resource-level authorization
-    await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
+  await assertResponderOrAbove();
   const parsedUrgency = parseIncidentUrgency(urgency);
   await prisma.incident.update({
     where: { id },
@@ -79,11 +82,7 @@ export async function updateIncidentUrgency(id: string, urgency: string) {
 }
 
 export async function updateIncidentPriority(id: string, priority: string | null) {
-  try {
-    await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
+  await assertResponderOrAbove();
 
   await prisma.incident.update({
     where: { id },
@@ -122,11 +121,7 @@ export async function createIncident(formData: FormData) {
   const description = formData.get('description') as string;
   const urgency = parseIncidentUrgency(formData.get('urgency') as string);
   const serviceId = formData.get('serviceId') as string;
-  try {
-    await assertCanCreateIncidentForService(serviceId);
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
+  await assertCanCreateIncidentForService(serviceId);
   const priority = formData.get('priority') as string | null;
   const dedupKey = formData.get('dedupKey') as string | null;
   const assigneeId = formData.get('assigneeId') as string | null;
@@ -144,14 +139,42 @@ export async function createIncident(formData: FormData) {
   }
   const customFields = await prisma.customField.findMany({ orderBy: { order: 'asc' } });
   const knownFieldIds = new Set(customFields.map(field => field.id));
-  if (Array.from(customFieldMap.keys()).some(fieldId => !knownFieldIds.has(fieldId))) {
-    throw new Error('One or more custom fields are invalid. Refresh the form and try again.');
+  const invalidCustomFieldIds = Array.from(customFieldMap.keys()).filter(
+    fieldId => !knownFieldIds.has(fieldId)
+  );
+  if (invalidCustomFieldIds.length > 0) {
+    throw new AppError({
+      code: 'INCIDENT_INVALID_ARGUMENT',
+      userMessage: 'One or more custom fields are invalid. Refresh the form and try again.',
+      fields: [
+        {
+          field: 'customFields',
+          code: 'invalid',
+          message: 'One or more custom fields are invalid. Refresh the form and try again.',
+        },
+      ],
+      details: { invalidCustomFieldIds },
+    });
   }
   const { validateCustomFieldValue } = await import('@/lib/custom-fields');
   const customFieldEntries = customFields.flatMap(field => {
     const supplied = customFieldMap.get(field.id) ?? field.defaultValue;
     const validation = validateCustomFieldValue(field, supplied);
-    if (!validation.valid) throw new Error(validation.error || `Invalid ${field.name}`);
+    if (!validation.valid) {
+      const userMessage = validation.error || `Invalid ${field.name}`;
+      throw new AppError({
+        code: 'INCIDENT_INVALID_ARGUMENT',
+        userMessage,
+        fields: [
+          {
+            field: `customField_${field.id}`,
+            code: 'invalid',
+            message: userMessage,
+          },
+        ],
+        details: { fieldId: field.id },
+      });
+    }
     return validation.normalizedValue === null
       ? []
       : [{ fieldId: field.id, value: validation.normalizedValue }];
@@ -162,9 +185,6 @@ export async function createIncident(formData: FormData) {
 
   const incident = await runSerializableTransaction(async tx => {
     const currentUser = await getCurrentUser();
-    if (!currentUser) {
-      throw new Error('User session not found. Please sign in again.');
-    }
 
     let assigneeName: string | null = null;
     if (assigneeId && assigneeId.length) {
@@ -482,12 +502,7 @@ export async function addNote(incidentId: string, content: string) {
 }
 
 export async function reassignIncident(incidentId: string, assigneeId: string, teamId?: string) {
-  try {
-    // Check resource-level authorization
-    await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
+  await assertResponderOrAbove();
 
   // Handle unassigning (empty assigneeId and teamId)
   if ((!assigneeId || assigneeId.trim() === '') && (!teamId || teamId.trim() === '')) {
@@ -529,9 +544,11 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
         select: { name: true },
       });
       if (!teamRecord) {
-        throw new Error(
-          getUserFriendlyError('Team not found. The selected team may have been deleted.')
-        );
+        throw new AppError({
+          code: 'RESOURCE_NOT_FOUND',
+          userMessage: LEGACY_NOT_FOUND_MESSAGE,
+          details: { resource: 'team', teamId },
+        });
       }
 
       await tx.incident.update({
@@ -624,9 +641,11 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
     await prisma.$transaction(async tx => {
       const assigneeRecord = await tx.user.findUnique({ where: { id: assigneeId } });
       if (!assigneeRecord) {
-        throw new Error(
-          getUserFriendlyError('Assignee not found. The selected user may have been deleted.')
-        );
+        throw new AppError({
+          code: 'RESOURCE_NOT_FOUND',
+          userMessage: LEGACY_NOT_FOUND_MESSAGE,
+          details: { resource: 'user', userId: assigneeId },
+        });
       }
 
       await tx.incident.update({
@@ -676,11 +695,7 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
 }
 
 export async function addWatcher(incidentId: string, userId: string, role: string) {
-  try {
-    await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
+  await assertResponderOrAbove();
   if (!userId) return;
 
   await prisma.$transaction(async tx => {
@@ -714,11 +729,7 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
 }
 
 export async function removeWatcher(incidentId: string, watcherId: string) {
-  try {
-    await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
+  await assertResponderOrAbove();
   await prisma.$transaction(async tx => {
     await tx.incidentWatcher.delete({
       where: { id: watcherId },
@@ -737,11 +748,7 @@ export async function removeWatcher(incidentId: string, watcherId: string) {
 }
 
 export async function updateIncidentVisibility(id: string, visibility: 'PUBLIC' | 'PRIVATE') {
-  try {
-    await assertResponderOrAbove();
-  } catch (error) {
-    throw new Error(getUserFriendlyError(error));
-  }
+  await assertResponderOrAbove();
 
   await prisma.incident.update({
     where: { id },

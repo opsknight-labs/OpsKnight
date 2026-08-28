@@ -7,7 +7,10 @@ const LEGACY_UNAUTHORIZED_MESSAGE =
 type DeniedDecision = Extract<AuthorizationDecision, { allowed: false }>;
 
 type AuthorizationErrorOptions = {
-  forbiddenCode?: Extract<AppErrorCode, 'AUTHORIZATION_DENIED' | 'SERVICE_ACCESS_DENIED'>;
+  forbiddenCode?: Extract<
+    AppErrorCode,
+    'AUTHORIZATION_DENIED' | 'SERVICE_ACCESS_DENIED' | 'INCIDENT_ACCESS_DENIED'
+  >;
   forbiddenMessage: string;
 };
 
