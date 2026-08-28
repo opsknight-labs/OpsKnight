@@ -6,6 +6,8 @@ import { logger } from '@/lib/logger';
 import { getWidgetData } from '@/lib/widget-data-provider';
 import prisma from '@/lib/prisma';
 import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
+import { dashboardMetricsScope } from '@/lib/authorization-filters';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 /**
  * Unified Widget Data API
@@ -23,12 +25,22 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         role: true,
+        status: true,
+        teamMemberships: { select: { teamId: true } },
       },
     });
 
-    if (!user) {
-      return jsonError('User not found', 404);
+    if (!user || user.status !== 'ACTIVE') {
+      return jsonError('Unauthorized', 401);
     }
+
+    const actor: AuthorizationActor = {
+      id: user.id,
+      role: user.role,
+      status: user.status,
+      teamIds: user.teamMemberships.map(membership => membership.teamId),
+    };
+    const metricsScope = dashboardMetricsScope(actor);
 
     const searchParams = new URL(req.url).searchParams;
     const range = searchParams.get('range') || '30';
@@ -54,6 +66,7 @@ export async function GET(req: NextRequest) {
       startDate: dateFilter.window.start,
       endDate: dateFilter.window.end,
       includeAllTime: range === 'all',
+      ...metricsScope,
     });
 
     return jsonOk(widgetData, 200, {
