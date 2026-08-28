@@ -16,8 +16,10 @@ export type ScheduleActionState = {
 };
 
 /**
- * Preserve the existing schedule form contract while exposing stable error
- * metadata to clients that are ready to consume it.
+ * Preserve the schedule form contract while exposing stable error metadata.
+ * Unknown/internal exceptions intentionally use the caller-provided fallback
+ * so Prisma, SQL, stack, and infrastructure details never cross the server
+ * action boundary.
  */
 export function scheduleActionError(error: unknown, fallback: string): ScheduleActionState {
   if (isAppError(error)) {
@@ -31,9 +33,7 @@ export function scheduleActionError(error: unknown, fallback: string): ScheduleA
     };
   }
 
-  return {
-    error: error instanceof Error ? error.message : fallback,
-  };
+  return { error: fallback };
 }
 
 export function scheduleValidationError(

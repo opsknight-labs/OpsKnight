@@ -60,7 +60,6 @@ import {
 } from 'lucide-react';
 import { getDefaultAvatar } from '@/lib/avatar';
 
-// Revalidate every 30 seconds to ensure current coverage is up-to-date
 export const revalidate = 0;
 
 export default async function ScheduleDetailPage({
@@ -72,58 +71,97 @@ export default async function ScheduleDetailPage({
 }) {
   const { id } = await params;
   const awaitedSearchParams = await searchParams;
-  // Use current time - this will be recalculated on each page load/refresh
   const now = new Date();
   const calendarRangeStart = new Date(now.getTime() - 35 * 86400000);
   const calendarRangeEnd = new Date(now.getTime() + 65 * 86400000);
   const historyPageSize = 8;
   const historyPage = Math.max(1, Number(awaitedSearchParams?.history ?? 1) || 1);
 
-  const [schedule, users, overridesInRange, upcomingOverrides, historyCount, historyOverrides] =
-    await Promise.all([
-      prisma.onCallSchedule.findUnique({
-        where: { id },
+  // Authorize before loading schedule details or the responder directory.
+  // This keeps the server-component payload scoped to data the viewer may see.
+  try {
+    await assertCanViewSchedule(id);
+  } catch {
+    notFound();
+  }
+
+  const permissions = await getUserPermissions();
+  const canManageSchedules = permissions.isAdminOrResponder;
+
+  const schedule = await prisma.onCallSchedule.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      timeZone: true,
+      layers: {
         select: {
           id: true,
           name: true,
-          timeZone: true,
-          layers: {
+          start: true,
+          end: true,
+          rotationLengthHours: true,
+          shiftLengthHours: true,
+          restrictions: true,
+          priority: true,
+          users: {
+            where: {
+              user: { status: 'ACTIVE' },
+            },
+            select: {
+              userId: true,
+              position: true,
+              user: {
+                select: { name: true, avatarUrl: true, gender: true },
+              },
+            },
+            orderBy: [{ position: 'asc' }, { id: 'asc' }],
+          },
+        },
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      },
+    },
+  });
+
+  if (!schedule) notFound();
+
+  // Coverage extends farther than the monthly calendar. Query overrides for
+  // the union of every consumer window so future coverage never omits a valid
+  // override merely because it sits outside the calendar's fetch horizon.
+  const todayKey = formatDateKeyInTimeZone(now, schedule.timeZone);
+  const coverageRangeStart = startOfDayFromDateKey(
+    addDaysToDateKey(todayKey, -1),
+    schedule.timeZone
+  );
+  const coverageRangeEnd = startOfDayFromDateKey(addDaysToDateKey(todayKey, 90), schedule.timeZone);
+  const overrideRangeStart = new Date(
+    Math.min(calendarRangeStart.getTime(), coverageRangeStart.getTime())
+  );
+  const overrideRangeEnd = new Date(
+    Math.max(calendarRangeEnd.getTime(), coverageRangeEnd.getTime())
+  );
+
+  const [users, overridesInRange, upcomingOverrides, historyCount, historyOverrides] =
+    await Promise.all([
+      canManageSchedules
+        ? prisma.user.findMany({
+            where: { status: 'ACTIVE' },
             select: {
               id: true,
               name: true,
-              start: true,
-              end: true,
-              rotationLengthHours: true,
-              shiftLengthHours: true,
-              restrictions: true,
-              priority: true,
-              users: {
-                where: {
-                  user: { status: 'ACTIVE' },
-                },
-                select: {
-                  userId: true,
-                  position: true,
-                  user: {
-                    select: { name: true, avatarUrl: true, gender: true },
-                  },
-                },
-                orderBy: { position: 'asc' },
-              },
+              email: true,
+              role: true,
+              avatarUrl: true,
+              gender: true,
             },
-            orderBy: { createdAt: 'asc' },
-          },
-        },
-      }),
-      prisma.user.findMany({
-        select: { id: true, name: true, avatarUrl: true, gender: true },
-        orderBy: { name: 'asc' },
-      }),
+            orderBy: [{ name: 'asc' }, { email: 'asc' }],
+          })
+        : Promise.resolve([]),
       prisma.onCallOverride.findMany({
         where: {
           scheduleId: id,
-          start: { lt: calendarRangeEnd },
-          end: { gt: calendarRangeStart },
+          start: { lt: overrideRangeEnd },
+          end: { gt: overrideRangeStart },
           user: { status: 'ACTIVE' },
         },
         select: {
@@ -174,28 +212,12 @@ export default async function ScheduleDetailPage({
       }),
     ]);
 
-  if (!schedule) notFound();
-
-  try {
-    await assertCanViewSchedule(schedule.id);
-  } catch {
-    notFound();
-  }
-
-  const permissions = await getUserPermissions();
-  const canManageSchedules = permissions.isAdminOrResponder;
-
-  // Timezone-aware coverage windows
-  const todayKey = formatDateKeyInTimeZone(now, schedule.timeZone);
-  const coverageRangeStart = startOfDayFromDateKey(
-    addDaysToDateKey(todayKey, -1),
-    schedule.timeZone
+  const assignedUserIds = new Set(
+    schedule.layers.flatMap(layer => layer.users.map(member => member.userId))
   );
-  const coverageRangeEnd = startOfDayFromDateKey(addDaysToDateKey(todayKey, 90), schedule.timeZone);
+  const assignableUsers = users.filter(user => !assignedUserIds.has(user.id));
+  const layerPriorities = new Map(schedule.layers.map(layer => [layer.id, layer.priority ?? 0]));
 
-  const layerPriorities = new Map(schedule.layers.map(l => [l.id, l.priority ?? 0]));
-
-  // Cast layers with proper restrictions type
   const typedLayers = schedule.layers.map(layer => ({
     ...layer,
     restrictions: layer.restrictions as {
@@ -217,6 +239,9 @@ export default async function ScheduleDetailPage({
     start: block.start.toISOString(),
     end: block.end.toISOString(),
     label: `${block.layerName}: ${block.userName}${block.source === 'override' ? ' (Override)' : ''}`,
+    layerId: block.layerId,
+    userId: block.userId,
+    source: block.source,
     user: {
       name: block.userName,
       avatarUrl: block.userAvatar,
@@ -232,7 +257,6 @@ export default async function ScheduleDetailPage({
     schedule.timeZone
   );
   const finalCoverageBlocks = getFinalScheduleBlocks(coverageBlocks, layerPriorities);
-  // Filter for blocks that are currently active (start <= now < end)
   const nowTime = now.getTime();
   const activeBlocks = finalCoverageBlocks.filter(block => {
     const blockStartTime = block.start.getTime();
@@ -268,7 +292,6 @@ export default async function ScheduleDetailPage({
 
   return (
     <div className="w-full px-4 py-6 space-y-6 [zoom:0.8]">
-      {/* Header with Stats - Matching Teams/Users Pattern */}
       <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-r from-primary via-primary/90 to-primary/75 text-primary-foreground shadow-lg">
         <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_0%_0%,rgba(255,255,255,0.25),transparent_55%)]" />
         <div className="relative p-5 md:p-7">
@@ -374,11 +397,8 @@ export default async function ScheduleDetailPage({
 
       <ScheduleTimezoneNotice scheduleTimeZone={schedule.timeZone} />
 
-      {/* Main Grid - 4 columns like teams page */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
-        {/* Main Content - 3 columns */}
         <div className="xl:col-span-3 space-y-4 md:space-y-6">
-          {/* Today's Coverage */}
           <Card className="overflow-hidden border-slate-200/80">
             <CardHeader className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50/70 md:flex-row md:items-center md:justify-between">
               <div>
@@ -416,7 +436,6 @@ export default async function ScheduleDetailPage({
             </CardContent>
           </Card>
 
-          {/* Schedule Timeline - 7/14 Days (has built-in header) */}
           <ScheduleTimeline
             shifts={scheduleBlocks.map(block => ({
               id: block.id,
@@ -434,13 +453,10 @@ export default async function ScheduleDetailPage({
             layerPriorities={layerPriorities}
           />
 
-          {/* Monthly Calendar (has built-in header) */}
           <ScheduleCalendar shifts={calendarShifts} timeZone={schedule.timeZone} />
         </div>
 
-        {/* Sidebar - 1 column */}
         <div className="space-y-4 md:space-y-6">
-          {/* Current On-Call - has its own Card with gradient styling */}
           <CurrentCoverageDisplay
             key={`coverage-${schedule.id}-${schedule.layers.map(l => `${l.id}-${l.start.getTime()}-${l.end?.getTime() || 'null'}`).join('-')}`}
             initialBlocks={activeBlocks.map(block => ({
@@ -455,17 +471,15 @@ export default async function ScheduleDetailPage({
             scheduleTimeZone={schedule.timeZone}
           />
 
-          {/* What are Layers - Info Card */}
           <Alert className="border-blue-200/80 bg-blue-50/70">
             <Info className="h-4 w-4 text-blue-600" />
             <AlertTitle className="text-sm text-blue-900">Layering basics</AlertTitle>
             <AlertDescription className="text-xs text-blue-700">
-              Layers define on-call rotations. Higher layers override lower ones. Use a primary
-              layer for baseline coverage and add secondary layers for backup.
+              Layers define on-call rotations. Higher-priority layers win during overlaps; equal
+              priority layers use a deterministic tie-breaker.
             </AlertDescription>
           </Alert>
 
-          {/* Rotation Layers */}
           <Card className="overflow-hidden border-slate-200/80">
             <CardHeader className="p-4 pb-2 border-b border-slate-100 bg-slate-50/70">
               <div className="flex items-center justify-between">
@@ -482,13 +496,14 @@ export default async function ScheduleDetailPage({
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-slate-500 hover:text-slate-700"
+                          aria-label="How layer priority works"
                         >
                           <Info className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs text-xs">
-                        Layers are evaluated from top to bottom. Higher layers override lower ones
-                        during overlaps.
+                        Higher numeric priority wins when layers overlap. Equal-priority layers are
+                        resolved deterministically.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -522,7 +537,7 @@ export default async function ScheduleDetailPage({
                     }}
                     scheduleId={schedule.id}
                     timeZone={schedule.timeZone}
-                    users={users}
+                    users={assignableUsers}
                     canManageSchedules={canManageSchedules}
                     updateLayer={updateLayer}
                     deleteLayer={deleteLayer}
@@ -536,7 +551,6 @@ export default async function ScheduleDetailPage({
             </CardContent>
           </Card>
 
-          {/* Quick Actions - has its own Card */}
           <ScheduleActionsPanel
             scheduleId={schedule.id}
             users={users}
@@ -547,7 +561,6 @@ export default async function ScheduleDetailPage({
             scheduleTimeZone={schedule.timeZone}
           />
 
-          {/* Schedule Settings */}
           {canManageSchedules && (
             <Card className="overflow-hidden border-slate-200/80">
               <CardHeader className="p-4 pb-2 border-b border-slate-100 bg-slate-50/70">
@@ -568,7 +581,6 @@ export default async function ScheduleDetailPage({
             </Card>
           )}
 
-          {/* Overrides Section */}
           <Card className="overflow-hidden border-slate-200/80">
             <CardHeader className="p-4 pb-2 border-b border-slate-100 bg-slate-50/70">
               <div className="flex items-start justify-between gap-3">
@@ -592,7 +604,6 @@ export default async function ScheduleDetailPage({
               </div>
             </CardHeader>
             <CardContent className="p-4 pt-3 space-y-4">
-              {/* Upcoming */}
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2">Upcoming</p>
                 {upcomingOverrides.length === 0 ? (
@@ -639,7 +650,6 @@ export default async function ScheduleDetailPage({
                 )}
               </div>
 
-              {/* History */}
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2">
                   History ({historyCount})
@@ -693,7 +703,6 @@ export default async function ScheduleDetailPage({
                 )}
               </div>
 
-              {/* Pagination for history */}
               {historyTotalPages > 1 && (
                 <div className="flex items-center justify-between pt-2 border-t">
                   <div className="text-[10px] text-muted-foreground">

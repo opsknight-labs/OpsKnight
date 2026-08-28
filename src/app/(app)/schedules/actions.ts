@@ -13,6 +13,12 @@ import {
   scheduleValidationError,
   type ScheduleActionState,
 } from '@/lib/schedule-action-errors';
+import {
+  addScheduleLayerUser,
+  createScheduleOverrideMutation,
+  moveScheduleLayerUser,
+  removeScheduleLayerUser,
+} from '@/lib/schedules/mutations';
 
 type ScheduleFormState = ScheduleActionState;
 
@@ -91,7 +97,7 @@ async function notifyScheduleMembers(
       });
     }
   } catch (_error) {
-    // Non-critical, continue
+    // Notifications are non-critical to the mutation and must not roll it back.
   }
 }
 
@@ -380,7 +386,7 @@ export async function deleteLayer(
     await notifyScheduleMembers(
       scheduleId,
       'Schedule updated',
-      `Layer "${layer?.name || 'Layer'}" removed from ${scheduleName}`
+      `Layer "${layer.name || 'Layer'}" removed from ${scheduleName}`
     );
 
     revalidatePath(`/schedules/${scheduleId}`);
@@ -400,109 +406,37 @@ export async function addLayerUser(
   } catch (error) {
     return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
-  const userId = formData.get('userId') as string;
 
+  const userId = (formData.get('userId') as string)?.trim();
   if (!userId) {
     return scheduleValidationError('User is required.', [
       { field: 'userId', code: 'required', message: 'User is required.' },
     ]);
   }
 
-  const layer = await prisma.onCallLayer.findUnique({
-    where: { id: layerId },
-    select: { scheduleId: true, name: true },
-  });
+  try {
+    const assignment = await addScheduleLayerUser(layerId, userId);
+    await logAudit({
+      action: 'schedule.member.added',
+      entityType: 'SCHEDULE',
+      entityId: assignment.scheduleId,
+      actorId,
+      details: { layerId, userId, position: assignment.position },
+    });
 
-  if (!layer) {
-    return scheduleActionError(
-      new AppError({
-        code: 'SCHEDULE_LAYER_NOT_FOUND',
-        userMessage: 'Layer not found.',
-        details: { layerId },
-      }),
-      'Layer not found.'
+    const scheduleName = await getScheduleName(assignment.scheduleId);
+    await notifyScheduleMembers(
+      assignment.scheduleId,
+      'Schedule updated',
+      `You were added to ${scheduleName}`,
+      [userId]
     );
+
+    revalidatePath(`/schedules/${assignment.scheduleId}`);
+    revalidatePath('/schedules');
+  } catch (error) {
+    return scheduleActionError(error, 'Failed to add responder to the schedule.');
   }
-
-  const existingAssignment = await prisma.onCallLayerUser.findFirst({
-    where: {
-      userId,
-      layer: { scheduleId: layer.scheduleId },
-    },
-    select: {
-      layerId: true,
-      layer: { select: { name: true } },
-      user: { select: { name: true } },
-    },
-  });
-
-  if (existingAssignment) {
-    const responderName = existingAssignment.user.name || 'This responder';
-    const userMessage =
-      existingAssignment.layerId === layerId
-        ? `${responderName} is already assigned to "${layer.name}".`
-        : `${responderName} is already assigned to "${existingAssignment.layer.name}" in this schedule. Remove them from that layer before adding them to "${layer.name}".`;
-
-    return scheduleActionError(
-      new AppError({
-        code: 'SCHEDULE_LAYER_USER_DUPLICATE',
-        userMessage,
-        details: {
-          scheduleId: layer.scheduleId,
-          requestedLayerId: layerId,
-          existingLayerId: existingAssignment.layerId,
-          userId,
-        },
-      }),
-      userMessage
-    );
-  }
-
-  const maxPosition = await prisma.onCallLayerUser.aggregate({
-    where: { layerId },
-    _max: { position: true },
-  });
-  const nextPosition = (maxPosition._max.position ?? 0) + 1;
-  const finalPosition = nextPosition;
-
-  await prisma.onCallLayerUser.create({
-    data: {
-      layerId,
-      userId,
-      position: finalPosition,
-    },
-  });
-
-  const ordered = await prisma.onCallLayerUser.findMany({
-    where: { layerId },
-    orderBy: { position: 'asc' },
-  });
-
-  await prisma.$transaction(
-    ordered.map((entry, index) =>
-      prisma.onCallLayerUser.update({
-        where: { id: entry.id },
-        data: { position: index + 1 },
-      })
-    )
-  );
-  await logAudit({
-    action: 'schedule.member.added',
-    entityType: 'SCHEDULE',
-    entityId: layer.scheduleId,
-    actorId,
-    details: { layerId, userId, position: finalPosition },
-  });
-
-  const scheduleName = await getScheduleName(layer.scheduleId);
-  await notifyScheduleMembers(
-    layer.scheduleId,
-    'Schedule updated',
-    `You were added to ${scheduleName}`
-  );
-
-  revalidatePath(`/schedules/${layer.scheduleId}`);
-  revalidatePath('/schedules');
 }
 
 export async function updateLayer(
@@ -635,59 +569,21 @@ export async function moveLayerUser(
   } catch (error) {
     return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
+
   try {
-    const layer = await prisma.onCallLayer.findUnique({
-      where: { id: layerId },
-      select: { scheduleId: true },
-    });
-
-    if (!layer) {
-      return scheduleActionError(
-        new AppError({
-          code: 'SCHEDULE_LAYER_NOT_FOUND',
-          userMessage: 'Layer not found.',
-          details: { layerId },
-        }),
-        'Layer not found.'
-      );
-    }
-
-    const users = await prisma.onCallLayerUser.findMany({
-      where: { layerId },
-      orderBy: { position: 'asc' },
-    });
-    const index = users.findIndex(u => u.userId === userId);
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-
-    if (index === -1 || targetIndex < 0 || targetIndex >= users.length) {
-      return scheduleValidationError('Cannot move user in that direction.');
-    }
-
-    const current = users[index];
-    const target = users[targetIndex];
-
-    await prisma.$transaction([
-      prisma.onCallLayerUser.update({
-        where: { id: current.id },
-        data: { position: target.position },
-      }),
-      prisma.onCallLayerUser.update({
-        where: { id: target.id },
-        data: { position: current.position },
-      }),
-    ]);
+    const result = await moveScheduleLayerUser(layerId, userId, direction);
     await logAudit({
       action: 'schedule.member.reordered',
       entityType: 'SCHEDULE',
-      entityId: layer.scheduleId,
+      entityId: result.scheduleId,
       actorId,
       details: { layerId, userId, direction },
     });
 
-    revalidatePath(`/schedules/${layer.scheduleId}`);
+    revalidatePath(`/schedules/${result.scheduleId}`);
     revalidatePath('/schedules');
   } catch (error) {
-    return scheduleActionError(error, 'Failed to move user.');
+    return scheduleActionError(error, 'Failed to reorder responder.');
   }
 }
 
@@ -701,59 +597,31 @@ export async function removeLayerUser(
   } catch (error) {
     return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
-  try {
-    const layer = await prisma.onCallLayer.findUnique({
-      where: { id: layerId },
-      select: { scheduleId: true },
-    });
 
-    if (!layer) {
-      return scheduleActionError(
-        new AppError({
-          code: 'SCHEDULE_LAYER_NOT_FOUND',
-          userMessage: 'Layer not found.',
-          details: { layerId },
-        }),
-        'Layer not found.'
+  try {
+    const result = await removeScheduleLayerUser(layerId, userId);
+    if (result.removed) {
+      await logAudit({
+        action: 'schedule.member.removed',
+        entityType: 'SCHEDULE',
+        entityId: result.scheduleId,
+        actorId,
+        details: { layerId, userId },
+      });
+
+      const scheduleName = await getScheduleName(result.scheduleId);
+      await notifyScheduleMembers(
+        result.scheduleId,
+        'Schedule updated',
+        `You were removed from ${scheduleName}`,
+        [userId]
       );
     }
 
-    await prisma.onCallLayerUser.delete({
-      where: { layerId_userId: { layerId, userId } },
-    });
-
-    const remaining = await prisma.onCallLayerUser.findMany({
-      where: { layerId },
-      orderBy: { position: 'asc' },
-    });
-
-    await prisma.$transaction(
-      remaining.map((entry, index) =>
-        prisma.onCallLayerUser.update({
-          where: { id: entry.id },
-          data: { position: index + 1 },
-        })
-      )
-    );
-    await logAudit({
-      action: 'schedule.member.removed',
-      entityType: 'SCHEDULE',
-      entityId: layer.scheduleId,
-      actorId,
-      details: { layerId, userId },
-    });
-
-    const scheduleName = await getScheduleName(layer.scheduleId);
-    await notifyScheduleMembers(
-      layer.scheduleId,
-      'Schedule updated',
-      `You were removed from ${scheduleName}`,
-      [userId]
-    );
-
-    revalidatePath(`/schedules/${layer.scheduleId}`);
+    revalidatePath(`/schedules/${result.scheduleId}`);
+    revalidatePath('/schedules');
   } catch (error) {
-    return scheduleActionError(error, 'Failed to remove user from layer.');
+    return scheduleActionError(error, 'Failed to remove responder from the schedule.');
   }
 }
 
@@ -767,8 +635,9 @@ export async function createOverride(
   } catch (error) {
     return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
   }
-  const userId = formData.get('userId') as string;
-  const replacesUserId = (formData.get('replacesUserId') as string) || null;
+
+  const userId = (formData.get('userId') as string)?.trim();
+  const replacesUserId = ((formData.get('replacesUserId') as string) || '').trim() || null;
   const start = formData.get('start') as string;
   const end = formData.get('end') as string;
 
@@ -798,36 +667,19 @@ export async function createOverride(
   if (!startDate || !endDate) {
     return scheduleValidationError('Invalid date format.');
   }
-
   if (endDate <= startDate) {
     return scheduleValidationError('End date must be after start date.');
   }
 
-  const targetUser = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { status: true },
-  });
-  if (!targetUser || targetUser.status !== 'ACTIVE') {
-    return scheduleValidationError(
-      'Cannot create an override for a deactivated or non-existent user.',
-      [{
-        field: 'userId',
-        code: 'inactive_or_missing',
-        message: 'Cannot create an override for a deactivated or non-existent user.',
-      }]
-    );
-  }
-
   try {
-    const override = await prisma.onCallOverride.create({
-      data: {
-        scheduleId,
-        userId,
-        replacesUserId: replacesUserId || null,
-        start: startDate,
-        end: endDate,
-      },
+    const override = await createScheduleOverrideMutation({
+      scheduleId,
+      userId,
+      replacesUserId,
+      start: startDate,
+      end: endDate,
     });
+
     await logAudit({
       action: 'schedule.override.created',
       entityType: 'SCHEDULE',
@@ -854,7 +706,7 @@ export async function createOverride(
 
     revalidatePath(`/schedules/${scheduleId}`);
   } catch (error) {
-    return scheduleActionError(error, 'Failed to create override.');
+    return scheduleActionError(error, 'Failed to create schedule override.');
   }
 }
 
