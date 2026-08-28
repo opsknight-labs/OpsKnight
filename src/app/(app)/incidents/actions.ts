@@ -16,6 +16,7 @@ import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
+import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 
 const allowedUrgencies = new Set<IncidentUrgency>(['LOW', 'MEDIUM', 'HIGH']);
 
@@ -222,23 +223,21 @@ export async function createIncident(formData: FormData) {
       });
 
       if (recentResolvedIncident) {
-        // RE-OPEN: Update status to OPEN
-        const reOpenedIncident = await tx.incident.update({
-          where: { id: recentResolvedIncident.id },
-          data: {
-            status: 'OPEN',
-            resolvedAt: null, // Clear resolution time
-            escalationStatus: 'ESCALATING',
-            nextEscalationAt: new Date(),
-            currentEscalationStep: 0,
-            events: {
-              create: {
-                type: 'REOPENED',
-                message: `Incident re-opened due to manual report within 30m window.\nSummary: ${title}`,
-              },
-            },
-          },
+        await applyIncidentLifecycleCommand(tx, {
+          incidentId: recentResolvedIncident.id,
+          command: 'REOPEN',
+          source: 'WEB',
+          actor: { id: currentUser.id, name: currentUser.name ?? undefined },
+          expectedStatus: 'RESOLVED',
+          eventMessage: `Incident re-opened due to manual report within 30m window.\nSummary: ${title}`,
         });
+
+        const reOpenedIncident = await tx.incident.findUnique({
+          where: { id: recentResolvedIncident.id },
+        });
+        if (!reOpenedIncident) {
+          throw new Error('Incident disappeared while reopening. Please try again.');
+        }
 
         await tx.incidentNote.create({
           data: {
@@ -287,7 +286,9 @@ export async function createIncident(formData: FormData) {
     return createdIncident;
   });
 
-  // If we reopened a recently resolved incident, immediately schedule the first escalation step
+  // If we reopened a recently resolved incident, schedule the first escalation
+  // at the lifecycle engine's canonical nextEscalationAt rather than overriding
+  // its delay semantics with a zero-delay job.
   if (
     incident.status === 'OPEN' &&
     incident.resolvedAt === null &&
@@ -295,10 +296,14 @@ export async function createIncident(formData: FormData) {
   ) {
     try {
       const { scheduleEscalation } = await import('@/lib/jobs/queue');
+      const delayMs = Math.max(
+        0,
+        (incident.nextEscalationAt?.getTime() ?? Date.now()) - Date.now()
+      );
       // Retry up to 3 times with short backoff to ensure the first escalation job is queued
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          await scheduleEscalation(incident.id, 0, 0);
+          await scheduleEscalation(incident.id, 0, delayMs);
           break;
         } catch (err) {
           if (attempt === 2) throw err;

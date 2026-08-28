@@ -65,10 +65,7 @@ describe('createIncident Action', () => {
 
     const result = await createIncident(formData);
 
-    expect(prisma.incident.findFirst).toHaveBeenCalledTimes(2); // Checks for OPEN and then for RESOLVED
-    // 2nd check for RESOLVED is skipped if key not found (logic dependent, but actually code checks for open first)
-    // Wait, my code currently does: findFirst(OPEN). If null -> findFirst(RESOLVED).
-
+    expect(prisma.incident.findFirst).toHaveBeenCalledTimes(2);
     expect(prisma.incident.create).toHaveBeenCalled();
     expect(result).toHaveProperty('id', 'inc-new');
   });
@@ -109,27 +106,40 @@ describe('createIncident Action', () => {
     expect(result).toHaveProperty('id', 'inc-open');
   });
 
-  it('re-opens a recently RESOLVED incident', async () => {
+  it('re-opens a recently RESOLVED incident through the lifecycle engine', async () => {
+    const resolvedAt = new Date(Date.now() - 1000 * 60 * 10);
     const recentResolved = {
       id: 'inc-resolved',
       status: 'RESOLVED',
-      resolvedAt: new Date(Date.now() - 1000 * 60 * 10), // 10 mins ago
+      resolvedAt,
     };
+    const reopenedAt = new Date();
 
     (prisma.incident.findFirst as any).mockImplementation((args: any) => {
-      // 1. Open check -> null
       if (args?.where?.status?.in) return Promise.resolve(null);
-      // 2. Resolved check -> returns incident
       if (args?.where?.status === 'RESOLVED') return Promise.resolve(recentResolved);
       return Promise.resolve(null);
     });
 
-    (prisma.incident.update as any).mockResolvedValue({
-      id: 'inc-resolved',
-      status: 'OPEN',
-      resolvedAt: null,
-      currentEscalationStep: 0,
-    });
+    // First lookup is the lifecycle snapshot; second reload is the committed incident.
+    (prisma.incident.findUnique as any)
+      .mockResolvedValueOnce({
+        status: 'RESOLVED',
+        acknowledgedAt: null,
+        resolvedAt,
+        currentEscalationStep: 2,
+        snoozedUntil: null,
+        snoozeReason: null,
+        service: { policy: { steps: [] } },
+      })
+      .mockResolvedValueOnce({
+        id: 'inc-resolved',
+        status: 'OPEN',
+        resolvedAt: null,
+        currentEscalationStep: 0,
+        nextEscalationAt: reopenedAt,
+      });
+    (prisma.incident.update as any).mockResolvedValue({});
     (prisma.$transaction as any).mockImplementation((cb: any) => cb(prisma));
 
     const formData = new FormData();
@@ -140,18 +150,28 @@ describe('createIncident Action', () => {
 
     const result = await createIncident(formData);
 
-    // Should NOT create new
     expect(prisma.incident.create).not.toHaveBeenCalled();
 
-    // Should UPDATE (Re-open)
+    // The lifecycle engine owns status/timestamp/escalation mutation and timeline creation.
     expect(prisma.incident.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'inc-resolved' },
-        data: expect.objectContaining({ status: 'OPEN' }),
+        data: expect.objectContaining({
+          status: 'OPEN',
+          resolvedAt: null,
+          currentEscalationStep: 0,
+          escalationStatus: 'ESCALATING',
+          nextEscalationAt: expect.any(Date),
+          events: {
+            create: expect.objectContaining({
+              type: 'REOPENED',
+              message: expect.stringContaining('manual report within 30m window'),
+            }),
+          },
+        }),
       })
     );
 
-    // Should add note
     expect(prisma.incidentNote.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -161,7 +181,11 @@ describe('createIncident Action', () => {
       })
     );
 
-    expect(scheduleEscalationMock).toHaveBeenCalledWith('inc-resolved', 0, 0);
+    expect(scheduleEscalationMock).toHaveBeenCalledWith(
+      'inc-resolved',
+      0,
+      expect.any(Number)
+    );
     expect(result).toHaveProperty('id', 'inc-resolved');
   });
 });
