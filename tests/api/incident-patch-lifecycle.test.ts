@@ -102,6 +102,7 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
       urgencyChanged: false,
       assigneeChanged: false,
       changed: true,
+      idempotencyReplayed: false,
     });
 
     const req = await createMockRequest('PATCH', '/api/incidents/inc-1', {
@@ -119,6 +120,7 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
       assigneeId: undefined,
       hasAssigneeUpdate: false,
       actor: { id: 'user-1' },
+      idempotency: undefined,
     });
     expect(mocks.incidentFindUnique).not.toHaveBeenCalled();
     expect(mocks.triggerWebhooksForService).not.toHaveBeenCalled();
@@ -133,6 +135,7 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
       urgencyChanged: true,
       assigneeChanged: false,
       changed: true,
+      idempotencyReplayed: false,
     });
     mocks.incidentFindUnique.mockResolvedValue({
       ...patchedIncident,
@@ -154,6 +157,37 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
     expect(mocks.sendServiceNotifications).toHaveBeenCalledWith('inc-1', 'updated');
   });
 
+  it('does not repeat immediate non-lifecycle effects when an Idempotency-Key is replayed', async () => {
+    const patchedIncident = { ...incident('OPEN'), urgency: 'HIGH' };
+    mocks.applyRestIncidentPatch.mockResolvedValue({
+      incident: patchedIncident,
+      lifecycle: null,
+      urgencyChanged: true,
+      assigneeChanged: false,
+      changed: true,
+      idempotencyReplayed: true,
+    });
+
+    const req = await createMockRequest(
+      'PATCH',
+      '/api/incidents/inc-1',
+      { urgency: 'HIGH' },
+      { 'Idempotency-Key': 'patch-42' }
+    );
+    const res = await PATCH(req, context);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Idempotency-Replayed')).toBe('true');
+    expect(mocks.applyRestIncidentPatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotency: { key: 'patch-42', principalId: 'key-1' },
+      })
+    );
+    expect(mocks.incidentFindUnique).not.toHaveBeenCalled();
+    expect(mocks.triggerWebhooksForService).not.toHaveBeenCalled();
+    expect(mocks.sendServiceNotifications).not.toHaveBeenCalled();
+  });
+
   it('does not repeat lifecycle side effects for an idempotent status retry', async () => {
     mocks.applyRestIncidentPatch.mockResolvedValue({
       incident: incident('ACKNOWLEDGED'),
@@ -168,6 +202,7 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
       urgencyChanged: false,
       assigneeChanged: false,
       changed: false,
+      idempotencyReplayed: false,
     });
 
     const req = await createMockRequest('PATCH', '/api/incidents/inc-1', {

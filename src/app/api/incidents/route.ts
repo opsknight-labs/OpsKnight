@@ -10,7 +10,7 @@ import { incidentReadWhere } from '@/lib/authorization-filters';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { authorizationDecisionError } from '@/lib/api-authorization-error';
 import { AppError } from '@/lib/errors';
-import { executeIncidentCreation } from '@/lib/incidents/creation';
+import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
@@ -179,15 +179,20 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const creation = await executeIncidentCreation({
-      title,
-      description: description ?? null,
-      serviceId,
-      urgency,
-      priority: priority ?? null,
-      source: 'REST_API',
-      actor: { id: actor.id },
-    });
+    const idempotencyKey = req.headers.get('idempotency-key')?.trim();
+    const execution = await executeIdempotentIncidentCreation(
+      {
+        title,
+        description: description ?? null,
+        serviceId,
+        urgency,
+        priority: priority ?? null,
+        source: 'REST_API',
+        actor: { id: actor.id },
+      },
+      idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined
+    );
+    const creation = execution.value;
 
     const incident = await prisma.incident.findUnique({
       where: { id: creation.id },
@@ -210,9 +215,14 @@ export async function POST(req: NextRequest) {
       serviceId: incident.serviceId,
       apiKeyId: apiKey.id,
       outcome: creation.outcome,
+      idempotencyReplayed: execution.replayed,
     });
 
-    return jsonOk({ incident, outcome: creation.outcome }, 201);
+    return jsonOk(
+      { incident, outcome: creation.outcome },
+      201,
+      execution.replayed ? { 'Idempotency-Replayed': 'true' } : undefined
+    );
   } catch (error) {
     logger.error('api.incident.create_failed', {
       error: error instanceof Error ? error.message : String(error),

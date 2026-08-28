@@ -1,14 +1,12 @@
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { createHash } from 'crypto';
 
 import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { updateIncidentStatus } from '@/app/(app)/incidents/actions';
-import prisma from '@/lib/prisma';
+import { updateIncidentStatus } from '@/lib/incidents/operator-lifecycle';
 
 const StatusSchema = z.object({
   status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']),
@@ -59,53 +57,21 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     }
 
     const idempotencyKey = req.headers.get('idempotency-key')?.trim();
-    if (idempotencyKey) {
-      if (idempotencyKey.length > 200) {
-        return jsonError(
-          new AppError({
-            code: 'VALIDATION_FAILED',
-            userMessage: 'Idempotency key is too long.',
-            fields: [
-              {
-                field: 'idempotency-key',
-                code: 'too_long',
-                message: 'Idempotency key must be 200 characters or fewer.',
-              },
-            ],
-          })
-        );
-      }
-      const fingerprint = createHash('sha256')
-        .update(`${session.user.email}\0${idempotencyKey}`)
-        .digest('hex');
-      const existing = await prisma.rateLimit.findUnique({
-        where: { key: `mobile-idempotency:${fingerprint}` },
-        select: { expiresAt: true },
-      });
-      if (existing && existing.expiresAt > new Date()) {
-        return jsonOk({ success: true, duplicate: true }, 200);
-      }
-    }
+    const result = await updateIncidentStatus(
+      params.id,
+      parsed.data.status,
+      parsed.data.expectedStatus,
+      'MOBILE',
+      idempotencyKey
+        ? { key: idempotencyKey, principalId: session.user.email.toLowerCase() }
+        : undefined
+    );
 
-    await updateIncidentStatus(params.id, parsed.data.status, parsed.data.expectedStatus);
-    if (idempotencyKey) {
-      const fingerprint = createHash('sha256')
-        .update(`${session.user.email}\0${idempotencyKey}`)
-        .digest('hex');
-      await prisma.rateLimit.upsert({
-        where: { key: `mobile-idempotency:${fingerprint}` },
-        create: {
-          key: `mobile-idempotency:${fingerprint}`,
-          count: 1,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        },
-        update: {
-          count: 1,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        },
-      });
-    }
-    return jsonOk({ success: true }, 200);
+    return jsonOk(
+      { success: true, ...(result.replayed ? { duplicate: true } : {}) },
+      200,
+      result.replayed ? { 'Idempotency-Replayed': 'true' } : undefined
+    );
   } catch (error) {
     logger.error('api.mobile.incident.update_failed', {
       component: 'mobile-incident-status',
@@ -115,7 +81,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     });
 
     if (isAppError(error)) return jsonError(error);
-    return jsonError('Failed to update incident.', 500);
+    return jsonError(new AppError({ code: 'INTERNAL_ERROR' }));
   }
 }
 
