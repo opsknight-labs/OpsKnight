@@ -35,8 +35,9 @@ describe('notification queue delivery reliability', () => {
     expect(sendNotification).toHaveBeenCalledTimes(1);
     expect(getQueueStats().pending).toBe(0);
 
-    // First retry uses a two-second backoff, then the restarted flush timer.
-    await vi.advanceTimersByTimeAsync(3_000);
+    // All delivery paths share the contract's ten-second delay after attempt one,
+    // followed by the restarted one-second flush timer.
+    await vi.advanceTimersByTimeAsync(11_000);
     expect(sendNotification).toHaveBeenCalledTimes(2);
 
     await forceFlush();

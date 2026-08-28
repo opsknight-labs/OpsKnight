@@ -13,6 +13,11 @@
 import { logger } from './logger';
 import { NotificationChannel, sendNotification } from './notifications';
 import { batchArray } from './db-utils';
+import {
+  notificationDedupeKey,
+  notificationRetryDelayMs,
+  NOTIFICATION_RETRY_POLICY,
+} from './notification-delivery';
 
 // Queue configuration
 const BATCH_SIZE = 50; // Process notifications in batches
@@ -121,14 +126,6 @@ function incrementRateLimit(channel: NotificationChannel): void {
 /**
  * Generate deduplication key
  */
-function generateDedupeKey(
-  incidentId: string,
-  userId: string,
-  channel: NotificationChannel
-): string {
-  return `${incidentId}:${userId}:${channel}`;
-}
-
 /**
  * Add notification to queue
  */
@@ -150,7 +147,7 @@ export function queueNotification(
     return false;
   }
 
-  const dedupeKey = generateDedupeKey(incidentId, userId, channel);
+  const dedupeKey = notificationDedupeKey({ incidentId, userId, channel, message });
 
   // Check for duplicates
   if (
@@ -204,7 +201,7 @@ export function queueBulkNotifications(
   let duplicates = 0;
 
   for (const n of notifications) {
-    const dedupeKey = generateDedupeKey(n.incidentId, n.userId, n.channel);
+    const dedupeKey = notificationDedupeKey(n);
 
     if (
       (processedDedupeKeys.has(dedupeKey) &&
@@ -310,8 +307,8 @@ async function processChannelNotifications(
       } else {
         // Re-queue rate-limited notifications with backoff
         const retryCount = (n.retryCount || 0) + 1;
-        if (retryCount <= 5) {
-          const delayMs = Math.pow(2, retryCount) * 1000;
+        if (retryCount <= NOTIFICATION_RETRY_POLICY.maxAttempts) {
+          const delayMs = notificationRetryDelayMs(retryCount);
           scheduleRetry({ ...n, priority: Math.min(n.priority + 1, 3), retryCount }, delayMs);
         } else {
           logger.error('[NotificationQueue] Notification permanently dropped due to rate limits', {
@@ -372,11 +369,8 @@ async function processChannelNotifications(
         const { notification, error } = result.reason;
         const retryCount = (notification.retryCount || 0) + 1;
 
-        if (retryCount <= 3) {
-          scheduleRetry(
-            { ...notification, retryCount },
-            Math.min(Math.pow(2, retryCount) * 1000, 30_000)
-          );
+        if (retryCount <= NOTIFICATION_RETRY_POLICY.maxAttempts) {
+          scheduleRetry({ ...notification, retryCount }, notificationRetryDelayMs(retryCount));
         } else {
           logger.error('[NotificationQueue] Notification permanently dropped after 3 retries', {
             incidentId: notification.incidentId,

@@ -5,11 +5,11 @@
 
 import prisma from './prisma';
 import { logger } from './logger';
-import { CircuitBreakers } from './circuit-breaker';
-
-const _MAX_RETRY_ATTEMPTS = 3;
-const INITIAL_RETRY_DELAY_MS = 5000; // 5 seconds
-const MAX_RETRY_DELAY_MS = 300000; // 5 minutes
+import {
+  dispatchNotificationAttempt,
+  notificationRetryDelayMs,
+  NOTIFICATION_RETRY_POLICY,
+} from './notification-delivery';
 
 /**
  * Retry failed notifications
@@ -26,8 +26,8 @@ export async function retryFailedNotifications(): Promise<{
   await prisma.notification.updateMany({
     where: {
       status: 'PENDING',
-      createdAt: { lt: new Date(Date.now() - 10 * 60_000) },
-      attempts: { lt: _MAX_RETRY_ATTEMPTS },
+      createdAt: { lt: new Date(Date.now() - NOTIFICATION_RETRY_POLICY.pendingTimeoutMs) },
+      attempts: { lt: NOTIFICATION_RETRY_POLICY.maxAttempts },
     },
     data: {
       status: 'FAILED',
@@ -43,7 +43,7 @@ export async function retryFailedNotifications(): Promise<{
         not: null,
       },
       attempts: {
-        lt: _MAX_RETRY_ATTEMPTS,
+        lt: NOTIFICATION_RETRY_POLICY.maxAttempts,
       },
     },
     take: 100, // Process in batches
@@ -73,23 +73,9 @@ export async function retryFailedNotifications(): Promise<{
   const now = Date.now();
   const readyToRetry = failedNotifications.filter(notification => {
     const timeSinceFailure = now - (notification.failedAt?.getTime() || 0);
-    const retryDelay = Math.min(
-      INITIAL_RETRY_DELAY_MS * Math.pow(2, notification.attempts || 0),
-      MAX_RETRY_DELAY_MS
-    );
+    const retryDelay = notificationRetryDelayMs(notification.attempts || 0);
     return timeSinceFailure >= retryDelay;
   });
-
-  // Pre-load channel handlers to avoid repeated dynamic imports
-  const emailModule = await import('./email');
-  const smsModule = await import('./sms');
-  const pushModule = await import('./push');
-  const whatsappModule = await import('./whatsapp');
-  const webhooksModule = await import('./webhooks');
-
-  // Helper to determine event type from incident status
-  const getEventType = (status?: string) =>
-    status === 'RESOLVED' ? 'resolved' : status === 'ACKNOWLEDGED' ? 'acknowledged' : 'triggered';
 
   // Process in parallel batches of 10 for better throughput
   const BATCH_SIZE = 10;
@@ -118,88 +104,15 @@ export async function retryFailedNotifications(): Promise<{
             return { success: false, claimed: false };
           }
 
-          let result: { success: boolean; error?: string; messageSid?: string } = {
-            success: false,
-            error: 'Unknown channel',
-          };
-
-          const eventType = getEventType(notification.incident?.status);
-
-          // Re-dispatch based on channel with circuit breaker protection
+          let result;
           try {
-            switch (notification.channel) {
-              case 'EMAIL':
-                result = await CircuitBreakers.email().execute(async () => {
-                  const res = await emailModule.sendIncidentEmail(
-                    notification.userId,
-                    notification.incidentId,
-                    eventType
-                  );
-                  if (!res.success) throw new Error(res.error || 'Email retry delivery failed');
-                  return res;
-                });
-                break;
-              case 'SMS':
-                result = await CircuitBreakers.sms().execute(async () => {
-                  const res = await smsModule.sendIncidentSMS(
-                    notification.userId,
-                    notification.incidentId,
-                    eventType,
-                    notification.id
-                  );
-                  if (!res.success) throw new Error(res.error || 'SMS retry delivery failed');
-                  return res;
-                });
-                break;
-              case 'PUSH':
-                result = await CircuitBreakers.push().execute(async () => {
-                  const res = await pushModule.sendIncidentPush(
-                    notification.userId,
-                    notification.incidentId,
-                    eventType
-                  );
-                  if (!res.success) throw new Error(res.error || 'Push retry delivery failed');
-                  return res;
-                });
-                break;
-              case 'WHATSAPP':
-                result = await CircuitBreakers.whatsapp().execute(async () => {
-                  const res = await whatsappModule.sendIncidentWhatsApp(
-                    notification.userId,
-                    notification.incidentId,
-                    eventType,
-                    notification.id
-                  );
-                  if (!res.success) throw new Error(res.error || 'WhatsApp retry delivery failed');
-                  return res;
-                });
-                break;
-              case 'WEBHOOK':
-                if (notification.incident?.service?.webhookUrl) {
-                  result = await CircuitBreakers.webhook(
-                    notification.incident.service.webhookUrl
-                  ).execute(async () => {
-                    const res = await webhooksModule.sendIncidentWebhook(
-                      notification.incident!.service!.webhookUrl!,
-                      notification.incidentId,
-                      eventType
-                    );
-                    if (!res.success) throw new Error(res.error || 'Webhook retry delivery failed');
-                    return res;
-                  });
-                } else {
-                  result = {
-                    success: false,
-                    error: 'No webhook URL configured on incident service',
-                  };
-                }
-                break;
-              default:
-                result = {
-                  success: false,
-                  error: `Retry not implemented for channel: ${notification.channel}`,
-                };
-            }
+            result = await dispatchNotificationAttempt({
+              notificationId: notification.id,
+              incidentId: notification.incidentId,
+              userId: notification.userId,
+              channel: notification.channel,
+              incident: notification.incident,
+            });
           } catch (cbError) {
             result = {
               success: false,
@@ -214,7 +127,7 @@ export async function retryFailedNotifications(): Promise<{
               data: {
                 status: 'SENT',
                 sentAt: new Date(),
-                providerMessageId: result.messageSid,
+                providerMessageId: result.providerMessageId,
               },
             });
             logger.info('notification.retry.success', {
@@ -234,10 +147,10 @@ export async function retryFailedNotifications(): Promise<{
             });
             return { success: false, claimed: true };
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           logger.error('notification.retry.error', {
             notificationId: notification.id,
-            error: error.message,
+            error: error instanceof Error ? error.message : String(error),
           });
 
           await prisma.notification.update({
@@ -245,7 +158,7 @@ export async function retryFailedNotifications(): Promise<{
             data: {
               status: 'FAILED',
               failedAt: new Date(),
-              errorMsg: error.message,
+              errorMsg: error instanceof Error ? error.message : String(error),
               attempts: (notification.attempts || 0) + 1,
             },
           });
