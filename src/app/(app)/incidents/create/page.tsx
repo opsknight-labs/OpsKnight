@@ -1,8 +1,6 @@
-import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
-import { getAllTemplates } from '../template-actions';
 import Link from 'next/link';
 import CreateIncidentFormModern from '@/components/incident/CreateIncidentFormModern';
+import { getIncidentCreationContext } from '../actions';
 
 export default async function CreateIncidentPage({
   searchParams,
@@ -11,26 +9,9 @@ export default async function CreateIncidentPage({
 }) {
   const params = await searchParams;
   const templateId = params.template || null;
+  const context = await getIncidentCreationContext();
 
-  const [services, users, permissions, customFields, teams] = await Promise.all([
-    prisma.service.findMany({ orderBy: { name: 'asc' } }),
-    prisma.user.findMany({
-      where: { status: 'ACTIVE' },
-      select: { id: true, name: true, email: true, avatarUrl: true },
-      orderBy: { name: 'asc' },
-    }),
-    getUserPermissions(),
-    prisma.customField.findMany({ orderBy: { order: 'asc' } }),
-    prisma.team.findMany({ orderBy: { name: 'asc' } }),
-  ]);
-
-  const templates = await getAllTemplates(permissions.id);
-
-  const canCreateIncident = permissions.capabilities.some(
-    capability => capability === 'incident.create.all' || capability === 'incident.create.scoped'
-  );
-
-  if (!canCreateIncident) {
+  if (!context.canCreateIncident) {
     return (
       <main>
         <Link
@@ -77,7 +58,7 @@ export default async function CreateIncidentPage({
                 Create Incident
               </h1>
               <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                ⚠️ You don't have access to create incidents. Responder role or above required.
+                ⚠️ You don't have access to create incidents for any service.
               </p>
             </div>
             <Link href="/incidents" className="glass-button" style={{ textDecoration: 'none' }}>
@@ -94,8 +75,8 @@ export default async function CreateIncidentPage({
             }}
           >
             <p style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              Incident creation form is disabled. Please contact an administrator to upgrade your
-              role.
+              Incident creation is disabled for your current permissions. Contact an administrator
+              if you need access.
             </p>
           </div>
         </div>
@@ -132,12 +113,12 @@ export default async function CreateIncidentPage({
       </div>
 
       <CreateIncidentFormModern
-        templates={templates as any}
-        services={services}
-        users={users}
+        templates={context.templates as any}
+        services={context.services}
+        users={context.users}
         selectedTemplateId={templateId}
-        customFields={customFields}
-        teams={teams}
+        customFields={context.customFields}
+        teams={context.teams}
       />
     </main>
   );

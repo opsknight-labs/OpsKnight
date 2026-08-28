@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getUserFriendlyError } from './user-friendly-errors';
 import { isAppError, toPublicAppError, type AppError } from './errors';
+
+const GENERIC_ERROR = 'An unexpected error occurred. Please try again.';
 
 export function jsonError(
   error: string | AppError | unknown,
@@ -26,8 +27,10 @@ export function jsonError(
     );
   }
 
-  const friendlyMessage = getUserFriendlyError(error);
-  return NextResponse.json({ error: friendlyMessage, meta }, { status: status ?? 500, headers });
+  // Plain strings remain an explicit legacy wire contract. Unknown exceptions
+  // are never interpreted from English text and never expose technical details.
+  const message = typeof error === 'string' ? error : GENERIC_ERROR;
+  return NextResponse.json({ error: message, meta }, { status: status ?? 500, headers });
 }
 
 export function jsonOk<T>(payload: T, status: number = 200, headers?: HeadersInit) {

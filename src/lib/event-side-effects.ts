@@ -94,6 +94,57 @@ async function runTriggerEscalationAndNotifications(incidentId: string): Promise
   });
 }
 
+async function notifyCreatedIncidentStatusPage(incidentId: string): Promise<void> {
+  const { notifyStatusPageSubscribers } = await import('./status-page-notifications');
+  await notifyStatusPageSubscribers(incidentId, 'triggered');
+}
+
+async function createJiraIssueForIncident(incidentId: string): Promise<void> {
+  const incident = await prisma.incident.findUnique({
+    where: { id: incidentId },
+    include: {
+      service: { include: { jiraServiceMapping: true } },
+      externalIssueLinks: { where: { provider: 'JIRA' }, select: { id: true } },
+    },
+  });
+
+  const mapping = incident?.service?.jiraServiceMapping;
+  if (
+    !incident ||
+    !mapping?.autoCreateIncidentIssue ||
+    (mapping.autoCreateIncidentUrgencies.length > 0 &&
+      !mapping.autoCreateIncidentUrgencies.includes(incident.urgency)) ||
+    incident.externalIssueLinks.length > 0
+  ) {
+    return;
+  }
+
+  const jiraConfig = await prisma.jiraConfig.findUnique({
+    where: { id: 'default' },
+    select: { enabled: true },
+  });
+  if (!jiraConfig?.enabled) return;
+
+  const { createJiraIssueAndLink } = await import('./jira-sync');
+  const { issue } = await createJiraIssueAndLink({
+    incidentId,
+    projectKey: mapping.projectKey,
+    issueType: mapping.incidentIssueType || 'Bug',
+    summary: `[Incident] ${incident.title}`,
+    description: incident.description || `OpsKnight Incident: ${incident.title}`,
+    labels: mapping.defaultLabels.length > 0 ? mapping.defaultLabels : ['opsknight'],
+    component: mapping.defaultComponent,
+  });
+
+  await prisma.incidentEvent.create({
+    data: {
+      incidentId,
+      type: 'LEGACY_OTHER',
+      message: `Jira issue ${issue.key} auto-created`,
+    },
+  });
+}
+
 function lifecycleContext(payload: EventSideEffectPayload): LifecycleSideEffectContext {
   if (!payload.lifecycle) {
     throw new Error(`Lifecycle context missing for ${payload.effect}`);
@@ -243,6 +294,14 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       }
       return;
     }
+
+    case 'TRIGGER_STATUS_PAGE':
+      await notifyCreatedIncidentStatusPage(payload.incidentId);
+      return;
+
+    case 'TRIGGER_JIRA':
+      await createJiraIssueForIncident(payload.incidentId);
+      return;
 
     case 'RESOLVE_WEBHOOK':
       await sendEventWebhook(payload, 'incident.resolved');

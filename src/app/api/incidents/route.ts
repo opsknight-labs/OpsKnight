@@ -5,13 +5,12 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { IncidentCreateSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
-import { executeEscalation } from '@/lib/escalation';
-import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
 import { resolveApiKeyActor } from '@/lib/authorization-actors';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { authorizationDecisionError } from '@/lib/api-authorization-error';
 import { AppError } from '@/lib/errors';
+import { executeIncidentCreation } from '@/lib/incidents/creation';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
@@ -123,21 +122,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  let body: unknown;
   try {
     body = await req.json();
   } catch (_error) {
     return jsonError(new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE }));
   }
 
-  const parsed = IncidentCreateSchema.safeParse({
-    title: body.title,
-    description: body.description ?? null,
-    serviceId: body.serviceId,
-    urgency: body.urgency,
-    priority: body.priority ?? null,
-  });
-
+  const parsed = IncidentCreateSchema.safeParse(body);
   if (!parsed.success) {
     return jsonError(
       new AppError({ code: 'VALIDATION_FAILED', userMessage: LEGACY_INVALID_INPUT_MESSAGE }),
@@ -172,79 +164,47 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const incident = await prisma.incident.create({
-    data: { title, description, urgency, priority, status: 'OPEN', serviceId },
-    include: {
-      service: { select: { id: true, name: true } },
-      assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
-    },
-  });
-
-  logger.info('api.incident.created', {
-    incidentId: incident.id,
-    serviceId: incident.serviceId,
-    apiKeyId: apiKey.id,
-  });
-
-  let escalationResult: { escalated?: boolean; reason?: string } | null = null;
   try {
-    escalationResult = await executeEscalation(incident.id);
-  } catch (e) {
-    logger.error('api.incident.escalation_failed', {
-      error: e instanceof Error ? e.message : String(e),
-      incidentId: incident.id,
+    const creation = await executeIncidentCreation({
+      title,
+      description,
+      serviceId,
+      urgency,
+      priority,
+      source: 'REST_API',
+      actor: { id: actor.id },
     });
-  }
 
-  try {
-    const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-    await triggerWebhooksForService(incident.serviceId, 'incident.created', {
-      id: incident.id,
-      title: incident.title,
-      description: incident.description,
-      status: incident.status,
-      urgency: incident.urgency,
-      priority: incident.priority,
-      service: { id: incident.service.id, name: incident.service.name },
-      assignee: incident.assignee,
-      createdAt: incident.createdAt.toISOString(),
+    const incident = await prisma.incident.findUnique({
+      where: { id: creation.id },
+      include: {
+        service: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
+      },
     });
-  } catch (e) {
-    logger.error('api.incident.webhook_trigger_failed', {
-      error: e instanceof Error ? e.message : String(e),
-    });
-  }
 
-  const hasEscalationPolicy = escalationResult?.reason !== 'No escalation policy configured';
-  try {
-    if (hasEscalationPolicy) {
-      const { sendServiceNotifications } = await import('@/lib/service-notifications');
-      await sendServiceNotifications(incident.id, 'triggered');
-    } else {
-      const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-      await sendIncidentNotifications(incident.id, 'triggered');
+    if (!incident) {
+      throw new AppError({
+        code: 'INCIDENT_NOT_FOUND',
+        userMessage: LEGACY_NOT_FOUND_MESSAGE,
+        details: { incidentId: creation.id },
+      });
     }
-  } catch (e) {
-    logger.error('api.incident.service_notification_import_failed', {
-      error: e instanceof Error ? e.message : String(e),
-    });
-  }
 
-  try {
-    await scheduleStatusPageNotification(incident.id, 'triggered');
-  } catch (e) {
-    logger.error('api.incident.status_page_notification_enqueue_failed', {
-      error: e instanceof Error ? e.message : String(e),
+    logger.info('api.incident.created', {
       incidentId: incident.id,
+      serviceId: incident.serviceId,
+      apiKeyId: apiKey.id,
+      outcome: creation.outcome,
     });
-  }
 
-  try {
-    const { createIncidentWarRoom } = await import('@/lib/chatops/war-room');
-    await createIncidentWarRoom(incident.id);
-  } catch (e) {
-    logger.error('Failed to load chatops/war-room', { error: e });
+    return jsonOk({ incident, outcome: creation.outcome }, 201);
+  } catch (error) {
+    logger.error('api.incident.create_failed', {
+      error: error instanceof Error ? error.message : String(error),
+      serviceId,
+      apiKeyId: apiKey.id,
+    });
+    return jsonError(error);
   }
-
-  return jsonOk({ incident }, 201);
 }
