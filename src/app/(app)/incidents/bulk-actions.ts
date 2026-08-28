@@ -61,20 +61,6 @@ async function runBulkLifecycleTarget(
   return changedIncidentIds(results);
 }
 
-async function loadIncidentsForLifecycleEffects(incidentIds: string[]) {
-  if (incidentIds.length === 0) return [];
-
-  return prisma.incident.findMany({
-    where: { id: { in: incidentIds } },
-    include: {
-      service: { select: { id: true, name: true } },
-      assignee: {
-        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-      },
-    },
-  });
-}
-
 export async function bulkAcknowledge(incidentIds: string[]) {
   if (!incidentIds || incidentIds.length === 0) {
     return { success: false, error: 'No incidents selected' };
@@ -95,42 +81,8 @@ export async function bulkAcknowledge(incidentIds: string[]) {
       `Bulk acknowledged${user ? ` by ${user.name}` : ''}`
     );
 
-    const incidents = await loadIncidentsForLifecycleEffects(changedIds);
-
-    const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-    const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
-    const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-
-    await Promise.allSettled(
-      incidents.map(async incident => {
-        try {
-          await Promise.all([
-            sendIncidentNotifications(incident.id, 'acknowledged'),
-            notifyStatusPageSubscribers(incident.id, 'acknowledged'),
-            triggerWebhooksForService(incident.serviceId, 'incident.acknowledged', {
-              id: incident.id,
-              title: incident.title,
-              description: incident.description,
-              status: incident.status,
-              urgency: incident.urgency,
-              priority: incident.priority,
-              service: incident.service,
-              assignee: incident.assignee,
-              createdAt: incident.createdAt.toISOString(),
-              acknowledgedAt: incident.acknowledgedAt?.toISOString() || new Date().toISOString(),
-            }),
-          ]);
-        } catch (error) {
-          logger.error('Failed to send notifications for incident', {
-            component: 'bulk-actions',
-            action: 'acknowledge',
-            error,
-            incidentId: incident.id,
-          });
-        }
-      })
-    );
-
+    // Notifications, status-page delivery and webhooks are durable lifecycle
+    // outbox jobs committed with the batch transaction.
     revalidatePath('/incidents');
     revalidatePath('/');
     return { success: true, count: changedIds.length };
@@ -158,49 +110,6 @@ export async function bulkResolve(incidentIds: string[]) {
       'RESOLVE',
       { id: user.id, name: user.name ?? undefined },
       `Bulk resolved${user ? ` by ${user.name}` : ''}`
-    );
-
-    const incidents = await loadIncidentsForLifecycleEffects(changedIds);
-
-    const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-    const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
-    const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-    const { archiveWarRoomChannel } = await import('@/lib/chatops/war-room');
-
-    await Promise.allSettled(
-      incidents.map(async incident => {
-        try {
-          await Promise.all([
-            sendIncidentNotifications(incident.id, 'resolved'),
-            notifyStatusPageSubscribers(incident.id, 'resolved'),
-            archiveWarRoomChannel(incident.id).catch(error =>
-              logger.warn('[ChatOps] Failed to archive war-room channel on bulk resolve', {
-                incidentId: incident.id,
-                error,
-              })
-            ),
-            triggerWebhooksForService(incident.serviceId, 'incident.resolved', {
-              id: incident.id,
-              title: incident.title,
-              description: incident.description,
-              status: incident.status,
-              urgency: incident.urgency,
-              priority: incident.priority,
-              service: incident.service,
-              assignee: incident.assignee,
-              createdAt: incident.createdAt.toISOString(),
-              resolvedAt: incident.resolvedAt?.toISOString() || new Date().toISOString(),
-            }),
-          ]);
-        } catch (error) {
-          logger.error('Failed to send notifications for incident', {
-            component: 'bulk-actions',
-            action: 'resolve',
-            error,
-            incidentId: incident.id,
-          });
-        }
-      })
     );
 
     revalidatePath('/incidents');
@@ -522,72 +431,6 @@ export async function bulkUpdateStatus(incidentIds: string[], status: BulkLifecy
       status,
       { id: user.id, name: user.name ?? undefined },
       `Bulk status updated to ${status}${user ? ` by ${user.name}` : ''}`
-    );
-
-    const incidents = await loadIncidentsForLifecycleEffects(changedIds);
-    const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-    const { notifyStatusPageSubscribers } = await import('@/lib/status-page-notifications');
-    const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-
-    let eventType = 'incident.updated';
-    if (status === 'RESOLVED') eventType = 'incident.resolved';
-    else if (status === 'ACKNOWLEDGED') eventType = 'incident.acknowledged';
-    else if (status === 'SNOOZED') eventType = 'incident.snoozed';
-    else if (status === 'SUPPRESSED') eventType = 'incident.suppressed';
-
-    await Promise.allSettled(
-      incidents.map(async incident => {
-        try {
-          const notificationPromises: Promise<unknown>[] = [];
-
-          if (status === 'ACKNOWLEDGED') {
-            notificationPromises.push(
-              sendIncidentNotifications(incident.id, 'acknowledged'),
-              notifyStatusPageSubscribers(incident.id, 'acknowledged')
-            );
-          } else if (status === 'RESOLVED') {
-            const { archiveWarRoomChannel } = await import('@/lib/chatops/war-room');
-            notificationPromises.push(
-              sendIncidentNotifications(incident.id, 'resolved'),
-              notifyStatusPageSubscribers(incident.id, 'resolved'),
-              archiveWarRoomChannel(incident.id).catch(error =>
-                logger.warn('[ChatOps] Failed to archive war-room channel on bulk status update', {
-                  incidentId: incident.id,
-                  error,
-                })
-              )
-            );
-          } else if (status === 'OPEN') {
-            notificationPromises.push(sendIncidentNotifications(incident.id, 'updated'));
-          }
-
-          notificationPromises.push(
-            triggerWebhooksForService(incident.serviceId, eventType, {
-              id: incident.id,
-              title: incident.title,
-              description: incident.description,
-              status: incident.status,
-              urgency: incident.urgency,
-              priority: incident.priority,
-              service: incident.service,
-              assignee: incident.assignee,
-              createdAt: incident.createdAt.toISOString(),
-              acknowledgedAt: incident.acknowledgedAt?.toISOString() || null,
-              resolvedAt: incident.resolvedAt?.toISOString() || null,
-            })
-          );
-
-          await Promise.all(notificationPromises);
-        } catch (error) {
-          logger.error('Failed to send notifications for incident', {
-            component: 'bulk-actions',
-            action: 'status-update',
-            error,
-            incidentId: incident.id,
-            status,
-          });
-        }
-      })
     );
 
     revalidatePath('/incidents');

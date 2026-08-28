@@ -139,13 +139,12 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
 
       // Two variants of every message: `responseMessage` goes to Slack and keeps
       // the <@ID> mention; `timelineMessage` is plain text for non-lifecycle
-      // actions. Lifecycle actions write their timeline entry atomically in the
-      // centralized lifecycle engine.
+      // actions. Lifecycle actions write their timeline entry and durable
+      // external side effects atomically in the centralized lifecycle engine.
       let responseMessage = '';
       let timelineMessage = '';
       let lifecycleRecordedTimeline = false;
-      // Mirrors the event the equivalent web console action notifies with.
-      let notifyEventType: 'acknowledged' | 'resolved' | 'updated' | null = null;
+      let notifyNonLifecycleUpdate = false;
 
       if (actionType === 'ack') {
         let result;
@@ -172,7 +171,6 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         }
 
         responseMessage = `👀 Incident acknowledged by <@${slackUserId || 'responder'}>`;
-        notifyEventType = 'acknowledged';
         lifecycleRecordedTimeline = true;
       } else if (actionType === 'resolve') {
         let result;
@@ -199,17 +197,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         }
 
         responseMessage = `✅ Incident resolved by <@${slackUserId || 'responder'}>`;
-        notifyEventType = 'resolved';
         lifecycleRecordedTimeline = true;
-
-        // Archive war-room channel only after a real resolve transition.
-        const { archiveWarRoomChannel } = await import('@/lib/chatops/war-room');
-        archiveWarRoomChannel(incidentId).catch(err => {
-          logger.error('[Slack Actions] War-room channel archive failed', {
-            error: err,
-            incidentId,
-          });
-        });
       } else if (actionType === 'assign_me') {
         if (slackUserId) {
           try {
@@ -249,7 +237,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             updateWarRoomTopic(incidentId).catch(() => {});
             responseMessage = `🙋 Incident assigned to *${targetUser.name}* (<@${slackUserId}>)`;
             timelineMessage = `Assigned to ${targetUser.name} via Slack button`;
-            notifyEventType = 'updated';
+            notifyNonLifecycleUpdate = true;
           } catch (err) {
             logger.warn('[Slack] Assign to Me failed', { error: err, incidentId });
             return NextResponse.json({
@@ -297,25 +285,13 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         }
 
         responseMessage = `💤 Incident snoozed for ${snoozeMinutes}m by <@${slackUserId || 'responder'}>`;
-        notifyEventType = 'updated';
         lifecycleRecordedTimeline = true;
-
-        // Prefer the durable timed job; the cron unsnooze sweep remains the fallback.
-        try {
-          const { scheduleAutoUnsnooze } = await import('@/lib/jobs/queue');
-          await scheduleAutoUnsnooze(incidentId, snoozedUntil);
-        } catch (error) {
-          logger.error('[Slack Actions] Failed to schedule auto-unsnooze', {
-            incidentId,
-            error,
-          });
-        }
       } else if (actionType === 'escalate' || actionType === 'escalate_incident') {
         const { executeEscalation } = await import('@/lib/escalation');
         await executeEscalation(incidentId);
         responseMessage = `⚡ Incident escalated by <@${slackUserId || 'responder'}>`;
         timelineMessage = `Escalated via Slack button by ${actorName}`;
-        notifyEventType = 'updated';
+        notifyNonLifecycleUpdate = true;
       } else {
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
       }
@@ -333,12 +309,11 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
           .catch(() => {});
       }
 
-      // Fire-and-forget: Slack times the interaction out after 3s.
-      if (notifyEventType) {
+      // Assignment/escalation are not lifecycle transitions and retain their
+      // existing immediate notification path. Lifecycle delivery is outboxed.
+      if (notifyNonLifecycleUpdate) {
         import('@/lib/user-notifications')
-          .then(({ sendIncidentNotifications }) =>
-            sendIncidentNotifications(incidentId, notifyEventType)
-          )
+          .then(({ sendIncidentNotifications }) => sendIncidentNotifications(incidentId, 'updated'))
           .catch(err =>
             logger.error('[Slack] Failed to send notifications for button action', {
               error: err instanceof Error ? err.message : String(err),

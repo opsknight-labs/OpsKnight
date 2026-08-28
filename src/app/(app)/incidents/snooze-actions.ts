@@ -28,7 +28,9 @@ export async function snoozeIncidentWithDuration(
   const normalizedReason = reason?.trim() || null;
 
   try {
-    const result = await executeIncidentLifecycleCommand({
+    // The lifecycle transaction persists both the transition side effects and
+    // the finite AUTO_UNSNOOZE timer. There is no post-commit scheduling gap.
+    await executeIncidentLifecycleCommand({
       incidentId,
       command: 'SNOOZE',
       source: 'WEB',
@@ -37,21 +39,6 @@ export async function snoozeIncidentWithDuration(
       snoozeReason: normalizedReason,
       eventMessage: `Incident snoozed until ${formatDateTime(snoozedUntil, userTimeZone, { format: 'datetime' })}${normalizedReason ? ` (Reason: ${normalizedReason})` : ''}${user ? ` by ${user.name}` : ''}`,
     });
-
-    // Schedule only after a committed lifecycle change. PostgreSQL job delivery
-    // remains best-effort because the cron sweep also observes snoozedUntil.
-    if (result.changed) {
-      try {
-        const { scheduleAutoUnsnooze } = await import('@/lib/jobs/queue');
-        await scheduleAutoUnsnooze(incidentId, snoozedUntil);
-      } catch (error) {
-        logger.error('Failed to schedule auto-unsnooze job', {
-          component: 'snooze-actions',
-          error,
-          incidentId,
-        });
-      }
-    }
 
     revalidatePath(`/incidents/${incidentId}`);
     revalidatePath('/incidents');

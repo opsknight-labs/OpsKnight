@@ -250,6 +250,10 @@ export async function createIncident(formData: FormData) {
           actor: { id: currentUser.id, name: currentUser.name ?? undefined },
           expectedStatus: 'RESOLVED',
           eventMessage: `Incident re-opened due to manual report within 30m window.\nSummary: ${title}`,
+          // Incident creation still owns its broader triggered/escalation/Jira/war-room
+          // bundle. Keep that one legacy path caller-owned until creation itself is
+          // moved onto a transactional outbox, avoiding duplicate lifecycle effects.
+          sideEffectPolicy: 'CALLER_OWNED',
         });
 
         const reOpenedIncident = await tx.incident.findUnique({

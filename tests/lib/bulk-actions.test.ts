@@ -103,9 +103,7 @@ describe('Bulk Actions', () => {
         }),
       ]);
       expect(prisma.incident.updateMany).not.toHaveBeenCalled();
-      expect(prisma.incident.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: { in: ['incident-1'] } } })
-      );
+      expect(prisma.incident.findMany).not.toHaveBeenCalled();
     });
 
     it('returns an error if no incidents are selected', async () => {

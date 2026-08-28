@@ -5,7 +5,6 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { IncidentPatchSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
-import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
 import { resolveApiKeyActor } from '@/lib/authorization-actors';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { authorizationDecisionError } from '@/lib/api-authorization-error';
@@ -213,14 +212,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return jsonError(error);
   }
 
-  const { incident, lifecycle } = result;
+  const { incident, lifecycle, urgencyChanged, assigneeChanged } = result;
   logger.info('api.incident.updated', {
     incidentId: incident.id,
     apiKeyId: apiKey.id,
     changed: result.changed,
   });
 
-  if (result.changed) {
+  // Lifecycle effects are already persisted in the same transaction as the
+  // status change. Keep the existing immediate path only for a pure
+  // urgency/assignee update; a mixed PATCH emits the lifecycle event once.
+  if (!lifecycle?.changed && (urgencyChanged || assigneeChanged)) {
     try {
       const updatedIncident = await prisma.incident.findUnique({
         where: { id },
@@ -234,15 +236,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
       if (updatedIncident) {
         const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-        let eventType = 'incident.updated';
-        if (lifecycle?.changed) {
-          if (lifecycle.status === 'RESOLVED') eventType = 'incident.resolved';
-          else if (lifecycle.status === 'ACKNOWLEDGED') eventType = 'incident.acknowledged';
-          else if (lifecycle.status === 'SNOOZED') eventType = 'incident.snoozed';
-          else if (lifecycle.status === 'SUPPRESSED') eventType = 'incident.suppressed';
-        }
-
-        await triggerWebhooksForService(updatedIncident.serviceId, eventType, {
+        await triggerWebhooksForService(updatedIncident.serviceId, 'incident.updated', {
           id: updatedIncident.id,
           title: updatedIncident.title,
           description: updatedIncident.description,
@@ -267,12 +261,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     try {
-      let eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' = 'updated';
-      if (lifecycle?.changed && lifecycle.status === 'ACKNOWLEDGED') eventType = 'acknowledged';
-      else if (lifecycle?.changed && lifecycle.status === 'RESOLVED') eventType = 'resolved';
-
       const { sendServiceNotifications } = await import('@/lib/service-notifications');
-      sendServiceNotifications(incident.id, eventType).catch(error => {
+      sendServiceNotifications(incident.id, 'updated').catch(error => {
         logger.error('api.incident.service_notification_failed', {
           error: error instanceof Error ? error.message : String(error),
           incidentId: incident.id,
@@ -280,28 +270,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       });
     } catch (error) {
       logger.error('api.incident.service_notification_import_failed', {
-        error: error instanceof Error ? error.message : String(error),
-        incidentId: incident.id,
-      });
-    }
-  }
-
-  if (lifecycle?.changed) {
-    try {
-      const notifyEvent =
-        lifecycle.status === 'ACKNOWLEDGED'
-          ? 'acknowledged'
-          : lifecycle.status === 'RESOLVED'
-            ? 'resolved'
-            : lifecycle.status === 'OPEN'
-              ? 'investigating'
-              : null;
-
-      if (notifyEvent) {
-        await scheduleStatusPageNotification(incident.id, notifyEvent);
-      }
-    } catch (error) {
-      logger.error('api.incident.status_page_notification_failed', {
         error: error instanceof Error ? error.message : String(error),
         incidentId: incident.id,
       });

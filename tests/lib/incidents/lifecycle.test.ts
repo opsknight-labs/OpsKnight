@@ -2,10 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   runSerializableTransaction: vi.fn(),
+  enqueueLifecycleSideEffects: vi.fn(),
 }));
 
 vi.mock('@/lib/db-utils', () => ({
   runSerializableTransaction: mocks.runSerializableTransaction,
+}));
+
+vi.mock('@/lib/event-outbox', () => ({
+  enqueueLifecycleSideEffects: mocks.enqueueLifecycleSideEffects,
 }));
 
 import {
@@ -86,6 +91,7 @@ describe('incident lifecycle command engine', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     tx = createTx();
+    mocks.enqueueLifecycleSideEffects.mockResolvedValue(undefined);
     mocks.runSerializableTransaction.mockImplementation(
       async (callback: (client: ReturnType<typeof asTransactionClient>) => Promise<unknown>) =>
         callback(asTransactionClient(tx))
@@ -107,9 +113,10 @@ describe('incident lifecycle command engine', () => {
 
     expect(result).toMatchObject({ incidentId: 'inc-ack', changed: false, status: 'ACKNOWLEDGED' });
     expect(tx.incident.update).not.toHaveBeenCalled();
+    expect(mocks.enqueueLifecycleSideEffects).not.toHaveBeenCalled();
   });
 
-  it('treats duplicate RESOLVE as a no-op without repeating validation or notes', async () => {
+  it('treats duplicate RESOLVE as a no-op without repeating validation, notes, or outbox work', async () => {
     tx.incident.findUnique.mockResolvedValue(
       snapshot({ status: 'RESOLVED', resolvedAt: new Date(NOW.getTime() - 60_000) })
     );
@@ -129,6 +136,7 @@ describe('incident lifecycle command engine', () => {
     expect(tx.incident.update).not.toHaveBeenCalled();
     expect(tx.incidentNote.create).not.toHaveBeenCalled();
     expect(tx.incidentEvent.create).not.toHaveBeenCalled();
+    expect(mocks.enqueueLifecycleSideEffects).not.toHaveBeenCalled();
   });
 
   it('rejects a stale expectedStatus for a real transition', async () => {
@@ -145,6 +153,7 @@ describe('incident lifecycle command engine', () => {
     ).rejects.toMatchObject({ code: 'INCIDENT_TRANSITION_CONFLICT', status: 409 });
 
     expect(tx.incident.update).not.toHaveBeenCalled();
+    expect(mocks.enqueueLifecycleSideEffects).not.toHaveBeenCalled();
   });
 
   it('rejects RESOLVED to ACKNOWLEDGED without an explicit reopen', async () => {
@@ -182,6 +191,17 @@ describe('incident lifecycle command engine', () => {
           escalationStatus: 'ESCALATING',
           nextEscalationAt: new Date('2026-08-27T12:05:00.000Z'),
         }),
+      })
+    );
+    expect(mocks.enqueueLifecycleSideEffects).toHaveBeenCalledWith(
+      asTransactionClient(tx),
+      expect.objectContaining({
+        incidentId: 'inc-reopen',
+        command: 'REOPEN',
+        source: 'WEB',
+        previousStatus: 'RESOLVED',
+        status: 'OPEN',
+        transitionAt: NOW,
       })
     );
   });
@@ -240,7 +260,9 @@ describe('incident lifecycle command engine', () => {
   });
 
   it('unsuppresses immediately and clears pause metadata', async () => {
-    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'SUPPRESSED', currentEscalationStep: 2 }));
+    tx.incident.findUnique.mockResolvedValue(
+      snapshot({ status: 'SUPPRESSED', currentEscalationStep: 2 })
+    );
 
     await applyIncidentLifecycleCommand(asTransactionClient(tx), {
       incidentId: 'inc-unsuppress',
@@ -274,9 +296,10 @@ describe('incident lifecycle command engine', () => {
     ).rejects.toMatchObject({ code: 'INCIDENT_REQUIRED_FIELDS_MISSING', status: 422 });
 
     expect(tx.incident.update).not.toHaveBeenCalled();
+    expect(mocks.enqueueLifecycleSideEffects).not.toHaveBeenCalled();
   });
 
-  it('persists resolution state, resolution note and timeline event in one transaction callback', async () => {
+  it('persists resolution state, resolution note, timeline, and outbox work in one transaction callback', async () => {
     tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'OPEN' }));
 
     const result = await executeIncidentLifecycleCommand({
@@ -305,6 +328,33 @@ describe('incident lifecycle command engine', () => {
         message: 'Resolution note added by Responder',
       },
     });
+    expect(mocks.enqueueLifecycleSideEffects).toHaveBeenCalledWith(
+      asTransactionClient(tx),
+      expect.objectContaining({
+        incidentId: 'inc-note',
+        command: 'RESOLVE',
+        source: 'WEB',
+        previousStatus: 'OPEN',
+        status: 'RESOLVED',
+        transitionAt: NOW,
+      })
+    );
+  });
+
+  it('allows the temporary creation workflow to retain caller-owned effects', async () => {
+    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'RESOLVED', resolvedAt: NOW }));
+
+    const result = await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-create-reopen',
+      command: 'REOPEN',
+      source: 'WEB',
+      sideEffectPolicy: 'CALLER_OWNED',
+      now: NOW,
+    });
+
+    expect(result.changed).toBe(true);
+    expect(tx.incident.update).toHaveBeenCalledOnce();
+    expect(mocks.enqueueLifecycleSideEffects).not.toHaveBeenCalled();
   });
 
   it('does not treat changed snooze metadata as idempotent', async () => {
@@ -332,6 +382,14 @@ describe('incident lifecycle command engine', () => {
           snoozedUntil: new Date('2026-08-27T14:00:00.000Z'),
           snoozeReason: 'extended maintenance',
         }),
+      })
+    );
+    expect(mocks.enqueueLifecycleSideEffects).toHaveBeenCalledWith(
+      asTransactionClient(tx),
+      expect.objectContaining({
+        incidentId: 'inc-snooze',
+        command: 'SNOOZE',
+        snoozedUntil: new Date('2026-08-27T14:00:00.000Z'),
       })
     );
   });
