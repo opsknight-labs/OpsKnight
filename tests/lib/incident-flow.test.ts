@@ -34,40 +34,70 @@ vi.mock('next/cache', () => ({
 describe('incident flow safeguards', () => {
   const prismaMock = prisma as any;
 
+  function lifecycleSnapshot(
+    overrides: Partial<{
+      status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
+      acknowledgedAt: Date | null;
+      resolvedAt: Date | null;
+      currentEscalationStep: number | null;
+      snoozedUntil: Date | null;
+      snoozeReason: string | null;
+    }> = {}
+  ) {
+    return {
+      status: 'OPEN',
+      acknowledgedAt: null,
+      resolvedAt: null,
+      currentEscalationStep: 0,
+      snoozedUntil: null,
+      snoozeReason: null,
+      service: { policy: { steps: [{ delayMinutes: 0 }] } },
+      ...overrides,
+    };
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.customField = { findMany: vi.fn().mockResolvedValue([]) };
     prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
     prismaMock.incident.findMany.mockReset().mockResolvedValue([]);
+    prismaMock.incidentEvent.create = vi.fn().mockResolvedValue({});
     prismaMock.incidentEvent.createMany = vi.fn().mockResolvedValue({ count: 0 });
   });
 
-  it('bulk acknowledge stops escalation', async () => {
-    prismaMock.incident.updateMany.mockResolvedValue({ count: 2 });
-    prismaMock.incident.findMany
-      .mockResolvedValueOnce([{ id: 'inc-1' }, { id: 'inc-2' }])
-      .mockResolvedValueOnce([]);
+  it('bulk acknowledge stops escalation through the lifecycle engine', async () => {
+    prismaMock.incident.findUnique.mockResolvedValue(lifecycleSnapshot());
+    prismaMock.incident.update.mockResolvedValue({});
 
     await bulkAcknowledge(['inc-1', 'inc-2']);
 
-    expect(prismaMock.incident.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-        }),
-      })
-    );
+    expect(prismaMock.incident.update).toHaveBeenCalledTimes(2);
+    for (const [call] of prismaMock.incident.update.mock.calls) {
+      expect(call).toEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'ACKNOWLEDGED',
+            acknowledgedAt: expect.any(Date),
+            escalationStatus: 'COMPLETED',
+            nextEscalationAt: null,
+          }),
+        })
+      );
+    }
   });
 
-  it('bulk status ACKNOWLEDGED stops escalation', async () => {
-    prismaMock.incident.updateMany.mockResolvedValue({ count: 1 });
+  it('bulk status ACKNOWLEDGED stops escalation through the lifecycle engine', async () => {
+    prismaMock.incident.findUnique.mockResolvedValue(lifecycleSnapshot());
+    prismaMock.incident.update.mockResolvedValue({});
 
     await bulkUpdateStatus(['inc-3'], 'ACKNOWLEDGED');
 
-    expect(prismaMock.incident.updateMany).toHaveBeenCalledWith(
+    expect(prismaMock.incident.update).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: 'inc-3' },
         data: expect.objectContaining({
+          status: 'ACKNOWLEDGED',
+          acknowledgedAt: expect.any(Date),
           escalationStatus: 'COMPLETED',
           nextEscalationAt: null,
         }),
@@ -75,30 +105,35 @@ describe('incident flow safeguards', () => {
     );
   });
 
-  it('bulk reopen clears resolved state and resets escalation step', async () => {
-    prismaMock.incident.findMany.mockResolvedValue([
-      {
-        id: 'inc-4',
+  it('bulk reopen clears resolved state, resets escalation, and preserves first acknowledgement', async () => {
+    const acknowledgedAt = new Date('2026-08-27T10:00:00.000Z');
+    prismaMock.incident.findUnique.mockResolvedValue(
+      lifecycleSnapshot({
         status: 'RESOLVED',
         currentEscalationStep: 2,
-        acknowledgedAt: new Date(),
-        resolvedAt: new Date(),
-        service: { policy: { steps: [{ delayMinutes: 0 }] } },
-      },
-    ]);
+        acknowledgedAt,
+        resolvedAt: new Date('2026-08-27T10:30:00.000Z'),
+      })
+    );
     prismaMock.incident.update.mockResolvedValue({});
 
     await bulkUpdateStatus(['inc-4'], 'OPEN');
 
     expect(prismaMock.incident.update).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: 'inc-4' },
         data: expect.objectContaining({
+          status: 'OPEN',
           resolvedAt: null,
-          acknowledgedAt: null,
           currentEscalationStep: 0,
+          escalationStatus: 'ESCALATING',
+          nextEscalationAt: expect.any(Date),
         }),
       })
     );
+
+    const updateData = prismaMock.incident.update.mock.calls[0][0].data;
+    expect(updateData).not.toHaveProperty('acknowledgedAt');
   });
 
   it('auto-unsnooze job resumes escalation', async () => {
