@@ -3,14 +3,9 @@
  * `@/lib/user-facing-error`. This module is a compatibility shim only and must
  * not infer error semantics from English message text.
  */
-import { isAppError } from './errors';
 import { getUserFacingErrorMessage } from './user-facing-error';
 
 export function getUserFriendlyError(error: unknown): string {
-  // Typed application errors already carry explicitly trusted public copy.
-  // Preserve contextual messages without reclassifying them from English text.
-  if (isAppError(error)) return error.userMessage;
-
   return getUserFacingErrorMessage(error, 'An unexpected error occurred. Please try again.');
 }
 

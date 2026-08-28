@@ -4,7 +4,6 @@ import { basename, join, relative } from 'node:path';
 
 const API_ROOT = join(process.cwd(), 'src', 'app', 'api');
 const APP_ROOT = join(process.cwd(), 'src', 'app');
-const LEGACY_FRIENDLY_ERROR_PATH = join(process.cwd(), 'src', 'lib', 'user-friendly-errors.ts');
 const ERROR_IDENTIFIER = String.raw`(?:error|err|e|[A-Za-z_$][\w$]*(?:Error|Err))`;
 const MESSAGE_ALIAS = String.raw`(?:message|msg)`;
 
@@ -85,7 +84,7 @@ describe('public API error contract architecture', () => {
   });
 
   it('keeps the legacy compatibility shim free of semantic message inference', () => {
-    const source = readFileSync(LEGACY_FRIENDLY_ERROR_PATH, 'utf8');
+    const source = readFileSync('src/lib/user-friendly-errors.ts', 'utf8');
 
     expect(source).not.toMatch(/\.(?:includes|startsWith|endsWith|match|search)\s*\(/);
     expect(source).not.toMatch(
@@ -94,13 +93,12 @@ describe('public API error contract architecture', () => {
   });
 
   it('keeps shared API and integration boundaries independent of the legacy shim', () => {
-    const files = [
-      join(process.cwd(), 'src', 'lib', 'api-response.ts'),
-      join(process.cwd(), 'src', 'lib', 'integrations', 'app-error.ts'),
+    const sources = [
+      readFileSync('src/lib/api-response.ts', 'utf8'),
+      readFileSync('src/lib/integrations/app-error.ts', 'utf8'),
     ];
 
-    for (const file of files) {
-      const source = readFileSync(file, 'utf8');
+    for (const source of sources) {
       expect(source).not.toContain('user-friendly-errors');
       expect(source).not.toContain('getUserFriendlyError');
     }
