@@ -51,8 +51,8 @@ export async function GET(req: NextRequest) {
           | 'SUPPRESSED'
           | 'RESOLVED'
           | null) || undefined,
-      startDate: dateFilter.createdAt.gte,
-      endDate: dateFilter.createdAt.lte,
+      startDate: dateFilter.window.start,
+      endDate: dateFilter.window.end,
       includeAllTime: range === 'all',
     });
 
