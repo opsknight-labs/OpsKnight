@@ -198,17 +198,27 @@ describe('incident flow safeguards', () => {
         resolvedAt: new Date(),
       });
     prismaMock.incident.update.mockResolvedValue({ id: 'inc-old' });
-    prismaMock.incident.findUnique.mockResolvedValue({
-      id: 'inc-old',
-      title: 'Disk full',
-      description: 'Disk usage exceeded',
-      status: 'OPEN',
-      urgency: 'HIGH',
-      priority: 'P1',
-      service: { id: 'svc-1', name: 'Service 1' },
-      assignee: null,
-      createdAt: new Date(),
-    });
+    prismaMock.incident.findUnique
+      .mockResolvedValueOnce(
+        lifecycleSnapshot({
+          status: 'RESOLVED',
+          resolvedAt: new Date(),
+        })
+      )
+      .mockResolvedValueOnce({
+        id: 'inc-old',
+        title: 'Disk full',
+        description: 'Disk usage exceeded',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        priority: 'P1',
+        resolvedAt: null,
+        currentEscalationStep: 0,
+        nextEscalationAt: new Date(),
+        service: { id: 'svc-1', name: 'Service 1' },
+        assignee: null,
+        createdAt: new Date(),
+      });
 
     const formData = new FormData();
     formData.append('title', 'Disk full');

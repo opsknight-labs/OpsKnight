@@ -20,7 +20,21 @@ vi.mock('@/lib/escalation', () => ({
   executeEscalation: vi.fn().mockResolvedValue({ escalated: false }),
 }));
 
-const scheduleEscalationMock = vi.fn().mockResolvedValue('job-1');
+const { applyIncidentLifecycleCommandMock, scheduleEscalationMock } = vi.hoisted(() => ({
+  applyIncidentLifecycleCommandMock: vi.fn().mockResolvedValue({
+    incidentId: 'inc-resolved',
+    command: 'REOPEN',
+    source: 'WEB',
+    previousStatus: 'RESOLVED',
+    status: 'OPEN',
+    changed: true,
+  }),
+  scheduleEscalationMock: vi.fn().mockResolvedValue('job-1'),
+}));
+vi.mock('@/lib/incidents/lifecycle', () => ({
+  applyIncidentLifecycleCommand: applyIncidentLifecycleCommandMock,
+}));
+
 vi.mock('@/lib/jobs/queue', () => ({
   scheduleEscalation: scheduleEscalationMock,
 }));
@@ -65,10 +79,7 @@ describe('createIncident Action', () => {
 
     const result = await createIncident(formData);
 
-    expect(prisma.incident.findFirst).toHaveBeenCalledTimes(2); // Checks for OPEN and then for RESOLVED
-    // 2nd check for RESOLVED is skipped if key not found (logic dependent, but actually code checks for open first)
-    // Wait, my code currently does: findFirst(OPEN). If null -> findFirst(RESOLVED).
-
+    expect(prisma.incident.findFirst).toHaveBeenCalledTimes(2);
     expect(prisma.incident.create).toHaveBeenCalled();
     expect(result).toHaveProperty('id', 'inc-new');
   });
@@ -109,27 +120,27 @@ describe('createIncident Action', () => {
     expect(result).toHaveProperty('id', 'inc-open');
   });
 
-  it('re-opens a recently RESOLVED incident', async () => {
+  it('re-opens a recently RESOLVED incident through the lifecycle engine', async () => {
+    const resolvedAt = new Date(Date.now() - 1000 * 60 * 10);
     const recentResolved = {
       id: 'inc-resolved',
       status: 'RESOLVED',
-      resolvedAt: new Date(Date.now() - 1000 * 60 * 10), // 10 mins ago
+      resolvedAt,
     };
+    const reopenedAt = new Date(Date.now() + 60_000);
 
-    (prisma.incident.findFirst as any).mockImplementation((args: any) => {
-      // 1. Open check -> null
-      if (args?.where?.status?.in) return Promise.resolve(null);
-      // 2. Resolved check -> returns incident
-      if (args?.where?.status === 'RESOLVED') return Promise.resolve(recentResolved);
-      return Promise.resolve(null);
-    });
+    vi.mocked(prisma.incident.findFirst)
+      .mockResolvedValueOnce(null as never)
+      .mockResolvedValueOnce(recentResolved as never);
 
-    (prisma.incident.update as any).mockResolvedValue({
+    // The lifecycle engine owns the mutation; this action only reloads the committed incident.
+    vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       id: 'inc-resolved',
       status: 'OPEN',
       resolvedAt: null,
       currentEscalationStep: 0,
-    });
+      nextEscalationAt: reopenedAt,
+    } as never);
     (prisma.$transaction as any).mockImplementation((cb: any) => cb(prisma));
 
     const formData = new FormData();
@@ -140,18 +151,20 @@ describe('createIncident Action', () => {
 
     const result = await createIncident(formData);
 
-    // Should NOT create new
     expect(prisma.incident.create).not.toHaveBeenCalled();
-
-    // Should UPDATE (Re-open)
-    expect(prisma.incident.update).toHaveBeenCalledWith(
+    expect(prisma.incident.update).not.toHaveBeenCalled();
+    expect(applyIncidentLifecycleCommandMock).toHaveBeenCalledWith(
+      prisma,
       expect.objectContaining({
-        where: { id: 'inc-resolved' },
-        data: expect.objectContaining({ status: 'OPEN' }),
+        incidentId: 'inc-resolved',
+        command: 'REOPEN',
+        source: 'WEB',
+        expectedStatus: 'RESOLVED',
+        actor: { id: 'user-1', name: 'Test User' },
+        eventMessage: expect.stringContaining('manual report within 30m window'),
       })
     );
 
-    // Should add note
     expect(prisma.incidentNote.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -161,7 +174,7 @@ describe('createIncident Action', () => {
       })
     );
 
-    expect(scheduleEscalationMock).toHaveBeenCalledWith('inc-resolved', 0, 0);
+    expect(scheduleEscalationMock).toHaveBeenCalledWith('inc-resolved', 0, expect.any(Number));
     expect(result).toHaveProperty('id', 'inc-resolved');
   });
 });
