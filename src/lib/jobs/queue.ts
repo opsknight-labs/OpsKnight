@@ -452,110 +452,42 @@ export async function processJob(job: any): Promise<boolean> {
         return true;
       }
 
-      case 'AUTO_UNSNOOZE':
-        const incident = await prisma.incident.findUnique({
-          where: { id: job.payload.incidentId },
-        });
+      case 'AUTO_UNSNOOZE': {
+        const { processAutoUnsnoozeIncidentInternal } = await import('../unsnooze');
+        const result = await processAutoUnsnoozeIncidentInternal(job.payload.incidentId);
 
-        if (incident && incident.status === 'SNOOZED' && incident.snoozedUntil) {
-          const now = new Date();
-          if (now >= incident.snoozedUntil) {
-            const unsnoozed = await prisma.$transaction(async tx => {
-              const changed = await tx.incident.updateMany({
-                where: {
-                  id: job.payload.incidentId,
-                  status: 'SNOOZED',
-                  snoozedUntil: { lte: now },
-                },
-                data: {
-                  status: 'OPEN',
-                  snoozedUntil: null,
-                  snoozeReason: null,
-                  escalationStatus: 'ESCALATING',
-                  nextEscalationAt: now,
-                },
-              });
-              if (changed.count === 0) return false;
-              await tx.incidentEvent.create({
-                data: {
-                  incidentId: job.payload.incidentId,
-                  message: 'Incident auto-unsnoozed (snooze duration expired)',
-                },
-              });
-              return true;
-            });
+        if (result.outcome === 'changed') {
+          await markJobCompleted(job.id);
+          return true;
+        }
 
-            if (!unsnoozed) {
-              await prisma.backgroundJob.update({
-                where: { id: job.id },
-                data: { status: 'CANCELLED', completedAt: new Date() },
-              });
-              return false;
-            }
-
-            try {
-              const { sendIncidentNotifications } = await import('../user-notifications');
-              await sendIncidentNotifications(job.payload.incidentId, 'updated');
-              const { notifyStatusPageSubscribers } = await import('../status-page-notifications');
-              await notifyStatusPageSubscribers(job.payload.incidentId, 'investigating');
-              const { triggerWebhooksForService } = await import('../status-page-webhooks');
-              const updatedIncident = await prisma.incident.findUnique({
-                where: { id: job.payload.incidentId },
-                include: {
-                  service: { select: { id: true, name: true } },
-                  assignee: { select: { id: true, name: true, email: true } },
-                },
-              });
-              if (updatedIncident) {
-                await triggerWebhooksForService(updatedIncident.serviceId, 'incident.updated', {
-                  id: updatedIncident.id,
-                  title: updatedIncident.title,
-                  description: updatedIncident.description,
-                  status: updatedIncident.status,
-                  urgency: updatedIncident.urgency,
-                  priority: updatedIncident.priority,
-                  service: updatedIncident.service,
-                  assignee: updatedIncident.assignee,
-                  createdAt: updatedIncident.createdAt.toISOString(),
-                  acknowledgedAt: updatedIncident.acknowledgedAt?.toISOString() || null,
-                  resolvedAt: updatedIncident.resolvedAt?.toISOString() || null,
-                });
-              }
-            } catch (error) {
-              logger.error('Auto-unsnooze notifications failed', {
-                incidentId: job.payload.incidentId,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }
-            await markJobCompleted(job.id);
-            // Resume escalation at current step (default 0)
-            const nextStep = incident.currentEscalationStep ?? 0;
-            await scheduleEscalation(job.payload.incidentId, nextStep, 0);
-            return true;
-          } else {
-            // Not ready yet, reschedule and reset attempts so premature polls don't exhaust retry budget
-            await prisma.backgroundJob.update({
-              where: { id: job.id },
-              data: {
-                status: 'PENDING',
-                attempts: 0,
-                scheduledAt: incident.snoozedUntil,
-                startedAt: null,
-              },
-            });
-            return false;
-          }
-        } else {
-          // Incident no longer snoozed, cancel job
+        if (result.outcome === 'not_due') {
+          // A snooze may have been extended after this job was originally
+          // scheduled. Requeue at the authoritative deadline without burning
+          // the retry budget.
           await prisma.backgroundJob.update({
             where: { id: job.id },
             data: {
-              status: 'CANCELLED',
-              completedAt: new Date(),
+              status: 'PENDING',
+              attempts: 0,
+              scheduledAt: result.snoozedUntil,
+              startedAt: null,
             },
           });
           return false;
         }
+
+        // The incident no longer requires this stale job (already open,
+        // resolved, deleted, or otherwise no longer snoozed).
+        await prisma.backgroundJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'CANCELLED',
+            completedAt: new Date(),
+          },
+        });
+        return false;
+      }
 
       default:
         await markJobFailed(job.id, `Unknown job type: ${job.type}`);

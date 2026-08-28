@@ -136,16 +136,34 @@ describe('incident flow safeguards', () => {
     expect(updateData).not.toHaveProperty('acknowledgedAt');
   });
 
-  it('auto-unsnooze job resumes escalation', async () => {
+  it('auto-unsnooze job resumes escalation through the lifecycle engine', async () => {
     const snoozedUntil = new Date(Date.now() - 1000);
-    prismaMock.incident.findUnique.mockResolvedValue({
-      id: 'inc-9',
+    const snoozed = lifecycleSnapshot({
       status: 'SNOOZED',
+      currentEscalationStep: 0,
       snoozedUntil,
-      createdAt: new Date(),
+      snoozeReason: 'maintenance',
     });
-    prismaMock.incident.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.incidentEvent.create.mockResolvedValue({});
+    const updatedIncident = {
+      id: 'inc-9',
+      title: 'Database latency',
+      description: 'p99 elevated',
+      status: 'OPEN',
+      urgency: 'HIGH',
+      priority: null,
+      serviceId: 'svc-1',
+      service: { id: 'svc-1', name: 'Database' },
+      assignee: null,
+      createdAt: new Date(),
+      acknowledgedAt: null,
+      resolvedAt: null,
+    };
+
+    prismaMock.incident.findUnique.mockImplementation((args: any) =>
+      args?.include ? Promise.resolve(updatedIncident) : Promise.resolve(snoozed)
+    );
+    prismaMock.incident.update.mockResolvedValue({});
+    prismaMock.backgroundJob.update.mockResolvedValue({});
 
     const job = {
       id: 'job-1',
@@ -156,15 +174,19 @@ describe('incident flow safeguards', () => {
 
     await processJob(job as any);
 
-    expect(prismaMock.incident.updateMany).toHaveBeenCalledWith(
+    expect(prismaMock.incident.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: 'inc-9', status: 'SNOOZED' }),
+        where: { id: 'inc-9' },
         data: expect.objectContaining({
+          status: 'OPEN',
+          snoozedUntil: null,
+          snoozeReason: null,
           escalationStatus: 'ESCALATING',
           nextEscalationAt: expect.any(Date),
         }),
       })
     );
+    expect(prismaMock.incident.updateMany).not.toHaveBeenCalled();
   });
 
   it('re-opened incidents resume escalation when dedup key matches recent resolve', async () => {
