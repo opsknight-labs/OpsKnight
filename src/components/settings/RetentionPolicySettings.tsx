@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { errorFromResponse } from '@/lib/client-error';
+import { toUserFacingError } from '@/lib/user-facing-error';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -70,6 +72,11 @@ const DEFAULT_POLICY: RetentionPolicy = {
   realTimeWindowDays: 90,
 };
 
+function displayError(error: unknown, fallback: string): string {
+  const friendly = toUserFacingError(error, fallback);
+  return friendly.description || friendly.title;
+}
+
 export default function RetentionPolicySettings() {
   const [policy, setPolicy] = useState<RetentionPolicy | null>(null);
   const [initialPolicy, setInitialPolicy] = useState<RetentionPolicy | null>(null);
@@ -94,14 +101,16 @@ export default function RetentionPolicySettings() {
     try {
       setLoading(true);
       const res = await fetch('/api/settings/retention');
-      if (!res.ok) throw new Error('Failed to fetch settings');
+      if (!res.ok) {
+        throw await errorFromResponse(res, 'Failed to fetch settings');
+      }
       const data = await res.json();
       setPolicy(data.policy);
       setInitialPolicy(data.policy);
       setStats(data.stats);
       setPresets(data.presets);
     } catch (err) {
-      setGeneralError('Failed to load retention settings');
+      setGeneralError(displayError(err, 'Failed to load retention settings'));
     } finally {
       setLoading(false);
     }
@@ -172,15 +181,14 @@ export default function RetentionPolicySettings() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to save');
+        throw await errorFromResponse(res, 'Failed to save');
       }
 
       setSuccess('Retention policy updated successfully');
       setInitialPolicy(policy);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setGeneralError(err instanceof Error ? err.message : 'Failed to save settings');
+      setGeneralError(displayError(err, 'Failed to save settings'));
     } finally {
       setSaving(false);
     }
@@ -199,8 +207,7 @@ export default function RetentionPolicySettings() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to run cleanup');
+        throw await errorFromResponse(res, 'Failed to run cleanup');
       }
 
       const data = await res.json();
@@ -213,7 +220,7 @@ export default function RetentionPolicySettings() {
         setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err) {
-      setGeneralError(err instanceof Error ? err.message : 'Failed to run cleanup');
+      setGeneralError(displayError(err, 'Failed to run cleanup'));
     } finally {
       setSaving(false);
     }
