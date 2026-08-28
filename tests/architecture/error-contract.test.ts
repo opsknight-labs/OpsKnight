@@ -4,6 +4,7 @@ import { basename, join, relative } from 'node:path';
 
 const API_ROOT = join(process.cwd(), 'src', 'app', 'api');
 const APP_ROOT = join(process.cwd(), 'src', 'app');
+const FRIENDLY_ERROR_FORMATTER = join(process.cwd(), 'src', 'lib', 'user-friendly-errors.ts');
 const ERROR_IDENTIFIER = String.raw`(?:error|err|e|[A-Za-z_$][\w$]*(?:Error|Err))`;
 const MESSAGE_ALIAS = String.raw`(?:message|msg)`;
 
@@ -81,5 +82,15 @@ describe('public API error contract architecture', () => {
       violations,
       'Server actions should preserve AppError identity instead of translating it back into string-only errors.'
     ).toEqual([]);
+  });
+
+  it('keeps the UI compatibility formatter free of English-text classification rules', () => {
+    const source = readFileSync(FRIENDLY_ERROR_FORMATTER, 'utf8');
+    expect(source).not.toMatch(/\.includes\s*\(/);
+    expect(source).not.toMatch(/\.startsWith\s*\(/);
+    expect(source).not.toMatch(/\.endsWith\s*\(/);
+    expect(source).not.toMatch(/\.match\s*\(/);
+    expect(source).not.toMatch(/\.search\s*\(/);
+    expect(source).not.toMatch(/new\s+RegExp\s*\(/);
   });
 });

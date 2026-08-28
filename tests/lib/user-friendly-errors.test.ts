@@ -1,86 +1,38 @@
 import { describe, it, expect } from 'vitest';
+import { AppError, ERROR_REGISTRY } from '@/lib/errors';
 import { getUserFriendlyError, getSuccessMessage } from '@/lib/user-friendly-errors';
 
 describe('User-Friendly Error Messages', () => {
   describe('getUserFriendlyError', () => {
-    it('should translate Unique constraint errors', () => {
-      const error = 'Unique constraint failed on the fields: (`email`)';
-      expect(getUserFriendlyError(error)).toBe(
-        'A user with this email already exists. Please use a different email address.'
+    it('uses the typed AppError public message', () => {
+      const error = new AppError({
+        code: 'SERVICE_NOT_FOUND',
+        userMessage: 'The selected service no longer exists.',
+      });
+      expect(getUserFriendlyError(error)).toBe('The selected service no longer exists.');
+    });
+
+    it('treats explicit strings as already-public copy without translating them', () => {
+      expect(getUserFriendlyError('Unauthorized')).toBe('Unauthorized');
+      expect(getUserFriendlyError('Incident not found')).toBe('Incident not found');
+      expect(getUserFriendlyError('Unique constraint failed on email')).toBe(
+        'Unique constraint failed on email'
       );
+      expect(getUserFriendlyError('Request timeout')).toBe('Request timeout');
     });
 
-    it('should translate key constraint errors', () => {
-      const error = 'Unique constraint failed on the fields: (`key`)';
-      expect(getUserFriendlyError(error)).toBe(
-        'This key is already in use. Please choose a different one.'
-      );
-    });
-
-    it('should translate Foreign key constraint errors', () => {
-      const error = 'Foreign key constraint failed on the field: (`serviceId`)';
-      expect(getUserFriendlyError(error)).toBe(
-        'The selected item is invalid or no longer exists. Please refresh the page and try again.'
-      );
-    });
-
-    it('should translate Record not found errors', () => {
-      const error = 'Record to update does not exist.';
-      expect(getUserFriendlyError(error)).toBe(
-        'The item you are trying to update does not exist. It may have been deleted.'
-      );
-    });
-
-    it('should translate Unauthorized errors', () => {
-      const error = 'Unauthorized';
-      expect(getUserFriendlyError(error)).toContain(
-        'You do not have permission to perform this action'
-      );
-    });
-
-    it('should translate not found errors', () => {
-      const error = 'Incident not found';
-      expect(getUserFriendlyError(error)).toContain(
-        'could not be found'
-      );
-    });
-
-    it('should translate network errors', () => {
-      const error = 'Failed to fetch';
-      expect(getUserFriendlyError(error)).toContain(
-        'Unable to connect to the server'
-      );
-    });
-
-    it('should translate timeout errors', () => {
-      const error = 'Request timeout';
-      expect(getUserFriendlyError(error)).toBe(
-        'The request took too long to complete. Please try again.'
-      );
-    });
-
-    it('should translate Internal Server Error', () => {
-      const error = 'Internal Server Error';
-      expect(getUserFriendlyError(error)).toContain(
-        'An unexpected error occurred'
-      );
-    });
-
-    it('should return original message if no match found', () => {
-      const error = 'Some custom error message';
-      expect(getUserFriendlyError(error)).toBe(error);
-    });
-
-    it('should handle Error objects', () => {
+    it('does not expose untyped Error messages even when they resemble old translation rules', () => {
       const error = new Error('Unique constraint failed on the fields: (`email`)');
-      expect(getUserFriendlyError(error)).toContain(
-        'A user with this email already exists'
-      );
+      expect(getUserFriendlyError(error)).toBe(ERROR_REGISTRY.INTERNAL_ERROR.userMessage);
     });
 
-    it('should handle unknown error types', () => {
-      const error = { message: 'Some error' };
-      expect(getUserFriendlyError(error)).toBe('An unexpected error occurred. Please try again.');
+    it('does not expose arbitrary unknown objects', () => {
+      const error = { message: 'postgres://secret@database' };
+      expect(getUserFriendlyError(error)).toBe(ERROR_REGISTRY.INTERNAL_ERROR.userMessage);
+    });
+
+    it('uses the generic message for empty string compatibility input', () => {
+      expect(getUserFriendlyError('   ')).toBe(ERROR_REGISTRY.INTERNAL_ERROR.userMessage);
     });
   });
 
@@ -118,5 +70,3 @@ describe('User-Friendly Error Messages', () => {
     });
   });
 });
-
-
