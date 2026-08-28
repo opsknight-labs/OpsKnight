@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -27,18 +26,13 @@ const ALLOWED_FIELDS_BY_FILE = new Map<string, ReadonlySet<string>>([
 ]);
 
 const MUTATION_METHODS = new Set(['update', 'updateMany', 'upsert']);
+const INCIDENT_UPDATE_SQL = /UPDATE\s+["`]?Incident["`]?\s+SET\s+/i;
+const SQL_CLAUSE_END = /\s+(?:WHERE|RETURNING)\b/i;
 
 function sourceFiles(root: string): string[] {
-  const files: string[] = [];
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    const absolute = path.join(root, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...sourceFiles(absolute));
-    } else if (/\.(?:ts|tsx)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
-      files.push(absolute);
-    }
-  }
-  return files;
+  return ts.sys
+    .readDirectory(root, ['.ts', '.tsx'], undefined, undefined)
+    .filter(file => !file.endsWith('.d.ts'));
 }
 
 function propertyName(node: ts.ObjectLiteralElementLike): string | null {
@@ -114,12 +108,27 @@ function lineOf(source: ts.SourceFile, node: ts.Node): number {
   return source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
 }
 
-function rawSqlViolations(relativePath: string, text: string): string[] {
-  // Direct SQL updates are outside Prisma's AST shape, so guard them explicitly.
-  // This intentionally ignores SELECT predicates containing lifecycle fields.
-  if (!/UPDATE\s+["`]?Incident["`]?/i.test(text)) return [];
+function staticStringText(node: ts.Node): string | null {
+  if (ts.isStringLiteralLike(node)) return node.text;
+  if (!ts.isTemplateExpression(node)) return null;
+
+  return [node.head.text, ...node.templateSpans.map(span => span.literal.text)].join(' ');
+}
+
+function rawSqlViolations(relativePath: string, node: ts.Node): string[] {
+  const sql = staticStringText(node);
+  if (!sql) return [];
+
+  const updateMatch = INCIDENT_UPDATE_SQL.exec(sql);
+  if (!updateMatch) return [];
+
+  const setStart = updateMatch.index + updateMatch[0].length;
+  const tail = sql.slice(setStart);
+  const clauseEnd = SQL_CLAUSE_END.exec(tail);
+  const setClause = (clauseEnd ? tail.slice(0, clauseEnd.index) : tail).toLowerCase();
+
   return [...PROTECTED_FIELDS]
-    .filter(field => new RegExp(`\\b${field}\\b`).test(text))
+    .filter(field => setClause.includes(field.toLowerCase()))
     .map(field => `${relativePath}: raw SQL mutates protected field "${field}"`);
 }
 
@@ -131,7 +140,12 @@ describe('incident lifecycle mutation architecture', () => {
 
     for (const absolutePath of sourceFiles(srcRoot)) {
       const relativePath = path.relative(repositoryRoot, absolutePath).split(path.sep).join('/');
-      const text = fs.readFileSync(absolutePath, 'utf8');
+      const text = ts.sys.readFile(absolutePath);
+      if (text === undefined) {
+        violations.push(`${relativePath}: source file could not be read`);
+        continue;
+      }
+
       const source = ts.createSourceFile(
         absolutePath,
         text,
@@ -163,13 +177,13 @@ describe('incident lifecycle mutation architecture', () => {
             }
           }
         }
+
+        if (!ALLOWED_FIELDS_BY_FILE.has(relativePath)) {
+          violations.push(...rawSqlViolations(relativePath, node));
+        }
         ts.forEachChild(node, visit);
       };
       visit(source);
-
-      if (!ALLOWED_FIELDS_BY_FILE.has(relativePath)) {
-        violations.push(...rawSqlViolations(relativePath, text));
-      }
     }
 
     expect(

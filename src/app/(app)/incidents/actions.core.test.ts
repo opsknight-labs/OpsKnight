@@ -20,6 +20,18 @@ vi.mock('@/lib/escalation', () => ({
   executeEscalation: vi.fn().mockResolvedValue({ escalated: false }),
 }));
 
+const applyIncidentLifecycleCommandMock = vi.fn().mockResolvedValue({
+  incidentId: 'inc-resolved',
+  command: 'REOPEN',
+  source: 'WEB',
+  previousStatus: 'RESOLVED',
+  status: 'OPEN',
+  changed: true,
+});
+vi.mock('@/lib/incidents/lifecycle', () => ({
+  applyIncidentLifecycleCommand: applyIncidentLifecycleCommandMock,
+}));
+
 const scheduleEscalationMock = vi.fn().mockResolvedValue('job-1');
 vi.mock('@/lib/jobs/queue', () => ({
   scheduleEscalation: scheduleEscalationMock,
@@ -113,33 +125,24 @@ describe('createIncident Action', () => {
       status: 'RESOLVED',
       resolvedAt,
     };
-    const reopenedAt = new Date();
+    const reopenedAt = new Date(Date.now() + 60_000);
 
-    (prisma.incident.findFirst as any).mockImplementation((args: any) => {
-      if (args?.where?.status?.in) return Promise.resolve(null);
-      if (args?.where?.status === 'RESOLVED') return Promise.resolve(recentResolved);
-      return Promise.resolve(null);
+    vi.mocked(prisma.incident.findFirst).mockImplementation(async args => {
+      if (args?.where?.status && typeof args.where.status === 'object' && 'in' in args.where.status) {
+        return null;
+      }
+      if (args?.where?.status === 'RESOLVED') return recentResolved as never;
+      return null;
     });
 
-    // First lookup is the lifecycle snapshot; second reload is the committed incident.
-    (prisma.incident.findUnique as any)
-      .mockResolvedValueOnce({
-        status: 'RESOLVED',
-        acknowledgedAt: null,
-        resolvedAt,
-        currentEscalationStep: 2,
-        snoozedUntil: null,
-        snoozeReason: null,
-        service: { policy: { steps: [] } },
-      })
-      .mockResolvedValueOnce({
-        id: 'inc-resolved',
-        status: 'OPEN',
-        resolvedAt: null,
-        currentEscalationStep: 0,
-        nextEscalationAt: reopenedAt,
-      });
-    (prisma.incident.update as any).mockResolvedValue({});
+    // The lifecycle engine owns the mutation; this action only reloads the committed incident.
+    vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
+      id: 'inc-resolved',
+      status: 'OPEN',
+      resolvedAt: null,
+      currentEscalationStep: 0,
+      nextEscalationAt: reopenedAt,
+    } as never);
     (prisma.$transaction as any).mockImplementation((cb: any) => cb(prisma));
 
     const formData = new FormData();
@@ -151,24 +154,16 @@ describe('createIncident Action', () => {
     const result = await createIncident(formData);
 
     expect(prisma.incident.create).not.toHaveBeenCalled();
-
-    // The lifecycle engine owns status/timestamp/escalation mutation and timeline creation.
-    expect(prisma.incident.update).toHaveBeenCalledWith(
+    expect(prisma.incident.update).not.toHaveBeenCalled();
+    expect(applyIncidentLifecycleCommandMock).toHaveBeenCalledWith(
+      prisma,
       expect.objectContaining({
-        where: { id: 'inc-resolved' },
-        data: expect.objectContaining({
-          status: 'OPEN',
-          resolvedAt: null,
-          currentEscalationStep: 0,
-          escalationStatus: 'ESCALATING',
-          nextEscalationAt: expect.any(Date),
-          events: {
-            create: expect.objectContaining({
-              type: 'REOPENED',
-              message: expect.stringContaining('manual report within 30m window'),
-            }),
-          },
-        }),
+        incidentId: 'inc-resolved',
+        command: 'REOPEN',
+        source: 'WEB',
+        expectedStatus: 'RESOLVED',
+        actor: { id: 'user-1', name: 'Test User' },
+        eventMessage: expect.stringContaining('manual report within 30m window'),
       })
     );
 
