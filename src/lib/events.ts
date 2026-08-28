@@ -4,6 +4,7 @@ import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import { createHash } from 'crypto';
 import { runReadCommittedTransaction } from './db-utils';
 import { enqueueEventSideEffects } from './event-outbox';
+import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -131,6 +132,14 @@ async function lockEventDedupKeys(
   for (const lockKey of lockKeys) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
   }
+}
+
+async function reloadIncident(tx: Prisma.TransactionClient, incidentId: string) {
+  const incident = await tx.incident.findUnique({ where: { id: incidentId } });
+  if (!incident) {
+    throw new Error(`Incident disappeared during event lifecycle transition: ${incidentId}`);
+  }
+  return incident;
 }
 
 export async function processEvent(
@@ -295,7 +304,8 @@ export async function processEvent(
       // Sanitize title to prevent XSS and truncate to reasonable length
       const sanitizedTitle = truncateString(sanitizeText(eventData.summary.trim()), 500);
 
-      // If a resolve event already arrived, create the incident in RESOLVED state immediately
+      // Creation is not a lifecycle transition. A buffered upstream resolve may
+      // legitimately create the incident directly in its terminal state.
       if (recentResolveAlert) {
         const rawDescription = eventData.custom_details
           ? JSON.stringify(eventData.custom_details, null, 2)
@@ -348,6 +358,8 @@ export async function processEvent(
         ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
         : null;
 
+      // Initial OPEN/SUPPRESSED state is creation policy, not a transition of an
+      // existing incident, so it intentionally remains in the ingestion path.
       const newIncident = await tx.incident.create({
         data: {
           title: sanitizedTitle,
@@ -399,74 +411,60 @@ export async function processEvent(
     }
 
     if (event_action === 'resolve') {
-      // existingIncident is guaranteed to exist here (checked above before alert creation)
+      // Alert linkage, lifecycle mutation, timeline event, and outbox enqueue stay
+      // in this same ReadCommitted transaction under the dedup advisory lock.
       await tx.alert.update({
         where: { id: alert.id },
         data: { incidentId: existingIncident!.id },
       });
 
-      const resolvedIncident = await tx.incident.update({
-        where: { id: existingIncident!.id },
-        data: {
-          status: 'RESOLVED',
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-          resolvedAt: existingIncident!.resolvedAt ?? new Date(),
-          // Clear stale snooze metadata so if incident is reopened it starts fresh
-          snoozedUntil: null,
-          snoozeReason: null,
-        },
+      const transition = await applyIncidentLifecycleCommand(tx, {
+        incidentId: existingIncident!.id,
+        command: 'RESOLVE',
+        source: 'EVENT',
+        eventMessage: `Auto-resolved by event from ${eventData.source}.`,
       });
+      const resolvedIncident = await reloadIncident(tx, existingIncident!.id);
 
-      await tx.incidentEvent.create({
-        data: {
-          incidentId: existingIncident!.id,
-          type: 'AUTO_RESOLVED',
-          message: `Auto-resolved by event from ${eventData.source}.`,
-        },
-      });
-
-      await enqueueEventSideEffects(tx, 'resolved', resolvedIncident.id);
+      if (transition.changed) {
+        await enqueueEventSideEffects(tx, 'resolved', resolvedIncident.id);
+      }
 
       logger.info('event.incident_resolved', {
         incidentId: resolvedIncident.id,
         dedupKey: dedup_key,
         source: eventData.source,
+        changed: transition.changed,
       });
 
       return { action: 'resolved', incident: resolvedIncident };
     }
 
     if (event_action === 'acknowledge') {
-      // existingIncident is guaranteed to exist here (checked above before alert creation)
+      // Repeated acknowledge signals still attach their raw alert, but the
+      // lifecycle engine makes the state transition/event/effects idempotent.
       await tx.alert.update({
         where: { id: alert.id },
         data: { incidentId: existingIncident!.id },
       });
 
-      const ackIncident = await tx.incident.update({
-        where: { id: existingIncident!.id },
-        data: {
-          status: 'ACKNOWLEDGED',
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-          acknowledgedAt: existingIncident!.acknowledgedAt ?? new Date(),
-        },
+      const transition = await applyIncidentLifecycleCommand(tx, {
+        incidentId: existingIncident!.id,
+        command: 'ACKNOWLEDGE',
+        source: 'EVENT',
+        eventMessage: 'Acknowledged via API event.',
       });
+      const ackIncident = await reloadIncident(tx, existingIncident!.id);
 
-      await tx.incidentEvent.create({
-        data: {
-          incidentId: existingIncident!.id,
-          message: `Acknowledged via API event.`,
-        },
-      });
-
-      await enqueueEventSideEffects(tx, 'acknowledged', ackIncident.id);
+      if (transition.changed) {
+        await enqueueEventSideEffects(tx, 'acknowledged', ackIncident.id);
+      }
 
       logger.info('event.incident_acknowledged', {
         incidentId: ackIncident.id,
         dedupKey: dedup_key,
         source: eventData.source,
+        changed: transition.changed,
       });
 
       return { action: 'acknowledged', incident: ackIncident };

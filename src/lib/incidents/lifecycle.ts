@@ -23,6 +23,7 @@ export type IncidentLifecycleSource =
   | 'REST_API'
   | 'BULK'
   | 'CHATOPS'
+  | 'EVENT'
   | 'SYSTEM';
 
 export interface IncidentLifecycleActor {
@@ -282,6 +283,10 @@ function atDelay(now: Date, delayMinutes: number): Date {
   return new Date(now.getTime() + delayMinutes * 60_000);
 }
 
+function resolutionEventType(input: IncidentLifecycleInput): IncidentEventType {
+  return input.source === 'EVENT' ? 'AUTO_RESOLVED' : 'MANUAL_RESOLVED';
+}
+
 function eventForCommand(
   input: IncidentLifecycleInput,
   resolutionNote?: string
@@ -292,7 +297,7 @@ function eventForCommand(
       case 'ACKNOWLEDGE':
         return { type: 'ACKNOWLEDGED', message: suppliedMessage };
       case 'RESOLVE':
-        return { type: 'MANUAL_RESOLVED', message: suppliedMessage };
+        return { type: resolutionEventType(input), message: suppliedMessage };
       case 'REOPEN':
         return { type: 'REOPENED', message: suppliedMessage };
       case 'UNACKNOWLEDGE':
@@ -310,7 +315,7 @@ function eventForCommand(
       return { type: 'ACKNOWLEDGED', message: `Incident acknowledged${suffix}` };
     case 'RESOLVE':
       return {
-        type: 'MANUAL_RESOLVED',
+        type: resolutionEventType(input),
         message: resolutionNote ? `Resolved: ${resolutionNote}` : `Incident resolved${suffix}`,
       };
     case 'REOPEN':
@@ -504,7 +509,10 @@ export async function applyIncidentLifecycleCommand(
     });
   }
 
-  if (input.command === 'RESOLVE') {
+  // Required custom fields gate human/operator resolution. Event ingestion is
+  // authoritative automation: upstream resolve signals must not be blocked by
+  // fields that can only be completed interactively.
+  if (input.command === 'RESOLVE' && input.source !== 'EVENT') {
     await assertRequiredCustomFieldsPresent(tx, input.incidentId);
   }
 
