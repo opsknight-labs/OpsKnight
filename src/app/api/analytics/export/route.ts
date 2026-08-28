@@ -11,7 +11,7 @@ import {
 } from '@prisma/client';
 import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
-import { getQueryDateBounds } from '@/lib/retention-policy';
+import { getReportingWindowForDays } from '@/lib/retention-policy';
 import { calculateSLAMetrics } from '@/lib/sla-server';
 import { INCIDENT_METRIC_DEFINITIONS, metricScopeLabel } from '@/lib/metric-contract';
 import { incidentStatusLabel } from '@/lib/incident-status';
@@ -106,13 +106,11 @@ export async function GET(req: NextRequest) {
     const windowDays = parseInt(searchParams.get('window') || '7', 10);
 
     const now = new Date();
-    const requestedStart = new Date(now);
-    requestedStart.setDate(now.getDate() - windowDays);
     const {
       start: effectiveStart,
       end: effectiveEnd,
       isClipped,
-    } = await getQueryDateBounds(requestedStart, now, 'incident');
+    } = await getReportingWindowForDays(windowDays, 'incident', now);
 
     // Build where clauses
     const serviceWhere = serviceId ? { serviceId } : teamId ? { service: { teamId } } : null;

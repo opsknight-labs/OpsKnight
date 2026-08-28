@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { serializeRecentIncidents } from '@/lib/sla';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import { getReportingWindowForDays } from '@/lib/retention-policy';
 
 /**
  * Status Page API
@@ -151,11 +152,11 @@ export async function GET(req: NextRequest) {
       activeIncidents: serviceActiveCountMap.get(service.id) || 0,
     }));
 
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const uptimeWindow = await getReportingWindowForDays(30, 'incident');
     const uptimeMap = await calculateMultiServiceUptime(
       serviceIds,
-      thirtyDaysAgo,
-      new Date(),
+      uptimeWindow.start,
+      uptimeWindow.end,
       'PUBLIC'
     );
     const uptimeMetrics = services.map(service => ({
@@ -188,7 +189,7 @@ export async function GET(req: NextRequest) {
         retention: {
           effectiveStart: metrics.effectiveStart.toISOString(),
           effectiveEnd: metrics.effectiveEnd.toISOString(),
-          isClipped: metrics.isClipped,
+          isClipped: uptimeWindow.isClipped || metrics.isClipped,
         },
         updatedAt: new Date().toISOString(),
       },

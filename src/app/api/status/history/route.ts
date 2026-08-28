@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { getReportingWindowForDays } from '@/lib/retention-policy';
 
 /**
  * Get Status Page Historical Data
@@ -15,7 +16,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const serviceId = searchParams.get('serviceId');
     const daysParam = searchParams.get('days');
-    const days = daysParam ? parseInt(daysParam) : 90;
+    const parsedDays = daysParam ? Number.parseInt(daysParam, 10) : 90;
+    const days = Number.isFinite(parsedDays) ? Math.min(Math.max(parsedDays, 1), 730) : 90;
 
     const statusPage = await prisma.statusPage.findFirst({
       where: { enabled: true },
@@ -72,13 +74,14 @@ export async function GET(req: NextRequest) {
       return jsonOk({ incidents: [], services: [] }, 200);
     }
 
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+    const now = new Date();
+    const window = await getReportingWindowForDays(days, 'incident', now);
 
     const { calculateSLAMetrics } = await import('@/lib/sla-server');
     const metrics = await calculateSLAMetrics({
       serviceId: effectiveServiceIds,
-      startDate,
+      startDate: window.start,
+      endDate: window.end,
       includeIncidents: true,
       incidentLimit: 100,
       visibility: 'PUBLIC',
@@ -96,12 +99,12 @@ export async function GET(req: NextRequest) {
         services,
         period: {
           days,
-          startDate: startDate.toISOString(),
-          endDate: new Date().toISOString(),
+          startDate: window.start.toISOString(),
+          endDate: window.end.toISOString(),
           // Retention info
           effectiveStart: metrics.effectiveStart.toISOString(),
           effectiveEnd: metrics.effectiveEnd.toISOString(),
-          isClipped: metrics.isClipped,
+          isClipped: window.isClipped || metrics.isClipped,
         },
       },
       200
