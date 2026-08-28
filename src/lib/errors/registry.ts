@@ -241,6 +241,28 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  SCHEDULE_NAME_CONFLICT: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'A schedule with that name already exists.',
+    action: 'Choose a different schedule name.',
+    retryable: false,
+    exposure: 'public',
+  },
+  SCHEDULE_LAYER_NOT_FOUND: {
+    status: 404,
+    category: 'not_found',
+    userMessage: 'The requested schedule layer could not be found.',
+    retryable: false,
+    exposure: 'public',
+  },
+  SCHEDULE_OVERRIDE_NOT_FOUND: {
+    status: 404,
+    category: 'not_found',
+    userMessage: 'The requested schedule override could not be found.',
+    retryable: false,
+    exposure: 'public',
+  },
   SCHEDULE_LAYER_USER_DUPLICATE: {
     status: 409,
     category: 'conflict',
