@@ -1,7 +1,6 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
 import { bulkAcknowledge, bulkUpdateStatus } from '@/app/(app)/incidents/bulk-actions';
-import { createIncident } from '@/app/(app)/incidents/actions';
 import { processJob } from '@/lib/jobs/queue';
 
 vi.mock('@/lib/rbac', () => ({
@@ -189,57 +188,5 @@ describe('incident flow safeguards', () => {
       })
     );
     expect(prismaMock.incident.updateMany).not.toHaveBeenCalled();
-  });
-
-  it('re-opened incidents resume escalation when dedup key matches recent resolve', async () => {
-    prismaMock.incident.findFirst
-      .mockResolvedValueOnce(null) // existing open incident check
-      .mockResolvedValueOnce({
-        id: 'inc-old',
-        status: 'RESOLVED',
-        resolvedAt: new Date(),
-      });
-    prismaMock.incident.update.mockResolvedValue({ id: 'inc-old' });
-    prismaMock.incident.findUnique
-      .mockResolvedValueOnce(
-        lifecycleSnapshot({
-          status: 'RESOLVED',
-          resolvedAt: new Date(),
-        })
-      )
-      .mockResolvedValueOnce({
-        id: 'inc-old',
-        title: 'Disk full',
-        description: 'Disk usage exceeded',
-        status: 'OPEN',
-        urgency: 'HIGH',
-        priority: 'P1',
-        resolvedAt: null,
-        currentEscalationStep: 0,
-        nextEscalationAt: new Date(),
-        service: { id: 'svc-1', name: 'Service 1' },
-        assignee: null,
-        createdAt: new Date(),
-      });
-
-    const formData = new FormData();
-    formData.append('title', 'Disk full');
-    formData.append('description', 'Disk usage exceeded');
-    formData.append('urgency', 'HIGH');
-    formData.append('serviceId', 'svc-1');
-    formData.append('priority', '');
-    formData.append('dedupKey', 'dedup-1');
-
-    await createIncident(formData);
-
-    expect(prismaMock.incident.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          escalationStatus: 'ESCALATING',
-          nextEscalationAt: expect.any(Date),
-          currentEscalationStep: 0,
-        }),
-      })
-    );
   });
 });

@@ -1,180 +1,95 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { createIncident } from './actions';
-import prisma from '@/lib/prisma';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock dependencies
-vi.mock('@/lib/rbac', () => ({
-  assertResponderOrAbove: vi.fn().mockResolvedValue(true),
-  assertCanCreateIncidentForService: vi.fn().mockResolvedValue(true),
-  assertCanModifyIncident: vi.fn().mockResolvedValue(true),
-  assertCanAcknowledgeIncident: vi.fn().mockResolvedValue(true),
-  assertCanAddIncidentNote: vi.fn().mockResolvedValue(true),
-  getCurrentUser: vi.fn().mockResolvedValue({ id: 'user-1', name: 'Test User' }),
-}));
-
-vi.mock('@/lib/service-notifications', () => ({
-  sendServiceNotifications: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('@/lib/escalation', () => ({
-  executeEscalation: vi.fn().mockResolvedValue({ escalated: false }),
-}));
-
-const { applyIncidentLifecycleCommandMock, scheduleEscalationMock } = vi.hoisted(() => ({
-  applyIncidentLifecycleCommandMock: vi.fn().mockResolvedValue({
-    incidentId: 'inc-resolved',
-    command: 'REOPEN',
-    source: 'WEB',
-    previousStatus: 'RESOLVED',
-    status: 'OPEN',
-    changed: true,
-  }),
-  scheduleEscalationMock: vi.fn().mockResolvedValue('job-1'),
-}));
-vi.mock('@/lib/incidents/lifecycle', () => ({
-  applyIncidentLifecycleCommand: applyIncidentLifecycleCommandMock,
-}));
-
-vi.mock('@/lib/jobs/queue', () => ({
-  scheduleEscalation: scheduleEscalationMock,
-}));
-
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-  },
-}));
-
-vi.mock('@/lib/status-page-webhooks', () => ({
-  triggerWebhooksForService: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('@/lib/status-page-notifications', () => ({
-  notifyStatusPageSubscribers: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('next/cache', () => ({
+const mocks = vi.hoisted(() => ({
+  executeIncidentCreation: vi.fn(),
+  assertCanCreateIncidentForService: vi.fn(),
+  getCurrentUser: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
-describe('createIncident Action', () => {
+vi.mock('@/lib/prisma', () => ({ default: {} }));
+vi.mock('@/lib/incidents/creation', () => ({
+  executeIncidentCreation: mocks.executeIncidentCreation,
+}));
+vi.mock('@/lib/incidents/operator-lifecycle', () => ({
+  updateIncidentStatus: vi.fn(),
+  resolveIncidentWithNote: vi.fn(),
+}));
+vi.mock('@/lib/rbac', () => ({
+  assertResponderOrAbove: vi.fn(),
+  assertCanCreateIncidentForService: mocks.assertCanCreateIncidentForService,
+  assertCanAddIncidentNote: vi.fn(),
+  getCurrentUser: mocks.getCurrentUser,
+}));
+vi.mock('@/lib/logger', () => ({
+  logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
+
+import { createIncident, createMobileIncident } from './actions';
+
+describe('incident creation action adapters', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (prisma as any).customField = { findMany: vi.fn().mockResolvedValue([]) };
+    mocks.assertCanCreateIncidentForService.mockResolvedValue(undefined);
+    mocks.getCurrentUser.mockResolvedValue({ id: 'user-1', name: 'Test User' });
+    mocks.executeIncidentCreation.mockResolvedValue({ id: 'inc-1', outcome: 'CREATED' });
   });
 
-  it('creates a new incident when no duplicates exist', async () => {
-    // Mock Prisma responses
-    (prisma.incident.findFirst as any).mockResolvedValue(null);
-    (prisma.$transaction as any).mockImplementation((cb: any) => cb(prisma));
-    (prisma.user.findUnique as any).mockResolvedValue({ name: 'Test User' });
-    (prisma.incident.create as any).mockResolvedValue({ id: 'inc-new', serviceId: 'svc-1' });
+  function formData() {
+    const form = new FormData();
+    form.append('title', 'Database latency');
+    form.append('description', 'Write latency above threshold');
+    form.append('serviceId', 'svc-1');
+    form.append('urgency', 'HIGH');
+    form.append('priority', 'P1');
+    form.append('dedupKey', 'db-latency');
+    form.append('assigneeId', 'user-2');
+    form.append('customField_impact', 'customer-facing');
+    return form;
+  }
 
-    const formData = new FormData();
-    formData.append('title', 'New Incident');
-    formData.append('serviceId', 'svc-1');
-    formData.append('urgency', 'HIGH');
-    formData.append('dedupKey', 'unique-key-123');
+  it('authorizes the service and delegates WEB creation to the domain engine', async () => {
+    const result = await createIncident(formData());
 
-    const result = await createIncident(formData);
-
-    expect(prisma.incident.findFirst).toHaveBeenCalledTimes(2);
-    expect(prisma.incident.create).toHaveBeenCalled();
-    expect(result).toHaveProperty('id', 'inc-new');
-  });
-
-  it('merges into an existing OPEN incident (Intelligent Deduplication)', async () => {
-    const existingIncident = { id: 'inc-open', status: 'OPEN', title: 'Existing' };
-
-    // Mock finding an OPEN incident
-    (prisma.incident.findFirst as any).mockImplementation((args: any) => {
-      if (args?.where?.status?.in) return Promise.resolve(existingIncident);
-      return Promise.resolve(null);
+    expect(mocks.assertCanCreateIncidentForService).toHaveBeenCalledWith('svc-1');
+    expect(mocks.executeIncidentCreation).toHaveBeenCalledWith({
+      title: 'Database latency',
+      description: 'Write latency above threshold',
+      urgency: 'HIGH',
+      serviceId: 'svc-1',
+      priority: 'P1',
+      dedupKey: 'db-latency',
+      assigneeId: 'user-2',
+      teamId: null,
+      visibility: 'PUBLIC',
+      customFields: [{ fieldId: 'impact', value: 'customer-facing' }],
+      source: 'WEB',
+      actor: { id: 'user-1', name: 'Test User' },
     });
-
-    (prisma.$transaction as any).mockImplementation((cb: any) => cb(prisma));
-
-    const formData = new FormData();
-    formData.append('title', 'Duplicate Incident');
-    formData.append('serviceId', 'svc-1');
-    formData.append('urgency', 'HIGH');
-    formData.append('dedupKey', 'dup-key');
-
-    const result = await createIncident(formData);
-
-    // Should NOT create new incident
-    expect(prisma.incident.create).not.toHaveBeenCalled();
-
-    // Should create a note
-    expect(prisma.incidentNote.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          incidentId: 'inc-open',
-          content: expect.stringContaining('[Manual Report Merged]'),
-        }),
-      })
-    );
-
-    // Should return existing incident
-    expect(result).toHaveProperty('id', 'inc-open');
+    expect(result).toEqual({ id: 'inc-1', outcome: 'CREATED' });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/incidents');
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/incidents/inc-1');
   });
 
-  it('re-opens a recently RESOLVED incident through the lifecycle engine', async () => {
-    const resolvedAt = new Date(Date.now() - 1000 * 60 * 10);
-    const recentResolved = {
-      id: 'inc-resolved',
-      status: 'RESOLVED',
-      resolvedAt,
-    };
-    const reopenedAt = new Date(Date.now() + 60_000);
+  it('uses the MOBILE source without maintaining a second creation implementation', async () => {
+    mocks.executeIncidentCreation.mockResolvedValue({ id: 'inc-existing', outcome: 'MERGED' });
 
-    vi.mocked(prisma.incident.findFirst)
-      .mockResolvedValueOnce(null as never)
-      .mockResolvedValueOnce(recentResolved as never);
+    const result = await createMobileIncident(formData());
 
-    // The lifecycle engine owns the mutation; this action only reloads the committed incident.
-    vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
-      id: 'inc-resolved',
-      status: 'OPEN',
-      resolvedAt: null,
-      currentEscalationStep: 0,
-      nextEscalationAt: reopenedAt,
-    } as never);
-    (prisma.$transaction as any).mockImplementation((cb: any) => cb(prisma));
-
-    const formData = new FormData();
-    formData.append('title', 'Recurrence');
-    formData.append('serviceId', 'svc-1');
-    formData.append('urgency', 'HIGH');
-    formData.append('dedupKey', 'reopen-key');
-
-    const result = await createIncident(formData);
-
-    expect(prisma.incident.create).not.toHaveBeenCalled();
-    expect(prisma.incident.update).not.toHaveBeenCalled();
-    expect(applyIncidentLifecycleCommandMock).toHaveBeenCalledWith(
-      prisma,
-      expect.objectContaining({
-        incidentId: 'inc-resolved',
-        command: 'REOPEN',
-        source: 'WEB',
-        expectedStatus: 'RESOLVED',
-        actor: { id: 'user-1', name: 'Test User' },
-        eventMessage: expect.stringContaining('manual report within 30m window'),
-      })
+    expect(mocks.executeIncidentCreation).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'MOBILE' })
     );
+    expect(result).toEqual({ id: 'inc-existing', outcome: 'MERGED' });
+  });
 
-    expect(prisma.incidentNote.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          incidentId: 'inc-resolved',
-          content: expect.stringContaining('[Re-opened]'),
-        }),
-      })
-    );
+  it('rejects an invalid urgency before invoking the domain engine', async () => {
+    const form = formData();
+    form.set('urgency', 'CRITICAL');
 
-    expect(scheduleEscalationMock).toHaveBeenCalledWith('inc-resolved', 0, expect.any(Number));
-    expect(result).toHaveProperty('id', 'inc-resolved');
+    await expect(createIncident(form)).rejects.toMatchObject({
+      code: 'INCIDENT_INVALID_ARGUMENT',
+    });
+    expect(mocks.executeIncidentCreation).not.toHaveBeenCalled();
   });
 });

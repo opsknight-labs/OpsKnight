@@ -1,7 +1,6 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { runSerializableTransaction } from '@/lib/db-utils';
 import { revalidatePath } from 'next/cache';
 import { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import {
@@ -16,7 +15,10 @@ import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
-import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
+import {
+  executeIncidentCreation,
+  type IncidentCreationSource,
+} from '@/lib/incidents/creation';
 
 const LEGACY_NOT_FOUND_MESSAGE =
   'The requested item could not be found. It may have been deleted or you may not have access to it.';
@@ -117,352 +119,60 @@ export async function updateIncidentPriority(id: string, priority: string | null
   revalidatePath('/');
 }
 
-export async function createIncident(formData: FormData) {
-  const title = formData.get('title') as string;
-  const description = formData.get('description') as string;
-  const urgency = parseIncidentUrgency(formData.get('urgency') as string);
-  const serviceId = formData.get('serviceId') as string;
-  await assertCanCreateIncidentForService(serviceId);
-  const priority = formData.get('priority') as string | null;
-  const dedupKey = formData.get('dedupKey') as string | null;
-  const assigneeId = formData.get('assigneeId') as string | null;
+async function createIncidentFromFormData(formData: FormData, source: IncidentCreationSource) {
+  const title = String(formData.get('title') ?? '');
+  const description = String(formData.get('description') ?? '');
+  const urgency = parseIncidentUrgency(String(formData.get('urgency') ?? ''));
+  const serviceId = String(formData.get('serviceId') ?? '');
 
-  // Extract custom field values (deduplicated by fieldId)
-  const customFieldMap = new Map<string, string>();
-  for (const [key, value] of formData.entries()) {
-    if (key.startsWith('customField_')) {
-      const fieldId = key.replace('customField_', '');
-      const fieldValue = value as string;
-      if (fieldValue && fieldValue.trim()) {
-        customFieldMap.set(fieldId, fieldValue.trim());
-      }
-    }
-  }
-  const customFields = await prisma.customField.findMany({ orderBy: { order: 'asc' } });
-  const knownFieldIds = new Set(customFields.map(field => field.id));
-  const invalidCustomFieldIds = Array.from(customFieldMap.keys()).filter(
-    fieldId => !knownFieldIds.has(fieldId)
-  );
-  if (invalidCustomFieldIds.length > 0) {
+  if (!serviceId) {
     throw new AppError({
       code: 'INCIDENT_INVALID_ARGUMENT',
-      userMessage: 'One or more custom fields are invalid. Refresh the form and try again.',
-      fields: [
-        {
-          field: 'customFields',
-          code: 'invalid',
-          message: 'One or more custom fields are invalid. Refresh the form and try again.',
-        },
-      ],
-      details: { invalidCustomFieldIds },
+      userMessage: 'Please select a service.',
+      fields: [{ field: 'serviceId', code: 'required', message: 'Please select a service.' }],
     });
   }
-  const { validateCustomFieldValue } = await import('@/lib/custom-fields');
-  const customFieldEntries = customFields.flatMap(field => {
-    const supplied = customFieldMap.get(field.id) ?? field.defaultValue;
-    const validation = validateCustomFieldValue(field, supplied);
-    if (!validation.valid) {
-      const userMessage = validation.error || `Invalid ${field.name}`;
-      throw new AppError({
-        code: 'INCIDENT_INVALID_ARGUMENT',
-        userMessage,
-        fields: [
-          {
-            field: `customField_${field.id}`,
-            code: 'invalid',
-            message: userMessage,
-          },
-        ],
-        details: { fieldId: field.id },
-      });
-    }
-    return validation.normalizedValue === null
-      ? []
-      : [{ fieldId: field.id, value: validation.normalizedValue }];
+
+  await assertCanCreateIncidentForService(serviceId);
+  const currentUser = await getCurrentUser();
+
+  const customFieldMap = new Map<string, string>();
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith('customField_') || typeof value !== 'string') continue;
+    const fieldId = key.slice('customField_'.length);
+    const fieldValue = value.trim();
+    if (fieldValue) customFieldMap.set(fieldId, fieldValue);
+  }
+
+  const rawVisibility = String(formData.get('visibility') ?? 'PUBLIC');
+  const result = await executeIncidentCreation({
+    title,
+    description,
+    urgency,
+    serviceId,
+    priority: String(formData.get('priority') ?? '') || null,
+    dedupKey: String(formData.get('dedupKey') ?? '') || null,
+    assigneeId: String(formData.get('assigneeId') ?? '') || null,
+    teamId: String(formData.get('teamId') ?? '') || null,
+    visibility: rawVisibility === 'PRIVATE' ? 'PRIVATE' : 'PUBLIC',
+    customFields: [...customFieldMap].map(([fieldId, value]) => ({ fieldId, value })),
+    source,
+    actor: { id: currentUser.id, name: currentUser.name ?? undefined },
   });
 
-  const teamId = formData.get('teamId') as string | null;
-  const visibility = (formData.get('visibility') as 'PUBLIC' | 'PRIVATE') || 'PUBLIC';
-
-  const incident = await runSerializableTransaction(async tx => {
-    const currentUser = await getCurrentUser();
-
-    let assigneeName: string | null = null;
-    if (assigneeId && assigneeId.length) {
-      const assignee = await tx.user.findUnique({
-        where: { id: assigneeId },
-        select: { name: true },
-      });
-      assigneeName = assignee?.name || null;
-    }
-
-    // Intelligent Deduplication & Merging Logic
-    if (dedupKey && dedupKey.length > 0) {
-      // 1. Check for existing OPEN/ACKNOWLEDGED incident
-      const existingOpenIncident = await tx.incident.findFirst({
-        where: {
-          dedupKey,
-          serviceId,
-          status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] },
-        },
-      });
-
-      if (existingOpenIncident) {
-        // MERGE: Add as a note to the existing incident
-        await tx.incidentNote.create({
-          data: {
-            incidentId: existingOpenIncident.id,
-            userId: currentUser.id,
-            content: `[Manual Report Merged] User reported recurrence.\n\nTitle: ${title}\nDescription: ${description}`,
-          },
-        });
-
-        await tx.incidentEvent.create({
-          data: {
-            incidentId: existingOpenIncident.id,
-            type: 'COMMENT',
-            message: `Manual report merged from user.`,
-          },
-        });
-
-        return existingOpenIncident; // Redirect user to the existing incident
-      }
-
-      // 2. Check for RECENTLY RESOLVED incident (Re-open window: 30 mins)
-      const REOPEN_WINDOW_MS = 30 * 60 * 1000;
-      const recentResolvedIncident = await tx.incident.findFirst({
-        where: {
-          dedupKey,
-          serviceId,
-          status: 'RESOLVED',
-          resolvedAt: {
-            gt: new Date(Date.now() - REOPEN_WINDOW_MS),
-          },
-        },
-        orderBy: { resolvedAt: 'desc' }, // Get the most recently resolved one
-      });
-
-      if (recentResolvedIncident) {
-        await applyIncidentLifecycleCommand(tx, {
-          incidentId: recentResolvedIncident.id,
-          command: 'REOPEN',
-          source: 'WEB',
-          actor: { id: currentUser.id, name: currentUser.name ?? undefined },
-          expectedStatus: 'RESOLVED',
-          eventMessage: `Incident re-opened due to manual report within 30m window.\nSummary: ${title}`,
-          // Incident creation still owns its broader triggered/escalation/Jira/war-room
-          // bundle. Keep that one legacy path caller-owned until creation itself is
-          // moved onto a transactional outbox, avoiding duplicate lifecycle effects.
-          sideEffectPolicy: 'CALLER_OWNED',
-        });
-
-        const reOpenedIncident = await tx.incident.findUnique({
-          where: { id: recentResolvedIncident.id },
-        });
-        if (!reOpenedIncident) {
-          throw new Error('Incident disappeared while reopening. Please try again.');
-        }
-
-        await tx.incidentNote.create({
-          data: {
-            incidentId: reOpenedIncident.id,
-            userId: currentUser.id,
-            content: `[Re-opened] User reported recurrence.\n\nTitle: ${title}\nDescription: ${description}`,
-          },
-        });
-
-        return reOpenedIncident;
-      }
-    }
-
-    const createdIncident = await tx.incident.create({
-      data: {
-        title,
-        description,
-        urgency,
-        serviceId,
-
-        visibility,
-        priority: priority && priority.length ? priority : null,
-        dedupKey: dedupKey && dedupKey.length ? dedupKey : null,
-        assigneeId: assigneeId && assigneeId.length ? assigneeId : null,
-        teamId: !assigneeId && teamId && teamId.length ? teamId : null,
-        events: {
-          create: {
-            type: 'LEGACY_OTHER',
-            message: assigneeId
-              ? `Incident created with ${urgency} urgency and assigned to ${assigneeName || 'user'}`
-              : teamId
-                ? `Incident created with ${urgency} urgency and assigned to team`
-                : `Incident created with ${urgency} urgency`,
-          },
-        },
-        // Create custom field values
-        customFieldValues: {
-          create: customFieldEntries.map(({ fieldId, value }) => ({
-            customFieldId: fieldId,
-            value,
-          })),
-        },
-      },
-    });
-
-    return createdIncident;
-  });
-
-  // If we reopened a recently resolved incident, schedule the first escalation
-  // at the lifecycle engine's canonical nextEscalationAt rather than overriding
-  // its delay semantics with a zero-delay job.
-  if (
-    incident.status === 'OPEN' &&
-    incident.resolvedAt === null &&
-    incident.currentEscalationStep === 0
-  ) {
-    try {
-      const { scheduleEscalation } = await import('@/lib/jobs/queue');
-      const delayMs = Math.max(
-        0,
-        (incident.nextEscalationAt?.getTime() ?? Date.now()) - Date.now()
-      );
-      // Retry up to 3 times with short backoff to ensure the first escalation job is queued
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await scheduleEscalation(incident.id, 0, delayMs);
-          break;
-        } catch (err) {
-          if (attempt === 2) throw err;
-          await new Promise(res => setTimeout(res, 200 * Math.pow(2, attempt)));
-        }
-      }
-    } catch (e) {
-      logger.error('Failed to schedule escalation after reopen', {
-        component: 'incidents-actions',
-        error: e,
-        incidentId: incident.id,
-      });
-    }
-  }
-
-  // Execute escalation policy if service has one
-  let escalationResult: { escalated?: boolean; reason?: string } | null = null;
-  try {
-    const { executeEscalation } = await import('@/lib/escalation');
-    escalationResult = await executeEscalation(incident.id);
-  } catch (e) {
-    logger.error('Escalation failed', {
-      component: 'incidents-actions',
-      error: e,
-      incidentId: incident.id,
-    });
-  }
-
-  const hasEscalationPolicy = escalationResult?.reason !== 'No escalation policy configured';
-
-  // Send service-level notifications for new incident (Slack/Webhook only),
-  // or fall back to user notifications when no policy is configured.
-  try {
-    if (hasEscalationPolicy) {
-      const { sendServiceNotifications } = await import('@/lib/service-notifications');
-      await sendServiceNotifications(incident.id, 'triggered');
-    } else {
-      const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-      await sendIncidentNotifications(incident.id, 'triggered');
-    }
-  } catch (e) {
-    logger.error('Service notification failed', {
-      component: 'incidents-actions',
-      error: e,
-      incidentId: incident.id,
-    });
-  }
-
-  // Notify status page subscribers (Email)
-  try {
-    const { scheduleStatusPageNotification } = await import('@/lib/jobs/queue');
-    await scheduleStatusPageNotification(incident.id, 'triggered');
-  } catch (e) {
-    logger.error('Status page subscriber notification failed', {
-      component: 'incidents-actions',
-      error: e,
-      incidentId: incident.id,
-    });
-  }
-
-  // Optional Jira automation. This is intentionally best-effort so Jira
-  // outages never block incident creation during rolling deployments.
-  try {
-    const incidentForJira = await prisma.incident.findUnique({
-      where: { id: incident.id },
-      include: {
-        service: { include: { jiraServiceMapping: true } },
-        externalIssueLinks: { where: { provider: 'JIRA' }, select: { id: true } },
-      },
-    });
-
-    const mapping = incidentForJira?.service?.jiraServiceMapping;
-    if (
-      incidentForJira &&
-      mapping?.autoCreateIncidentIssue &&
-      (mapping.autoCreateIncidentUrgencies.length === 0 ||
-        mapping.autoCreateIncidentUrgencies.includes(incidentForJira.urgency)) &&
-      incidentForJira.externalIssueLinks.length === 0
-    ) {
-      const jiraConfig = await prisma.jiraConfig.findUnique({
-        where: { id: 'default' },
-        select: { enabled: true },
-      });
-
-      if (jiraConfig?.enabled) {
-        const { createJiraIssueAndLink } = await import('@/lib/jira-sync');
-        const { issue } = await createJiraIssueAndLink({
-          incidentId: incident.id,
-          projectKey: mapping.projectKey,
-          issueType: mapping.incidentIssueType || 'Bug',
-          summary: `[Incident] ${incidentForJira.title}`,
-          description:
-            incidentForJira.description || `OpsKnight Incident: ${incidentForJira.title}`,
-          labels: mapping.defaultLabels.length > 0 ? mapping.defaultLabels : ['opsknight'],
-          component: mapping.defaultComponent,
-        });
-
-        await prisma.incidentEvent.create({
-          data: {
-            incidentId: incident.id,
-            type: 'LEGACY_OTHER',
-            message: `Jira issue ${issue.key} auto-created`,
-          },
-        });
-      }
-    }
-  } catch (e) {
-    logger.error('Jira issue auto-create failed', {
-      component: 'incidents-actions',
-      error: e,
-      incidentId: incident.id,
-    });
-  }
-
-  // ChatOps: Auto-create war-room for qualifying incidents (best-effort)
-  try {
-    const { createIncidentWarRoom } = await import('@/lib/chatops/war-room');
-    await createIncidentWarRoom(incident.id).catch(err => {
-      logger.error('ChatOps war-room creation failed', {
-        component: 'incidents-actions',
-        error: err instanceof Error ? err.message : String(err),
-        incidentId: incident.id,
-      });
-    });
-  } catch (e) {
-    logger.error('Failed to load chatops/war-room', { error: e });
-  }
-
-  // Revalidate all relevant paths to ensure UI shows updated assignee
   revalidatePath('/incidents');
-  revalidatePath(`/incidents/${incident.id}`);
+  revalidatePath(`/incidents/${result.id}`);
   revalidatePath('/');
 
-  // Return the incident ID so the client can handle redirection (context-aware)
-  return { id: incident.id };
+  return result;
+}
+
+export async function createIncident(formData: FormData) {
+  return createIncidentFromFormData(formData, 'WEB');
+}
+
+export async function createMobileIncident(formData: FormData) {
+  return createIncidentFromFormData(formData, 'MOBILE');
 }
 
 export async function addNote(incidentId: string, content: string) {

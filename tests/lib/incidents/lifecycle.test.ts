@@ -341,22 +341,6 @@ describe('incident lifecycle command engine', () => {
     );
   });
 
-  it('allows the temporary creation workflow to retain caller-owned effects', async () => {
-    tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'RESOLVED', resolvedAt: NOW }));
-
-    const result = await applyIncidentLifecycleCommand(asTransactionClient(tx), {
-      incidentId: 'inc-create-reopen',
-      command: 'REOPEN',
-      source: 'WEB',
-      sideEffectPolicy: 'CALLER_OWNED',
-      now: NOW,
-    });
-
-    expect(result.changed).toBe(true);
-    expect(tx.incident.update).toHaveBeenCalledOnce();
-    expect(mocks.enqueueLifecycleSideEffects).not.toHaveBeenCalled();
-  });
-
   it('does not treat changed snooze metadata as idempotent', async () => {
     tx.incident.findUnique.mockResolvedValue(
       snapshot({

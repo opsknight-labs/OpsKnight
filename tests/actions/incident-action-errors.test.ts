@@ -6,8 +6,8 @@ const mocks = vi.hoisted(() => ({
   assertCanCreateIncidentForService: vi.fn(),
   assertCanAddIncidentNote: vi.fn(),
   getCurrentUser: vi.fn(),
+  executeIncidentCreation: vi.fn(),
   incidentUpdate: vi.fn(),
-  customFieldFindMany: vi.fn(),
   teamFindUnique: vi.fn(),
   userFindUnique: vi.fn(),
   incidentEventCreate: vi.fn(),
@@ -21,14 +21,15 @@ vi.mock('@/lib/rbac', () => ({
   getCurrentUser: mocks.getCurrentUser,
 }));
 
+vi.mock('@/lib/incidents/creation', () => ({
+  executeIncidentCreation: mocks.executeIncidentCreation,
+}));
+
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     incident: {
       update: mocks.incidentUpdate,
-    },
-    customField: {
-      findMany: mocks.customFieldFindMany,
     },
     team: {
       findUnique: mocks.teamFindUnique,
@@ -66,13 +67,15 @@ describe('incident server-action typed errors', () => {
     mocks.assertResponderOrAbove.mockResolvedValue({ id: 'responder-1' });
     mocks.assertCanCreateIncidentForService.mockResolvedValue({ id: 'responder-1' });
     mocks.getCurrentUser.mockResolvedValue({ id: 'responder-1', name: 'Responder' });
-    mocks.customFieldFindMany.mockResolvedValue([]);
-    mocks.transaction.mockImplementation(async callback => callback({
-      incident: { update: mocks.incidentUpdate },
-      team: { findUnique: mocks.teamFindUnique },
-      user: { findUnique: mocks.userFindUnique },
-      incidentEvent: { create: mocks.incidentEventCreate },
-    }));
+    mocks.executeIncidentCreation.mockResolvedValue({ id: 'inc-1', outcome: 'CREATED' });
+    mocks.transaction.mockImplementation(async callback =>
+      callback({
+        incident: { update: mocks.incidentUpdate },
+        team: { findUnique: mocks.teamFindUnique },
+        user: { findUnique: mocks.userFindUnique },
+        incidentEvent: { create: mocks.incidentEventCreate },
+      })
+    );
   });
 
   it('preserves typed authorization failures instead of flattening them to Error', async () => {
@@ -90,9 +93,7 @@ describe('incident server-action typed errors', () => {
     await expect(updateIncidentUrgency('inc-1', 'CRITICAL')).rejects.toMatchObject({
       code: 'INCIDENT_INVALID_ARGUMENT',
       userMessage: 'Invalid incident urgency.',
-      fields: [
-        expect.objectContaining({ field: 'urgency', code: 'invalid' }),
-      ],
+      fields: [expect.objectContaining({ field: 'urgency', code: 'invalid' })],
     });
     expect(mocks.incidentUpdate).not.toHaveBeenCalled();
   });
@@ -110,7 +111,7 @@ describe('incident server-action typed errors', () => {
     formData.set('urgency', 'HIGH');
 
     await expect(createIncident(formData)).rejects.toBe(denied);
-    expect(mocks.customFieldFindMany).not.toHaveBeenCalled();
+    expect(mocks.executeIncidentCreation).not.toHaveBeenCalled();
   });
 
   it('uses a structured not-found error for a missing reassignment team', async () => {

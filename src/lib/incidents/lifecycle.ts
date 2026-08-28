@@ -42,11 +42,6 @@ export interface IncidentLifecycleInput {
   snoozedUntil?: Date | null;
   snoozeReason?: string | null;
   eventMessage?: string;
-  /**
-   * Temporary compatibility seam for workflows that still own a larger
-   * creation-side-effect bundle. New lifecycle callers must use the outbox.
-   */
-  sideEffectPolicy?: 'OUTBOX' | 'CALLER_OWNED';
   /** Test seam. Production callers should use the server/DB clock. */
   now?: Date;
 }
@@ -551,17 +546,15 @@ export async function applyIncidentLifecycleCommand(
     });
   }
 
-  if (input.sideEffectPolicy !== 'CALLER_OWNED') {
-    await enqueueLifecycleSideEffects(tx, {
-      incidentId: input.incidentId,
-      command: input.command,
-      source: input.source,
-      previousStatus: incident.status,
-      status: targetStatus,
-      transitionAt: now,
-      snoozedUntil: input.command === 'SNOOZE' ? input.snoozedUntil : null,
-    });
-  }
+  await enqueueLifecycleSideEffects(tx, {
+    incidentId: input.incidentId,
+    command: input.command,
+    source: input.source,
+    previousStatus: incident.status,
+    status: targetStatus,
+    transitionAt: now,
+    snoozedUntil: input.command === 'SNOOZE' ? input.snoozedUntil : null,
+  });
 
   return {
     incidentId: input.incidentId,

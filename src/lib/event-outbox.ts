@@ -7,6 +7,8 @@ export type EventSideEffect =
   | 'TRIGGER_WEBHOOK'
   | 'TRIGGER_ESCALATION_NOTIFICATIONS'
   | 'TRIGGER_WAR_ROOM'
+  | 'TRIGGER_STATUS_PAGE'
+  | 'TRIGGER_JIRA'
   | 'RESOLVE_WEBHOOK'
   | 'RESOLVE_SLACK'
   | 'RESOLVE_WAR_ROOM_ARCHIVE'
@@ -25,7 +27,8 @@ export type EventSideEffectLane =
   | 'WAR_ROOM'
   | 'SLACK'
   | 'NOTIFICATION'
-  | 'STATUS_PAGE';
+  | 'STATUS_PAGE'
+  | 'INTEGRATION';
 
 export interface LifecycleSideEffectContext {
   command: IncidentLifecycleCommand;
@@ -55,6 +58,11 @@ export interface LifecycleOutboxInput {
   snoozedUntil?: Date | null;
 }
 
+export interface IncidentCreationOutboxInput {
+  incidentId: string;
+  source: 'WEB' | 'MOBILE' | 'REST_API';
+}
+
 export function getEventSideEffects(action: EventOutboxAction): readonly EventSideEffect[] {
   switch (action) {
     case 'triggered':
@@ -64,6 +72,30 @@ export function getEventSideEffects(action: EventOutboxAction): readonly EventSi
     case 'acknowledged':
       return ['ACK_SLACK'];
   }
+}
+
+/**
+ * Manual/mobile and REST creation historically had slightly different external
+ * effects. Persist those effects atomically with the new incident while keeping
+ * event-ingestion trigger behavior unchanged.
+ */
+export function getIncidentCreationSideEffects(
+  input: Pick<IncidentCreationOutboxInput, 'source'>
+): readonly EventSideEffect[] {
+  const effects: EventSideEffect[] = [
+    'TRIGGER_ESCALATION_NOTIFICATIONS',
+    'TRIGGER_STATUS_PAGE',
+    'TRIGGER_WAR_ROOM',
+  ];
+
+  // REST historically emitted the public incident.created status-page webhook.
+  if (input.source === 'REST_API') effects.unshift('TRIGGER_WEBHOOK');
+
+  // Interactive creation historically owned Jira auto-create. Keep it durable,
+  // but do not silently add Jira automation to the REST API contract.
+  if (input.source === 'WEB' || input.source === 'MOBILE') effects.push('TRIGGER_JIRA');
+
+  return effects;
 }
 
 /**
@@ -161,8 +193,11 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
     case 'LIFECYCLE_USER_NOTIFICATION':
     case 'LIFECYCLE_SERVICE_NOTIFICATION':
       return 'NOTIFICATION';
+    case 'TRIGGER_STATUS_PAGE':
     case 'LIFECYCLE_STATUS_PAGE':
       return 'STATUS_PAGE';
+    case 'TRIGGER_JIRA':
+      return 'INTEGRATION';
   }
 }
 
@@ -225,6 +260,17 @@ export async function enqueueEventSideEffects(
   incidentId: string
 ): Promise<void> {
   await enqueueSideEffects(tx, incidentId, getEventSideEffects(action));
+}
+
+/**
+ * Persist manual/mobile/REST creation side effects in the same transaction as
+ * the incident row and creation timeline entry.
+ */
+export async function enqueueIncidentCreationSideEffects(
+  tx: Prisma.TransactionClient,
+  input: IncidentCreationOutboxInput
+): Promise<void> {
+  await enqueueSideEffects(tx, input.incidentId, getIncidentCreationSideEffects(input));
 }
 
 /**

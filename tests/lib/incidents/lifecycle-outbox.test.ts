@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  enqueueIncidentCreationSideEffects,
   enqueueLifecycleSideEffects,
+  getIncidentCreationSideEffects,
   getLifecycleSideEffects,
 } from '@/lib/event-outbox';
 
@@ -137,5 +139,63 @@ describe('durable lifecycle outbox', () => {
     expect(tx.$queryRaw).not.toHaveBeenCalled();
     expect(tx.backgroundJob.createMany).not.toHaveBeenCalled();
     expect(tx.backgroundJob.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('durable incident creation outbox', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('preserves interactive creation effects while making them durable', () => {
+    expect(getIncidentCreationSideEffects({ source: 'WEB' })).toEqual([
+      'TRIGGER_ESCALATION_NOTIFICATIONS',
+      'TRIGGER_STATUS_PAGE',
+      'TRIGGER_WAR_ROOM',
+      'TRIGGER_JIRA',
+    ]);
+    expect(getIncidentCreationSideEffects({ source: 'MOBILE' })).toEqual([
+      'TRIGGER_ESCALATION_NOTIFICATIONS',
+      'TRIGGER_STATUS_PAGE',
+      'TRIGGER_WAR_ROOM',
+      'TRIGGER_JIRA',
+    ]);
+  });
+
+  it('preserves REST created-webhook behavior without adding Jira automation', () => {
+    expect(getIncidentCreationSideEffects({ source: 'REST_API' })).toEqual([
+      'TRIGGER_WEBHOOK',
+      'TRIGGER_ESCALATION_NOTIFICATIONS',
+      'TRIGGER_STATUS_PAGE',
+      'TRIGGER_WAR_ROOM',
+    ]);
+  });
+
+  it('persists creation effects using one database ordering timestamp', async () => {
+    const tx = createTx();
+
+    await enqueueIncidentCreationSideEffects(asTransactionClient(tx), {
+      incidentId: 'inc-created',
+      source: 'WEB',
+    });
+
+    expect(tx.$queryRaw).toHaveBeenCalledOnce();
+    expect(tx.backgroundJob.createMany).toHaveBeenCalledOnce();
+    const call = tx.backgroundJob.createMany.mock.calls[0]?.[0];
+    expect(call?.data).toHaveLength(4);
+    expect(call?.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'SCHEDULED_TASK',
+          status: 'PENDING',
+          scheduledAt: DB_NOW,
+          payload: expect.objectContaining({
+            task: 'EVENT_SIDE_EFFECT',
+            incidentId: 'inc-created',
+            eventOrderAt: DB_NOW.toISOString(),
+          }),
+        }),
+      ])
+    );
   });
 });
