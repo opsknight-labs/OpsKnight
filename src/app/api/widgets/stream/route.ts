@@ -3,7 +3,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { getCachedWidgetData } from '@/lib/widget-data-cache';
 import prisma from '@/lib/prisma';
-import { buildDateFilter } from '@/lib/dashboard-utils';
+import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
 
 /**
  * Server-Sent Events (SSE) Stream for Real-time Widget Updates
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     const assigneeParam = searchParams.get('assignee');
     const serviceParam = searchParams.get('service');
 
-    const dateFilter = buildDateFilter(range, startDate, endDate);
+    const dateFilter = await buildRetainedDateFilter(range, startDate, endDate);
     const widgetFilters = {
       serviceId: serviceParam && serviceParam !== 'all' ? serviceParam : undefined,
       assigneeId: assigneeParam === null ? undefined : assigneeParam === '' ? null : assigneeParam,
@@ -49,8 +49,8 @@ export async function GET(request: Request) {
           | 'SUPPRESSED'
           | 'RESOLVED'
           | null) || undefined,
-      startDate: dateFilter.createdAt?.gte,
-      endDate: dateFilter.createdAt?.lte,
+      startDate: dateFilter.createdAt.gte,
+      endDate: dateFilter.createdAt.lte,
       includeAllTime: range === 'all',
     };
 
