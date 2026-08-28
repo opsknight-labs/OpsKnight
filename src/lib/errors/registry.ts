@@ -194,6 +194,22 @@ export const ERROR_REGISTRY = {
     retryable: true,
     exposure: 'public',
   },
+  IDEMPOTENCY_KEY_INVALID: {
+    status: 400,
+    category: 'validation',
+    userMessage: 'The idempotency key is invalid.',
+    action: 'Provide a non-empty Idempotency-Key of 200 characters or fewer.',
+    retryable: false,
+    exposure: 'public',
+  },
+  IDEMPOTENCY_KEY_CONFLICT: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'This idempotency key was already used for a different request.',
+    action: 'Use a new Idempotency-Key for a different request payload.',
+    retryable: false,
+    exposure: 'public',
+  },
   INCIDENT_NOT_FOUND: {
     status: 404,
     category: 'not_found',

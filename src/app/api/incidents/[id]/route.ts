@@ -195,6 +195,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   let result: Awaited<ReturnType<typeof applyRestIncidentPatch>>;
   try {
+    const idempotencyKey = req.headers.get('idempotency-key')?.trim();
     result = await applyRestIncidentPatch({
       incidentId: id,
       status: parsed.data.status,
@@ -202,6 +203,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       assigneeId: hasAssigneeUpdate ? (parsed.data.assigneeId ?? null) : undefined,
       hasAssigneeUpdate,
       actor: { id: actor.id },
+      idempotency: idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined,
     });
   } catch (error) {
     logger.warn('api.incident.patch_rejected', {
@@ -212,17 +214,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return jsonError(error);
   }
 
-  const { incident, lifecycle, urgencyChanged, assigneeChanged } = result;
+  const { incident, lifecycle, urgencyChanged, assigneeChanged, idempotencyReplayed } = result;
   logger.info('api.incident.updated', {
     incidentId: incident.id,
     apiKeyId: apiKey.id,
     changed: result.changed,
+    idempotencyReplayed,
   });
 
   // Lifecycle effects are already persisted in the same transaction as the
-  // status change. Keep the existing immediate path only for a pure
-  // urgency/assignee update; a mixed PATCH emits the lifecycle event once.
-  if (!lifecycle?.changed && (urgencyChanged || assigneeChanged)) {
+  // status change. Keep the existing immediate path only for a new, pure
+  // urgency/assignee update; idempotent replays must not resend these effects.
+  if (!idempotencyReplayed && !lifecycle?.changed && (urgencyChanged || assigneeChanged)) {
     try {
       const updatedIncident = await prisma.incident.findUnique({
         where: { id },
@@ -276,5 +279,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  return jsonOk({ incident }, 200);
+  return jsonOk(
+    { incident },
+    200,
+    idempotencyReplayed ? { 'Idempotency-Replayed': 'true' } : undefined
+  );
 }

@@ -24,7 +24,7 @@ vi.mock('@/components/ToastProvider', () => ({
 }));
 
 vi.mock('@/app/(app)/incidents/actions', () => ({
-  updateIncidentStatus: vi.fn().mockResolvedValue(undefined),
+  updateIncidentStatus: vi.fn().mockResolvedValue({ replayed: false }),
 }));
 
 vi.mock('@/app/(app)/incidents/bulk-actions', () => ({

@@ -6,13 +6,13 @@ import * as apiAuth from '@/lib/api-auth';
 import * as rateLimit from '@/lib/rate-limit';
 
 const mocks = vi.hoisted(() => ({
-  executeIncidentCreation: vi.fn(),
+  executeIdempotentIncidentCreation: vi.fn(),
 }));
 
 vi.mock('@/lib/api-auth');
 vi.mock('@/lib/rate-limit');
-vi.mock('@/lib/incidents/creation', () => ({
-  executeIncidentCreation: mocks.executeIncidentCreation,
+vi.mock('@/lib/incidents/idempotent-commands', () => ({
+  executeIdempotentIncidentCreation: mocks.executeIdempotentIncidentCreation,
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -40,7 +40,10 @@ describe('API Routes - Incidents', () => {
       resetAt: Date.now() + 60000,
       count: 1,
     });
-    mocks.executeIncidentCreation.mockResolvedValue({ id: 'inc-new', outcome: 'CREATED' });
+    mocks.executeIdempotentIncidentCreation.mockResolvedValue({
+      value: { id: 'inc-new', outcome: 'CREATED' },
+      replayed: false,
+    });
   });
 
   describe('GET /api/incidents', () => {
@@ -127,13 +130,7 @@ describe('API Routes - Incidents', () => {
   });
 
   describe('POST /api/incidents', () => {
-    it('delegates valid REST creation to the centralized creation engine', async () => {
-      const incidentData = {
-        title: 'New Incident',
-        serviceId: 'svc-1',
-        urgency: 'HIGH',
-      };
-
+    function allowCreate() {
       vi.mocked(apiAuth.authenticateApiKey).mockResolvedValue({
         id: 'key-1',
         userId: 'user-1',
@@ -151,7 +148,9 @@ describe('API Routes - Incidents', () => {
       } as never);
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-new',
-        ...incidentData,
+        title: 'New Incident',
+        serviceId: 'svc-1',
+        urgency: 'HIGH',
         description: null,
         priority: null,
         status: 'OPEN',
@@ -159,6 +158,15 @@ describe('API Routes - Incidents', () => {
         assignee: null,
         createdAt: new Date('2026-08-28T09:00:00.000Z'),
       } as never);
+    }
+
+    it('delegates valid REST creation to the centralized creation engine', async () => {
+      allowCreate();
+      const incidentData = {
+        title: 'New Incident',
+        serviceId: 'svc-1',
+        urgency: 'HIGH',
+      };
 
       const req = await createMockRequest('POST', '/api/incidents', incidentData);
       const res = await incidentRoute.POST(req);
@@ -167,15 +175,41 @@ describe('API Routes - Incidents', () => {
       expect(status).toBe(201);
       expect(data.incident.title).toBe('New Incident');
       expect(data.outcome).toBe('CREATED');
-      expect(mocks.executeIncidentCreation).toHaveBeenCalledWith({
-        title: 'New Incident',
-        description: null,
-        serviceId: 'svc-1',
-        urgency: 'HIGH',
-        priority: null,
-        source: 'REST_API',
-        actor: { id: 'user-1' },
+      expect(mocks.executeIdempotentIncidentCreation).toHaveBeenCalledWith(
+        {
+          title: 'New Incident',
+          description: null,
+          serviceId: 'svc-1',
+          urgency: 'HIGH',
+          priority: null,
+          source: 'REST_API',
+          actor: { id: 'user-1' },
+        },
+        undefined
+      );
+    });
+
+    it('passes Idempotency-Key through the API-key namespace and marks replays', async () => {
+      allowCreate();
+      mocks.executeIdempotentIncidentCreation.mockResolvedValue({
+        value: { id: 'inc-new', outcome: 'CREATED' },
+        replayed: true,
       });
+
+      const req = await createMockRequest(
+        'POST',
+        '/api/incidents',
+        { title: 'New Incident', serviceId: 'svc-1', urgency: 'HIGH' },
+        { 'Idempotency-Key': 'deploy-42' }
+      );
+      const res = await incidentRoute.POST(req);
+
+      expect(res.status).toBe(201);
+      expect(res.headers.get('Idempotency-Replayed')).toBe('true');
+      expect(mocks.executeIdempotentIncidentCreation).toHaveBeenCalledWith(
+        expect.objectContaining({ serviceId: 'svc-1' }),
+        { key: 'deploy-42', principalId: 'key-1' }
+      );
     });
 
     it('should return 400 for invalid data', async () => {
@@ -197,7 +231,7 @@ describe('API Routes - Incidents', () => {
 
       expect(status).toBe(400);
       expect(data.error).toBeDefined();
-      expect(mocks.executeIncidentCreation).not.toHaveBeenCalled();
+      expect(mocks.executeIdempotentIncidentCreation).not.toHaveBeenCalled();
     });
 
     it('denies incident writes when an old write key belongs to an Auditor', async () => {
@@ -227,7 +261,7 @@ describe('API Routes - Incidents', () => {
 
       expect(res.status).toBe(403);
       expect(data.error).toContain('Incident creation access denied');
-      expect(mocks.executeIncidentCreation).not.toHaveBeenCalled();
+      expect(mocks.executeIdempotentIncidentCreation).not.toHaveBeenCalled();
     });
   });
 });
