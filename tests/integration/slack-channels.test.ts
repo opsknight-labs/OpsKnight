@@ -78,23 +78,29 @@ describe('Slack Channels API', () => {
 
     const req = new NextRequest('http://localhost:3000/api/slack/channels');
     const response = await GET(req);
+    const body = await response.json();
 
     expect(response.status).toBe(401);
+    expect(body.code).toBe('AUTHENTICATION_REQUIRED');
   });
 
-  it('returns 503 when bot token is missing', async () => {
+  it('returns a non-retryable typed error when bot token is missing', async () => {
     vi.mocked(prisma.slackIntegration.findFirst).mockResolvedValue(null);
     delete process.env.SLACK_BOT_TOKEN;
 
     const req = new NextRequest('http://localhost:3000/api/slack/channels');
     const response = await GET(req);
+    const body = await response.json();
 
     expect(response.status).toBe(503);
+    expect(body.code).toBe('NOTIFICATION_PROVIDER_UNAVAILABLE');
+    expect(body.retryable).toBe(false);
   });
 
   it('lists channels and preserves membership status', async () => {
     vi.mocked(retryFetch).mockResolvedValue({
       ok: true,
+      status: 200,
       json: async () => ({
         ok: true,
         channels: [
@@ -118,6 +124,7 @@ describe('Slack Channels API', () => {
   it('joins a public channel when requested', async () => {
     vi.mocked(retryFetch).mockResolvedValue({
       ok: true,
+      status: 200,
       json: async () => ({ ok: true }),
     } as unknown as Response);
 
@@ -134,9 +141,10 @@ describe('Slack Channels API', () => {
     expect(body.ok).toBe(true);
   });
 
-  it('returns an error when Slack join fails', async () => {
+  it('preserves the native Slack code while adding typed semantics', async () => {
     vi.mocked(retryFetch).mockResolvedValue({
       ok: true,
+      status: 200,
       json: async () => ({ ok: false, error: 'missing_scope' }),
     } as unknown as Response);
 
@@ -151,5 +159,25 @@ describe('Slack Channels API', () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe('missing_scope');
+    expect(body.code).toBe('INTEGRATION_VALIDATION_FAILED');
+    expect(body.retryable).toBe(false);
+    expect(body.meta).toEqual({ provider: 'slack', providerCode: 'missing_scope' });
+  });
+
+  it('classifies a revoked Slack token as non-retryable authentication failure', async () => {
+    vi.mocked(retryFetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: false, error: 'token_revoked' }),
+    } as unknown as Response);
+
+    const req = new NextRequest('http://localhost:3000/api/slack/channels');
+    const response = await GET(req);
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe('token_revoked');
+    expect(body.code).toBe('INTEGRATION_AUTHENTICATION_FAILED');
+    expect(body.retryable).toBe(false);
   });
 });

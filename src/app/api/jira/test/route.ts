@@ -1,4 +1,6 @@
-import { NextResponse } from 'next/server';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { assertAdmin } from '@/lib/rbac';
 import { getDecryptedJiraConfig, testJiraConnection } from '@/lib/jira';
 
@@ -7,23 +9,29 @@ export async function POST() {
     await assertAdmin();
     const config = await getDecryptedJiraConfig();
     if (!config) {
-      return NextResponse.json(
-        { error: 'Jira is not configured or is disabled.' },
-        { status: 400 }
+      return jsonError(
+        new AppError({
+          code: 'INTEGRATION_DISABLED',
+          userMessage: 'Jira is not configured or is disabled.',
+          action: 'Configure and enable Jira before testing the connection.',
+          details: { provider: 'jira' },
+        })
       );
     }
 
     const result = await testJiraConnection(config);
-    return NextResponse.json({
+    return jsonOk({
       ok: true,
       accountId: result.accountId,
       displayName: result.displayName,
       emailAddress: result.emailAddress,
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to test Jira connection.' },
-      { status: 500 }
-    );
+    logger.error('api.jira.test_failed', {
+      error,
+      errorCode: isAppError(error) ? error.code : 'INTERNAL_ERROR',
+    });
+    if (isAppError(error)) return jsonError(error);
+    return jsonError('Failed to test Jira connection.', 500);
   }
 }

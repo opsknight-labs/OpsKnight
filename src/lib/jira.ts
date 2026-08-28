@@ -1,5 +1,7 @@
 import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
+import { AppError } from '@/lib/errors';
+import { integrationProviderError } from '@/lib/provider-errors';
 import { normalizeJiraBaseUrl } from '@/lib/jira-validation';
 
 export type JiraIssueSummary = {
@@ -71,19 +73,35 @@ async function jiraRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(`${config.baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: authHeader(config),
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(init.headers ?? {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: authHeader(config),
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch (error) {
+    throw integrationProviderError({
+      provider: 'jira',
+      operation: `${init.method || 'GET'} ${path}`,
+      cause: error,
+    });
+  }
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    throw new Error(`Jira request failed (${response.status}): ${body || response.statusText}`);
+    throw integrationProviderError({
+      provider: 'jira',
+      operation: `${init.method || 'GET'} ${path}`,
+      status: response.status,
+      cause: body
+        ? new Error(`Jira request failed (${response.status}) with a provider response body.`)
+        : new Error(`Jira request failed (${response.status}).`),
+    });
   }
 
   return (await response.json()) as T;
@@ -109,6 +127,15 @@ export async function getDecryptedJiraConfig(): Promise<JiraConfigForRequest | n
   };
 }
 
+function jiraNotConfigured(): AppError {
+  return new AppError({
+    code: 'INTEGRATION_DISABLED',
+    userMessage: 'Jira is not configured or is disabled.',
+    action: 'Configure and enable Jira before using Jira workflows.',
+    details: { provider: 'jira' },
+  });
+}
+
 export async function testJiraConnection(config: JiraConfigForRequest): Promise<{
   accountId?: string;
   displayName?: string;
@@ -120,7 +147,7 @@ export async function testJiraConnection(config: JiraConfigForRequest): Promise<
 export async function createJiraIssue(input: CreateJiraIssueInput): Promise<JiraIssueSummary> {
   const config = await getDecryptedJiraConfig();
   if (!config) {
-    throw new Error('Jira is not configured or is disabled.');
+    throw jiraNotConfigured();
   }
 
   const payload = {
@@ -150,7 +177,7 @@ export async function createJiraIssue(input: CreateJiraIssueInput): Promise<Jira
 export async function getJiraIssue(issueKeyOrId: string): Promise<JiraIssueSummary> {
   const config = await getDecryptedJiraConfig();
   if (!config) {
-    throw new Error('Jira is not configured or is disabled.');
+    throw jiraNotConfigured();
   }
 
   const issue = await jiraRequest<JiraIssueResponse>(
@@ -183,4 +210,3 @@ export async function addJiraComment(
     body: JSON.stringify(payload),
   });
 }
-

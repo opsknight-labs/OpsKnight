@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useTransition, useCallback } from 'react';
 import { Card, Button, FormField, Switch } from '@/components/ui';
+import { errorFromResponse } from '@/lib/client-error';
+import { toUserFacingError } from '@/lib/user-facing-error';
 
 interface Webhook {
     id: string;
@@ -24,6 +26,11 @@ const WEBHOOK_EVENTS = [
     { value: 'maintenance.scheduled', label: 'Maintenance Scheduled' },
 ];
 
+function displayError(error: unknown, fallback: string): string {
+    const friendly = toUserFacingError(error, fallback);
+    return friendly.description || friendly.title;
+}
+
 export default function StatusPageWebhooksSettings({ statusPageId }: StatusPageWebhooksSettingsProps) {
     const [webhooks, setWebhooks] = useState<Webhook[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -38,11 +45,13 @@ export default function StatusPageWebhooksSettings({ statusPageId }: StatusPageW
     const loadWebhooks = useCallback(async () => {
         try {
             const response = await fetch(`/api/status-page/webhooks?statusPageId=${statusPageId}`);
-            if (!response.ok) throw new Error('Failed to load webhooks');
+            if (!response.ok) {
+                throw await errorFromResponse(response, 'Failed to load webhooks');
+            }
             const data = await response.json();
             setWebhooks(data.webhooks || []);
-        } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            setError(err.message || 'Failed to load webhooks');
+        } catch (err) {
+            setError(displayError(err, 'Failed to load webhooks'));
         } finally {
             setIsLoading(false);
         }
@@ -51,7 +60,6 @@ export default function StatusPageWebhooksSettings({ statusPageId }: StatusPageW
     useEffect(() => {
         loadWebhooks();
     }, [loadWebhooks]);
-
 
     const handleCreate = () => {
         if (!formData.url || formData.events.length === 0) {
@@ -72,15 +80,14 @@ export default function StatusPageWebhooksSettings({ statusPageId }: StatusPageW
                 });
 
                 if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(data.error || 'Failed to create webhook');
+                    throw await errorFromResponse(response, 'Failed to create webhook');
                 }
 
                 setFormData({ url: '', events: [] });
                 setShowForm(false);
                 await loadWebhooks();
-            } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-                setError(err.message || 'Failed to create webhook');
+            } catch (err) {
+                setError(displayError(err, 'Failed to create webhook'));
             }
         });
     };
@@ -96,12 +103,12 @@ export default function StatusPageWebhooksSettings({ statusPageId }: StatusPageW
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to delete webhook');
+                    throw await errorFromResponse(response, 'Failed to delete webhook');
                 }
 
                 await loadWebhooks();
-            } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-                setError(err.message || 'Failed to delete webhook');
+            } catch (err) {
+                setError(displayError(err, 'Failed to delete webhook'));
             }
         });
     };
@@ -246,10 +253,12 @@ export default function StatusPageWebhooksSettings({ statusPageId }: StatusPageW
                                                                         enabled,
                                                                     }),
                                                                 });
-                                                                if (!response.ok) throw new Error('Failed to update webhook');
+                                                                if (!response.ok) {
+                                                                    throw await errorFromResponse(response, 'Failed to update webhook');
+                                                                }
                                                                 await loadWebhooks();
-                                                            } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-                                                                setError(err.message || 'Failed to update webhook');
+                                                            } catch (err) {
+                                                                setError(displayError(err, 'Failed to update webhook'));
                                                             }
                                                         }}
                                                     />
