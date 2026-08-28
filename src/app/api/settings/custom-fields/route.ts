@@ -4,9 +4,20 @@ import { getAuthOptions } from '@/lib/auth';
 import { assertAdmin } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
+import { prismaToAppError } from '@/lib/prisma-errors';
 import { CustomFieldCreateSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
+
+const CUSTOM_FIELD_KEY_CONFLICT = {
+  code: 'VALIDATION_FAILED' as const,
+  userMessage: 'A custom field with this key already exists',
+  action: 'Choose a different custom-field key.',
+  fields: [
+    { field: 'key', code: 'duplicate', message: 'A custom field with this key already exists' },
+  ],
+};
 
 /**
  * Create Custom Field
@@ -16,40 +27,42 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session) {
-      return jsonError('Unauthorized', 401);
+      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
     }
 
-    try {
-      await assertAdmin();
-    } catch (error) {
-      return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
-    }
+    await assertAdmin();
 
-    let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let body: unknown;
     try {
       body = await req.json();
-    } catch (_error) {
-      return jsonError('Invalid JSON in request body.', 400);
+    } catch (error) {
+      return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
     }
+
     const parsed = CustomFieldCreateSchema.safeParse(body);
     if (!parsed.success) {
-      return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'Invalid request body.',
+          fields: parsed.error.issues.map(issue => ({
+            field: issue.path.join('.') || 'request',
+            code: issue.code,
+            message: issue.message,
+          })),
+        }),
+        undefined,
+        { issues: parsed.error.issues }
+      );
     }
     const { name, key, type, required, defaultValue, options, showInList } = parsed.data;
 
-    // Check if key already exists
-    const existing = await prisma.customField.findUnique({
-      where: { key },
-    });
-
+    const existing = await prisma.customField.findUnique({ where: { key } });
     if (existing) {
-      return jsonError('A custom field with this key already exists', 400);
+      return jsonError(new AppError(CUSTOM_FIELD_KEY_CONFLICT));
     }
 
-    // Get max order
-    const maxOrder = await prisma.customField.aggregate({
-      _max: { order: true },
-    });
+    const maxOrder = await prisma.customField.aggregate({ _max: { order: true } });
 
     const fieldData: Prisma.CustomFieldCreateInput = {
       name,
@@ -65,17 +78,16 @@ export async function POST(req: NextRequest) {
       fieldData.options = options as Prisma.InputJsonValue;
     }
 
-    const customField = await prisma.customField.create({
-      data: fieldData,
-    });
+    const customField = await prisma.customField.create({ data: fieldData });
 
     logger.info('api.custom_fields.created', { customFieldId: customField.id });
     return jsonOk({ success: true, field: customField }, 200);
-  } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('api.custom_fields.create_error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch (error) {
+    const prismaError = prismaToAppError(error, { unique: CUSTOM_FIELD_KEY_CONFLICT });
+    if (prismaError) return jsonError(prismaError);
+    if (isAppError(error)) return jsonError(error);
+
+    logger.error('api.custom_fields.create_error', { error });
     return jsonError('Failed to create custom field', 500);
   }
 }
@@ -88,26 +100,22 @@ export async function GET() {
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session) {
-      return jsonError('Unauthorized', 401);
+      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
     }
 
     const customFields = await prisma.customField.findMany({
       orderBy: { order: 'asc' },
       include: {
         _count: {
-          select: {
-            values: true,
-          },
+          select: { values: true },
         },
       },
     });
 
     return jsonOk({ fields: customFields }, 200);
-  } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
-    logger.error('api.custom_fields.fetch_error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch (error) {
+    if (isAppError(error)) return jsonError(error);
+    logger.error('api.custom_fields.fetch_error', { error });
     return jsonError('Failed to fetch custom fields', 500);
   }
 }
