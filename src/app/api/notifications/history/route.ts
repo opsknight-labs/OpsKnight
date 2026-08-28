@@ -16,7 +16,9 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session?.user?.email) {
-      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
+      return jsonError(
+        new AppError({ code: 'AUTHENTICATION_REQUIRED', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+      );
     }
 
     const user = await prisma.user.findUnique({
@@ -25,7 +27,9 @@ export async function GET(req: NextRequest) {
     });
 
     if (!user) {
-      return jsonError(new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: LEGACY_NOT_FOUND_MESSAGE }));
+      return jsonError(
+        new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: LEGACY_NOT_FOUND_MESSAGE })
+      );
     }
 
     const userTimeZone = getUserTimeZone(user ?? undefined);
@@ -42,7 +46,7 @@ export async function GET(req: NextRequest) {
     const toParam = searchParams.get('to');
 
     const allowedChannels = new Set(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP']);
-    const allowedStatuses = new Set(['PENDING', 'SENT', 'FAILED']);
+    const allowedStatuses = new Set(['PENDING', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED']);
 
     const baseWhere: any = {
       userId: user.id,
@@ -113,6 +117,7 @@ export async function GET(req: NextRequest) {
       sent: 0,
       pending: 0,
       failed: 0,
+      skipped: 0,
     };
     for (const entry of grouped) {
       const count = entry._count._all;
@@ -123,6 +128,8 @@ export async function GET(req: NextRequest) {
         stats.pending += count;
       } else if (entry.status === 'FAILED') {
         stats.failed += count;
+      } else if (entry.status === 'SKIPPED') {
+        stats.skipped += count;
       }
     }
 

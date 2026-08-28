@@ -32,13 +32,21 @@ export type PushOptions = {
   badge?: number;
 };
 
+export type PushFailureCode =
+  | 'NO_DEVICE_TOKENS'
+  | 'NO_WEB_SUBSCRIPTIONS'
+  | 'PROVIDER_NOT_CONFIGURED'
+  | 'VAPID_NOT_CONFIGURED'
+  | 'RECIPIENT_NOT_FOUND'
+  | 'DELIVERY_FAILED';
+
+export type PushResult = { success: boolean; error?: string; code?: PushFailureCode };
+
 /**
  * Send push notification
  * Uses logger output for development mode
  */
-export async function sendPush(
-  options: PushOptions
-): Promise<{ success: boolean; error?: string }> {
+export async function sendPush(options: PushOptions): Promise<PushResult> {
   try {
     // Get push configuration
     const pushConfig = await getPushConfig();
@@ -50,7 +58,11 @@ export async function sendPush(
     });
 
     if (devices.length === 0) {
-      return { success: false, error: 'No device tokens found for user' };
+      return {
+        success: false,
+        code: 'NO_DEVICE_TOKENS',
+        error: 'No device tokens found for user',
+      };
     }
 
     // If provider is not enabled, log and return failure
@@ -62,7 +74,11 @@ export async function sendPush(
         provider: pushConfig.provider,
       });
 
-      return { success: false, error: 'Push notifications are not enabled or configured' };
+      return {
+        success: false,
+        code: 'PROVIDER_NOT_CONFIGURED',
+        error: 'Push notifications are not enabled or configured',
+      };
     }
 
     // Production: Use configured provider
@@ -281,16 +297,28 @@ export async function sendPush(
     };
 
     if (pushConfig.provider !== 'web-push') {
-      return { success: false, error: 'No push notification provider configured' };
+      return {
+        success: false,
+        code: 'PROVIDER_NOT_CONFIGURED',
+        error: 'No push notification provider configured',
+      };
     }
 
     const webDevices = devices.filter(device => device.platform === 'web');
     if (webDevices.length === 0) {
-      return { success: false, error: 'No web push subscriptions found for user' };
+      return {
+        success: false,
+        code: 'NO_WEB_SUBSCRIPTIONS',
+        error: 'No web push subscriptions found for user',
+      };
     }
 
     if (vapidDetailsList.length === 0) {
-      return { success: false, error: 'VAPID keys not configured' };
+      return {
+        success: false,
+        code: 'VAPID_NOT_CONFIGURED',
+        error: 'VAPID keys not configured',
+      };
     }
 
     await Promise.allSettled(webDevices.map(device => sendWebPush(device)));
@@ -298,11 +326,15 @@ export async function sendPush(
     if (successCount > 0) {
       return { success: true };
     } else {
-      return { success: false, error: errorMessages.join('; ') || 'Failed to send to all devices' };
+      return {
+        success: false,
+        code: 'DELIVERY_FAILED',
+        error: errorMessages.join('; ') || 'Failed to send to all devices',
+      };
     }
   } catch (error: any) {
     logger.error('Push send error', { component: 'push', error, userId: options.userId });
-    return { success: false, error: error.message };
+    return { success: false, code: 'DELIVERY_FAILED', error: error.message };
   }
 }
 
@@ -312,8 +344,8 @@ export async function sendPush(
 export async function sendIncidentPush(
   userId: string,
   incidentId: string,
-  eventType: 'triggered' | 'acknowledged' | 'resolved'
-): Promise<{ success: boolean; error?: string }> {
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated'
+): Promise<PushResult> {
   try {
     const [user, incident] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId } }),
@@ -328,7 +360,11 @@ export async function sendIncidentPush(
     ]);
 
     if (!user || !incident) {
-      return { success: false, error: 'User or incident not found' };
+      return {
+        success: false,
+        code: 'RECIPIENT_NOT_FOUND',
+        error: 'User or incident not found',
+      };
     }
 
     const baseUrl = getBaseUrl();
@@ -357,7 +393,9 @@ export async function sendIncidentPush(
         ? 'Triggered'
         : eventType === 'acknowledged'
           ? 'Acknowledged'
-          : 'Resolved';
+          : eventType === 'resolved'
+            ? 'Resolved'
+            : 'Updated';
 
     const title =
       eventType === 'triggered'
@@ -369,7 +407,7 @@ export async function sendIncidentPush(
         ? incident.acknowledgedAt || incident.updatedAt || incident.createdAt
         : eventType === 'resolved'
           ? incident.resolvedAt || incident.updatedAt || incident.createdAt
-          : incident.createdAt;
+          : incident.updatedAt || incident.createdAt;
 
     const timeLabel = formatPushTimestamp(eventTime, userTimeZone);
     const ownerLabel =
@@ -432,6 +470,6 @@ export async function sendIncidentPush(
       userId,
       eventType,
     });
-    return { success: false, error: error.message };
+    return { success: false, code: 'DELIVERY_FAILED', error: error.message };
   }
 }

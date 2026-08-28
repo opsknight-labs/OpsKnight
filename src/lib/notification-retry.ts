@@ -9,6 +9,7 @@ import {
   dispatchNotificationAttempt,
   notificationRetryDelayMs,
   NOTIFICATION_RETRY_POLICY,
+  type NotificationEventType,
 } from './notification-delivery';
 
 /**
@@ -111,17 +112,18 @@ export async function retryFailedNotifications(): Promise<{
               incidentId: notification.incidentId,
               userId: notification.userId,
               channel: notification.channel,
+              eventType: notification.eventType as NotificationEventType,
               incident: notification.incident,
             });
-          } catch (cbError) {
+          } catch (dispatchError) {
             result = {
               success: false,
-              error:
-                cbError instanceof Error ? cbError.message : 'Circuit breaker / provider error',
+              outcome: 'RETRYABLE_FAILURE' as const,
+              error: dispatchError instanceof Error ? dispatchError.message : 'Provider error',
             };
           }
 
-          if (result.success) {
+          if (result.outcome === 'DELIVERED') {
             await prisma.notification.update({
               where: { id: notification.id },
               data: {
@@ -135,14 +137,33 @@ export async function retryFailedNotifications(): Promise<{
               channel: notification.channel,
             });
             return { success: true, claimed: true };
-          } else {
+          }
+
+          if (result.outcome === 'SKIPPED') {
+            await prisma.notification.update({
+              where: { id: notification.id },
+              data: {
+                status: 'SKIPPED',
+                errorMsg: result.error || 'Delivery skipped by notification policy.',
+              },
+            });
+            return { success: true, claimed: true, skipped: true };
+          }
+
+          {
+            const circuitOpen = result.outcome === 'CIRCUIT_OPEN';
+            const permanentFailure = result.outcome === 'PERMANENT_FAILURE';
             await prisma.notification.update({
               where: { id: notification.id },
               data: {
                 status: 'FAILED',
                 failedAt: new Date(),
                 errorMsg: result.error || 'Retry failed',
-                attempts: (notification.attempts || 0) + 1,
+                attempts: circuitOpen
+                  ? notification.attempts
+                  : permanentFailure
+                    ? NOTIFICATION_RETRY_POLICY.maxAttempts
+                    : (notification.attempts || 0) + 1,
               },
             });
             return { success: false, claimed: true };

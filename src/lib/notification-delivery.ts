@@ -1,6 +1,6 @@
 import type { IncidentStatus } from '@prisma/client';
 import prisma from './prisma';
-import { CircuitBreakers } from './circuit-breaker';
+import { CircuitBreakerError, CircuitBreakers } from './circuit-breaker';
 
 export const NOTIFICATION_CHANNELS = [
   'EMAIL',
@@ -12,8 +12,27 @@ export const NOTIFICATION_CHANNELS = [
 ] as const;
 export type NotificationDeliveryChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
-export const NOTIFICATION_DELIVERY_STATUSES = ['PENDING', 'SENT', 'DELIVERED', 'FAILED'] as const;
+export const NOTIFICATION_DELIVERY_STATUSES = [
+  'PENDING',
+  'SENT',
+  'DELIVERED',
+  'FAILED',
+  'SKIPPED',
+] as const;
 export type NotificationDeliveryStatus = (typeof NOTIFICATION_DELIVERY_STATUSES)[number];
+export const NOTIFICATION_EVENT_TYPES = [
+  'triggered',
+  'acknowledged',
+  'resolved',
+  'updated',
+] as const;
+export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
+export type NotificationDeliveryOutcome =
+  | 'DELIVERED'
+  | 'SKIPPED'
+  | 'RETRYABLE_FAILURE'
+  | 'PERMANENT_FAILURE'
+  | 'CIRCUIT_OPEN';
 
 export interface NotificationRetryPolicy {
   maxAttempts: number;
@@ -31,6 +50,7 @@ export const NOTIFICATION_RETRY_POLICY: Readonly<NotificationRetryPolicy> = Obje
 
 export interface NotificationAttemptResult {
   success: boolean;
+  outcome: NotificationDeliveryOutcome;
   error?: string;
   providerMessageId?: string;
   skipped?: boolean;
@@ -46,6 +66,7 @@ export interface NotificationAttemptInput {
   incidentId: string;
   userId: string;
   channel: NotificationDeliveryChannel;
+  eventType: NotificationEventType;
   incident?: IncidentDeliveryContext | null;
 }
 
@@ -65,22 +86,14 @@ export function notificationDedupeKey(input: {
   return [input.incidentId, input.userId, input.channel, input.message].join('\u001f');
 }
 
-function eventType(status: IncidentStatus | undefined): 'triggered' | 'acknowledged' | 'resolved' {
+export function notificationEventTypeFromStatus(
+  status: IncidentStatus | undefined
+): Exclude<NotificationEventType, 'updated'> {
   return status === 'RESOLVED'
     ? 'resolved'
     : status === 'ACKNOWLEDGED'
       ? 'acknowledged'
       : 'triggered';
-}
-
-function unavailablePush(error: string | undefined): boolean {
-  const normalized = error?.toLowerCase() ?? '';
-  return [
-    'no web push subscriptions',
-    'no device tokens',
-    'disabled by user',
-    'user has no phone',
-  ].some(message => normalized.includes(message));
 }
 
 /** One channel dispatcher shared by first attempts and durable retries. */
@@ -93,65 +106,98 @@ export async function dispatchNotificationAttempt(
       where: { id: input.incidentId },
       select: { status: true, service: { select: { webhookUrl: true } } },
     }));
-  const type = eventType(incident?.status);
+  const type = input.eventType;
 
-  switch (input.channel) {
-    case 'EMAIL': {
-      const { sendIncidentEmail } = await import('./email');
-      return CircuitBreakers.email().execute(async () => {
-        const result = await sendIncidentEmail(input.userId, input.incidentId, type);
-        if (!result.success) throw new Error(result.error || 'Email delivery failed');
-        return result;
-      });
+  try {
+    switch (input.channel) {
+      case 'EMAIL': {
+        const { sendIncidentEmail } = await import('./email');
+        return await CircuitBreakers.email().execute(async () => {
+          const result = await sendIncidentEmail(input.userId, input.incidentId, type);
+          if (!result.success) throw new Error(result.error || 'Email delivery failed');
+          return { ...result, success: true, outcome: 'DELIVERED' };
+        });
+      }
+      case 'SMS': {
+        const { sendIncidentSMS } = await import('./sms');
+        return await CircuitBreakers.sms().execute(async () => {
+          const result = await sendIncidentSMS(
+            input.userId,
+            input.incidentId,
+            type,
+            input.notificationId
+          );
+          if (!result.success) throw new Error(result.error || 'SMS delivery failed');
+          return {
+            ...result,
+            success: true,
+            outcome: 'DELIVERED',
+            providerMessageId: result.messageSid,
+          };
+        });
+      }
+      case 'PUSH': {
+        const { sendIncidentPush } = await import('./push');
+        return await CircuitBreakers.push().execute(async () => {
+          const result = await sendIncidentPush(input.userId, input.incidentId, type);
+          if (result.success) return { ...result, success: true, outcome: 'DELIVERED' };
+          if (result.code === 'NO_DEVICE_TOKENS' || result.code === 'NO_WEB_SUBSCRIPTIONS') {
+            return { ...result, outcome: 'SKIPPED', skipped: true };
+          }
+          throw new Error(result.error || 'Push delivery failed');
+        });
+      }
+      case 'WEBHOOK': {
+        const webhookUrl = incident?.service?.webhookUrl;
+        if (!webhookUrl) {
+          return {
+            success: false,
+            outcome: 'PERMANENT_FAILURE',
+            error: 'No webhook URL configured for service',
+          };
+        }
+        const { sendIncidentWebhook } = await import('./webhooks');
+        return await CircuitBreakers.webhook(webhookUrl).execute(async () => {
+          const result = await sendIncidentWebhook(webhookUrl, input.incidentId, type);
+          if (!result.success) throw new Error(result.error || 'Webhook delivery failed');
+          return { ...result, success: true, outcome: 'DELIVERED' };
+        });
+      }
+      case 'WHATSAPP': {
+        const { sendIncidentWhatsApp } = await import('./whatsapp');
+        return await CircuitBreakers.whatsapp().execute(async () => {
+          const result = await sendIncidentWhatsApp(
+            input.userId,
+            input.incidentId,
+            type,
+            input.notificationId
+          );
+          if (!result.success) throw new Error(result.error || 'WhatsApp delivery failed');
+          return {
+            ...result,
+            success: true,
+            outcome: 'DELIVERED',
+            providerMessageId: result.messageSid,
+          };
+        });
+      }
+      case 'SLACK':
+        // Incident Slack delivery is performed by the durable event outbox. This
+        // record acknowledges that ownership rather than contacting Slack twice.
+        return { success: true, outcome: 'SKIPPED', skipped: true };
     }
-    case 'SMS': {
-      const { sendIncidentSMS } = await import('./sms');
-      return CircuitBreakers.sms().execute(async () => {
-        const result = await sendIncidentSMS(
-          input.userId,
-          input.incidentId,
-          type,
-          input.notificationId
-        );
-        if (!result.success) throw new Error(result.error || 'SMS delivery failed');
-        return { ...result, providerMessageId: result.messageSid };
-      });
+  } catch (error) {
+    if (error instanceof CircuitBreakerError) {
+      return {
+        success: false,
+        outcome: 'CIRCUIT_OPEN',
+        error: `Service unavailable (circuit open): ${error.serviceName}`,
+      };
     }
-    case 'PUSH': {
-      const { sendIncidentPush } = await import('./push');
-      return CircuitBreakers.push().execute(async () => {
-        const result = await sendIncidentPush(input.userId, input.incidentId, type);
-        if (result.success) return result;
-        if (unavailablePush(result.error)) return { ...result, skipped: true };
-        throw new Error(result.error || 'Push delivery failed');
-      });
-    }
-    case 'WEBHOOK': {
-      const webhookUrl = incident?.service?.webhookUrl;
-      if (!webhookUrl) return { success: false, error: 'No webhook URL configured for service' };
-      const { sendIncidentWebhook } = await import('./webhooks');
-      return CircuitBreakers.webhook(webhookUrl).execute(async () => {
-        const result = await sendIncidentWebhook(webhookUrl, input.incidentId, type);
-        if (!result.success) throw new Error(result.error || 'Webhook delivery failed');
-        return result;
-      });
-    }
-    case 'WHATSAPP': {
-      const { sendIncidentWhatsApp } = await import('./whatsapp');
-      return CircuitBreakers.whatsapp().execute(async () => {
-        const result = await sendIncidentWhatsApp(
-          input.userId,
-          input.incidentId,
-          type,
-          input.notificationId
-        );
-        if (!result.success) throw new Error(result.error || 'WhatsApp delivery failed');
-        return { ...result, providerMessageId: result.messageSid };
-      });
-    }
-    case 'SLACK':
-      // Incident Slack delivery is performed by the durable event outbox. This
-      // record acknowledges that ownership rather than contacting Slack twice.
-      return { success: true, skipped: true };
+    return {
+      success: false,
+      outcome: 'RETRYABLE_FAILURE',
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }

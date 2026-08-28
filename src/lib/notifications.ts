@@ -1,10 +1,11 @@
 import { Incident, Service } from '@prisma/client';
 import prisma from './prisma';
-import { CircuitBreakerError } from './circuit-breaker';
 import {
   dispatchNotificationAttempt,
   NOTIFICATION_CHANNELS,
+  NOTIFICATION_RETRY_POLICY,
   type NotificationDeliveryChannel,
+  type NotificationEventType,
 } from './notification-delivery';
 
 export type NotificationChannel = NotificationDeliveryChannel;
@@ -21,7 +22,8 @@ export async function sendNotification(
   userId: string,
   channel: NotificationChannel,
   message: string,
-  incident?: Incident & { service?: Service | null }
+  incident?: Incident & { service?: Service | null },
+  eventType: NotificationEventType = 'triggered'
 ) {
   if (!NOTIFICATION_CHANNELS.includes(channel)) {
     return { success: false, error: `Unknown channel: ${String(channel)}` };
@@ -57,6 +59,7 @@ export async function sendNotification(
       userId,
       channel,
       message,
+      eventType,
       status: 'PENDING',
       attempts: 0,
     },
@@ -68,10 +71,11 @@ export async function sendNotification(
       incidentId,
       userId,
       channel,
+      eventType,
       incident,
     });
 
-    if (result.success) {
+    if (result.outcome === 'DELIVERED') {
       await prisma.notification.update({
         where: { id: notification.id },
         data: {
@@ -106,17 +110,49 @@ export async function sendNotification(
       } catch (_) {}
 
       return { success: true, notificationId: notification.id };
-    } else {
-      throw new Error(result.error || 'Notification delivery failed');
     }
+
+    if (result.outcome === 'SKIPPED') {
+      await prisma.notification.update({
+        where: { id: notification.id },
+        data: {
+          status: 'SKIPPED',
+          errorMsg: result.error || 'Delivery skipped by notification policy.',
+        },
+      });
+      return {
+        success: false,
+        skipped: true,
+        terminal: true,
+        error: result.error,
+        notificationId: notification.id,
+      };
+    }
+
+    const circuitOpen = result.outcome === 'CIRCUIT_OPEN';
+    const permanentFailure = result.outcome === 'PERMANENT_FAILURE';
+    await prisma.notification.update({
+      where: { id: notification.id },
+      data: {
+        status: 'FAILED',
+        failedAt: new Date(),
+        errorMsg: result.error || 'Notification delivery failed',
+        attempts: circuitOpen
+          ? notification.attempts
+          : permanentFailure
+            ? NOTIFICATION_RETRY_POLICY.maxAttempts
+            : (notification.attempts || 0) + 1,
+      },
+    });
+    return {
+      success: false,
+      terminal: permanentFailure,
+      circuitOpen,
+      error: result.error || 'Notification delivery failed',
+      notificationId: notification.id,
+    };
   } catch (error: unknown) {
-    // Handle circuit breaker errors specially - don't count as attempt failure
-    const isCircuitOpen = error instanceof CircuitBreakerError;
-    const errorMessage = isCircuitOpen
-      ? `Service unavailable (circuit open): ${error.serviceName}`
-      : error instanceof Error
-        ? error.message
-        : String(error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     await prisma.notification.update({
       where: { id: notification.id },
@@ -124,8 +160,7 @@ export async function sendNotification(
         status: 'FAILED',
         failedAt: new Date(),
         errorMsg: errorMessage,
-        // Don't increment attempts for circuit breaker failures (will retry when circuit closes)
-        attempts: isCircuitOpen ? notification.attempts : (notification.attempts || 0) + 1,
+        attempts: (notification.attempts || 0) + 1,
       },
     });
 
@@ -133,7 +168,7 @@ export async function sendNotification(
       success: false,
       error: errorMessage,
       notificationId: notification.id,
-      circuitOpen: isCircuitOpen,
+      circuitOpen: false,
     };
   }
 }

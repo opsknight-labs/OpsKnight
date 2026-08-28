@@ -84,7 +84,8 @@ export async function scheduleNotification(
   userId: string,
   channel: string,
   message: string,
-  delayMs: number = 0
+  delayMs: number = 0,
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' = 'triggered'
 ): Promise<string> {
   const scheduledAt = new Date(Date.now() + delayMs);
 
@@ -93,6 +94,7 @@ export async function scheduleNotification(
     userId,
     channel,
     message,
+    eventType,
   });
 }
 
@@ -161,9 +163,7 @@ export async function claimPendingJobs(limit: number = 50, type?: JobType): Prom
     )
     .catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
 
-  const typeFilter = type
-    ? Prisma.sql`AND candidate."type" = ${type}::"JobType"`
-    : Prisma.empty;
+  const typeFilter = type ? Prisma.sql`AND candidate."type" = ${type}::"JobType"` : Prisma.empty;
   const jobs = await prisma.$queryRaw<any[]>( // eslint-disable-line @typescript-eslint/no-explicit-any
     Prisma.sql`
       WITH cte AS (
@@ -309,7 +309,11 @@ export async function processJob(job: any): Promise<boolean> {
         }
 
       case 'NOTIFICATION':
-        let notificationResult: { success: boolean; error?: string };
+        let notificationResult: {
+          success: boolean;
+          error?: string;
+          terminal?: boolean;
+        };
         if (job.payload.mode === 'CHANNEL_FALLBACK') {
           const { getUserNotificationChannels, sendUserNotification } =
             await import('../user-notifications');
@@ -342,7 +346,11 @@ export async function processJob(job: any): Promise<boolean> {
               job.payload.userId,
               job.payload.message,
               availableChannels,
-              { excludedChannels, createInApp: false }
+              {
+                excludedChannels,
+                createInApp: false,
+                eventType: job.payload.eventType || 'triggered',
+              }
             );
             notificationResult = {
               success: fallbackResult.success,
@@ -355,10 +363,12 @@ export async function processJob(job: any): Promise<boolean> {
             job.payload.incidentId,
             job.payload.userId,
             job.payload.channel as NotificationChannel,
-            job.payload.message
+            job.payload.message,
+            undefined,
+            job.payload.eventType || 'triggered'
           );
         }
-        if (notificationResult.success) {
+        if (notificationResult.success || notificationResult.terminal) {
           await markJobCompleted(job.id);
           return true;
         }
