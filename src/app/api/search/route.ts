@@ -7,6 +7,8 @@ import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 const INSENSITIVE_MODE = 'insensitive' as const;
 
@@ -87,23 +89,20 @@ export async function GET(req: NextRequest) {
         teamMemberships: { select: { teamId: true } },
       },
     });
-    if (!currentUser || currentUser.status === 'DISABLED') {
+    if (!currentUser || currentUser.status !== 'ACTIVE') {
       return jsonError('Unauthorized', 401);
     }
 
+    const actor: AuthorizationActor = {
+      id: currentUser.id,
+      role: currentUser.role,
+      status: currentUser.status,
+      teamIds: currentUser.teamMemberships.map(membership => membership.teamId),
+    };
     const isPrivileged = hasCapability(currentUser.role, CAPABILITIES.INCIDENT_READ_ALL);
-    const teamIds = currentUser.teamMemberships.map(membership => membership.teamId);
-    const incidentAccess = isPrivileged
-      ? {}
-      : {
-          OR: [
-            { assigneeId: currentUser.id },
-            { watchers: { some: { userId: currentUser.id } } },
-            {
-              AND: [{ visibility: 'PUBLIC' as const }, { service: { teamId: { in: teamIds } } }],
-            },
-          ],
-        };
+    const teamIds = [...actor.teamIds];
+    const incidentAccess = incidentReadWhere(actor);
+    const serviceAccess = serviceReadWhere(actor);
 
     const rate = await checkRateLimit(`api:search:user:${currentUser.id}`, 30, 60_000);
     if (!rate.allowed) {
@@ -183,7 +182,7 @@ export async function GET(req: NextRequest) {
       prisma.service.findMany({
         where: {
           AND: [
-            isPrivileged ? {} : { teamId: { in: teamIds } },
+            serviceAccess,
             {
               OR: [
                 { name: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
