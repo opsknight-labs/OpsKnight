@@ -74,10 +74,10 @@ function canonicalize(value: unknown): string {
         return `[${value.map(item => canonicalize(item)).join(',')}]`;
       }
       const objectValue = value as Record<string, unknown>;
-      const entries = Object.keys(objectValue)
-        .sort()
-        .filter(key => objectValue[key] !== undefined)
-        .map(key => `${JSON.stringify(key)}:${canonicalize(objectValue[key])}`);
+      const entries = Object.entries(objectValue)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${JSON.stringify(k)}:${canonicalize(v)}`);
       return `{${entries.join(',')}}`;
     }
     default:
@@ -108,11 +108,10 @@ function encodeJson(value: unknown): Prisma.InputJsonValue {
     return value.map(item => encodeJson(item)) as Prisma.InputJsonArray;
   }
   if (typeof value === 'object') {
-    const encoded: Prisma.InputJsonObject = {};
-    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-      if (nested !== undefined) encoded[key] = encodeJson(nested);
-    }
-    return encoded;
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, nested]) => nested !== undefined)
+      .map(([key, nested]) => [key, encodeJson(nested)]);
+    return Object.fromEntries(entries) as Prisma.InputJsonObject;
   }
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return value;
@@ -128,14 +127,21 @@ function decodeJson(value: Prisma.JsonValue): unknown {
   if (Array.isArray(value)) return value.map(item => decodeJson(item));
 
   const objectValue = value as Record<string, Prisma.JsonValue>;
-  if (typeof objectValue[DATE_TAG] === 'string' && Object.keys(objectValue).length === 1) {
-    return new Date(objectValue[DATE_TAG] as string);
-  }
-  if (typeof objectValue[BIGINT_TAG] === 'string' && Object.keys(objectValue).length === 1) {
-    return BigInt(objectValue[BIGINT_TAG] as string);
+  const entries = Object.entries(objectValue);
+  if (entries.length === 1) {
+    const [firstEntry] = entries;
+    if (firstEntry) {
+      const [key, val] = firstEntry;
+      if (key === DATE_TAG && typeof val === 'string') {
+        return new Date(val);
+      }
+      if (key === BIGINT_TAG && typeof val === 'string') {
+        return BigInt(val);
+      }
+    }
   }
 
-  return Object.fromEntries(Object.entries(objectValue).map(([key, nested]) => [key, decodeJson(nested)]));
+  return Object.fromEntries(entries.map(([key, nested]) => [key, decodeJson(nested)]));
 }
 
 function parseRecord(payload: Prisma.JsonValue): PersistedIdempotencyPayload | null {
