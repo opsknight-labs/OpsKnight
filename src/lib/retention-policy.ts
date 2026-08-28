@@ -1,5 +1,11 @@
 // import 'server-only';
 import { logger } from './logger';
+import {
+  createTimeContractContext,
+  normalizeContractTimeZone,
+  resolveReportingWindow,
+  type RetainedDataType,
+} from './time-retention-contract';
 
 /**
  * Data Retention Policy Service
@@ -61,7 +67,7 @@ export async function getRetentionPolicy(): Promise<RetentionPolicy> {
     try {
       const prismaModule = await import('./prisma');
       prisma = prismaModule.default;
-    } catch (e) {
+    } catch (_error) {
       // If we can't import prisma, just return default policy (common in unit tests)
       return DEFAULT_POLICY;
     }
@@ -122,8 +128,7 @@ export async function getRetentionPolicy(): Promise<RetentionPolicy> {
         logRetentionDays: settings.logRetentionDays ?? DEFAULT_POLICY.logRetentionDays,
         metricsRetentionDays: settings.metricsRetentionDays ?? DEFAULT_POLICY.metricsRetentionDays,
         realTimeWindowDays: settings.realTimeWindowDays ?? DEFAULT_POLICY.realTimeWindowDays,
-        businessHoursTimeZone:
-          settings.businessHoursTimeZone ?? DEFAULT_POLICY.businessHoursTimeZone,
+        businessHoursTimeZone: normalizeContractTimeZone(settings.businessHoursTimeZone),
       };
     } else {
       // Create default settings if not exists
@@ -199,8 +204,9 @@ export async function updateRetentionPolicy(
   if (policy.businessHoursTimeZone !== undefined) {
     // Defense in depth: only persist values that look like an IANA name.
     // Final validation also happens in the SLA pipeline before use.
-    if (/^[A-Za-z][A-Za-z0-9+\-_/]{0,63}$/.test(policy.businessHoursTimeZone)) {
-      validated.businessHoursTimeZone = policy.businessHoursTimeZone;
+    const normalized = normalizeContractTimeZone(policy.businessHoursTimeZone);
+    if (normalized !== 'UTC' || policy.businessHoursTimeZone.trim() === 'UTC') {
+      validated.businessHoursTimeZone = normalized;
     } else {
       logger.warn('[RetentionPolicy] Rejected businessHoursTimeZone with invalid shape', {
         value: policy.businessHoursTimeZone,
@@ -246,9 +252,13 @@ export async function updateRetentionPolicy(
  */
 export async function getIncidentRetentionStartDate(): Promise<Date> {
   const policy = await getRetentionPolicy();
-  const date = new Date();
-  date.setDate(date.getDate() - policy.incidentRetentionDays);
-  return date;
+  return resolveReportingWindow({
+    context: createTimeContractContext({
+      now: new Date(),
+      businessTimeZone: policy.businessHoursTimeZone,
+    }),
+    policy,
+  }).retentionStart;
 }
 
 /**
@@ -290,60 +300,22 @@ export async function shouldUseRollups(startDate: Date, endDate?: Date): Promise
 export async function getQueryDateBounds(
   requestedStart: Date | undefined,
   requestedEnd: Date | undefined,
-  dataType: 'incident' | 'alert' | 'log' | 'metrics' = 'incident'
+  dataType: RetainedDataType = 'incident',
+  now: Date = new Date()
 ): Promise<{ start: Date; end: Date; isClipped: boolean }> {
   const policy = await getRetentionPolicy();
-  const now = new Date();
+  const window = resolveReportingWindow({
+    context: createTimeContractContext({
+      now,
+      businessTimeZone: policy.businessHoursTimeZone,
+    }),
+    policy,
+    dataType,
+    requestedStart,
+    requestedEnd,
+  });
 
-  // Get retention days based on data type
-  let retentionDays: number;
-  switch (dataType) {
-    case 'alert':
-      retentionDays = policy.alertRetentionDays;
-      break;
-    case 'log':
-      retentionDays = policy.logRetentionDays;
-      break;
-    case 'metrics':
-      retentionDays = policy.metricsRetentionDays;
-      break;
-    case 'incident':
-    default:
-      retentionDays = policy.incidentRetentionDays;
-  }
-
-  // Calculate retention boundary
-  const retentionBoundary = new Date(now);
-  retentionBoundary.setDate(retentionBoundary.getDate() - retentionDays);
-
-  // End date defaults to now. If the caller passed a future end date
-  // (e.g., clock skew between client and server), it gets clamped — and
-  // this counts as clipping so the UI can render a "range was clamped"
-  // banner instead of silently appearing to honor the requested range.
-  const requestedEndExceedsNow = !!requestedEnd && requestedEnd > now;
-  const end = requestedEnd && requestedEnd <= now ? requestedEnd : now;
-
-  // Start date defaults to retention boundary, but can't go before it
-  let start: Date;
-  let isClipped = requestedEndExceedsNow;
-
-  if (requestedStart) {
-    if (requestedStart < retentionBoundary) {
-      start = retentionBoundary;
-      isClipped = true;
-    } else {
-      start = requestedStart;
-    }
-  } else {
-    start = retentionBoundary;
-  }
-
-  // Ensure start is not after end
-  if (start > end) {
-    start = end;
-  }
-
-  return { start, end, isClipped };
+  return { ...window.effective, isClipped: window.isClipped };
 }
 
 /**
@@ -361,7 +333,6 @@ export async function getPaginationRecommendation(
   endDate: Date,
   estimatedIncidentsPerDay: number = 10
 ): Promise<PaginationInfo> {
-  const policy = await getRetentionPolicy();
   const realTimeStart = await getRealTimeWindowStart();
 
   const daySpan = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
