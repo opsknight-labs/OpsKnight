@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateApiKey } from '@/lib/api-auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -8,15 +8,38 @@ import { logger } from '@/lib/logger';
 import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
 import { resolveApiKeyActor } from '@/lib/authorization-actors';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import { authorizationDecisionError } from '@/lib/api-authorization-error';
+import { AppError } from '@/lib/errors';
 import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
+
+const LEGACY_UNAUTHORIZED_MESSAGE =
+  'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
+const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;
 
+function rateLimitError(retryAfter: number) {
+  return jsonError(
+    new AppError({
+      code: 'RATE_LIMIT_EXCEEDED',
+      userMessage: 'Rate limit exceeded.',
+      details: { retryAfter },
+    }),
+    undefined,
+    undefined,
+    { 'Retry-After': String(retryAfter) }
+  );
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError('Unauthorized. Missing or invalid API key.', 401);
+    return jsonError(
+      new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+    );
   }
 
   const rate = await checkRateLimit(
@@ -25,19 +48,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     RATE_LIMIT_WINDOW_MS
   );
   if (!rate.allowed) {
-    const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
-    );
+    return rateLimitError(Math.ceil((rate.resetAt - Date.now()) / 1000));
   }
 
   const actor = await resolveApiKeyActor(apiKey);
   if (!actor) {
-    return jsonError('Unauthorized. API key user not found.', 401);
+    return jsonError(
+      new AppError({
+        code: 'API_KEY_USER_INVALID',
+        userMessage: LEGACY_UNAUTHORIZED_MESSAGE,
+        details: { apiKeyId: apiKey.id, userId: apiKey.userId },
+      })
+    );
   }
-  if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ }).allowed) {
-    return jsonError('Forbidden. Incident access denied.', 403);
+
+  const readDecision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ });
+  if (!readDecision.allowed) {
+    return jsonError(
+      authorizationDecisionError(readDecision, {
+        forbiddenMessage: 'Forbidden. Incident access denied.',
+      })
+    );
   }
 
   const { id } = await params;
@@ -53,7 +84,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   });
 
   if (!incident) {
-    return jsonError('Incident not found.', 404);
+    return jsonError(
+      new AppError({
+        code: 'INCIDENT_NOT_FOUND',
+        userMessage: LEGACY_NOT_FOUND_MESSAGE,
+        details: { incidentId: id },
+      })
+    );
   }
 
   const decision = authorize({
@@ -68,7 +105,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       assignedTeamId: incident.teamId,
     },
   });
-  if (!decision.allowed) return jsonError('Forbidden. Incident access denied.', 403);
+  if (!decision.allowed) {
+    return jsonError(
+      authorizationDecisionError(decision, {
+        forbiddenCode: 'INCIDENT_ACCESS_DENIED',
+        forbiddenMessage: 'Forbidden. Incident access denied.',
+      })
+    );
+  }
 
   const { watchers: _watchers, ...visibleIncident } = incident;
   const responseIncident = visibleIncident.service
@@ -84,7 +128,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError('Unauthorized. Missing or invalid API key.', 401);
+    return jsonError(
+      new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+    );
   }
 
   const rate = await checkRateLimit(
@@ -93,37 +139,58 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     RATE_LIMIT_WINDOW_MS
   );
   if (!rate.allowed) {
-    const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
-    );
+    return rateLimitError(Math.ceil((rate.resetAt - Date.now()) / 1000));
   }
 
   const actor = await resolveApiKeyActor(apiKey);
   if (!actor) {
-    return jsonError('Unauthorized. API key user not found.', 401);
+    return jsonError(
+      new AppError({
+        code: 'API_KEY_USER_INVALID',
+        userMessage: LEGACY_UNAUTHORIZED_MESSAGE,
+        details: { apiKeyId: apiKey.id, userId: apiKey.userId },
+      })
+    );
   }
-  if (!authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_MANAGE }).allowed) {
-    return jsonError('Forbidden. API key owner cannot manage incidents.', 403);
+
+  const manageDecision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_MANAGE });
+  if (!manageDecision.allowed) {
+    return jsonError(
+      authorizationDecisionError(manageDecision, {
+        forbiddenMessage: 'Forbidden. API key owner cannot manage incidents.',
+      })
+    );
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return jsonError('Invalid JSON in request body.', 400);
+    return jsonError(
+      new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE })
+    );
   }
 
   const parsed = IncidentPatchSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
+    return jsonError(
+      new AppError({ code: 'VALIDATION_FAILED', userMessage: LEGACY_INVALID_INPUT_MESSAGE }),
+      undefined,
+      { issues: parsed.error.issues }
+    );
   }
 
   const hasAssigneeUpdate =
-    typeof body === 'object' && body !== null && Object.prototype.hasOwnProperty.call(body, 'assigneeId');
+    typeof body === 'object' &&
+    body !== null &&
+    Object.prototype.hasOwnProperty.call(body, 'assigneeId');
   if (parsed.data.status === undefined && parsed.data.urgency === undefined && !hasAssigneeUpdate) {
-    return jsonError('No valid fields to update.', 400);
+    return jsonError(
+      new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'No valid fields to update.',
+      })
+    );
   }
 
   const { id } = await params;
