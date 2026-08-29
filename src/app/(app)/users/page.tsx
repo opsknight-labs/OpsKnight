@@ -220,49 +220,66 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   }
 
   return (
-    <div className="w-full px-4 py-6 space-y-6 [zoom:0.8]">
-      {/* Header with Stats */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg p-4 md:p-6 shadow-lg">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2 text-white">
-              <Users className="h-6 w-6 md:h-8 md:w-8" />
-              Users
+    <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-6">
+      {/* Centralized Hero Header with 4-Stat Capsule */}
+      <div className="bg-gradient-to-r from-primary via-primary/95 to-primary/80 text-white rounded-2xl p-6 sm:p-7 shadow-lg relative overflow-hidden">
+        <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/5 pointer-events-none blur-2xl" />
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/15 text-white/90 backdrop-blur-xs border border-white/20">
+                Team & Member Access
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2.5 text-white">
+              <Users className="h-7 w-7 sm:h-8 sm:w-8 shrink-0 text-white/90" />
+              Users & Responders
             </h1>
-            <p className="text-xs md:text-sm opacity-90 mt-1 text-white">
-              Manage team members and permissions
+            <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
+              Manage organization members, assign operational roles, configure paging channels, and
+              oversee on-call responder access.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 w-full lg:w-auto">
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold">{stats.total}</div>
-                <div className="text-[10px] md:text-xs opacity-90">Total</div>
+          {/* 4-Stat Capsule */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5 w-full lg:w-auto shrink-0">
+            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-black tracking-tight">{stats.total}</div>
+                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">Total</div>
               </CardContent>
             </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-green-200">
+
+            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-black tracking-tight text-emerald-200">
                   {stats.active}
                 </div>
-                <div className="text-[10px] md:text-xs opacity-90">Active</div>
+                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
+                  Active
+                </div>
               </CardContent>
             </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-yellow-200">
+
+            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-black tracking-tight text-amber-200">
                   {stats.invited}
                 </div>
-                <div className="text-[10px] md:text-xs opacity-90">Invited</div>
+                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
+                  Invited
+                </div>
               </CardContent>
             </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-gray-200">
+
+            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-black tracking-tight text-slate-200">
                   {stats.disabled}
                 </div>
-                <div className="text-[10px] md:text-xs opacity-90">Disabled</div>
+                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
+                  Disabled
+                </div>
               </CardContent>
             </Card>
           </div>

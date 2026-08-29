@@ -7,8 +7,10 @@ import { randomBytes, createHash } from 'crypto';
 import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf } from '@/lib/rbac';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
-import { revokeUserSessions } from '@/lib/auth';
+import { revokeUserSessions, getAuthOptions } from '@/lib/auth';
 import { isAppRole } from '@/lib/authorization';
+import { getServerSession } from 'next-auth';
+import type { Role } from '@prisma/client';
 
 async function sendInviteEmailIfConfigured(data: {
   email: string;
@@ -765,4 +767,129 @@ export async function bulkUpdateUsers(
   }
 
   return { error: 'Unsupported bulk action.' };
+}
+
+export async function updateUserProfile(
+  userId: string,
+  formData: FormData
+): Promise<{ error?: string; success?: boolean } | undefined> {
+  const session = await getServerSession(await getAuthOptions());
+  if (!session?.user?.email) {
+    return { error: 'Unauthorized. Please log in.' };
+  }
+
+  const currentUser = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true, role: true },
+  });
+
+  if (!currentUser) {
+    return { error: 'User session not found.' };
+  }
+
+  const isSelf = currentUser.id === userId;
+  const isAdmin = currentUser.role === 'ADMIN';
+
+  if (!isAdmin && !isSelf) {
+    return { error: 'Unauthorized. You can only edit your own profile.' };
+  }
+
+  const name = formData.get('name') as string;
+  const email = formData.get('email') as string;
+  const role = formData.get('role') as string | null;
+  const department = formData.get('department') as string | null;
+  const jobTitle = formData.get('jobTitle') as string | null;
+  const timeZone = formData.get('timeZone') as string | null;
+  const phoneNumber = formData.get('phoneNumber') as string | null;
+  const emailNotificationsEnabled = formData.get('emailNotificationsEnabled') === 'true';
+  const smsNotificationsEnabled = formData.get('smsNotificationsEnabled') === 'true';
+  const pushNotificationsEnabled = formData.get('pushNotificationsEnabled') === 'true';
+  const whatsappNotificationsEnabled = formData.get('whatsappNotificationsEnabled') === 'true';
+
+  if (!name || name.trim().length === 0) {
+    return { error: 'Name is required.' };
+  }
+  if (!email || !email.includes('@')) {
+    return { error: 'Valid email is required.' };
+  }
+
+  // Check email uniqueness if email is changed
+  const existingUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, role: true },
+  });
+
+  if (!existingUser) {
+    return { error: 'User not found.' };
+  }
+
+  if (email.toLowerCase() !== existingUser.email.toLowerCase()) {
+    const emailConflict = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+    if (emailConflict) {
+      return { error: 'A user with this email address already exists.' };
+    }
+  }
+
+  // Role validation
+  let targetRole = existingUser.role;
+  if (role && isAppRole(role)) {
+    if (!isAdmin && role !== existingUser.role) {
+      return { error: 'Only administrators can change user roles.' };
+    }
+    if (isAdmin) {
+      if (existingUser.role === 'ADMIN' && role !== 'ADMIN') {
+        try {
+          await assertNotLastAdmin(userId);
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : 'Cannot demote the last admin.' };
+        }
+      }
+      targetRole = role as Role;
+    }
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        role: targetRole,
+        department: department?.trim() || null,
+        jobTitle: jobTitle?.trim() || null,
+        timeZone: timeZone?.trim() || 'UTC',
+        phoneNumber: phoneNumber?.trim() || null,
+        emailNotificationsEnabled,
+        smsNotificationsEnabled,
+        pushNotificationsEnabled,
+        whatsappNotificationsEnabled,
+      },
+    });
+
+    if (targetRole !== existingUser.role) {
+      await revokeUserSessions(userId);
+    }
+
+    await logAudit({
+      action: 'user.updated',
+      entityType: 'USER',
+      entityId: userId,
+      actorId: currentUser.id,
+      details: {
+        name: updated.name,
+        email: updated.email,
+        role: updated.role,
+        department: updated.department,
+        jobTitle: updated.jobTitle,
+      },
+    });
+
+    revalidatePath('/users');
+    revalidatePath(`/users/${userId}`);
+    return { success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update user profile.' };
+  }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/shadcn/badge';
 import UserAvatar from '@/components/UserAvatar';
 import OidcLinkingApprovalButton from './OidcLinkingApprovalButton';
@@ -42,6 +43,7 @@ import {
   Briefcase,
   AlertTriangle,
   Trash2,
+  User,
   UserX,
   UserCheck,
   MoreHorizontal,
@@ -134,9 +136,7 @@ export function UserCard({
       });
 
       if (!res.ok) {
-        const friendly = toUserFacingError(
-          await errorFromResponse(res, 'Failed to generate link')
-        );
+        const friendly = toUserFacingError(await errorFromResponse(res, 'Failed to generate link'));
         setLinkError(friendly.description || friendly.title);
         return;
       }
@@ -230,7 +230,12 @@ export function UserCard({
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-sm truncate">{user.name}</h3>
+            <Link
+              href={`/users/${user.id}`}
+              className="font-semibold text-sm truncate text-foreground hover:text-primary transition-colors"
+            >
+              {user.name}
+            </Link>
             {isCurrentUser && (
               <Badge variant="neutral" size="xs">
                 You
@@ -353,6 +358,16 @@ export function UserCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem asChild>
+                  <Link
+                    href={`/users/${user.id}`}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <User className="h-4 w-4" /> View Full Profile
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
 
                 {(user.status === 'ACTIVE' || user.status === 'INVITED') && (
