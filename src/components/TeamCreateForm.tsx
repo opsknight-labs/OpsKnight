@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useActionState } from 'react';
+import { useState, useRef, useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
@@ -16,27 +16,26 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/shadcn/card';
-import { Plus, Loader2, AlertCircle, ShieldAlert, Users } from 'lucide-react';
+import { Plus, X, Loader2, AlertCircle, ShieldAlert, Users } from 'lucide-react';
 
 type FormState = {
   error?: string | null;
   success?: boolean;
 };
 
-type Props = {
+type TeamCreateFormProps = {
   action: (prevState: FormState, formData: FormData) => Promise<FormState>;
   canCreate?: boolean;
-  isCardWrapper?: boolean;
 };
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending} className="w-full gap-2 font-medium shadow-xs">
+    <Button type="submit" disabled={pending} className="gap-2 font-medium shadow-xs">
       {pending ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
-          Creating team...
+          Creating...
         </>
       ) : (
         <>
@@ -48,7 +47,8 @@ function SubmitButton() {
   );
 }
 
-export default function TeamCreateForm({ action, canCreate = true, isCardWrapper = true }: Props) {
+export default function TeamCreateForm({ action, canCreate = true }: TeamCreateFormProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const [state, formAction] = useActionState(action, { error: null, success: false });
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
@@ -58,6 +58,7 @@ export default function TeamCreateForm({ action, canCreate = true, isCardWrapper
     if (state?.success) {
       showToast('Team created successfully', 'success');
       formRef.current?.reset();
+      setIsOpen(false);
       router.refresh();
     } else if (state?.error) {
       showToast(getUserFacingErrorMessage(state.error), 'error');
@@ -66,85 +67,110 @@ export default function TeamCreateForm({ action, canCreate = true, isCardWrapper
 
   if (!canCreate) {
     return (
-      <Card id="create-team" className="border-border/70 shadow-xs opacity-75">
-        <CardHeader className="border-b bg-muted/20 px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20 dark:text-amber-400">
-              <ShieldAlert className="h-4 w-4" />
-            </div>
-            <div>
-              <CardTitle className="text-sm font-semibold">Create Team</CardTitle>
-              <CardDescription className="text-[11px]">Permission restricted</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 text-xs text-muted-foreground">
-          Admin or Responder role is required to create new teams.
-        </CardContent>
-      </Card>
+      <Alert className="bg-muted/50">
+        <ShieldAlert className="h-4 w-4" />
+        <AlertDescription className="text-xs">
+          You do not have access to create teams. Admin or Responder role is required.
+        </AlertDescription>
+      </Alert>
     );
   }
 
-  const formBody = (
-    <form ref={formRef} action={formAction} className="space-y-3.5">
-      <div className="space-y-1.5">
-        <Label htmlFor="name" className="text-xs font-medium text-foreground">
-          Team Name <span className="text-destructive">*</span>
-        </Label>
-        <Input
-          id="name"
-          name="name"
-          required
-          placeholder="e.g. Core Infrastructure"
-          maxLength={200}
-          className="text-xs"
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="description" className="text-xs font-medium text-foreground">
-          Mission / Description
-        </Label>
-        <Input
-          id="description"
-          name="description"
-          placeholder="What does this team own?"
-          maxLength={1000}
-          className="text-xs"
-        />
-      </div>
-
-      <SubmitButton />
-
-      {state?.error && (
-        <Alert variant="destructive" className="py-2 text-xs">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{getUserFacingErrorMessage(state.error)}</AlertDescription>
-        </Alert>
-      )}
-    </form>
-  );
-
-  if (!isCardWrapper) {
-    return formBody;
+  if (!isOpen) {
+    return (
+      <Button
+        variant="outline"
+        className="w-full h-auto py-8 border-dashed border-2 hover:border-primary hover:bg-primary/5 flex flex-col items-center justify-center gap-2 group transition-all rounded-lg"
+        onClick={() => setIsOpen(true)}
+      >
+        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+          <Plus className="h-6 w-6" />
+        </div>
+        <div className="text-center">
+          <h3 className="font-semibold text-base text-foreground">Create New Team</h3>
+          <p className="text-muted-foreground text-xs mt-0.5">
+            Add a new team to manage ownership, responders, and service coverage
+          </p>
+        </div>
+      </Button>
+    );
   }
 
   return (
-    <Card id="create-team" className="overflow-hidden border-border/70 shadow-xs">
-      <CardHeader className="border-b bg-muted/20 px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
-            <Users className="h-4 w-4" />
-          </div>
-          <div>
-            <CardTitle className="text-sm font-semibold">Create Team</CardTitle>
-            <CardDescription className="text-[11px]">
-              Organize responders and service ownership
+    <Card className="border-primary/20 shadow-lg relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 to-primary" />
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-base">Create New Team</CardTitle>
+            <CardDescription className="text-xs">
+              Configure basic details for your new team. Members and services can be attached after
+              creation.
             </CardDescription>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsOpen(false)}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       </CardHeader>
-      <CardContent className="p-4 pt-3.5">{formBody}</CardContent>
+
+      <form ref={formRef} action={formAction}>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="name" className="text-xs font-medium text-foreground">
+                Team Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="name"
+                name="name"
+                required
+                placeholder="e.g. Core Infrastructure"
+                maxLength={200}
+                className="text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="description" className="text-xs font-medium text-foreground">
+                Mission / Description
+              </Label>
+              <Input
+                id="description"
+                name="description"
+                placeholder="What does this team own and support?"
+                maxLength={1000}
+                className="text-xs"
+              />
+            </div>
+          </div>
+
+          {state?.error && (
+            <Alert variant="destructive" className="py-2 text-xs">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{getUserFacingErrorMessage(state.error)}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOpen(false)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <SubmitButton />
+          </div>
+        </CardContent>
+      </form>
     </Card>
   );
 }

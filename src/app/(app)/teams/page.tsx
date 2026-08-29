@@ -91,6 +91,9 @@ export default async function TeamsPage() {
         </div>
       </div>
 
+      {/* Top Action: Create Team Dashed Expander */}
+      <TeamCreateForm action={createTeam} canCreate={canCreateTeam} />
+
       {/* Main Grid: Directory + Sidebar */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
         {/* Teams Directory List */}
@@ -98,10 +101,8 @@ export default async function TeamsPage() {
           <TeamDirectoryList teams={teams} />
         </div>
 
-        {/* Sidebar: Create Team & Guide */}
+        {/* Sidebar: Guide & Quick Links */}
         <aside className="space-y-4">
-          <TeamCreateForm action={createTeam} canCreate={canCreateTeam} isCardWrapper={true} />
-
           {/* Team Lifecycle & Best Practices Guide */}
           <Card className="overflow-hidden border-border/70 shadow-xs">
             <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
