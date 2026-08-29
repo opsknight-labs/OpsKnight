@@ -1,10 +1,14 @@
+'use client';
+
+import Link from 'next/link';
 import { formatDateTime } from '@/lib/timezone';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { ArrowRight, Clock, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { ArrowRight, Clock, ShieldCheck, TriangleAlert, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ReactNode } from 'react';
 
 type CoverageBlock = {
   id: string;
@@ -23,170 +27,152 @@ type CurrentCoverageDisplayProps = {
   currentCoverage: CoverageBlock[];
   nextCoverageChange: { at: Date | string; coverage: CoverageBlock[] } | null;
   scheduleTimeZone: string;
-  embedded?: boolean;
+  coverageGap?: boolean;
+  activeOverridesCount?: number;
+  healthContent?: ReactNode;
 };
 
 export default function CurrentCoverageDisplay({
   currentCoverage,
   nextCoverageChange,
   scheduleTimeZone,
-  embedded = false,
+  coverageGap = false,
+  activeOverridesCount = 0,
+  healthContent,
 }: CurrentCoverageDisplayProps) {
   const hasCoverage = currentCoverage.length > 0;
 
   return (
-    <Card
-      className={cn(
-        'overflow-hidden shadow-sm transition-shadow hover:shadow-md',
-        embedded && 'rounded-none border-0 shadow-none hover:shadow-none',
-        hasCoverage ? 'border-emerald-500/25' : 'border-amber-500/30'
-      )}
-    >
-      <CardHeader
-        className={cn(
-          'border-b px-4 py-3.5 md:px-5',
-          hasCoverage
-            ? 'border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent'
-            : 'border-amber-500/20 bg-gradient-to-br from-amber-500/12 via-amber-500/5 to-transparent'
-        )}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-inset',
-                hasCoverage
-                  ? 'bg-emerald-500/15 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400'
-                  : 'bg-amber-500/15 text-amber-600 ring-amber-500/20 dark:text-amber-400'
-              )}
-            >
-              {hasCoverage ? (
-                <ShieldCheck className="h-5 w-5" />
-              ) : (
-                <TriangleAlert className="h-5 w-5" />
-              )}
+    <Card className="flex flex-col justify-between overflow-hidden border-border/70 shadow-sm">
+      <div>
+        {/* Compact Header */}
+        <CardHeader className="border-b bg-muted/20 px-4 py-2.5 sm:px-5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded-md ring-1 ring-inset',
+                  hasCoverage && !coverageGap
+                    ? 'bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400'
+                    : 'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400'
+                )}
+              >
+                {hasCoverage && !coverageGap ? (
+                  <ShieldCheck className="h-4 w-4" />
+                ) : (
+                  <TriangleAlert className="h-4 w-4" />
+                )}
+              </div>
+              <CardTitle className="text-sm font-semibold">On-call now</CardTitle>
             </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                On call now
-              </p>
-              <CardTitle className="mt-0.5 text-xl tracking-tight">
-                {hasCoverage
-                  ? currentCoverage.length === 1
-                    ? currentCoverage[0].userName
-                    : `${currentCoverage.length} responders`
-                  : 'Coverage gap'}
-              </CardTitle>
+            <div className="flex items-center gap-1.5">
+              <Badge
+                variant={hasCoverage && !coverageGap ? 'success' : 'warning'}
+                size="xs"
+                className="gap-1 px-2 py-0.5 text-[10px]"
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    hasCoverage && !coverageGap ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                  )}
+                />
+                {hasCoverage && !coverageGap ? 'Covered' : 'Needs attention'}
+              </Badge>
+              <Badge
+                variant="outline"
+                size="xs"
+                className="px-1.5 py-0.5 text-[10px] text-muted-foreground"
+              >
+                {scheduleTimeZone}
+              </Badge>
             </div>
           </div>
-          <Badge variant={hasCoverage ? 'success' : 'warning'} className="shrink-0 px-2.5 py-1">
-            {hasCoverage ? 'Covered' : 'Needs attention'}
-          </Badge>
-        </div>
-      </CardHeader>
+        </CardHeader>
 
-      <CardContent className="p-0">
-        {hasCoverage ? (
-          currentCoverage.length === 1 ? (
-            <div className="flex items-center gap-3 px-5 py-3.5 md:px-6">
-              <DirectUserAvatar
-                avatarUrl={
-                  currentCoverage[0].userAvatar ||
-                  getDefaultAvatar(
-                    currentCoverage[0].userGender,
-                    currentCoverage[0].userId || currentCoverage[0].userName
-                  )
-                }
-                name={currentCoverage[0].userName}
-                size="md"
-                className="h-9 w-9"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Badge variant="info" size="xs">
-                    {currentCoverage[0].layerName}
-                  </Badge>
-                  {currentCoverage[0].source === 'override' && (
-                    <Badge variant="warning" size="xs">
-                      {currentCoverage[0].isAdditiveOverride ? 'Extra coverage' : 'Override'}
+        {/* Compact Content */}
+        <CardContent className="p-3.5 sm:p-4 space-y-2.5">
+          {hasCoverage ? (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <DirectUserAvatar
+                  avatarUrl={
+                    currentCoverage[0].userAvatar ||
+                    getDefaultAvatar(
+                      currentCoverage[0].userGender,
+                      currentCoverage[0].userId || currentCoverage[0].userName
+                    )
+                  }
+                  name={currentCoverage[0].userName}
+                  size="sm"
+                  className="h-9 w-9 shrink-0 ring-1.5 ring-primary/20"
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="truncate text-sm font-bold text-foreground">
+                      {currentCoverage[0].userName}
+                    </span>
+                    <Badge variant="secondary" size="xs" className="text-[10px] px-1.5 py-0">
+                      {currentCoverage[0].layerName}
                     </Badge>
-                  )}
+                    {currentCoverage[0].source === 'override' && (
+                      <Badge variant="warning" size="xs" className="text-[10px] px-1.5 py-0">
+                        {currentCoverage[0].isAdditiveOverride ? 'Extra coverage' : 'Override'}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <Clock className="h-3 w-3 text-muted-foreground/70" />
+                    <span>
+                      Until{' '}
+                      <span className="font-medium text-foreground">
+                        {formatDateTime(new Date(currentCoverage[0].end), scheduleTimeZone, {
+                          format: 'short',
+                        })}
+                      </span>
+                    </span>
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  On call until{' '}
-                  {formatDateTime(new Date(currentCoverage[0].end), scheduleTimeZone, {
-                    format: 'short',
-                  })}
-                </p>
               </div>
             </div>
           ) : (
-            <div className="divide-y">
-              {currentCoverage.map(block => (
-                <div key={block.id} className="flex items-center gap-3 px-5 py-3 md:px-6">
-                  <DirectUserAvatar
-                    avatarUrl={
-                      block.userAvatar ||
-                      getDefaultAvatar(block.userGender, block.userId || block.userName)
-                    }
-                    name={block.userName}
-                    size="md"
-                    className="h-9 w-9"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{block.userName}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <Badge variant="info" size="xs">
-                        {block.layerName}
-                      </Badge>
-                      {block.source === 'override' && (
-                        <Badge variant="warning" size="xs">
-                          {block.isAdditiveOverride ? 'Extra coverage' : 'Override'}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    Until{' '}
-                    {formatDateTime(new Date(block.end), scheduleTimeZone, { format: 'short' })}
+            <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-center">
+              <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                No responder scheduled
+              </p>
+            </div>
+          )}
+
+          {/* Next Handoff Bar */}
+          <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-1.5 text-xs">
+            <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
+              <Clock className="h-3 w-3 shrink-0 text-muted-foreground" />
+              {nextCoverageChange ? (
+                <div className="flex items-center gap-1 truncate">
+                  <span className="text-muted-foreground font-medium">Next:</span>
+                  <span className="text-foreground font-semibold truncate">
+                    {nextCoverageChange.coverage.map(b => b.userName).join(', ') || 'Gap'}
                   </span>
                 </div>
-              ))}
+              ) : (
+                <span className="text-muted-foreground">No upcoming handoff</span>
+              )}
             </div>
-          )
-        ) : (
-          <div className="px-5 py-7">
-            <p className="text-sm font-medium">No responder is currently scheduled.</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Review rotation restrictions, layer dates, or add temporary coverage.
-            </p>
-          </div>
-        )}
-
-        <div className="border-t bg-muted/35 px-5 py-3 md:px-6">
-          <div className="flex items-start gap-2 text-sm">
-            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            {nextCoverageChange ? (
-              <div>
-                <p className="font-medium">
-                  Next handoff ·{' '}
-                  {formatDateTime(new Date(nextCoverageChange.at), scheduleTimeZone, {
-                    format: 'short',
-                  })}
-                </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                  {currentCoverage.map(block => block.userName).join(', ') || 'No coverage'}
-                  <ArrowRight className="h-3 w-3" />
-                  {nextCoverageChange.coverage.map(block => block.userName).join(', ') ||
-                    'No coverage'}
-                </p>
-              </div>
-            ) : (
-              <p className="text-muted-foreground">No upcoming handoff in this view.</p>
+            {nextCoverageChange && (
+              <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums font-medium">
+                {formatDateTime(new Date(nextCoverageChange.at), scheduleTimeZone, {
+                  format: 'short',
+                })}
+              </span>
             )}
           </div>
-        </div>
-      </CardContent>
+        </CardContent>
+      </div>
+
+      {/* Bottom Health/Alerts Sub-strip */}
+      {healthContent && (
+        <div className="border-t bg-muted/10 px-3.5 py-2 sm:px-4 text-xs">{healthContent}</div>
+      )}
     </Card>
   );
 }
