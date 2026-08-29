@@ -2,7 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { assertAdminOrResponder, getCurrentUser } from '@/lib/rbac';
+import { assertAdminOrResponder, assertCanCreateScheduleOverride } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { createInAppNotifications, getScheduleUserIds } from '@/lib/in-app-notifications';
 import { parseDateTimeInTimeZone, isValidTimeZone } from '@/lib/timezone';
@@ -28,44 +28,6 @@ async function getScheduleName(scheduleId: string) {
     select: { name: true },
   });
   return schedule?.name || 'On-call schedule';
-}
-
-async function assertCanCreateScheduleOverride(scheduleId: string) {
-  const user = await getCurrentUser();
-  if (user.role === 'ADMIN') return user;
-
-  const accessible = await prisma.onCallSchedule.findFirst({
-    where: {
-      id: scheduleId,
-      OR: [
-        { layers: { some: { users: { some: { userId: user.id } } } } },
-        {
-          escalationRules: {
-            some: {
-              policy: {
-                services: {
-                  some: {
-                    team: { members: { some: { userId: user.id, role: 'OWNER' } } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      ],
-    },
-    select: { id: true },
-  });
-
-  if (!accessible) {
-    throw new AppError({
-      code: 'SCHEDULE_OVERRIDE_ACCESS_DENIED',
-      userMessage:
-        'Unauthorized. Only an administrator, owning team lead, or assigned schedule member can create overrides.',
-      details: { scheduleId, userId: user.id },
-    });
-  }
-  return user;
 }
 
 async function notifyScheduleMembers(
