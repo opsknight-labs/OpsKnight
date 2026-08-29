@@ -28,35 +28,35 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
 
   return (
     <Link href={`/schedules/${schedule.id}`} className="block group">
-      <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 border-slate-200/80 hover:border-primary/30">
+      <Card className="border-border/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15 transition-colors">
                 <Calendar className="h-4 w-4" />
               </div>
-              <CardTitle className="text-base font-semibold text-slate-900 group-hover:text-primary transition-colors">
+              <CardTitle className="text-base font-semibold transition-colors group-hover:text-primary">
                 {schedule.name}
               </CardTitle>
             </div>
             <Badge variant="outline" size="xs" className="gap-1.5 shrink-0">
-              <Clock className="h-3 w-3 text-slate-400" />
+              <Clock className="h-3 w-3 text-muted-foreground" />
               {schedule.timeZone}
             </Badge>
           </div>
         </CardHeader>
 
         <CardContent>
-          <div className="flex items-center justify-between text-sm text-slate-500">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
-                <Layers className="h-4 w-4 text-slate-400" />
+                <Layers className="h-4 w-4" />
                 <span>
                   {schedule.layers.length} {schedule.layers.length === 1 ? 'layer' : 'layers'}
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <Users className="h-4 w-4 text-slate-400" />
+                <Users className="h-4 w-4" />
                 <span>
                   {uniqueUsers.size} {uniqueUsers.size === 1 ? 'responder' : 'responders'}
                 </span>
@@ -67,7 +67,7 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
 
           {/* Status indicator for incomplete schedules */}
           {(!hasLayers || !hasResponders) && (
-            <div className="mt-3 pt-3 border-t border-slate-100">
+            <div className="mt-3 border-t pt-3">
               <Badge variant="warning" size="xs">
                 Needs configuration
               </Badge>

@@ -11,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/shadcn/card';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 
@@ -40,7 +39,7 @@ export default async function SchedulesPage() {
   const canManageSchedules = permissions.isAdminOrResponder;
 
   return (
-    <main className="w-full p-4 md:p-6 space-y-6 [zoom:0.8]">
+    <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
       {/* Header with Glassmorphic Stats */}
       <div className="bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg p-4 md:p-6 shadow-lg">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
@@ -119,16 +118,22 @@ export default async function SchedulesPage() {
         <aside className="space-y-4">
           <ScheduleCreateForm action={createSchedule} canCreate={canManageSchedules} />
 
-          <Card className="bg-amber-50 border-amber-200">
+          <Card
+            className={
+              hasConfiguredResponders ? 'bg-muted/30' : 'border-amber-500/30 bg-amber-500/5'
+            }
+          >
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2 text-amber-900">
+              <CardTitle className="text-base flex items-center gap-2">
                 <AlertCircle className="h-4 w-4" />
-                Next Steps
+                {hasConfiguredResponders ? 'Schedule workflow' : 'Next step'}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-amber-800 leading-relaxed">
-                Set a rotation and assign your responders to start tracking coverage
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {hasConfiguredResponders
+                  ? 'Open a schedule to check effective coverage, manage rotations, or add a temporary override.'
+                  : 'Create a rotation and assign responders to begin tracking effective coverage.'}
               </p>
             </CardContent>
           </Card>
