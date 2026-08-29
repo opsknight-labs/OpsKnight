@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/shadcn/card';
 import UserAvatar from '@/components/UserAvatar';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { Collapsible, CollapsibleContent } from '@/components/ui/shadcn/collapsible';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +38,7 @@ import {
   X,
   CheckCircle2,
   AlertTriangle,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { notify } from '@/lib/toast';
@@ -218,6 +220,7 @@ export default function LayerCard({
   const [isPending, startTransition] = useTransition();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(colorIndex === 0);
 
   const color = LAYER_COLORS[colorIndex % LAYER_COLORS.length];
   const hasResponders = layer.users.length > 0;
@@ -396,108 +399,133 @@ export default function LayerCard({
             onOpenChange={setIsEditOpen}
           />
 
-          <div className="border-t">
+          <Collapsible open={isExpanded} onOpenChange={setIsExpanded} className="border-t">
             <div className="flex items-center justify-between gap-3 bg-muted/15 px-4 py-3">
-              <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => setIsExpanded(value => !value)}
+                aria-expanded={isExpanded}
+                aria-controls={`layer-responders-${layer.id}`}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 <Users className="h-3.5 w-3.5 shrink-0" />
-                <span className="font-medium">Responders</span>
+                <span className="font-medium text-foreground">Responders</span>
                 <Badge variant="secondary" className="h-4 px-1.5 text-[9px]">
                   {layer.users.length}
                 </Badge>
-              </div>
-              {canManageSchedules && (
-                <ResponderCombobox
-                  users={availableUsers}
-                  onSelect={handleAddUser}
-                  disabled={isPending}
+                {!isExpanded && layer.users.length > 0 && (
+                  <span className="truncate text-[11px]">
+                    {layer.users
+                      .slice(0, 2)
+                      .map(item => item.user.name)
+                      .join(', ')}
+                    {layer.users.length > 2 ? ` +${layer.users.length - 2}` : ''}
+                  </span>
+                )}
+                <ChevronDown
+                  className={cn(
+                    'ml-auto h-4 w-4 shrink-0 transition-transform',
+                    isExpanded && 'rotate-180'
+                  )}
                 />
-              )}
-            </div>
-
-            {layer.users.length === 0 ? (
-              <div className="px-4 py-5 text-center">
-                <Users className="mx-auto mb-1.5 h-5 w-5 text-muted-foreground/40" />
-                <p className="text-xs font-medium text-muted-foreground">
-                  No responders in this rotation
-                </p>
+              </button>
+              <div className="ml-2 shrink-0">
                 {canManageSchedules && (
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    Add an active responder to start coverage.
-                  </p>
+                  <ResponderCombobox
+                    users={availableUsers}
+                    onSelect={handleAddUser}
+                    disabled={isPending}
+                  />
                 )}
               </div>
-            ) : (
-              <div className="px-3 pb-3 pt-2 space-y-2">
-                {layer.users.map((layerUser, index) => (
-                  <div
-                    key={layerUser.userId}
-                    className={cn(
-                      'group flex items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-muted/40',
-                      isPending && 'opacity-50'
-                    )}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={cn(
-                          'w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0',
-                          index === 0
-                            ? `${color.light} ${color.text}`
-                            : 'bg-muted text-muted-foreground'
-                        )}
-                      >
-                        {index + 1}
-                      </span>
-                      <UserAvatar
-                        userId={layerUser.userId}
-                        name={layerUser.user.name}
-                        gender={layerUser.user.gender}
-                        avatarUrl={layerUser.user.avatarUrl}
-                        size="xs"
-                        className="h-6 w-6 shrink-0"
-                      />
-                      <span className="truncate text-sm font-medium text-foreground">
-                        {layerUser.user.name}
-                      </span>
-                    </div>
-                    {canManageSchedules && (
-                      <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleMoveUser(layerUser.userId, 'up')}
-                          disabled={index === 0 || isPending}
-                          className="h-7 w-7"
-                          aria-label={`Move ${layerUser.user.name} up`}
+            </div>
+
+            <CollapsibleContent id={`layer-responders-${layer.id}`}>
+              {layer.users.length === 0 ? (
+                <div className="px-4 py-5 text-center">
+                  <Users className="mx-auto mb-1.5 h-5 w-5 text-muted-foreground/40" />
+                  <p className="text-xs font-medium text-muted-foreground">
+                    No responders in this rotation
+                  </p>
+                  {canManageSchedules && (
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                      Add an active responder to start coverage.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2 px-3 pb-3 pt-2">
+                  {layer.users.map((layerUser, index) => (
+                    <div
+                      key={layerUser.userId}
+                      className={cn(
+                        'group flex items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-muted/40',
+                        isPending && 'opacity-50'
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className={cn(
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-bold',
+                            index === 0
+                              ? `${color.light} ${color.text}`
+                              : 'bg-muted text-muted-foreground'
+                          )}
                         >
-                          <ArrowUp className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleMoveUser(layerUser.userId, 'down')}
-                          disabled={index === layer.users.length - 1 || isPending}
-                          className="h-7 w-7"
-                          aria-label={`Move ${layerUser.user.name} down`}
-                        >
-                          <ArrowDown className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveUser(layerUser.userId)}
-                          disabled={isPending}
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          aria-label={`Remove ${layerUser.user.name} from ${layer.name}`}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
+                          {index + 1}
+                        </span>
+                        <UserAvatar
+                          userId={layerUser.userId}
+                          name={layerUser.user.name}
+                          gender={layerUser.user.gender}
+                          avatarUrl={layerUser.user.avatarUrl}
+                          size="xs"
+                          className="h-6 w-6 shrink-0"
+                        />
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {layerUser.user.name}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                      {canManageSchedules && (
+                        <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity group-focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleMoveUser(layerUser.userId, 'up')}
+                            disabled={index === 0 || isPending}
+                            className="h-7 w-7"
+                            aria-label={`Move ${layerUser.user.name} up`}
+                          >
+                            <ArrowUp className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleMoveUser(layerUser.userId, 'down')}
+                            disabled={index === layer.users.length - 1 || isPending}
+                            className="h-7 w-7"
+                            aria-label={`Move ${layerUser.user.name} down`}
+                          >
+                            <ArrowDown className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveUser(layerUser.userId)}
+                            disabled={isPending}
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            aria-label={`Remove ${layerUser.user.name} from ${layer.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         </CardContent>
       </Card>
 
