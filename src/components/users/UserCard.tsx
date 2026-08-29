@@ -286,19 +286,7 @@ export function UserCard({
           )}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="h-7 px-2.5 text-xs font-semibold text-primary hover:bg-primary/10 hover:border-primary/40 gap-1 shrink-0"
-          >
-            <Link href={`/users/${user.id}`}>
-              <User className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Profile</span>
-            </Link>
-          </Button>
-
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             {!isCurrentUser && isAdmin && onUpdateRole ? (
               <Select value={user.role} onValueChange={value => onUpdateRole(value)}>
