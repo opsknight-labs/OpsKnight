@@ -14,10 +14,15 @@ import { Calendar, Download, Link, Check, ExternalLink } from 'lucide-react';
 
 type ScheduleExportMenuProps = {
   scheduleId: string;
-  scheduleName: string;
+  scheduleName?: string;
+  className?: string;
 };
 
-export default function ScheduleExportMenu({ scheduleId, scheduleName }: ScheduleExportMenuProps) {
+export default function ScheduleExportMenu({
+  scheduleId,
+  scheduleName,
+  className,
+}: ScheduleExportMenuProps) {
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
 
@@ -54,10 +59,13 @@ export default function ScheduleExportMenu({ scheduleId, scheduleName }: Schedul
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-1.5 border-border/80 bg-background/80 text-xs font-medium backdrop-blur-sm hover:bg-muted"
+          className={
+            className ||
+            'h-8.5 gap-1.5 border-border/80 bg-background/80 text-xs font-medium backdrop-blur-sm hover:bg-muted/80 shadow-2xs'
+          }
         >
           <Calendar className="h-3.5 w-3.5 text-primary" />
-          <span>Sync Calendar</span>
+          <span>Export / Sync</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56 text-xs">

@@ -437,6 +437,7 @@ export default async function ScheduleDetailPage({
           />
         }
         calendar={<ScheduleCalendar shifts={calendarShifts} timeZone={schedule.timeZone} />}
+        exportMenu={<ScheduleExportMenu scheduleId={schedule.id} scheduleName={schedule.name} />}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -693,18 +694,15 @@ export default async function ScheduleDetailPage({
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <header className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            href="/schedules"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Schedules</span>
-            <span className="opacity-40">/</span>
-            <span className="font-medium text-foreground">{schedule.name}</span>
-          </Link>
-          <ScheduleExportMenu scheduleId={schedule.id} scheduleName={schedule.name} />
-        </div>
+        <Link
+          href="/schedules"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Schedules</span>
+          <span className="opacity-40">/</span>
+          <span className="font-medium text-foreground">{schedule.name}</span>
+        </Link>
         <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
           <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
           <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
