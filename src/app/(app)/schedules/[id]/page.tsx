@@ -58,27 +58,8 @@ import {
 
 export const revalidate = 0;
 
-export default async function ScheduleDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<{ history?: string; tab?: string }>;
-}) {
-  const { id } = await params;
-  const query = await searchParams;
-  const now = new Date();
-  const historyPageSize = 8;
-  const historyPage = Math.max(1, Number(query?.history ?? 1) || 1);
-
-  let capabilities: ScheduleUICapabilities;
-  let currentUser: Awaited<ReturnType<typeof assertCanViewSchedule>>['user'];
-  try {
-    ({ user: currentUser, capabilities } = await assertCanViewSchedule(id));
-  } catch {
-    notFound();
-  }
-  const schedule = await prisma.onCallSchedule.findUnique({
+async function getScheduleDetails(id: string) {
+  return prisma.onCallSchedule.findUnique({
     where: { id },
     select: {
       id: true,
@@ -108,7 +89,31 @@ export default async function ScheduleDetailPage({
       },
     },
   });
-  if (!schedule) notFound();
+}
+
+export default async function ScheduleDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ history?: string; tab?: string }>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const now = new Date();
+  const historyPageSize = 8;
+  const historyPage = Math.max(1, Number(query?.history ?? 1) || 1);
+
+  const [authResult, schedule] = await Promise.all([
+    assertCanViewSchedule(id).catch(() => null),
+    getScheduleDetails(id),
+  ]);
+
+  if (!authResult || !schedule) {
+    notFound();
+  }
+
+  const { user: currentUser, capabilities } = authResult;
 
   const todayKey = formatDateKeyInTimeZone(now, schedule.timeZone);
   const coverageRangeStart = startOfDayFromDateKey(
