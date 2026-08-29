@@ -134,6 +134,21 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
 
   const localTimeStr = formatLocalTimeInTz(user.timeZone);
 
+  // Transform auditLogs.details to match UserDetailProfile type
+  // JsonValue can be any JSON type, but UserDetailProfile expects Record<string, unknown> | string | null
+  const transformedUser = {
+    ...user,
+    auditLogs: user.auditLogs.map(log => ({
+      ...log,
+      details:
+        log.details === null
+          ? null
+          : typeof log.details === 'object'
+            ? (log.details as Record<string, unknown>)
+            : JSON.stringify(log.details),
+    })),
+  };
+
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <header className="space-y-4">
@@ -301,7 +316,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
       </header>
 
       {/* 4-Tab Full-Width Profile Workspace matching standard tab styling */}
-      <UserDetailTabs user={user} canManage={canManage} defaultTab={defaultTab} />
+      <UserDetailTabs user={transformedUser} canManage={canManage} defaultTab={defaultTab} />
     </main>
   );
 }
