@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { buildIncidentListHref } from '@/lib/incident-links';
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import SidebarWidget, { WIDGET_ICON_BG } from '@/components/dashboard/SidebarWidget';
 import { useWidgetData } from '@/components/dashboard/WidgetProvider';
@@ -156,7 +157,7 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
   );
 
   const handleViewAll = useCallback(() => {
-    router.push('/incidents?status=OPEN');
+    router.push(buildIncidentListHref({ filter: 'all_open' }));
   }, [router]);
 
   return (

@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { getEmailValidationError } from '@/lib/form-validation';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
+import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import {
@@ -43,6 +43,7 @@ type Props = {
 const ROLE_DESCRIPTIONS = {
   ADMIN: 'Full access to all settings and users',
   RESPONDER: 'Can manage incidents and view reports',
+  AUDITOR: 'Organization-wide read-only access and audit evidence',
   USER: 'Standard access to view status and dashboards',
 };
 
@@ -222,6 +223,19 @@ export default function UserCreateForm({ action, className = '', disabled = fals
                     </div>
                   </div>
                 </SelectItem>
+                <SelectItem value="AUDITOR" className="py-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="p-1 bg-amber-100 rounded-md text-amber-700">
+                      <Shield className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm">Auditor</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Organization-wide read access
+                      </span>
+                    </div>
+                  </div>
+                </SelectItem>
                 <SelectItem value="USER" className="py-2.5">
                   <div className="flex items-center gap-3">
                     <div className="p-1 bg-gray-100 rounded-md text-gray-600">
@@ -251,7 +265,7 @@ export default function UserCreateForm({ action, className = '', disabled = fals
         {state?.error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-100 flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            <p>{getUserFriendlyError(state.error)}</p>
+            <p>{getUserFacingErrorMessage(state.error)}</p>
           </div>
         )}
 

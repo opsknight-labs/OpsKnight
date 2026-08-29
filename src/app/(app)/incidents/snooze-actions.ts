@@ -1,11 +1,11 @@
 'use server';
 
-import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import { processAutoUnsnoozeInternal } from '@/lib/unsnooze';
+import { executeIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 
 export async function snoozeIncidentWithDuration(
   incidentId: string,
@@ -18,53 +18,27 @@ export async function snoozeIncidentWithDuration(
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
 
-  const incident = await prisma.incident.findUnique({
-    where: { id: incidentId },
-    select: { status: true },
-  });
-
-  if (!incident) {
-    throw new Error('Incident not found');
-  }
-
-  if (incident.status === 'RESOLVED') {
-    throw new Error('Cannot snooze an already resolved incident');
+  if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+    throw new Error('Snooze duration must be a positive number of minutes.');
   }
 
   const snoozedUntil = new Date(Date.now() + durationMinutes * 60 * 1000);
   const user = await getCurrentUser();
   const userTimeZone = getUserTimeZone(user ?? undefined);
+  const normalizedReason = reason?.trim() || null;
 
   try {
-    await prisma.incident.update({
-      where: { id: incidentId },
-      data: {
-        status: 'SNOOZED',
-        snoozedUntil,
-        snoozeReason: reason || null,
-        escalationStatus: 'PAUSED',
-        nextEscalationAt: null,
-        events: {
-          create: {
-            type: 'STATUS_CHANGE',
-            message: `Incident snoozed until ${formatDateTime(snoozedUntil, userTimeZone, { format: 'datetime' })}${reason ? ` (Reason: ${reason})` : ''}${user ? ` by ${user.name}` : ''}`,
-          },
-        },
-      },
+    // The lifecycle transaction persists both the transition side effects and
+    // the finite AUTO_UNSNOOZE timer. There is no post-commit scheduling gap.
+    await executeIncidentLifecycleCommand({
+      incidentId,
+      command: 'SNOOZE',
+      source: 'WEB',
+      actor: { id: user.id, name: user.name ?? undefined },
+      snoozedUntil,
+      snoozeReason: normalizedReason,
+      eventMessage: `Incident snoozed until ${formatDateTime(snoozedUntil, userTimeZone, { format: 'datetime' })}${normalizedReason ? ` (Reason: ${normalizedReason})` : ''}${user ? ` by ${user.name}` : ''}`,
     });
-
-    // Schedule auto-unsnooze job using PostgreSQL job queue
-    try {
-      const { scheduleAutoUnsnooze } = await import('@/lib/jobs/queue');
-      await scheduleAutoUnsnooze(incidentId, snoozedUntil);
-    } catch (error) {
-      logger.error('Failed to schedule auto-unsnooze job', {
-        component: 'snooze-actions',
-        error,
-        incidentId,
-      });
-      // Continue anyway - internal worker will pick it up via snoozedUntil field
-    }
 
     revalidatePath(`/incidents/${incidentId}`);
     revalidatePath('/incidents');
@@ -76,7 +50,7 @@ export async function snoozeIncidentWithDuration(
       incidentId,
       userId: user?.id,
     });
-    throw new Error('Failed to snooze incident. Please try again.');
+    throw error;
   }
 }
 

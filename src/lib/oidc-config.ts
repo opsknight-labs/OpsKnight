@@ -42,7 +42,11 @@ export type OidcConfig = {
   clientSecret: string;
   autoProvision: boolean;
   allowedDomains: string[];
-  roleMapping?: Array<{ claim: string; value: string; role: 'ADMIN' | 'RESPONDER' | 'USER' }>;
+  roleMapping?: Array<{
+    claim: string;
+    value: string;
+    role: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+  }>;
   customScopes?: string | null;
   providerType?: string | null;
   providerLabel?: string | null;
@@ -90,7 +94,7 @@ function normalizeDomains(domains: string[]) {
 const RoleMappingRuleSchema = z.object({
   claim: z.string().min(1),
   value: z.string(),
-  role: z.enum(['ADMIN', 'RESPONDER', 'USER']),
+  role: z.enum(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER']),
 });
 
 const RoleMappingSchema = z.array(RoleMappingRuleSchema);

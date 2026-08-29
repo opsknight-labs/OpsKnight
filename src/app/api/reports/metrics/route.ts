@@ -1,10 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { calculateSLAMetrics } from '@/lib/sla-server';
 import { serializeSlaMetrics } from '@/lib/sla';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { assertCanReadServiceMetrics } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError } from '@/lib/errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +29,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
     }
 
     const { searchParams } = new URL(request.url);
@@ -38,6 +41,7 @@ export async function GET(request: NextRequest) {
     const assigneeId = searchParams.get('assigneeId') || undefined;
     const urgency = searchParams.get('urgency') as 'HIGH' | 'MEDIUM' | 'LOW' | undefined;
     const status = searchParams.get('status') as
+      | 'ACTIVE'
       | 'OPEN'
       | 'ACKNOWLEDGED'
       | 'SNOOZED'
@@ -64,16 +68,21 @@ export async function GET(request: NextRequest) {
     try {
       user = await assertCanReadServiceMetrics({ serviceId, teamId });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unauthorized';
-      return NextResponse.json({ error: message }, { status: 403 });
+      return jsonError(
+        new AppError({
+          code: 'AUTHORIZATION_DENIED',
+          details: { cause: err instanceof Error ? err.name : 'unknown' },
+          cause: err,
+        })
+      );
     }
 
-    // `?include=description` is opt-in PII. Only honored for ADMIN /
-    // RESPONDER — regular USERs get description=null even when they
+    // `?include=description` is opt-in PII. It requires the centralized
+    // sensitive-incident capability; regular USERs get description=null even when they
     // pass the flag, since their team scope might still expose them to
     // descriptions they shouldn't read.
     const effectiveIncludeDescription =
-      includeDescription && (user.role === 'ADMIN' || user.role === 'RESPONDER');
+      includeDescription && hasCapability(user.role, CAPABILITIES.INCIDENT_SENSITIVE_READ);
 
     // Calculate metrics using the centralized SLA server
     const metrics = await calculateSLAMetrics({
@@ -89,23 +98,33 @@ export async function GET(request: NextRequest) {
     // Serialize dates for JSON response
     const serialized = serializeSlaMetrics(metrics);
 
-    return NextResponse.json({
-      success: true,
-      data: serialized,
-      filters: {
-        windowDays,
-        teamId,
-        serviceId,
-        assigneeId,
-        urgency,
-        status,
+    const meta = {
+      dataState: 'available',
+      calculatedAt: new Date().toISOString(),
+      source: (metrics as { dataSource?: string }).dataSource || 'live',
+      scope: {
+        backlog: 'current',
+        analysis: 'selected_period',
       },
-    });
+    };
+    const filters = {
+      windowDays,
+      teamId,
+      serviceId,
+      assigneeId,
+      urgency,
+      status,
+    };
+
+    // Keep the legacy `data: metrics`, `meta`, and `filters` shape while the
+    // shared helper adds canonical request metadata. Passing an already-wrapped
+    // payload to jsonOk would otherwise turn this into `data.data`.
+    return jsonOk(serialized, 200, undefined, { meta, filters });
   } catch (error) {
     logger.error('api.reports.metrics.error', {
       error: error instanceof Error ? error.message : String(error),
     });
     // Don't expose internal error details to clients
-    return NextResponse.json({ error: 'Failed to fetch metrics' }, { status: 500 });
+    return jsonError(new AppError({ code: 'INTERNAL_ERROR', cause: error }));
   }
 }

@@ -14,6 +14,7 @@ import { isChannelAvailable } from './notification-providers';
 import { createInAppNotifications } from './in-app-notifications';
 import { logger } from './logger';
 import { filterChannelsForQuietHours } from './quiet-hours';
+import type { NotificationEventType } from './notification-delivery';
 
 /**
  * Get user's enabled notification channels based on their preferences
@@ -95,6 +96,7 @@ export async function sendUserNotification(
   options: {
     excludedChannels?: NotificationChannel[];
     createInApp?: boolean;
+    eventType?: NotificationEventType;
   } = {}
 ): Promise<{
   success: boolean;
@@ -176,7 +178,14 @@ export async function sendUserNotification(
       break;
     }
 
-    const result = await sendNotification(incidentId, userId, channel, message);
+    const result = await sendNotification(
+      incidentId,
+      userId,
+      channel,
+      message,
+      undefined,
+      options.eventType ?? 'triggered'
+    );
     if (result.success) {
       channelsUsed.push(channel);
       logger.info(`[UserNotification] Successfully delivered via ${channel}`, {
@@ -197,7 +206,14 @@ export async function sendUserNotification(
       ch => !channels.includes(ch) && !quietHoursBlockedChannels.has(ch)
     );
     for (const fbChannel of fallbackChannels) {
-      const fbResult = await sendNotification(incidentId, userId, fbChannel, message);
+      const fbResult = await sendNotification(
+        incidentId,
+        userId,
+        fbChannel,
+        message,
+        undefined,
+        options.eventType ?? 'triggered'
+      );
       if (fbResult.success) {
         channelsUsed.push(fbChannel);
         logger.warn(`[UserNotification] Fallback delivery succeeded via ${fbChannel}`, {
@@ -213,11 +229,7 @@ export async function sendUserNotification(
 
   // A deliberate quiet-hours suppression is a successful policy decision, not a
   // notification-provider failure. In-app was already created above.
-  if (
-    channelsUsed.length === 0 &&
-    errors.length === 0 &&
-    quietHoursBlockedChannels.size > 0
-  ) {
+  if (channelsUsed.length === 0 && errors.length === 0 && quietHoursBlockedChannels.size > 0) {
     logger.info('[UserNotification] External delivery suppressed by quiet hours', {
       incidentId,
       userId,
@@ -264,6 +276,7 @@ export async function sendIncidentNotifications(
             },
           },
           assignee: true,
+          watchers: true,
         },
       }));
 
@@ -274,11 +287,16 @@ export async function sendIncidentNotifications(
     const incidentRecord = incidentData;
 
     const errors: string[] = [];
-    const recipients: string[] = [];
+    const inAppRecipients: string[] = [];
 
     // Add assignee if exists
     if (incidentRecord.assigneeId) {
-      recipients.push(incidentRecord.assigneeId);
+      inAppRecipients.push(incidentRecord.assigneeId);
+    }
+
+    // Add explicit incident watchers if any
+    if (incidentRecord.watchers && Array.isArray(incidentRecord.watchers)) {
+      inAppRecipients.push(...incidentRecord.watchers.map((w: { userId: string }) => w.userId));
     }
 
     // Add service team members if team exists
@@ -286,11 +304,13 @@ export async function sendIncidentNotifications(
       const teamUserIds = incidentRecord.service.team.members.map(
         (m: { userId: string }) => m.userId
       );
-      recipients.push(...teamUserIds);
+      inAppRecipients.push(...teamUserIds);
     }
 
-    // Remove duplicates
-    const uniqueRecipients = [...new Set(recipients)].filter(id => !excludeUserIds.includes(id));
+    // Remove duplicates for In-App notifications
+    const uniqueInAppRecipients = [...new Set(inAppRecipients)].filter(
+      id => !excludeUserIds.includes(id)
+    );
 
     const eventTitle =
       eventType === 'triggered'
@@ -302,9 +322,9 @@ export async function sendIncidentNotifications(
             : 'Incident Updated';
     const eventMessage = `[${incidentRecord.service.name}] ${incidentRecord.title}`;
 
-    if (uniqueRecipients.length > 0) {
+    if (uniqueInAppRecipients.length > 0) {
       await createInAppNotifications({
-        userIds: uniqueRecipients,
+        userIds: uniqueInAppRecipients,
         type: 'INCIDENT',
         title: eventTitle,
         message: eventMessage,
@@ -313,10 +333,32 @@ export async function sendIncidentNotifications(
       });
     }
 
-    if (uniqueRecipients.length > 0) {
+    // Determine External Recipients (Push, SMS, WhatsApp, Email)
+    // 1. For 'triggered': if this function is called (i.e. service has no escalation policy),
+    //    alert the whole team and assignee so someone responds to the new incident.
+    // 2. For lifecycle events ('acknowledged', 'resolved', 'updated'):
+    //    only send disruptive personal device alerts (Push/SMS/WhatsApp/Email) to the active
+    //    Assignee and explicit Incident Watchers. Do NOT blast off-duty team members' personal phones.
+    let externalRecipients: string[] = [];
+    if (eventType === 'triggered') {
+      externalRecipients = uniqueInAppRecipients;
+    } else {
+      const directRecipients: string[] = [];
+      if (incidentRecord.assigneeId) {
+        directRecipients.push(incidentRecord.assigneeId);
+      }
+      if (incidentRecord.watchers && Array.isArray(incidentRecord.watchers)) {
+        directRecipients.push(...incidentRecord.watchers.map((w: { userId: string }) => w.userId));
+      }
+      externalRecipients = [...new Set(directRecipients)].filter(
+        id => !excludeUserIds.includes(id)
+      );
+    }
+
+    if (externalRecipients.length > 0) {
       // Batch fetch user notification preferences to avoid N+1 queries
       const users = await prisma.user.findMany({
-        where: { id: { in: uniqueRecipients } },
+        where: { id: { in: externalRecipients } },
         select: {
           id: true,
           emailNotificationsEnabled: true,
@@ -351,7 +393,7 @@ export async function sendIncidentNotifications(
 
       // Send notifications to each recipient based on their preferences
       const message = `[${incidentRecord.service.name}] Incident ${eventType}: ${incidentRecord.title}`;
-      const notificationPromises = uniqueRecipients.map(async userId => {
+      const notificationPromises = externalRecipients.map(async userId => {
         const user = userMap.get(userId);
         if (!user) {
           return { userId, success: false, error: 'User not found' };
@@ -416,7 +458,14 @@ export async function sendIncidentNotifications(
             }
           }
 
-          const result = await sendNotification(incidentId, userId, channel, message);
+          const result = await sendNotification(
+            incidentId,
+            userId,
+            channel,
+            message,
+            incidentRecord,
+            eventType
+          );
 
           if (result.success) {
             successful.push({ channel, result });

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
+import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -84,7 +84,7 @@ export default function TeamCreateForm({ action }: Props) {
           <Alert variant="destructive" className="flex-1 py-2">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-sm">
-              {getUserFriendlyError(state.error)}
+              {getUserFacingErrorMessage(state.error)}
             </AlertDescription>
           </Alert>
         )}

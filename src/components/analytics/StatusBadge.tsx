@@ -1,4 +1,6 @@
 import { Badge } from '@/components/ui/shadcn/badge';
+import { incidentStatusLabel } from '@/lib/incident-status';
+import type { IncidentStatus } from '@prisma/client';
 
 interface StatusBadgeProps {
   status: string;
@@ -18,7 +20,7 @@ export default function StatusBadge({ status, count, variant = 'default' }: Stat
 
   return (
     <Badge variant={autoVariant} size="sm">
-      {status}
+      {incidentStatusLabel(status as IncidentStatus)}
       {count !== undefined && (
         <Badge variant="outline" size="xs" className="ml-1 bg-white/50">
           {count}

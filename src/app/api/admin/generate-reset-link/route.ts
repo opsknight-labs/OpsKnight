@@ -1,13 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { revokeUserSessions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getAppUrl } from '@/lib/app-url';
 import { randomBytes, createHash } from 'crypto';
-import { logger } from '@/lib/logger';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
+import { logger, withRequestContext } from '@/lib/logger';
 import { assertAdmin } from '@/lib/rbac';
 import { getClientIp } from '@/lib/client-ip';
+import { emitAuditEvent } from '@/lib/audit';
 
-export async function POST(req: NextRequest) {
+async function postGenerateResetLink(req: NextRequest) {
   try {
     // Re-resolve the user from the database so role demotion and account
     // deactivation take effect without waiting for the JWT to expire.
@@ -19,23 +22,55 @@ export async function POST(req: NextRequest) {
     try {
       // Use Admin's email to limit *their* activity
       await checkRateLimit(sessionUser.email, ip, 'ADMIN_GENERATED_RESET_LINK');
-    } catch (e) {
-      if (e instanceof Error && e.message.includes('Too many')) {
-        return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    } catch (error) {
+      if (isAppError(error) && error.code === 'RATE_LIMIT_EXCEEDED') {
+        return jsonError(
+          new AppError({
+            code: 'RATE_LIMIT_EXCEEDED',
+            userMessage: 'Too many requests',
+            cause: error,
+          })
+        );
       }
-      throw e;
+      throw error;
     }
 
-    const body = await req.json();
-    const { userId } = body;
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonError(
+        new AppError({
+          code: 'INVALID_JSON',
+          userMessage: 'Please check your input and try again.',
+        })
+      );
+    }
 
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    const userId =
+      body && typeof body === 'object' && 'userId' in body
+        ? (body as { userId?: unknown }).userId
+        : undefined;
+
+    if (typeof userId !== 'string' || userId.trim().length === 0) {
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'User ID is required',
+          fields: [{ field: 'userId', code: 'required', message: 'User ID is required' }],
+        })
+      );
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return jsonError(
+        new AppError({
+          code: 'RESOURCE_NOT_FOUND',
+          userMessage: 'User not found',
+          details: { resource: 'user', userId },
+        })
+      );
     }
 
     // 2. Generate Token
@@ -72,24 +107,30 @@ export async function POST(req: NextRequest) {
     const resetLink = `${appUrl}/reset-password?token=${token}`;
 
     // 5. Audit Log
-    await prisma.auditLog.create({
-      data: {
-        action: 'ADMIN_GENERATED_RESET_LINK',
-        entityType: 'USER',
-        entityId: user.id,
-        actorId: sessionUser.id,
-        targetEmail: sessionUser.email,
-        ip,
-        details: { targetEmail: user.email, generatedFor: user.id },
+    await emitAuditEvent({
+      action: 'ADMIN_GENERATED_RESET_LINK',
+      source: 'API',
+      target: { type: 'USER', id: user.id },
+      actor: {
+        type: 'USER',
+        id: sessionUser.id,
+        email: sessionUser.email,
+        name: sessionUser.name,
       },
+      targetEmail: user.email,
+      ip,
+      metadata: { generatedFor: user.id },
     });
 
-    return NextResponse.json({ link: resetLink });
+    return jsonOk({ link: resetLink }, 200);
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Unauthorized')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-    logger.error('API Error /admin/generate-reset-link', { error });
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    if (isAppError(error)) return jsonError(error);
+    logger.error('API Error /admin/generate-reset-link', {
+      error,
+      errorCode: 'INTERNAL_ERROR',
+    });
+    return jsonError('Internal Server Error', 500);
   }
 }
+
+export const POST = withRequestContext(postGenerateResetLink, 'api.admin.generate-reset-link');

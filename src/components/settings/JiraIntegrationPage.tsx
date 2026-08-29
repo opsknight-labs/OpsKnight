@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { errorFromResponse } from '@/lib/client-error';
+import { toUserFacingError } from '@/lib/user-facing-error';
 import { CheckCircle2, Loader2, PlugZap, XCircle } from 'lucide-react';
 
 type JiraConfigView = {
@@ -31,6 +33,11 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       Save Jira Configuration
     </Button>
   );
+}
+
+function displayError(error: unknown): string {
+  const friendly = toUserFacingError(error, 'Jira connection failed.');
+  return friendly.description || friendly.title;
 }
 
 export default function JiraIntegrationPage({
@@ -59,8 +66,10 @@ export default function JiraIntegrationPage({
     setTestResult(null);
     try {
       const response = await fetch('/api/jira/test', { method: 'POST' });
+      if (!response.ok) {
+        throw await errorFromResponse(response, 'Jira connection failed.');
+      }
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Jira connection failed.');
       setTestResult({
         ok: true,
         message: data.displayName ? `Connected as ${data.displayName}` : 'Connected to Jira.',
@@ -68,7 +77,7 @@ export default function JiraIntegrationPage({
     } catch (error) {
       setTestResult({
         ok: false,
-        message: error instanceof Error ? error.message : 'Jira connection failed.',
+        message: displayError(error),
       });
     } finally {
       setTesting(false);

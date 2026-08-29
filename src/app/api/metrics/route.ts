@@ -3,6 +3,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { withRequestContext } from '@/lib/logger';
 import { timingSafeEqual } from 'crypto';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 
 type MetricsSnapshot = {
   jobStats: Array<{ status: string; count: number }> | null;
@@ -24,7 +25,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
   metricsInflight = (async () => {
     const [jobs, incidents, users] = await Promise.allSettled([
       prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } }),
-      prisma.incident.count({ where: { status: { in: ['OPEN', 'ACKNOWLEDGED'] } } }),
+      prisma.incident.count({ where: { status: { in: activeIncidentStatuses() } } }),
       prisma.user.count({ where: { status: 'ACTIVE' } }),
     ]);
     const value: MetricsSnapshot = {

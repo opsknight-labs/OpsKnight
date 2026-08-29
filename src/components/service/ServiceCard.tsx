@@ -38,7 +38,7 @@ function ServiceCard({ service, compact = false }: ServiceCardProps) {
         : incidents.some(i => i.urgency === 'HIGH');
     const calculatedStatus =
       service.dynamicStatus ||
-      getServiceDynamicStatus({ openIncidentCount: count, hasCritical: critical });
+      getServiceDynamicStatus({ activeIncidentCount: count, hasCritical: critical });
     return {
       openIncidents: incidents,
       hasCritical: critical,
@@ -121,7 +121,7 @@ function ServiceCard({ service, compact = false }: ServiceCardProps) {
             <>
               <span>•</span>
               <span style={{ color: hasCritical ? 'var(--danger)' : 'var(--warning)' }}>
-                {openIncidentCount} open incident{openIncidentCount !== 1 ? 's' : ''}
+                {openIncidentCount} active incident{openIncidentCount !== 1 ? 's' : ''}
               </span>
             </>
           )}
@@ -344,7 +344,7 @@ function ServiceCard({ service, compact = false }: ServiceCardProps) {
                   fontSize: '0.95rem',
                 }}
               >
-                {openIncidentCount} open
+                {openIncidentCount} active
               </span>
             ) : (
               <span style={{ color: 'var(--success)', fontWeight: 700, fontSize: '0.95rem' }}>

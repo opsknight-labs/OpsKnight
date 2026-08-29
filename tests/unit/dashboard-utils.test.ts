@@ -1,6 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('@/lib/retention-policy', () => ({
+  getQueryDateBounds: vi.fn(),
+  getReportingWindowForDays: vi.fn(async (days: number, _dataType: string, now: Date) => ({
+    start: new Date(now.getTime() - days * 24 * 60 * 60 * 1000),
+    end: now,
+    isClipped: false,
+  })),
+}));
 import {
   buildDateFilter,
+  buildRetainedDateFilter,
   buildIncidentWhere,
   buildIncidentOrderBy,
   getDaysFromRange,
@@ -8,6 +18,73 @@ import {
 } from '@/lib/dashboard-utils';
 
 describe('dashboard-utils', () => {
+  describe('buildRetainedDateFilter', () => {
+    it('keeps retention metadata outside the Prisma where object', async () => {
+      const now = new Date('2026-08-28T13:07:49.809Z');
+      const result = await buildRetainedDateFilter('30', undefined, undefined, now);
+
+      expect(result.where).toEqual({
+        createdAt: {
+          gte: new Date('2026-07-29T13:07:49.809Z'),
+          lte: now,
+        },
+      });
+      expect(result.window).toEqual({
+        start: new Date('2026-07-29T13:07:49.809Z'),
+        end: now,
+        isClipped: false,
+      });
+      expect(result.where).not.toHaveProperty('isClipped');
+    });
+
+    it('builds a Prisma-safe incident query from the retained filter', async () => {
+      const retained = await buildRetainedDateFilter(
+        '30',
+        undefined,
+        undefined,
+        new Date('2026-08-28T13:07:49.809Z')
+      );
+
+      const where = buildIncidentWhere({ status: 'OPEN' }, { dateFilter: retained.where });
+
+      expect(where).toEqual({
+        createdAt: retained.where.createdAt,
+        status: 'OPEN',
+      });
+      expect(where).not.toHaveProperty('isClipped');
+      expect(Object.keys(where)).toEqual(['createdAt', 'status']);
+    });
+
+    it('retains default status and urgency behavior when a date filter is supplied', async () => {
+      const retained = await buildRetainedDateFilter(
+        '7',
+        undefined,
+        undefined,
+        new Date('2026-08-28T13:07:49.809Z')
+      );
+
+      const where = buildIncidentWhere(
+        { status: 'ACTIVE', urgency: 'HIGH' },
+        { dateFilter: retained.where }
+      );
+
+      expect(where.status).toEqual({ in: ['OPEN', 'ACKNOWLEDGED'] });
+      expect(where.urgency).toBe('HIGH');
+    });
+
+    it('copies only supported Prisma fields from caller-supplied date filters', () => {
+      const unsafeFilter = {
+        createdAt: { gte: new Date('2026-08-01T00:00:00.000Z') },
+        isClipped: true,
+      };
+
+      const where = buildIncidentWhere({}, { dateFilter: unsafeFilter });
+
+      expect(where).toEqual({ createdAt: unsafeFilter.createdAt });
+      expect(where).not.toHaveProperty('isClipped');
+    });
+  });
+
   describe('buildDateFilter', () => {
     it('returns empty object when range is "all"', () => {
       const result = buildDateFilter('all');
@@ -38,6 +115,11 @@ describe('dashboard-utils', () => {
     it('builds where clause with status filter', () => {
       const result = buildIncidentWhere({ status: 'OPEN', range: '30' });
       expect(result.status).toBe('OPEN');
+    });
+
+    it('maps ACTIVE to the canonical actionable statuses', () => {
+      const result = buildIncidentWhere({ status: 'ACTIVE', range: '30' });
+      expect(result.status).toEqual({ in: ['OPEN', 'ACKNOWLEDGED'] });
     });
 
     it('excludes status when includeStatus is false', () => {

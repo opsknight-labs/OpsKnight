@@ -19,6 +19,8 @@ from the current codebase in `OpsKnight/`.
 - **Export API**: `/api/analytics/export` → `src/app/api/analytics/export/route.ts`
 
 All analytics calculations come from `calculateSLAMetrics` in `src/lib/sla-server.ts`.
+Shared names, formulas, scopes, and directions come from
+[`src/lib/metric-contract.ts`](./metric-contract).
 
 ---
 
@@ -63,15 +65,22 @@ All analytics calculations come from `calculateSLAMetrics` in `src/lib/sla-serve
 All surfaces share the same SLA engine but expose different subsets in UI:
 
 - **Desktop analytics**: full KPI grid, trends, service health table, heatmap, insights feed
-- **Mobile analytics**: compact four-card summary (open, new, MTTA, MTTR)
+- **Mobile Command Center**: current Triggered, Active, High-urgency Active, and Muted values plus
+  trailing-24-hour resolutions, with exact incident drill-downs
 - **Executive report**: template-driven widgets (uses `src/lib/reports/dashboard-templates.ts`)
+- **CSV export**: data-state, generation time, effective dates, filters, KPI scope, status mix, and
+  bounded matching incident rows
+
+All surfaces distinguish current backlog values from selected-period cohorts. Aggregation failures
+render an unavailable state instead of fabricated zero values.
 
 ---
 
 ## Current Gaps
 
 - **Role parity**: export is restricted to responders/admins; analytics pages are session-only.
-- **Filter parity**: mobile analytics is fixed to a 7-day window and does not expose filters.
+- **Filter parity**: the compact mobile Command Center exposes fixed operational scopes rather than
+  the complete desktop Analytics filter set.
 - **Export parity**: only desktop analytics exposes export in UI; executive report and mobile do not.
 
 ---

@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/shadcn/table';
 import { Card } from '@/components/ui/shadcn/card';
 
-import { assertAdmin } from '@/lib/rbac';
+import { assertAuditorOrAdmin } from '@/lib/rbac';
 import type { AuditEntityType } from '@prisma/client';
 import Link from 'next/link';
 
@@ -31,7 +31,7 @@ type AuditLogPageProps = {
 };
 
 export default async function AuditLogPage({ searchParams }: AuditLogPageProps) {
-  await assertAdmin();
+  await assertAuditorOrAdmin();
 
   const awaitedParams = await searchParams;
   const entityType = awaitedParams?.entityType as AuditEntityType | undefined;

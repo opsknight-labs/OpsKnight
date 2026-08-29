@@ -44,6 +44,7 @@ export default function RoleSelector({
     >
       <option value="ADMIN">Admin</option>
       <option value="RESPONDER">Responder</option>
+      <option value="AUDITOR">Auditor</option>
       <option value="USER">User</option>
     </select>
   );

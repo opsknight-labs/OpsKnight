@@ -2,7 +2,7 @@
  * PostgreSQL-based Job Queue System
  *
  * This implementation uses PostgreSQL instead of Redis/BullMQ.
- * Jobs are stored in the BackgroundJob table and processed by cron jobs.
+ * Jobs are stored in the BackgroundJob table and processed by workers/schedulers.
  *
  * Benefits:
  * - No additional infrastructure (Redis) needed
@@ -84,7 +84,8 @@ export async function scheduleNotification(
   userId: string,
   channel: string,
   message: string,
-  delayMs: number = 0
+  delayMs: number = 0,
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' = 'triggered'
 ): Promise<string> {
   const scheduledAt = new Date(Date.now() + delayMs);
 
@@ -93,6 +94,7 @@ export async function scheduleNotification(
     userId,
     channel,
     message,
+    eventType,
   });
 }
 
@@ -138,6 +140,12 @@ export async function getPendingJobs(limit: number = 50): Promise<any[]> {
 /**
  * Atomically claim pending jobs for processing.
  * Uses SKIP LOCKED to avoid concurrent workers claiming the same jobs.
+ *
+ * EVENT_SIDE_EFFECT jobs add one more boundary: a later lifecycle event in the
+ * same incident/lane cannot be claimed while an older job in that lane is
+ * pending or processing. This preserves created -> acknowledged -> resolved
+ * ordering for dependent external systems without serializing independent
+ * webhook, Slack, escalation, and war-room lanes.
  */
 export async function claimPendingJobs(limit: number = 50, type?: JobType): Promise<any[]> {
   // Recover abandoned jobs that exceeded maxAttempts while in PROCESSING
@@ -155,18 +163,43 @@ export async function claimPendingJobs(limit: number = 50, type?: JobType): Prom
     )
     .catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
 
-  const typeFilter = type ? Prisma.sql`AND "type" = ${type}::"JobType"` : Prisma.empty;
+  const typeFilter = type ? Prisma.sql`AND candidate."type" = ${type}::"JobType"` : Prisma.empty;
   const jobs = await prisma.$queryRaw<any[]>( // eslint-disable-line @typescript-eslint/no-explicit-any
     Prisma.sql`
       WITH cte AS (
-        SELECT "id"
-        FROM "BackgroundJob"
-        WHERE ("status" = 'PENDING' OR ("status" = 'PROCESSING' AND ("startedAt" IS NULL OR "startedAt" < NOW() - INTERVAL '10 minutes')))
-          AND "scheduledAt" <= NOW()
-          AND "attempts" < "maxAttempts"
+        SELECT candidate."id"
+        FROM "BackgroundJob" AS candidate
+        WHERE (
+            candidate."status" = 'PENDING'
+            OR (
+              candidate."status" = 'PROCESSING'
+              AND (
+                candidate."startedAt" IS NULL
+                OR candidate."startedAt" < NOW() - INTERVAL '10 minutes'
+              )
+            )
+          )
+          AND candidate."scheduledAt" <= NOW()
+          AND candidate."attempts" < candidate."maxAttempts"
           ${typeFilter}
-        ORDER BY "scheduledAt" ASC
-        FOR UPDATE SKIP LOCKED
+          AND (
+            candidate."type" <> 'SCHEDULED_TASK'::"JobType"
+            OR candidate."payload"->>'task' IS DISTINCT FROM 'EVENT_SIDE_EFFECT'
+            OR NOT EXISTS (
+              SELECT 1
+              FROM "BackgroundJob" AS older
+              WHERE older."type" = 'SCHEDULED_TASK'::"JobType"
+                AND older."status" IN ('PENDING', 'PROCESSING')
+                AND older."payload"->>'task' = 'EVENT_SIDE_EFFECT'
+                AND older."payload"->>'incidentId' = candidate."payload"->>'incidentId'
+                AND older."payload"->>'lane' = candidate."payload"->>'lane'
+                AND older."id" <> candidate."id"
+                AND (older."payload"->>'eventOrderAt')::timestamptz
+                  < (candidate."payload"->>'eventOrderAt')::timestamptz
+            )
+          )
+        ORDER BY candidate."scheduledAt" ASC, candidate."createdAt" ASC
+        FOR UPDATE OF candidate SKIP LOCKED
         LIMIT ${limit}
       )
       UPDATE "BackgroundJob"
@@ -276,7 +309,12 @@ export async function processJob(job: any): Promise<boolean> {
         }
 
       case 'NOTIFICATION':
-        let notificationResult: { success: boolean; error?: string };
+        let notificationResult: {
+          success: boolean;
+          error?: string;
+          terminal?: boolean;
+          skipped?: boolean;
+        };
         if (job.payload.mode === 'CHANNEL_FALLBACK') {
           const { getUserNotificationChannels, sendUserNotification } =
             await import('../user-notifications');
@@ -309,7 +347,11 @@ export async function processJob(job: any): Promise<boolean> {
               job.payload.userId,
               job.payload.message,
               availableChannels,
-              { excludedChannels, createInApp: false }
+              {
+                excludedChannels,
+                createInApp: false,
+                eventType: job.payload.eventType || 'triggered',
+              }
             );
             notificationResult = {
               success: fallbackResult.success,
@@ -322,12 +364,26 @@ export async function processJob(job: any): Promise<boolean> {
             job.payload.incidentId,
             job.payload.userId,
             job.payload.channel as NotificationChannel,
-            job.payload.message
+            job.payload.message,
+            undefined,
+            job.payload.eventType || 'triggered'
           );
         }
-        if (notificationResult.success) {
+        if (notificationResult.success || notificationResult.skipped) {
           await markJobCompleted(job.id);
           return true;
+        }
+
+        if (notificationResult.terminal) {
+          await prisma.backgroundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'FAILED',
+              failedAt: new Date(),
+              error: notificationResult.error || 'Notification permanently failed',
+            },
+          });
+          return false;
         }
 
         // Cap notification retries to avoid infinite loops on bad payloads or spamming users
@@ -400,110 +456,61 @@ export async function processJob(job: any): Promise<boolean> {
         return true;
       }
 
-      case 'AUTO_UNSNOOZE':
-        const incident = await prisma.incident.findUnique({
-          where: { id: job.payload.incidentId },
-        });
-
-        if (incident && incident.status === 'SNOOZED' && incident.snoozedUntil) {
-          const now = new Date();
-          if (now >= incident.snoozedUntil) {
-            const unsnoozed = await prisma.$transaction(async tx => {
-              const changed = await tx.incident.updateMany({
-                where: {
-                  id: job.payload.incidentId,
-                  status: 'SNOOZED',
-                  snoozedUntil: { lte: now },
-                },
-                data: {
-                  status: 'OPEN',
-                  snoozedUntil: null,
-                  snoozeReason: null,
-                  escalationStatus: 'ESCALATING',
-                  nextEscalationAt: now,
-                },
-              });
-              if (changed.count === 0) return false;
-              await tx.incidentEvent.create({
-                data: {
-                  incidentId: job.payload.incidentId,
-                  message: 'Incident auto-unsnoozed (snooze duration expired)',
-                },
-              });
-              return true;
-            });
-
-            if (!unsnoozed) {
-              await prisma.backgroundJob.update({
-                where: { id: job.id },
-                data: { status: 'CANCELLED', completedAt: new Date() },
-              });
-              return false;
-            }
-
-            try {
-              const { sendIncidentNotifications } = await import('../user-notifications');
-              await sendIncidentNotifications(job.payload.incidentId, 'updated');
-              const { notifyStatusPageSubscribers } = await import('../status-page-notifications');
-              await notifyStatusPageSubscribers(job.payload.incidentId, 'investigating');
-              const { triggerWebhooksForService } = await import('../status-page-webhooks');
-              const updatedIncident = await prisma.incident.findUnique({
-                where: { id: job.payload.incidentId },
-                include: {
-                  service: { select: { id: true, name: true } },
-                  assignee: { select: { id: true, name: true, email: true } },
-                },
-              });
-              if (updatedIncident) {
-                await triggerWebhooksForService(updatedIncident.serviceId, 'incident.updated', {
-                  id: updatedIncident.id,
-                  title: updatedIncident.title,
-                  description: updatedIncident.description,
-                  status: updatedIncident.status,
-                  urgency: updatedIncident.urgency,
-                  priority: updatedIncident.priority,
-                  service: updatedIncident.service,
-                  assignee: updatedIncident.assignee,
-                  createdAt: updatedIncident.createdAt.toISOString(),
-                  acknowledgedAt: updatedIncident.acknowledgedAt?.toISOString() || null,
-                  resolvedAt: updatedIncident.resolvedAt?.toISOString() || null,
-                });
-              }
-            } catch (error) {
-              logger.error('Auto-unsnooze notifications failed', {
-                incidentId: job.payload.incidentId,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }
-            await markJobCompleted(job.id);
-            // Resume escalation at current step (default 0)
-            const nextStep = incident.currentEscalationStep ?? 0;
-            await scheduleEscalation(job.payload.incidentId, nextStep, 0);
-            return true;
-          } else {
-            // Not ready yet, reschedule and reset attempts so premature polls don't exhaust retry budget
-            await prisma.backgroundJob.update({
-              where: { id: job.id },
-              data: {
-                status: 'PENDING',
-                attempts: 0,
-                scheduledAt: incident.snoozedUntil,
-                startedAt: null,
-              },
-            });
-            return false;
-          }
-        } else {
-          // Incident no longer snoozed, cancel job
+      case 'SCHEDULED_TASK': {
+        if (job.payload?.task !== 'EVENT_SIDE_EFFECT') {
           await prisma.backgroundJob.update({
             where: { id: job.id },
             data: {
-              status: 'CANCELLED',
-              completedAt: new Date(),
+              status: 'FAILED',
+              failedAt: new Date(),
+              error: `Unknown scheduled task: ${job.payload?.task || 'missing task'}`,
             },
           });
           return false;
         }
+
+        const { processEventSideEffect } = await import('../event-side-effects');
+        await processEventSideEffect(job.payload);
+        await markJobCompleted(job.id);
+        return true;
+      }
+
+      case 'AUTO_UNSNOOZE': {
+        const { processAutoUnsnoozeIncidentInternal } = await import('../unsnooze');
+        const result = await processAutoUnsnoozeIncidentInternal(job.payload.incidentId);
+
+        if (result.outcome === 'changed') {
+          await markJobCompleted(job.id);
+          return true;
+        }
+
+        if (result.outcome === 'not_due') {
+          // A snooze may have been extended after this job was originally
+          // scheduled. Requeue at the authoritative deadline without burning
+          // the retry budget.
+          await prisma.backgroundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'PENDING',
+              attempts: 0,
+              scheduledAt: result.snoozedUntil,
+              startedAt: null,
+            },
+          });
+          return false;
+        }
+
+        // The incident no longer requires this stale job (already open,
+        // resolved, deleted, or otherwise no longer snoozed).
+        await prisma.backgroundJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'CANCELLED',
+            completedAt: new Date(),
+          },
+        });
+        return false;
+      }
 
       default:
         await markJobFailed(job.id, `Unknown job type: ${job.type}`);

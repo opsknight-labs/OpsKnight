@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import UserAvatar from '@/components/UserAvatar';
 import OidcLinkingApprovalButton from './OidcLinkingApprovalButton';
 import { Button } from '@/components/ui/shadcn/button';
+import { errorFromResponse } from '@/lib/client-error';
+import { toUserFacingError } from '@/lib/user-facing-error';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -26,12 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/shadcn/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/shadcn/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/shadcn/select';
 import {
   Dialog,
   DialogContent,
@@ -96,6 +93,7 @@ type UserCardProps = {
 const roleAccentColors = {
   ADMIN: 'border-l-rose-500',
   RESPONDER: 'border-l-indigo-500',
+  AUDITOR: 'border-l-violet-500',
   USER: 'border-l-sky-500',
 };
 
@@ -134,15 +132,24 @@ export function UserCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
       });
-      const data = await res.json();
 
-      if (res.ok && data.link) {
+      if (!res.ok) {
+        const friendly = toUserFacingError(
+          await errorFromResponse(res, 'Failed to generate link')
+        );
+        setLinkError(friendly.description || friendly.title);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.link) {
         setInviteLink(data.link);
       } else {
-        setLinkError(data.error || 'Failed to generate link');
+        setLinkError('Failed to generate link');
       }
-    } catch (_err) {
-      setLinkError('An error occurred');
+    } catch (err) {
+      const friendly = toUserFacingError(err, 'Failed to generate link');
+      setLinkError(friendly.description || friendly.title);
     } finally {
       setIsLoadingLink(false);
     }
@@ -165,12 +172,14 @@ export function UserCard({
   const roleVariants = {
     ADMIN: 'danger',
     RESPONDER: 'warning',
+    AUDITOR: 'neutral',
     USER: 'info',
   } as const;
 
   const roleTriggerColors = {
     ADMIN: 'bg-red-100 text-red-800 border-red-200',
     RESPONDER: 'bg-amber-100 text-amber-800 border-amber-200',
+    AUDITOR: 'bg-violet-100 text-violet-800 border-violet-200',
     USER: 'bg-blue-100 text-blue-800 border-blue-200',
   };
 
@@ -219,7 +228,6 @@ export function UserCard({
           size="lg"
           className="ring-2 ring-background shadow-md transition-transform duration-300 group-hover:scale-105"
         />
-
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-semibold text-sm truncate">{user.name}</h3>
@@ -284,7 +292,9 @@ export function UserCard({
                       ? 'Admin'
                       : user.role === 'RESPONDER'
                         ? 'Responder'
-                        : 'User'}
+                        : user.role === 'AUDITOR'
+                          ? 'Auditor'
+                          : 'User'}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -298,6 +308,12 @@ export function UserCard({
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
                       <span>Responder</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="AUDITOR" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                      <span>Auditor</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="USER" className="text-xs">

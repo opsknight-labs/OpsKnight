@@ -342,7 +342,7 @@ export async function sendSMS(
 export async function sendIncidentSMS(
   userId: string,
   incidentId: string,
-  eventType: 'triggered' | 'acknowledged' | 'resolved',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
   notificationId?: string
 ): Promise<{ success: boolean; error?: string; messageSid?: string }> {
   try {
@@ -423,13 +423,15 @@ export async function sendIncidentSMS(
         ? `[OpsKnight] ${eventEmoji} Resolved: ${title}\n✓ ${service}\n${incidentUrl}`
         : eventType === 'acknowledged'
           ? `[OpsKnight] ${eventEmoji} Acknowledged: ${title}\n⚡ ${service}\n${incidentUrl}`
-          : `[OpsKnight] ${eventEmoji} ${
-              incident.urgency === 'HIGH'
-                ? 'CRITICAL'
-                : incident.urgency === 'MEDIUM'
-                  ? 'Elevated'
-                  : 'Incident'
-            }: ${title}\n⚠ ${service}\n${incidentUrl}`;
+          : eventType === 'updated'
+            ? `[OpsKnight] ${eventEmoji} Updated: ${title}\nℹ ${service}\n${incidentUrl}`
+            : `[OpsKnight] ${eventEmoji} ${
+                incident.urgency === 'HIGH'
+                  ? 'CRITICAL'
+                  : incident.urgency === 'MEDIUM'
+                    ? 'Elevated'
+                    : 'Incident'
+              }: ${title}\n⚠ ${service}\n${incidentUrl}`;
 
     // Format phone number to E.164 format if needed
     let phoneNumber = user.phoneNumber.trim();

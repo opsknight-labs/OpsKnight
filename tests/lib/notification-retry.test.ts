@@ -3,6 +3,7 @@ import { retryFailedNotifications } from '@/lib/notification-retry';
 import prisma from '@/lib/prisma';
 
 const sendIncidentEmail = vi.fn();
+const circuitExecute = vi.fn((fn: () => unknown) => fn());
 
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -18,8 +19,15 @@ vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/circuit-breaker', () => ({
+  CircuitBreakerError: class CircuitBreakerError extends Error {
+    serviceName: string;
+    constructor(message: string, serviceName: string) {
+      super(message);
+      this.serviceName = serviceName;
+    }
+  },
   CircuitBreakers: {
-    email: () => ({ execute: (fn: () => unknown) => fn() }),
+    email: () => ({ execute: circuitExecute }),
     sms: () => ({ execute: (fn: () => unknown) => fn() }),
     push: () => ({ execute: (fn: () => unknown) => fn() }),
     whatsapp: () => ({ execute: (fn: () => unknown) => fn() }),
@@ -42,12 +50,30 @@ const failedNotification = {
   attempts: 1,
   failedAt: new Date(Date.now() - 60_000),
   incident: { id: 'incident-1', status: 'OPEN', service: { webhookUrl: null } },
+  eventType: 'acknowledged',
 };
 
 describe('notification retry claiming', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    circuitExecute.mockImplementation((fn: () => unknown) => fn());
     vi.mocked(prisma.notification.findMany).mockResolvedValue([failedNotification] as never);
+  });
+
+  it('does not consume an attempt while the provider circuit is open', async () => {
+    const { CircuitBreakerError } = await import('@/lib/circuit-breaker');
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
+    circuitExecute.mockRejectedValue(new CircuitBreakerError('Circuit is open', 'email'));
+    vi.mocked(prisma.notification.update).mockResolvedValue({} as never);
+
+    const result = await retryFailedNotifications();
+
+    expect(result).toEqual({ retried: 1, succeeded: 0, failed: 1 });
+    expect(prisma.notification.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'FAILED', attempts: 1 }),
+      })
+    );
   });
 
   it('does not send when another worker already claimed the notification', async () => {

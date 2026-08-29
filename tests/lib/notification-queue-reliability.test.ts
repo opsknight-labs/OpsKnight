@@ -35,8 +35,9 @@ describe('notification queue delivery reliability', () => {
     expect(sendNotification).toHaveBeenCalledTimes(1);
     expect(getQueueStats().pending).toBe(0);
 
-    // First retry uses a two-second backoff, then the restarted flush timer.
-    await vi.advanceTimersByTimeAsync(3_000);
+    // All delivery paths share the contract's ten-second delay after attempt one,
+    // followed by the restarted one-second flush timer.
+    await vi.advanceTimersByTimeAsync(11_000);
     expect(sendNotification).toHaveBeenCalledTimes(2);
 
     await forceFlush();
@@ -51,5 +52,41 @@ describe('notification queue delivery reliability', () => {
     clearQueue();
 
     expect(queueNotification('incident-2', 'user-2', 'SMS', 'Incident opened')).toBe(true);
+  });
+
+  it('does not retry a terminally skipped delivery', async () => {
+    sendNotification.mockResolvedValue({
+      success: false,
+      skipped: true,
+      terminal: true,
+      error: 'No registered device',
+    });
+    queueNotification('incident-3', 'user-3', 'PUSH', 'Incident acknowledged', 2, 'acknowledged');
+
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(sendNotification).toHaveBeenCalledWith(
+      'incident-3',
+      'user-3',
+      'PUSH',
+      'Incident acknowledged',
+      undefined,
+      'acknowledged'
+    );
+  });
+
+  it('does not deduplicate a permanent failure after its configuration is corrected', async () => {
+    sendNotification.mockResolvedValue({
+      success: false,
+      terminal: true,
+      error: 'No webhook URL configured for service',
+    });
+    queueNotification('incident-4', 'user-4', 'WEBHOOK', 'Incident opened');
+
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(queueNotification('incident-4', 'user-4', 'WEBHOOK', 'Incident opened')).toBe(true);
   });
 });

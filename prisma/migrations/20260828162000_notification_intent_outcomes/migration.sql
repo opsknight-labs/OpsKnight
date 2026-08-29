@@ -1,0 +1,1 @@
+ALTER TYPE "NotificationStatus" ADD VALUE IF NOT EXISTS 'SKIPPED';

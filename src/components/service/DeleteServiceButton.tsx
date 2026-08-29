@@ -33,7 +33,7 @@ export default function DeleteServiceButton({
   };
 
   const warningMessage = hasOpenIncidents
-    ? `⚠️ WARNING: This service has ${incidentCount} incident(s), including open incidents. Deleting this service will permanently remove all associated incidents, integrations, and alerts. This action CANNOT be undone.`
+    ? `⚠️ WARNING: This service has ${incidentCount} incident(s), including non-resolved incidents. Deleting this service will permanently remove all associated incidents, integrations, and alerts. This action CANNOT be undone.`
     : incidentCount > 0
       ? `⚠️ WARNING: This service has ${incidentCount} incident(s). Deleting this service will permanently remove all associated incidents, integrations, and alerts. This action CANNOT be undone.`
       : `⚠️ WARNING: Are you sure you want to delete "${serviceName}"? This will permanently remove the service and all associated integrations and alerts. This action CANNOT be undone.`;

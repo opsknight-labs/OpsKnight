@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -20,13 +21,13 @@ import {
   Globe,
   Settings,
   Zap,
-  Plus,
 } from 'lucide-react';
 
 // Custom Components
 import IncidentList from '@/components/service/IncidentList';
 import Pagination from '@/components/service/Pagination';
 import DeleteServiceButton from '@/components/service/DeleteServiceButton';
+import CreateIncidentButton from '@/components/incident/CreateIncidentButton';
 
 const INCIDENTS_PER_PAGE = 20;
 
@@ -162,7 +163,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   // Define status filter based on active tab
   const incidentWhere =
     tab === 'incidents'
-      ? { status: { notIn: ['RESOLVED', 'SNOOZED', 'SUPPRESSED'] as const } }
+      ? { status: { in: activeIncidentStatuses() } }
       : { status: 'RESOLVED' as const };
 
   // Parallelize data fetching
@@ -348,14 +349,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                   : 'Viewing Resolved and Closed incidents.'}
               </p>
             </div>
-            {tab === 'incidents' && (
-              <Button className="gap-2" asChild>
-                <Link href={`/incidents/create?serviceId=${id}`}>
-                  <Plus className="h-4 w-4" />
-                  Create Incident
-                </Link>
-              </Button>
-            )}
+            {tab === 'incidents' && <CreateIncidentButton serviceId={id} className="gap-2" />}
           </div>
 
           <Card className="border-slate-200 shadow-sm overflow-hidden">

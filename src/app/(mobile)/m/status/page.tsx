@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import MobileCard from '@/components/mobile/MobileCard';
 import Link from 'next/link';
 import MobileTime from '@/components/mobile/MobileTime';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,7 +62,7 @@ export default async function MobileStatusPage() {
   const activeIncidentCounts = await prisma.incident.groupBy({
     by: ['serviceId', 'urgency'],
     where: {
-      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+      status: { in: activeIncidentStatuses() },
     },
     _count: { id: true },
   });
@@ -106,7 +107,7 @@ export default async function MobileStatusPage() {
 
     // Recalculate status based on verified counts
     const dynamicStatus = getServiceDynamicStatus({
-      openIncidentCount: activeCount,
+      activeIncidentCount: activeCount,
       hasCritical: criticalCount > 0,
     });
 

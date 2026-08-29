@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
+import type { MetricDataState } from '@/lib/metric-contract';
 
 type ExportProps = {
   incidents: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -17,10 +18,15 @@ type ExportProps = {
     endDate?: string;
   };
   metrics: {
-    totalOpen: number;
+    totalActive: number;
+    totalTriggered: number;
+    totalMuted: number;
+    totalSnoozed: number;
+    totalSuppressed: number;
     totalResolved: number;
     totalAcknowledged: number;
     unassigned: number;
+    dataState: MetricDataState;
   };
 };
 
@@ -85,11 +91,21 @@ export default function DashboardExport({ incidents, filters, metrics }: ExportP
 
     // Metrics Summary
     csvRows.push('Metrics Summary:');
-    csvRows.push(`Open Incidents,${metrics.totalOpen}`);
-    csvRows.push(`Resolved Incidents,${metrics.totalResolved}`);
-    csvRows.push(`Acknowledged Incidents,${metrics.totalAcknowledged}`);
-    csvRows.push(`Unassigned Incidents,${metrics.unassigned}`);
-    csvRows.push('');
+    csvRows.push(`Metric Data State,${metrics.dataState}`);
+    if (metrics.dataState === 'unavailable') {
+      csvRows.push('Metric values,N/A');
+      csvRows.push('');
+    } else {
+      csvRows.push(`Active Incidents (current),${metrics.totalActive}`);
+      csvRows.push(`Triggered Incidents (current),${metrics.totalTriggered}`);
+      csvRows.push(`Acknowledged Incidents (current),${metrics.totalAcknowledged}`);
+      csvRows.push(`Muted Incidents (current),${metrics.totalMuted}`);
+      csvRows.push(`Snoozed Incidents (current),${metrics.totalSnoozed}`);
+      csvRows.push(`Suppressed Incidents (current),${metrics.totalSuppressed}`);
+      csvRows.push(`Unassigned Active Incidents (current),${metrics.unassigned}`);
+      csvRows.push(`Resolved Incidents (selected period),${metrics.totalResolved}`);
+      csvRows.push('');
+    }
 
     // Incidents Data
     csvRows.push('Incidents:');

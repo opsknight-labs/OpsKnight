@@ -171,7 +171,19 @@ export const GitHubEventSchema = z.object({
       name: z.string(),
       head_branch: z.string().optional(),
       status: z.enum(['queued', 'in_progress', 'completed', 'requested']),
-      conclusion: z.enum(['success', 'failure', 'cancelled', 'timed_out']).nullable().optional(),
+      conclusion: z
+        .enum([
+          'success',
+          'failure',
+          'neutral',
+          'cancelled',
+          'timed_out',
+          'action_required',
+          'stale',
+          'skipped',
+        ])
+        .nullable()
+        .optional(),
       html_url: z.string(),
     })
     .optional(),
@@ -180,7 +192,19 @@ export const GitHubEventSchema = z.object({
       id: z.number(),
       name: z.string(),
       status: z.enum(['queued', 'in_progress', 'completed']),
-      conclusion: z.enum(['success', 'failure', 'cancelled', 'timed_out']).nullable().optional(),
+      conclusion: z
+        .enum([
+          'success',
+          'failure',
+          'neutral',
+          'cancelled',
+          'timed_out',
+          'action_required',
+          'stale',
+          'skipped',
+        ])
+        .nullable()
+        .optional(),
       html_url: z.string(),
     })
     .optional(),

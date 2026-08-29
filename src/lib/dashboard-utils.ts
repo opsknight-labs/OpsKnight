@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { getQueryDateBounds, getReportingWindowForDays } from './retention-policy';
 
 // Type for filter parameters
 export interface DashboardFilters {
@@ -16,6 +17,46 @@ export interface DashboardFilters {
 interface DateFilter {
   gte?: Date;
   lte?: Date;
+}
+
+type IncidentDateWhere = Pick<Prisma.IncidentWhereInput, 'createdAt'>;
+
+export interface RetainedDateFilterResult {
+  where: IncidentDateWhere;
+  window: {
+    start: Date;
+    end: Date;
+    isClipped: boolean;
+  };
+}
+
+export async function buildRetainedDateFilter(
+  range?: string,
+  customStart?: string,
+  customEnd?: string,
+  now: Date = new Date()
+): Promise<RetainedDateFilterResult> {
+  let bounds;
+  if (range === 'custom') {
+    const requestedStart = customStart ? new Date(customStart) : undefined;
+    const requestedEnd = customEnd ? new Date(customEnd) : undefined;
+    bounds = await getQueryDateBounds(requestedStart, requestedEnd, 'incident', now);
+  } else if (!range || range === 'all') {
+    bounds = await getQueryDateBounds(undefined, now, 'incident', now);
+  } else {
+    const days = Number.parseInt(range, 10);
+    bounds = Number.isFinite(days)
+      ? await getReportingWindowForDays(days, 'incident', now)
+      : await getReportingWindowForDays(30, 'incident', now);
+  }
+  return {
+    where: { createdAt: { gte: bounds.start, lte: bounds.end } },
+    window: {
+      start: bounds.start,
+      end: bounds.end,
+      isClipped: bounds.isClipped,
+    },
+  };
 }
 
 /**
@@ -61,14 +102,26 @@ export function buildIncidentWhere(
   options: {
     includeStatus?: boolean;
     includeUrgency?: boolean;
-  } = { includeStatus: true, includeUrgency: true }
+    dateFilter?: IncidentDateWhere;
+  } = {}
 ): Prisma.IncidentWhereInput {
-  const dateFilter = buildDateFilter(filters.range, filters.customStart, filters.customEnd);
+  const includeStatus = options.includeStatus ?? true;
+  const includeUrgency = options.includeUrgency ?? true;
+  const dateFilter =
+    options.dateFilter ?? buildDateFilter(filters.range, filters.customStart, filters.customEnd);
 
-  const where: Prisma.IncidentWhereInput = { ...dateFilter };
+  // Copy only the Prisma field we explicitly support. TypeScript permits values
+  // with additional properties to satisfy IncidentDateWhere, so spreading the
+  // caller object would let retention metadata leak back into a Prisma query.
+  const where: Prisma.IncidentWhereInput = dateFilter.createdAt
+    ? { createdAt: dateFilter.createdAt }
+    : {};
 
-  if (options.includeStatus && filters.status && filters.status !== 'ALL') {
-    where.status = filters.status as Prisma.EnumIncidentStatusFilter;
+  if (includeStatus && filters.status && filters.status !== 'ALL') {
+    where.status =
+      filters.status === 'ACTIVE'
+        ? { in: ['OPEN', 'ACKNOWLEDGED'] }
+        : (filters.status as Prisma.EnumIncidentStatusFilter);
   }
 
   if (filters.assignee !== undefined) {
@@ -79,7 +132,7 @@ export function buildIncidentWhere(
     where.serviceId = filters.service;
   }
 
-  if (options.includeUrgency && filters.urgency) {
+  if (includeUrgency && filters.urgency) {
     where.urgency = filters.urgency as Prisma.EnumIncidentUrgencyFilter;
   }
 

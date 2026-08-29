@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/shadcn/select';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Users, UserCheck, UserPlus, UserX, ArrowUpDown } from 'lucide-react';
+import { isAppRole } from '@/lib/authorization';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +59,9 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   const query = typeof awaitedSearchParams?.q === 'string' ? awaitedSearchParams.q.trim() : '';
   const statusFilter =
     typeof awaitedSearchParams?.status === 'string' ? awaitedSearchParams.status : '';
-  const roleFilter = typeof awaitedSearchParams?.role === 'string' ? awaitedSearchParams.role : '';
+  const requestedRole =
+    typeof awaitedSearchParams?.role === 'string' ? awaitedSearchParams.role : '';
+  const roleFilter = isAppRole(requestedRole) ? requestedRole : '';
   const teamFilter =
     typeof awaitedSearchParams?.teamId === 'string' ? awaitedSearchParams.teamId : '';
   const sortBy =

@@ -362,7 +362,13 @@ export default function UserTable({
                 </td>
                 <td style={{ padding: '0.875rem 1rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <UserAvatar userId={user.id} avatarUrl={user.avatarUrl} name={user.name} gender={user.gender} size="md" />
+                    <UserAvatar
+                      userId={user.id}
+                      avatarUrl={user.avatarUrl}
+                      name={user.name}
+                      gender={user.gender}
+                      size="md"
+                    />
                     <div>
                       <div
                         style={{ fontWeight: '600', fontSize: '0.9rem', marginBottom: '0.15rem' }}
@@ -398,7 +404,9 @@ export default function UserTable({
                         ? 'Admin'
                         : user.role === 'RESPONDER'
                           ? 'Responder'
-                          : 'User'}
+                          : user.role === 'AUDITOR'
+                            ? 'Auditor'
+                            : 'User'}
                     </span>
                   )}
                 </td>

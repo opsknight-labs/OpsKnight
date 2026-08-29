@@ -2,30 +2,51 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
+import { prismaToAppError } from '@/lib/prisma-errors';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 import { assertSafeOutboundUrl } from '@/lib/network-security';
 import { encrypt } from '@/lib/encryption';
 
-/**
- * Webhook Management API
- * GET /api/status-page/webhooks - List webhooks
- * POST /api/status-page/webhooks - Create webhook
- */
+const LEGACY_REQUIRED_MESSAGE = 'Please fill in all required fields.';
+const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
-export async function GET(req: NextRequest) {
+const WEBHOOK_NOT_FOUND = {
+  code: 'STATUS_PAGE_WEBHOOK_NOT_FOUND' as const,
+  userMessage: LEGACY_NOT_FOUND_MESSAGE,
+};
+
+async function requireAdmin() {
   try {
     await assertAdmin();
+    return null;
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
+    if (isAppError(error)) return jsonError(error);
+    return jsonError('Unable to authorize this request', 500);
   }
+}
+
+export async function GET(req: NextRequest) {
+  const authError = await requireAdmin();
+  if (authError) return authError;
 
   try {
     const { searchParams } = new URL(req.url);
     const statusPageId = searchParams.get('statusPageId');
 
     if (!statusPageId) {
-      return jsonError('statusPageId is required', 400);
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: LEGACY_REQUIRED_MESSAGE,
+          fields: [
+            { field: 'statusPageId', code: 'required', message: 'statusPageId is required' },
+          ],
+        })
+      );
     }
 
     const webhooks = await prisma.statusPageWebhook.findMany({
@@ -33,154 +54,190 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return jsonOk(
-      {
-        webhooks: webhooks.map(webhook => ({ ...webhook, secret: '••••••••', hasSecret: true })),
-      },
-      200
-    );
-  } catch (error: any) {
-    logger.error('api.status_page.webhooks.get_error', {
-      error: error instanceof Error ? error.message : String(error),
+    return jsonOk({
+      webhooks: webhooks.map(webhook => ({ ...webhook, secret: '••••••••', hasSecret: true })),
     });
+  } catch (error) {
+    logger.error('api.status_page.webhooks.get_error', { error });
     return jsonError('Failed to fetch webhooks', 500);
   }
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    await assertAdmin();
-  } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
-  }
+  const authError = await requireAdmin();
+  if (authError) return authError;
 
   try {
-    const body = await req.json();
-    const { statusPageId, url, events } = body;
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch (error) {
+      return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
+    }
+    const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    const statusPageId = typeof payload.statusPageId === 'string' ? payload.statusPageId : null;
+    const url = typeof payload.url === 'string' ? payload.url : null;
+    const events = Array.isArray(payload.events) ? payload.events : null;
 
-    if (!statusPageId || !url || !events || !Array.isArray(events)) {
-      return jsonError('statusPageId, url, and events array are required', 400);
+    if (!statusPageId || !url || !events) {
+      return jsonError(
+        new AppError({ code: 'VALIDATION_FAILED', userMessage: LEGACY_REQUIRED_MESSAGE })
+      );
     }
 
-    // Validate URL
     try {
       await assertSafeOutboundUrl(url);
-    } catch {
-      return jsonError('Invalid URL format', 400);
+    } catch (error) {
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+          fields: [{ field: 'url', code: 'invalid', message: 'Invalid URL format' }],
+          cause: error,
+        })
+      );
     }
 
-    // Generate secret
     const secret = randomBytes(32).toString('hex');
-
     const webhook = await prisma.statusPageWebhook.create({
       data: {
         statusPageId,
         url,
         secret: await encrypt(secret),
-        events: events,
+        events,
         enabled: true,
       },
     });
 
     logger.info('api.status_page.webhook.created', { webhookId: webhook.id, statusPageId });
     return jsonOk({ webhook: { ...webhook, secret }, hasSecret: true }, 201);
-  } catch (error: any) {
-    logger.error('api.status_page.webhook.create_error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch (error) {
+    logger.error('api.status_page.webhook.create_error', { error });
     return jsonError('Failed to create webhook', 500);
   }
 }
 
-/**
- * PATCH /api/status-page/webhooks?id=xxx
- * Update webhook (URL, events, enabled status)
- */
 export async function PATCH(req: NextRequest) {
-  try {
-    await assertAdmin();
-  } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
-  }
+  const authError = await requireAdmin();
+  if (authError) return authError;
 
   try {
-    const body = await req.json();
-    const { id, url, events, enabled } = body;
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch (error) {
+      return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
+    }
+    const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    const id = typeof payload.id === 'string' ? payload.id : null;
 
     if (!id) {
-      return jsonError('id is required', 400);
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: LEGACY_REQUIRED_MESSAGE,
+          fields: [{ field: 'id', code: 'required', message: 'id is required' }],
+        })
+      );
     }
 
-    const updateData: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (url !== undefined) {
-      // Validate URL
+    const updateData: Record<string, unknown> = {};
+    if (payload.url !== undefined) {
+      if (typeof payload.url !== 'string') {
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+            fields: [{ field: 'url', code: 'invalid_type', message: 'url must be a string' }],
+          })
+        );
+      }
       try {
-        await assertSafeOutboundUrl(url);
-        updateData.url = url;
-      } catch {
-        return jsonError('Invalid URL format', 400);
+        await assertSafeOutboundUrl(payload.url);
+        updateData.url = payload.url;
+      } catch (error) {
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+            fields: [{ field: 'url', code: 'invalid', message: 'Invalid URL format' }],
+            cause: error,
+          })
+        );
       }
     }
-    if (events !== undefined) {
-      if (!Array.isArray(events)) {
-        return jsonError('events must be an array', 400);
+    if (payload.events !== undefined) {
+      if (!Array.isArray(payload.events)) {
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: 'events must be an array',
+            fields: [{ field: 'events', code: 'invalid_type', message: 'events must be an array' }],
+          })
+        );
       }
-      updateData.events = events;
+      updateData.events = payload.events;
     }
-    if (enabled !== undefined) {
-      updateData.enabled = enabled;
+    if (payload.enabled !== undefined) {
+      if (typeof payload.enabled !== 'boolean') {
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: 'enabled must be a boolean',
+            fields: [{ field: 'enabled', code: 'invalid_type', message: 'enabled must be a boolean' }],
+          })
+        );
+      }
+      updateData.enabled = payload.enabled;
     }
 
     if (Object.keys(updateData).length === 0) {
-      return jsonError('No fields to update', 400);
+      return jsonError(
+        new AppError({ code: 'VALIDATION_FAILED', userMessage: 'No fields to update' })
+      );
     }
 
-    const webhook = await prisma.statusPageWebhook.update({
-      where: { id },
-      data: updateData,
-    });
+    const webhook = await prisma.statusPageWebhook.update({ where: { id }, data: updateData });
 
     logger.info('api.status_page.webhook.updated', { webhookId: id });
     return jsonOk({ webhook }, 200);
-  } catch (error: any) {
-    if (error.code === 'P2025') {
-      return jsonError('Webhook not found', 404);
-    }
-    logger.error('api.status_page.webhook.update_error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch (error) {
+    const prismaError = prismaToAppError(error, { notFound: WEBHOOK_NOT_FOUND });
+    if (prismaError) return jsonError(prismaError);
+    if (isAppError(error)) return jsonError(error);
+
+    logger.error('api.status_page.webhook.update_error', { error });
     return jsonError('Failed to update webhook', 500);
   }
 }
 
-/**
- * DELETE /api/status-page/webhooks?id=xxx
- */
 export async function DELETE(req: NextRequest) {
-  try {
-    await assertAdmin();
-  } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
-  }
+  const authError = await requireAdmin();
+  if (authError) return authError;
 
   try {
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
+    const id = new URL(req.url).searchParams.get('id');
 
     if (!id) {
-      return jsonError('id is required', 400);
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: LEGACY_REQUIRED_MESSAGE,
+          fields: [{ field: 'id', code: 'required', message: 'id is required' }],
+        })
+      );
     }
 
-    await prisma.statusPageWebhook.delete({
-      where: { id },
-    });
+    await prisma.statusPageWebhook.delete({ where: { id } });
 
     logger.info('api.status_page.webhook.deleted', { webhookId: id });
     return jsonOk({ success: true }, 200);
-  } catch (error: any) {
-    logger.error('api.status_page.webhook.delete_error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  } catch (error) {
+    const prismaError = prismaToAppError(error, { notFound: WEBHOOK_NOT_FOUND });
+    if (prismaError) return jsonError(prismaError);
+    if (isAppError(error)) return jsonError(error);
+
+    logger.error('api.status_page.webhook.delete_error', { error });
     return jsonError('Failed to delete webhook', 500);
   }
 }

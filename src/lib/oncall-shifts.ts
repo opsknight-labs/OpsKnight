@@ -69,11 +69,6 @@ export async function getActiveOnCallShifts(
   for (const schedule of schedules) {
     if (!schedule.layers.length && !schedule.overrides.length) continue;
 
-    const activeUserIds = new Set(
-      schedule.layers.flatMap(layer =>
-        layer.users.filter(member => member.user.status === 'ACTIVE').map(member => member.userId)
-      )
-    );
     const blocks = buildScheduleBlocks(
       schedule.layers.map(layer => ({
         id: layer.id,
@@ -84,15 +79,17 @@ export async function getActiveOnCallShifts(
         shiftLengthHours: (layer as { shiftLengthHours?: number | null }).shiftLengthHours,
         restrictions: layer.restrictions as any,
         priority: (layer as { priority?: number }).priority,
-        users: layer.users.map(lu => ({
-          userId: lu.userId,
-          user: {
-            name: lu.user?.name ?? 'Unknown User',
-            avatarUrl: lu.user?.avatarUrl ?? null,
-            gender: lu.user?.gender ?? null,
-          },
-          position: lu.position,
-        })),
+        users: layer.users
+          .filter(lu => lu.user.status === 'ACTIVE')
+          .map(lu => ({
+            userId: lu.userId,
+            user: {
+              name: lu.user?.name ?? 'Unknown User',
+              avatarUrl: lu.user?.avatarUrl ?? null,
+              gender: lu.user?.gender ?? null,
+            },
+            position: lu.position,
+          })),
       })),
       schedule.overrides.map(override => ({
         id: override.id,
@@ -118,10 +115,7 @@ export async function getActiveOnCallShifts(
     const finalBlocks = getFinalScheduleBlocks(blocks, layerPriority);
 
     const activeBlocks = finalBlocks.filter(
-      b =>
-        b.start.getTime() <= atTime.getTime() &&
-        b.end.getTime() > atTime.getTime() &&
-        (b.source === 'override' || activeUserIds.has(b.userId))
+      b => b.start.getTime() <= atTime.getTime() && b.end.getTime() > atTime.getTime()
     );
 
     for (const block of activeBlocks) {
@@ -193,11 +187,6 @@ export async function getWindowOnCallShifts(
   for (const schedule of schedules) {
     if (!schedule.layers.length && !schedule.overrides.length) continue;
 
-    const activeUserIds = new Set(
-      schedule.layers.flatMap(layer =>
-        layer.users.filter(member => member.user.status === 'ACTIVE').map(member => member.userId)
-      )
-    );
     const blocks = buildScheduleBlocks(
       schedule.layers.map(layer => ({
         id: layer.id,
@@ -208,15 +197,17 @@ export async function getWindowOnCallShifts(
         shiftLengthHours: (layer as { shiftLengthHours?: number | null }).shiftLengthHours,
         restrictions: layer.restrictions as any,
         priority: (layer as { priority?: number }).priority,
-        users: layer.users.map(lu => ({
-          userId: lu.userId,
-          user: {
-            name: lu.user?.name ?? 'Unknown User',
-            avatarUrl: lu.user?.avatarUrl ?? null,
-            gender: lu.user?.gender ?? null,
-          },
-          position: lu.position,
-        })),
+        users: layer.users
+          .filter(lu => lu.user.status === 'ACTIVE')
+          .map(lu => ({
+            userId: lu.userId,
+            user: {
+              name: lu.user?.name ?? 'Unknown User',
+              avatarUrl: lu.user?.avatarUrl ?? null,
+              gender: lu.user?.gender ?? null,
+            },
+            position: lu.position,
+          })),
       })),
       schedule.overrides.map(override => ({
         id: override.id,
@@ -243,10 +234,7 @@ export async function getWindowOnCallShifts(
 
     // Filter to blocks overlapping the window
     const overlappingBlocks = finalBlocks.filter(
-      b =>
-        b.start.getTime() < windowEnd.getTime() &&
-        b.end.getTime() > windowStart.getTime() &&
-        (b.source === 'override' || activeUserIds.has(b.userId))
+      b => b.start.getTime() < windowEnd.getTime() && b.end.getTime() > windowStart.getTime()
     );
 
     for (const block of overlappingBlocks) {

@@ -41,7 +41,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
   {
     id: 'active-incidents',
     name: 'Active Incidents',
-    description: 'Currently open incidents (excludes snoozed/suppressed)',
+    description: 'Current actionable backlog (triggered + acknowledged)',
     type: 'metric',
     metricKey: 'activeIncidents',
     defaultSize: { w: 1, h: 1 },

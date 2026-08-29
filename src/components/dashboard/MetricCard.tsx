@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useState, useRef, memo } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import type { MetricDataState } from '@/lib/metric-contract';
 
 type MetricCardProps = {
   label: string;
@@ -9,6 +11,11 @@ type MetricCardProps = {
   rangeLabel?: string;
   isDark?: boolean;
   variant?: 'default' | 'hero';
+  description?: string;
+  href?: string;
+  tooltip?: string;
+  dataState?: MetricDataState;
+  asOf?: string;
 };
 
 /**
@@ -18,28 +25,30 @@ const useCountUp = (end: number, duration = 800) => {
   const [count, setCount] = useState(0);
   const animationRef = useRef<number | null>(null);
   const prevEndRef = useRef<number>(end);
+  const countRef = useRef(0);
 
   useEffect(() => {
-    // Guard against invalid values
-    if (!Number.isFinite(end) || end < 0) {
-      setCount(0);
-      return;
-    }
+    const updateCount = (value: number) => {
+      countRef.current = value;
+      setCount(value);
+    };
 
     // Skip animation if value hasn't changed
-    if (prevEndRef.current === end && count === end) {
+    if (prevEndRef.current === end && countRef.current === end) {
       return;
     }
     prevEndRef.current = end;
 
-    // For zero, just set immediately
-    if (end === 0) {
-      setCount(0);
-      return;
+    // Keep state updates inside the animation callback rather than synchronously in the effect.
+    if (!Number.isFinite(end) || end <= 0) {
+      animationRef.current = requestAnimationFrame(() => updateCount(0));
+      return () => {
+        if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
+      };
     }
 
     let startTime: number | null = null;
-    const startValue = count;
+    const startValue = countRef.current;
 
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
@@ -50,13 +59,13 @@ const useCountUp = (end: number, duration = 800) => {
       const ease = 1 - Math.pow(1 - progress, 4);
 
       const newCount = Math.round(startValue + (end - startValue) * ease);
-      setCount(newCount);
+      updateCount(newCount);
 
       if (progress < 1) {
         animationRef.current = requestAnimationFrame(animate);
       } else {
         // Ensure we end exactly at the target
-        setCount(end);
+        updateCount(end);
       }
     };
 
@@ -68,7 +77,7 @@ const useCountUp = (end: number, duration = 800) => {
         animationRef.current = null;
       }
     };
-  }, [end, duration, count]);
+  }, [end, duration]);
 
   return count;
 };
@@ -83,6 +92,11 @@ const MetricCard = memo(function MetricCard({
   rangeLabel,
   isDark = false,
   variant = 'default',
+  description,
+  href,
+  tooltip,
+  dataState = 'available',
+  asOf,
 }: MetricCardProps) {
   // Parse value and determine if we should animate
   const { shouldAnimate, numericEnd, displayString } = React.useMemo(() => {
@@ -116,14 +130,19 @@ const MetricCard = memo(function MetricCard({
   const animatedValue = useCountUp(shouldAnimate ? numericEnd : 0);
 
   // Format the display value
-  const formattedDisplay = shouldAnimate ? animatedValue.toLocaleString() : displayString;
+  const formattedDisplay =
+    dataState === 'unavailable' || dataState === 'no_data'
+      ? 'N/A'
+      : shouldAnimate
+        ? animatedValue.toLocaleString()
+        : displayString;
 
   const isHero = variant === 'hero';
 
-  return (
+  const card = (
     <div
       className={cn(
-        'relative overflow-hidden text-center transition-all duration-300',
+        'relative h-full overflow-hidden text-center transition-all duration-300',
         isHero
           ? 'rounded-lg'
           : 'group rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-white to-primary/5 shadow-sm hover:shadow-md',
@@ -133,10 +152,11 @@ const MetricCard = memo(function MetricCard({
           : isHero
             ? 'bg-white/10 border border-white/20 backdrop-blur text-primary-foreground shadow-sm hover:bg-white/15'
             : '',
-        isHero ? 'p-3 md:p-4' : 'p-6 sm:p-4'
+        isHero ? 'flex min-h-32 flex-col justify-center p-3 md:p-4' : 'p-6 sm:p-4'
       )}
       role="figure"
-      aria-label={`${label}: ${formattedDisplay}${rangeLabel ? ` ${rangeLabel}` : ''}`}
+      aria-label={`${label}: ${formattedDisplay}${description ? `. ${description}` : ''}${rangeLabel ? ` ${rangeLabel}` : ''}`}
+      title={tooltip}
     >
       {/* Accent bar for default variant */}
       {!isDark && !isHero && (
@@ -164,7 +184,47 @@ const MetricCard = memo(function MetricCard({
       >
         {label} {rangeLabel && <span className="opacity-80 text-[0.7rem]">{rangeLabel}</span>}
       </div>
+      {description && (
+        <div
+          className={cn(
+            'mt-1 text-[0.7rem] leading-tight relative z-10',
+            isDark || isHero ? 'text-white/75' : 'text-muted-foreground'
+          )}
+        >
+          {description}
+        </div>
+      )}
+      {dataState !== 'available' && (
+        <div
+          className={cn(
+            'mt-1 text-[0.65rem] font-semibold uppercase tracking-wide relative z-10',
+            isDark || isHero ? 'text-amber-100' : 'text-amber-700'
+          )}
+          role="status"
+        >
+          {dataState === 'unavailable'
+            ? 'Data unavailable'
+            : dataState === 'no_data'
+              ? 'No qualifying data'
+              : `${dataState} data`}
+        </div>
+      )}
+      {asOf && dataState !== 'unavailable' && (
+        <span className="sr-only">Data calculated at {asOf}</span>
+      )}
     </div>
+  );
+
+  if (!href) return card;
+
+  return (
+    <Link
+      href={href}
+      className="block h-full rounded-lg no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+      aria-label={`View ${label.toLowerCase()} incidents`}
+    >
+      {card}
+    </Link>
   );
 });
 

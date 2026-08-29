@@ -1,12 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
+import { authenticateApiKey } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { IncidentCreateSchema } from '@/lib/validation';
-import { logger } from '@/lib/logger';
-import { executeEscalation } from '@/lib/escalation';
-import { scheduleStatusPageNotification } from '@/lib/jobs/queue';
+import { logger, withRequestContext } from '@/lib/logger';
+import { resolveApiKeyActor } from '@/lib/authorization-actors';
+import { incidentReadWhere } from '@/lib/authorization-filters';
+import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import { authorizationDecisionError } from '@/lib/api-authorization-error';
+import { AppError } from '@/lib/errors';
+import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
+
+const LEGACY_UNAUTHORIZED_MESSAGE =
+  'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
+const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
 function parseLimit(value: string | null) {
   const limit = Number(value);
@@ -16,34 +26,27 @@ function parseLimit(value: string | null) {
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;
-const RATE_LIMIT_BURST = 120; // short burst protection
+const RATE_LIMIT_BURST = 120;
 
-async function getApiUserContext(apiKeyUserId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: apiKeyUserId },
-    select: {
-      id: true,
-      role: true,
-      teamMemberships: { select: { teamId: true } },
-    },
-  });
-
-  if (!user) return null;
-
-  return {
-    id: user.id,
-    role: user.role,
-    teamIds: user.teamMemberships.map(membership => membership.teamId),
-  };
+function rateLimitError(retryAfter: number) {
+  return jsonError(
+    new AppError({
+      code: 'RATE_LIMIT_EXCEEDED',
+      userMessage: 'Rate limit exceeded.',
+      details: { retryAfter },
+    }),
+    undefined,
+    undefined,
+    { 'Retry-After': String(retryAfter) }
+  );
 }
 
-export async function GET(req: NextRequest) {
+async function getIncidents(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError('Unauthorized. Missing or invalid API key.', 401);
-  }
-  if (!hasApiScopes(apiKey.scopes, ['incidents:read'])) {
-    return jsonError('API key missing scope: incidents:read.', 403);
+    return jsonError(
+      new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+    );
   }
 
   const rate = await checkRateLimit(
@@ -52,27 +55,32 @@ export async function GET(req: NextRequest) {
     RATE_LIMIT_WINDOW_MS
   );
   if (!rate.allowed) {
-    const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+    return rateLimitError(Math.ceil((rate.resetAt - Date.now()) / 1000));
+  }
+
+  const actor = await resolveApiKeyActor(apiKey);
+  if (!actor) {
+    return jsonError(
+      new AppError({
+        code: 'API_KEY_USER_INVALID',
+        userMessage: LEGACY_UNAUTHORIZED_MESSAGE,
+        details: { apiKeyId: apiKey.id, userId: apiKey.userId },
+      })
     );
   }
 
-  const apiUser = await getApiUserContext(apiKey.userId);
-  if (!apiUser) {
-    return jsonError('Unauthorized. API key user not found.', 401);
+  const readDecision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_READ });
+  if (!readDecision.allowed) {
+    return jsonError(
+      authorizationDecisionError(readDecision, {
+        forbiddenMessage: 'Forbidden. Incident access denied.',
+      })
+    );
   }
 
   const { searchParams } = new URL(req.url);
   const limit = parseLimit(searchParams.get('limit'));
-
-  const accessFilter =
-    apiUser.role === 'ADMIN' || apiUser.role === 'RESPONDER'
-      ? undefined
-      : {
-          OR: [{ assigneeId: apiUser.id }, { service: { teamId: { in: apiUser.teamIds } } }],
-        };
+  const accessFilter = incidentReadWhere(actor);
 
   const incidents = await prisma.incident.findMany({
     where: accessFilter,
@@ -80,25 +88,21 @@ export async function GET(req: NextRequest) {
     take: limit,
     include: {
       service: { select: { id: true, name: true } },
-      assignee: {
-        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-      },
+      assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
     },
   });
 
-  // Add cache headers for incidents list (short cache, private)
   return jsonOk({ incidents }, 200, {
     'Cache-Control': 'private, max-age=5, stale-while-revalidate=15',
   });
 }
 
-export async function POST(req: NextRequest) {
+async function postIncident(req: NextRequest) {
   const apiKey = await authenticateApiKey(req);
   if (!apiKey) {
-    return jsonError('Unauthorized. Missing or invalid API key.', 401);
-  }
-  if (!hasApiScopes(apiKey.scopes, ['incidents:write'])) {
-    return jsonError('API key missing scope: incidents:write.', 403);
+    return jsonError(
+      new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+    );
   }
 
   const rate = await checkRateLimit(
@@ -106,152 +110,128 @@ export async function POST(req: NextRequest) {
     RATE_LIMIT_MAX,
     RATE_LIMIT_WINDOW_MS
   );
-  // Simple burst guard: if attempts exceed burst, block immediately
   if (!rate.allowed || rate.count > RATE_LIMIT_BURST) {
-    const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
-    );
+    return rateLimitError(Math.ceil((rate.resetAt - Date.now()) / 1000));
   }
-  if (!rate.allowed) {
-    const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      { error: 'Rate limit exceeded.' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+
+  const actor = await resolveApiKeyActor(apiKey);
+  if (!actor) {
+    return jsonError(
+      new AppError({
+        code: 'API_KEY_USER_INVALID',
+        userMessage: LEGACY_UNAUTHORIZED_MESSAGE,
+        details: { apiKeyId: apiKey.id, userId: apiKey.userId },
+      })
     );
   }
 
-  const apiUser = await getApiUserContext(apiKey.userId);
-  if (!apiUser) {
-    return jsonError('Unauthorized. API key user not found.', 401);
+  const createDecision = authorize({ actor, action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE });
+  if (!createDecision.allowed) {
+    return jsonError(
+      authorizationDecisionError(createDecision, {
+        forbiddenMessage: 'Forbidden. Incident creation access denied.',
+      })
+    );
   }
 
-  let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  let body: unknown;
   try {
     body = await req.json();
   } catch (_error) {
-    return jsonError('Invalid JSON in request body.', 400);
+    return jsonError(
+      new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE })
+    );
   }
-  const parsed = IncidentCreateSchema.safeParse({
-    title: body.title,
-    description: body.description ?? null,
-    serviceId: body.serviceId,
-    urgency: body.urgency,
-    priority: body.priority ?? null,
-  });
 
+  const parsed = IncidentCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError('Invalid request body.', 400, { issues: parsed.error.issues });
+    return jsonError(
+      new AppError({ code: 'VALIDATION_FAILED', userMessage: LEGACY_INVALID_INPUT_MESSAGE }),
+      undefined,
+      { issues: parsed.error.issues }
+    );
   }
 
   const { title, description, serviceId, urgency, priority } = parsed.data;
-
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!service) {
-    return jsonError('Service not found.', 404);
+    return jsonError(
+      new AppError({
+        code: 'SERVICE_NOT_FOUND',
+        userMessage: LEGACY_NOT_FOUND_MESSAGE,
+        details: { serviceId },
+      })
+    );
   }
 
-  if (apiUser.role !== 'ADMIN' && apiUser.role !== 'RESPONDER') {
-    if (!service.teamId || !apiUser.teamIds.includes(service.teamId)) {
-      return jsonError('Forbidden. Service access denied.', 403);
+  const serviceDecision = authorize({
+    actor,
+    action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+    resource: { type: 'service', teamId: service.teamId },
+  });
+  if (!serviceDecision.allowed) {
+    return jsonError(
+      authorizationDecisionError(serviceDecision, {
+        forbiddenCode: 'SERVICE_ACCESS_DENIED',
+        forbiddenMessage: 'Forbidden. Service access denied.',
+      })
+    );
+  }
+
+  try {
+    const idempotencyKey = req.headers.get('idempotency-key')?.trim();
+    const execution = await executeIdempotentIncidentCreation(
+      {
+        title,
+        description: description ?? null,
+        serviceId,
+        urgency,
+        priority: priority ?? null,
+        source: 'REST_API',
+        actor: { id: actor.id },
+      },
+      idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined
+    );
+    const creation = execution.value;
+
+    const incident = await prisma.incident.findUnique({
+      where: { id: creation.id },
+      include: {
+        service: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
+      },
+    });
+
+    if (!incident) {
+      throw new AppError({
+        code: 'INCIDENT_NOT_FOUND',
+        userMessage: LEGACY_NOT_FOUND_MESSAGE,
+        details: { incidentId: creation.id },
+      });
     }
-  }
 
-  // Use include in create() to fetch relations in single query instead of separate findUnique
-  const incident = await prisma.incident.create({
-    data: {
-      title,
-      description,
-      urgency,
-      priority,
-      status: 'OPEN',
+    logger.info('api.incident.created', {
+      incidentId: incident.id,
+      serviceId: incident.serviceId,
+      apiKeyId: apiKey.id,
+      outcome: creation.outcome,
+      idempotencyReplayed: execution.replayed,
+    });
+
+    return jsonOk(
+      { incident, outcome: creation.outcome },
+      201,
+      execution.replayed ? { 'Idempotency-Replayed': 'true' } : undefined
+    );
+  } catch (error) {
+    logger.error('api.incident.create_failed', {
+      error: error instanceof Error ? error.message : String(error),
       serviceId,
-    },
-    include: {
-      service: { select: { id: true, name: true } },
-      assignee: {
-        select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-      },
-    },
-  });
-
-  logger.info('api.incident.created', {
-    incidentId: incident.id,
-    serviceId: incident.serviceId,
-    apiKeyId: apiKey.id,
-  });
-
-  // Execute escalation policy to assign/notify per policy steps
-  let escalationResult: { escalated?: boolean; reason?: string } | null = null;
-  try {
-    escalationResult = await executeEscalation(incident.id);
-  } catch (e) {
-    logger.error('api.incident.escalation_failed', {
-      error: e instanceof Error ? e.message : String(e),
-      incidentId: incident.id,
+      apiKeyId: apiKey.id,
     });
+    return jsonError(error);
   }
-
-  // Trigger status page webhooks for incident.created event
-  try {
-    const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-    await triggerWebhooksForService(incident.serviceId, 'incident.created', {
-      id: incident.id,
-      title: incident.title,
-      description: incident.description,
-      status: incident.status,
-      urgency: incident.urgency,
-      priority: incident.priority,
-      service: {
-        id: incident.service.id,
-        name: incident.service.name,
-      },
-      assignee: incident.assignee,
-      createdAt: incident.createdAt.toISOString(),
-    });
-  } catch (e) {
-    // Log but don't fail the request
-    logger.error('api.incident.webhook_trigger_failed', {
-      error: e instanceof Error ? e.message : String(e),
-    });
-  }
-
-  const hasEscalationPolicy = escalationResult?.reason !== 'No escalation policy configured';
-
-  // Trigger service-level notifications (Slack, Webhooks),
-  // or fall back to user notifications when no policy is configured.
-  try {
-    if (hasEscalationPolicy) {
-      const { sendServiceNotifications } = await import('@/lib/service-notifications');
-      await sendServiceNotifications(incident.id, 'triggered');
-    } else {
-      const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-      await sendIncidentNotifications(incident.id, 'triggered');
-    }
-  } catch (e) {
-    logger.error('api.incident.service_notification_import_failed', {
-      error: e instanceof Error ? e.message : String(e),
-    });
-  }
-
-  // Subscriber fan-out is durable and processed outside the request path.
-  try {
-    await scheduleStatusPageNotification(incident.id, 'triggered');
-  } catch (e) {
-    logger.error('api.incident.status_page_notification_enqueue_failed', {
-      error: e instanceof Error ? e.message : String(e),
-      incidentId: incident.id,
-    });
-  }
-
-  // ChatOps: Auto-create war-room for qualifying incidents.
-  try {
-    const { createIncidentWarRoom } = await import('@/lib/chatops/war-room');
-    await createIncidentWarRoom(incident.id);
-  } catch (e) {
-    logger.error('Failed to load chatops/war-room', { error: e });
-  }
-
-  return jsonOk({ incident }, 201);
 }
+
+export const GET = withRequestContext(getIncidents, 'api.incidents.list');
+export const POST = withRequestContext(postIncident, 'api.incidents.create');

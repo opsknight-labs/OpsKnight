@@ -5,6 +5,8 @@ import { getAuthOptions } from '@/lib/auth';
 import MobileTime from '@/components/mobile/MobileTime';
 import NewIncidentButton from '@/components/mobile/NewIncidentButton';
 import { formatDurationShort } from '@/lib/mobile-time';
+import { logger } from '@/lib/logger';
+import { INCIDENT_METRIC_DEFINITIONS, metricDefinitionTooltip } from '@/lib/metric-contract';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,16 +22,38 @@ export default async function MobileDashboard() {
     windowDays: metricsWindowDays,
     includeAllTime: false,
     includeActiveIncidents: true,
+  }).catch(error => {
+    logger.error('mobile.dashboard.metricsUnavailable', {
+      component: 'MobileDashboard',
+      error,
+    });
+    return null;
   });
 
-  const dayMs = 24 * 60 * 60 * 1000;
-  const effectiveWindowDays = Math.max(
-    1,
-    Math.ceil((slaMetrics.effectiveEnd.getTime() - slaMetrics.effectiveStart.getTime()) / dayMs)
-  );
-  const windowLabelDays = slaMetrics.isClipped ? effectiveWindowDays : metricsWindowDays;
-  const windowLabelSuffix = slaMetrics.isClipped ? ' (retention limit)' : '';
+  if (!slaMetrics) {
+    return (
+      <div className="mobile-dashboard">
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+          role="alert"
+        >
+          <strong>Incident statistics are unavailable.</strong>
+          <p className="mt-1">
+            OpsKnight could not calculate metrics, so zero values are not shown. Incident workflows
+            remain available.
+          </p>
+        </div>
+        <div className="mobile-quick-actions mt-4">
+          <NewIncidentButton />
+          <Link href="/m/incidents" className="mobile-quick-action secondary">
+            View incidents
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
+  const dayMs = 24 * 60 * 60 * 1000;
   const currentOnCallShift = userId
     ? slaMetrics.currentShifts.find(s => s.userId === userId && s.end) || null
     : null;
@@ -37,11 +61,9 @@ export default async function MobileDashboard() {
   const openIncidents = slaMetrics.openCount;
   const criticalIncidents = slaMetrics.criticalCount;
   const resolved24h = slaMetrics.resolved24h;
-  const totalActive =
-    slaMetrics.openCount +
-    slaMetrics.acknowledgedCount +
-    slaMetrics.snoozedCount +
-    slaMetrics.suppressedCount;
+  const totalActive = slaMetrics.openCount + slaMetrics.acknowledgedCount;
+  const totalMuted = slaMetrics.snoozedCount + slaMetrics.suppressedCount;
+  const resolvedAfter = new Date(lastUpdated.getTime() - dayMs).toISOString();
 
   const activeIncidentList = (slaMetrics.activeIncidentSummaries || [])
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -160,30 +182,56 @@ export default async function MobileDashboard() {
 
       {/* Key Metrics */}
       <div className="mobile-metrics-grid mobile-enter delay-300">
-        <div className="mobile-metric-card">
+        <Link
+          href="/m/incidents?filter=open"
+          className="mobile-metric-card"
+          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.triggeredIncidents)}
+        >
           <div className="mobile-metric-value">{openIncidents}</div>
-          <div className="mobile-metric-label">Open</div>
-        </div>
-        <div className="mobile-metric-card" style={{ borderLeft: '3px solid #dc2626' }}>
+          <div className="mobile-metric-label">Triggered · Current</div>
+        </Link>
+        <Link
+          href="/m/incidents?filter=all_open&urgency=HIGH"
+          className="mobile-metric-card"
+          style={{ borderLeft: '3px solid #dc2626' }}
+          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.highUrgencyActive)}
+        >
           <div className="mobile-metric-value" style={{ color: '#dc2626' }}>
             {criticalIncidents}
           </div>
-          <div className="mobile-metric-label">Critical</div>
-        </div>
-        <div className="mobile-metric-card" style={{ borderLeft: '3px solid #16a34a' }}>
+          <div className="mobile-metric-label">High urgency · Current</div>
+        </Link>
+        <Link
+          href={`/m/incidents?filter=resolved&resolvedAfter=${encodeURIComponent(resolvedAfter)}`}
+          className="mobile-metric-card"
+          style={{ borderLeft: '3px solid #16a34a' }}
+          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.resolved24h)}
+        >
           <div className="mobile-metric-value" style={{ color: '#16a34a' }}>
             {resolved24h}
           </div>
           <div className="mobile-metric-label">Resolved (24h)</div>
-        </div>
-        <div className="mobile-metric-card">
+        </Link>
+        <Link
+          href="/m/incidents?filter=all_open"
+          className="mobile-metric-card"
+          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.activeIncidents)}
+        >
           <div className="mobile-metric-value">{totalActive}</div>
-          <div className="mobile-metric-label">Total Active</div>
-        </div>
+          <div className="mobile-metric-label">Active · Current</div>
+        </Link>
+        <Link
+          href="/m/incidents?filter=muted"
+          className="mobile-metric-card"
+          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.mutedIncidents)}
+        >
+          <div className="mobile-metric-value">{totalMuted}</div>
+          <div className="mobile-metric-label">Muted · Current</div>
+        </Link>
       </div>
       <p className="text-[11px] font-medium text-[color:var(--text-muted)] mobile-enter delay-300">
-        <strong>Open</strong>: New & Unacknowledged. <strong>Total Active</strong>: All unresolved
-        incidents.
+        <strong>Active</strong>: Triggered plus acknowledged. <strong>Muted</strong>: Snoozed plus
+        suppressed. Current backlog counts are separate from period metrics.
       </p>
       <p className="text-[11px] text-[color:var(--text-muted)] mobile-enter delay-300">
         Last updated <MobileTime value={lastUpdated} format="time" />

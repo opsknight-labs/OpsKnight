@@ -11,6 +11,7 @@ enum Role {
   USER
   ADMIN
   RESPONDER
+  AUDITOR
 }
 
 enum UserStatus {
@@ -66,6 +67,7 @@ enum NotificationStatus {
   SENT
   DELIVERED
   FAILED
+  SKIPPED
 }
 
 enum NotificationChannel {
@@ -851,6 +853,7 @@ model Notification {
   channel           NotificationChannel
   status            NotificationStatus  @default(PENDING)
   message           String?
+  eventType         String              @default("triggered")
   sentAt            DateTime?
   deliveredAt       DateTime?
   failedAt          DateTime?

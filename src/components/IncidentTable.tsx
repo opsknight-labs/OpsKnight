@@ -171,8 +171,8 @@ export default memo(function IncidentTable({
         showToast(`Incident ${status.toLowerCase()} successfully`, 'success');
         router.refresh();
       } catch (error) {
-        const { getUserFriendlyError } = await import('@/lib/user-friendly-errors');
-        showToast(getUserFriendlyError(error) || 'Failed to update status', 'error');
+        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+        showToast(getUserFacingErrorMessage(error) || 'Failed to update status', 'error');
       }
     });
   };

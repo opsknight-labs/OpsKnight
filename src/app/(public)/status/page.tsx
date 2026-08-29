@@ -23,7 +23,9 @@ import StatusPageIncidents from '@/components/status-page/StatusPageIncidents';
 import StatusPageAnnouncements from '@/components/status-page/StatusPageAnnouncements';
 import StatusPageSubscribe from '@/components/status-page/StatusPageSubscribe';
 import StatusPageMetrics from '@/components/status-page/StatusPageMetrics';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 import StatusPageAutoRefresh from '@/components/status-page/StatusPageAutoRefresh';
+import { getReportingWindowForDays } from '@/lib/retention-policy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -300,7 +302,7 @@ async function renderStatusPage(statusPage: any) {
           select: {
             incidents: {
               where: {
-                status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+                status: { in: activeIncidentStatuses() },
                 visibility: 'PUBLIC',
               },
             },
@@ -308,7 +310,7 @@ async function renderStatusPage(statusPage: any) {
         },
         incidents: {
           where: {
-            status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+            status: { in: activeIncidentStatuses() },
             visibility: 'PUBLIC',
           },
           select: {
@@ -327,11 +329,16 @@ async function renderStatusPage(statusPage: any) {
   // Get recent incidents (last 90 days) with events
   // Use all services if none configured, or specific service IDs
   const incidentServiceIds = serviceIds.length > 0 ? serviceIds : services.map(s => s.id);
+  const now = new Date();
+  const [ninetyDayWindow, thirtyDayWindow] = await Promise.all([
+    getReportingWindowForDays(90, 'incident', now),
+    getReportingWindowForDays(30, 'incident', now),
+  ]);
   const recentIncidents = statusPage.showIncidents
     ? await prisma.incident.findMany({
         where: {
           serviceId: { in: incidentServiceIds },
-          createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+          createdAt: { gte: ninetyDayWindow.start, lte: ninetyDayWindow.end },
           visibility: 'PUBLIC',
         },
         include: {
@@ -357,11 +364,8 @@ async function renderStatusPage(statusPage: any) {
   const { calculateSLAMetrics, calculateMultiServiceUptime, getExternalStatusLabel } =
     await import('@/lib/sla-server');
 
-  const now = new Date();
-  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-  ninetyDaysAgo.setUTCHours(0, 0, 0, 0);
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  thirtyDaysAgo.setUTCHours(0, 0, 0, 0);
+  const ninetyDaysAgo = new Date(ninetyDayWindow.start);
+  const thirtyDaysAgo = new Date(thirtyDayWindow.start);
   const serviceIdsForSLA = statusPage.services.map((sp: any) => sp.serviceId);
 
   // Optimized: Single call to get metrics for all services
@@ -395,7 +399,7 @@ async function renderStatusPage(statusPage: any) {
       OR: [
         { createdAt: { gte: ninetyDaysAgo } },
         { resolvedAt: { gte: ninetyDaysAgo } },
-        { status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
+        { status: { in: activeIncidentStatuses() } },
       ],
     },
     select: {

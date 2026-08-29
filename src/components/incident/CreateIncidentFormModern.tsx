@@ -1,11 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useActionState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
+import { createIncident } from '@/app/(app)/incidents/actions';
 import CustomFieldInput from '@/components/CustomFieldInput';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -42,7 +43,6 @@ import {
   Users,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
-import { useCreateIncident } from '@/hooks/useCreateIncident';
 
 // Types
 type Service = {
@@ -146,12 +146,6 @@ export default function CreateIncidentFormModern({
     },
   });
 
-  // FIX: Use ref to avoid stale closure issues
-  const formRef = useRef(form);
-  useEffect(() => {
-    formRef.current = form;
-  }, [form]);
-
   // Custom Field State (kept separate from RHF for simplicity with dynamic fields)
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
 
@@ -170,22 +164,51 @@ export default function CreateIncidentFormModern({
     }
   }, [initialTemplate, form]);
 
-  // Shared hook for incident creation with error handling
-  const {
-    submitError,
-    isPending,
-    onSubmit: handleSubmit,
-    clearError,
-  } = useCreateIncident({
-    onSuccess: incidentId => {
-      router.push(`/incidents/${incidentId}`);
+  // Server Action State
+  const [state, formAction, isPending] = useActionState(
+    async (prevState: { id: string } | null, formData: FormData) => {
+      return await createIncident(formData);
     },
-    onError: error => {
-      // Error is already handled by the hook, but we can add additional logging here
-      console.error('Incident creation failed:', error);
-    },
-    formRef,
-  });
+    null
+  );
+
+  // Handle successful creation
+  useEffect(() => {
+    if (state && state.id) {
+      router.push(`/incidents/${state.id}`);
+    }
+  }, [state, router]);
+
+  // Custom submit handler to bridge RHF and Server Actions
+  const onSubmit = (data: FormValues) => {
+    const formData = new FormData();
+    formData.append('title', data.title);
+    formData.append('description', data.description || '');
+    formData.append('serviceId', data.serviceId);
+    formData.append('urgency', data.urgency);
+    if (data.priority) formData.append('priority', data.priority);
+    if (data.assigneeId && data.assigneeId !== 'unassigned') {
+      if (data.assigneeId.startsWith('team:')) {
+        formData.append('teamId', data.assigneeId.replace('team:', ''));
+      } else if (data.assigneeId.startsWith('user:')) {
+        formData.append('assigneeId', data.assigneeId.replace('user:', ''));
+      } else {
+        // Fallback for direct IDs if any
+        formData.append('assigneeId', data.assigneeId);
+      }
+    }
+    if (data.dedupKey) formData.append('dedupKey', data.dedupKey);
+
+    // Add custom fields
+    Object.entries(customFieldValues).forEach(([key, value]) => {
+      formData.append(`customField_${key}`, value);
+    });
+
+    // Trigger the server action
+    React.startTransition(() => {
+      formAction(formData);
+    });
+  };
 
   // Helper State for Service Combobox
   const [serviceOpen, setServiceOpen] = useState(false);
@@ -203,7 +226,7 @@ export default function CreateIncidentFormModern({
   return (
     <Form {...form}>
       <form
-        onSubmit={form.handleSubmit(handleSubmit)}
+        onSubmit={form.handleSubmit(onSubmit)}
         className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out"
       >
         {/* Main Card - Glassmorphism & Structured */}
@@ -212,20 +235,6 @@ export default function CreateIncidentFormModern({
           <div className="h-1.5 w-full bg-zinc-500/50" />
 
           <div className="p-6 md:p-8 space-y-8">
-            {/* Error Display */}
-            {submitError && (
-              <div
-                role="alert"
-                className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 flex gap-3 text-sm text-red-600 dark:text-red-400"
-              >
-                <AlertCircle className="h-5 w-5 shrink-0" />
-                <div>
-                  <p className="font-semibold">Failed to create incident</p>
-                  <p className="opacity-90">{submitError}</p>
-                </div>
-              </div>
-            )}
-
             {/* Intelligent Deduplication Info */}
             <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4 flex gap-3 text-sm text-yellow-600 dark:text-yellow-500">
               <AlertTriangle className="h-5 w-5 shrink-0" />
@@ -315,11 +324,9 @@ export default function CreateIncidentFormModern({
                             <Button
                               variant="outline"
                               role="combobox"
-                              disabled={isPending}
                               className={cn(
                                 'w-full justify-between h-10 bg-background/50 hover:bg-background border-dashed border-input active:scale-[0.98] transition-all',
-                                !field.value && 'text-muted-foreground',
-                                isPending && 'opacity-50 cursor-not-allowed'
+                                !field.value && 'text-muted-foreground'
                               )}
                             >
                               {field.value ? (
@@ -389,11 +396,9 @@ export default function CreateIncidentFormModern({
                             <Button
                               variant="outline"
                               role="combobox"
-                              disabled={isPending}
                               className={cn(
                                 'w-full justify-between h-10 bg-background/50 hover:bg-background border-dashed border-input active:scale-[0.98] transition-all',
-                                !field.value && 'text-muted-foreground',
-                                isPending && 'opacity-50 cursor-not-allowed'
+                                !field.value && 'text-muted-foreground'
                               )}
                             >
                               {field.value && field.value !== 'unassigned' ? (

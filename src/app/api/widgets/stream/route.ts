@@ -3,7 +3,9 @@ import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { getCachedWidgetData } from '@/lib/widget-data-cache';
 import prisma from '@/lib/prisma';
-import { buildDateFilter } from '@/lib/dashboard-utils';
+import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
+import { dashboardMetricsScope } from '@/lib/authorization-filters';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 /**
  * Server-Sent Events (SSE) Stream for Real-time Widget Updates
@@ -21,12 +23,22 @@ export async function GET(request: Request) {
       select: {
         id: true,
         role: true,
+        status: true,
+        teamMemberships: { select: { teamId: true } },
       },
     });
 
-    if (!user) {
-      return new Response('User not found', { status: 404 });
+    if (!user || user.status !== 'ACTIVE') {
+      return new Response('Unauthorized', { status: 401 });
     }
+
+    const actor: AuthorizationActor = {
+      id: user.id,
+      role: user.role,
+      status: user.status,
+      teamIds: user.teamMemberships.map(membership => membership.teamId),
+    };
+    const metricsScope = dashboardMetricsScope(actor);
 
     const encoder = new TextEncoder();
     const searchParams = new URL(request.url).searchParams;
@@ -36,7 +48,7 @@ export async function GET(request: Request) {
     const assigneeParam = searchParams.get('assignee');
     const serviceParam = searchParams.get('service');
 
-    const dateFilter = buildDateFilter(range, startDate, endDate);
+    const dateFilter = await buildRetainedDateFilter(range, startDate, endDate);
     const widgetFilters = {
       serviceId: serviceParam && serviceParam !== 'all' ? serviceParam : undefined,
       assigneeId: assigneeParam === null ? undefined : assigneeParam === '' ? null : assigneeParam,
@@ -49,9 +61,10 @@ export async function GET(request: Request) {
           | 'SUPPRESSED'
           | 'RESOLVED'
           | null) || undefined,
-      startDate: dateFilter.createdAt?.gte,
-      endDate: dateFilter.createdAt?.lte,
+      startDate: dateFilter.window.start,
+      endDate: dateFilter.window.end,
       includeAllTime: range === 'all',
+      ...metricsScope,
     };
 
     let cleanup: () => void = () => {};

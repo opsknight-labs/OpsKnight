@@ -13,12 +13,13 @@ User accounts identify responders, administrators, observers, schedule participa
 | Role          | Intended access                                                                                                                                                                                                                                       |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **User**      | Standard signed-in access to permitted dashboards and operational records. Some server-side resource checks also allow assigned users or owning-team members, but the v1.4 incident interface reserves management controls for Responders and Admins. |
+| **Auditor**   | Read-only organization-wide access to incidents, services, schedules, reports, metrics, and audit evidence. Cannot change operational resources or workspace settings.                                                                                |
 | **Responder** | Create and manage incidents, services, teams, schedules, integrations, and other response workflows. Cannot perform Admin-only workspace governance.                                                                                                  |
 | **Admin**     | Full workspace administration, including users, policy administration, providers, security configuration, and destructive account/service operations.                                                                                                 |
 
 Team **Owner**, **Admin**, and **Member** are separate team-scoped roles. See [Teams](teams.md).
 
-Use least privilege. Keep at least two active application Admins, and review Responder access regularly.
+Use least privilege. Prefer Auditor over Admin for compliance reviewers, keep at least two active application Admins, and review Responder access regularly.
 
 ## Account statuses
 

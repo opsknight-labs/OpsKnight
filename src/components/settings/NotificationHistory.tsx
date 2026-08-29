@@ -34,6 +34,7 @@ import {
   Clock,
   XCircle,
   Loader2,
+  MinusCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -78,6 +79,7 @@ export default function NotificationHistory() {
     sent: 0,
     pending: 0,
     failed: 0,
+    skipped: 0,
   });
 
   const resolveDateToIso = (value: string, endOfDay: boolean) => {
@@ -132,6 +134,7 @@ export default function NotificationHistory() {
           sent: 0,
           pending: 0,
           failed: 0,
+          skipped: 0,
         }
       );
       setLastUpdated(new Date().toLocaleTimeString());
@@ -187,6 +190,13 @@ export default function NotificationHistory() {
             Failed
           </Badge>
         );
+      case 'SKIPPED':
+        return (
+          <Badge variant="outline" size="xs">
+            <MinusCircle className="h-3 w-3 mr-1" />
+            Skipped
+          </Badge>
+        );
       default:
         return (
           <Badge variant="outline" size="xs">
@@ -218,7 +228,7 @@ export default function NotificationHistory() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Notifications</CardTitle>
@@ -262,6 +272,16 @@ export default function NotificationHistory() {
           <CardContent>
             <div className="text-2xl font-bold text-destructive">{stats.failed}</div>
             <p className="text-xs text-muted-foreground">Delivery errors</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Skipped</CardTitle>
+            <MinusCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-extrabold">{stats.skipped}</div>
+            <p className="text-xs text-muted-foreground">Terminal policy outcomes</p>
           </CardContent>
         </Card>
       </div>
@@ -330,6 +350,7 @@ export default function NotificationHistory() {
                   <SelectItem value="PENDING">Pending</SelectItem>
                   <SelectItem value="SENT">Sent</SelectItem>
                   <SelectItem value="FAILED">Failed</SelectItem>
+                  <SelectItem value="SKIPPED">Skipped</SelectItem>
                 </SelectContent>
               </Select>
 

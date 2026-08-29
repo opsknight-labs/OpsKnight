@@ -5,6 +5,8 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import MobileCard from '@/components/mobile/MobileCard';
 import MobileTime from '@/components/mobile/MobileTime';
 import type { ReactNode } from 'react';
+import { activeIncidentStatuses } from '@/lib/incident-status';
+import { buildIncidentListHref } from '@/lib/incident-links';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +22,7 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
     include: {
       policy: true,
       incidents: {
-        where: { status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] } },
+        where: { status: { in: activeIncidentStatuses() } },
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: {
@@ -34,7 +36,7 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
       _count: {
         select: {
           incidents: {
-            where: { status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] } },
+            where: { status: { in: activeIncidentStatuses() } },
           },
         },
       },
@@ -79,7 +81,7 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
             >
               {isHealthy
                 ? '✓ Operational'
-                : `⚠ ${service._count.incidents} Open Incident${service._count.incidents !== 1 ? 's' : ''}`}
+                : `⚠ ${service._count.incidents} Active Incident${service._count.incidents !== 1 ? 's' : ''}`}
             </div>
           </div>
         </div>
@@ -103,15 +105,19 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
         <DetailRow label="Created" value={<MobileTime value={service.createdAt} format="date" />} />
       </MobileCard>
 
-      {/* Open Incidents */}
+      {/* Active Incidents */}
       {service.incidents.length > 0 && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-              Open Incidents
+              Active Incidents
             </h2>
             <Link
-              href={`/m/incidents?serviceId=${service.id}`}
+              href={buildIncidentListHref({
+                basePath: '/m/incidents',
+                filter: 'all_open',
+                serviceId: service.id,
+              })}
               className="text-xs font-semibold text-primary"
             >
               See all →

@@ -25,6 +25,7 @@ import {
   type WidgetDefinition,
   type WidgetCategory,
 } from '@/lib/reports/widget-registry';
+import { getMetricDefinition, metricScopeLabel } from '@/lib/metric-contract';
 
 interface WidgetLibraryProps {
   isOpen: boolean;
@@ -209,6 +210,7 @@ const WidgetLibrary = memo(function WidgetLibrary({
                 {widgets.map(widget => {
                   const isAdded = existingWidgetKeys.includes(widget.metricKey);
                   const Icon = getWidgetIcon(widget.id);
+                  const metricDefinition = getMetricDefinition(widget.metricKey);
 
                   return (
                     <button
@@ -232,8 +234,13 @@ const WidgetLibrary = memo(function WidgetLibrary({
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium truncate">{widget.name}</div>
                           <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                            {widget.description}
+                            {metricDefinition?.description || widget.description}
                           </div>
+                          {metricDefinition && (
+                            <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-primary/80">
+                              {metricScopeLabel(metricDefinition.scope)}
+                            </div>
+                          )}
                         </div>
                       </div>
 

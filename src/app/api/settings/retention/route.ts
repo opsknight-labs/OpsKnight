@@ -1,6 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { NextRequest } from 'next/server';
 import {
   getRetentionPolicy,
   updateRetentionPolicy,
@@ -8,6 +6,8 @@ import {
 } from '@/lib/retention-policy';
 import { getStorageStats, performDataCleanup } from '@/lib/data-cleanup';
 import { assertAdmin } from '@/lib/rbac';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { logAudit } from '@/lib/audit';
 import { z } from 'zod';
@@ -22,6 +22,18 @@ const RetentionUpdateSchema = z
   })
   .refine(data => Object.keys(data).length > 0, { message: 'No valid fields provided' });
 
+function retentionValidationError(error: z.ZodError) {
+  return new AppError({
+    code: 'VALIDATION_FAILED',
+    userMessage: 'Invalid retention settings',
+    fields: error.issues.map(issue => ({
+      field: issue.path.join('.') || 'request',
+      code: issue.code,
+      message: issue.message,
+    })),
+  });
+}
+
 /**
  * GET /api/settings/retention
  * Fetch current retention policy and storage statistics
@@ -32,7 +44,7 @@ export async function GET() {
 
     const [policy, stats] = await Promise.all([getRetentionPolicy(), getStorageStats()]);
 
-    return NextResponse.json({
+    return jsonOk({
       policy,
       stats,
       presets: [
@@ -79,12 +91,9 @@ export async function GET() {
       ],
     });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Failed to fetch retention settings';
-    if (msg.includes('Unauthorized') || msg.includes('Admin access required')) {
-      return NextResponse.json({ error: msg }, { status: 403 });
-    }
+    if (isAppError(error)) return jsonError(error);
     logger.error('[API] Failed to fetch retention settings', { error });
-    return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
+    return jsonError('Failed to fetch settings', 500);
   }
 }
 
@@ -95,14 +104,19 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const admin = await assertAdmin();
-    const body = await request.json();
-    const parsed = RetentionUpdateSchema.safeParse(body);
 
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
+    }
+
+    const parsed = RetentionUpdateSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Invalid retention settings', issues: parsed.error.issues },
-        { status: 400 }
-      );
+      return jsonError(retentionValidationError(parsed.error), undefined, {
+        issues: parsed.error.issues,
+      });
     }
 
     const updates: Partial<RetentionPolicy> = parsed.data;
@@ -116,22 +130,12 @@ export async function PUT(request: NextRequest) {
       details: updates,
     });
 
-    logger.info('[API] Retention policy updated', {
-      userId: admin.id,
-      updates,
-    });
-
-    return NextResponse.json({
-      success: true,
-      policy: updatedPolicy,
-    });
+    logger.info('[API] Retention policy updated', { userId: admin.id, updates });
+    return jsonOk({ success: true, policy: updatedPolicy });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Failed to update settings';
-    if (msg.includes('Unauthorized') || msg.includes('Admin access required')) {
-      return NextResponse.json({ error: msg }, { status: 403 });
-    }
+    if (isAppError(error)) return jsonError(error);
     logger.error('[API] Failed to update retention settings', { error });
-    return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
+    return jsonError('Failed to update settings', 500);
   }
 }
 
@@ -142,8 +146,15 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const admin = await assertAdmin();
-    const body = await request.json();
-    const dryRun = body.dryRun !== false; // Default to dry run for safety
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
+    }
+    const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    const dryRun = payload.dryRun !== false;
 
     const result = await performDataCleanup(dryRun);
 
@@ -157,23 +168,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    logger.info('[API] Data cleanup executed', {
-      userId: admin.id,
-      dryRun,
-      result,
-    });
-
-    return NextResponse.json({
-      success: true,
-      dryRun,
-      result,
-    });
+    logger.info('[API] Data cleanup executed', { userId: admin.id, dryRun, result });
+    return jsonOk({ success: true, dryRun, result });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Failed to execute cleanup';
-    if (msg.includes('Unauthorized') || msg.includes('Admin access required')) {
-      return NextResponse.json({ error: msg }, { status: 403 });
-    }
+    if (isAppError(error)) return jsonError(error);
     logger.error('[API] Data cleanup failed', { error });
-    return NextResponse.json({ error: 'Failed to execute cleanup' }, { status: 500 });
+    return jsonError('Failed to execute cleanup', 500);
   }
 }

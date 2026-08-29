@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 export type RoleMappingRule = {
   claim: string;
   value: string;
-  role: 'USER' | 'ADMIN' | 'RESPONDER';
+  role: 'USER' | 'ADMIN' | 'RESPONDER' | 'AUDITOR';
 };
 
 type Props = {
@@ -79,6 +79,7 @@ export default function RoleMappingEditor({ initialMappings, onChange }: Props) 
                 >
                   <option value="USER">User</option>
                   <option value="RESPONDER">Responder</option>
+                  <option value="AUDITOR">Auditor</option>
                   <option value="ADMIN">Admin</option>
                 </select>
               </div>

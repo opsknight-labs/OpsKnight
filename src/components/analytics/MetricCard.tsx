@@ -6,6 +6,7 @@ interface MetricCardProps {
   detail: string;
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
+  trendIntent?: 'positive' | 'negative' | 'neutral';
   icon?: React.ReactNode;
   variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger';
   className?: string;
@@ -20,6 +21,7 @@ function MetricCard({
   detail,
   trend,
   trendValue,
+  trendIntent,
   icon,
   variant = 'default',
   className = '',
@@ -27,25 +29,35 @@ function MetricCard({
   tooltip,
   href,
 }: MetricCardProps) {
-  const variantClasses = {
-    default: 'analytics-card-default',
-    primary: 'analytics-card-primary',
-    success: 'analytics-card-success',
-    warning: 'analytics-card-warning',
-    danger: 'analytics-card-danger',
+  const variantClass = () => {
+    if (variant === 'primary') return 'analytics-card-primary';
+    if (variant === 'success') return 'analytics-card-success';
+    if (variant === 'warning') return 'analytics-card-warning';
+    if (variant === 'danger') return 'analytics-card-danger';
+    return 'analytics-card-default';
   };
 
-  const trendColors = {
-    up: 'analytics-trend-up',
-    down: 'analytics-trend-down',
-    neutral: 'analytics-trend-neutral',
+  const trendColor = (value: 'up' | 'down' | 'neutral') => {
+    if (value === 'up') return 'analytics-trend-up';
+    if (value === 'down') return 'analytics-trend-down';
+    return 'analytics-trend-neutral';
   };
 
   const trendLabel = trend === 'up' ? 'UP' : trend === 'down' ? 'DOWN' : 'FLAT';
+  const trendColorClass =
+    trendIntent === 'positive'
+      ? trendColor('up')
+      : trendIntent === 'negative'
+        ? trendColor('down')
+        : trendIntent === 'neutral'
+          ? trendColor('neutral')
+          : trend
+            ? trendColor(trend)
+            : trendColor('neutral');
 
   return (
     <article
-      className={`analytics-card-enhanced ${variantClasses[variant]} ${className} ${href ? 'cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 transition-all' : ''}`}
+      className={`analytics-card-enhanced ${variantClass()} ${className} ${href ? 'cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 transition-all' : ''}`}
     >
       {href ? (
         <a href={href} className="contents">
@@ -63,7 +75,7 @@ function MetricCard({
           <div className="analytics-card-body">
             <span className="analytics-value">{value}</span>
             {trend && trendValue && (
-              <div className={`analytics-trend ${trendColors[trend]}`}>
+              <div className={`analytics-trend ${trendColorClass}`}>
                 <span className="analytics-trend-icon">{trendLabel}</span>
                 <span>{trendValue}</span>
               </div>
@@ -88,7 +100,7 @@ function MetricCard({
           <div className="analytics-card-body">
             <span className="analytics-value">{value}</span>
             {trend && trendValue && (
-              <div className={`analytics-trend ${trendColors[trend]}`}>
+              <div className={`analytics-trend ${trendColorClass}`}>
                 <span className="analytics-trend-icon">{trendLabel}</span>
                 <span>{trendValue}</span>
               </div>

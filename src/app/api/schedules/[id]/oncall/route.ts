@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authenticateApiKey, hasApiScopes } from '@/lib/api-auth';
+import { authenticateApiKey } from '@/lib/api-auth';
 import { resolveEscalationTarget } from '@/lib/escalation';
 import { logger } from '@/lib/logger';
 import { checkApiKeyRateLimit } from '@/lib/api-rate-limit';
 import { getScheduleApiScope } from '@/lib/schedule-api-auth';
+import { resolveApiKeyActor } from '@/lib/authorization-actors';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,12 +14,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json(
         { error: 'Unauthorized. Missing or invalid API key.' },
         { status: 401 }
-      );
-    }
-    if (!hasApiScopes(apiKey.scopes, ['schedules:read'])) {
-      return NextResponse.json(
-        { error: 'API key missing scope: schedules:read.' },
-        { status: 403 }
       );
     }
     const rate = await checkApiKeyRateLimit('schedules:oncall', apiKey.id, 60);
@@ -32,7 +27,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
 
     // Verify schedule exists
-    const scheduleScope = await getScheduleApiScope(apiKey.userId);
+    const actor = await resolveApiKeyActor(apiKey);
+    if (!actor) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    let scheduleScope;
+    try {
+      scheduleScope = getScheduleApiScope(actor);
+    } catch {
+      return NextResponse.json({ error: 'Forbidden. Schedule access denied.' }, { status: 403 });
+    }
     const schedule = await prisma.onCallSchedule.findFirst({
       where: { id, ...scheduleScope },
       select: { id: true },

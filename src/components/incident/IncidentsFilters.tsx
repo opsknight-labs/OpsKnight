@@ -2,6 +2,7 @@
 
 import { useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import {
@@ -55,6 +56,7 @@ export default function IncidentsFilters({
   canCreateIncident = false,
 }: IncidentsFiltersProps) {
   const router = useRouter();
+  const { openCreateIncident } = useCreateIncidentModal();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
@@ -132,7 +134,7 @@ export default function IncidentsFilters({
                 size="sm"
                 className="h-7 px-3 text-xs"
                 onClick={() => {
-                  router.push('/incidents/create');
+                  openCreateIncident();
                 }}
               >
                 Create incident
@@ -160,6 +162,19 @@ export default function IncidentsFilters({
             }
           >
             Mine
+          </Badge>
+          <Badge
+            variant={currentFilter === 'acknowledged' ? 'warning' : 'outline'}
+            size="sm"
+            className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-amber-100 hover:text-amber-800 transition-colors"
+            onClick={() =>
+              updateParams({
+                filter: currentFilter === 'acknowledged' ? 'all' : 'acknowledged',
+                teamId: 'all',
+              })
+            }
+          >
+            Acknowledged
           </Badge>
           {teams.length > 0 && (
             <Badge
@@ -278,7 +293,9 @@ export default function IncidentsFilters({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">Status</Label>
+            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
+              Status
+            </Label>
             <Select value={currentFilter} onValueChange={val => updateParams({ filter: val })}>
               <SelectTrigger className="h-9 bg-muted/30 focus:bg-background transition-colors text-sm">
                 <div className="flex items-center gap-2">
@@ -291,7 +308,19 @@ export default function IncidentsFilters({
                 <SelectItem value="all_open">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                    <span>Open</span>
+                    <span>Active</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="open">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                    <span>Triggered</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="acknowledged">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    <span>Acknowledged</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="mine">
@@ -304,6 +333,12 @@ export default function IncidentsFilters({
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-slate-500" />
                     <span>Resolved</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="muted">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                    <span>Muted (Snoozed + Suppressed)</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="snoozed">
@@ -323,7 +358,9 @@ export default function IncidentsFilters({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">Team</Label>
+            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
+              Team
+            </Label>
             <Select value={currentTeamId} onValueChange={val => updateParams({ teamId: val })}>
               <SelectTrigger className="h-9 bg-muted/30 focus:bg-background transition-colors text-sm">
                 <div className="flex items-center gap-2">
@@ -344,7 +381,9 @@ export default function IncidentsFilters({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">Urgency</Label>
+            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
+              Urgency
+            </Label>
             <Select
               value={currentUrgency}
               onValueChange={val => updateParams({ urgency: val === 'all' ? 'all' : val })}
@@ -380,7 +419,9 @@ export default function IncidentsFilters({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">Sort</Label>
+            <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
+              Sort
+            </Label>
             <Select
               value={currentSort}
               onValueChange={val => updateParams({ sort: val === 'newest' ? 'newest' : val })}

@@ -52,6 +52,7 @@ type IncidentSidebarProps = {
   }>;
   tags: Array<{ id: string; name: string; color?: string | null }>;
   canManage: boolean;
+  canAcknowledge: boolean;
   onAcknowledge: () => void;
   onUnacknowledge: () => void;
   onSnooze: () => void;
@@ -68,6 +69,7 @@ export default function IncidentSidebar({
   watchers,
   tags,
   canManage,
+  canAcknowledge,
   onAcknowledge,
   onUnacknowledge,
   onSnooze,
@@ -101,6 +103,7 @@ export default function IncidentSidebar({
           onSuppress={onSuppress}
           onUnsuppress={onUnsuppress}
           canManage={canManage}
+          canAcknowledge={canAcknowledge}
         />
       </div>
 
@@ -141,7 +144,10 @@ export default function IncidentSidebar({
             <FileText className="h-3 w-3" /> Postmortem
           </h3>
           <Link href={`/postmortems/${incident.id}`}>
-            <Button className="w-full justify-between group bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800" variant="outline">
+            <Button
+              className="w-full justify-between group bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+              variant="outline"
+            >
               <span>{canManage ? 'Create Report' : 'View Report'}</span>
               <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Button>

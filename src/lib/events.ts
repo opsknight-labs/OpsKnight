@@ -1,9 +1,10 @@
 import { Prisma, IncidentUrgency } from '@prisma/client';
-import prisma from './prisma';
-import { executeEscalation } from './notifications';
-import { notifySlackForIncident } from './slack';
 import { logger } from './logger';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
+import { createHash } from 'crypto';
+import { runReadCommittedTransaction } from './db-utils';
+import { enqueueEventSideEffects } from './event-outbox';
+import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -17,9 +18,6 @@ export type EventPayload = {
     custom_details?: unknown;
   };
 };
-
-import { createHash } from 'crypto';
-import { runSerializableTransaction } from './db-utils';
 
 const MAX_DEDUP_KEY_LENGTH = 512;
 const MAX_STORED_ALERT_PAYLOAD_BYTES = 64 * 1024;
@@ -120,6 +118,30 @@ function boundedAlertPayload(eventData: EventPayload['payload']): Prisma.InputJs
   };
 }
 
+async function lockEventDedupKeys(
+  tx: Prisma.TransactionClient,
+  serviceId: string,
+  candidateDedupKeys: string[]
+): Promise<void> {
+  // Serialize only requests that can address the same logical incident. Include
+  // legacy keys during rolling upgrades and use deterministic lock ordering.
+  const lockKeys = Array.from(
+    new Set(candidateDedupKeys.map(key => JSON.stringify([serviceId, key])))
+  ).sort();
+
+  for (const lockKey of lockKeys) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+  }
+}
+
+async function reloadIncident(tx: Prisma.TransactionClient, incidentId: string) {
+  const incident = await tx.incident.findUnique({ where: { id: incidentId } });
+  if (!incident) {
+    throw new Error(`Incident disappeared during event lifecycle transition: ${incidentId}`);
+  }
+  return incident;
+}
+
 export async function processEvent(
   payload: EventPayload,
   serviceId: string,
@@ -143,7 +165,7 @@ export async function processEvent(
     eventData.summary = `Alert from ${eventData.source}`;
   }
 
-  const result = await runSerializableTransaction(async tx => {
+  const result = await runReadCommittedTransaction(async tx => {
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
       where: { id: serviceId },
@@ -158,6 +180,11 @@ export async function processEvent(
       });
       throw new Error(`Service not found: ${serviceId}. Integration may be misconfigured.`);
     }
+
+    // ReadCommitted removes broad Serializable predicate conflicts. A
+    // transaction-scoped advisory lock preserves the find-then-create
+    // deduplication boundary for events targeting the same service/key.
+    await lockEventDedupKeys(tx, serviceId, candidateDedupKeys);
 
     // 2. Find existing open incident with this dedup_key BEFORE creating alert
     // This prevents alert orphaning when resolve/acknowledge has no matching incident
@@ -177,6 +204,21 @@ export async function processEvent(
         data: { dedupKey: dedup_key },
       });
       existingIncident.dedupKey = dedup_key;
+    }
+
+    // Run this after the advisory lock so a queued event observes alert
+    // history committed by earlier events for the same dedup key. Passing the
+    // transaction client avoids opening a second pooled connection while this
+    // interactive transaction is active.
+    let isFlapping = false;
+    if (event_action === 'trigger' && !existingIncident) {
+      try {
+        const { checkAlertFlapping } = await import('./flapping');
+        const flappingResult = await checkAlertFlapping(dedup_key, serviceId, undefined, tx);
+        isFlapping = flappingResult.isFlapping;
+      } catch (_) {
+        // Non-critical: if flapping check fails, proceed with normal incident creation
+      }
     }
 
     // 3. For acknowledge, skip alert creation if no matching incident
@@ -262,7 +304,8 @@ export async function processEvent(
       // Sanitize title to prevent XSS and truncate to reasonable length
       const sanitizedTitle = truncateString(sanitizeText(eventData.summary.trim()), 500);
 
-      // If a resolve event already arrived, create the incident in RESOLVED state immediately
+      // Creation is not a lifecycle transition. A buffered upstream resolve may
+      // legitimately create the incident directly in its terminal state.
       if (recentResolveAlert) {
         const rawDescription = eventData.custom_details
           ? JSON.stringify(eventData.custom_details, null, 2)
@@ -296,6 +339,8 @@ export async function processEvent(
           },
         });
 
+        await enqueueEventSideEffects(tx, 'resolved', resolvedIncident.id);
+
         logger.info('event.out_of_order_resolved', {
           incidentId: resolvedIncident.id,
           dedupKey: dedup_key,
@@ -313,18 +358,8 @@ export async function processEvent(
         ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
         : null;
 
-      // Flapping detection: check rapid state oscillations before creating a new incident
-      // Done outside the transaction since it reads Alert rows that were just committed
-      // (the current alert was created above in the same tx, so we use a non-tx prisma read)
-      let isFlapping = false;
-      try {
-        const { checkAlertFlapping } = await import('./flapping');
-        const flappingResult = await checkAlertFlapping(dedup_key, serviceId);
-        isFlapping = flappingResult.isFlapping;
-      } catch (_) {
-        // Non-critical: if flapping check fails, proceed with normal incident creation
-      }
-
+      // Initial OPEN/SUPPRESSED state is creation policy, not a transition of an
+      // existing incident, so it intentionally remains in the ingestion path.
       const newIncident = await tx.incident.create({
         data: {
           title: sanitizedTitle,
@@ -337,14 +372,17 @@ export async function processEvent(
         },
       });
 
-      logger.info(isFlapping ? 'event.incident_created_suppressed_flapping' : 'event.incident_created', {
-        incidentId: newIncident.id,
-        dedupKey: dedup_key,
-        source: eventData.source,
-        severity: eventData.severity,
-        urgency,
-        isFlapping,
-      });
+      logger.info(
+        isFlapping ? 'event.incident_created_suppressed_flapping' : 'event.incident_created',
+        {
+          incidentId: newIncident.id,
+          dedupKey: dedup_key,
+          source: eventData.source,
+          severity: eventData.severity,
+          urgency,
+          isFlapping,
+        }
+      );
 
       // Connect alert to incident
       await tx.alert.update({
@@ -362,9 +400,10 @@ export async function processEvent(
         },
       });
 
-      // Note: Webhook triggering happens outside transaction to avoid blocking
-      // If the incident is suppressed due to flapping, return 'suppressed' action
-      // so the caller skips escalation dispatch
+      if (!isFlapping) {
+        await enqueueEventSideEffects(tx, 'triggered', newIncident.id);
+      }
+
       return {
         action: isFlapping ? ('suppressed' as const) : ('triggered' as const),
         incident: newIncident,
@@ -372,70 +411,60 @@ export async function processEvent(
     }
 
     if (event_action === 'resolve') {
-      // existingIncident is guaranteed to exist here (checked above before alert creation)
+      // Alert linkage, lifecycle mutation, timeline event, and outbox enqueue stay
+      // in this same ReadCommitted transaction under the dedup advisory lock.
       await tx.alert.update({
         where: { id: alert.id },
         data: { incidentId: existingIncident!.id },
       });
 
-      const resolvedIncident = await tx.incident.update({
-        where: { id: existingIncident!.id },
-        data: {
-          status: 'RESOLVED',
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-          resolvedAt: existingIncident!.resolvedAt ?? new Date(),
-          // Clear stale snooze metadata so if incident is reopened it starts fresh
-          snoozedUntil: null,
-          snoozeReason: null,
-        },
+      const transition = await applyIncidentLifecycleCommand(tx, {
+        incidentId: existingIncident!.id,
+        command: 'RESOLVE',
+        source: 'EVENT',
+        eventMessage: `Auto-resolved by event from ${eventData.source}.`,
       });
+      const resolvedIncident = await reloadIncident(tx, existingIncident!.id);
 
-      await tx.incidentEvent.create({
-        data: {
-          incidentId: existingIncident!.id,
-          type: 'AUTO_RESOLVED',
-          message: `Auto-resolved by event from ${eventData.source}.`,
-        },
-      });
+      if (transition.changed) {
+        await enqueueEventSideEffects(tx, 'resolved', resolvedIncident.id);
+      }
 
       logger.info('event.incident_resolved', {
         incidentId: resolvedIncident.id,
         dedupKey: dedup_key,
         source: eventData.source,
+        changed: transition.changed,
       });
 
       return { action: 'resolved', incident: resolvedIncident };
     }
 
     if (event_action === 'acknowledge') {
-      // existingIncident is guaranteed to exist here (checked above before alert creation)
+      // Repeated acknowledge signals still attach their raw alert, but the
+      // lifecycle engine makes the state transition/event/effects idempotent.
       await tx.alert.update({
         where: { id: alert.id },
         data: { incidentId: existingIncident!.id },
       });
 
-      const ackIncident = await tx.incident.update({
-        where: { id: existingIncident!.id },
-        data: {
-          status: 'ACKNOWLEDGED',
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-          acknowledgedAt: existingIncident!.acknowledgedAt ?? new Date(),
-        },
+      const transition = await applyIncidentLifecycleCommand(tx, {
+        incidentId: existingIncident!.id,
+        command: 'ACKNOWLEDGE',
+        source: 'EVENT',
+        eventMessage: 'Acknowledged via API event.',
       });
+      const ackIncident = await reloadIncident(tx, existingIncident!.id);
 
-      await tx.incidentEvent.create({
-        data: {
-          incidentId: existingIncident!.id,
-          message: `Acknowledged via API event.`,
-        },
-      });
+      if (transition.changed) {
+        await enqueueEventSideEffects(tx, 'acknowledged', ackIncident.id);
+      }
 
       logger.info('event.incident_acknowledged', {
         incidentId: ackIncident.id,
         dedupKey: dedup_key,
         source: eventData.source,
+        changed: transition.changed,
       });
 
       return { action: 'acknowledged', incident: ackIncident };
@@ -448,231 +477,12 @@ export async function processEvent(
       source: eventData.source,
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
-  });
+  }, EVENT_TRANSACTION_MAX_ATTEMPTS);
 
-  if (result.action === 'triggered' && result.incident) {
-    // Trigger status page webhooks for incident.created event
-    try {
-      const { triggerWebhooksForService } = await import('./status-page-webhooks');
-      const incidentWithService = await prisma.incident.findUnique({
-        where: { id: result.incident.id },
-        include: {
-          service: { select: { id: true, name: true } },
-          assignee: {
-            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-          },
-        },
-      });
-
-      if (incidentWithService) {
-        // Await externally visible side effects so process teardown cannot
-        // silently discard them after the response is returned.
-        const webhookStart = performance.now();
-        await triggerWebhooksForService(result.incident.serviceId, 'incident.created', {
-          id: incidentWithService.id,
-          title: incidentWithService.title,
-          description: incidentWithService.description,
-          status: incidentWithService.status,
-          urgency: incidentWithService.urgency,
-          priority: incidentWithService.priority,
-          service: {
-            id: incidentWithService.service.id,
-            name: incidentWithService.service.name,
-          },
-          assignee: incidentWithService.assignee,
-          createdAt: incidentWithService.createdAt.toISOString(),
-        })
-          .then(() => {
-            logger.info('api.event.webhook_trigger_success', {
-              latencyMs: performance.now() - webhookStart,
-              incidentId: result.incident.id,
-            });
-          })
-          .catch(err => {
-            logger.error('api.event.webhook_trigger_failed', {
-              error: err instanceof Error ? err.message : String(err),
-              latencyMs: performance.now() - webhookStart,
-            });
-          });
-      }
-    } catch (e) {
-      logger.error('api.event.webhook_trigger_error', {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-
-    // Execute escalation policy, then choose the correct notification path.
-    const notifyStart = performance.now();
-    await executeEscalation(result.incident.id)
-      .then(escalationResult => {
-        const route = escalationNotificationRoute(escalationResult || {});
-
-        if (route === 'service') {
-          return import('./service-notifications')
-            .then(({ sendServiceNotifications }) => {
-              return sendServiceNotifications(result.incident.id, 'triggered')
-                .then(() => {
-                  logger.info('api.event.notifications_sent', {
-                    latencyMs: performance.now() - notifyStart,
-                    incidentId: result.incident.id,
-                  });
-                })
-                .catch(error => {
-                  logger.error('Service notification failed', {
-                    incidentId: result.incident.id,
-                    error: error instanceof Error ? error.message : 'Unknown error',
-                    latencyMs: performance.now() - notifyStart,
-                  });
-                });
-            })
-            .catch(e => logger.error('Failed to load service-notifications', { error: e }));
-        } else {
-          // Fallback only when the policy cannot provide responders. Scheduled
-          // steps retain their configured delay and do not page the whole team.
-          return import('./user-notifications')
-            .then(({ sendIncidentNotifications }) => {
-              return sendIncidentNotifications(result.incident.id, 'triggered')
-                .then(() => {
-                  logger.info('api.event.user_notifications_sent', {
-                    latencyMs: performance.now() - notifyStart,
-                    incidentId: result.incident.id,
-                  });
-                })
-                .catch(error => {
-                  logger.error('User notification failed', {
-                    incidentId: result.incident.id,
-                    error: error instanceof Error ? error.message : 'Unknown error',
-                    latencyMs: performance.now() - notifyStart,
-                  });
-                });
-            })
-            .catch(e => logger.error('Failed to load user-notifications', { error: e }));
-        }
-      })
-      .catch(error => {
-        logger.error('Escalation failed', {
-          incidentId: result.incident.id,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-
-        return import('./service-notifications')
-          .then(({ sendServiceNotifications }) => {
-            return sendServiceNotifications(result.incident.id, 'triggered').catch(err => {
-              logger.error('Service notification failed', {
-                incidentId: result.incident.id,
-                error: err instanceof Error ? err.message : 'Unknown error',
-                latencyMs: performance.now() - notifyStart,
-              });
-            });
-          })
-          .catch(e => logger.error('Failed to load service-notifications', { error: e }));
-      });
-
-    // ChatOps: Auto-create war-room channel for qualifying incidents.
-    await import('./chatops/war-room')
-      .then(({ createIncidentWarRoom }) => {
-        return createIncidentWarRoom(result.incident.id)
-          .then(warRoomResult => {
-            if (warRoomResult.success) {
-              logger.info('chatops.war_room_created', {
-                incidentId: result.incident.id,
-                channelName: warRoomResult.channelName,
-              });
-            }
-          })
-          .catch(err => {
-            logger.error('chatops.war_room_creation_failed', {
-              incidentId: result.incident.id,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          });
-      })
-      .catch(e => logger.error('Failed to load chatops/war-room', { error: e }));
-  }
-
-  if (result.action === 'resolved' && result.incident) {
-    // Trigger status page webhooks for incident.resolved event
-    try {
-      const { triggerWebhooksForService } = await import('./status-page-webhooks');
-      const incidentWithService = await prisma.incident.findUnique({
-        where: { id: result.incident.id },
-        include: {
-          service: { select: { id: true, name: true } },
-          assignee: {
-            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-          },
-        },
-      });
-
-      if (incidentWithService) {
-        await triggerWebhooksForService(result.incident.serviceId, 'incident.resolved', {
-          id: incidentWithService.id,
-          title: incidentWithService.title,
-          description: incidentWithService.description,
-          status: incidentWithService.status,
-          urgency: incidentWithService.urgency,
-          priority: incidentWithService.priority,
-          service: {
-            id: incidentWithService.service.id,
-            name: incidentWithService.service.name,
-          },
-          assignee: incidentWithService.assignee,
-          createdAt: incidentWithService.createdAt.toISOString(),
-          acknowledgedAt: incidentWithService.acknowledgedAt?.toISOString() || null,
-          resolvedAt: incidentWithService.resolvedAt?.toISOString() || null,
-        }).catch(err => {
-          logger.error('api.event.webhook_trigger_failed', {
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-      }
-    } catch (e) {
-      logger.error('api.event.webhook_trigger_error', {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-
-    await notifySlackForIncident(result.incident.id, 'resolved').catch(error => {
-      logger.error('Slack notification failed', {
-        incidentId: result.incident.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    });
-
-    // ChatOps: Archive war-room channel on resolve.
-    await import('./chatops/war-room')
-      .then(({ archiveWarRoomChannel }) => {
-        return archiveWarRoomChannel(result.incident.id).catch(err => {
-          logger.error('chatops.war_room_archive_failed', {
-            incidentId: result.incident.id,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-      })
-      .catch(e => logger.error('Failed to load chatops/war-room', { error: e }));
-  }
-
-  if (result.action === 'acknowledged' && result.incident) {
-    await notifySlackForIncident(result.incident.id, 'acknowledged').catch(error => {
-      logger.error('Slack notification failed', {
-        incidentId: result.incident.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    });
-  }
-
+  // External side-effects are persisted above in the same transaction and are
+  // executed by the durable PostgreSQL job worker. The API no longer waits for
+  // webhook, notification, Slack, or ChatOps network calls before returning.
   return result;
 }
 
-export function escalationNotificationRoute(result: {
-  escalated?: boolean;
-  reason?: string;
-}): 'service' | 'fallback' {
-  const reason = (result.reason || '').toLowerCase();
-  const policyOwnsResponderRouting =
-    result.escalated === true ||
-    reason.includes('scheduled') ||
-    reason.includes('already in progress');
-
-  return policyOwnsResponderRouting ? 'service' : 'fallback';
-}
+export { escalationNotificationRoute } from './event-side-effects';

@@ -13,6 +13,12 @@
 import { logger } from './logger';
 import { NotificationChannel, sendNotification } from './notifications';
 import { batchArray } from './db-utils';
+import {
+  notificationDedupeKey,
+  notificationRetryDelayMs,
+  NOTIFICATION_RETRY_POLICY,
+  type NotificationEventType,
+} from './notification-delivery';
 
 // Queue configuration
 const BATCH_SIZE = 50; // Process notifications in batches
@@ -39,6 +45,7 @@ interface QueuedNotification {
   createdAt: number;
   dedupeKey: string;
   retryCount?: number;
+  eventType: NotificationEventType;
 }
 
 interface ChannelState {
@@ -121,14 +128,6 @@ function incrementRateLimit(channel: NotificationChannel): void {
 /**
  * Generate deduplication key
  */
-function generateDedupeKey(
-  incidentId: string,
-  userId: string,
-  channel: NotificationChannel
-): string {
-  return `${incidentId}:${userId}:${channel}`;
-}
-
 /**
  * Add notification to queue
  */
@@ -137,7 +136,8 @@ export function queueNotification(
   userId: string,
   channel: NotificationChannel,
   message: string,
-  priority: number = 2
+  priority: number = 2,
+  eventType: NotificationEventType = 'triggered'
 ): boolean {
   // Check queue size limit
   if (queue.length >= MAX_QUEUE_SIZE) {
@@ -150,7 +150,7 @@ export function queueNotification(
     return false;
   }
 
-  const dedupeKey = generateDedupeKey(incidentId, userId, channel);
+  const dedupeKey = notificationDedupeKey({ incidentId, userId, channel, message });
 
   // Check for duplicates
   if (
@@ -179,6 +179,7 @@ export function queueNotification(
     priority,
     createdAt: Date.now(),
     dedupeKey,
+    eventType,
   });
 
   // Start flush timer if not running
@@ -197,6 +198,7 @@ export function queueBulkNotifications(
     channel: NotificationChannel;
     message: string;
     priority?: number;
+    eventType?: NotificationEventType;
   }>
 ): { queued: number; dropped: number; duplicates: number } {
   let queued = 0;
@@ -204,7 +206,7 @@ export function queueBulkNotifications(
   let duplicates = 0;
 
   for (const n of notifications) {
-    const dedupeKey = generateDedupeKey(n.incidentId, n.userId, n.channel);
+    const dedupeKey = notificationDedupeKey(n);
 
     if (
       (processedDedupeKeys.has(dedupeKey) &&
@@ -225,6 +227,7 @@ export function queueBulkNotifications(
       priority: n.priority || 2,
       createdAt: Date.now(),
       dedupeKey,
+      eventType: n.eventType ?? 'triggered',
     });
     queued++;
   }
@@ -310,8 +313,8 @@ async function processChannelNotifications(
       } else {
         // Re-queue rate-limited notifications with backoff
         const retryCount = (n.retryCount || 0) + 1;
-        if (retryCount <= 5) {
-          const delayMs = Math.pow(2, retryCount) * 1000;
+        if (retryCount <= NOTIFICATION_RETRY_POLICY.maxAttempts) {
+          const delayMs = notificationRetryDelayMs(retryCount);
           scheduleRetry({ ...n, priority: Math.min(n.priority + 1, 3), retryCount }, delayMs);
         } else {
           logger.error('[NotificationQueue] Notification permanently dropped due to rate limits', {
@@ -331,17 +334,31 @@ async function processChannelNotifications(
     const results = await Promise.allSettled(
       toProcess.map(async n => {
         try {
-          const result = await sendNotification(n.incidentId, n.userId, n.channel, n.message);
+          const result = await sendNotification(
+            n.incidentId,
+            n.userId,
+            n.channel,
+            n.message,
+            undefined,
+            n.eventType
+          );
 
           // Notification providers report expected delivery failures in their
           // result instead of throwing. Treat those results as failures so the
           // queue's retry policy is actually applied.
-          if (!result.success) {
+          if (!result.success && !result.terminal) {
             throw new Error(result.error || `${n.channel} notification delivery failed`);
           }
 
-          // A failed attempt must not suppress a later enqueue of the same
-          // notification. Record the dedupe key only after confirmed delivery.
+          // Permanent failures are terminal for this attempt, but they are not
+          // successful deliveries and must not poison the in-memory dedupe
+          // cache. A configuration fix (for example, adding a webhook URL)
+          // should allow the same notification to be enqueued immediately.
+          if (!result.success && result.terminal && !result.skipped) {
+            return { notification: n, result, terminalFailure: true };
+          }
+
+          // Record dedupe only after confirmed delivery or an intentional skip.
           processedDedupeKeys.set(n.dedupeKey, Date.now());
 
           // Clean old dedupe keys periodically (keep last 10 minutes)
@@ -364,19 +381,31 @@ async function processChannelNotifications(
     state.processing -= toProcess.length;
 
     // Log batch results
-    const succeeded = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    const succeeded = results.filter(
+      r => r.status === 'fulfilled' && !r.value.terminalFailure
+    ).length;
+    const terminalFailures = results.filter(
+      r => r.status === 'fulfilled' && r.value.terminalFailure
+    );
+    const failed = results.filter(r => r.status === 'rejected').length + terminalFailures.length;
+
+    for (const failure of terminalFailures) {
+      if (failure.status !== 'fulfilled') continue;
+      logger.error('[NotificationQueue] Notification permanently failed', {
+        incidentId: failure.value.notification.incidentId,
+        userId: failure.value.notification.userId,
+        channel: failure.value.notification.channel,
+        error: failure.value.result.error,
+      });
+    }
 
     for (const result of results) {
       if (result.status === 'rejected') {
         const { notification, error } = result.reason;
         const retryCount = (notification.retryCount || 0) + 1;
 
-        if (retryCount <= 3) {
-          scheduleRetry(
-            { ...notification, retryCount },
-            Math.min(Math.pow(2, retryCount) * 1000, 30_000)
-          );
+        if (retryCount <= NOTIFICATION_RETRY_POLICY.maxAttempts) {
+          scheduleRetry({ ...notification, retryCount }, notificationRetryDelayMs(retryCount));
         } else {
           logger.error('[NotificationQueue] Notification permanently dropped after 3 retries', {
             incidentId: notification.incidentId,

@@ -3,12 +3,47 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import type { Role } from '@prisma/client';
+import type { Prisma, Role } from '@prisma/client';
+import { AppError } from '@/lib/errors';
+import {
+  AuthorizationError,
+  CAPABILITIES,
+  getRoleCapabilities,
+  hasCapability,
+  type AppRole,
+  type Capability,
+} from '@/lib/authorization';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import {
+  deriveScheduleUICapabilities,
+  type ScheduleUICapabilities,
+} from '@/lib/schedules/capabilities';
+
+function appError(
+  code:
+    | 'AUTHENTICATION_REQUIRED'
+    | 'SESSION_REVOKED'
+    | 'USER_DISABLED'
+    | 'AUTHORIZATION_DENIED'
+    | 'INCIDENT_NOT_FOUND'
+    | 'INCIDENT_ACCESS_DENIED'
+    | 'INCIDENT_MODIFY_DENIED'
+    | 'INCIDENT_CREATE_SERVICE_ACCESS_DENIED'
+    | 'SERVICE_NOT_FOUND'
+    | 'SERVICE_ACCESS_DENIED'
+    | 'SCHEDULE_NOT_FOUND'
+    | 'SCHEDULE_ACCESS_DENIED',
+  userMessage: string,
+  details?: Record<string, unknown>
+) {
+  return new AppError({ code, userMessage, details });
+}
 
 export async function getCurrentUser() {
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
-    throw new Error('Unauthorized');
+    throw appError('AUTHENTICATION_REQUIRED', 'Unauthorized');
   }
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
@@ -23,91 +58,91 @@ export async function getCurrentUser() {
     },
   });
   if (!user) {
-    throw new Error('User not found');
+    throw appError('AUTHENTICATION_REQUIRED', 'User not found');
   }
   if (user.status === 'DISABLED') {
-    throw new Error('Unauthorized. User is inactive or disabled.');
+    throw appError('USER_DISABLED', 'Unauthorized. User is inactive or disabled.', {
+      userId: user.id,
+    });
   }
   if ((user.tokenVersion ?? 0) !== (session.user.tokenVersion ?? 0)) {
-    throw new Error('Unauthorized. Session has been revoked.');
+    throw appError('SESSION_REVOKED', 'Unauthorized. Session has been revoked.', {
+      userId: user.id,
+    });
   }
   return user;
 }
 
 export async function assertAdmin() {
-  const user = await getCurrentUser();
-  if (user.role !== 'ADMIN') {
-    throw new Error('Unauthorized. Admin access required.');
-  }
-  return user;
+  return assertCapability(CAPABILITIES.ADMIN_MANAGE, 'Unauthorized. Admin access required.');
 }
 
 export async function assertAdminOrResponder() {
+  return assertCapability(
+    CAPABILITIES.OPERATIONS_MANAGE,
+    'Unauthorized. Admin or Responder access required.'
+  );
+}
+
+export async function assertCapability(capability: Capability, message?: string) {
   const user = await getCurrentUser();
-  if (user.role !== 'ADMIN' && user.role !== 'RESPONDER') {
-    throw new Error('Unauthorized. Admin or Responder access required.');
+  if (!hasCapability(user.role as AppRole, capability)) {
+    throw new AuthorizationError(
+      message ?? `Unauthorized. Missing required capability: ${capability}.`,
+      capability
+    );
   }
   return user;
 }
 
 export async function assertAdminOrTeamOwner(teamId: string) {
   const user = await getCurrentUser();
-  if (user.role === 'ADMIN') {
-    return user;
-  }
+  if (user.role === 'ADMIN') return user;
 
   const membership = await prisma.teamMember.findFirst({
-    where: {
-      teamId,
-      userId: user.id,
-      role: 'OWNER',
-    },
+    where: { teamId, userId: user.id, role: 'OWNER' },
     select: { id: true },
   });
 
   if (!membership) {
-    throw new Error('Unauthorized. Admin or Team Owner access required.');
+    throw appError('AUTHORIZATION_DENIED', 'Unauthorized. Admin or Team Owner access required.', {
+      teamId,
+      userId: user.id,
+    });
   }
-
   return user;
 }
 
 export async function assertResponderOrAbove() {
-  const user = await getCurrentUser();
-  if (user.role !== 'ADMIN' && user.role !== 'RESPONDER') {
-    throw new Error('Unauthorized. Responder access or above required.');
-  }
-  return user;
+  return assertCapability(
+    CAPABILITIES.OPERATIONS_MANAGE,
+    'Unauthorized. Responder access or above required.'
+  );
+}
+
+export async function assertAuditorOrAdmin() {
+  return assertCapability(
+    CAPABILITIES.AUDIT_READ,
+    'Unauthorized. Auditor or Admin access required.'
+  );
 }
 
 export async function assertNotSelf(currentUserId: string, targetUserId: string, action: string) {
   if (currentUserId === targetUserId) {
-    throw new Error(`You cannot ${action} your own account.`);
+    throw appError('AUTHORIZATION_DENIED', `You cannot ${action} your own account.`, {
+      currentUserId,
+      targetUserId,
+      action,
+    });
   }
 }
 
-/**
- * Verifies the current user can read metrics scoped to the given service /
- * team filter. ADMIN and RESPONDER roles see everything (consistent with
- * incident-modify semantics elsewhere in this file). For regular USERs, the
- * service must belong to a team they are a member of, and any teamId filter
- * must be a team they are a member of.
- *
- * Pass a single id or an array; an empty/undefined filter means "no scope
- * constraint" and is allowed only when the user has global read.
- *
- * Throws on denial — callers should let it surface as 403 to clients.
- */
 export async function assertCanReadServiceMetrics(opts: {
   serviceId?: string | string[] | null;
   teamId?: string | string[] | null;
 }) {
   const user = await getCurrentUser();
-
-  // ADMIN/RESPONDER bypass — they have global read for ops dashboards.
-  if (user.role === 'ADMIN' || user.role === 'RESPONDER') {
-    return user;
-  }
+  if (hasCapability(user.role as AppRole, CAPABILITIES.METRICS_READ_ALL)) return user;
 
   const serviceIds = Array.isArray(opts.serviceId)
     ? opts.serviceId
@@ -116,38 +151,50 @@ export async function assertCanReadServiceMetrics(opts: {
       : [];
   const teamIds = Array.isArray(opts.teamId) ? opts.teamId : opts.teamId ? [opts.teamId] : [];
 
-  // No scope constraint and not admin/responder → deny. Forces callers to
-  // pass an explicit scope rather than reading global metrics by omission.
   if (serviceIds.length === 0 && teamIds.length === 0) {
-    throw new Error('Unauthorized. Specify serviceId or teamId to view metrics.');
+    throw appError(
+      'AUTHORIZATION_DENIED',
+      'Unauthorized. Specify serviceId or teamId to view metrics.'
+    );
   }
 
-  // Collect the teams the user belongs to once.
   const memberships = await prisma.teamMember.findMany({
     where: { userId: user.id },
     select: { teamId: true },
   });
   const userTeamIds = new Set(memberships.map(m => m.teamId));
 
-  // Every team in the filter must be one the user is in.
   for (const teamId of teamIds) {
     if (!userTeamIds.has(teamId)) {
-      throw new Error('Unauthorized. You are not a member of the requested team.');
+      throw appError(
+        'AUTHORIZATION_DENIED',
+        'Unauthorized. You are not a member of the requested team.',
+        {
+          teamId,
+          userId: user.id,
+        }
+      );
     }
   }
 
-  // Every service must be owned by a team the user is in.
   if (serviceIds.length > 0) {
     const services = await prisma.service.findMany({
       where: { id: { in: serviceIds } },
       select: { id: true, teamId: true },
     });
     if (services.length !== serviceIds.length) {
-      throw new Error('One or more services not found.');
+      throw appError('SERVICE_NOT_FOUND', 'One or more services not found.');
     }
-    for (const s of services) {
-      if (!s.teamId || !userTeamIds.has(s.teamId)) {
-        throw new Error('Unauthorized. Service belongs to a team you are not in.');
+    for (const service of services) {
+      if (!service.teamId || !userTeamIds.has(service.teamId)) {
+        throw appError(
+          'SERVICE_ACCESS_DENIED',
+          'Unauthorized. Service belongs to a team you are not in.',
+          {
+            serviceId: service.id,
+            userId: user.id,
+          }
+        );
       }
     }
   }
@@ -155,263 +202,298 @@ export async function assertCanReadServiceMetrics(opts: {
   return user;
 }
 
+export async function assertCanCreateIncidentForService(serviceId: string) {
+  const user = await getCurrentUser();
+  const [actor, service] = await Promise.all([
+    resolveUserActor(user.id),
+    prisma.service.findUnique({ where: { id: serviceId }, select: { id: true, teamId: true } }),
+  ]);
+  if (!service) throw appError('SERVICE_NOT_FOUND', 'Service not found', { serviceId });
+  if (!actor) {
+    throw appError('AUTHORIZATION_DENIED', 'Unauthorized. Incident creation access required.', {
+      userId: user.id,
+    });
+  }
+  const decision = authorize({
+    actor,
+    action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
+    resource: { type: 'service', teamId: service.teamId },
+  });
+  if (!decision.allowed && decision.reason === 'MISSING_CAPABILITY') {
+    throw appError('AUTHORIZATION_DENIED', 'Unauthorized. Incident creation access required.', {
+      userId: user.id,
+    });
+  }
+  if (!decision.allowed) {
+    throw appError(
+      'INCIDENT_CREATE_SERVICE_ACCESS_DENIED',
+      'Unauthorized. You can only create incidents for your team services.',
+      { serviceId, userId: user.id }
+    );
+  }
+  return user;
+}
+
+export async function assertCanAcknowledgeIncident(incidentId: string) {
+  const user = await getCurrentUser();
+  return assertIncidentPolicy(
+    user,
+    incidentId,
+    AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE,
+    CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED,
+    'Unauthorized. Incident acknowledgement access required.'
+  );
+}
+
+export async function assertCanAddIncidentNote(incidentId: string) {
+  const user = await getCurrentUser();
+  return assertIncidentPolicy(
+    user,
+    incidentId,
+    AUTHORIZATION_ACTIONS.INCIDENT_NOTE,
+    CAPABILITIES.INCIDENT_NOTE_SCOPED,
+    'Unauthorized. Incident note access required.'
+  );
+}
+
 export async function getUserPermissions() {
   try {
     const user = await getCurrentUser();
     const { logger } = await import('@/lib/logger');
-    logger.warn('[RBAC] Resolved user permissions', {
-      id: user.id,
-      role: user.role,
-    });
+    logger.warn('[RBAC] Resolved user permissions', { id: user.id, role: user.role });
     return {
       id: user.id,
       role: user.role as Role,
+      capabilities: getRoleCapabilities(user.role as AppRole),
       authenticated: true,
       isAdmin: user.role === 'ADMIN',
+      isAuditor: user.role === 'AUDITOR',
       isAdminOrResponder: user.role === 'ADMIN' || user.role === 'RESPONDER',
       isResponderOrAbove: user.role === 'ADMIN' || user.role === 'RESPONDER',
     };
   } catch {
     return {
       id: '',
-      role: 'VIEWER' as Role,
+      role: 'VIEWER' as const,
+      capabilities: [] as readonly Capability[],
       authenticated: false,
       isAdmin: false,
+      isAuditor: false,
       isAdminOrResponder: false,
       isResponderOrAbove: false,
     };
   }
 }
 
-/**
- * Check if user can modify an incident
- * Users can modify incidents if:
- * - They are ADMIN (any incident)
- * - They are the assignee
- * - They are a member of the team that owns the service
- */
 export async function assertCanModifyIncident(incidentId: string) {
   const user = await getCurrentUser();
+  if (hasCapability(user.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE)) return user;
 
-  // Only global admins bypass team boundaries.
-  if (user.role === 'ADMIN') {
-    return user;
-  }
-
-  // Check if user has access to this incident
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
     include: {
       assignee: true,
       service: {
         include: {
-          team: {
-            include: {
-              members: {
-                where: { userId: user.id },
-              },
-            },
-          },
+          team: { include: { members: { where: { userId: user.id } } } },
         },
       },
     },
   });
 
   if (!incident) {
-    throw new Error('Incident not found');
+    throw appError('INCIDENT_NOT_FOUND', 'Incident not found', { incidentId });
   }
+  if (incident.assigneeId === user.id) return user;
+  if (incident.service.team && incident.service.team.members.length > 0) return user;
 
-  // Check if user is assignee
-  if (incident.assigneeId === user.id) {
-    return user;
-  }
-
-  // Check if user is team member
-  if (incident.service.team && incident.service.team.members.length > 0) {
-    return user;
-  }
-
-  throw new Error('Unauthorized. You do not have permission to modify this incident.');
+  throw appError(
+    'INCIDENT_MODIFY_DENIED',
+    'Unauthorized. You do not have permission to modify this incident.',
+    { incidentId, userId: user.id }
+  );
 }
 
-/**
- * Check if user can view an incident
- */
 export async function assertCanViewIncident(incidentId: string) {
   const user = await getCurrentUser();
+  return assertIncidentPolicy(
+    user,
+    incidentId,
+    AUTHORIZATION_ACTIONS.INCIDENT_READ,
+    CAPABILITIES.INCIDENT_READ_SCOPED,
+    'Unauthorized. You do not have permission to view this incident.'
+  );
+}
 
-  // Only global admins bypass incident visibility and team boundaries.
-  if (user.role === 'ADMIN') {
-    return user;
+async function assertIncidentPolicy(
+  user: Awaited<ReturnType<typeof getCurrentUser>>,
+  incidentId: string,
+  action:
+    | typeof AUTHORIZATION_ACTIONS.INCIDENT_READ
+    | typeof AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE
+    | typeof AUTHORIZATION_ACTIONS.INCIDENT_NOTE,
+  capability: Capability,
+  deniedMessage: string
+) {
+  const actor = await resolveUserActor(user.id);
+  if (!actor) {
+    throw new AuthorizationError(deniedMessage, capability);
   }
-
-  // Check if user has access to this incident
+  const preliminaryDecision = authorize({ actor, action });
+  if (!preliminaryDecision.allowed) {
+    throw new AuthorizationError(deniedMessage, capability);
+  }
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
+    select: {
+      assigneeId: true,
+      teamId: true,
+      visibility: true,
+      watchers: { select: { userId: true } },
+      service: { select: { teamId: true } },
+    },
+  });
+
+  if (!incident) {
+    throw appError('INCIDENT_NOT_FOUND', 'Incident not found', { incidentId });
+  }
+  const decision = authorize({
+    actor,
+    action,
+    resource: {
+      type: 'incident',
+      assigneeId: incident.assigneeId,
+      assignedTeamId: incident.teamId,
+      visibility: incident.visibility,
+      watcherIds: incident.watchers.map(watcher => watcher.userId),
+      serviceTeamId: incident.service.teamId,
+    },
+  });
+  if (decision.allowed) return user;
+
+  throw appError('INCIDENT_ACCESS_DENIED', deniedMessage, { incidentId, userId: user.id, action });
+}
+
+export async function assertCanModifyService(serviceId: string) {
+  const user = await getCurrentUser();
+  if (user.role === 'ADMIN') return user;
+
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
     include: {
-      assignee: true,
-      watchers: { where: { userId: user.id }, select: { id: true } },
-      service: {
-        include: {
-          team: {
-            include: {
-              members: {
-                where: { userId: user.id },
+      team: { include: { members: { where: { userId: user.id } } } },
+    },
+  });
+
+  if (!service) {
+    throw appError('SERVICE_NOT_FOUND', 'Service not found', { serviceId });
+  }
+  if (service.team && service.team.members.length > 0) return user;
+
+  throw appError(
+    'SERVICE_ACCESS_DENIED',
+    'Unauthorized. You do not have permission to modify this service.',
+    { serviceId, userId: user.id }
+  );
+}
+
+export async function assertCanViewSchedule(scheduleId: string) {
+  const user = await getCurrentUser();
+  const capabilities = await resolveScheduleUICapabilities(scheduleId, user);
+  if (capabilities.canViewSchedule) return { user, capabilities };
+
+  throw appError(
+    'SCHEDULE_ACCESS_DENIED',
+    'Unauthorized. You do not have permission to view this schedule.',
+    { scheduleId, userId: user.id }
+  );
+}
+
+export async function getViewableScheduleWhere(): Promise<Prisma.OnCallScheduleWhereInput> {
+  const user = await getCurrentUser();
+  if (hasCapability(user.role as AppRole, CAPABILITIES.SCHEDULE_READ_ALL)) return {};
+
+  return {
+    OR: [
+      { layers: { some: { users: { some: { userId: user.id } } } } },
+      { overrides: { some: { OR: [{ userId: user.id }, { replacesUserId: user.id }] } } },
+      {
+        escalationRules: {
+          some: {
+            policy: {
+              services: {
+                some: { team: { members: { some: { userId: user.id, role: 'OWNER' } } } },
               },
             },
           },
         },
       },
-    },
-  });
-
-  if (!incident) {
-    throw new Error('Incident not found');
-  }
-
-  // Check if user is assignee
-  if (incident.assigneeId === user.id) {
-    return user;
-  }
-
-  if (incident.watchers.length > 0) {
-    return user;
-  }
-
-  // Private incidents require explicit assignee/watcher access.
-  if (
-    incident.visibility === 'PUBLIC' &&
-    incident.service.team &&
-    incident.service.team.members.length > 0
-  ) {
-    return user;
-  }
-
-  throw new Error('Unauthorized. You do not have permission to view this incident.');
+    ],
+  };
 }
 
-/**
- * Check if user can modify a service
- */
-export async function assertCanModifyService(serviceId: string) {
-  const user = await getCurrentUser();
-
-  // Global admins can modify any service. Responders remain scoped to
-  // services owned by a team they belong to.
-  if (user.role === 'ADMIN') {
-    return user;
-  }
-
-  // Check if user is team member of the service's team
-  const service = await prisma.service.findUnique({
-    where: { id: serviceId },
-    include: {
-      team: {
-        include: {
-          members: {
-            where: { userId: user.id },
-          },
-        },
-      },
-    },
-  });
-
-  if (!service) {
-    throw new Error('Service not found');
-  }
-
-  // Check if user is team member
-  if (service.team && service.team.members.length > 0) {
-    return user;
-  }
-
-  throw new Error('Unauthorized. You do not have permission to modify this service.');
-}
-
-/**
- * Check if user can create an incident for a service
- * Users can create incidents for a service if:
- * - They are ADMIN (any service)
- * - They are RESPONDER (any service - they have broad operational scope)
- * - They are a member of the team that owns the service
- */
-export async function assertCanCreateIncidentForService(serviceId: string) {
-  const user = await getCurrentUser();
-
-  // Global admins and responders can create incidents for any service
-  if (user.role === 'ADMIN' || user.role === 'RESPONDER') {
-    return user;
-  }
-
-  // Check if user is team member of the service's team
-  const service = await prisma.service.findUnique({
-    where: { id: serviceId },
-    include: {
-      team: {
-        include: {
-          members: {
-            where: { userId: user.id },
-          },
-        },
-      },
-    },
-  });
-
-  if (!service) {
-    throw new Error('Service not found');
-  }
-
-  // Check if user is team member
-  if (service.team && service.team.members.length > 0) {
-    return user;
-  }
-
-  throw new Error('Unauthorized. You do not have permission to create incidents for this service.');
-}
-
-/**
- * Check if user can view a schedule
- * Users can view schedules if:
- * - They are ADMIN or RESPONDER
- * - They are assigned to a layer in the schedule
- * - They are referenced in an override (as user or replacement)
- */
-export async function assertCanViewSchedule(scheduleId: string) {
-  const user = await getCurrentUser();
-
-  if (user.role === 'ADMIN' || user.role === 'RESPONDER') {
-    return user;
-  }
-
+async function resolveScheduleUICapabilities(
+  scheduleId: string,
+  user: Awaited<ReturnType<typeof getCurrentUser>>
+): Promise<ScheduleUICapabilities> {
   const schedule = await prisma.onCallSchedule.findUnique({
     where: { id: scheduleId },
     select: {
-      id: true,
       layers: {
         select: {
-          users: {
-            where: { userId: user.id },
-            select: { id: true },
-          },
+          users: { where: { userId: user.id }, select: { id: true } },
         },
       },
       overrides: {
+        where: { OR: [{ userId: user.id }, { replacesUserId: user.id }] },
+        select: { id: true },
+        take: 1,
+      },
+      escalationRules: {
         where: {
-          OR: [{ userId: user.id }, { replacesUserId: user.id }],
+          policy: {
+            services: {
+              some: {
+                team: { members: { some: { userId: user.id, role: 'OWNER' } } },
+              },
+            },
+          },
         },
         select: { id: true },
+        take: 1,
       },
     },
   });
 
   if (!schedule) {
-    throw new Error('Schedule not found');
+    throw appError('SCHEDULE_NOT_FOUND', 'Schedule not found', { scheduleId });
   }
 
-  const hasLayerAccess = schedule.layers.some(layer => layer.users.length > 0);
-  if (hasLayerAccess || schedule.overrides.length > 0) {
-    return user;
-  }
+  const isAssignedMember = schedule.layers.some(layer => layer.users.length > 0);
+  const isOwningTeamLead = schedule.escalationRules.length > 0;
+  return deriveScheduleUICapabilities({
+    capabilities: getRoleCapabilities(user.role as AppRole),
+    isAdmin: user.role === 'ADMIN',
+    isAssignedMember,
+    isOwningTeamLead,
+    hasScopedView: isAssignedMember || schedule.overrides.length > 0,
+  });
+}
 
-  throw new Error('Unauthorized. You do not have permission to view this schedule.');
+export async function getScheduleUICapabilities(scheduleId: string) {
+  const user = await getCurrentUser();
+  return resolveScheduleUICapabilities(scheduleId, user);
+}
+
+export async function assertCanCreateScheduleOverride(scheduleId: string) {
+  const user = await getCurrentUser();
+  const capabilities = await resolveScheduleUICapabilities(scheduleId, user);
+  if (capabilities.canCreateOverride) return user;
+
+  throw new AppError({
+    code: 'SCHEDULE_OVERRIDE_ACCESS_DENIED',
+    userMessage:
+      'Unauthorized. Only an administrator, owning team lead, or assigned schedule member can create overrides.',
+    details: { scheduleId, userId: user.id },
+  });
 }

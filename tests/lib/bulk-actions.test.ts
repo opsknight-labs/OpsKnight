@@ -1,14 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   bulkAcknowledge,
   bulkResolve,
-  bulkUpdateUrgency,
+  bulkSnooze,
   bulkUpdateStatus,
+  bulkUpdateUrgency,
 } from '@/app/(app)/incidents/bulk-actions';
 import prisma from '@/lib/prisma';
-import { getCurrentUser, assertResponderOrAbove } from '@/lib/rbac';
+import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
+import {
+  executeIncidentLifecycleBatch,
+  executeIncidentLifecycleTargetBatch,
+} from '@/lib/incidents/lifecycle';
 
-// Mock dependencies
 vi.mock('@/lib/prisma', () => {
   const incident = {
     updateMany: vi.fn(),
@@ -26,13 +30,8 @@ vi.mock('@/lib/prisma', () => {
       async (callback: (tx: { incident: typeof incident; incidentEvent: typeof incidentEvent }) => unknown) =>
         callback({ incident, incidentEvent })
     ),
-    auditLog: {
-      create: vi.fn(),
-    },
-    systemSettings: {
-      findUnique: vi.fn(),
-      upsert: vi.fn(),
-    },
+    auditLog: { create: vi.fn() },
+    systemSettings: { findUnique: vi.fn(), upsert: vi.fn() },
   };
   return { __esModule: true, default: client };
 });
@@ -40,6 +39,11 @@ vi.mock('@/lib/prisma', () => {
 vi.mock('@/lib/rbac', () => ({
   getCurrentUser: vi.fn(),
   assertResponderOrAbove: vi.fn(),
+}));
+
+vi.mock('@/lib/incidents/lifecycle', () => ({
+  executeIncidentLifecycleBatch: vi.fn(),
+  executeIncidentLifecycleTargetBatch: vi.fn(),
 }));
 
 vi.mock('next/cache', () => ({
@@ -56,136 +60,202 @@ describe('Bulk Actions', () => {
       email: 'test@example.com',
       role: 'RESPONDER',
     } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
   });
 
   describe('bulkAcknowledge', () => {
-    it('should acknowledge multiple incidents', async () => {
+    it('routes acknowledgement through the lifecycle batch engine', async () => {
       const incidentIds = ['incident-1', 'incident-2'];
-      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 2 });
-      vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 2 });
-      vi.mocked(prisma.incident.findMany)
-        .mockResolvedValueOnce(
-          incidentIds.map(id => ({ id })) as unknown as Awaited<
-            ReturnType<typeof prisma.incident.findMany>
-          >
-        )
-        .mockResolvedValueOnce([]);
+      vi.mocked(executeIncidentLifecycleBatch).mockResolvedValue([
+        {
+          incidentId: 'incident-1',
+          command: 'ACKNOWLEDGE',
+          source: 'BULK',
+          previousStatus: 'OPEN',
+          status: 'ACKNOWLEDGED',
+          changed: true,
+        },
+        {
+          incidentId: 'incident-2',
+          command: 'ACKNOWLEDGE',
+          source: 'BULK',
+          previousStatus: 'ACKNOWLEDGED',
+          status: 'ACKNOWLEDGED',
+          changed: false,
+        },
+      ]);
 
       const result = await bulkAcknowledge(incidentIds);
 
-      expect(result.success).toBe(true);
-      expect(result.count).toBe(2);
-      expect(prisma.incident.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: incidentIds } },
-        data: {
-          status: 'ACKNOWLEDGED',
-          acknowledgedAt: expect.any(Date),
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-        },
+      expect(result).toEqual({ success: true, count: 1 });
+      expect(executeIncidentLifecycleBatch).toHaveBeenCalledWith([
+        expect.objectContaining({
+          incidentId: 'incident-1',
+          command: 'ACKNOWLEDGE',
+          source: 'BULK',
+          actor: { id: 'user-1', name: 'Test User' },
+        }),
+        expect.objectContaining({
+          incidentId: 'incident-2',
+          command: 'ACKNOWLEDGE',
+          source: 'BULK',
+          actor: { id: 'user-1', name: 'Test User' },
+        }),
+      ]);
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+      expect(prisma.incident.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns an error if no incidents are selected', async () => {
+      await expect(bulkAcknowledge([])).resolves.toEqual({
+        success: false,
+        error: 'No incidents selected',
       });
+      expect(executeIncidentLifecycleBatch).not.toHaveBeenCalled();
     });
 
-    it('should return error if no incidents selected', async () => {
-      const result = await bulkAcknowledge([]);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('No incidents selected');
-    });
-
-    it('should return error if unauthorized', async () => {
+    it('returns an authorization error before invoking lifecycle commands', async () => {
       vi.mocked(assertResponderOrAbove).mockRejectedValue(new Error('Unauthorized'));
 
       const result = await bulkAcknowledge(['incident-1']);
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Unauthorized');
+      expect(result).toEqual({ success: false, error: 'Unauthorized' });
+      expect(executeIncidentLifecycleBatch).not.toHaveBeenCalled();
     });
   });
 
   describe('bulkResolve', () => {
-    it('should resolve multiple incidents', async () => {
-      const incidentIds = ['incident-1', 'incident-2'];
-      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 2 });
-      vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 2 });
-      vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
-
-      const result = await bulkResolve(incidentIds);
-
-      expect(result.success).toBe(true);
-      expect(result.count).toBe(2);
-      expect(prisma.incident.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: { in: incidentIds },
-        },
-        data: {
+    it('routes resolution through lifecycle validation and only counts changed incidents', async () => {
+      vi.mocked(executeIncidentLifecycleBatch).mockResolvedValue([
+        {
+          incidentId: 'incident-1',
+          command: 'RESOLVE',
+          source: 'BULK',
+          previousStatus: 'ACKNOWLEDGED',
           status: 'RESOLVED',
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
-          resolvedAt: expect.any(Date),
+          changed: true,
         },
-      });
+        {
+          incidentId: 'incident-2',
+          command: 'RESOLVE',
+          source: 'BULK',
+          previousStatus: 'RESOLVED',
+          status: 'RESOLVED',
+          changed: false,
+        },
+      ]);
+
+      const result = await bulkResolve(['incident-1', 'incident-2']);
+
+      expect(result).toEqual({ success: true, count: 1 });
+      expect(executeIncidentLifecycleBatch).toHaveBeenCalledWith([
+        expect.objectContaining({ incidentId: 'incident-1', command: 'RESOLVE', source: 'BULK' }),
+        expect.objectContaining({ incidentId: 'incident-2', command: 'RESOLVE', source: 'BULK' }),
+      ]);
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not bypass lifecycle required-field validation', async () => {
+      vi.mocked(executeIncidentLifecycleBatch).mockRejectedValue(
+        new Error('Complete required custom fields before resolving: Root Cause')
+      );
+
+      const result = await bulkResolve(['incident-1']);
+
+      expect(result).toEqual({ success: false, error: 'Failed to resolve incidents' });
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
     });
   });
 
-  describe('bulkUpdateUrgency', () => {
-    it('should update urgency for multiple incidents', async () => {
-      const incidentIds = ['incident-1', 'incident-2'];
-      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 2 });
-      vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 2 });
-
-      const result = await bulkUpdateUrgency(incidentIds, 'HIGH');
-
-      expect(result.success).toBe(true);
-      expect(result.count).toBe(2);
-      expect(prisma.incident.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: { in: incidentIds },
+  describe('bulkSnooze', () => {
+    it('routes snooze metadata through the semantic lifecycle command', async () => {
+      vi.mocked(executeIncidentLifecycleBatch).mockResolvedValue([
+        {
+          incidentId: 'incident-1',
+          command: 'SNOOZE',
+          source: 'BULK',
+          previousStatus: 'OPEN',
+          status: 'SNOOZED',
+          changed: true,
         },
-        data: { urgency: 'HIGH' },
-      });
+      ]);
+
+      const result = await bulkSnooze(['incident-1'], 30, 'maintenance');
+
+      expect(result).toEqual({ success: true, count: 1 });
+      expect(executeIncidentLifecycleBatch).toHaveBeenCalledWith([
+        expect.objectContaining({
+          incidentId: 'incident-1',
+          command: 'SNOOZE',
+          source: 'BULK',
+          snoozeReason: 'maintenance',
+          snoozedUntil: expect.any(Date),
+        }),
+      ]);
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
     });
   });
 
   describe('bulkUpdateStatus', () => {
-    it('should update status to ACKNOWLEDGED with timestamp', async () => {
-      const incidentIds = ['incident-1'];
-      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
-      vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 1 });
-      vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
-
-      const result = await bulkUpdateStatus(incidentIds, 'ACKNOWLEDGED');
-
-      expect(result.success).toBe(true);
-      expect(prisma.incident.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: incidentIds } },
-        data: {
-          status: 'ACKNOWLEDGED',
-          acknowledgedAt: expect.any(Date),
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
+    it('delegates OPEN to target-status translation so source state selects the semantic command', async () => {
+      vi.mocked(executeIncidentLifecycleTargetBatch).mockResolvedValue([
+        {
+          incidentId: 'incident-1',
+          command: 'REOPEN',
+          source: 'BULK',
+          previousStatus: 'RESOLVED',
+          status: 'OPEN',
+          changed: true,
         },
-      });
+      ]);
+
+      const result = await bulkUpdateStatus(['incident-1'], 'OPEN');
+
+      expect(result).toEqual({ success: true, count: 1 });
+      expect(executeIncidentLifecycleTargetBatch).toHaveBeenCalledWith([
+        expect.objectContaining({
+          incidentId: 'incident-1',
+          status: 'OPEN',
+          source: 'BULK',
+          actor: { id: 'user-1', name: 'Test User' },
+        }),
+      ]);
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
     });
 
-    it('should update status to RESOLVED with proper data', async () => {
-      const incidentIds = ['incident-1'];
-      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
-      vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 1 });
-      vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
-
-      const result = await bulkUpdateStatus(incidentIds, 'RESOLVED');
-
-      expect(result.success).toBe(true);
-      expect(prisma.incident.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: incidentIds } },
-        data: {
-          status: 'RESOLVED',
-          resolvedAt: expect.any(Date),
-          escalationStatus: 'COMPLETED',
-          nextEscalationAt: null,
+    it('does not write acknowledgement timestamps directly for generic status updates', async () => {
+      vi.mocked(executeIncidentLifecycleTargetBatch).mockResolvedValue([
+        {
+          incidentId: 'incident-1',
+          command: 'ACKNOWLEDGE',
+          source: 'BULK',
+          previousStatus: 'OPEN',
+          status: 'ACKNOWLEDGED',
+          changed: true,
         },
+      ]);
+
+      await bulkUpdateStatus(['incident-1'], 'ACKNOWLEDGED');
+
+      expect(executeIncidentLifecycleTargetBatch).toHaveBeenCalled();
+      expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkUpdateUrgency', () => {
+    it('keeps non-lifecycle bulk updates on their existing direct path', async () => {
+      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 2 });
+      vi.mocked(prisma.incidentEvent.createMany).mockResolvedValue({ count: 2 });
+
+      const result = await bulkUpdateUrgency(['incident-1', 'incident-2'], 'HIGH');
+
+      expect(result).toEqual({ success: true, count: 2 });
+      expect(prisma.incident.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['incident-1', 'incident-2'] } },
+        data: { urgency: 'HIGH' },
       });
+      expect(executeIncidentLifecycleBatch).not.toHaveBeenCalled();
+      expect(executeIncidentLifecycleTargetBatch).not.toHaveBeenCalled();
     });
   });
 });

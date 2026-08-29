@@ -1,10 +1,13 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
 import { assertResponderOrAbove } from '@/lib/rbac';
 import { logger, withRequestContext } from '@/lib/logger';
 
 const MAX_RESULTS = 50;
+const LEGACY_NOT_FOUND_MESSAGE =
+  'The requested item could not be found. It may have been deleted or you may not have access to it.';
 
 async function getAvailableUsers(
   req: NextRequest,
@@ -18,7 +21,15 @@ async function getAvailableUsers(
     const limit = Math.max(1, Math.min(requestedLimit, MAX_RESULTS));
 
     const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } });
-    if (!team) return jsonError('Team not found', 404);
+    if (!team) {
+      return jsonError(
+        new AppError({
+          code: 'RESOURCE_NOT_FOUND',
+          userMessage: LEGACY_NOT_FOUND_MESSAGE,
+          details: { resource: 'team', teamId },
+        })
+      );
+    }
 
     const users = await prisma.user.findMany({
       where: {
@@ -47,9 +58,11 @@ async function getAvailableUsers(
 
     return jsonOk({ users: users.slice(0, limit), hasMore: users.length > limit });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to search users';
-    logger.error('team.available_users.search_failed', { error: message });
-    if (message.startsWith('Unauthorized')) return jsonError(message, 403);
+    logger.error('team.available_users.search_failed', {
+      error,
+      errorCode: isAppError(error) ? error.code : 'INTERNAL_ERROR',
+    });
+    if (isAppError(error)) return jsonError(error);
     return jsonError('Unable to search the user directory', 500);
   }
 }

@@ -12,7 +12,7 @@ import { formatToE164 } from './sms';
 export type WhatsAppOptions = {
   userId: string;
   incidentId: string;
-  eventType: 'triggered' | 'acknowledged' | 'resolved';
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
 };
 
 const normalizeWhatsAppNumber = (value: string) => formatToE164(value.replace(/^whatsapp:/i, ''));
@@ -24,7 +24,7 @@ const normalizeWhatsAppNumber = (value: string) => formatToE164(value.replace(/^
 export async function sendIncidentWhatsApp(
   userId: string,
   incidentId: string,
-  eventType: 'triggered' | 'acknowledged' | 'resolved',
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
   notificationId?: string
 ): Promise<{ success: boolean; error?: string; messageSid?: string }> {
   try {
@@ -83,6 +83,8 @@ export async function sendIncidentWhatsApp(
       statusLine = '👀 Incident Acknowledged';
     } else if (eventType === 'resolved') {
       statusLine = '✅ Incident Resolved';
+    } else {
+      statusLine = 'ℹ️ Incident Updated';
     }
 
     // Truncate for sanity, though WhatsApp limit is 1600 chars

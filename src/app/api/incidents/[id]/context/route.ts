@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getIncidentContext } from '@/lib/incident-enrichment';
 import { assertCanViewIncident } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import { AppError, isAppError } from '@/lib/errors';
 
 /**
  * GET: Fetch telemetry context for an incident
@@ -9,14 +11,28 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!id || !/^[a-z0-9_-]{1,64}$/i.test(id)) {
-    return NextResponse.json({ error: 'Invalid incident ID' }, { status: 400 });
+    return jsonError(
+      new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'Invalid incident ID.',
+        fields: [{ field: 'id', code: 'invalid_format', message: 'Invalid incident ID.' }],
+      })
+    );
   }
 
   try {
     await assertCanViewIncident(id);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unauthorized';
-    return NextResponse.json({ error: msg }, { status: msg === 'Incident not found' ? 404 : 403 });
+  } catch (error) {
+    if (isAppError(error)) return jsonError(error);
+
+    logger.error('api.incident_context.authorization_failed', { error, incidentId: id });
+    return jsonError(
+      new AppError({
+        code: 'INTERNAL_ERROR',
+        details: { incidentId: id },
+        cause: error,
+      })
+    );
   }
 
   const { searchParams } = new URL(request.url);
@@ -25,13 +41,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const context = await getIncidentContext(id, windowMinutes);
     if (!context) {
-      return NextResponse.json({ error: 'Incident not found' }, { status: 404 });
+      return jsonError(
+        new AppError({
+          code: 'RESOURCE_NOT_FOUND',
+          userMessage: 'Incident not found.',
+          details: { incidentId: id },
+        })
+      );
     }
-    return NextResponse.json(context);
+    return jsonOk(context);
   } catch (error) {
     logger.error('api.incident_context.fetch_failed', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json({ error: 'Failed to get context' }, { status: 500 });
+    return jsonError(
+      new AppError({ code: 'INTERNAL_ERROR', details: { incidentId: id }, cause: error })
+    );
   }
 }

@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { activeIncidentStatuses } from '@/lib/incident-status';
 import MobileServicesClient from '@/components/mobile/MobileServicesClient';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,7 @@ export default async function MobileServicesPage({
       _count: {
         select: {
           incidents: {
-            where: { status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED'] } },
+            where: { status: { in: activeIncidentStatuses() } },
           },
         },
       },

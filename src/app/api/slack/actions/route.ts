@@ -1,12 +1,16 @@
 /**
  * Slack Interactive Actions API
- * Handles Slack button clicks for ack/resolve actions
+ * Handles Slack button clicks for incident lifecycle actions
  */
 
 import { after, NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { toSlackResponseUrl, verifySlackSignature } from '@/lib/slack-signature';
+import {
+  chatOpsLifecycleErrorMessage,
+  executeChatOpsLifecycleCommand,
+} from '@/lib/incidents/chatops-lifecycle';
 
 /**
  * Resolve the Slack user who pressed a button to an OpsKnight account and a
@@ -80,7 +84,14 @@ type SlackActionPayload = {
   [key: string]: unknown;
 };
 
-async function handleSlackActionRequest(payload: SlackActionPayload) {
+function lifecycleFailureResponse(error: unknown) {
+  return NextResponse.json({
+    response_type: 'ephemeral',
+    text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}`,
+  });
+}
+
+export async function handleSlackActionRequest(payload: SlackActionPayload) {
   try {
     // Handle URL verification (for Slack app setup)
     if (payload.type === 'url_verification') {
@@ -103,7 +114,7 @@ async function handleSlackActionRequest(payload: SlackActionPayload) {
         return NextResponse.json({ error: 'Invalid action data' }, { status: 400 });
       }
 
-      // Get incident
+      // Get incident context needed for Slack identity resolution and non-lifecycle actions.
       const incident = await prisma.incident.findUnique({
         where: { id: incidentId },
       });
@@ -127,73 +138,66 @@ async function handleSlackActionRequest(payload: SlackActionPayload) {
       }
 
       // Two variants of every message: `responseMessage` goes to Slack and keeps
-      // the <@ID> mention; `timelineMessage` is plain text for the incident
-      // timeline, which has no way to render a Slack mention.
+      // the <@ID> mention; `timelineMessage` is plain text for non-lifecycle
+      // actions. Lifecycle actions write their timeline entry and durable
+      // external side effects atomically in the centralized lifecycle engine.
       let responseMessage = '';
       let timelineMessage = '';
-      // Mirrors the event the equivalent web console action notifies with
-      let notifyEventType: 'acknowledged' | 'resolved' | 'updated' | null = null;
+      let lifecycleRecordedTimeline = false;
+      let notifyNonLifecycleUpdate = false;
 
       if (actionType === 'ack') {
-        const updateResult = await prisma.incident.updateMany({
-          where: {
-            id: incidentId,
-            status: 'OPEN',
-          },
-          data: {
-            status: 'ACKNOWLEDGED',
-            acknowledgedAt: incident.acknowledgedAt ?? new Date(),
-            escalationStatus: 'COMPLETED',
-            nextEscalationAt: null,
-          },
-        });
-
-        if (updateResult.count > 0) {
-          responseMessage = `👀 Incident acknowledged by <@${slackUserId || 'responder'}>`;
-          timelineMessage = `Acknowledged via Slack button by ${actorName}`;
-          notifyEventType = 'acknowledged';
-        } else {
-          const fresh = await prisma.incident.findUnique({
-            where: { id: incidentId },
-            select: { status: true },
+        let result;
+        try {
+          result = await executeChatOpsLifecycleCommand({
+            incidentId,
+            command: 'ACKNOWLEDGE',
+            actor: { id: actorUser.id, name: actorName },
+            eventMessage: `Acknowledged via Slack button by ${actorName}`,
           });
+        } catch (error) {
+          logger.warn('[Slack Actions] Acknowledge rejected', {
+            incidentId,
+            userId: actorUser.id,
+            error,
+          });
+          return lifecycleFailureResponse(error);
+        }
+
+        if (!result.changed) {
           return NextResponse.json({
-            text: `ℹ️ Incident is already ${fresh?.status?.toLowerCase() || 'processed'}`,
+            text: `ℹ️ Incident is already ${result.status.toLowerCase()}`,
           });
         }
+
+        responseMessage = `👀 Incident acknowledged by <@${slackUserId || 'responder'}>`;
+        lifecycleRecordedTimeline = true;
       } else if (actionType === 'resolve') {
-        const updateResult = await prisma.incident.updateMany({
-          where: {
-            id: incidentId,
-            status: { not: 'RESOLVED' },
-          },
-          data: {
-            status: 'RESOLVED',
-            resolvedAt: incident.resolvedAt ?? new Date(),
-            acknowledgedAt: incident.acknowledgedAt ?? new Date(),
-            escalationStatus: 'COMPLETED',
-            nextEscalationAt: null,
-          },
-        });
-
-        if (updateResult.count > 0) {
-          responseMessage = `✅ Incident resolved by <@${slackUserId || 'responder'}>`;
-          timelineMessage = `Resolved via Slack button by ${actorName}`;
-          notifyEventType = 'resolved';
-
-          // Auto-generate Postmortem draft & archive war-room channel
-          const { archiveWarRoomChannel } = await import('@/lib/chatops/war-room');
-          archiveWarRoomChannel(incidentId).catch(err => {
-            logger.error('[Slack Actions] War-room channel archive failed', {
-              error: err,
-              incidentId,
-            });
+        let result;
+        try {
+          result = await executeChatOpsLifecycleCommand({
+            incidentId,
+            command: 'RESOLVE',
+            actor: { id: actorUser.id, name: actorName },
+            eventMessage: `Resolved via Slack button by ${actorName}`,
           });
-        } else {
+        } catch (error) {
+          logger.warn('[Slack Actions] Resolve rejected', {
+            incidentId,
+            userId: actorUser.id,
+            error,
+          });
+          return lifecycleFailureResponse(error);
+        }
+
+        if (!result.changed) {
           return NextResponse.json({
             text: 'ℹ️ Incident is already resolved',
           });
         }
+
+        responseMessage = `✅ Incident resolved by <@${slackUserId || 'responder'}>`;
+        lifecycleRecordedTimeline = true;
       } else if (actionType === 'assign_me') {
         if (slackUserId) {
           try {
@@ -207,13 +211,10 @@ async function handleSlackActionRequest(payload: SlackActionPayload) {
               }).catch(() => {});
             }
 
-            // Already resolved once above, by email then real name then
-            // username — the same lookup every action type needs.
             const targetUser = actorUser;
 
             // No "first active user" fallback: assigning the incident to an
-            // arbitrary person is worse than not assigning it. Fail loudly
-            // and tell the clicker how to make resolution work.
+            // arbitrary person is worse than not assigning it. Fail loudly.
             if (!targetUser) {
               logger.warn(
                 '[Slack] assign_me could not resolve Slack user to an OpsKnight account',
@@ -236,7 +237,7 @@ async function handleSlackActionRequest(payload: SlackActionPayload) {
             updateWarRoomTopic(incidentId).catch(() => {});
             responseMessage = `🙋 Incident assigned to *${targetUser.name}* (<@${slackUserId}>)`;
             timelineMessage = `Assigned to ${targetUser.name} via Slack button`;
-            notifyEventType = 'updated';
+            notifyNonLifecycleUpdate = true;
           } catch (err) {
             logger.warn('[Slack] Assign to Me failed', { error: err, incidentId });
             return NextResponse.json({
@@ -251,48 +252,68 @@ async function handleSlackActionRequest(payload: SlackActionPayload) {
           });
         }
       } else if (actionType === 'snooze' || actionType === 'snooze_incident') {
-        const snoozeMinutes = actionValue.minutes ? parseInt(String(actionValue.minutes), 10) : 60;
+        const snoozeMinutes =
+          actionValue.minutes === undefined ? 60 : Number.parseInt(String(actionValue.minutes), 10);
+        if (!Number.isInteger(snoozeMinutes) || snoozeMinutes <= 0) {
+          return NextResponse.json({
+            response_type: 'ephemeral',
+            text: '⚠️ Snooze duration must be a positive number of minutes.',
+          });
+        }
+
         const snoozedUntil = new Date(Date.now() + snoozeMinutes * 60 * 1000);
-        await prisma.incident.update({
-          where: { id: incidentId },
-          data: {
-            status: 'SNOOZED',
+        let result;
+        try {
+          result = await executeChatOpsLifecycleCommand({
+            incidentId,
+            command: 'SNOOZE',
+            actor: { id: actorUser.id, name: actorName },
             snoozedUntil,
-            escalationStatus: 'PAUSED',
-          },
-        });
+            eventMessage: `Snoozed for ${snoozeMinutes}m via Slack button by ${actorName}`,
+          });
+        } catch (error) {
+          logger.warn('[Slack Actions] Snooze rejected', {
+            incidentId,
+            userId: actorUser.id,
+            error,
+          });
+          return lifecycleFailureResponse(error);
+        }
+
+        if (!result.changed) {
+          return NextResponse.json({ text: 'ℹ️ Incident snooze is already applied' });
+        }
+
         responseMessage = `💤 Incident snoozed for ${snoozeMinutes}m by <@${slackUserId || 'responder'}>`;
-        timelineMessage = `Snoozed for ${snoozeMinutes}m via Slack button by ${actorName}`;
-        notifyEventType = 'updated';
+        lifecycleRecordedTimeline = true;
       } else if (actionType === 'escalate' || actionType === 'escalate_incident') {
         const { executeEscalation } = await import('@/lib/escalation');
         await executeEscalation(incidentId);
         responseMessage = `⚡ Incident escalated by <@${slackUserId || 'responder'}>`;
         timelineMessage = `Escalated via Slack button by ${actorName}`;
-        notifyEventType = 'updated';
+        notifyNonLifecycleUpdate = true;
       } else {
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
       }
 
-      // Create incident event
-      await prisma.incidentEvent
-        .create({
-          data: {
-            incidentId,
-            message: timelineMessage || `${responseMessage} (1-Click Slack Button)`,
-          },
-        })
-        .catch(() => {});
+      // Non-lifecycle actions still own their timeline entry here. Lifecycle
+      // actions already wrote it atomically with the state transition.
+      if (!lifecycleRecordedTimeline && timelineMessage) {
+        await prisma.incidentEvent
+          .create({
+            data: {
+              incidentId,
+              message: timelineMessage,
+            },
+          })
+          .catch(() => {});
+      }
 
-      // Notify the same way the web console does. These handlers write to
-      // Prisma directly, so without this a Slack button silently skips the
-      // notification the equivalent UI action always sends.
-      // Fire-and-forget: Slack times the interaction out after 3s.
-      if (notifyEventType) {
+      // Assignment/escalation are not lifecycle transitions and retain their
+      // existing immediate notification path. Lifecycle delivery is outboxed.
+      if (notifyNonLifecycleUpdate) {
         import('@/lib/user-notifications')
-          .then(({ sendIncidentNotifications }) =>
-            sendIncidentNotifications(incidentId, notifyEventType)
-          )
+          .then(({ sendIncidentNotifications }) => sendIncidentNotifications(incidentId, 'updated'))
           .catch(err =>
             logger.error('[Slack] Failed to send notifications for button action', {
               error: err instanceof Error ? err.message : String(err),

@@ -6,6 +6,8 @@ import {
   MobileUrgencyBadge,
 } from '@/components/mobile/MobileUtils';
 import MobileTime from '@/components/mobile/MobileTime';
+import { logger } from '@/lib/logger';
+import { INCIDENT_METRIC_DEFINITIONS, metricDefinitionTooltip } from '@/lib/metric-contract';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +20,33 @@ export default async function MobileAnalyticsPage() {
     includeAllTime: false,
     includeIncidents: true,
     incidentLimit: 15,
+  }).catch(error => {
+    logger.error('mobile.analytics.metricsUnavailable', {
+      component: 'MobileAnalyticsPage',
+      error,
+    });
+    return null;
   });
+
+  if (!slaMetrics) {
+    return (
+      <div className="flex flex-col gap-4 p-4 pb-24">
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+          role="alert"
+        >
+          <strong>Analytics data is unavailable.</strong>
+          <p className="mt-1">
+            OpsKnight could not calculate this metric set. Zero values are hidden so a query failure
+            cannot look like healthy performance.
+          </p>
+        </div>
+        <Link href="/m/incidents" className="mobile-quick-action secondary">
+          View incidents
+        </Link>
+      </div>
+    );
+  }
 
   const dayMs = 24 * 60 * 60 * 1000;
   const effectiveWindowDays = Math.max(
@@ -28,7 +56,7 @@ export default async function MobileAnalyticsPage() {
   const windowLabelDays = slaMetrics.isClipped ? effectiveWindowDays : metricsWindowDays;
   const windowLabelSuffix = slaMetrics.isClipped ? ' (retention limit)' : '';
 
-  const openIncidents = slaMetrics.activeIncidents;
+  const activeIncidents = slaMetrics.activeIncidents;
   const incidentsInRange = slaMetrics.totalIncidents;
   const mtta = slaMetrics.mttd ?? null;
   const mttr = slaMetrics.mttr ?? null;
@@ -49,6 +77,10 @@ export default async function MobileAnalyticsPage() {
   const assigneeLoad = slaMetrics.assigneeLoad.slice(0, 5);
   const onCallLoad = slaMetrics.onCallLoad.slice(0, 5);
   const recentIncidents = (slaMetrics.recentIncidents || []).slice(0, 8);
+  const periodIncidentHref = `/m/incidents?${new URLSearchParams({
+    createdAfter: slaMetrics.effectiveStart.toISOString(),
+    createdBefore: slaMetrics.effectiveEnd.toISOString(),
+  }).toString()}`;
 
   const formatDuration = (minutes: number | null) => {
     if (!minutes || minutes <= 0) return '--';
@@ -85,22 +117,37 @@ export default async function MobileAnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <MobileCard className="relative overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-500 to-rose-500" />
-          <div className="text-2xl font-bold text-[color:var(--text-primary)]">{openIncidents}</div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-            Open Incidents
-          </div>
-        </MobileCard>
-        <MobileCard className="relative overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
-          <div className="text-2xl font-bold text-[color:var(--text-primary)]">
-            {incidentsInRange}
-          </div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
-            New ({windowLabelDays}d)
-          </div>
-        </MobileCard>
+        <Link
+          href="/m/incidents?filter=all_open"
+          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.activeIncidents)}
+        >
+          <MobileCard className="relative h-full overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-500 to-rose-500" />
+            <div className="text-2xl font-bold text-[color:var(--text-primary)]">
+              {activeIncidents}
+            </div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
+              Active · Current
+            </div>
+          </MobileCard>
+        </Link>
+        <Link
+          href={periodIncidentHref}
+          title={metricDefinitionTooltip(
+            INCIDENT_METRIC_DEFINITIONS.totalIncidents,
+            `Last ${windowLabelDays} days`
+          )}
+        >
+          <MobileCard className="relative h-full overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
+            <div className="text-2xl font-bold text-[color:var(--text-primary)]">
+              {incidentsInRange}
+            </div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
+              New ({windowLabelDays}d)
+            </div>
+          </MobileCard>
+        </Link>
         <MobileCard className="relative overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
           <div className="text-2xl font-bold text-[color:var(--text-primary)]">
@@ -155,7 +202,10 @@ export default async function MobileAnalyticsPage() {
       </MobileCard>
 
       <MobileCard className="space-y-3">
-        <div className="text-sm font-semibold text-[color:var(--text-primary)]">Urgency Mix</div>
+        <div>
+          <div className="text-sm font-semibold text-[color:var(--text-primary)]">Urgency Mix</div>
+          <div className="text-[11px] text-[color:var(--text-muted)]">Selected period</div>
+        </div>
         <div className="space-y-3">
           {urgencyRows.map(row => (
             <div key={row.label} className="space-y-1">
@@ -230,7 +280,12 @@ export default async function MobileAnalyticsPage() {
       </MobileCard>
 
       <MobileCard className="space-y-3">
-        <div className="text-sm font-semibold text-[color:var(--text-primary)]">Assignee Load</div>
+        <div>
+          <div className="text-sm font-semibold text-[color:var(--text-primary)]">
+            Assignee Load
+          </div>
+          <div className="text-[11px] text-[color:var(--text-muted)]">Current active work</div>
+        </div>
         {assigneeLoad.length === 0 ? (
           <div className="text-xs text-[color:var(--text-muted)]">No assignee data yet.</div>
         ) : (

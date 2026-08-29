@@ -1,7 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
-import { useRef, useEffect } from 'react';
+import { useActionState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-product-notification';
 import TimeZoneSelect from './TimeZoneSelect';
@@ -16,7 +15,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { AlertCircle, Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, CalendarPlus, ShieldAlert } from 'lucide-react';
 import { useFormStatus } from 'react-dom';
 
 type ScheduleCreateFormProps = {
@@ -35,11 +34,11 @@ type FormState = {
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending} className="w-full gap-2">
+    <Button type="submit" disabled={pending} className="w-full gap-2 font-medium shadow-xs">
       {pending ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
-          Creating...
+          Creating schedule...
         </>
       ) : (
         <>
@@ -72,72 +71,71 @@ export default function ScheduleCreateForm({ action, canCreate }: ScheduleCreate
 
   if (!canCreate) {
     return (
-      <Card id="new-schedule" className="opacity-60">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-orange-600" />
-            New Schedule
-          </CardTitle>
-          <CardDescription>Admin or Responder role required</CardDescription>
+      <Card id="new-schedule" className="border-border/70 shadow-xs opacity-75">
+        <CardHeader className="border-b bg-muted/20 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20 dark:text-amber-400">
+              <ShieldAlert className="h-4 w-4" />
+            </div>
+            <div>
+              <CardTitle className="text-sm font-semibold">New Schedule</CardTitle>
+              <CardDescription className="text-[11px]">Permission restricted</CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4 pointer-events-none">
-          <div className="space-y-2">
-            <Label htmlFor="name-disabled" className="text-sm">
-              Name
-            </Label>
-            <Input
-              id="name-disabled"
-              name="name"
-              placeholder="Primary on-call"
-              disabled
-              className="bg-muted"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="timezone-disabled" className="text-sm">
-              Time Zone
-            </Label>
-            <TimeZoneSelect name="timeZone" defaultValue="UTC" disabled />
-          </div>
-          <Button disabled className="w-full">
-            Create Schedule
-          </Button>
+        <CardContent className="p-4 text-xs text-muted-foreground">
+          Admin or Responder role is required to create and manage on-call schedules.
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card id="new-schedule" className="shadow-sm border-slate-200">
-      <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Plus className="h-4 w-4 text-primary" />
-          New Schedule
-        </CardTitle>
-        <CardDescription>Create a rotation schedule for on-call coverage</CardDescription>
+    <Card id="new-schedule" className="overflow-hidden border-border/70 shadow-xs">
+      <CardHeader className="border-b bg-muted/20 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+            <CalendarPlus className="h-4 w-4" />
+          </div>
+          <div>
+            <CardTitle className="text-sm font-semibold">Create Schedule</CardTitle>
+            <CardDescription className="text-[11px]">
+              Define rotation name and base timezone
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="pt-4">
-        <form ref={formRef} action={formAction} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name" className="text-sm">
-              Name <span className="text-red-500">*</span>
+      <CardContent className="p-4 pt-3.5">
+        <form ref={formRef} action={formAction} className="space-y-3.5">
+          <div className="space-y-1.5">
+            <Label htmlFor="name" className="text-xs font-medium text-foreground">
+              Schedule Name <span className="text-destructive">*</span>
             </Label>
-            <Input id="name" name="name" placeholder="Primary on-call" required maxLength={200} />
+            <Input
+              id="name"
+              name="name"
+              placeholder="e.g. Primary on-call"
+              required
+              maxLength={200}
+              className="text-xs"
+            />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="timeZone" className="text-sm">
-              Time Zone <span className="text-red-500">*</span>
+          <div className="space-y-1.5">
+            <Label htmlFor="timeZone" className="text-xs font-medium text-foreground">
+              Time Zone <span className="text-destructive">*</span>
             </Label>
             <TimeZoneSelect name="timeZone" defaultValue="UTC" />
+            <p className="text-[10px] text-muted-foreground">
+              Shifts, rotations, and handoffs will follow this timezone.
+            </p>
           </div>
 
           <SubmitButton />
 
           {state?.error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-sm">{state.error}</AlertDescription>
+            <Alert variant="destructive" className="py-2 text-xs">
+              <AlertDescription>{state.error}</AlertDescription>
             </Alert>
           )}
         </form>

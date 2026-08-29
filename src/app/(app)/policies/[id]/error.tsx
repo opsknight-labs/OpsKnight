@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { logger } from '@/lib/logger';
-import { getUserFriendlyError } from '@/lib/user-friendly-errors';
+import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function PolicyDetailError({
@@ -31,7 +31,7 @@ export default function PolicyDetailError({
           <h2 className="text-lg font-semibold text-slate-900">
             Escalation policy couldn&apos;t load
           </h2>
-          <p className="text-sm text-slate-600 mt-1">{getUserFriendlyError(error)}</p>
+          <p className="text-sm text-slate-600 mt-1">{getUserFacingErrorMessage(error)}</p>
         </div>
         <button
           type="button"

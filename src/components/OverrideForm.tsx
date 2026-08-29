@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-product-notification';
-
 import {
   Sheet,
   SheetContent,
@@ -14,13 +13,15 @@ import {
 } from '@/components/ui/shadcn/sheet';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
-import { AlertCircle, Clock, Loader2 } from 'lucide-react';
-import { addHours, format } from 'date-fns';
+import ResponderCombobox, { type ResponderOption } from './ResponderCombobox';
+import { formatDateForInput, formatDateTime, parseDateTimeInTimeZone } from '@/lib/timezone';
+import { AlertCircle, Clock, Loader2, ShieldPlus, UserRoundCog } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type OverrideFormProps = {
   scheduleId: string;
-  users: Array<{ id: string; name: string; avatarUrl?: string | null; gender?: string | null }>;
-  canManageSchedules: boolean;
+  users: ResponderOption[];
+  canCreateOverride: boolean;
   createOverride: (
     scheduleId: string,
     formData: FormData
@@ -28,10 +29,12 @@ type OverrideFormProps = {
   scheduleTimeZone: string;
 };
 
+type OverrideMode = 'replacement' | 'additive';
+
 export default function OverrideForm({
   scheduleId,
   users,
-  canManageSchedules,
+  canCreateOverride,
   createOverride,
   scheduleTimeZone,
 }: OverrideFormProps) {
@@ -39,263 +42,250 @@ export default function OverrideForm({
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<OverrideMode>('replacement');
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [replacesUserId, setReplacesUserId] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
 
-  // Form state
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [replacesUserId, setReplacesUserId] = useState<string>('');
-  const [startTime, setStartTime] = useState<string>('');
-  const [endTime, setEndTime] = useState<string>('');
-
-  // Format date for datetime-local input in the schedule's timezone
-  const toScheduleISOString = (date: Date) => {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: scheduleTimeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      hourCycle: 'h23',
-    });
-    const parts = formatter.formatToParts(date);
-    const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
-    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
-  };
+  const replacementCandidates = useMemo(
+    () => users.filter(user => user.id !== selectedUserId),
+    [selectedUserId, users]
+  );
+  const startInstant = useMemo(
+    () => parseDateTimeInTimeZone(startTime, scheduleTimeZone),
+    [scheduleTimeZone, startTime]
+  );
+  const endInstant = useMemo(
+    () => parseDateTimeInTimeZone(endTime, scheduleTimeZone),
+    [endTime, scheduleTimeZone]
+  );
+  const hasValidRange = Boolean(startInstant && endInstant && endInstant > startInstant);
+  const selectedResponder = users.find(user => user.id === selectedUserId);
+  const replacedResponder = users.find(user => user.id === replacesUserId);
 
   const handleQuickDuration = (hours: number) => {
-    const now = new Date();
-    // Round up to next 15 mins for cleanliness
-    const remainder = 15 - (now.getMinutes() % 15);
-    now.setMinutes(now.getMinutes() + remainder);
-    now.setSeconds(0);
-    now.setMilliseconds(0);
-
-    const end = addHours(now, hours);
-
-    setStartTime(toScheduleISOString(now));
-    setEndTime(toScheduleISOString(end));
+    const start = new Date();
+    const minutesToQuarter = (15 - (start.getMinutes() % 15)) % 15;
+    start.setMinutes(start.getMinutes() + minutesToQuarter, 0, 0);
+    const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
+    setStartTime(formatDateForInput(start, scheduleTimeZone));
+    setEndTime(formatDateForInput(end, scheduleTimeZone));
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const reset = () => {
+    setMode('replacement');
+    setSelectedUserId('');
+    setReplacesUserId('');
+    setStartTime('');
+    setEndTime('');
+  };
 
-    if (!selectedUserId) {
-      showToast('Please select a responder', 'error');
-      return;
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedUserId) return showToast('Select the responder taking coverage.', 'error');
+    if (mode === 'replacement' && !replacesUserId) {
+      return showToast('Select the responder being replaced.', 'error');
     }
-    if (!startTime || !endTime) {
-      showToast('Please set start and end times', 'error');
-      return;
+    if (!hasValidRange) {
+      return showToast('Enter a valid schedule-timezone range with end after start.', 'error');
     }
 
-    const formData = new FormData(e.currentTarget);
-
+    const formData = new FormData(event.currentTarget);
     startTransition(async () => {
       try {
         const result = await createOverride(scheduleId, formData);
-        if (result?.error) {
-          showToast(result.error, 'error');
-        } else {
-          const userName = users.find(u => u.id === selectedUserId)?.name || 'User';
-          showToast(`Override created for ${userName}`, 'success');
-          // Reset form
-          setSelectedUserId('');
-          setReplacesUserId('');
-          setStartTime('');
-          setEndTime('');
-          router.refresh();
-          setOpen(false);
-        }
+        if (result?.error) return showToast(result.error, 'error');
+        showToast(
+          mode === 'replacement' ? 'Replacement created.' : 'Extra coverage added.',
+          'success'
+        );
+        reset();
+        setOpen(false);
+        router.refresh();
       } catch {
-        showToast('Failed to create override', 'error');
+        showToast('Failed to create override.', 'error');
       }
     });
   };
 
-  if (!canManageSchedules) return null;
+  if (!canCreateOverride) return null;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button
-          variant="outline"
-          className="w-full h-10 gap-2 text-sm font-medium border-amber-200 bg-amber-50/50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 shadow-sm"
-        >
-          <Clock className="h-4 w-4" />
-          Add Override
+        <Button className="gap-2">
+          <ShieldPlus className="h-4 w-4" />
+          Add override
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-        {/* Header */}
-        <SheetHeader className="pb-4 mb-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
-              <AlertCircle className="h-5 w-5" />
-            </div>
-            <div>
-              <SheetTitle className="text-lg font-semibold">Add Coverage Override</SheetTitle>
-              <SheetDescription>Temporarily replace the on-call responder</SheetDescription>
-            </div>
-          </div>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetHeader className="border-b pb-4 text-left">
+          <SheetTitle>Add coverage override</SheetTitle>
+          <SheetDescription>
+            Times are interpreted in {scheduleTimeZone}, regardless of your browser timezone.
+          </SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Hidden inputs for FormData */}
+        <form onSubmit={handleSubmit} className="space-y-6 py-5">
           <input type="hidden" name="userId" value={selectedUserId} />
-          <input type="hidden" name="replacesUserId" value={replacesUserId} />
+          <input
+            type="hidden"
+            name="replacesUserId"
+            value={mode === 'replacement' ? replacesUserId : ''}
+          />
           <input type="hidden" name="start" value={startTime} />
           <input type="hidden" name="end" value={endTime} />
 
-          {/* Who takes coverage - Dropdown */}
-          <div className="space-y-3">
-            <Label>Who takes coverage? *</Label>
-            <div className="relative">
-              <select
-                value={selectedUserId}
-                onChange={e => setSelectedUserId(e.target.value)}
-                className="w-full h-11 text-sm rounded-lg border-2 border-slate-200 bg-white pl-4 pr-10 hover:border-primary focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer font-medium appearance-none"
-                required
-              >
-                <option value="">Select responder...</option>
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-              {/* Dropdown arrow */}
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                <svg
-                  className="h-4 w-4 text-slate-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          {/* Who are they replacing (Optional) - Dropdown */}
-          <div className="space-y-3">
-            <Label>
-              Replacing <span className="text-slate-400 font-normal">(Optional)</span>
-            </Label>
-            <div className="relative">
-              <select
-                value={replacesUserId}
-                onChange={e => setReplacesUserId(e.target.value)}
-                className="w-full h-11 text-sm rounded-lg border-2 border-slate-200 bg-white pl-4 pr-10 hover:border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer font-medium appearance-none"
-              >
-                <option value="">Everyone (override all)</option>
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-              {/* Dropdown arrow */}
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                <svg
-                  className="h-4 w-4 text-slate-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Duration */}
-          <div className="space-y-3">
-            <Label>Quick Duration</Label>
-            <div className="grid grid-cols-4 gap-2">
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-medium">What should change?</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
               {[
-                { label: '1h', hours: 1 },
-                { label: '4h', hours: 4 },
-                { label: '8h', hours: 8 },
-                { label: '24h', hours: 24 },
-              ].map(({ label, hours }) => (
+                {
+                  value: 'replacement' as const,
+                  title: 'Replace someone',
+                  description: 'Swap one scheduled responder for another.',
+                  icon: UserRoundCog,
+                },
+                {
+                  value: 'additive' as const,
+                  title: 'Add extra coverage',
+                  description: 'Add a responder without removing anyone.',
+                  icon: ShieldPlus,
+                },
+              ].map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={mode === option.value}
+                  onClick={() => {
+                    setMode(option.value);
+                    if (option.value === 'additive') setReplacesUserId('');
+                  }}
+                  className={cn(
+                    'rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    mode === option.value
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'hover:border-primary/50'
+                  )}
+                >
+                  <option.icon className="mb-2 h-5 w-5 text-primary" />
+                  <span className="block text-sm font-semibold">{option.title}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {option.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="space-y-2">
+            <Label>Responder taking coverage</Label>
+            <ResponderCombobox
+              users={users}
+              selectedUserId={selectedUserId}
+              onSelect={setSelectedUserId}
+              label="Select responder"
+              className="w-full justify-between"
+              disabled={isPending}
+            />
+          </div>
+
+          {mode === 'replacement' && (
+            <div className="space-y-2">
+              <Label>Responder being replaced</Label>
+              <ResponderCombobox
+                users={replacementCandidates}
+                selectedUserId={replacesUserId}
+                onSelect={setReplacesUserId}
+                label="Select scheduled responder"
+                className="w-full justify-between"
+                disabled={isPending}
+              />
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <Label>Quick duration</Label>
+            <div className="grid grid-cols-4 gap-2">
+              {[1, 4, 8, 24].map(hours => (
                 <Button
                   key={hours}
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => handleQuickDuration(hours)}
-                  className="text-xs"
                 >
-                  {label}
+                  {hours}h
                 </Button>
               ))}
             </div>
           </div>
 
-          {/* Date/Time inputs - using native datetime-local */}
-          <div className="space-y-3">
-            <Label>Start Date & Time *</Label>
-            <input
-              type="datetime-local"
-              value={startTime}
-              onChange={e => setStartTime(e.target.value)}
-              required
-              disabled={isPending}
-              className="w-full h-11 text-sm rounded-lg border-2 border-slate-200 bg-white px-3 hover:border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer"
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="override-start">Starts</Label>
+              <input
+                id="override-start"
+                type="datetime-local"
+                value={startTime}
+                onChange={event => setStartTime(event.target.value)}
+                required
+                disabled={isPending}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="override-end">Ends</Label>
+              <input
+                id="override-end"
+                type="datetime-local"
+                value={endTime}
+                onChange={event => setEndTime(event.target.value)}
+                required
+                disabled={isPending}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
           </div>
 
-          <div className="space-y-3">
-            <Label>End Date & Time *</Label>
-            <input
-              type="datetime-local"
-              value={endTime}
-              onChange={e => setEndTime(e.target.value)}
-              required
-              disabled={isPending}
-              className="w-full h-11 text-sm rounded-lg border-2 border-slate-200 bg-white px-3 hover:border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer"
-            />
-          </div>
-
-          {/* Timezone indicator */}
-          <p className="text-xs text-slate-500 -mt-1">
-            Times are in schedule timezone: <span className="font-medium">{scheduleTimeZone}</span>
-          </p>
-
-          {/* Preview */}
-          {startTime && endTime && selectedUserId && (
-            <div className="p-4 rounded-xl bg-amber-50/80 border border-amber-200/80">
-              <div className="flex items-center gap-2 mb-1">
-                <Clock className="h-4 w-4 text-amber-600" />
-                <p className="font-medium text-amber-800">
-                  {users.find(u => u.id === selectedUserId)?.name} will be on-call
-                </p>
+          {startTime && endTime && (
+            <div
+              className={cn(
+                'rounded-lg border p-3 text-sm',
+                hasValidRange ? 'bg-muted/40' : 'border-destructive/40 bg-destructive/5'
+              )}
+            >
+              <div className="flex items-center gap-2 font-medium">
+                {hasValidRange ? (
+                  <Clock className="h-4 w-4" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                )}
+                {hasValidRange ? 'Schedule-timezone preview' : 'Invalid or ambiguous local time'}
               </div>
-              <p className="text-amber-600 text-xs pl-6">
-                {format(new Date(startTime), 'MMM d, h:mm a')} →{' '}
-                {format(new Date(endTime), 'MMM d, h:mm a')}
-              </p>
+              {startInstant && endInstant && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatDateTime(startInstant, scheduleTimeZone, { format: 'short' })} →{' '}
+                  {formatDateTime(endInstant, scheduleTimeZone, { format: 'short' })}
+                </p>
+              )}
+              {hasValidRange && selectedResponder && (
+                <p className="mt-2 border-t pt-2 text-xs text-foreground">
+                  {mode === 'replacement'
+                    ? replacedResponder
+                      ? `${selectedResponder.name} replaces ${replacedResponder.name} for this period.`
+                      : 'Choose who is being replaced to complete this change.'
+                    : `${selectedResponder.name} is added alongside the current effective responder.`}
+                </p>
+              )}
             </div>
           )}
 
-          {/* Submit */}
-          <div className="flex gap-3 pt-4 mt-2 border-t border-slate-100">
+          <div className="flex justify-end gap-3 border-t pt-4">
             <Button
               type="button"
               variant="outline"
-              className="flex-1 h-10"
               onClick={() => setOpen(false)}
               disabled={isPending}
             >
@@ -303,17 +293,15 @@ export default function OverrideForm({
             </Button>
             <Button
               type="submit"
-              disabled={isPending || !selectedUserId || !startTime || !endTime}
-              className="flex-1 h-10 bg-amber-500 hover:bg-amber-600 shadow-sm"
+              disabled={
+                isPending ||
+                !selectedUserId ||
+                !hasValidRange ||
+                (mode === 'replacement' && !replacesUserId)
+              }
             >
-              {isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                'Confirm Override'
-              )}
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {mode === 'replacement' ? 'Create replacement' : 'Add coverage'}
             </Button>
           </div>
         </form>

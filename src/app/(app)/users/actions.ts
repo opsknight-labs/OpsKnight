@@ -8,6 +8,7 @@ import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf } from '@/lib/rbac';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
 import { revokeUserSessions } from '@/lib/auth';
+import { isAppRole } from '@/lib/authorization';
 
 async function sendInviteEmailIfConfigured(data: {
   email: string;
@@ -196,6 +197,9 @@ export async function addUser(
   if (!name || !email) {
     return { error: 'Name and email are required.' };
   }
+  if (!isAppRole(role)) {
+    return { error: 'Select a valid user role.' };
+  }
 
   // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -235,7 +239,7 @@ export async function addUser(
         data: {
           name,
           email,
-          role: (role as 'ADMIN' | 'RESPONDER' | 'USER') || 'USER',
+          role,
           status: 'INVITED',
           invitedAt: new Date(),
         },
@@ -304,6 +308,9 @@ export async function updateUserRole(userId: string, formData: FormData) {
     };
   }
   const role = formData.get('role') as string;
+  if (!isAppRole(role)) {
+    return { error: 'Select a valid user role.' };
+  }
   if (role !== 'ADMIN') {
     try {
       await assertNotLastAdmin(userId);
@@ -316,7 +323,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
 
   await prisma.user.update({
     where: { id: userId },
-    data: { role: role as 'ADMIN' | 'RESPONDER' | 'USER' },
+    data: { role },
   });
   await revokeUserSessions(userId);
 
@@ -720,6 +727,9 @@ export async function bulkUpdateUsers(
     if (!role) {
       return { error: 'Role is required.' };
     }
+    if (!isAppRole(role)) {
+      return { error: 'Select a valid user role.' };
+    }
 
     if (role !== 'ADMIN') {
       if (admin && userIds.includes(admin.id)) {
@@ -737,7 +747,7 @@ export async function bulkUpdateUsers(
 
     await prisma.user.updateMany({
       where: { id: { in: userIds } },
-      data: { role: role as 'ADMIN' | 'RESPONDER' | 'USER' },
+      data: { role },
     });
 
     await Promise.all(userIds.map(id => revokeUserSessions(id)));

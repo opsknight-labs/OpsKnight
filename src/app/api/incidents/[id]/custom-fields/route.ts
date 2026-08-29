@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { assertCanModifyIncident } from '@/lib/rbac';
+import { assertResponderOrAbove } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { IncidentCustomFieldSchema } from '@/lib/validation';
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id: incidentId } = await params;
 
     try {
-      await assertCanModifyIncident(incidentId);
+      await assertResponderOrAbove();
     } catch (error) {
       return jsonError(
         error instanceof Error ? error.message : 'Unauthorized to modify incident',

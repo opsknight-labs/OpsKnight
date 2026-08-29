@@ -5,10 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import MobileButton from '@/components/mobile/MobileButton';
 import { cn } from '@/lib/utils';
 import { notify as toast } from '@/lib/toast';
+import { toUserFacingError } from '@/lib/user-facing-error';
 
 type Service = { id: string; name: string };
 type User = { id: string; name: string | null; email: string };
-type CreateIncidentResult = { id?: string } | null;
+type CreateIncidentResult = {
+  id: string;
+  outcome: 'CREATED' | 'MERGED' | 'REOPENED';
+} | null;
 
 export default function MobileCreateIncidentClient({
   services,
@@ -25,7 +29,7 @@ export default function MobileCreateIncidentClient({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [urgency, setUrgency] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('LOW');
+  const [urgency, setUrgency] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('HIGH');
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -33,29 +37,31 @@ export default function MobileCreateIncidentClient({
 
     try {
       const result = await createAction(formData);
-      if (result && result.id) {
-        toast.success('Incident created successfully');
-        // Ensure we redirect to the MOBILE view
+      if (result?.id) {
+        const message =
+          result.outcome === 'MERGED'
+            ? 'Report merged into the existing incident'
+            : result.outcome === 'REOPENED'
+              ? 'Incident reopened from your report'
+              : 'Incident created successfully';
+        toast.success(message);
         router.push(`/m/incidents/${result.id}`);
       } else {
-        toast.success('Incident created');
-        // Fallback if no ID returned (shouldn't happen)
-        router.push('/m/incidents');
+        toast.error('Incident creation did not return a result');
+        setLoading(false);
       }
     } catch (err: unknown) {
       const errorInfo =
         err && typeof err === 'object' ? (err as { message?: string; digest?: string }) : {};
-      // We removed the server-side redirect, so NEXT_REDIRECT shouldn't happen,
-      // but keeping this check doesn't hurt.
       if (errorInfo.message === 'NEXT_REDIRECT' || errorInfo.digest?.startsWith('NEXT_REDIRECT')) {
         throw err;
       }
-      setError(errorInfo.message || 'Failed to create incident');
+      const userFacing = toUserFacingError(err, 'Failed to create incident. Please try again.');
+      setError(userFacing.description ? `${userFacing.title}. ${userFacing.description}` : userFacing.title);
       setLoading(false);
     }
   }
 
-  // Helper to truncate long names for mobile dropdowns
   const truncate = (str: string | null, len: number) => {
     if (!str) return '';
     return str.length > len ? str.substring(0, len) + '...' : str;
@@ -64,7 +70,6 @@ export default function MobileCreateIncidentClient({
   return (
     <form action={handleSubmit}>
       <div className="flex flex-col gap-4">
-        {/* Title */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
             Title <span className="text-red-500">*</span>
@@ -77,7 +82,6 @@ export default function MobileCreateIncidentClient({
           />
         </div>
 
-        {/* Description */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
             Description
@@ -90,7 +94,6 @@ export default function MobileCreateIncidentClient({
           />
         </div>
 
-        {/* Service */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
             Service <span className="text-red-500">*</span>
@@ -126,7 +129,6 @@ export default function MobileCreateIncidentClient({
           </div>
         </div>
 
-        {/* Urgency */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
             Urgency
@@ -156,7 +158,6 @@ export default function MobileCreateIncidentClient({
           </div>
         </div>
 
-        {/* Assignee */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
             Assignee (Optional)

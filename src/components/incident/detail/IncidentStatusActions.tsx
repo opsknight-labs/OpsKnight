@@ -18,6 +18,7 @@ type IncidentStatusActionsProps = {
   onSuppress: () => void;
   onUnsuppress: () => void;
   canManage: boolean;
+  canAcknowledge: boolean;
 };
 
 export default function IncidentStatusActions({
@@ -30,10 +31,11 @@ export default function IncidentStatusActions({
   onSuppress,
   onUnsuppress,
   canManage,
+  canAcknowledge,
 }: IncidentStatusActionsProps) {
   const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
 
-  if (!canManage) {
+  if (!canManage && !canAcknowledge) {
     return (
       <Card className="border-amber-200 bg-amber-50/50">
         <CardContent className="p-3 flex items-center gap-3">
@@ -73,7 +75,7 @@ export default function IncidentStatusActions({
   return (
     <div className="space-y-3">
       {/* Primary Action - Acknowledge */}
-      {isAcknowledged ? (
+      {isAcknowledged && canManage ? (
         <form action={onUnacknowledge}>
           <Button
             type="submit"
@@ -85,6 +87,7 @@ export default function IncidentStatusActions({
           </Button>
         </form>
       ) : (
+        canAcknowledge &&
         !isSuppressed &&
         !isSnoozed && (
           <form action={onAcknowledge}>
@@ -99,7 +102,7 @@ export default function IncidentStatusActions({
         )
       )}
 
-      {isSnoozed && (
+      {isSnoozed && canAcknowledge && (
         <form action={onAcknowledge}>
           <Button
             type="submit"
@@ -112,70 +115,72 @@ export default function IncidentStatusActions({
       )}
 
       {/* Secondary Actions - Enhanced Cards */}
-      <div className="grid grid-cols-2 gap-2">
-        {isSnoozed ? (
-          <form action={onUnsnooze} className="contents">
-            <Button
-              type="submit"
-              variant="outline"
-              className="h-auto py-3 flex-col gap-1 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 hover:border-indigo-300"
-            >
-              <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center mb-1">
-                <Bell className="h-3.5 w-3.5 text-indigo-600" />
-              </div>
-              <span className="text-xs font-medium text-indigo-700">Unsnooze</span>
-              <span className="text-[10px] text-indigo-500">Resume alerts</span>
-            </Button>
-          </form>
-        ) : (
-          !isSuppressed && (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-auto py-3 flex-col gap-1 border-slate-200 hover:border-slate-300 force-light-surface"
-              onClick={() => setShowSnoozeDialog(true)}
-            >
-              <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center mb-1 force-light-surface">
-                <Pause className="h-3.5 w-3.5 text-slate-600" />
-              </div>
-              <span className="text-xs font-medium text-slate-700">Snooze</span>
-              <span className="text-[10px] text-slate-500">Pause alerts</span>
-            </Button>
-          )
-        )}
-
-        {isSuppressed ? (
-          <form action={onUnsuppress} className="contents">
-            <Button
-              type="submit"
-              variant="outline"
-              className="h-auto py-3 flex-col gap-1 border-purple-200 bg-purple-50/50 hover:bg-purple-100 hover:border-purple-300"
-            >
-              <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center mb-1">
-                <Volume2 className="h-3.5 w-3.5 text-purple-600" />
-              </div>
-              <span className="text-xs font-medium text-purple-700">Unsuppress</span>
-              <span className="text-[10px] text-purple-500">Enable alerts</span>
-            </Button>
-          </form>
-        ) : (
-          !isSnoozed && (
-            <form action={onSuppress} className="contents">
+      {canManage && (
+        <div className="grid grid-cols-2 gap-2">
+          {isSnoozed ? (
+            <form action={onUnsnooze} className="contents">
               <Button
                 type="submit"
                 variant="outline"
-                className="h-auto py-3 flex-col gap-1 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
+                className="h-auto py-3 flex-col gap-1 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 hover:border-indigo-300"
               >
-                <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center mb-1">
-                  <BellOff className="h-3.5 w-3.5 text-slate-600" />
+                <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center mb-1">
+                  <Bell className="h-3.5 w-3.5 text-indigo-600" />
                 </div>
-                <span className="text-xs font-medium text-slate-700">Suppress</span>
-                <span className="text-[10px] text-slate-500">Mute alerts</span>
+                <span className="text-xs font-medium text-indigo-700">Unsnooze</span>
+                <span className="text-[10px] text-indigo-500">Resume alerts</span>
               </Button>
             </form>
-          )
-        )}
-      </div>
+          ) : (
+            !isSuppressed && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-auto py-3 flex-col gap-1 border-slate-200 hover:border-slate-300 force-light-surface"
+                onClick={() => setShowSnoozeDialog(true)}
+              >
+                <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center mb-1 force-light-surface">
+                  <Pause className="h-3.5 w-3.5 text-slate-600" />
+                </div>
+                <span className="text-xs font-medium text-slate-700">Snooze</span>
+                <span className="text-[10px] text-slate-500">Pause alerts</span>
+              </Button>
+            )
+          )}
+
+          {isSuppressed ? (
+            <form action={onUnsuppress} className="contents">
+              <Button
+                type="submit"
+                variant="outline"
+                className="h-auto py-3 flex-col gap-1 border-purple-200 bg-purple-50/50 hover:bg-purple-100 hover:border-purple-300"
+              >
+                <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center mb-1">
+                  <Volume2 className="h-3.5 w-3.5 text-purple-600" />
+                </div>
+                <span className="text-xs font-medium text-purple-700">Unsuppress</span>
+                <span className="text-[10px] text-purple-500">Enable alerts</span>
+              </Button>
+            </form>
+          ) : (
+            !isSnoozed && (
+              <form action={onSuppress} className="contents">
+                <Button
+                  type="submit"
+                  variant="outline"
+                  className="h-auto py-3 flex-col gap-1 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
+                >
+                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center mb-1">
+                    <BellOff className="h-3.5 w-3.5 text-slate-600" />
+                  </div>
+                  <span className="text-xs font-medium text-slate-700">Suppress</span>
+                  <span className="text-[10px] text-slate-500">Mute alerts</span>
+                </Button>
+              </form>
+            )
+          )}
+        </div>
+      )}
 
       {showSnoozeDialog && (
         <SnoozeDurationDialog

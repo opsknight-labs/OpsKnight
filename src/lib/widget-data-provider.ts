@@ -3,6 +3,7 @@ import { calculateSLAMetrics } from '@/lib/sla-server';
 import type { SLAMetricsFilter } from '@/lib/sla-server';
 import type { SLAMetrics as SLAServerMetrics } from '@/lib/sla';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
+import type { Prisma } from '@prisma/client';
 
 /**
  * Centralized Widget Data Provider
@@ -83,6 +84,32 @@ const OVERLOAD_THRESHOLD = 5;
 // SLA breach alert windows (in milliseconds)
 const ACK_BREACH_ALERT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const RESOLVE_BREACH_ALERT_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+
+export function buildWidgetActivityIncidentWhere(
+  filters: SLAMetricsFilter
+): Prisma.IncidentWhereInput | undefined {
+  const activityScope: Prisma.IncidentWhereInput[] = [];
+  if (filters.serviceId) {
+    activityScope.push({
+      serviceId: Array.isArray(filters.serviceId) ? { in: filters.serviceId } : filters.serviceId,
+    });
+  }
+  if (filters.teamId) {
+    const teamIds = Array.isArray(filters.teamId) ? filters.teamId : [filters.teamId];
+    activityScope.push(
+      filters.useOrScope
+        ? {
+            OR: [{ teamId: { in: teamIds } }, { service: { teamId: { in: teamIds } } }],
+          }
+        : { service: { teamId: { in: teamIds } } }
+    );
+  }
+  return activityScope.length === 0
+    ? undefined
+    : activityScope.length === 1
+      ? activityScope[0]
+      : { AND: activityScope };
+}
 
 /**
  * Determines trend direction based on current and previous values
@@ -234,7 +261,9 @@ export async function getWidgetData(
   }));
 
   // Recent activity from IncidentEvents (minimal query, sla-server doesn't include this)
+  const activityIncidentWhere = buildWidgetActivityIncidentWhere(filters);
   const recentIncidentEvents = await prisma.incidentEvent.findMany({
+    ...(activityIncidentWhere ? { where: { incident: activityIncidentWhere } } : {}),
     take: 10,
     orderBy: { createdAt: 'desc' },
     select: {

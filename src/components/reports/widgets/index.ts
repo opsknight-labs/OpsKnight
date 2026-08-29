@@ -34,22 +34,30 @@ export function getPreviousPeriodValue(
   metricKey: string
 ): number | null {
   const previousPeriod = metrics.previousPeriod;
-  if (!previousPeriod) return null;
+  if (!previousPeriod || previousPeriod.available === false) return null;
 
-  // Map current period keys to previous period keys
-  const keyMap: Record<string, keyof typeof previousPeriod> = {
-    totalIncidents: 'totalIncidents',
-    highUrgencyCount: 'highUrgencyCount',
-    mttd: 'mtta',
-    mttr: 'mttr',
-    ackRate: 'ackRate',
-    resolveRate: 'resolveRate',
-  };
+  // Keep this allowlist explicit so user-controlled report keys never become
+  // dynamic object-property lookups.
+  const value = (() => {
+    switch (metricKey) {
+      case 'totalIncidents':
+        return previousPeriod.totalIncidents;
+      case 'highUrgencyCount':
+        return previousPeriod.highUrgencyCount;
+      case 'mttd':
+        return previousPeriod.mtta;
+      case 'mttr':
+        return previousPeriod.mttr;
+      case 'ackRate':
+        return previousPeriod.ackRate;
+      case 'resolveRate':
+        return previousPeriod.resolveRate;
+      default:
+        return null;
+    }
+  })();
 
-  const prevKey = keyMap[metricKey];
-  if (!prevKey) return null;
-
-  return previousPeriod[prevKey] ?? null;
+  return typeof value === 'number' ? value : null;
 }
 
 /**

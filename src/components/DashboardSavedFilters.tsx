@@ -151,7 +151,7 @@ export default function DashboardSavedFilters() {
               type="text"
               value={filterName}
               onChange={e => setFilterName(e.target.value)}
-              placeholder="Filter name (e.g., My Open Incidents)"
+              placeholder="Filter name (e.g., My Active Incidents)"
               className="mb-4"
               autoFocus
               onKeyDown={e => {
