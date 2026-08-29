@@ -15,7 +15,12 @@ function AppThemeProvider({ children }: { children: React.ReactNode }) {
     : { forcedTheme: 'light' as const, defaultTheme: 'light' as const, enableSystem: false };
 
   return (
-    <ThemeProvider attribute={['class', 'data-theme']} disableTransitionOnChange {...themeProps}>
+    <ThemeProvider
+      attribute="class"
+      disableTransitionOnChange
+      enableColorScheme={false}
+      {...themeProps}
+    >
       {children}
     </ThemeProvider>
   );
