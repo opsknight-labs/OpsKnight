@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/shadcn/badge';
 import UserAvatar from '@/components/UserAvatar';
 import OidcLinkingApprovalButton from './OidcLinkingApprovalButton';
@@ -113,6 +114,7 @@ export function UserCard({
   onUpdateRole,
   onAddToTeam,
 }: UserCardProps) {
+  const router = useRouter();
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -217,17 +219,19 @@ export function UserCard({
           form="bulk-users-form"
           checked={selected}
           onChange={onSelect}
-          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer shrink-0"
         />
 
-        <UserAvatar
-          userId={user.id}
-          avatarUrl={user.avatarUrl}
-          name={user.name}
-          gender={user.gender}
-          size="lg"
-          className="ring-2 ring-background shadow-md transition-transform duration-300 group-hover:scale-105"
-        />
+        <Link href={`/users/${user.id}`} className="shrink-0">
+          <UserAvatar
+            userId={user.id}
+            avatarUrl={user.avatarUrl}
+            name={user.name}
+            gender={user.gender}
+            size="lg"
+            className="ring-2 ring-background shadow-md transition-transform duration-300 group-hover:scale-105"
+          />
+        </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <Link
@@ -282,7 +286,19 @@ export function UserCard({
           )}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="h-7 px-2.5 text-xs font-semibold text-primary hover:bg-primary/10 hover:border-primary/40 gap-1 shrink-0"
+          >
+            <Link href={`/users/${user.id}`}>
+              <User className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Profile</span>
+            </Link>
+          </Button>
+
           <div className="flex items-center gap-2">
             {!isCurrentUser && isAdmin && onUpdateRole ? (
               <Select value={user.role} onValueChange={value => onUpdateRole(value)}>
@@ -360,13 +376,11 @@ export function UserCard({
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                 <DropdownMenuSeparator />
 
-                <DropdownMenuItem asChild>
-                  <Link
-                    href={`/users/${user.id}`}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
-                    <User className="h-4 w-4" /> View Full Profile
-                  </Link>
+                <DropdownMenuItem
+                  onClick={() => router.push(`/users/${user.id}`)}
+                  className="flex items-center gap-2 cursor-pointer font-medium text-primary"
+                >
+                  <User className="h-4 w-4 text-primary" /> View Full Profile
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
 
