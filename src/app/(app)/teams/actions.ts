@@ -460,3 +460,91 @@ export async function removeTeamMember(memberId: string): Promise<{ error?: stri
     });
   }
 }
+
+export async function designateTeamLead(teamId: string, userId: string | null) {
+  let currentUser: { id: string } | null = null;
+  try {
+    currentUser = await assertAdminOrTeamOwner(teamId);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unauthorized. Admin or Team Owner access required.',
+    };
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { members: true },
+  });
+
+  if (!team) {
+    return { error: 'Team not found.' };
+  }
+
+  if (userId && !team.members.some(m => m.userId === userId)) {
+    return { error: 'User must be a member of the team to become team lead.' };
+  }
+
+  await prisma.team.update({
+    where: { id: teamId },
+    data: { teamLeadId: userId },
+  });
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.lead_updated',
+    entityType: 'TEAM',
+    entityId: teamId,
+    actorId,
+    details: { teamLeadId: userId },
+  });
+
+  revalidatePath('/teams');
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath('/audit');
+
+  logger.info('team.lead_updated', { teamId, teamLeadId: userId, actorId });
+  return { success: true };
+}
+
+export async function assignServicesToTeam(teamId: string, serviceIds: string[]) {
+  let currentUser: { id: string } | null = null;
+  try {
+    currentUser = await assertAdminOrTeamOwner(teamId);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unauthorized. Admin or Team Owner access required.',
+    };
+  }
+
+  if (serviceIds.length === 0) {
+    return { error: 'Please select at least one service to assign.' };
+  }
+
+  await prisma.service.updateMany({
+    where: { id: { in: serviceIds } },
+    data: { teamId },
+  });
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.services_assigned',
+    entityType: 'TEAM',
+    entityId: teamId,
+    actorId,
+    details: { serviceIds },
+  });
+
+  revalidatePath('/teams');
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath('/services');
+  revalidatePath('/audit');
+
+  logger.info('team.services_assigned', { teamId, serviceIds, actorId });
+  return { success: true };
+}

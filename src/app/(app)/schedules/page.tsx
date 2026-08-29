@@ -1,31 +1,33 @@
 import prisma from '@/lib/prisma';
-import { getUserPermissions, getViewableScheduleWhere } from '@/lib/rbac';
+import { getUserPermissions } from '@/lib/rbac';
 import { createSchedule } from './actions';
 import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
-import { Calendar, Plus, Layers3, Users, CheckCircle2, Sparkles } from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
+import {
+  Calendar,
+  Layers3,
+  Users,
+  CheckCircle2,
+  Sparkles,
+  Network,
+  ArrowUpRight,
+} from 'lucide-react';
+import Link from 'next/link';
 
 export default async function SchedulesPage() {
-  const [permissions, scheduleWhere] = await Promise.all([
-    getUserPermissions(),
-    getViewableScheduleWhere(),
-  ]);
+  const permissions = await getUserPermissions();
+
   const schedules = await prisma.onCallSchedule.findMany({
-    where: scheduleWhere,
     include: {
       layers: {
         include: {
           users: {
+            where: { user: { status: 'ACTIVE' } },
             select: {
               userId: true,
+              position: true,
               user: {
                 select: {
                   name: true,
@@ -53,7 +55,7 @@ export default async function SchedulesPage() {
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      {/* Header with Glassmorphic Stats Capsule matching Schedule Detail Page */}
+      {/* Header with Glassmorphic Stats Capsule */}
       <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
         <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
@@ -69,13 +71,13 @@ export default async function SchedulesPage() {
                 Schedules
               </h1>
               <p className="mt-1 max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
-                Design rotations, monitor coverage, and keep responders aligned across all services.
+                Manage rotation layers, shifts, on-call responders, and coverage calendars.
               </p>
             </div>
           </div>
 
-          {/* Glassmorphic Stats Capsule */}
-          <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-1.5 backdrop-blur-sm lg:min-w-[330px]">
+          {/* Frosted Glassmorphism 3-column stats capsule */}
+          <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-1.5 backdrop-blur-sm lg:min-w-[340px]">
             <div className="min-w-0 rounded-md px-3 py-2 text-center">
               <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
                 Responders
@@ -109,37 +111,18 @@ export default async function SchedulesPage() {
         </div>
       </div>
 
+      {/* Top Action: Create Schedule Dashed Expander */}
+      <ScheduleCreateForm action={createSchedule} canCreate={canManageSchedules} />
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
         {/* Schedules List with Live Search & Filters */}
         <div className="xl:col-span-3 space-y-4">
-          {schedules.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Calendar className="h-16 w-16 text-muted-foreground mb-4" />
-                <CardTitle className="text-xl mb-2">No schedules yet</CardTitle>
-                <CardDescription className="mb-6 max-w-md">
-                  Create a schedule to start building your on-call coverage
-                </CardDescription>
-                {canManageSchedules && (
-                  <Button asChild>
-                    <a href="#new-schedule" className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Create Your First Schedule
-                    </a>
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <ScheduleDirectoryList schedules={schedules} />
-          )}
+          <ScheduleDirectoryList schedules={schedules} />
         </div>
 
-        {/* Sidebar: New Schedule Form & Step Guide */}
+        {/* Sidebar: Step Guide & Quick Links */}
         <aside className="space-y-4">
-          <ScheduleCreateForm action={createSchedule} canCreate={canManageSchedules} />
-
           {/* Clean Guidance Card */}
           <Card className="overflow-hidden border-border/70 shadow-xs">
             <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
@@ -182,12 +165,51 @@ export default async function SchedulesPage() {
                   3
                 </span>
                 <div>
-                  <p className="font-semibold text-foreground">Coverage Overrides</p>
+                  <p className="font-semibold text-foreground">Link Escalation Policies</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Schedule temporary shift replacements or extra coverage anytime.
+                    Attach schedules to policy levels to route alerts to active on-call engineers.
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Links */}
+          <Card className="overflow-hidden border-border/70 shadow-xs">
+            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Quick Links
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-2 space-y-1">
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="w-full justify-between h-8 text-xs font-medium"
+              >
+                <Link href="/policies">
+                  <span className="flex items-center gap-2">
+                    <Network className="h-3.5 w-3.5 text-muted-foreground" />
+                    Escalation Policies
+                  </span>
+                  <ArrowUpRight className="h-3 w-3 opacity-60" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="w-full justify-between h-8 text-xs font-medium"
+              >
+                <Link href="/teams">
+                  <span className="flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                    Team Directory
+                  </span>
+                  <ArrowUpRight className="h-3 w-3 opacity-60" />
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </aside>
