@@ -423,87 +423,56 @@ export default async function ScheduleDetailPage({
 
   const rotation = (
     <>
-      <div className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/[0.08] via-card to-card p-5 shadow-sm md:p-6">
-        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/15">
-              <Layers3 className="h-5 w-5" />
+      <div className="flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Layers3 className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold tracking-tight">Rotation layers</h2>
+              <Badge variant="outline" size="xs">
+                {schedule.layers.length} {schedule.layers.length === 1 ? 'layer' : 'layers'}
+              </Badge>
+              <Badge variant="secondary" size="xs">
+                {totalResponderCount} {totalResponderCount === 1 ? 'responder' : 'responders'}
+              </Badge>
+              {restrictedLayerCount > 0 && (
+                <Badge variant="secondary" size="xs">
+                  {restrictedLayerCount} restricted
+                </Badge>
+              )}
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-                Rotation configuration
-              </p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight">Rotation layers</h2>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                Build the handoff sequence, timing, and coverage rules that power this schedule.
-              </p>
-            </div>
-          </div>
-          {capabilities.canManageRotation && (
-            <LayerCreateForm
-              scheduleId={schedule.id}
-              canManageSchedules={capabilities.canManageRotation}
-              createLayer={createLayer}
-              defaultStartDate={formatDateForInput(now, schedule.timeZone)}
-              timeZone={schedule.timeZone}
-              users={assignableUsers}
-            />
-          )}
-        </div>
-        <div className="mt-5 grid grid-cols-2 gap-2 border-t border-primary/10 pt-4 sm:grid-cols-4">
-          <div className="rounded-lg border border-blue-500/15 bg-blue-500/[0.06] px-3 py-2">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Layers
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Handoff sequence, timing rules, and layer precedence order.
             </p>
-            <p className="mt-1 text-lg font-semibold">{schedule.layers.length}</p>
-          </div>
-          <div className="rounded-lg border border-violet-500/15 bg-violet-500/[0.06] px-3 py-2">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Responders
-            </p>
-            <p className="mt-1 text-lg font-semibold">{totalResponderCount}</p>
-          </div>
-          <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.06] px-3 py-2">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Ready layers
-            </p>
-            <p className="mt-1 text-lg font-semibold">
-              {configuredLayerCount}/{schedule.layers.length}
-            </p>
-          </div>
-          <div className="rounded-lg border border-amber-500/15 bg-amber-500/[0.06] px-3 py-2">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Restricted
-            </p>
-            <p className="mt-1 text-lg font-semibold">{restrictedLayerCount}</p>
           </div>
         </div>
-      </div>
-      <Alert
-        className={
-          configuredLayerCount === schedule.layers.length && schedule.layers.length > 0
-            ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
-            : 'border-amber-500/25 bg-amber-500/[0.05]'
-        }
-      >
-        {configuredLayerCount === schedule.layers.length && schedule.layers.length > 0 ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-        ) : (
-          <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        {capabilities.canManageRotation && (
+          <LayerCreateForm
+            scheduleId={schedule.id}
+            canManageSchedules={capabilities.canManageRotation}
+            createLayer={createLayer}
+            defaultStartDate={formatDateForInput(now, schedule.timeZone)}
+            timeZone={schedule.timeZone}
+            users={assignableUsers}
+          />
         )}
-        <AlertTitle>
-          {schedule.layers.length === 0
-            ? 'Add a layer to start coverage'
-            : configuredLayerCount === schedule.layers.length
-              ? 'Rotation is ready for coverage'
-              : `${schedule.layers.length - configuredLayerCount} layer${schedule.layers.length - configuredLayerCount === 1 ? '' : 's'} need responders`}
-        </AlertTitle>
-        <AlertDescription>
-          Responder numbers show rotation order, not a live prediction. Effective on-call and the
-          next real change are calculated from all layers, restrictions, priorities, and overrides
-          in Overview.
-        </AlertDescription>
-      </Alert>
+      </div>
+
+      {schedule.layers.length > 0 && configuredLayerCount < schedule.layers.length && (
+        <Alert className="border-amber-500/25 bg-amber-500/[0.05]">
+          <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertTitle className="text-sm">
+            {schedule.layers.length - configuredLayerCount} layer
+            {schedule.layers.length - configuredLayerCount === 1 ? '' : 's'} need responders
+          </AlertTitle>
+          <AlertDescription className="text-xs">
+            Assign team members to all rotation layers to ensure continuous on-call coverage.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {schedule.layers.length === 0 ? (
         <Card className="border-dashed p-10 text-center">
           <Layers3 className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -556,9 +525,19 @@ export default async function ScheduleDetailPage({
     <>
       <div className="flex flex-col justify-between gap-3 border-b pb-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-lg font-semibold">Coverage overrides</h2>
-          <p className="text-sm text-muted-foreground">
-            Replace one responder or add extra coverage without changing the rotation.
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold tracking-tight">Coverage overrides</h2>
+            <Badge variant="outline" size="xs">
+              {activeOverrides.length} active
+            </Badge>
+            {upcomingOverrides.length > 0 && (
+              <Badge variant="secondary" size="xs">
+                {upcomingOverrides.length} upcoming
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Replace a responder or add temporary extra coverage without modifying rotation layers.
           </p>
         </div>
         <OverrideForm
@@ -573,20 +552,18 @@ export default async function ScheduleDetailPage({
       {!capabilities.canCreateOverride && (
         <Alert>
           <ShieldAlert className="h-4 w-4" />
-          <AlertTitle>Read-only override access</AlertTitle>
-          <AlertDescription>
+          <AlertTitle className="text-sm">Read-only override access</AlertTitle>
+          <AlertDescription className="text-xs">
             Assigned schedule members, owning team leads, and administrators can manage overrides.
           </AlertDescription>
         </Alert>
       )}
 
-      <section
-        className="space-y-3 rounded-xl border border-emerald-500/15 bg-emerald-500/[0.03] p-4"
-        aria-labelledby="active-overrides-title"
-      >
+      {/* Active Overrides */}
+      <section className="space-y-3" aria-labelledby="active-overrides-title">
         <div className="flex items-center gap-2">
-          <h3 id="active-overrides-title" className="font-semibold">
-            Active
+          <h3 id="active-overrides-title" className="text-sm font-semibold">
+            Active Overrides
           </h3>
           <Badge variant="success" size="xs">
             {activeOverrides.length}
@@ -600,33 +577,31 @@ export default async function ScheduleDetailPage({
         />
       </section>
 
-      <section
-        className="space-y-3 rounded-xl border border-amber-500/15 bg-amber-500/[0.03] p-4"
-        aria-labelledby="upcoming-overrides-title"
-      >
-        <div className="flex items-center gap-2">
-          <h3 id="upcoming-overrides-title" className="font-semibold">
-            Upcoming
-          </h3>
-          <Badge variant="warning" size="xs">
-            {upcomingOverrides.length}
-          </Badge>
-        </div>
-        <OverrideList
-          {...overrideListProps}
-          overrides={upcomingOverrides}
-          status="UPCOMING"
-          emptyMessage="No upcoming overrides."
-        />
-      </section>
+      {/* Upcoming Overrides */}
+      {upcomingOverrides.length > 0 && (
+        <section className="space-y-3" aria-labelledby="upcoming-overrides-title">
+          <div className="flex items-center gap-2">
+            <h3 id="upcoming-overrides-title" className="text-sm font-semibold">
+              Upcoming Overrides
+            </h3>
+            <Badge variant="warning" size="xs">
+              {upcomingOverrides.length}
+            </Badge>
+          </div>
+          <OverrideList
+            {...overrideListProps}
+            overrides={upcomingOverrides}
+            status="UPCOMING"
+            emptyMessage="No upcoming overrides."
+          />
+        </section>
+      )}
 
-      <section
-        className="space-y-3 rounded-xl border bg-muted/[0.18] p-4"
-        aria-labelledby="override-history-title"
-      >
+      {/* Override History */}
+      <section className="space-y-3" aria-labelledby="override-history-title">
         <div className="flex items-center gap-2">
-          <h3 id="override-history-title" className="font-semibold">
-            History
+          <h3 id="override-history-title" className="text-sm font-semibold">
+            Past Overrides
           </h3>
           <Badge variant="secondary" size="xs">
             {historyCount}

@@ -22,6 +22,13 @@ export default async function SchedulesPage() {
           users: {
             select: {
               userId: true,
+              user: {
+                select: {
+                  name: true,
+                  avatarUrl: true,
+                  gender: true,
+                },
+              },
             },
           },
         },
@@ -40,7 +47,7 @@ export default async function SchedulesPage() {
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      {/* Header with Glassmorphic Stats */}
+      {/* Product Standard Metric Panel */}
       <div className="bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg p-4 md:p-6 shadow-lg">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -106,7 +113,7 @@ export default async function SchedulesPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
               {schedules.map((schedule, index) => (
                 <ScheduleCard key={schedule.id} schedule={schedule} index={index} />
               ))}

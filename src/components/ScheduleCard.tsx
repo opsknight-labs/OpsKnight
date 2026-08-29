@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Clock, Layers, Users, ArrowRight, Calendar } from 'lucide-react';
+import { DirectUserAvatar } from '@/components/UserAvatar';
+import { getDefaultAvatar } from '@/lib/avatar';
+import { Clock, Layers, Users, Calendar, ArrowRight } from 'lucide-react';
 
 type ScheduleCardProps = {
   schedule: {
@@ -11,6 +13,11 @@ type ScheduleCardProps = {
     layers: Array<{
       users: Array<{
         userId: string;
+        user?: {
+          name: string;
+          avatarUrl?: string | null;
+          gender?: string | null;
+        } | null;
       }>;
     }>;
   };
@@ -18,24 +25,41 @@ type ScheduleCardProps = {
 };
 
 export default function ScheduleCard({ schedule }: ScheduleCardProps) {
-  const uniqueUsers = new Set<string>();
+  const uniqueUsersMap = new Map<
+    string,
+    { name: string; avatarUrl?: string | null; gender?: string | null }
+  >();
+
   schedule.layers.forEach(layer => {
-    layer.users.forEach(user => uniqueUsers.add(user.userId));
+    layer.users.forEach(u => {
+      if (!uniqueUsersMap.has(u.userId)) {
+        uniqueUsersMap.set(u.userId, {
+          name: u.user?.name || 'Responder',
+          avatarUrl: u.user?.avatarUrl,
+          gender: u.user?.gender,
+        });
+      }
+    });
   });
 
+  const uniqueUsers = Array.from(uniqueUsersMap.entries()).map(([userId, user]) => ({
+    userId,
+    ...user,
+  }));
+
   const hasLayers = schedule.layers.length > 0;
-  const hasResponders = uniqueUsers.size > 0;
+  const hasResponders = uniqueUsers.length > 0;
 
   return (
-    <Link href={`/schedules/${schedule.id}`} className="block group">
-      <Card className="border-border/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+    <Link href={`/schedules/${schedule.id}`} className="group block focus-visible:outline-none">
+      <Card className="h-full border-border/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15 transition-colors">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15 transition-colors">
                 <Calendar className="h-4 w-4" />
               </div>
-              <CardTitle className="text-base font-semibold transition-colors group-hover:text-primary">
+              <CardTitle className="truncate text-base font-semibold transition-colors group-hover:text-primary">
                 {schedule.name}
               </CardTitle>
             </div>
@@ -49,24 +73,47 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
         <CardContent>
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <Layers className="h-4 w-4" />
+              <div className="flex items-center gap-1.5 text-xs">
+                <Layers className="h-3.5 w-3.5" />
                 <span>
                   {schedule.layers.length} {schedule.layers.length === 1 ? 'layer' : 'layers'}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <Users className="h-4 w-4" />
+              <div className="flex items-center gap-1.5 text-xs">
+                <Users className="h-3.5 w-3.5" />
                 <span>
-                  {uniqueUsers.size} {uniqueUsers.size === 1 ? 'responder' : 'responders'}
+                  {uniqueUsers.length} {uniqueUsers.length === 1 ? 'responder' : 'responders'}
                 </span>
               </div>
             </div>
-            <ArrowRight className="h-4 w-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 text-primary" />
+
+            {/* Responder avatar stack or status */}
+            {uniqueUsers.length > 0 ? (
+              <div className="flex items-center -space-x-1.5 overflow-hidden">
+                {uniqueUsers.slice(0, 3).map(u => (
+                  <DirectUserAvatar
+                    key={u.userId}
+                    avatarUrl={u.avatarUrl || getDefaultAvatar(u.gender, u.userId || u.name)}
+                    name={u.name}
+                    size="xs"
+                    className="h-5 w-5 ring-1.5 ring-background"
+                  />
+                ))}
+                {uniqueUsers.length > 3 && (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground ring-1.5 ring-background">
+                    +{uniqueUsers.length - 3}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <Badge variant="warning" size="xs">
+                Needs setup
+              </Badge>
+            )}
           </div>
 
           {/* Status indicator for incomplete schedules */}
-          {(!hasLayers || !hasResponders) && (
+          {(!hasLayers || !hasResponders) && hasResponders && (
             <div className="mt-3 border-t pt-3">
               <Badge variant="warning" size="xs">
                 Needs configuration
