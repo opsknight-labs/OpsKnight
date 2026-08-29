@@ -23,12 +23,14 @@ type CurrentCoverageDisplayProps = {
   currentCoverage: CoverageBlock[];
   nextCoverageChange: { at: Date | string; coverage: CoverageBlock[] } | null;
   scheduleTimeZone: string;
+  embedded?: boolean;
 };
 
 export default function CurrentCoverageDisplay({
   currentCoverage,
   nextCoverageChange,
   scheduleTimeZone,
+  embedded = false,
 }: CurrentCoverageDisplayProps) {
   const hasCoverage = currentCoverage.length > 0;
 
@@ -36,12 +38,13 @@ export default function CurrentCoverageDisplay({
     <Card
       className={cn(
         'overflow-hidden shadow-sm transition-shadow hover:shadow-md',
+        embedded && 'rounded-none border-0 shadow-none hover:shadow-none',
         hasCoverage ? 'border-emerald-500/25' : 'border-amber-500/30'
       )}
     >
       <CardHeader
         className={cn(
-          'border-b px-5 py-4 md:px-6',
+          'border-b px-4 py-3.5 md:px-5',
           hasCoverage
             ? 'border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent'
             : 'border-amber-500/20 bg-gradient-to-br from-amber-500/12 via-amber-500/5 to-transparent'

@@ -27,6 +27,7 @@ type Props = {
   timeZone: string;
   viewerId: string;
   viewerTimeZone: string;
+  embedded?: boolean;
 };
 
 export default function ScheduleCoveragePreview({
@@ -34,6 +35,7 @@ export default function ScheduleCoveragePreview({
   timeZone,
   viewerId,
   viewerTimeZone,
+  embedded = false,
 }: Props) {
   const [referenceTime] = useState(() => new Date());
   const [dateKey, setDateKey] = useState(() =>
@@ -60,8 +62,14 @@ export default function ScheduleCoveragePreview({
   );
 
   return (
-    <Card className="overflow-hidden border-border/70 shadow-sm">
-      <CardHeader className="border-b bg-muted/20 py-4">
+    <Card
+      className={
+        embedded
+          ? 'overflow-hidden rounded-none border-0 shadow-none'
+          : 'overflow-hidden border-border/70 shadow-sm'
+      }
+    >
+      <CardHeader className="border-b bg-muted/20 px-4 py-3.5">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -83,7 +91,7 @@ export default function ScheduleCoveragePreview({
           />
         </div>
       </CardHeader>
-      <CardContent className="p-4">
+      <CardContent className="p-3.5">
         <div className="rounded-lg border bg-muted/20">
           {assignments.length === 0 ? (
             <div className="flex items-center gap-2 px-3 py-3 text-sm text-amber-700 dark:text-amber-300">
@@ -99,12 +107,8 @@ export default function ScheduleCoveragePreview({
                   <div className="min-w-0">
                     <p className="font-medium">{assignment.userName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatDateTime(assignment.start, timeZone, {
-                        format: 'time',
-                        hour12: false,
-                      })}{' '}
-                      –{' '}
-                      {formatDateTime(assignment.end, timeZone, { format: 'time', hour12: false })}
+                      {formatDateTime(assignment.start, timeZone, { format: 'short' })} –{' '}
+                      {formatDateTime(assignment.end, timeZone, { format: 'short' })}
                     </p>
                   </div>
                   <Badge

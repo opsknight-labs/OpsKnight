@@ -298,128 +298,134 @@ export default async function ScheduleDetailPage({
   const overview = (
     <>
       <ScheduleTimezoneNotice scheduleTimeZone={schedule.timeZone} />
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-        <CurrentCoverageDisplay
-          currentCoverage={viewModel.currentCoverage}
-          nextCoverageChange={viewModel.nextCoverageChange}
-          scheduleTimeZone={schedule.timeZone}
-        />
-        <Card className="overflow-hidden border-border/70 shadow-sm">
-          <CardHeader className="border-b bg-gradient-to-br from-primary/[0.07] via-transparent to-transparent px-5 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <CheckCircle2 className="h-4 w-4" />
+      <Card className="overflow-hidden border-border/70 shadow-sm">
+        <CardContent className="p-0">
+          <div className="grid lg:grid-cols-[minmax(0,2fr)_minmax(260px,0.85fr)]">
+            <CurrentCoverageDisplay
+              currentCoverage={viewModel.currentCoverage}
+              nextCoverageChange={viewModel.nextCoverageChange}
+              scheduleTimeZone={schedule.timeZone}
+              embedded
+            />
+            <div className="border-t lg:border-l lg:border-t-0">
+              <div className="border-b bg-gradient-to-br from-primary/[0.07] via-transparent to-transparent px-4 py-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <CheckCircle2 className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        Schedule snapshot
+                      </p>
+                      <CardTitle className="mt-0.5 text-base">Operational status</CardTitle>
+                    </div>
+                  </div>
+                  <div
+                    className={`h-2.5 w-2.5 rounded-full ring-4 ${
+                      viewModel.coverageGap
+                        ? 'bg-amber-500 ring-amber-500/15'
+                        : 'bg-emerald-500 ring-emerald-500/15'
+                    }`}
+                    aria-hidden="true"
+                  />
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    Schedule snapshot
-                  </p>
-                  <CardTitle className="mt-0.5 text-base">Operational status</CardTitle>
+              </div>
+              <div className="p-3.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border bg-muted/30 px-3 py-2.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Coverage
+                    </p>
+                    <Badge
+                      variant={viewModel.coverageGap ? 'warning' : 'success'}
+                      size="xs"
+                      className="mt-1.5"
+                    >
+                      {viewModel.coverageGap ? 'Gap detected' : 'Covered'}
+                    </Badge>
+                  </div>
+                  <div className="rounded-xl border bg-muted/30 px-3 py-2.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Overrides
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">
+                      {activeOverrides.length}{' '}
+                      <span className="font-normal text-muted-foreground">active</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
+                  <Globe2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1 truncate">{schedule.timeZone}</span>
+                  {upcomingOverrides.length > 0 && (
+                    <span className="shrink-0 font-medium text-foreground">
+                      {upcomingOverrides.length} upcoming
+                    </span>
+                  )}
                 </div>
               </div>
-              <div
-                className={`h-2.5 w-2.5 rounded-full ring-4 ${
-                  viewModel.coverageGap
-                    ? 'bg-amber-500 ring-amber-500/15'
-                    : 'bg-emerald-500 ring-emerald-500/15'
-                }`}
-                aria-hidden="true"
-              />
             </div>
-          </CardHeader>
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-xl border bg-muted/30 px-3 py-2.5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Coverage
-                </p>
-                <Badge
-                  variant={viewModel.coverageGap ? 'warning' : 'success'}
-                  size="xs"
-                  className="mt-1.5"
-                >
-                  {viewModel.coverageGap ? 'Gap detected' : 'Covered'}
-                </Badge>
-              </div>
-              <div className="rounded-xl border bg-muted/30 px-3 py-2.5">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Overrides
-                </p>
-                <p className="mt-1 text-sm font-semibold">
-                  {activeOverrides.length}{' '}
-                  <span className="font-normal text-muted-foreground">active</span>
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
-              <Globe2 className="h-3.5 w-3.5 shrink-0 text-primary" />
-              <span className="min-w-0 flex-1 truncate">{schedule.timeZone}</span>
-              {upcomingOverrides.length > 0 && (
-                <span className="shrink-0 font-medium text-foreground">
-                  {upcomingOverrides.length} upcoming
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
-        <Card className="overflow-hidden border-border/70 shadow-sm">
-          <CardHeader className="border-b bg-muted/20 py-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300">
-                <ShieldAlert className="h-4 w-4" />
+          <div className="grid border-t xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,1fr)]">
+            <div className="border-b xl:border-b-0 xl:border-r">
+              <div className="border-b bg-muted/20 px-4 py-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                    <ShieldAlert className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Schedule checks</CardTitle>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Issues that need attention in the next seven days.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-base">Schedule checks</CardTitle>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Issues that need attention in the next seven days.
-                </p>
+              <div className="p-3.5">
+                <ScheduleHealthCheck
+                  layers={schedule.layers.map(layer => ({
+                    id: layer.id,
+                    name: layer.name,
+                    end: layer.end ? new Date(layer.end) : null,
+                    restrictions: layer.restrictions as {
+                      daysOfWeek?: number[];
+                      startHour?: number;
+                      endHour?: number;
+                    } | null,
+                    users: layer.users.map(user => ({ userId: user.userId })),
+                  }))}
+                  shifts={effectiveBlocks.map(block => ({
+                    start: block.start.toISOString(),
+                    end: block.end.toISOString(),
+                  }))}
+                  timeZone={schedule.timeZone}
+                  rotationHref={`/schedules/${schedule.id}?tab=rotation`}
+                  overridesHref={`/schedules/${schedule.id}?tab=overrides`}
+                  activeOverrideCount={activeOverrides.length}
+                />
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="p-4">
-            <ScheduleHealthCheck
-              layers={schedule.layers.map(layer => ({
-                id: layer.id,
-                name: layer.name,
-                end: layer.end ? new Date(layer.end) : null,
-                restrictions: layer.restrictions as {
-                  daysOfWeek?: number[];
-                  startHour?: number;
-                  endHour?: number;
-                } | null,
-                users: layer.users.map(user => ({ userId: user.userId })),
-              }))}
-              shifts={effectiveBlocks.map(block => ({
-                start: block.start.toISOString(),
-                end: block.end.toISOString(),
+            <ScheduleCoveragePreview
+              effectiveShifts={effectiveBlocks.map(block => ({
+                id: block.id,
+                userId: block.userId,
+                userName: block.userName,
+                layerName: block.layerName,
+                start: block.start,
+                end: block.end,
+                source: block.source,
+                isAdditiveOverride: block.isAdditiveOverride,
               }))}
               timeZone={schedule.timeZone}
-              rotationHref={`/schedules/${schedule.id}?tab=rotation`}
-              overridesHref={`/schedules/${schedule.id}?tab=overrides`}
-              activeOverrideCount={activeOverrides.length}
+              viewerId={currentUser.id}
+              viewerTimeZone={currentUser.timeZone || schedule.timeZone}
+              embedded
             />
-          </CardContent>
-        </Card>
-        <ScheduleCoveragePreview
-          effectiveShifts={effectiveBlocks.map(block => ({
-            id: block.id,
-            userId: block.userId,
-            userName: block.userName,
-            layerName: block.layerName,
-            start: block.start,
-            end: block.end,
-            source: block.source,
-            isAdditiveOverride: block.isAdditiveOverride,
-          }))}
-          timeZone={schedule.timeZone}
-          viewerId={currentUser.id}
-          viewerTimeZone={currentUser.timeZone || schedule.timeZone}
-        />
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="overflow-hidden border-border/70 shadow-sm">
         <CardHeader className="border-b bg-muted/20 py-4">
