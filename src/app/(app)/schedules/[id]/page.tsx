@@ -594,7 +594,7 @@ export default async function ScheduleDetailPage({
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-foreground/75">
                   On-call schedule
                 </p>
-                <h1 className="mt-1 text-2xl font-extrabold tracking-tight md:text-3xl">
+                <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary-foreground md:text-3xl">
                   {schedule.name}
                 </h1>
                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
