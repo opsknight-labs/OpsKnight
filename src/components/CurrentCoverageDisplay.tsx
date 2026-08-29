@@ -1,12 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { formatDateTime } from '@/lib/timezone';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { ArrowRight, Clock, ShieldCheck, TriangleAlert, AlertCircle } from 'lucide-react';
+import { useTimezone } from '@/contexts/TimezoneContext';
+import { ArrowRight, Clock, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
 
@@ -40,6 +40,10 @@ export default function CurrentCoverageDisplay({
   activeOverridesCount = 0,
   healthContent,
 }: CurrentCoverageDisplayProps) {
+  const { userTimeZone, browserTimeZone } = useTimezone();
+  const viewerTz = browserTimeZone || userTimeZone || scheduleTimeZone;
+  const isDifferentTz = Boolean(viewerTz && viewerTz !== scheduleTimeZone);
+
   const hasCoverage = currentCoverage.length > 0;
 
   return (
@@ -121,15 +125,29 @@ export default function CurrentCoverageDisplay({
                       </Badge>
                     )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <Clock className="h-3 w-3 text-muted-foreground/70" />
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5 flex-wrap">
+                    <Clock className="h-3 w-3 text-muted-foreground/70 shrink-0" />
                     <span>
                       Until{' '}
-                      <span className="font-medium text-foreground">
+                      <span className="font-semibold text-foreground">
                         {formatDateTime(new Date(currentCoverage[0].end), scheduleTimeZone, {
                           format: 'short',
                         })}
                       </span>
+                      {isDifferentTz && (
+                        <span
+                          className="text-muted-foreground font-normal ml-1"
+                          title={`Formatted in your local timezone (${viewerTz})`}
+                        >
+                          (
+                          <strong className="font-medium text-foreground/80">
+                            {formatDateTime(new Date(currentCoverage[0].end), viewerTz, {
+                              format: 'time',
+                            })}
+                          </strong>{' '}
+                          local)
+                        </span>
+                      )}
                     </span>
                   </p>
                 </div>
@@ -163,6 +181,18 @@ export default function CurrentCoverageDisplay({
                 {formatDateTime(new Date(nextCoverageChange.at), scheduleTimeZone, {
                   format: 'short',
                 })}
+                {isDifferentTz && (
+                  <span
+                    className="opacity-70 ml-1"
+                    title={`Local time: ${formatDateTime(new Date(nextCoverageChange.at), viewerTz, { format: 'datetime' })}`}
+                  >
+                    (
+                    {formatDateTime(new Date(nextCoverageChange.at), viewerTz, {
+                      format: 'time',
+                    })}
+                    )
+                  </span>
+                )}
               </span>
             )}
           </div>
