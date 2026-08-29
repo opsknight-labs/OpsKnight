@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import StepsList from '@/components/policies/StepsList';
 import PolicyDeleteButton from '@/components/PolicyDeleteButton';
+import PolicyActivityTimeline from '@/components/policies/PolicyActivityTimeline';
 import {
   updatePolicy,
   addPolicyStep,
@@ -20,7 +21,16 @@ import {
   CardDescription,
 } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
-import { ArrowLeft, ShieldCheck, Settings, AlertTriangle, Server } from 'lucide-react';
+import {
+  ArrowLeft,
+  ShieldAlert,
+  ShieldCheck,
+  Settings,
+  AlertTriangle,
+  Server,
+  Activity,
+  ChevronRight,
+} from 'lucide-react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 
@@ -37,7 +47,7 @@ export default async function PolicyDetailPage({
   const resolvedSearchParams = await searchParams;
   const errorCode = resolvedSearchParams?.error;
 
-  const [policy, users, teams, schedules, services, permissions] = await Promise.all([
+  const [policy, users, teams, schedules, services, auditLogs, permissions] = await Promise.all([
     prisma.escalationPolicy.findUnique({
       where: { id },
       include: {
@@ -73,6 +83,25 @@ export default async function PolicyDetailPage({
       include: { team: true },
       orderBy: { name: 'asc' },
     }),
+    prisma.auditLog.findMany({
+      where: {
+        entityType: 'ESCALATION_POLICY',
+        entityId: id,
+      },
+      include: {
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+            gender: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+    }),
     getUserPermissions(),
   ]);
 
@@ -83,72 +112,74 @@ export default async function PolicyDetailPage({
 
   return (
     <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-6">
-      {/* Navigation Breadcrumb */}
-      <div>
-        <Link href="/policies">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="pl-0 text-slate-500 mb-2 hover:text-slate-900 -ml-1 text-xs gap-1.5"
+      {/* Navigation Breadcrumb Bar */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Link
+            href="/policies"
+            className="hover:text-foreground font-medium flex items-center gap-1 transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back to Escalation Policies
-          </Button>
-        </Link>
+            Escalation Policies
+          </Link>
+          <ChevronRight className="h-3 w-3 text-slate-400" />
+          <span className="text-foreground font-semibold truncate max-w-[200px]">
+            {policy.name}
+          </span>
+        </div>
+      </div>
 
-        {/* Hero Header */}
-        <div className="bg-gradient-to-r from-primary via-primary/95 to-primary/80 text-white rounded-2xl p-6 sm:p-7 shadow-lg relative overflow-hidden">
-          <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/5 pointer-events-none blur-2xl" />
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/15 text-white/90 backdrop-blur-xs border border-white/20">
-                  Escalation Policy Details
-                </span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2 text-white">
-                {policy.name}
-              </h1>
-              <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
-                {policy.description || 'No description provided for this escalation policy.'}
-              </p>
+      {/* Centralized Hero Header */}
+      <div className="bg-gradient-to-r from-primary via-primary/95 to-primary/80 text-white rounded-2xl p-6 sm:p-7 shadow-lg relative overflow-hidden">
+        <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/5 pointer-events-none blur-2xl" />
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/15 text-white/90 backdrop-blur-xs border border-white/20">
+                Incident Response Routing
+              </span>
             </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2 text-white">
+              <ShieldAlert className="h-7 w-7 shrink-0 text-white/90" />
+              {policy.name}
+            </h1>
+            <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
+              {policy.description || 'No description provided for this escalation policy.'}
+            </p>
+          </div>
 
-            {/* 3-Stat Capsule */}
-            <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 w-full lg:w-auto shrink-0">
-              <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
-                <CardContent className="p-3 sm:p-4 text-center">
-                  <div className="text-xl sm:text-2xl font-black tracking-tight">
-                    {policy.steps.length}
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
-                    Steps
-                  </div>
-                </CardContent>
-              </Card>
+          {/* 3-Stat Capsule */}
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 w-full lg:w-auto shrink-0">
+            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-black tracking-tight">
+                  {policy.steps.length}
+                </div>
+                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">Steps</div>
+              </CardContent>
+            </Card>
 
-              <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
-                <CardContent className="p-3 sm:p-4 text-center">
-                  <div className="text-xl sm:text-2xl font-black tracking-tight text-emerald-200">
-                    {services.length}
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
-                    Services
-                  </div>
-                </CardContent>
-              </Card>
+            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-black tracking-tight text-emerald-200">
+                  {services.length}
+                </div>
+                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
+                  Services
+                </div>
+              </CardContent>
+            </Card>
 
-              <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
-                <CardContent className="p-3 sm:p-4 text-center">
-                  <div className="text-xl sm:text-2xl font-black tracking-tight text-blue-200">
-                    ~{totalDuration}m
-                  </div>
-                  <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
-                    Cycle Duration
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-black tracking-tight text-blue-200">
+                  ~{totalDuration}m
+                </div>
+                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
+                  Cycle Time
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
@@ -162,7 +193,7 @@ export default async function PolicyDetailPage({
 
       {/* Main Workspace Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main 2 Cols: Escalation Steps Manager */}
+        {/* Main 2 Cols: Escalation Steps Manager (Preserved 100% as requested) */}
         <div className="lg:col-span-2 space-y-6">
           <StepsList
             initialSteps={policy.steps.map(step => ({
@@ -187,9 +218,9 @@ export default async function PolicyDetailPage({
           />
         </div>
 
-        {/* Sidebar 1 Col: Settings, Linked Services, Danger Zone */}
+        {/* Sidebar 1 Col: Settings, Linked Services, Activity History, Danger Zone */}
         <div className="space-y-6">
-          {/* Policy Settings */}
+          {/* Policy Settings Card */}
           <Card className="border-slate-200/80 bg-white">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -228,13 +259,18 @@ export default async function PolicyDetailPage({
             </CardContent>
           </Card>
 
-          {/* Linked Services */}
+          {/* Linked Services Card */}
           <Card className="border-slate-200/80 bg-white">
             <CardHeader className="pb-3">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                Linked Services ({services.length})
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                  Linked Services
+                </CardTitle>
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  {services.length}
+                </span>
+              </div>
               <CardDescription className="text-xs">
                 Services currently routing incident alerts through this policy.
               </CardDescription>
@@ -267,6 +303,22 @@ export default async function PolicyDetailPage({
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Activity / Audit History Card */}
+          <Card className="border-slate-200/80 bg-white">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Activity className="h-3.5 w-3.5 text-primary" />
+                Policy Activity
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Recent changes and step modifications on this policy.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-1">
+              <PolicyActivityTimeline logs={auditLogs} />
             </CardContent>
           </Card>
 
