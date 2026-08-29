@@ -3,22 +3,14 @@ import { getUserPermissions } from '@/lib/rbac';
 import { createSchedule } from './actions';
 import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Calendar,
   Layers3,
   Users,
-  Plus,
   CheckCircle2,
   Sparkles,
-  Clock,
   Network,
   ArrowUpRight,
 } from 'lucide-react';

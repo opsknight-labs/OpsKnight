@@ -16,19 +16,16 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { Plus, X, Loader2, CalendarPlus, ShieldAlert, AlertCircle } from 'lucide-react';
-
-type ScheduleCreateFormProps = {
-  action: (
-    prevState: any,
-    formData: FormData
-  ) => Promise<{ error?: string } | { success?: boolean }>;
-  canCreate: boolean;
-};
+import { Plus, X, Loader2, ShieldAlert, AlertCircle } from 'lucide-react';
 
 type FormState = {
   error?: string | null;
   success?: boolean;
+};
+
+type ScheduleCreateFormProps = {
+  action: (prevState: FormState, formData: FormData) => Promise<FormState>;
+  canCreate: boolean;
 };
 
 function SubmitButton() {

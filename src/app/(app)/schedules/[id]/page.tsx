@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { assertCanViewSchedule } from '@/lib/rbac';
-import type { ScheduleUICapabilities } from '@/lib/schedules/capabilities';
 import { buildScheduleBlocks, getFinalScheduleBlocks } from '@/lib/oncall';
 import {
   addDaysToDateKey,

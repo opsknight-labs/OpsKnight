@@ -1,13 +1,6 @@
 import Link from 'next/link';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
-import { Badge } from '@/components/ui/shadcn/badge';
-import { Network, ShieldAlert, ArrowUpRight, CheckCircle2 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/shadcn/card';
+import { Network, ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type PolicyItem = {
@@ -33,7 +26,7 @@ export default function TeamLinkedPolicies({ policies, className }: TeamLinkedPo
         <Network className="h-8 w-8 text-muted-foreground/40 mb-2" />
         <p className="text-xs font-semibold text-foreground">No escalation policies attached</p>
         <p className="text-[11px] text-muted-foreground mt-0.5 max-w-sm">
-          Escalation policies attached to this team's services will route incidents to these
+          Escalation policies attached to this team&apos;s services will route incidents to these
           members.
         </p>
       </div>

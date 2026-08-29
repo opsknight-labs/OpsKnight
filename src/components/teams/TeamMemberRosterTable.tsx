@@ -26,18 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/shadcn/alert-dialog';
 import { useToast } from '@/hooks/use-product-notification';
-import {
-  Search,
-  MoreVertical,
-  Trash2,
-  Bell,
-  BellOff,
-  Crown,
-  Loader2,
-  X,
-  ChevronDown,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Search, Trash2, Bell, BellOff, Crown, Loader2, X, ChevronDown } from 'lucide-react';
 
 type TeamMember = {
   id: string;

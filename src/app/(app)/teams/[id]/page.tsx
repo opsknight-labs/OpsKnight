@@ -28,7 +28,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/shadcn/card';
-import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
   ArrowLeft,
@@ -273,7 +272,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
               <div>
                 <CardTitle className="text-sm font-semibold">Linked Escalation Policies</CardTitle>
                 <CardDescription className="text-[11px]">
-                  Policies routing incidents across this team's services
+                  Policies routing incidents across this team&apos;s services
                 </CardDescription>
               </div>
             </div>

@@ -13,7 +13,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/shadcn/dialog';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Shield, Plus, Loader2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

@@ -13,7 +13,7 @@ export default function TeamStatsCapsule({
   totalTeams,
   totalMembers,
   totalServices,
-  configuredCount,
+  configuredCount: _configuredCount,
   className,
 }: TeamStatsCapsuleProps) {
   const isConfigured = totalTeams > 0 && totalMembers > 0;

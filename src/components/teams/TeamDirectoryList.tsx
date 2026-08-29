@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
-import { Search, X, Filter, Users, Sparkles, Plus } from 'lucide-react';
+import { Search, X, Filter, Users } from 'lucide-react';
 import TeamDirectoryCard from './TeamDirectoryCard';
 
 type TeamItem = {

@@ -22,7 +22,7 @@ type TeamOwnedServicesGridProps = {
 
 export default function TeamOwnedServicesGrid({
   services,
-  teamId,
+  teamId: _teamId,
   canManage = false,
   compact = false,
   className,
@@ -40,7 +40,8 @@ export default function TeamOwnedServicesGrid({
         <Shield className="h-8 w-8 text-muted-foreground/40 mb-2" />
         <p className="text-xs font-semibold text-foreground">No services assigned to this team</p>
         <p className="text-[11px] text-muted-foreground mt-0.5 max-w-sm">
-          Services assigned to this team will inherit this team's members and escalation routing.
+          Services assigned to this team will inherit this team&apos;s members and escalation
+          routing.
         </p>
         {canManage && (
           <Button asChild size="sm" variant="outline" className="mt-3 h-7 text-xs gap-1.5">
