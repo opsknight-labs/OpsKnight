@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/rbac';
 import { createSchedule } from './actions';
-import ScheduleCard from '@/components/ScheduleCard';
+import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
 import { Calendar, Plus, Layers3, Users, CheckCircle2, Sparkles } from 'lucide-react';
 import {
@@ -107,7 +107,7 @@ export default async function SchedulesPage() {
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
-        {/* Schedules List */}
+        {/* Schedules List with Live Search & Filters */}
         <div className="xl:col-span-3 space-y-4">
           {schedules.length === 0 ? (
             <Card className="border-dashed">
@@ -128,11 +128,7 @@ export default async function SchedulesPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {schedules.map((schedule, index) => (
-                <ScheduleCard key={schedule.id} schedule={schedule} index={index} />
-              ))}
-            </div>
+            <ScheduleDirectoryList schedules={schedules} canManageSchedules={canManageSchedules} />
           )}
         </div>
 

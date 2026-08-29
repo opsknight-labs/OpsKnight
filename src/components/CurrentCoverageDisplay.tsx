@@ -1,12 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { formatDateTime } from '@/lib/timezone';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { useTimezone } from '@/contexts/TimezoneContext';
-import { ArrowRight, Clock, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Clock, ShieldCheck, TriangleAlert, UserRoundCog } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
 
@@ -27,6 +28,8 @@ type CurrentCoverageDisplayProps = {
   currentCoverage: CoverageBlock[];
   nextCoverageChange: { at: Date | string; coverage: CoverageBlock[] } | null;
   scheduleTimeZone: string;
+  scheduleId?: string;
+  canCreateOverride?: boolean;
   coverageGap?: boolean;
   activeOverridesCount?: number;
   healthContent?: ReactNode;
@@ -36,6 +39,8 @@ export default function CurrentCoverageDisplay({
   currentCoverage,
   nextCoverageChange,
   scheduleTimeZone,
+  scheduleId,
+  canCreateOverride = false,
   coverageGap = false,
   activeOverridesCount = 0,
   healthContent,
@@ -152,6 +157,17 @@ export default function CurrentCoverageDisplay({
                   </p>
                 </div>
               </div>
+
+              {/* Cover Shift Quick Action */}
+              {scheduleId && canCreateOverride && (
+                <Link
+                  href={`/schedules/${scheduleId}?tab=overrides`}
+                  className="inline-flex items-center gap-1 rounded-md border border-primary/25 bg-primary/5 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors shrink-0"
+                >
+                  <UserRoundCog className="h-3 w-3" />
+                  <span>Cover shift</span>
+                </Link>
+              )}
             </div>
           ) : (
             <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-center">

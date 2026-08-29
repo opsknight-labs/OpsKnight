@@ -39,6 +39,8 @@ import ScheduleCoverageExplorer from '@/components/schedules/ScheduleCoverageExp
 import ScheduleCoveragePreview from '@/components/schedules/ScheduleCoveragePreview';
 import ScheduleActivityFeed from '@/components/schedules/ScheduleActivityFeed';
 import ScheduleHealthCheck from '@/components/ScheduleHealthCheck';
+import ScheduleExportMenu from '@/components/schedules/ScheduleExportMenu';
+import ScheduleLinkedPolicies from '@/components/schedules/ScheduleLinkedPolicies';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -124,6 +126,7 @@ export default async function ScheduleDetailPage({
     historyCount,
     historyOverrides,
     auditLogs,
+    linkedRules,
   ] = await Promise.all([
     canMutate
       ? prisma.user.findMany({
@@ -206,6 +209,23 @@ export default async function ScheduleDetailPage({
       },
       orderBy: { createdAt: 'desc' },
       take: 6,
+    }),
+    prisma.escalationRule.findMany({
+      where: { targetScheduleId: id },
+      include: {
+        policy: {
+          select: {
+            id: true,
+            name: true,
+            services: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
     }),
   ]);
 
@@ -319,6 +339,8 @@ export default async function ScheduleDetailPage({
           currentCoverage={viewModel.currentCoverage}
           nextCoverageChange={viewModel.nextCoverageChange}
           scheduleTimeZone={schedule.timeZone}
+          scheduleId={schedule.id}
+          canCreateOverride={capabilities.canCreateOverride}
           coverageGap={viewModel.coverageGap}
           activeOverridesCount={activeOverrides.length}
           healthContent={
@@ -417,7 +439,10 @@ export default async function ScheduleDetailPage({
         calendar={<ScheduleCalendar shifts={calendarShifts} timeZone={schedule.timeZone} />}
       />
 
-      <ScheduleActivityFeed auditLogs={auditLogs} timeZone={schedule.timeZone} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ScheduleLinkedPolicies linkedRules={linkedRules as any} scheduleId={schedule.id} />
+        <ScheduleActivityFeed auditLogs={auditLogs} timeZone={schedule.timeZone} />
+      </div>
     </>
   );
 
@@ -668,15 +693,18 @@ export default async function ScheduleDetailPage({
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <header className="space-y-4">
-        <Link
-          href="/schedules"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Schedules</span>
-          <span className="opacity-40">/</span>
-          <span className="font-medium text-foreground">{schedule.name}</span>
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href="/schedules"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Schedules</span>
+            <span className="opacity-40">/</span>
+            <span className="font-medium text-foreground">{schedule.name}</span>
+          </Link>
+          <ScheduleExportMenu scheduleId={schedule.id} scheduleName={schedule.name} />
+        </div>
         <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
           <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
           <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
