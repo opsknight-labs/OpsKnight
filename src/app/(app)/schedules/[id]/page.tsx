@@ -359,7 +359,7 @@ export default async function ScheduleDetailPage({
             <div>
               <CardTitle className="text-base">Today&apos;s coverage</CardTitle>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                A 24-hour view in {schedule.timeZone}
+                Effective on-call and every active layer, shown separately in {schedule.timeZone}
               </p>
             </div>
           </div>
@@ -367,12 +367,26 @@ export default async function ScheduleDetailPage({
         <CardContent className="pt-5">
           <CoverageTimeline
             shifts={scheduleBlocks.map(block => ({
+              id: block.id,
               userName: block.userName,
               userAvatar: block.userAvatar,
               userGender: block.userGender,
               layerName: block.layerName,
               start: block.start,
               end: block.end,
+              source: block.source,
+              isAdditiveOverride: block.isAdditiveOverride,
+            }))}
+            effectiveShifts={effectiveBlocks.map(block => ({
+              id: block.id,
+              userName: block.userName,
+              userAvatar: block.userAvatar,
+              userGender: block.userGender,
+              layerName: block.layerName,
+              start: block.start,
+              end: block.end,
+              source: block.source,
+              isAdditiveOverride: block.isAdditiveOverride,
             }))}
             timeZone={schedule.timeZone}
           />
