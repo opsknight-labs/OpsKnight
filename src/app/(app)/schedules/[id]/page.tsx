@@ -44,6 +44,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock3,
+  Globe2,
   Info,
   Layers3,
   Settings2,
@@ -289,13 +290,18 @@ export default async function ScheduleDetailPage({
           scheduleTimeZone={schedule.timeZone}
         />
         <Card className="overflow-hidden border-border/70 shadow-sm">
-          <CardHeader className="border-b bg-muted/25 pb-4">
+          <CardHeader className="border-b bg-gradient-to-br from-primary/[0.07] via-transparent to-transparent px-5 py-4">
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Live status
-                </p>
-                <CardTitle className="mt-1 text-lg">Coverage health</CardTitle>
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Schedule snapshot
+                  </p>
+                  <CardTitle className="mt-0.5 text-base">Operational status</CardTitle>
+                </div>
               </div>
               <div
                 className={`h-2.5 w-2.5 rounded-full ring-4 ${
@@ -307,24 +313,38 @@ export default async function ScheduleDetailPage({
               />
             </div>
           </CardHeader>
-          <CardContent className="divide-y p-0">
-            <div className="flex items-center justify-between gap-3 px-5 py-4">
-              <span className="text-sm text-muted-foreground">Current state</span>
-              <Badge variant={viewModel.coverageGap ? 'warning' : 'success'}>
-                {viewModel.coverageGap ? 'Gap detected' : 'Covered'}
-              </Badge>
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border bg-muted/30 px-3 py-2.5">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Coverage
+                </p>
+                <Badge
+                  variant={viewModel.coverageGap ? 'warning' : 'success'}
+                  size="xs"
+                  className="mt-1.5"
+                >
+                  {viewModel.coverageGap ? 'Gap detected' : 'Covered'}
+                </Badge>
+              </div>
+              <div className="rounded-xl border bg-muted/30 px-3 py-2.5">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Overrides
+                </p>
+                <p className="mt-1 text-sm font-semibold">
+                  {activeOverrides.length}{' '}
+                  <span className="font-normal text-muted-foreground">active</span>
+                </p>
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-5 py-4">
-              <span className="text-sm text-muted-foreground">Active overrides</span>
-              <span className="font-semibold">{activeOverrides.length}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3 px-5 py-4">
-              <span className="text-sm text-muted-foreground">Upcoming overrides</span>
-              <span className="font-semibold">{upcomingOverrides.length}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3 px-5 py-4">
-              <span className="text-sm text-muted-foreground">Schedule timezone</span>
-              <span className="text-sm font-medium">{schedule.timeZone}</span>
+            <div className="mt-3 flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
+              <Globe2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1 truncate">{schedule.timeZone}</span>
+              {upcomingOverrides.length > 0 && (
+                <span className="shrink-0 font-medium text-foreground">
+                  {upcomingOverrides.length} upcoming
+                </span>
+              )}
             </div>
           </CardContent>
         </Card>
