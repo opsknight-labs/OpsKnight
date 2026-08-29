@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Search, X, ShieldAlert, Layers } from 'lucide-react';
 import PolicyDirectoryCard, { type PolicyDirectoryItem } from './PolicyDirectoryCard';
@@ -109,76 +108,69 @@ export default function PolicyDirectoryList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       {/* Search & Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-        {/* Search Input */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search policies by name, description, or service..."
-            className="pl-8.5 pr-8 h-8.5 text-xs"
-          />
-          {searchQuery && (
+      {policies.length > 0 && (
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          {/* Search bar */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search policies by name, description, or service..."
+              className="pl-8 pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Status filter chips */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              type="button"
+              onClick={() => setActiveFilter('all')}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                activeFilter === 'all'
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
             >
-              <X className="h-3.5 w-3.5" />
+              All ({policies.length})
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => setActiveFilter('in-use')}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                activeFilter === 'in-use'
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              In Use ({inUseCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveFilter('unassigned')}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                activeFilter === 'unassigned'
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              Unassigned ({unassignedCount})
+            </button>
+          </div>
         </div>
-
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto pb-1 sm:pb-0">
-          <Button
-            variant={activeFilter === 'all' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setActiveFilter('all')}
-            className="h-8 text-xs font-medium px-3 rounded-lg"
-          >
-            All Policies
-            <Badge
-              variant={activeFilter === 'all' ? 'outline' : 'secondary'}
-              className="ml-1.5 text-[10px] px-1.5 py-0 h-4 border-transparent"
-            >
-              {policies.length}
-            </Badge>
-          </Button>
-
-          <Button
-            variant={activeFilter === 'in-use' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setActiveFilter('in-use')}
-            className="h-8 text-xs font-medium px-3 rounded-lg"
-          >
-            In Use
-            <Badge
-              variant={activeFilter === 'in-use' ? 'outline' : 'secondary'}
-              className="ml-1.5 text-[10px] px-1.5 py-0 h-4 border-transparent"
-            >
-              {inUseCount}
-            </Badge>
-          </Button>
-
-          <Button
-            variant={activeFilter === 'unassigned' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setActiveFilter('unassigned')}
-            className="h-8 text-xs font-medium px-3 rounded-lg"
-          >
-            Unassigned
-            <Badge
-              variant={activeFilter === 'unassigned' ? 'outline' : 'secondary'}
-              className="ml-1.5 text-[10px] px-1.5 py-0 h-4 border-transparent"
-            >
-              {unassignedCount}
-            </Badge>
-          </Button>
-        </div>
-      </div>
+      )}
 
       {/* Policy Card Grid */}
       {filteredPolicies.length > 0 ? (
