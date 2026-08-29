@@ -18,7 +18,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/shadcn/tooltip';
 import { getDefaultAvatar } from '@/lib/avatar';
-import { getFinalScheduleBlocks, type OnCallBlock } from '@/lib/oncall';
 import { ChevronLeft, ChevronRight, Calendar, Clock, Users, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -43,8 +42,8 @@ type TimelineShift = {
 
 type ScheduleTimelineProps = {
   shifts: TimelineShift[];
+  effectiveShifts: TimelineShift[];
   timeZone: string;
-  layerPriorities?: Map<string, number>;
 };
 
 const LAYER_COLORS = [
@@ -88,8 +87,8 @@ const LAYER_COLORS = [
 
 export default function ScheduleTimeline({
   shifts,
+  effectiveShifts,
   timeZone,
-  layerPriorities,
 }: ScheduleTimelineProps) {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
@@ -155,28 +154,11 @@ export default function ScheduleTimeline({
     return [...groups.entries()];
   }, [visibleShifts]);
 
-  // Compute final schedule blocks (merged view with priority resolution)
+  // Effective coverage is calculated once by the canonical server-side engine.
+  // This component only clips that presentation data to the selected window.
   const finalScheduleBlocks = useMemo(() => {
-    if (!layerPriorities || layerPriorities.size === 0 || visibleShifts.length === 0) {
-      return [];
-    }
-
-    // Convert shifts to OnCallBlock format
-    const blocks: OnCallBlock[] = visibleShifts.map(shift => ({
-      id: shift.id,
-      start: shift.start,
-      end: shift.end,
-      userId: shift.userId || '',
-      userName: shift.userName,
-      userAvatar: shift.userAvatar,
-      userGender: shift.userGender,
-      layerId: shift.layerId || shift.layerName,
-      layerName: shift.layerName,
-      source: shift.source === 'override' ? 'override' : 'rotation',
-    }));
-
-    return getFinalScheduleBlocks(blocks, layerPriorities);
-  }, [visibleShifts, layerPriorities]);
+    return effectiveShifts.filter(shift => shift.start < endDate && shift.end > startDate);
+  }, [effectiveShifts, endDate, startDate]);
 
   const handlePrevPeriod = () => {
     setStartDateKey(prev => addDaysToDateKey(prev, -daysToShow));

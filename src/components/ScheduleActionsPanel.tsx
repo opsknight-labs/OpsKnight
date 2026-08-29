@@ -62,7 +62,7 @@ export default function ScheduleActionsPanel({
         <OverrideForm
           scheduleId={scheduleId}
           users={users}
-          canManageSchedules={canManageSchedules}
+          canCreateOverride={canManageSchedules}
           createOverride={createOverride}
           scheduleTimeZone={scheduleTimeZone}
         />

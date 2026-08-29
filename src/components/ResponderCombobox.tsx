@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/shadcn/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { ChevronsUpDown, UserPlus } from 'lucide-react';
+import { Check, ChevronsUpDown, UserPlus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export type ResponderOption = {
   id: string;
@@ -27,17 +28,32 @@ export type ResponderOption = {
 type ResponderComboboxProps = {
   users: ResponderOption[];
   onSelect: (userId: string) => void;
+  selectedUserId?: string;
   disabled?: boolean;
+  loading?: boolean;
+  label?: string;
+  placeholder?: string;
+  emptyMessage?: string;
+  className?: string;
+  ariaLabel?: string;
 };
 
 export default function ResponderCombobox({
   users,
   onSelect,
+  selectedUserId,
   disabled = false,
+  loading = false,
+  label = 'Add Responder',
+  placeholder = 'Search by name, email, or role...',
+  emptyMessage = 'No active responders match your search.',
+  className,
+  ariaLabel,
 }: ResponderComboboxProps) {
   const [open, setOpen] = useState(false);
   const hasUsers = users.length > 0;
-  const isDisabled = disabled || !hasUsers;
+  const isDisabled = disabled || loading || !hasUsers;
+  const selectedUser = users.find(user => user.id === selectedUserId);
 
   return (
     <Popover open={open} onOpenChange={nextOpen => !isDisabled && setOpen(nextOpen)}>
@@ -49,26 +65,47 @@ export default function ResponderCombobox({
           role="combobox"
           aria-expanded={open}
           aria-haspopup="listbox"
-          aria-label={hasUsers ? 'Add responder' : 'All active responders are already assigned'}
+          aria-label={
+            hasUsers
+              ? (ariaLabel ?? (label === 'Add Responder' ? 'Add responder' : label))
+              : 'All active responders are already assigned'
+          }
           disabled={isDisabled}
-          title={hasUsers ? 'Search and add a responder' : 'All active responders are already assigned'}
-          className="h-8 gap-1.5 border-primary/40 bg-primary/5 px-2.5 text-xs font-medium text-primary hover:border-primary hover:bg-primary/10"
+          title={hasUsers ? label : 'No active responders available'}
+          className={cn(
+            'h-9 gap-1.5 border-primary/40 bg-primary/5 px-2.5 text-xs font-medium text-primary hover:border-primary hover:bg-primary/10',
+            selectedUser && 'justify-between bg-background text-foreground',
+            className
+          )}
         >
-          <UserPlus className="h-3.5 w-3.5" />
-          {hasUsers ? 'Add Responder' : 'All Assigned'}
+          {selectedUser ? (
+            <>
+              <UserAvatar
+                userId={selectedUser.id}
+                name={selectedUser.name}
+                avatarUrl={selectedUser.avatarUrl}
+                gender={selectedUser.gender}
+                size="sm"
+                className="mr-1 h-6 w-6 shrink-0"
+              />
+              <span className="truncate">{selectedUser.name}</span>
+            </>
+          ) : (
+            <>
+              <UserPlus className="h-3.5 w-3.5" />
+              {loading ? 'Loading responders…' : hasUsers ? label : 'All Assigned'}
+            </>
+          )}
           {hasUsers && <ChevronsUpDown className="h-3 w-3 opacity-60" />}
         </Button>
       </PopoverTrigger>
 
       <PopoverContent className="w-[320px] p-0" align="end" sideOffset={6}>
         <Command className="rounded-lg">
-          <CommandInput
-            placeholder="Search by name, email, or role..."
-            aria-label="Search available responders"
-          />
+          <CommandInput placeholder={placeholder} aria-label="Search available responders" />
           <CommandList className="max-h-[320px]">
             <CommandEmpty className="px-4 py-8 text-center text-sm text-muted-foreground">
-              No active responders match your search.
+              {emptyMessage}
             </CommandEmpty>
             <CommandGroup heading={`Available responders (${users.length})`} className="p-1.5">
               {users.map(user => (
@@ -104,6 +141,12 @@ export default function ResponderCombobox({
                       {user.email || 'Active responder'}
                     </span>
                   </div>
+                  <Check
+                    className={cn(
+                      'ml-2 h-4 w-4 shrink-0',
+                      user.id === selectedUserId ? 'opacity-100' : 'opacity-0'
+                    )}
+                  />
                 </CommandItem>
               ))}
             </CommandGroup>
