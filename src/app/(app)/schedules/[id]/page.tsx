@@ -47,7 +47,6 @@ import {
   Globe2,
   Info,
   Layers3,
-  Settings2,
   ShieldAlert,
   Users,
 } from 'lucide-react';
@@ -658,34 +657,13 @@ export default async function ScheduleDetailPage({
   );
 
   const settings = capabilities.canManageScheduleSettings ? (
-    <section className="overflow-hidden rounded-2xl border border-primary/15 bg-card shadow-sm">
-      <div className="relative overflow-hidden border-b bg-gradient-to-br from-primary/[0.12] via-primary/[0.045] to-transparent px-5 py-6 md:px-7 md:py-7">
-        <div className="pointer-events-none absolute -right-20 -top-28 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm ring-1 ring-inset ring-primary-foreground/20">
-            <Settings2 className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-              Schedule administration
-            </p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight">Schedule settings</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Manage the schedule-wide details used by every layer, handoff, and escalation.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div className="p-5 md:p-7">
-        <ScheduleEditForm
-          scheduleId={schedule.id}
-          currentName={schedule.name}
-          currentTimeZone={schedule.timeZone}
-          updateSchedule={updateSchedule}
-          canManageSchedules={capabilities.canManageScheduleSettings}
-        />
-      </div>
-    </section>
+    <ScheduleEditForm
+      scheduleId={schedule.id}
+      currentName={schedule.name}
+      currentTimeZone={schedule.timeZone}
+      updateSchedule={updateSchedule}
+      canManageSchedules={capabilities.canManageScheduleSettings}
+    />
   ) : (
     <Alert>
       <Info className="h-4 w-4" />
