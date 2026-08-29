@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
-import { movePolicyStep } from '@/app/(app)/policies/actions';
+import { movePolicyStep, reorderPolicySteps } from '@/app/(app)/policies/actions';
 
 vi.mock('@/lib/rbac', () => ({
-  assertAdmin: vi.fn().mockResolvedValue(undefined),
+  assertAdmin: vi.fn().mockResolvedValue({ id: 'admin-1', role: 'ADMIN' }),
 }));
 
 vi.mock('@/lib/audit', () => ({
@@ -15,7 +15,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
 
-describe('movePolicyStep', () => {
+describe('Policy Step Actions', () => {
   const prismaMock = prisma as any;
 
   beforeEach(() => {
@@ -28,34 +28,67 @@ describe('movePolicyStep', () => {
     });
   });
 
-  it('updates step orders without overwriting delay minutes when moving a step up', async () => {
-    prismaMock.escalationRule.findUnique.mockResolvedValue({
-      id: 'step-1',
-      policyId: 'pol-1',
-      stepOrder: 1,
-      delayMinutes: 10,
-    });
+  describe('movePolicyStep', () => {
+    it('updates step orders via temporary negative indexing when moving a step up', async () => {
+      prismaMock.escalationRule.findUnique.mockResolvedValue({
+        id: 'step-1',
+        policyId: 'pol-1',
+        stepOrder: 1,
+        delayMinutes: 10,
+      });
 
-    prismaMock.escalationRule.findMany.mockResolvedValue([
-      { id: 'step-0', stepOrder: 0, delayMinutes: 0 },
-      { id: 'step-1', stepOrder: 1, delayMinutes: 10 },
-    ]);
+      prismaMock.escalationRule.findMany.mockResolvedValue([
+        { id: 'step-0', stepOrder: 0, delayMinutes: 0 },
+        { id: 'step-1', stepOrder: 1, delayMinutes: 10 },
+      ]);
 
-    await movePolicyStep('step-1', 'up');
+      const result = await movePolicyStep('step-1', 'up');
+      expect(result).toBeUndefined();
 
-    const updates = prismaMock.escalationRule.update.mock.calls.map((call: any) => call[0]);
+      const updates = prismaMock.escalationRule.update.mock.calls.map((call: any) => call[0]);
 
-    expect(updates).toEqual(
-      expect.arrayContaining([
+      // Checks that step-1 was first moved to -1, then step-0 moved to 1, then step-1 moved to 0
+      expect(updates).toEqual([
         {
           where: { id: 'step-1' },
-          data: { stepOrder: 0 },
+          data: { stepOrder: -1 },
         },
         {
           where: { id: 'step-0' },
           data: { stepOrder: 1 },
         },
-      ])
-    );
+        {
+          where: { id: 'step-1' },
+          data: { stepOrder: 0 },
+        },
+      ]);
+    });
+  });
+
+  describe('reorderPolicySteps', () => {
+    it('reorders all steps using two-phase negative indexing to prevent unique constraint collisions', async () => {
+      prismaMock.escalationRule.findMany.mockResolvedValue([
+        { id: 'step-b', stepOrder: 1 },
+        { id: 'step-a', stepOrder: 0 },
+        { id: 'step-c', stepOrder: 2 },
+      ]);
+
+      const newOrder = ['step-b', 'step-c', 'step-a'];
+      const result = await reorderPolicySteps('pol-1', newOrder);
+      expect(result).toBeUndefined();
+
+      const updates = prismaMock.escalationRule.update.mock.calls.map((call: any) => call[0]);
+
+      // Phase 1 (negative index): -(i+1)
+      // Phase 2 (final 0-index): i
+      expect(updates).toEqual([
+        { where: { id: 'step-b' }, data: { stepOrder: -1 } },
+        { where: { id: 'step-c' }, data: { stepOrder: -2 } },
+        { where: { id: 'step-a' }, data: { stepOrder: -3 } },
+        { where: { id: 'step-b' }, data: { stepOrder: 0 } },
+        { where: { id: 'step-c' }, data: { stepOrder: 1 } },
+        { where: { id: 'step-a' }, data: { stepOrder: 2 } },
+      ]);
+    });
   });
 });

@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/shadcn/dropdown-menu';
 import { getDefaultAvatar } from '@/lib/avatar';
 
+import { useToast } from '@/hooks/use-product-notification';
+
 type EscalationStep = {
   id: string;
   stepOrder: number;
@@ -57,7 +59,7 @@ type EscalationStepItemProps = {
 
 export default function EscalationStepItem({
   step,
-  policyId,
+  policyId: _policyId,
   canManage,
   isFirst,
   isLast,
@@ -65,18 +67,25 @@ export default function EscalationStepItem({
   moveStep,
 }: EscalationStepItemProps) {
   const [isPending, startTransition] = useTransition();
+  const { showToast } = useToast();
 
   const handleDelete = () => {
     if (confirm('Are you sure you want to delete this step?')) {
       startTransition(async () => {
-        await deleteStep(step.id);
+        const res = await deleteStep(step.id);
+        if (res?.error) {
+          showToast(res.error, 'error');
+        }
       });
     }
   };
 
   const handleMove = (direction: 'up' | 'down') => {
     startTransition(async () => {
-      await moveStep(step.id, direction);
+      const res = await moveStep(step.id, direction);
+      if (res?.error) {
+        showToast(res.error, 'error');
+      }
     });
   };
 

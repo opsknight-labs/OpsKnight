@@ -531,17 +531,23 @@ export async function movePolicyStep(
   }
 
   try {
-    // Swap step orders
-    await prisma.$transaction([
-      prisma.escalationRule.update({
+    // Swap step orders via temporary negative index to satisfy @@unique([policyId, stepOrder])
+    await prisma.$transaction(async tx => {
+      await tx.escalationRule.update({
         where: { id: stepId },
-        data: { stepOrder: newOrder },
-      }),
-      prisma.escalationRule.update({
+        data: { stepOrder: -1 },
+      });
+
+      await tx.escalationRule.update({
         where: { id: targetStep.id },
         data: { stepOrder: currentOrder },
-      }),
-    ]);
+      });
+
+      await tx.escalationRule.update({
+        where: { id: stepId },
+        data: { stepOrder: newOrder },
+      });
+    });
 
     await logAudit({
       action: 'escalation_policy.step_moved',
@@ -585,7 +591,17 @@ export async function reorderPolicySteps(
         throw new Error('Invalid step IDs provided for reordering');
       }
 
-      // Update each step in 'newOrder' to its new stepOrder position
+      // Step 1: Temporarily set all steps to negative indices to prevent @@unique([policyId, stepOrder]) collisions
+      for (let i = 0; i < newOrder.length; i++) {
+        await tx.escalationRule.update({
+          where: { id: newOrder[i] },
+          data: {
+            stepOrder: -(i + 1),
+          },
+        });
+      }
+
+      // Step 2: Assign final sequential 0-indexed positions
       for (let i = 0; i < newOrder.length; i++) {
         await tx.escalationRule.update({
           where: { id: newOrder[i] },
