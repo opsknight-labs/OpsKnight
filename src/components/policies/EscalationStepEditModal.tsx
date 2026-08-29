@@ -22,8 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import UserAvatar from '@/components/UserAvatar';
 import { Clock, Users, Calendar, User, ShieldAlert } from 'lucide-react';
+import PolicyTargetCombobox from './PolicyTargetCombobox';
 
 type EscalationStep = {
   id: string;
@@ -172,61 +172,34 @@ export default function EscalationStepEditModal({
           {/* Target Selector */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold">
-              {targetType === 'USER' && 'Assignee User'}
-              {targetType === 'TEAM' && 'Target Team'}
-              {targetType === 'SCHEDULE' && 'Target On-Call Schedule'}
+              {targetType === 'USER' && 'Assignee User (Searchable)'}
+              {targetType === 'TEAM' && 'Target Team (Searchable)'}
+              {targetType === 'SCHEDULE' && 'Target On-Call Schedule (Searchable)'}
             </Label>
 
             {targetType === 'USER' && (
-              <Select
-                value={targetUserId}
-                onValueChange={setTargetUserId}
-                required
+              <PolicyTargetCombobox
+                targetType="USER"
+                name="targetUserId"
+                users={users}
+                selectedValue={targetUserId}
+                onSelect={setTargetUserId}
                 disabled={isPending}
-              >
-                <SelectTrigger className="text-xs h-9">
-                  <SelectValue placeholder="Select user" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[220px]">
-                  {users.map(user => (
-                    <SelectItem key={user.id} value={user.id} className="text-xs">
-                      <div className="flex items-center gap-2">
-                        <UserAvatar
-                          userId={user.id}
-                          name={user.name}
-                          gender={user.gender}
-                          size="xs"
-                        />
-                        <div className="flex flex-col text-left">
-                          <span className="font-medium text-xs">{user.name}</span>
-                          <span className="text-[10px] text-muted-foreground">{user.email}</span>
-                        </div>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                required
+              />
             )}
 
             {targetType === 'TEAM' && (
               <div className="space-y-2.5">
-                <Select
-                  value={targetTeamId}
-                  onValueChange={setTargetTeamId}
-                  required
+                <PolicyTargetCombobox
+                  targetType="TEAM"
+                  name="targetTeamId"
+                  teams={teams}
+                  selectedValue={targetTeamId}
+                  onSelect={setTargetTeamId}
                   disabled={isPending}
-                >
-                  <SelectTrigger className="text-xs h-9">
-                    <SelectValue placeholder="Select team" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teams.map(team => (
-                      <SelectItem key={team.id} value={team.id} className="text-xs">
-                        {team.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  required
+                />
 
                 <div className="flex items-center space-x-2 pt-1">
                   <Checkbox
@@ -246,23 +219,15 @@ export default function EscalationStepEditModal({
             )}
 
             {targetType === 'SCHEDULE' && (
-              <Select
-                value={targetScheduleId}
-                onValueChange={setTargetScheduleId}
-                required
+              <PolicyTargetCombobox
+                targetType="SCHEDULE"
+                name="targetScheduleId"
+                schedules={schedules}
+                selectedValue={targetScheduleId}
+                onSelect={setTargetScheduleId}
                 disabled={isPending}
-              >
-                <SelectTrigger className="text-xs h-9">
-                  <SelectValue placeholder="Select schedule" />
-                </SelectTrigger>
-                <SelectContent>
-                  {schedules.map(schedule => (
-                    <SelectItem key={schedule.id} value={schedule.id} className="text-xs">
-                      {schedule.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                required
+              />
             )}
           </div>
 
