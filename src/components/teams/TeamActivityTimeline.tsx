@@ -18,7 +18,7 @@ type AuditLogItem = {
   action: string;
   actorName?: string | null;
   actorEmail?: string | null;
-  details?: Record<string, unknown> | string | null;
+  details?: unknown;
   createdAt: Date | string;
   actor?: {
     id: string;
