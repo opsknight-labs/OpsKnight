@@ -6,6 +6,7 @@ import { getDefaultAvatar } from '@/lib/avatar';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
+import { assertCanViewSchedule } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,11 @@ type PageProps = {
 
 export default async function MobileScheduleDetailPage({ params }: PageProps) {
   const { id } = await params;
+  try {
+    await assertCanViewSchedule(id);
+  } catch {
+    notFound();
+  }
 
   const schedule = await prisma.onCallSchedule.findUnique({
     where: { id },
@@ -45,17 +51,13 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const activeShifts = await getActiveOnCallShifts();
-  const currentShift = activeShifts.find(s => s.scheduleId === schedule.id);
-  const currentOnCall = currentShift
-    ? {
-        id: currentShift.user.id,
-        name: currentShift.user.name,
-        email: '',
-        avatarUrl: currentShift.user.avatarUrl,
-        gender: currentShift.user.gender ?? null,
-      }
-    : null;
+  const currentOnCall = (await getActiveOnCallShifts(new Date(), schedule.id)).map(shift => ({
+    id: shift.user.id,
+    name: shift.user.name,
+    email: '',
+    avatarUrl: shift.user.avatarUrl,
+    gender: shift.user.gender ?? null,
+  }));
   const totalParticipants = schedule.layers.reduce((acc, layer) => acc + layer.users.length, 0);
 
   return (
@@ -85,23 +87,24 @@ export default async function MobileScheduleDetailPage({ params }: PageProps) {
         </div>
 
         {/* Current On-Call */}
-        {currentOnCall && (
+        {currentOnCall.length > 0 && (
           <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/40 dark:bg-emerald-950/40">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
               CURRENTLY ON-CALL
             </div>
-            <div className="mt-2 flex items-center gap-2">
-              <MobileAvatar
-                name={currentOnCall.name || currentOnCall.email}
-                size="sm"
-                src={
-                  currentOnCall.avatarUrl ||
-                  getDefaultAvatar(currentOnCall.gender, currentOnCall.id)
-                }
-              />
-              <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                {currentOnCall.name || currentOnCall.email}
-              </span>
+            <div className="mt-2 space-y-2">
+              {currentOnCall.map(responder => (
+                <div key={responder.id} className="flex items-center gap-2">
+                  <MobileAvatar
+                    name={responder.name || responder.email}
+                    size="sm"
+                    src={responder.avatarUrl || getDefaultAvatar(responder.gender, responder.id)}
+                  />
+                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                    {responder.name || responder.email}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}

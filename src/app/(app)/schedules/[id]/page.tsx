@@ -381,6 +381,7 @@ export default async function ScheduleDetailPage({
           timeZone={schedule.timeZone}
           viewerId={currentUser.id}
           viewerTimeZone={currentUser.timeZone || schedule.timeZone}
+          maxDateKey={addDaysToDateKey(todayKey, 94)}
         />
       </div>
 

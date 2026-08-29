@@ -9,8 +9,8 @@ import { getDefaultAvatar } from '@/lib/avatar';
 import {
   formatDateTime,
   formatDateForInput,
-  startOfDayInTimeZone,
-  startOfNextDayInTimeZone,
+  startOfDayFromDateKey,
+  startOfNextDayFromDateKey,
 } from '@/lib/timezone';
 
 type Shift = {
@@ -31,17 +31,17 @@ type Props = {
   timeZone: string;
   viewerId: string;
   viewerTimeZone: string;
+  maxDateKey: string;
 };
 
-export default function ScheduleCoveragePreview({ effectiveShifts, timeZone }: Props) {
+export default function ScheduleCoveragePreview({ effectiveShifts, timeZone, maxDateKey }: Props) {
   const [dateKey, setDateKey] = useState(() =>
     formatDateForInput(new Date(), timeZone).slice(0, 10)
   );
-  const selectedDate = useMemo(() => new Date(`${dateKey}T12:00:00Z`), [dateKey]);
   const range = useMemo(() => {
-    const start = startOfDayInTimeZone(selectedDate, timeZone);
-    return { start, end: startOfNextDayInTimeZone(selectedDate, timeZone) };
-  }, [selectedDate, timeZone]);
+    const start = startOfDayFromDateKey(dateKey, timeZone);
+    return { start, end: startOfNextDayFromDateKey(dateKey, timeZone) };
+  }, [dateKey, timeZone]);
 
   const assignments = useMemo(
     () =>
@@ -67,7 +67,10 @@ export default function ScheduleCoveragePreview({ effectiveShifts, timeZone }: P
               aria-label="Preview coverage date"
               type="date"
               value={dateKey}
-              onChange={event => setDateKey(event.target.value)}
+              max={maxDateKey}
+              onChange={event => {
+                if (event.target.value <= maxDateKey) setDateKey(event.target.value);
+              }}
               className="h-7 rounded border bg-background px-2 text-[11px] text-foreground font-medium shadow-2xs focus-visible:ring-1 focus-visible:ring-primary"
             />
           </div>

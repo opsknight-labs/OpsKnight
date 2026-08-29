@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { getUserPermissions, getViewableScheduleWhere } from '@/lib/rbac';
 import { createSchedule } from './actions';
 import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
@@ -14,7 +14,12 @@ import {
 import { Button } from '@/components/ui/shadcn/button';
 
 export default async function SchedulesPage() {
+  const [permissions, scheduleWhere] = await Promise.all([
+    getUserPermissions(),
+    getViewableScheduleWhere(),
+  ]);
   const schedules = await prisma.onCallSchedule.findMany({
+    where: scheduleWhere,
     include: {
       layers: {
         include: {
@@ -44,7 +49,6 @@ export default async function SchedulesPage() {
     schedule.layers.some(layer => layer.users.length > 0)
   );
 
-  const permissions = await getUserPermissions();
   const canManageSchedules = permissions.isAdminOrResponder;
 
   return (

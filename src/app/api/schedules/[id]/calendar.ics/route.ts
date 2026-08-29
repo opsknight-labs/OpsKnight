@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { buildScheduleBlocks, getFinalScheduleBlocks } from '@/lib/oncall';
+import { assertCanViewSchedule } from '@/lib/rbac';
+
+function escapeICalText(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/\r?\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+}
 
 function formatICalDate(date: Date): string {
   return date
@@ -11,6 +20,11 @@ function formatICalDate(date: Date): string {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  try {
+    await assertCanViewSchedule(id);
+  } catch {
+    return new NextResponse('Schedule not found', { status: 404 });
+  }
 
   const schedule = await prisma.onCallSchedule.findUnique({
     where: { id },
@@ -18,6 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       layers: {
         include: {
           users: {
+            where: { user: { status: 'ACTIVE' } },
             include: {
               user: {
                 select: {
@@ -32,6 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         },
       },
       overrides: {
+        where: { user: { status: 'ACTIVE' } },
         include: {
           user: {
             select: {
@@ -102,8 +118,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     'PRODID:-//OpsKnight//On-Call Schedule//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    `X-WR-CALNAME:OpsKnight - ${schedule.name}`,
-    `X-WR-TIMEZONE:${schedule.timeZone}`,
+    `X-WR-CALNAME:OpsKnight - ${escapeICalText(schedule.name)}`,
+    `X-WR-TIMEZONE:${escapeICalText(schedule.timeZone)}`,
   ];
 
   for (const block of effectiveBlocks) {
@@ -111,8 +127,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const dtstamp = formatICalDate(now);
     const dtstart = formatICalDate(block.start);
     const dtend = formatICalDate(block.end);
-    const summary = `On-Call: ${block.userName} (${block.layerName})`;
-    const description = `Schedule: ${schedule.name}\\nLayer: ${block.layerName}\\nResponder: ${block.userName}\\nTimezone: ${schedule.timeZone}`;
+    const summary = escapeICalText(`On-Call: ${block.userName} (${block.layerName})`);
+    const description = [
+      `Schedule: ${schedule.name}`,
+      `Layer: ${block.layerName}`,
+      `Responder: ${block.userName}`,
+      `Timezone: ${schedule.timeZone}`,
+    ]
+      .map(escapeICalText)
+      .join('\\n');
 
     lines.push(
       'BEGIN:VEVENT',

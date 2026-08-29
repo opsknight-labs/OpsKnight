@@ -1,10 +1,15 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { AlertTriangle, CheckCircle2, Clock, CalendarX, Users, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import {
+  addDaysToDateKey,
+  formatDateKeyInTimeZone,
+  startOfDayFromDateKey,
+  startOfNextDayFromDateKey,
+} from '@/lib/timezone';
 
 type ScheduleHealthCheckProps = {
   layers: Array<{
@@ -128,70 +133,31 @@ export default function ScheduleHealthCheck({
     }
 
     // Check 4: Coverage gaps in next 7 days
-    const next7Days = new Date(now);
-    next7Days.setDate(next7Days.getDate() + 7);
+    const todayKey = formatDateKeyInTimeZone(now, timeZone || 'UTC');
+    const hasGap = Array.from({ length: 7 }, (_, index) => addDaysToDateKey(todayKey, index)).some(
+      dateKey => {
+        const dayStart = startOfDayFromDateKey(dateKey, timeZone || 'UTC').getTime();
+        const dayEnd = startOfNextDayFromDateKey(dateKey, timeZone || 'UTC').getTime();
+        const intervals = shifts
+          .map(
+            shift =>
+              [
+                Math.max(new Date(shift.start).getTime(), dayStart),
+                Math.min(new Date(shift.end).getTime(), dayEnd),
+              ] as const
+          )
+          .filter(([start, end]) => start < end)
+          .sort((a, b) => a[0] - b[0]);
 
-    const dayCoverages = new Map<string, Set<number>>();
-
-    let formatter: Intl.DateTimeFormat;
-    try {
-      formatter = new Intl.DateTimeFormat('en-CA', {
-        timeZone: timeZone || 'UTC',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      });
-    } catch {
-      formatter = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'UTC',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      });
-    }
-
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(now);
-      d.setDate(d.getDate() + i);
-      const dateStr = formatter.format(d);
-      dayCoverages.set(dateStr, new Set());
-    }
-
-    shifts.forEach(shift => {
-      const s = new Date(shift.start);
-      const e = new Date(shift.end);
-
-      for (let i = 0; i < 7; i++) {
-        const currentCheck = new Date(now);
-        currentCheck.setDate(currentCheck.getDate() + i);
-        const dateStr = formatter.format(currentCheck);
-
-        const currentDayStart = new Date(`${dateStr}T00:00:00Z`);
-        const currentDayEnd = new Date(`${dateStr}T23:59:59.999Z`);
-
-        if (s < currentDayEnd && e > currentDayStart) {
-          const overlapStart = Math.max(s.getTime(), currentDayStart.getTime());
-          const overlapEnd = Math.min(e.getTime(), currentDayEnd.getTime());
-
-          const startMinute = Math.floor((overlapStart - currentDayStart.getTime()) / (1000 * 60));
-          const endMinute = Math.floor((overlapEnd - currentDayStart.getTime()) / (1000 * 60));
-
-          const coveredSet = dayCoverages.get(dateStr);
-          if (coveredSet) {
-            for (let m = Math.max(0, startMinute); m < Math.min(1440, endMinute); m++) {
-              coveredSet.add(m);
-            }
-          }
+        let coveredUntil = dayStart;
+        for (const [start, end] of intervals) {
+          if (start > coveredUntil) return true;
+          coveredUntil = Math.max(coveredUntil, end);
+          if (coveredUntil >= dayEnd) return false;
         }
+        return coveredUntil < dayEnd;
       }
-    });
-
-    let hasGap = false;
-    dayCoverages.forEach(coveredMinutes => {
-      if (coveredMinutes.size < 1440) {
-        hasGap = true;
-      }
-    });
+    );
 
     if (hasGap) {
       problems.push({

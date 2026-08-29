@@ -3,7 +3,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import type { Role } from '@prisma/client';
+import type { Prisma, Role } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import {
   AuthorizationError,
@@ -407,6 +407,29 @@ export async function assertCanViewSchedule(scheduleId: string) {
     'Unauthorized. You do not have permission to view this schedule.',
     { scheduleId, userId: user.id }
   );
+}
+
+export async function getViewableScheduleWhere(): Promise<Prisma.OnCallScheduleWhereInput> {
+  const user = await getCurrentUser();
+  if (hasCapability(user.role as AppRole, CAPABILITIES.SCHEDULE_READ_ALL)) return {};
+
+  return {
+    OR: [
+      { layers: { some: { users: { some: { userId: user.id } } } } },
+      { overrides: { some: { OR: [{ userId: user.id }, { replacesUserId: user.id }] } } },
+      {
+        escalationRules: {
+          some: {
+            policy: {
+              services: {
+                some: { team: { members: { some: { userId: user.id, role: 'OWNER' } } } },
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
 }
 
 async function resolveScheduleUICapabilities(

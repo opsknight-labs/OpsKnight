@@ -19,6 +19,7 @@ import {
   moveScheduleLayerUser,
   removeScheduleLayerUser,
 } from '@/lib/schedules/mutations';
+import { runSerializableTransaction } from '@/lib/db-utils';
 
 type ScheduleFormState = ScheduleActionState;
 
@@ -276,7 +277,13 @@ export async function createLayer(
   }
 
   try {
-    const layer = await prisma.$transaction(async tx => {
+    const layer = await runSerializableTransaction(async tx => {
+      const lowestPriorityLayer = await tx.onCallLayer.findFirst({
+        where: { scheduleId },
+        orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
+        select: { priority: true },
+      });
+
       if (responderIds.length > 0) {
         const activeResponders = await tx.user.count({
           where: { id: { in: responderIds }, status: 'ACTIVE' },
@@ -311,6 +318,9 @@ export async function createLayer(
           rotationLengthHours: rotationLength,
           shiftLengthHours: shiftLength,
           restrictions,
+          // New layers are appended as fallback coverage. This keeps the visual
+          // order and the effective precedence identical from the first save.
+          priority: lowestPriorityLayer ? lowestPriorityLayer.priority - 1 : 0,
           users:
             responderIds.length > 0
               ? { create: responderIds.map((userId, index) => ({ userId, position: index + 1 })) }

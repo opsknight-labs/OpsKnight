@@ -151,5 +151,43 @@ describe('oncall-handoff', () => {
       expect(prisma.incident.update).not.toHaveBeenCalled();
       expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     });
+
+    it('keeps additive responders stable and only hands off incidents owned by an outgoing responder', async () => {
+      const { default: prisma } = await import('@/lib/prisma');
+      const { getActiveOnCallShifts } = await import('@/lib/oncall-shifts');
+      const now = new Date('2026-08-26T06:31:00Z');
+      const shift = (userId: string): DynamicOnCallShift => ({
+        id: `shift-${userId}`,
+        scheduleId: 'sched-1',
+        userId,
+        schedule: { id: 'sched-1', name: 'Devops Schedule' },
+        user: { id: userId, name: userId },
+        start: new Date(now.getTime() - 60 * 60 * 1000),
+        end: new Date(now.getTime() + 60 * 60 * 1000),
+      });
+
+      vi.mocked(getActiveOnCallShifts).mockImplementation(async time =>
+        (time ?? new Date()).getTime() < now.getTime()
+          ? [shift('outgoing-primary'), shift('additive')]
+          : [shift('incoming-primary'), shift('additive')]
+      );
+      vi.mocked(prisma.escalationPolicy.findMany).mockResolvedValue([
+        { id: 'ep-1', services: [{ id: 'svc-1' }] },
+      ] as unknown as Awaited<ReturnType<typeof prisma.escalationPolicy.findMany>>);
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([
+        { id: 'inc-outgoing', title: 'Move me', status: 'OPEN', assigneeId: 'outgoing-primary' },
+        { id: 'inc-additive', title: 'Keep me', status: 'OPEN', assigneeId: 'additive' },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
+
+      const result = await processShiftRotations(now);
+
+      expect(result.rotationsProcessed).toBe(1);
+      expect(result.incidentsReassigned).toBe(1);
+      expect(prisma.incident.update).toHaveBeenCalledTimes(1);
+      expect(prisma.incident.update).toHaveBeenCalledWith({
+        where: { id: 'inc-outgoing' },
+        data: { assigneeId: 'incoming-primary' },
+      });
+    });
   });
 });
