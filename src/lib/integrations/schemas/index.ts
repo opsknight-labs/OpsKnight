@@ -208,6 +208,29 @@ export const GitHubEventSchema = z.object({
       html_url: z.string(),
     })
     .optional(),
+  workflow_job: z
+    .object({
+      id: z.number(),
+      run_id: z.number().optional(),
+      name: z.string(),
+      head_branch: z.string().optional(),
+      status: z.enum(['queued', 'in_progress', 'completed', 'waiting']),
+      conclusion: z
+        .enum([
+          'success',
+          'failure',
+          'neutral',
+          'cancelled',
+          'timed_out',
+          'action_required',
+          'stale',
+          'skipped',
+        ])
+        .nullable()
+        .optional(),
+      html_url: z.string().optional(),
+    })
+    .optional(),
   deployment: z
     .object({
       id: z.number(),
