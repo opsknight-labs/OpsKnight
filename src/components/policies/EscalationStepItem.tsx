@@ -22,8 +22,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
-import { getDefaultAvatar } from '@/lib/avatar';
 import { useToast } from '@/hooks/use-product-notification';
+import UserAvatar from '@/components/UserAvatar';
 import EscalationStepEditModal from './EscalationStepEditModal';
 
 type EscalationStep = {
@@ -114,9 +114,6 @@ export default function EscalationStepItem({
         icon: <User className="h-4 w-4" />,
         label: step.targetUser.name,
         subLabel: step.targetUser.email,
-        avatar:
-          step.targetUser.avatarUrl ||
-          getDefaultAvatar(step.targetUser.gender, step.targetUser.id || step.targetUser.name),
       };
     }
     if (step.targetType === 'TEAM' && step.targetTeam) {
@@ -124,7 +121,6 @@ export default function EscalationStepItem({
         icon: <Users className="h-4 w-4" />,
         label: step.targetTeam.name,
         subLabel: step.notifyOnlyTeamLead ? 'Notify Team Lead Only' : 'Notify All Members',
-        avatar: null,
       };
     }
     if (step.targetType === 'SCHEDULE' && step.targetSchedule) {
@@ -132,18 +128,16 @@ export default function EscalationStepItem({
         icon: <Calendar className="h-4 w-4" />,
         label: step.targetSchedule.name,
         subLabel: 'On-Call Schedule',
-        avatar: null,
       };
     }
     return {
       icon: <Clock className="h-4 w-4" />,
       label: 'Unknown Target',
       subLabel: 'Configuration error',
-      avatar: null,
     };
   };
 
-  const { icon, label, subLabel, avatar } = getTargetInfo();
+  const { icon, label, subLabel } = getTargetInfo();
 
   return (
     <>
@@ -170,11 +164,13 @@ export default function EscalationStepItem({
             <div className="flex items-center gap-4">
               {/* Avatar/Icon */}
               <div className="flex-shrink-0">
-                {avatar ? (
-                  <img
-                    src={avatar}
-                    alt={label}
-                    className="w-10 h-10 rounded-full object-cover border border-slate-100"
+                {step.targetType === 'USER' && step.targetUser ? (
+                  <UserAvatar
+                    userId={step.targetUser.id}
+                    name={step.targetUser.name}
+                    avatarUrl={step.targetUser.avatarUrl}
+                    gender={step.targetUser.gender}
+                    size="md"
                   />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">

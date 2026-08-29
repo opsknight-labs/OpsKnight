@@ -606,9 +606,9 @@ export async function reorderPolicySteps(
       }
 
       // Step 1: Temporarily set all steps to negative indices to prevent @@unique([policyId, stepOrder]) collisions
-      for (let i = 0; i < orderIds.length; i++) {
+      for (const [i, stepId] of orderIds.entries()) {
         await tx.escalationRule.update({
-          where: { id: orderIds[i] },
+          where: { id: stepId },
           data: {
             stepOrder: -(i + 1),
           },
@@ -616,8 +616,7 @@ export async function reorderPolicySteps(
       }
 
       // Step 2: Assign final sequential 0-indexed positions & update positional delays if provided
-      for (let i = 0; i < orderIds.length; i++) {
-        const stepId = orderIds[i];
+      for (const [i, stepId] of orderIds.entries()) {
         const delay = delayMap.get(stepId);
         await tx.escalationRule.update({
           where: { id: stepId },

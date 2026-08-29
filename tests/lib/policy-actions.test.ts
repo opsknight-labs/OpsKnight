@@ -15,17 +15,28 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
 
+type PrismaUpdateCall = [{ where: { id: string }; data: Record<string, unknown> }];
+
 describe('Policy Step Actions', () => {
-  const prismaMock = prisma as any;
+  const prismaMock = prisma as unknown as {
+    $transaction: ReturnType<typeof vi.fn>;
+    escalationRule: {
+      findUnique: ReturnType<typeof vi.fn>;
+      findMany: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMock.$transaction.mockImplementation(async (arg: any) => {
-      if (Array.isArray(arg)) {
-        return Promise.all(arg);
+    prismaMock.$transaction.mockImplementation(
+      async (arg: Array<Promise<unknown>> | ((tx: typeof prismaMock) => Promise<unknown>)) => {
+        if (Array.isArray(arg)) {
+          return Promise.all(arg);
+        }
+        return arg(prismaMock);
       }
-      return arg(prismaMock);
-    });
+    );
   });
 
   describe('movePolicyStep', () => {
@@ -45,7 +56,9 @@ describe('Policy Step Actions', () => {
       const result = await movePolicyStep('step-1', 'up');
       expect(result).toBeUndefined();
 
-      const updates = prismaMock.escalationRule.update.mock.calls.map((call: any) => call[0]);
+      const updates = (prismaMock.escalationRule.update.mock.calls as PrismaUpdateCall[]).map(
+        call => call[0]
+      );
 
       expect(updates).toEqual([
         {
@@ -80,7 +93,9 @@ describe('Policy Step Actions', () => {
       const result = await reorderPolicySteps('pol-1', newOrder);
       expect(result).toBeUndefined();
 
-      const updates = prismaMock.escalationRule.update.mock.calls.map((call: any) => call[0]);
+      const updates = (prismaMock.escalationRule.update.mock.calls as PrismaUpdateCall[]).map(
+        call => call[0]
+      );
 
       // Phase 1 (negative index): -(i+1)
       // Phase 2 (final 0-index): i with positional delayMinutes

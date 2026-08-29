@@ -58,7 +58,9 @@ export default async function PolicyDetailPage({
         steps: {
           include: {
             targetUser: true,
-            targetTeam: true,
+            targetTeam: {
+              include: { teamLead: true },
+            },
             targetSchedule: true,
           },
           orderBy: { stepOrder: 'asc' },
@@ -117,15 +119,7 @@ export default async function PolicyDetailPage({
   // Tab 1: Escalation Steps Content
   const stepsContent = (
     <StepsList
-      initialSteps={policy.steps.map(step => ({
-        ...step,
-        targetTeam: step.targetTeam
-          ? {
-              ...step.targetTeam,
-              teamLead: (step.targetTeam as any).teamLead, // eslint-disable-line @typescript-eslint/no-explicit-any
-            }
-          : null,
-      }))}
+      initialSteps={policy.steps}
       policyId={policy.id}
       canManage={canManagePolicies}
       updateStep={updatePolicyStep}

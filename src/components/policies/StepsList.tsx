@@ -122,7 +122,7 @@ export default function StepsList({
         // 3. Re-assign delays based on the position so Step 1 always maintains Immediate (0m)
         const itemsWithFixedDelays = newItems.map((item, index) => ({
           ...item,
-          delayMinutes: delays[index] ?? item.delayMinutes,
+          delayMinutes: delays.at(index) ?? item.delayMinutes,
         }));
 
         // 4. Trigger server update persisting both order and positional delays
@@ -178,12 +178,7 @@ export default function StepsList({
                       ...step,
                       // Re-mapping stepOrder based on current index for display correctness during drag
                       stepOrder: index,
-                      targetTeam: step.targetTeam
-                        ? {
-                            ...step.targetTeam,
-                            teamLead: (step.targetTeam as any).teamLead, // eslint-disable-line @typescript-eslint/no-explicit-any
-                          }
-                        : null,
+                      targetTeam: step.targetTeam ?? null,
                     }}
                     policyId={policyId}
                     canManage={canManage}
