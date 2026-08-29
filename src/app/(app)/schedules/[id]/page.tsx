@@ -46,6 +46,7 @@ import {
   Clock3,
   Info,
   Layers3,
+  Settings2,
   ShieldAlert,
   Users,
 } from 'lucide-react';
@@ -623,14 +624,21 @@ export default async function ScheduleDetailPage({
   );
 
   const settings = capabilities.canManageScheduleSettings ? (
-    <Card className="max-w-2xl">
-      <CardHeader>
-        <CardTitle>Schedule settings</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Rename the schedule or change the timezone used by every rotation and override.
-        </p>
+    <Card className="max-w-2xl overflow-hidden border-primary/15 shadow-sm">
+      <CardHeader className="border-b bg-gradient-to-r from-primary/[0.08] via-card to-card p-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/15">
+            <Settings2 className="h-4 w-4" />
+          </div>
+          <div>
+            <CardTitle>Schedule settings</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Name and timezone used across this on-call schedule.
+            </p>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-5">
         <ScheduleEditForm
           scheduleId={schedule.id}
           currentName={schedule.name}
