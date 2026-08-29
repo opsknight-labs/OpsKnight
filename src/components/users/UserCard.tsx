@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/shadcn/badge';
 import UserAvatar from '@/components/UserAvatar';
 import OidcLinkingApprovalButton from './OidcLinkingApprovalButton';
@@ -42,6 +44,7 @@ import {
   Briefcase,
   AlertTriangle,
   Trash2,
+  User,
   UserX,
   UserCheck,
   MoreHorizontal,
@@ -111,6 +114,7 @@ export function UserCard({
   onUpdateRole,
   onAddToTeam,
 }: UserCardProps) {
+  const router = useRouter();
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -134,9 +138,7 @@ export function UserCard({
       });
 
       if (!res.ok) {
-        const friendly = toUserFacingError(
-          await errorFromResponse(res, 'Failed to generate link')
-        );
+        const friendly = toUserFacingError(await errorFromResponse(res, 'Failed to generate link'));
         setLinkError(friendly.description || friendly.title);
         return;
       }
@@ -217,20 +219,27 @@ export function UserCard({
           form="bulk-users-form"
           checked={selected}
           onChange={onSelect}
-          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer shrink-0"
         />
 
-        <UserAvatar
-          userId={user.id}
-          avatarUrl={user.avatarUrl}
-          name={user.name}
-          gender={user.gender}
-          size="lg"
-          className="ring-2 ring-background shadow-md transition-transform duration-300 group-hover:scale-105"
-        />
+        <Link href={`/users/${user.id}`} className="shrink-0">
+          <UserAvatar
+            userId={user.id}
+            avatarUrl={user.avatarUrl}
+            name={user.name}
+            gender={user.gender}
+            size="lg"
+            className="ring-2 ring-background shadow-md transition-transform duration-300 group-hover:scale-105"
+          />
+        </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-sm truncate">{user.name}</h3>
+            <Link
+              href={`/users/${user.id}`}
+              className="font-semibold text-sm truncate text-foreground hover:text-primary transition-colors"
+            >
+              {user.name}
+            </Link>
             {isCurrentUser && (
               <Badge variant="neutral" size="xs">
                 You
@@ -353,6 +362,14 @@ export function UserCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={() => router.push(`/users/${user.id}`)}
+                  className="flex items-center gap-2 cursor-pointer font-medium text-primary"
+                >
+                  <User className="h-4 w-4 text-primary" /> View Full Profile
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
 
                 {(user.status === 'ACTIVE' || user.status === 'INVITED') && (
