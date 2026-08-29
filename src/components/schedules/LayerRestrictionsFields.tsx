@@ -117,7 +117,7 @@ export default function LayerRestrictionsFields({
                     type="button"
                     onClick={() => onSelectedDaysChange([1, 2, 3, 4, 5])}
                     disabled={disabled}
-                    className="rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:opacity-50"
+                    className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-[10px] font-semibold text-blue-700 transition-colors hover:bg-blue-500/20 dark:text-blue-300 disabled:opacity-50"
                   >
                     Weekdays
                   </button>
@@ -125,7 +125,7 @@ export default function LayerRestrictionsFields({
                     type="button"
                     onClick={() => onSelectedDaysChange([0, 6])}
                     disabled={disabled}
-                    className="rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:opacity-50"
+                    className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[10px] font-semibold text-violet-700 transition-colors hover:bg-violet-500/20 dark:text-violet-300 disabled:opacity-50"
                   >
                     Weekends
                   </button>
@@ -134,7 +134,7 @@ export default function LayerRestrictionsFields({
                       type="button"
                       onClick={() => onSelectedDaysChange([])}
                       disabled={disabled}
-                      className="rounded-md px-2 py-1 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                      className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/20 dark:text-emerald-300 disabled:opacity-50"
                     >
                       Every day
                     </button>
@@ -214,7 +214,7 @@ export default function LayerRestrictionsFields({
                     onEndHourChange('17');
                   }}
                   disabled={disabled}
-                  className="rounded-md bg-muted px-2.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold text-amber-700 transition-colors hover:bg-amber-500/20 dark:text-amber-300 disabled:opacity-50"
                 >
                   Business hours
                 </button>
@@ -225,7 +225,7 @@ export default function LayerRestrictionsFields({
                     onEndHourChange('6');
                   }}
                   disabled={disabled}
-                  className="rounded-md bg-muted px-2.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 text-[10px] font-semibold text-indigo-700 transition-colors hover:bg-indigo-500/20 dark:text-indigo-300 disabled:opacity-50"
                 >
                   Overnight
                 </button>
@@ -237,7 +237,7 @@ export default function LayerRestrictionsFields({
                       onEndHourChange('');
                     }}
                     disabled={disabled}
-                    className="rounded-md px-2.5 py-1 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                    className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/20 dark:text-emerald-300 disabled:opacity-50"
                   >
                     24 hours
                   </button>
