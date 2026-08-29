@@ -1,16 +1,17 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Card } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { AlertTriangle, CheckCircle2, Clock, CalendarX, Users, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 type ScheduleHealthCheckProps = {
   layers: Array<{
     id: string;
     name: string;
     end: Date | null;
+    restrictions?: { daysOfWeek?: number[]; startHour?: number; endHour?: number } | null;
     users: Array<{ userId: string }>;
   }>;
   shifts: Array<{
@@ -18,6 +19,9 @@ type ScheduleHealthCheckProps = {
     end: string;
   }>;
   timeZone: string;
+  rotationHref: string;
+  overridesHref: string;
+  activeOverrideCount: number;
 };
 
 type HealthIssue = {
@@ -25,12 +29,16 @@ type HealthIssue = {
   title: string;
   description: string;
   icon: typeof AlertTriangle;
+  href?: string;
 };
 
 export default function ScheduleHealthCheck({
   layers,
   shifts,
   timeZone,
+  rotationHref,
+  overridesHref,
+  activeOverrideCount,
 }: ScheduleHealthCheckProps) {
   const issues = useMemo(() => {
     const problems: HealthIssue[] = [];
@@ -43,6 +51,7 @@ export default function ScheduleHealthCheck({
         title: 'No layers configured',
         description: 'Add at least one rotation layer to enable on-call coverage',
         icon: CalendarX,
+        href: rotationHref,
       });
       return problems;
     }
@@ -59,6 +68,7 @@ export default function ScheduleHealthCheck({
             title: `"${layer.name}" has ended`,
             description: 'This layer is no longer active. Remove or extend it.',
             icon: CalendarX,
+            href: `${rotationHref}#layer-${layer.id}`,
           });
         } else if (daysUntilEnd <= 7) {
           problems.push({
@@ -66,6 +76,7 @@ export default function ScheduleHealthCheck({
             title: `"${layer.name}" ends in ${daysUntilEnd} day${daysUntilEnd > 1 ? 's' : ''}`,
             description: 'Consider extending this layer or it will stop providing coverage',
             icon: Clock,
+            href: `${rotationHref}#layer-${layer.id}`,
           });
         }
       }
@@ -79,6 +90,7 @@ export default function ScheduleHealthCheck({
           title: `"${layer.name}" has no responders`,
           description: 'Add team members to this layer for on-call coverage',
           icon: Users,
+          href: `${rotationHref}#layer-${layer.id}`,
         });
       } else if (layer.users.length === 1) {
         problems.push({
@@ -86,9 +98,34 @@ export default function ScheduleHealthCheck({
           title: `"${layer.name}" has only 1 responder`,
           description: 'Consider adding more responders to prevent burnout',
           icon: Users,
+          href: `${rotationHref}#layer-${layer.id}`,
+        });
+      }
+      if (
+        layer.restrictions &&
+        (layer.restrictions.daysOfWeek?.length ||
+          layer.restrictions.startHour != null ||
+          layer.restrictions.endHour != null)
+      ) {
+        problems.push({
+          type: 'info',
+          title: `"${layer.name}" has limited coverage hours`,
+          description: 'This is expected only if another layer covers the remaining hours.',
+          icon: Clock,
+          href: `${rotationHref}#layer-${layer.id}`,
         });
       }
     });
+
+    if (activeOverrideCount > 0) {
+      problems.push({
+        type: 'info',
+        title: `${activeOverrideCount} active override${activeOverrideCount === 1 ? '' : 's'}`,
+        description: 'Review temporary coverage and its scheduled end time.',
+        icon: AlertCircle,
+        href: overridesHref,
+      });
+    }
 
     // Check 4: Coverage gaps in next 7 days
     const next7Days = new Date(now);
@@ -155,6 +192,7 @@ export default function ScheduleHealthCheck({
           title: `No coverage on ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
           description: 'Zero coverage configured for this day',
           icon: AlertTriangle,
+          href: rotationHref,
         });
         break; // Only show first gap
       } else if (
@@ -167,13 +205,14 @@ export default function ScheduleHealthCheck({
           title: `Partial coverage on ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
           description: `Only ${Math.floor(coveredMins / 60)}h ${coveredMins % 60}m covered`,
           icon: AlertCircle,
+          href: rotationHref,
         });
         break; // Only show first gap
       }
     }
 
     return problems;
-  }, [layers, shifts, timeZone]);
+  }, [activeOverrideCount, layers, overridesHref, rotationHref, shifts, timeZone]);
 
   if (issues.length === 0) {
     return (
@@ -214,10 +253,11 @@ export default function ScheduleHealthCheck({
         {issues.slice(0, 3).map((issue, index) => {
           const Icon = issue.icon;
           return (
-            <div
+            <Link
               key={index}
+              href={issue.href || rotationHref}
               className={cn(
-                'flex items-start gap-2 rounded-lg px-3 py-2 border',
+                'flex items-start gap-2 rounded-lg border px-3 py-2 transition-colors hover:brightness-95',
                 issue.type === 'error' && 'bg-red-50/50 border-red-100',
                 issue.type === 'warning' && 'bg-amber-50/50 border-amber-100',
                 issue.type === 'info' && 'bg-blue-50/50 border-blue-100'
@@ -253,7 +293,7 @@ export default function ScheduleHealthCheck({
                   {issue.description}
                 </p>
               </div>
-            </div>
+            </Link>
           );
         })}
         {issues.length > 3 && (

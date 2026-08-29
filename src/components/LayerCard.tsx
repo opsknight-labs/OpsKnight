@@ -234,6 +234,19 @@ export default function LayerCard({
 
   const color = LAYER_COLORS[colorIndex % LAYER_COLORS.length];
   const hasResponders = layer.users.length > 0;
+  const hasCoverageWindow = Boolean(
+    layer.restrictions &&
+    (layer.restrictions.daysOfWeek?.length ||
+      layer.restrictions.startHour != null ||
+      layer.restrictions.endHour != null)
+  );
+  const layerRole = hasCoverageWindow
+    ? 'Business-hours coverage'
+    : layerPosition === 0
+      ? 'Primary escalation'
+      : layerPosition === 1
+        ? 'Fallback coverage'
+        : `Fallback level ${layerPosition}`;
 
   const handleDelete = useCallback(async () => {
     setShowDeleteConfirm(false);
@@ -319,6 +332,7 @@ export default function LayerCard({
   return (
     <>
       <Card
+        id={`layer-${layer.id}`}
         className={cn(
           'overflow-hidden border-l-4 shadow-sm transition-shadow hover:shadow-md',
           color.border
@@ -439,13 +453,7 @@ export default function LayerCard({
             <div
               className={cn('border-t px-3 py-1.5 text-[11px] text-muted-foreground', color.light)}
             >
-              <span className="font-medium text-foreground">
-                {layerPosition === 0
-                  ? 'Primary escalation'
-                  : layerPosition === 1
-                    ? 'Fallback coverage'
-                    : `Fallback level ${layerPosition}`}
-              </span>
+              <span className="font-medium text-foreground">{layerRole}</span>
               {' · '}precedence{' '}
               <span className="font-medium text-foreground">
                 {layerPosition + 1} of {layerCount}

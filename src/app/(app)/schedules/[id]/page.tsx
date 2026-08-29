@@ -8,6 +8,7 @@ import {
   addDaysToDateKey,
   formatDateForInput,
   formatDateKeyInTimeZone,
+  formatDateTime,
   startOfDayFromDateKey,
 } from '@/lib/timezone';
 import { buildScheduleDetailViewModel } from '@/lib/schedules/detail-view-model';
@@ -69,8 +70,9 @@ export default async function ScheduleDetailPage({
   const historyPage = Math.max(1, Number(query?.history ?? 1) || 1);
 
   let capabilities: ScheduleUICapabilities;
+  let currentUser: Awaited<ReturnType<typeof assertCanViewSchedule>>['user'];
   try {
-    ({ capabilities } = await assertCanViewSchedule(id));
+    ({ user: currentUser, capabilities } = await assertCanViewSchedule(id));
   } catch {
     notFound();
   }
@@ -114,70 +116,82 @@ export default async function ScheduleDetailPage({
   const coverageRangeEnd = startOfDayFromDateKey(addDaysToDateKey(todayKey, 95), schedule.timeZone);
 
   const canMutate = capabilities.canManageRotation || capabilities.canCreateOverride;
-  const [users, overridesInRange, currentAndFutureOverrides, historyCount, historyOverrides] =
-    await Promise.all([
-      canMutate
-        ? prisma.user.findMany({
-            where: { status: 'ACTIVE' },
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-              avatarUrl: true,
-              gender: true,
-            },
-            orderBy: [{ name: 'asc' }, { email: 'asc' }],
-          })
-        : Promise.resolve([]),
-      prisma.onCallOverride.findMany({
-        where: {
-          scheduleId: id,
-          start: { lt: coverageRangeEnd },
-          end: { gt: coverageRangeStart },
-          user: { status: 'ACTIVE' },
-        },
-        select: {
-          id: true,
-          start: true,
-          end: true,
-          userId: true,
-          replacesUserId: true,
-          user: { select: { name: true, avatarUrl: true, gender: true } },
-          replacesUser: { select: { name: true } },
-        },
-      }),
-      prisma.onCallOverride.findMany({
-        where: { scheduleId: id, end: { gt: now }, user: { status: 'ACTIVE' } },
-        select: {
-          id: true,
-          start: true,
-          end: true,
-          userId: true,
-          replacesUserId: true,
-          user: { select: { name: true, avatarUrl: true, gender: true } },
-          replacesUser: { select: { name: true } },
-        },
-        orderBy: { start: 'asc' },
-        take: 100,
-      }),
-      prisma.onCallOverride.count({ where: { scheduleId: id, end: { lte: now } } }),
-      prisma.onCallOverride.findMany({
-        where: { scheduleId: id, end: { lte: now } },
-        select: {
-          id: true,
-          start: true,
-          end: true,
-          userId: true,
-          replacesUserId: true,
-          user: { select: { name: true, avatarUrl: true, gender: true } },
-          replacesUser: { select: { name: true } },
-        },
-        orderBy: { end: 'desc' },
-        skip: (historyPage - 1) * historyPageSize,
-        take: historyPageSize,
-      }),
-    ]);
+  const [
+    users,
+    overridesInRange,
+    currentAndFutureOverrides,
+    historyCount,
+    historyOverrides,
+    auditLogs,
+  ] = await Promise.all([
+    canMutate
+      ? prisma.user.findMany({
+          where: { status: 'ACTIVE' },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            avatarUrl: true,
+            gender: true,
+          },
+          orderBy: [{ name: 'asc' }, { email: 'asc' }],
+        })
+      : Promise.resolve([]),
+    prisma.onCallOverride.findMany({
+      where: {
+        scheduleId: id,
+        start: { lt: coverageRangeEnd },
+        end: { gt: coverageRangeStart },
+        user: { status: 'ACTIVE' },
+      },
+      select: {
+        id: true,
+        start: true,
+        end: true,
+        userId: true,
+        replacesUserId: true,
+        user: { select: { name: true, avatarUrl: true, gender: true } },
+        replacesUser: { select: { name: true } },
+      },
+    }),
+    prisma.onCallOverride.findMany({
+      where: { scheduleId: id, end: { gt: now }, user: { status: 'ACTIVE' } },
+      select: {
+        id: true,
+        start: true,
+        end: true,
+        userId: true,
+        replacesUserId: true,
+        user: { select: { name: true, avatarUrl: true, gender: true } },
+        replacesUser: { select: { name: true } },
+      },
+      orderBy: { start: 'asc' },
+      take: 100,
+    }),
+    prisma.onCallOverride.count({ where: { scheduleId: id, end: { lte: now } } }),
+    prisma.onCallOverride.findMany({
+      where: { scheduleId: id, end: { lte: now } },
+      select: {
+        id: true,
+        start: true,
+        end: true,
+        userId: true,
+        replacesUserId: true,
+        user: { select: { name: true, avatarUrl: true, gender: true } },
+        replacesUser: { select: { name: true } },
+      },
+      orderBy: { end: 'desc' },
+      skip: (historyPage - 1) * historyPageSize,
+      take: historyPageSize,
+    }),
+    prisma.auditLog.findMany({
+      where: { entityType: 'SCHEDULE', entityId: id },
+      select: { id: true, action: true, actorName: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    }),
+  ]);
 
   const typedLayers = schedule.layers.map(layer => ({
     ...layer,
@@ -372,6 +386,11 @@ export default async function ScheduleDetailPage({
                 id: layer.id,
                 name: layer.name,
                 end: layer.end ? new Date(layer.end) : null,
+                restrictions: layer.restrictions as {
+                  daysOfWeek?: number[];
+                  startHour?: number;
+                  endHour?: number;
+                } | null,
                 users: layer.users.map(user => ({ userId: user.userId })),
               }))}
               shifts={effectiveBlocks.map(block => ({
@@ -379,12 +398,16 @@ export default async function ScheduleDetailPage({
                 end: block.end.toISOString(),
               }))}
               timeZone={schedule.timeZone}
+              rotationHref={`/schedules/${schedule.id}?tab=rotation`}
+              overridesHref={`/schedules/${schedule.id}?tab=overrides`}
+              activeOverrideCount={activeOverrides.length}
             />
           </CardContent>
         </Card>
         <ScheduleCoveragePreview
           effectiveShifts={effectiveBlocks.map(block => ({
             id: block.id,
+            userId: block.userId,
             userName: block.userName,
             layerName: block.layerName,
             start: block.start,
@@ -393,6 +416,8 @@ export default async function ScheduleDetailPage({
             isAdditiveOverride: block.isAdditiveOverride,
           }))}
           timeZone={schedule.timeZone}
+          viewerId={currentUser.id}
+          viewerTimeZone={currentUser.timeZone || schedule.timeZone}
         />
       </div>
 
@@ -449,6 +474,30 @@ export default async function ScheduleDetailPage({
         }
         calendar={<ScheduleCalendar shifts={calendarShifts} timeZone={schedule.timeZone} />}
       />
+
+      <Card className="overflow-hidden border-border/70 shadow-sm">
+        <CardHeader className="border-b bg-muted/20 py-3.5">
+          <CardTitle className="text-base">Recent schedule changes</CardTitle>
+        </CardHeader>
+        <CardContent className="divide-y p-0">
+          {auditLogs.length === 0 ? (
+            <p className="px-5 py-3 text-sm text-muted-foreground">No recorded changes yet.</p>
+          ) : (
+            auditLogs.map(log => (
+              <div
+                key={log.id}
+                className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm"
+              >
+                <p className="min-w-0 truncate font-medium">{log.action.replaceAll('.', ' ')}</p>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {log.actorName || 'System'} ·{' '}
+                  {formatDateTime(log.createdAt, schedule.timeZone, { format: 'short' })}
+                </span>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 
