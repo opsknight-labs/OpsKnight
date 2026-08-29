@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 vi.mock('@/lib/rbac', () => ({
   assertResponderOrAbove: vi.fn().mockResolvedValue(true),
   assertCanModifyIncident: vi.fn().mockResolvedValue(true),
+  assertCanCreateIncidentForService: vi.fn().mockResolvedValue(true),
   getCurrentUser: vi.fn().mockResolvedValue({ id: 'user-1', name: 'Test User' }),
 }));
 

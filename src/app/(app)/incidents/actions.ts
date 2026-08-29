@@ -4,7 +4,12 @@ import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { revalidatePath } from 'next/cache';
 import { IncidentStatus, IncidentUrgency } from '@prisma/client';
-import { getCurrentUser, assertResponderOrAbove, assertCanModifyIncident } from '@/lib/rbac';
+import {
+  getCurrentUser,
+  assertResponderOrAbove,
+  assertCanModifyIncident,
+  assertCanCreateIncidentForService,
+} from '@/lib/rbac';
 import { getUserFriendlyError } from '@/lib/user-friendly-errors';
 import { logger } from '@/lib/logger';
 
@@ -464,19 +469,81 @@ export async function updateIncidentPriority(id: string, priority: string | null
   revalidatePath('/');
 }
 
-export async function createIncident(formData: FormData) {
+async function validateAndGetServiceId(formData: FormData): Promise<string> {
+  const serviceId = formData.get('serviceId') as string;
+  if (!serviceId || !serviceId.trim()) {
+    throw new Error('Service is required.');
+  }
+  // Fail fast - check authorization before any other processing
   try {
-    await assertResponderOrAbove();
+    await assertCanCreateIncidentForService(serviceId);
   } catch (error) {
     throw new Error(getUserFriendlyError(error));
   }
+  return serviceId;
+}
+
+// ============================================================
+// FIX 2: Validate assigneeId and teamId server-side
+// ============================================================
+async function validateAssigneeAndTeam(
+  tx: any,
+  assigneeId: string | null,
+  teamId: string | null
+): Promise<{ assigneeId: string | null; teamId: string | null; assigneeName: string | null }> {
+  let finalAssigneeId: string | null = null;
+  let finalTeamId: string | null = null;
+  let assigneeName: string | null = null;
+
+  if (assigneeId && assigneeId.trim()) {
+    const assignee = await tx.user.findUnique({
+      where: { id: assigneeId },
+      select: { id: true, name: true, status: true },
+    });
+    if (!assignee) {
+      throw new Error('Assignee not found. The selected user may have been deleted.');
+    }
+    if (assignee.status !== 'ACTIVE') {
+      throw new Error('Cannot assign to inactive user.');
+    }
+    finalAssigneeId = assignee.id;
+    assigneeName = assignee.name;
+  }
+
+  if (teamId && teamId.trim()) {
+    const team = await tx.team.findUnique({
+      where: { id: teamId },
+      select: { id: true, name: true },
+    });
+    if (!team) {
+      throw new Error('Team not found. The selected team may have been deleted.');
+    }
+    finalTeamId = team.id;
+  }
+
+  // Mutual exclusion: either user or team, not both
+  if (finalAssigneeId && finalTeamId) {
+    throw new Error('Cannot assign to both a user and a team. Choose one.');
+  }
+
+  return { assigneeId: finalAssigneeId, teamId: finalTeamId, assigneeName };
+}
+
+export async function createIncident(formData: FormData) {
+  // ============================================================
+  // FIX 1: Validate auth FIRST - fail fast, no info leakage
+  // ============================================================
+  const serviceId = await validateAndGetServiceId(formData);
+
+  // Now parse remaining form data (auth already passed)
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
   const urgency = parseIncidentUrgency(formData.get('urgency') as string);
-  const serviceId = formData.get('serviceId') as string;
   const priority = formData.get('priority') as string | null;
   const dedupKey = formData.get('dedupKey') as string | null;
   const assigneeId = formData.get('assigneeId') as string | null;
+  const teamId = formData.get('teamId') as string | null;
+  const visibility = (formData.get('visibility') as 'PUBLIC' | 'PRIVATE') || 'PUBLIC';
 
   // Extract custom field values (deduplicated by fieldId)
   const customFieldMap = new Map<string, string>();
@@ -491,21 +558,19 @@ export async function createIncident(formData: FormData) {
   }
   const customFields = await prisma.customField.findMany({ orderBy: { order: 'asc' } });
   const knownFieldIds = new Set(customFields.map(field => field.id));
+  // Don't leak field names in error - generic message
   if (Array.from(customFieldMap.keys()).some(fieldId => !knownFieldIds.has(fieldId))) {
-    throw new Error('One or more custom fields are invalid. Refresh the form and try again.');
+    throw new Error('Invalid form data. Please refresh and try again.');
   }
   const { validateCustomFieldValue } = await import('@/lib/custom-fields');
   const customFieldEntries = customFields.flatMap(field => {
     const supplied = customFieldMap.get(field.id) ?? field.defaultValue;
     const validation = validateCustomFieldValue(field, supplied);
-    if (!validation.valid) throw new Error(validation.error || `Invalid ${field.name}`);
+    if (!validation.valid) throw new Error(validation.error || `Invalid value for ${field.name}`);
     return validation.normalizedValue === null
       ? []
       : [{ fieldId: field.id, value: validation.normalizedValue }];
   });
-
-  const teamId = formData.get('teamId') as string | null;
-  const visibility = (formData.get('visibility') as 'PUBLIC' | 'PRIVATE') || 'PUBLIC';
 
   const incident = await runSerializableTransaction(async tx => {
     const currentUser = await getCurrentUser();
@@ -513,14 +578,14 @@ export async function createIncident(formData: FormData) {
       throw new Error('User session not found. Please sign in again.');
     }
 
-    let assigneeName: string | null = null;
-    if (assigneeId && assigneeId.length) {
-      const assignee = await tx.user.findUnique({
-        where: { id: assigneeId },
-        select: { name: true },
-      });
-      assigneeName = assignee?.name || null;
-    }
+    // ============================================================
+    // FIX 2: Validate assignee/team inside transaction
+    // ============================================================
+    const {
+      assigneeId: validatedAssigneeId,
+      teamId: validatedTeamId,
+      assigneeName,
+    } = await validateAssigneeAndTeam(tx, assigneeId, teamId);
 
     // Intelligent Deduplication & Merging Logic
     if (dedupKey && dedupKey.length > 0) {
@@ -609,14 +674,14 @@ export async function createIncident(formData: FormData) {
         visibility,
         priority: priority && priority.length ? priority : null,
         dedupKey: dedupKey && dedupKey.length ? dedupKey : null,
-        assigneeId: assigneeId && assigneeId.length ? assigneeId : null,
-        teamId: !assigneeId && teamId && teamId.length ? teamId : null,
+        assigneeId: validatedAssigneeId,
+        teamId: validatedTeamId,
         events: {
           create: {
             type: 'LEGACY_OTHER',
-            message: assigneeId
+            message: validatedAssigneeId
               ? `Incident created with ${urgency} urgency and assigned to ${assigneeName || 'user'}`
-              : teamId
+              : validatedTeamId
                 ? `Incident created with ${urgency} urgency and assigned to team`
                 : `Incident created with ${urgency} urgency`,
           },

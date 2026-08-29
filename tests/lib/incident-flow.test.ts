@@ -7,6 +7,7 @@ import { processJob } from '@/lib/jobs/queue';
 vi.mock('@/lib/rbac', () => ({
   assertResponderOrAbove: vi.fn().mockResolvedValue(undefined),
   assertCanModifyIncident: vi.fn().mockResolvedValue(undefined),
+  assertCanCreateIncidentForService: vi.fn().mockResolvedValue(undefined),
   getCurrentUser: vi.fn().mockResolvedValue({ id: 'user-1', name: 'Alex' }),
 }));
 

@@ -329,6 +329,47 @@ export async function assertCanModifyService(serviceId: string) {
 }
 
 /**
+ * Check if user can create an incident for a service
+ * Users can create incidents for a service if:
+ * - They are ADMIN (any service)
+ * - They are RESPONDER (any service - they have broad operational scope)
+ * - They are a member of the team that owns the service
+ */
+export async function assertCanCreateIncidentForService(serviceId: string) {
+  const user = await getCurrentUser();
+
+  // Global admins and responders can create incidents for any service
+  if (user.role === 'ADMIN' || user.role === 'RESPONDER') {
+    return user;
+  }
+
+  // Check if user is team member of the service's team
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    include: {
+      team: {
+        include: {
+          members: {
+            where: { userId: user.id },
+          },
+        },
+      },
+    },
+  });
+
+  if (!service) {
+    throw new Error('Service not found');
+  }
+
+  // Check if user is team member
+  if (service.team && service.team.members.length > 0) {
+    return user;
+  }
+
+  throw new Error('Unauthorized. You do not have permission to create incidents for this service.');
+}
+
+/**
  * Check if user can view a schedule
  * Users can view schedules if:
  * - They are ADMIN or RESPONDER
