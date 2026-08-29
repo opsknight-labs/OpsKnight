@@ -1,6 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useMemo, useTransition, type ReactNode } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { CalendarClock, Layers3, Settings2, ShieldPlus } from 'lucide-react';
 
@@ -14,7 +15,7 @@ type ScheduleDetailTabsProps = {
   settings: ReactNode;
 };
 
-function normalizeTab(tab?: string): ScheduleDetailTab {
+function normalizeTab(tab?: string | null): ScheduleDetailTab {
   return tab === 'rotation' || tab === 'overrides' || tab === 'settings' ? tab : 'overview';
 }
 
@@ -25,8 +26,34 @@ export default function ScheduleDetailTabs({
   overrides,
   settings,
 }: ScheduleDetailTabsProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [, startTransition] = useTransition();
+
+  const activeTab = useMemo(() => {
+    const urlTab = searchParams.get('tab');
+    if (urlTab) return normalizeTab(urlTab);
+    return normalizeTab(defaultTab);
+  }, [searchParams, defaultTab]);
+
+  const handleTabChange = (value: string) => {
+    const nextTab = normalizeTab(value);
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextTab === 'overview') {
+      params.delete('tab');
+    } else {
+      params.set('tab', nextTab);
+    }
+    const queryString = params.toString();
+    const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
+    startTransition(() => {
+      router.push(newUrl, { scroll: false });
+    });
+  };
+
   return (
-    <Tabs defaultValue={normalizeTab(defaultTab)} className="space-y-6">
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
       <div className="overflow-x-auto pb-1">
         <TabsList className="grid h-auto min-w-[520px] grid-cols-4 rounded-xl border bg-card/90 p-1.5 shadow-sm">
           <TabsTrigger
