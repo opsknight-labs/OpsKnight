@@ -23,22 +23,16 @@ import {
   Building2,
   Briefcase,
   Globe,
-  Clock,
   Bell,
   MessageSquare,
   Smartphone,
-  Shield,
   ShieldCheck,
   ShieldAlert,
   CheckCircle2,
-  XCircle,
-  AlertTriangle,
   Flame,
   ArrowUpRight,
-  Sparkles,
   Layers,
   Crown,
-  History,
   Copy,
   Check,
 } from 'lucide-react';
@@ -109,7 +103,7 @@ type UserDetailProfile = {
     id: string;
     action: string;
     createdAt: Date | string;
-    details?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    details?: Record<string, unknown> | string | null;
   }>;
 };
 
