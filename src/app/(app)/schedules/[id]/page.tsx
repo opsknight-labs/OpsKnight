@@ -576,55 +576,56 @@ export default async function ScheduleDetailPage({
       <header className="space-y-4">
         <Link
           href="/schedules"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition hover:text-foreground"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to schedules
+          <ArrowLeft className="h-4 w-4" />
+          <span>Schedules</span>
+          <span className="opacity-40">/</span>
+          <span className="font-medium text-foreground">{schedule.name}</span>
         </Link>
-        <div className="relative overflow-hidden rounded-2xl border border-primary/10 bg-gradient-to-br from-card via-card to-primary/[0.05] p-5 shadow-sm md:p-7">
-          <div className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-primary/[0.07] blur-3xl" />
-          <div className="relative flex flex-col justify-between gap-5 md:flex-row md:items-center">
+        <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
+          <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
+          <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/15">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
                 <Calendar className="h-5 w-5" aria-hidden="true" />
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-foreground/75">
                   On-call schedule
                 </p>
-                <h1 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">
+                <h1 className="mt-1 text-2xl font-extrabold tracking-tight md:text-3xl">
                   {schedule.name}
                 </h1>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
                   {viewModel.summary}
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-1.5 rounded-xl border bg-background/65 p-1.5 shadow-sm backdrop-blur-sm">
-              <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-1.5 backdrop-blur-sm lg:min-w-[330px]">
+              <div className="min-w-0 rounded-md px-3 py-2 text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
                   Responders
                 </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold">
-                  <Users className="h-3.5 w-3.5 text-primary" /> {viewModel.participantCount}
+                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground">
+                  <Users className="h-3.5 w-3.5" /> {viewModel.participantCount}
                 </p>
               </div>
-              <div className="min-w-0 rounded-lg border-x px-3 py-2 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="min-w-0 rounded-md border-x border-primary-foreground/20 px-3 py-2 text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
                   Layers
                 </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold">
-                  <Layers3 className="h-3.5 w-3.5 text-primary" /> {viewModel.layerCount}
+                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground">
+                  <Layers3 className="h-3.5 w-3.5" /> {viewModel.layerCount}
                 </p>
               </div>
-              <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="min-w-0 rounded-md px-3 py-2 text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
                   Status
                 </p>
                 <p
-                  className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold ${
-                    viewModel.coverageGap
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-emerald-600 dark:text-emerald-400'
+                  className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground ${
+                    viewModel.coverageGap ? 'text-amber-100' : 'text-emerald-100'
                   }`}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
