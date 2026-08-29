@@ -82,13 +82,15 @@ export default function LayerRestrictionsFields({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold">Layer coverage</p>
+                <p className="text-sm font-semibold">Repeating coverage hours</p>
                 <Badge variant={hasRestrictions ? 'info' : 'secondary'} size="xs">
                   {hasRestrictions ? 'Customized' : '24/7'}
                 </Badge>
               </div>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {restrictionSummary(selectedDays, startHour, endHour)}
+                {hasRestrictions
+                  ? restrictionSummary(selectedDays, startHour, endHour)
+                  : 'Always active (24/7)'}
               </p>
             </div>
             <ChevronDown
@@ -107,7 +109,7 @@ export default function LayerRestrictionsFields({
                 <div>
                   <p className="text-sm font-medium">Active days</p>
                   <p className="text-xs text-muted-foreground">
-                    Choose when this layer should provide coverage.
+                    These hours repeat after the first responder starts.
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -165,9 +167,9 @@ export default function LayerRestrictionsFields({
               <div className="flex items-center gap-2">
                 <Clock3 className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Active hours</p>
+                  <p className="text-sm font-medium">Daily active hours</p>
                   <p className="text-xs text-muted-foreground">
-                    Leave both empty for 24-hour coverage on the selected days.
+                    Leave both empty to keep this layer active all day.
                   </p>
                 </div>
               </div>

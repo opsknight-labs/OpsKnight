@@ -129,13 +129,13 @@ export default function LayerCreateForm({
         </SheetHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
-            <section className="space-y-3 rounded-xl border bg-card p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
                   <UserRound className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold">Layer identity</h3>
+                  <h3 className="text-sm font-semibold">Name this layer</h3>
                   <p className="text-xs text-muted-foreground">
                     Use a name responders will recognize quickly.
                   </p>
@@ -155,14 +155,14 @@ export default function LayerCreateForm({
               </div>
             </section>
 
-            <section className="space-y-3 rounded-xl border bg-card p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <section className="space-y-3 border-t pt-5">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
                   <Users className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-sm font-semibold">Responders</h3>
+                    <h3 className="text-sm font-semibold">Who is in this rotation?</h3>
                     <span className="text-xs text-muted-foreground">
                       Required for active coverage
                     </span>
@@ -248,7 +248,7 @@ export default function LayerCreateForm({
               disabled={isPending}
             />
 
-            <div className="rounded-lg border border-primary/15 bg-primary/[0.04] p-3 text-xs text-muted-foreground">
+            <div className="border-t pt-4 text-xs text-muted-foreground">
               <div className="flex items-center gap-2 font-medium text-foreground">
                 <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
                 Layer summary

@@ -110,13 +110,13 @@ export default function LayerEditSheet({
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
-            <section className="space-y-3 rounded-xl border bg-card p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
                   <UserRound className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold">Layer identity</h3>
+                  <h3 className="text-sm font-semibold">Layer name</h3>
                   <p className="text-xs text-muted-foreground">
                     Keep the name clear for responders and schedule owners.
                   </p>

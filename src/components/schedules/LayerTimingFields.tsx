@@ -179,50 +179,47 @@ export default function LayerTimingFields({
               </div>
             </CollapsibleContent>
           </Collapsible>
-        </div>
-      </section>
-
-      <section className="space-y-4 rounded-xl border bg-card p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold">Schedule period</h3>
-            <p className="text-xs text-muted-foreground">
-              The start time anchors the first responder handoff.
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>First handoff starts</Label>
-            <input
-              aria-label="Layer starts"
-              type="datetime-local"
-              name="start"
-              defaultValue={startDefaultValue}
-              required
-              disabled={disabled}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            {timeZone && <p className="text-xs text-muted-foreground">Times use {timeZone}.</p>}
-          </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              Ends
-              <Badge variant="secondary" size="xs">
-                Optional
-              </Badge>
-            </Label>
-            <input
-              aria-label="Layer ends"
-              type="datetime-local"
-              name="end"
-              defaultValue={endDefaultValue}
-              disabled={disabled}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <h4 className="text-sm font-semibold">Rotation start and end</h4>
+                <p className="text-xs text-muted-foreground">
+                  This sets the first handoff; it does not limit daily coverage hours.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>First responder starts</Label>
+                <input
+                  aria-label="Layer starts"
+                  type="datetime-local"
+                  name="start"
+                  defaultValue={startDefaultValue}
+                  required
+                  disabled={disabled}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                {timeZone && <p className="text-xs text-muted-foreground">Times use {timeZone}.</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-2">
+                  Rotation ends
+                  <Badge variant="secondary" size="xs">
+                    Optional
+                  </Badge>
+                </Label>
+                <input
+                  aria-label="Layer ends"
+                  type="datetime-local"
+                  name="end"
+                  defaultValue={endDefaultValue}
+                  disabled={disabled}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
