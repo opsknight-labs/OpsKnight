@@ -25,17 +25,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/shadcn/tooltip';
-import {
-  Trash2,
-  Edit3,
-  Users,
-  Clock,
-  ArrowUp,
-  ArrowDown,
-  Layers,
-  Info,
-  X,
-} from 'lucide-react';
+import { Trash2, Edit3, Users, Clock, ArrowUp, ArrowDown, Layers, Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { notify } from '@/lib/toast';
 
@@ -135,7 +125,13 @@ function formatRestrictions(restrictions: LayerRestrictions | null | undefined):
 
     if (isWeekdays) badges.push('Mon-Fri');
     else if (isWeekends) badges.push('Sat-Sun');
-    else if (days.length <= 3) badges.push(days.map(d => getDayName(d)).filter(Boolean).join(', '));
+    else if (days.length <= 3)
+      badges.push(
+        days
+          .map(d => getDayName(d))
+          .filter(Boolean)
+          .join(', ')
+      );
     else badges.push(`${days.length} days`);
   }
 
@@ -298,8 +294,7 @@ export default function LayerCard({
                   </Badge>
                 )}
                 {layer.restrictions &&
-                  (layer.restrictions.daysOfWeek?.length ||
-                    layer.restrictions.startHour != null) &&
+                  (layer.restrictions.daysOfWeek?.length || layer.restrictions.startHour != null) &&
                   formatRestrictions(layer.restrictions).map((badge, index) => (
                     <Badge
                       key={index}
@@ -422,14 +417,6 @@ export default function LayerCard({
                       <span className="text-sm font-medium text-slate-700 truncate">
                         {layerUser.user.name}
                       </span>
-                      {index === 0 && (
-                        <Badge
-                          variant="secondary"
-                          className="h-4 px-1.5 text-[8px] bg-emerald-50 text-emerald-600 border-emerald-100 shrink-0"
-                        >
-                          NEXT
-                        </Badge>
-                      )}
                     </div>
                     {canManageSchedules && (
                       <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0">

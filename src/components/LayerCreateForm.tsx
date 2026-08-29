@@ -34,6 +34,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import LayerTimingFields from '@/components/schedules/LayerTimingFields';
 
 type LayerCreateFormProps = {
   scheduleId: string;
@@ -141,10 +142,6 @@ export default function LayerCreateForm({
     });
   };
 
-  const setQuickDuration = (hours: number) => {
-    setRotationDuration(hours.toString());
-  };
-
   if (!canManageSchedules) return null;
 
   return (
@@ -227,132 +224,15 @@ export default function LayerCreateForm({
             <p className="text-[11px] text-slate-500">Give this rotation a descriptive name</p>
           </div>
 
-          {/* Rotation Length */}
-          <div className="space-y-3">
-            <Label className="flex items-center gap-2">
-              <Repeat className="h-4 w-4 text-slate-500" />
-              Rotation Length
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-slate-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-[280px]">
-                    <p>
-                      How often the on-call person changes. After this time, the next person in the
-                      rotation takes over.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </Label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { hours: 12, label: '12 Hours' },
-                { hours: 24, label: 'Daily' },
-                { hours: 168, label: 'Weekly' },
-                { hours: 336, label: '2 Weeks' },
-              ].map(({ hours, label }) => (
-                <Button
-                  key={hours}
-                  type="button"
-                  variant={rotationDuration === hours.toString() ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setQuickDuration(hours)}
-                  className="text-xs"
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                name="rotationLengthHours"
-                value={rotationDuration}
-                onChange={e => setRotationDuration(e.target.value)}
-                required
-                min="1"
-                disabled={isPending}
-                className="w-24 h-10"
-              />
-              <span className="text-sm text-slate-500">hours</span>
-              <span className="text-xs text-slate-400 ml-auto">{rotationInfo}</span>
-            </div>
-          </div>
-
-          {/* Shift Duration */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-slate-500" />
-              Shift Duration
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                Optional
-              </Badge>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-slate-400 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-[280px]">
-                    <p className="font-medium mb-1">Creates gaps in coverage</p>
-                    <p className="text-slate-400">
-                      Example: 12h shift with 24h rotation = person is on-call for 12 hours, then 12
-                      hours off before next person starts.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                name="shiftLengthHours"
-                value={shiftDuration}
-                onChange={e => setShiftDuration(e.target.value)}
-                min="1"
-                placeholder="Same as rotation"
-                disabled={isPending}
-                className="w-40 h-10"
-              />
-              <span className="text-sm text-slate-500">hours</span>
-            </div>
-          </div>
-
-          {/* Start Date */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-slate-500" />
-              Start Date & Time
-            </Label>
-            <input
-              type="datetime-local"
-              name="start"
-              defaultValue={defaultStartDate}
-              required
-              disabled={isPending}
-              className="w-full h-11 text-sm rounded-lg border-2 border-slate-200 bg-white px-3 hover:border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20"
-            />
-            <p className="text-[11px] text-slate-500">First rotation starts at this time</p>
-          </div>
-
-          {/* End Date */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-slate-500" />
-              End Date
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                Optional
-              </Badge>
-            </Label>
-            <input
-              type="datetime-local"
-              name="end"
-              disabled={isPending}
-              className="w-full h-11 text-sm rounded-lg border-2 border-slate-200 bg-white px-3 hover:border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20"
-            />
-            <p className="text-[11px] text-slate-500">Leave empty for ongoing rotation</p>
-          </div>
+          <LayerTimingFields
+            rotationDuration={rotationDuration}
+            onRotationDurationChange={setRotationDuration}
+            shiftDuration={shiftDuration}
+            onShiftDurationChange={setShiftDuration}
+            startDefaultValue={defaultStartDate}
+            disabled={isPending}
+            rotationSummary={rotationInfo}
+          />
 
           {/* Restrictions Section */}
           <div className="space-y-4 p-4 rounded-xl bg-purple-50/50 border border-purple-100">
