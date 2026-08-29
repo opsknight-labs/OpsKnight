@@ -37,6 +37,7 @@ import ScheduleTimezoneNotice from '@/components/ScheduleTimezoneNotice';
 import ScheduleDetailTabs from '@/components/schedules/ScheduleDetailTabs';
 import ScheduleCoverageExplorer from '@/components/schedules/ScheduleCoverageExplorer';
 import ScheduleCoveragePreview from '@/components/schedules/ScheduleCoveragePreview';
+import ScheduleActivityFeed from '@/components/schedules/ScheduleActivityFeed';
 import ScheduleHealthCheck from '@/components/ScheduleHealthCheck';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -187,9 +188,24 @@ export default async function ScheduleDetailPage({
     }),
     prisma.auditLog.findMany({
       where: { entityType: 'SCHEDULE', entityId: id },
-      select: { id: true, action: true, actorName: true, createdAt: true },
+      select: {
+        id: true,
+        action: true,
+        actorName: true,
+        actorEmail: true,
+        details: true,
+        createdAt: true,
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+            gender: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
-      take: 5,
+      take: 6,
     }),
   ]);
 
@@ -481,29 +497,7 @@ export default async function ScheduleDetailPage({
         calendar={<ScheduleCalendar shifts={calendarShifts} timeZone={schedule.timeZone} />}
       />
 
-      <Card className="overflow-hidden border-border/70 shadow-sm">
-        <CardHeader className="border-b bg-muted/20 py-3.5">
-          <CardTitle className="text-base">Recent schedule changes</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y p-0">
-          {auditLogs.length === 0 ? (
-            <p className="px-5 py-3 text-sm text-muted-foreground">No recorded changes yet.</p>
-          ) : (
-            auditLogs.map(log => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm"
-              >
-                <p className="min-w-0 truncate font-medium">{log.action.replaceAll('.', ' ')}</p>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {log.actorName || 'System'} ·{' '}
-                  {formatDateTime(log.createdAt, schedule.timeZone, { format: 'short' })}
-                </span>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+      <ScheduleActivityFeed auditLogs={auditLogs} timeZone={schedule.timeZone} />
     </>
   );
 
