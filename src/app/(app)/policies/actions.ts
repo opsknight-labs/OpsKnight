@@ -5,8 +5,71 @@ import { NotificationChannel } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { assertAdmin } from '@/lib/rbac';
-import { getDefaultActorId, logAudit } from '@/lib/audit';
+import { logAudit } from '@/lib/audit';
 import { assertEscalationPolicyNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
+
+export type PolicyFormState = {
+  error?: string | null;
+  success?: boolean;
+  policyId?: string;
+};
+
+export async function createPolicyAction(
+  _prevState: PolicyFormState,
+  formData: FormData
+): Promise<PolicyFormState> {
+  let currentUser: { id: string } | null = null;
+  try {
+    currentUser = await assertAdmin();
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
+    };
+  }
+
+  const name = (formData.get('name') as string)?.trim() || '';
+  const description = (formData.get('description') as string)?.trim() || null;
+
+  if (!name || name.length < 2) {
+    return { error: 'Policy name must be at least 2 characters long.' };
+  }
+
+  let normalizedName = name;
+  try {
+    normalizedName = await assertEscalationPolicyNameAvailable(name);
+  } catch (error) {
+    if (error instanceof UniqueNameConflictError) {
+      return {
+        error: 'An escalation policy with this name already exists. Please choose a unique name.',
+      };
+    }
+    return { error: error instanceof Error ? error.message : 'Failed to validate policy name.' };
+  }
+
+  try {
+    const policy = await prisma.escalationPolicy.create({
+      data: {
+        name: normalizedName,
+        description,
+      },
+    });
+
+    await logAudit({
+      action: 'escalation_policy.created',
+      entityType: 'ESCALATION_POLICY',
+      entityId: policy.id,
+      actorId: currentUser.id,
+      details: { name: normalizedName, stepCount: 0 },
+    });
+
+    revalidatePath('/policies');
+    return { success: true, policyId: policy.id };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Failed to create escalation policy.',
+    };
+  }
+}
 
 export async function createPolicy(formData: FormData) {
   let currentUser: { id: string } | null = null;
