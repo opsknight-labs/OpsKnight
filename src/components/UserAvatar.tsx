@@ -52,6 +52,10 @@ const sizeClasses: Record<AvatarSize, { container: string; text: string; statusD
 
 function getInitials(name: string | null | undefined): string {
   if (!name) return 'U';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length > 1) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
   return name.slice(0, 2).toUpperCase();
 }
 
@@ -71,14 +75,8 @@ export default function UserAvatar({
   const initials = getInitials(name);
 
   return (
-    <div className="relative shrink-0">
-      <Avatar
-        className={cn(
-          sizeConfig.container,
-          'border border-black/5 dark:border-white/10 shadow-sm',
-          className
-        )}
-      >
+    <div className={cn('relative shrink-0', sizeConfig.container, className)}>
+      <Avatar className="h-full w-full border border-black/5 dark:border-white/10 shadow-xs">
         <AvatarImage
           src={avatarUrl}
           alt={name || 'User avatar'}
@@ -126,14 +124,8 @@ export function DirectUserAvatar({
   const initials = getInitials(name);
 
   return (
-    <div className="relative shrink-0">
-      <Avatar
-        className={cn(
-          sizeConfig.container,
-          'border border-black/5 dark:border-white/10 shadow-sm',
-          className
-        )}
-      >
+    <div className={cn('relative shrink-0', sizeConfig.container, className)}>
+      <Avatar className="h-full w-full border border-black/5 dark:border-white/10 shadow-xs">
         <AvatarImage
           src={avatarUrl}
           alt={name || 'User avatar'}
