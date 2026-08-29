@@ -3,7 +3,7 @@ import { getUserPermissions } from '@/lib/rbac';
 import { createSchedule } from './actions';
 import ScheduleCard from '@/components/ScheduleCard';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
-import { Calendar, AlertCircle, Plus, Layers3, Users, CheckCircle2 } from 'lucide-react';
+import { Calendar, Plus, Layers3, Users, CheckCircle2, Sparkles } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -136,27 +136,58 @@ export default async function SchedulesPage() {
           )}
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar: New Schedule Form & Step Guide */}
         <aside className="space-y-4">
           <ScheduleCreateForm action={createSchedule} canCreate={canManageSchedules} />
 
-          <Card
-            className={
-              hasConfiguredResponders ? 'bg-muted/30' : 'border-amber-500/30 bg-amber-500/5'
-            }
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />
-                {hasConfiguredResponders ? 'Schedule workflow' : 'Next step'}
-              </CardTitle>
+          {/* Clean Guidance Card */}
+          <Card className="overflow-hidden border-border/70 shadow-xs">
+            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+                  <Sparkles className="h-3 w-3" />
+                </div>
+                <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Schedule Lifecycle
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {hasConfiguredResponders
-                  ? 'Open a schedule to check effective coverage, manage rotations, or add a temporary override.'
-                  : 'Create a rotation and assign responders to begin tracking effective coverage.'}
-              </p>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start gap-2.5 text-xs">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  1
+                </span>
+                <div>
+                  <p className="font-semibold text-foreground">Rotation Layers</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    Configure shift lengths (12h, 24h, weekly) and rotation start times.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 text-xs">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  2
+                </span>
+                <div>
+                  <p className="font-semibold text-foreground">Assign Responders</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    Add team members in rotation sequence with easy reordering.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 text-xs">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  3
+                </span>
+                <div>
+                  <p className="font-semibold text-foreground">Coverage Overrides</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    Schedule temporary shift replacements or extra coverage anytime.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </aside>
