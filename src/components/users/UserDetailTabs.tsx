@@ -154,41 +154,43 @@ export default function UserDetailTabs({
   };
 
   return (
-    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-5">
-      {/* Modern High-Contrast Tab Bar */}
-      <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto p-1.5 bg-muted/80 rounded-xl border border-border/60 shadow-xs">
-        <TabsTrigger
-          value="overview"
-          className="flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
-        >
-          <User className="h-3.5 w-3.5" />
-          <span>Profile & Overview</span>
-        </TabsTrigger>
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+      {/* Standard Tab Navigation Bar */}
+      <div className="overflow-x-auto pb-1">
+        <TabsList className="grid h-auto min-w-[520px] grid-cols-4 rounded-xl border bg-card/90 p-1.5 shadow-xs">
+          <TabsTrigger
+            value="overview"
+            className="gap-2 rounded-lg py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+          >
+            <User className="h-4 w-4" />
+            Overview
+          </TabsTrigger>
 
-        <TabsTrigger
-          value="teams"
-          className="flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
-        >
-          <Users className="h-3.5 w-3.5" />
-          <span>Teams ({user.teamMemberships.length})</span>
-        </TabsTrigger>
+          <TabsTrigger
+            value="teams"
+            className="gap-2 rounded-lg py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+          >
+            <Users className="h-4 w-4" />
+            Teams ({user.teamMemberships.length})
+          </TabsTrigger>
 
-        <TabsTrigger
-          value="schedules"
-          className="flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
-        >
-          <Calendar className="h-3.5 w-3.5" />
-          <span>On-Call ({user.layerAssignments.length})</span>
-        </TabsTrigger>
+          <TabsTrigger
+            value="schedules"
+            className="gap-2 rounded-lg py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+          >
+            <Calendar className="h-4 w-4" />
+            On-Call ({user.layerAssignments.length})
+          </TabsTrigger>
 
-        <TabsTrigger
-          value="activity"
-          className="flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
-        >
-          <Activity className="h-3.5 w-3.5" />
-          <span>Activity & Routing</span>
-        </TabsTrigger>
-      </TabsList>
+          <TabsTrigger
+            value="activity"
+            className="gap-2 rounded-lg py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+          >
+            <Activity className="h-4 w-4" />
+            Activity & Routing
+          </TabsTrigger>
+        </TabsList>
+      </div>
 
       {/* TAB 1: Profile & Overview */}
       <TabsContent value="overview" className="space-y-5 pt-1">
