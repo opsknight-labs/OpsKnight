@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/shadcn/select';
 import { Plus, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
-import UserAvatar from '@/components/UserAvatar';
+import PolicyTargetCombobox from '@/components/policies/PolicyTargetCombobox';
 
 type PolicyStepCreateFormProps = {
   policyId: string;
@@ -118,64 +118,41 @@ export default function PolicyStepCreateForm({
           </div>
 
           <div className="space-y-2">
-            <Label>
-              {targetType === 'USER' && 'Select User'}
-              {targetType === 'TEAM' && 'Select Team'}
-              {targetType === 'SCHEDULE' && 'Select Schedule'}
+            <Label className="text-xs font-semibold">
+              {targetType === 'USER' && 'Assignee User (Searchable)'}
+              {targetType === 'TEAM' && 'Target Team (Searchable)'}
+              {targetType === 'SCHEDULE' && 'Target On-Call Schedule (Searchable)'}
             </Label>
 
             {targetType === 'USER' && (
-              <Select name="targetUserId" required disabled={isPending}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Select a user" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[200px]">
-                  {users.map(user => (
-                    <SelectItem key={user.id} value={user.id}>
-                      <div className="flex items-center gap-2">
-                        <UserAvatar
-                          userId={user.id}
-                          name={user.name}
-                          gender={user.gender}
-                          size="xs"
-                        />
-                        {user.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PolicyTargetCombobox
+                targetType="USER"
+                name="targetUserId"
+                users={users}
+                disabled={isPending}
+                required
+              />
             )}
 
             {targetType === 'TEAM' && (
-              <Select name="targetTeamId" required disabled={isPending}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Select a team" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teams.map(team => (
-                    <SelectItem key={team.id} value={team.id}>
-                      {team.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PolicyTargetCombobox
+                targetType="TEAM"
+                name="targetTeamId"
+                teams={teams}
+                disabled={isPending}
+                required
+              />
             )}
 
             {targetType === 'SCHEDULE' && (
-              <div className="space-y-2">
-                <Select name="targetScheduleId" required disabled={isPending}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Select a schedule" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {schedules.map(schedule => (
-                      <SelectItem key={schedule.id} value={schedule.id}>
-                        {schedule.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-1.5">
+                <PolicyTargetCombobox
+                  targetType="SCHEDULE"
+                  name="targetScheduleId"
+                  schedules={schedules}
+                  disabled={isPending}
+                  required
+                />
                 <p className="text-[10px] text-amber-700">
                   Schedule timezone is authoritative. Changing it can shift coverage.
                 </p>

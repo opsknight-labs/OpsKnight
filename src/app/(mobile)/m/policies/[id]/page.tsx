@@ -84,7 +84,7 @@ export default async function MobilePolicyDetailPage({ params }: PageProps) {
                   {stepOrder + 1}
                 </div>
                 <span className="text-sm font-semibold text-[color:var(--text-primary)]">
-                  Wait {rules[0].delayMinutes}m
+                  {rules[0].delayMinutes > 0 ? `Wait ${rules[0].delayMinutes}m` : 'Immediately'}
                 </span>
               </div>
 
