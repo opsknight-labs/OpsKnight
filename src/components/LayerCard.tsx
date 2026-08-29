@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/shadcn/card';
 import UserAvatar from '@/components/UserAvatar';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { Collapsible, CollapsibleContent } from '@/components/ui/shadcn/collapsible';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +36,9 @@ import {
   Layers,
   Info,
   X,
+  CheckCircle2,
+  AlertTriangle,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { notify } from '@/lib/toast';
@@ -53,6 +57,7 @@ type LayerCardProps = {
     end: Date | null;
     rotationLengthHours: number;
     shiftLengthHours?: number | null;
+    priority?: number;
     restrictions?: LayerRestrictions | null;
     users: Array<{
       userId: string;
@@ -73,25 +78,46 @@ type LayerCardProps = {
     direction: 'up' | 'down'
   ) => Promise<{ error?: string } | undefined>;
   removeLayerUser: (layerId: string, userId: string) => Promise<{ error?: string } | undefined>;
+  moveLayerPrecedence: (
+    layerId: string,
+    direction: 'higher' | 'lower'
+  ) => Promise<{ error?: string } | undefined>;
   colorIndex?: number;
+  layerPosition: number;
+  layerCount: number;
 };
 
 const LAYER_COLORS = [
-  { bg: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  {
+    bg: 'bg-blue-500',
+    light: 'bg-blue-500/10',
+    text: 'text-blue-700 dark:text-blue-300',
+    border: 'border-blue-500/40',
+  },
   {
     bg: 'bg-violet-500',
-    light: 'bg-violet-50',
-    text: 'text-violet-700',
-    border: 'border-violet-200',
+    light: 'bg-violet-500/10',
+    text: 'text-violet-700 dark:text-violet-300',
+    border: 'border-violet-500/40',
   },
   {
     bg: 'bg-emerald-500',
-    light: 'bg-emerald-50',
-    text: 'text-emerald-700',
-    border: 'border-emerald-200',
+    light: 'bg-emerald-500/10',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-500/40',
   },
-  { bg: 'bg-amber-500', light: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-  { bg: 'bg-rose-500', light: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+  {
+    bg: 'bg-amber-500',
+    light: 'bg-amber-500/10',
+    text: 'text-amber-700 dark:text-amber-300',
+    border: 'border-amber-500/40',
+  },
+  {
+    bg: 'bg-rose-500',
+    light: 'bg-rose-500/10',
+    text: 'text-rose-700 dark:text-rose-300',
+    border: 'border-rose-500/40',
+  },
 ];
 
 function formatShortTime(date: Date, timeZone: string): string {
@@ -135,7 +161,13 @@ function formatRestrictions(restrictions: LayerRestrictions | null | undefined):
 
     if (isWeekdays) badges.push('Mon-Fri');
     else if (isWeekends) badges.push('Sat-Sun');
-    else if (days.length <= 3) badges.push(days.map(d => getDayName(d)).filter(Boolean).join(', '));
+    else if (days.length <= 3)
+      badges.push(
+        days
+          .map(d => getDayName(d))
+          .filter(Boolean)
+          .join(', ')
+      );
     else badges.push(`${days.length} days`);
   }
 
@@ -161,14 +193,14 @@ function HelpTip({ children }: { children: React.ReactNode }) {
             role="button"
             tabIndex={0}
             aria-label="Layer help"
-            className="inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Info className="h-3 w-3" />
           </span>
         </TooltipTrigger>
         <TooltipContent
           side="right"
-          className="max-w-[250px] text-xs z-50 bg-slate-900 text-white border-slate-800"
+          className="z-50 max-w-[250px] border-border bg-popover text-xs text-popover-foreground"
         >
           {children}
         </TooltipContent>
@@ -188,15 +220,33 @@ export default function LayerCard({
   addLayerUser,
   moveLayerUser,
   removeLayerUser,
+  moveLayerPrecedence,
   colorIndex = 0,
+  layerPosition,
+  layerCount,
 }: LayerCardProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(colorIndex === 0);
 
   const color = LAYER_COLORS[colorIndex % LAYER_COLORS.length];
+  const hasResponders = layer.users.length > 0;
+  const hasCoverageWindow = Boolean(
+    layer.restrictions &&
+    (layer.restrictions.daysOfWeek?.length ||
+      layer.restrictions.startHour != null ||
+      layer.restrictions.endHour != null)
+  );
+  const layerRole = hasCoverageWindow
+    ? 'Business-hours coverage'
+    : layerPosition === 0
+      ? 'Primary escalation'
+      : layerPosition === 1
+        ? 'Fallback coverage'
+        : `Fallback level ${layerPosition}`;
 
   const handleDelete = useCallback(async () => {
     setShowDeleteConfirm(false);
@@ -257,6 +307,21 @@ export default function LayerCard({
     [layer.id, removeLayerUser, showToast, router]
   );
 
+  const handleMovePrecedence = useCallback(
+    (direction: 'higher' | 'lower') => {
+      startTransition(async () => {
+        const result = await moveLayerPrecedence(layer.id, direction);
+        if (result?.error) {
+          showToast(result.error, 'error');
+          return;
+        }
+        showToast('Layer precedence updated', 'success');
+        router.refresh();
+      });
+    },
+    [layer.id, moveLayerPrecedence, router, showToast]
+  );
+
   // Parent pages should already supply schedule-wide assignable users. Keep a
   // local guard as defense in depth so this component never offers a current
   // layer member even if reused elsewhere.
@@ -267,16 +332,20 @@ export default function LayerCard({
   return (
     <>
       <Card
-        className={cn('overflow-hidden border-l-4 border-slate-200/80 shadow-sm', color.border)}
+        id={`layer-${layer.id}`}
+        className={cn(
+          'overflow-hidden border-l-4 shadow-sm transition-shadow hover:shadow-md',
+          color.border
+        )}
       >
-        <div className="flex items-start justify-between gap-3 p-3 bg-slate-50/70">
+        <div className={cn('flex items-start justify-between gap-3 p-3', color.light)}>
           <div className="flex items-start gap-3 min-w-0 flex-1">
-            <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center', color.light)}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/70 shadow-sm ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.08]">
               <Layers className={cn('h-4 w-4', color.text)} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold text-slate-800 truncate">{layer.name}</h3>
+                <h3 className="truncate text-base font-semibold text-foreground">{layer.name}</h3>
                 <HelpTip>
                   <p>
                     <strong>Layer:</strong> A rotation pattern that cycles through responders.
@@ -284,28 +353,27 @@ export default function LayerCard({
                   </p>
                 </HelpTip>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                 <Badge variant="secondary" size="xs">
-                  {layer.rotationLengthHours}h rotation
+                  Changes every {layer.rotationLengthHours}h
                 </Badge>
                 {layer.shiftLengthHours && layer.shiftLengthHours !== layer.rotationLengthHours && (
                   <Badge
                     variant="outline"
                     size="xs"
-                    className="border-orange-200 bg-orange-50 text-orange-700"
+                    className="border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-300"
                   >
-                    {layer.shiftLengthHours}h shift
+                    Active for {layer.shiftLengthHours}h
                   </Badge>
                 )}
                 {layer.restrictions &&
-                  (layer.restrictions.daysOfWeek?.length ||
-                    layer.restrictions.startHour != null) &&
+                  (layer.restrictions.daysOfWeek?.length || layer.restrictions.startHour != null) &&
                   formatRestrictions(layer.restrictions).map((badge, index) => (
                     <Badge
                       key={index}
                       variant="outline"
                       size="xs"
-                      className="border-purple-200 bg-purple-50 text-purple-700"
+                      className="border-purple-500/25 bg-purple-500/10 text-purple-700 dark:text-purple-300"
                     >
                       {badge}
                     </Badge>
@@ -317,17 +385,52 @@ export default function LayerCard({
                     ? ` - ${formatShortTime(new Date(layer.end), timeZone)}`
                     : ' - Open ended'}
                 </span>
+                <Badge variant={hasResponders ? 'success' : 'warning'} size="xs" className="gap-1">
+                  {hasResponders ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : (
+                    <AlertTriangle className="h-3 w-3" />
+                  )}
+                  {hasResponders ? 'Ready' : 'Needs responders'}
+                </Badge>
               </div>
             </div>
           </div>
 
           {canManageSchedules && (
             <div className="flex items-center gap-1">
+              {layerCount > 1 && (
+                <div
+                  className="mr-1 flex items-center rounded-md border bg-background p-0.5"
+                  title="Higher layers take precedence when coverage overlaps"
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleMovePrecedence('higher')}
+                    disabled={layerPosition === 0 || isPending}
+                    className="h-6 w-6"
+                    aria-label={`Move ${layer.name} to higher coverage precedence`}
+                  >
+                    <ArrowUp className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleMovePrecedence('lower')}
+                    disabled={layerPosition === layerCount - 1 || isPending}
+                    className="h-6 w-6"
+                    aria-label={`Move ${layer.name} to lower coverage precedence`}
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsEditOpen(!isEditOpen)}
-                className={cn('h-7 w-7', isEditOpen && 'bg-slate-200')}
+                className={cn('h-7 w-7', isEditOpen && 'bg-muted')}
                 aria-label={`Edit ${layer.name}`}
               >
                 <Edit3 className="h-3 w-3" />
@@ -336,7 +439,7 @@ export default function LayerCard({
                 variant="ghost"
                 size="icon"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="h-7 w-7 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                className="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 aria-label={`Delete ${layer.name}`}
               >
                 <Trash2 className="h-3 w-3" />
@@ -346,6 +449,18 @@ export default function LayerCard({
         </div>
 
         <CardContent className="p-0">
+          {layerCount > 1 && (
+            <div
+              className={cn('border-t px-3 py-1.5 text-[11px] text-muted-foreground', color.light)}
+            >
+              <span className="font-medium text-foreground">{layerRole}</span>
+              {' · '}precedence{' '}
+              <span className="font-medium text-foreground">
+                {layerPosition + 1} of {layerCount}
+              </span>
+              . Higher layers replace lower layers only when both are active.
+            </div>
+          )}
           <LayerEditSheet
             layer={{
               id: layer.id,
@@ -362,114 +477,133 @@ export default function LayerCard({
             onOpenChange={setIsEditOpen}
           />
 
-          <div className="border-t border-slate-100">
-            <div className="flex items-center justify-between gap-3 p-2.5 px-3 bg-slate-50/50">
-              <div className="flex items-center gap-2 text-xs text-slate-600 min-w-0">
+          <Collapsible open={isExpanded} onOpenChange={setIsExpanded} className="border-t">
+            <div className="flex items-center justify-between gap-3 bg-muted/15 px-3 py-2.5">
+              <button
+                type="button"
+                onClick={() => setIsExpanded(value => !value)}
+                aria-expanded={isExpanded}
+                aria-controls={`layer-responders-${layer.id}`}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 <Users className="h-3.5 w-3.5 shrink-0" />
-                <span className="font-medium">Responders</span>
-                <Badge variant="secondary" className="h-4 px-1.5 text-[9px] bg-slate-100">
+                <span className="font-medium text-foreground">Responders</span>
+                <Badge variant="secondary" className="h-4 px-1.5 text-[9px]">
                   {layer.users.length}
                 </Badge>
-              </div>
-              {canManageSchedules && (
-                <ResponderCombobox
-                  users={availableUsers}
-                  onSelect={handleAddUser}
-                  disabled={isPending}
+                {!isExpanded && layer.users.length > 0 && (
+                  <span className="truncate text-[11px]">
+                    {layer.users
+                      .slice(0, 2)
+                      .map(item => item.user.name)
+                      .join(', ')}
+                    {layer.users.length > 2 ? ` +${layer.users.length - 2}` : ''}
+                  </span>
+                )}
+                <ChevronDown
+                  className={cn(
+                    'ml-auto h-4 w-4 shrink-0 transition-transform',
+                    isExpanded && 'rotate-180'
+                  )}
                 />
-              )}
-            </div>
-
-            {layer.users.length === 0 ? (
-              <div className="px-4 py-5 text-center">
-                <Users className="mx-auto mb-1.5 h-5 w-5 text-slate-300" />
-                <p className="text-xs font-medium text-slate-500">No responders in this rotation</p>
+              </button>
+              <div className="ml-2 shrink-0">
                 {canManageSchedules && (
-                  <p className="mt-0.5 text-[10px] text-slate-400">
-                    Add an active responder to start coverage.
-                  </p>
+                  <ResponderCombobox
+                    users={availableUsers}
+                    onSelect={handleAddUser}
+                    disabled={isPending}
+                  />
                 )}
               </div>
-            ) : (
-              <div className="px-3 pb-3 pt-2 space-y-2">
-                {layer.users.map((layerUser, index) => (
-                  <div
-                    key={layerUser.userId}
-                    className={cn(
-                      'flex items-center justify-between py-2 px-2 rounded-md hover:bg-slate-50 group',
-                      isPending && 'opacity-50'
-                    )}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={cn(
-                          'w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0',
-                          index === 0
-                            ? `${color.light} ${color.text}`
-                            : 'bg-slate-100 text-slate-500'
-                        )}
-                      >
-                        {index + 1}
-                      </span>
-                      <UserAvatar
-                        userId={layerUser.userId}
-                        name={layerUser.user.name}
-                        gender={layerUser.user.gender}
-                        avatarUrl={layerUser.user.avatarUrl}
-                        size="xs"
-                        className="h-6 w-6 shrink-0"
-                      />
-                      <span className="text-sm font-medium text-slate-700 truncate">
-                        {layerUser.user.name}
-                      </span>
-                      {index === 0 && (
-                        <Badge
-                          variant="secondary"
-                          className="h-4 px-1.5 text-[8px] bg-emerald-50 text-emerald-600 border-emerald-100 shrink-0"
+            </div>
+
+            <CollapsibleContent id={`layer-responders-${layer.id}`}>
+              {layer.users.length === 0 ? (
+                <div className="px-4 py-5 text-center">
+                  <Users className="mx-auto mb-1.5 h-5 w-5 text-muted-foreground/40" />
+                  <p className="text-xs font-medium text-muted-foreground">
+                    No responders in this rotation
+                  </p>
+                  {canManageSchedules && (
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                      Add an active responder to start coverage.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2 px-3 pb-3 pt-2">
+                  {layer.users.map((layerUser, index) => (
+                    <div
+                      key={layerUser.userId}
+                      className={cn(
+                        'group flex items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-muted/40',
+                        isPending && 'opacity-50'
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className={cn(
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-bold',
+                            index === 0
+                              ? `${color.light} ${color.text}`
+                              : 'bg-muted text-muted-foreground'
+                          )}
                         >
-                          NEXT
-                        </Badge>
+                          {index + 1}
+                        </span>
+                        <UserAvatar
+                          userId={layerUser.userId}
+                          name={layerUser.user.name}
+                          gender={layerUser.user.gender}
+                          avatarUrl={layerUser.user.avatarUrl}
+                          size="xs"
+                          className="h-6 w-6 shrink-0"
+                        />
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {layerUser.user.name}
+                        </span>
+                      </div>
+                      {canManageSchedules && (
+                        <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity group-focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleMoveUser(layerUser.userId, 'up')}
+                            disabled={index === 0 || isPending}
+                            className="h-7 w-7"
+                            aria-label={`Move ${layerUser.user.name} up`}
+                          >
+                            <ArrowUp className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleMoveUser(layerUser.userId, 'down')}
+                            disabled={index === layer.users.length - 1 || isPending}
+                            className="h-7 w-7"
+                            aria-label={`Move ${layerUser.user.name} down`}
+                          >
+                            <ArrowDown className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveUser(layerUser.userId)}
+                            disabled={isPending}
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            aria-label={`Remove ${layerUser.user.name} from ${layer.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
                       )}
                     </div>
-                    {canManageSchedules && (
-                      <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleMoveUser(layerUser.userId, 'up')}
-                          disabled={index === 0 || isPending}
-                          className="h-7 w-7"
-                          aria-label={`Move ${layerUser.user.name} up`}
-                        >
-                          <ArrowUp className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleMoveUser(layerUser.userId, 'down')}
-                          disabled={index === layer.users.length - 1 || isPending}
-                          className="h-7 w-7"
-                          aria-label={`Move ${layerUser.user.name} down`}
-                        >
-                          <ArrowDown className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveUser(layerUser.userId)}
-                          disabled={isPending}
-                          className="h-7 w-7 text-slate-400 hover:text-red-500"
-                          aria-label={`Remove ${layerUser.user.name} from ${layer.name}`}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         </CardContent>
       </Card>
 

@@ -1,8 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import {
-  addScheduleLayerUser,
-  createScheduleOverrideMutation,
-} from '@/lib/schedules/mutations';
+import { addScheduleLayerUser, createScheduleOverrideMutation } from '@/lib/schedules/mutations';
 import { isAppError } from '@/lib/errors';
 import { createTestUser, resetDatabase, testPrisma } from '../helpers/test-db';
 
@@ -110,9 +107,7 @@ describeIfRealDB('schedule mutation concurrency', () => {
       code: 'SCHEDULE_RESPONDER_NOT_ACTIVE',
     });
 
-    expect(
-      await testPrisma.onCallLayerUser.count({ where: { userId: disabled.id } })
-    ).toBe(0);
+    expect(await testPrisma.onCallLayerUser.count({ where: { userId: disabled.id } })).toBe(0);
   });
 
   it('rejects an inactive replacement responder before persisting an override', async () => {
@@ -147,6 +142,8 @@ describeIfRealDB('schedule mutation concurrency', () => {
       createTestUser({ email: 'override-taylor@example.com', name: 'Override Taylor' }),
     ]);
 
+    await addScheduleLayerUser(schedule.layers[0].id, replaced.id);
+
     const results = await Promise.allSettled([
       createScheduleOverrideMutation({
         scheduleId: schedule.id,
@@ -172,5 +169,23 @@ describeIfRealDB('schedule mutation concurrency', () => {
         where: { scheduleId: schedule.id, replacesUserId: replaced.id },
       })
     ).toBe(1);
+  });
+
+  it('rejects a replacement target that is not assigned to the schedule', async () => {
+    const [schedule, replacement, unrelated] = await Promise.all([
+      createScheduleWithTwoLayers(),
+      createTestUser({ email: 'valid-replacement@example.com', name: 'Valid Replacement' }),
+      createTestUser({ email: 'unrelated-target@example.com', name: 'Unrelated Target' }),
+    ]);
+
+    await expect(
+      createScheduleOverrideMutation({
+        scheduleId: schedule.id,
+        userId: replacement.id,
+        replacesUserId: unrelated.id,
+        start: new Date('2026-08-30T00:00:00.000Z'),
+        end: new Date('2026-08-30T12:00:00.000Z'),
+      })
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
   });
 });

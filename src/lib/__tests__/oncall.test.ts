@@ -82,6 +82,66 @@ describe('buildScheduleBlocks', () => {
     expect(final.some(block => block.source === 'rotation')).toBe(true);
   });
 
+  it('clips additive overrides to the requested coverage window', () => {
+    const blocks = buildScheduleBlocks(
+      [],
+      [
+        {
+          id: 'wide-override',
+          userId: 'user-c',
+          user: { name: 'Charlie' },
+          start: hoursFromBase(0),
+          end: hoursFromBase(72),
+          replacesUserId: null,
+        },
+      ],
+      hoursFromBase(24),
+      hoursFromBase(48)
+    );
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].start).toEqual(hoursFromBase(24));
+    expect(blocks[0].end).toEqual(hoursFromBase(48));
+  });
+
+  it('preserves layer precedence when replacement overrides overlap', () => {
+    const primary = { ...layer, id: 'z-primary', users: [layer.users[0]] };
+    const fallback = { ...layer, id: 'a-fallback', users: [layer.users[1]] };
+    const blocks = buildScheduleBlocks(
+      [primary, fallback],
+      [
+        {
+          id: 'primary-override',
+          userId: 'primary-cover',
+          user: { name: 'Primary Cover' },
+          start: hoursFromBase(0),
+          end: hoursFromBase(24),
+          replacesUserId: 'user-a',
+        },
+        {
+          id: 'fallback-override',
+          userId: 'fallback-cover',
+          user: { name: 'Fallback Cover' },
+          start: hoursFromBase(0),
+          end: hoursFromBase(24),
+          replacesUserId: 'user-b',
+        },
+      ],
+      hoursFromBase(0),
+      hoursFromBase(24)
+    );
+
+    const final = getFinalScheduleBlocks(
+      blocks,
+      new Map([
+        ['z-primary', 10],
+        ['a-fallback', 0],
+      ])
+    );
+    expect(final).toHaveLength(1);
+    expect(final[0].userId).toBe('primary-cover');
+  });
+
   it('creates gaps when shiftLengthHours is less than rotationLengthHours', () => {
     const layerWithShiftRestriction = {
       ...layer,

@@ -3,7 +3,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import type { Role } from '@prisma/client';
+import type { Prisma, Role } from '@prisma/client';
 import { AppError } from '@/lib/errors';
 import {
   AuthorizationError,
@@ -15,6 +15,10 @@ import {
 } from '@/lib/authorization';
 import { resolveUserActor } from '@/lib/authorization-actors';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
+import {
+  deriveScheduleUICapabilities,
+  type ScheduleUICapabilities,
+} from '@/lib/schedules/capabilities';
 
 function appError(
   code:
@@ -395,12 +399,46 @@ export async function assertCanModifyService(serviceId: string) {
 
 export async function assertCanViewSchedule(scheduleId: string) {
   const user = await getCurrentUser();
-  if (hasCapability(user.role as AppRole, CAPABILITIES.SCHEDULE_READ_ALL)) return user;
+  const capabilities = await resolveScheduleUICapabilities(scheduleId, user);
+  if (capabilities.canViewSchedule) return { user, capabilities };
 
+  throw appError(
+    'SCHEDULE_ACCESS_DENIED',
+    'Unauthorized. You do not have permission to view this schedule.',
+    { scheduleId, userId: user.id }
+  );
+}
+
+export async function getViewableScheduleWhere(): Promise<Prisma.OnCallScheduleWhereInput> {
+  const user = await getCurrentUser();
+  if (hasCapability(user.role as AppRole, CAPABILITIES.SCHEDULE_READ_ALL)) return {};
+
+  return {
+    OR: [
+      { layers: { some: { users: { some: { userId: user.id } } } } },
+      { overrides: { some: { OR: [{ userId: user.id }, { replacesUserId: user.id }] } } },
+      {
+        escalationRules: {
+          some: {
+            policy: {
+              services: {
+                some: { team: { members: { some: { userId: user.id, role: 'OWNER' } } } },
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
+}
+
+async function resolveScheduleUICapabilities(
+  scheduleId: string,
+  user: Awaited<ReturnType<typeof getCurrentUser>>
+): Promise<ScheduleUICapabilities> {
   const schedule = await prisma.onCallSchedule.findUnique({
     where: { id: scheduleId },
     select: {
-      id: true,
       layers: {
         select: {
           users: { where: { userId: user.id }, select: { id: true } },
@@ -409,6 +447,20 @@ export async function assertCanViewSchedule(scheduleId: string) {
       overrides: {
         where: { OR: [{ userId: user.id }, { replacesUserId: user.id }] },
         select: { id: true },
+        take: 1,
+      },
+      escalationRules: {
+        where: {
+          policy: {
+            services: {
+              some: {
+                team: { members: { some: { userId: user.id, role: 'OWNER' } } },
+              },
+            },
+          },
+        },
+        select: { id: true },
+        take: 1,
       },
     },
   });
@@ -417,12 +469,31 @@ export async function assertCanViewSchedule(scheduleId: string) {
     throw appError('SCHEDULE_NOT_FOUND', 'Schedule not found', { scheduleId });
   }
 
-  const hasLayerAccess = schedule.layers.some(layer => layer.users.length > 0);
-  if (hasLayerAccess || schedule.overrides.length > 0) return user;
+  const isAssignedMember = schedule.layers.some(layer => layer.users.length > 0);
+  const isOwningTeamLead = schedule.escalationRules.length > 0;
+  return deriveScheduleUICapabilities({
+    capabilities: getRoleCapabilities(user.role as AppRole),
+    isAdmin: user.role === 'ADMIN',
+    isAssignedMember,
+    isOwningTeamLead,
+    hasScopedView: isAssignedMember || schedule.overrides.length > 0,
+  });
+}
 
-  throw appError(
-    'SCHEDULE_ACCESS_DENIED',
-    'Unauthorized. You do not have permission to view this schedule.',
-    { scheduleId, userId: user.id }
-  );
+export async function getScheduleUICapabilities(scheduleId: string) {
+  const user = await getCurrentUser();
+  return resolveScheduleUICapabilities(scheduleId, user);
+}
+
+export async function assertCanCreateScheduleOverride(scheduleId: string) {
+  const user = await getCurrentUser();
+  const capabilities = await resolveScheduleUICapabilities(scheduleId, user);
+  if (capabilities.canCreateOverride) return user;
+
+  throw new AppError({
+    code: 'SCHEDULE_OVERRIDE_ACCESS_DENIED',
+    userMessage:
+      'Unauthorized. Only an administrator, owning team lead, or assigned schedule member can create overrides.',
+    details: { scheduleId, userId: user.id },
+  });
 }

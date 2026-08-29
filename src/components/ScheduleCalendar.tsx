@@ -16,10 +16,9 @@ import {
   type CalendarShiftIdentity,
 } from '@/lib/schedules/calendar';
 import UserAvatar from '@/components/UserAvatar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { ChevronLeft, ChevronRight, Calendar, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type CalendarShift = CalendarShiftIdentity & {
@@ -96,21 +95,17 @@ function buildCalendar(baseDate: Date, shifts: CalendarShift[], timeZone: string
 
 function CalendarSkeleton() {
   return (
-    <Card className="shadow-sm" aria-busy="true" aria-label="Loading on-call calendar">
-      <CardHeader className="pb-3 border-b">
-        <div className="h-6 w-44 rounded bg-muted animate-pulse" />
-        <div className="h-4 w-72 max-w-full rounded bg-muted animate-pulse" />
-      </CardHeader>
-      <CardContent className="p-6 overflow-x-auto">
-        <div className="grid grid-cols-7 gap-1 min-w-[700px]">
-          {Array.from({ length: 35 }, (_, index) => (
-            <div key={index} className="min-h-24 rounded-lg border bg-muted/20 p-2">
-              <div className="h-3 w-4 rounded bg-muted animate-pulse" />
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="p-6 space-y-4" aria-busy="true" aria-label="Loading on-call calendar">
+      <div className="flex justify-between items-center">
+        <div className="h-6 w-36 bg-muted animate-pulse rounded" />
+        <div className="h-6 w-20 bg-muted animate-pulse rounded" />
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {Array.from({ length: 35 }).map((_, i) => (
+          <div key={i} className="h-24 bg-muted/40 animate-pulse rounded-lg" />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -120,7 +115,7 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
     getClientSnapshot,
     getServerSnapshot
   );
-  const [cursor, setCursor] = useState(() => new Date());
+  const [cursor, setCursor] = useState(() => startOfDayInTimeZone(new Date(), timeZone));
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
 
   const monthLabel = useMemo(
@@ -177,67 +172,66 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
   if (!isHydrated) return <CalendarSkeleton />;
 
   return (
-    <Card className="shadow-sm">
-      <CardHeader className="pb-3 border-b">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="space-y-1">
-            <CardTitle className="text-xl font-semibold flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              On-call Calendar
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              One entry per responder and layer each day. Overnight coverage is grouped into a
-              single entry.
-            </p>
+    <div className="flex flex-col">
+      {/* Sub-toolbar: Navigation & Month Info */}
+      <div className="flex flex-col gap-3 border-b bg-muted/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        {/* Left: Navigation & Month */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center rounded-lg border bg-background p-0.5 shadow-2xs">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-md"
+              onClick={handlePrev}
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2.5 text-xs font-medium rounded-md"
+              onClick={handleToday}
+            >
+              Today
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-md"
+              onClick={handleNext}
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
-          <Badge variant="secondary" size="xs" className="gap-1.5 shrink-0">
-            <Clock className="h-3 w-3" />
-            {monthLabel}
+          <span className="text-sm font-semibold text-foreground">{monthLabel}</span>
+        </div>
+
+        {/* Right: Timezone Badge */}
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" size="xs" className="text-muted-foreground">
+            {timeZone}
           </Badge>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="p-6">
-        <div className="flex justify-end gap-2 mb-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handlePrev}
-            className="h-8 px-3"
-            aria-label="Previous month"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Prev
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleToday} className="h-8 px-3">
-            Today
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleNext}
-            className="h-8 px-3"
-            aria-label="Next month"
-          >
-            Next
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-
+      {/* Calendar Grid Container */}
+      <div className="p-4 sm:p-6">
         <div className="overflow-x-auto pb-1">
           <div className="space-y-2 min-w-[700px]">
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-1 mb-1">
               {weekdayLabels.map(day => (
                 <div
                   key={day}
-                  className="text-center text-sm font-semibold text-muted-foreground py-2"
+                  className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground py-1.5"
                 >
                   {day}
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1.5">
               {calendarCells.map(cell => {
                 const dateKey = formatDateKeyInTimeZone(cell.date, timeZone);
                 const isToday = dateKey === todayKey;
@@ -253,14 +247,14 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
                       'min-h-24 p-2 rounded-lg border transition-all',
                       cell.inMonth
                         ? 'bg-card border-border hover:border-primary/30'
-                        : 'bg-muted/30 border-transparent',
-                      isToday && 'ring-2 ring-primary bg-primary/5'
+                        : 'bg-muted/30 border-transparent opacity-60',
+                      isToday && 'ring-2 ring-primary bg-primary/5 opacity-100'
                     )}
                   >
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between mb-1.5">
                       <span
                         className={cn(
-                          'text-sm font-medium',
+                          'text-xs font-medium',
                           !cell.inMonth && 'text-muted-foreground',
                           isToday && 'text-primary font-bold'
                         )}
@@ -276,7 +270,7 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
                     </div>
 
                     {cell.shifts.length > 0 && (
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         {(showAll ? cell.shifts : preview).map(shift => {
                           const windows = shift.segments.map(segment => {
                             const startTime = formatDateTime(new Date(segment.start), timeZone, {
@@ -321,7 +315,7 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
                                 <Badge
                                   variant="outline"
                                   size="xs"
-                                  className="mt-1 h-4 border-primary/30"
+                                  className="mt-1 h-3.5 text-[9px] px-1 border-primary/30"
                                 >
                                   {shift.segments.length} windows
                                 </Badge>
@@ -329,7 +323,7 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
                                 <Badge
                                   variant="outline"
                                   size="xs"
-                                  className="mt-1 h-4 border-primary/30"
+                                  className="mt-1 h-3.5 text-[9px] px-1 border-primary/30"
                                 >
                                   overnight
                                 </Badge>
@@ -346,7 +340,7 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
                               event.stopPropagation();
                               toggleExpand(dateKey);
                             }}
-                            className="w-full h-6 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 gap-1"
+                            className="w-full h-5 text-[11px] font-medium text-primary hover:text-primary hover:bg-primary/10 gap-0.5 p-0"
                             aria-label={`Show ${remaining} more on-call entries for ${dateKey}`}
                           >
                             <ChevronDown className="h-3 w-3" />+{remaining} more
@@ -360,7 +354,7 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
                               event.stopPropagation();
                               toggleExpand(dateKey);
                             }}
-                            className="w-full h-6 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 gap-1"
+                            className="w-full h-5 text-[11px] font-medium text-primary hover:text-primary hover:bg-primary/10 gap-0.5 p-0"
                             aria-label={`Show fewer on-call entries for ${dateKey}`}
                           >
                             <ChevronUp className="h-3 w-3" />
@@ -375,7 +369,7 @@ export default function ScheduleCalendar({ shifts, timeZone }: ScheduleCalendarP
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

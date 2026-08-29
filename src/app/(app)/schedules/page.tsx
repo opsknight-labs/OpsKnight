@@ -1,9 +1,9 @@
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { getUserPermissions, getViewableScheduleWhere } from '@/lib/rbac';
 import { createSchedule } from './actions';
-import ScheduleCard from '@/components/ScheduleCard';
+import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
-import { Calendar, AlertCircle, Plus } from 'lucide-react';
+import { Calendar, Plus, Layers3, Users, CheckCircle2, Sparkles } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -11,18 +11,28 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/shadcn/card';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
-import { cn } from '@/lib/utils';
 
 export default async function SchedulesPage() {
+  const [permissions, scheduleWhere] = await Promise.all([
+    getUserPermissions(),
+    getViewableScheduleWhere(),
+  ]);
   const schedules = await prisma.onCallSchedule.findMany({
+    where: scheduleWhere,
     include: {
       layers: {
         include: {
           users: {
             select: {
               userId: true,
+              user: {
+                select: {
+                  name: true,
+                  avatarUrl: true,
+                  gender: true,
+                },
+              },
             },
           },
         },
@@ -32,61 +42,76 @@ export default async function SchedulesPage() {
   });
 
   const totalLayers = schedules.reduce((sum, schedule) => sum + schedule.layers.length, 0);
+  const totalUniqueResponders = new Set(
+    schedules.flatMap(s => s.layers.flatMap(l => l.users.map(u => u.userId)))
+  ).size;
   const hasConfiguredResponders = schedules.some(schedule =>
     schedule.layers.some(layer => layer.users.length > 0)
   );
 
-  const permissions = await getUserPermissions();
   const canManageSchedules = permissions.isAdminOrResponder;
 
   return (
-    <main className="w-full p-4 md:p-6 space-y-6 [zoom:0.8]">
-      {/* Header with Glassmorphic Stats */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg p-4 md:p-6 shadow-lg">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2 text-white">
-              <Calendar className="h-6 w-6 md:h-8 md:w-8" />
-              Schedules
-            </h1>
-            <p className="text-white/80 text-xs md:text-sm max-w-2xl">
-              Design rotations, monitor coverage, and keep responders aligned
-            </p>
+    <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
+      {/* Header with Glassmorphic Stats Capsule matching Schedule Detail Page */}
+      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
+        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
+        <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+              <Calendar className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-foreground/75">
+                On-call schedules
+              </p>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary-foreground md:text-3xl">
+                Schedules
+              </h1>
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
+                Design rotations, monitor coverage, and keep responders aligned across all services.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 w-full lg:w-auto">
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold">{schedules.length}</div>
-                <div className="text-[10px] md:text-xs opacity-90">Schedules</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold">{totalLayers}</div>
-                <div className="text-[10px] md:text-xs opacity-90">Total Layers</div>
-              </CardContent>
-            </Card>
-            <Card
-              className={cn(
-                'bg-white/10 border-white/20 backdrop-blur',
-                hasConfiguredResponders ? 'text-green-100' : 'text-red-100'
-              )}
-            >
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold">
-                  {hasConfiguredResponders ? 'Configured' : 'Needs setup'}
-                </div>
-                <div className="text-[10px] md:text-xs opacity-90">Responder assignment</div>
-              </CardContent>
-            </Card>
+          {/* Glassmorphic Stats Capsule */}
+          <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-1.5 backdrop-blur-sm lg:min-w-[330px]">
+            <div className="min-w-0 rounded-md px-3 py-2 text-center">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+                Responders
+              </p>
+              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground">
+                <Users className="h-3.5 w-3.5" /> {totalUniqueResponders}
+              </p>
+            </div>
+            <div className="min-w-0 rounded-md border-x border-primary-foreground/20 px-3 py-2 text-center">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+                Layers
+              </p>
+              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground">
+                <Layers3 className="h-3.5 w-3.5" /> {totalLayers}
+              </p>
+            </div>
+            <div className="min-w-0 rounded-md px-3 py-2 text-center">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+                Status
+              </p>
+              <p
+                className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground ${
+                  hasConfiguredResponders ? 'text-emerald-100' : 'text-amber-100'
+                }`}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {hasConfiguredResponders ? 'Configured' : 'Needs setup'}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
-        {/* Schedules List */}
+        {/* Schedules List with Live Search & Filters */}
         <div className="xl:col-span-3 space-y-4">
           {schedules.length === 0 ? (
             <Card className="border-dashed">
@@ -107,29 +132,62 @@ export default async function SchedulesPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-4">
-              {schedules.map((schedule, index) => (
-                <ScheduleCard key={schedule.id} schedule={schedule} index={index} />
-              ))}
-            </div>
+            <ScheduleDirectoryList schedules={schedules} />
           )}
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar: New Schedule Form & Step Guide */}
         <aside className="space-y-4">
           <ScheduleCreateForm action={createSchedule} canCreate={canManageSchedules} />
 
-          <Card className="bg-amber-50 border-amber-200">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2 text-amber-900">
-                <AlertCircle className="h-4 w-4" />
-                Next Steps
-              </CardTitle>
+          {/* Clean Guidance Card */}
+          <Card className="overflow-hidden border-border/70 shadow-xs">
+            <CardHeader className="border-b bg-muted/20 px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+                  <Sparkles className="h-3 w-3" />
+                </div>
+                <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Schedule Lifecycle
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-amber-800 leading-relaxed">
-                Set a rotation and assign your responders to start tracking coverage
-              </p>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start gap-2.5 text-xs">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  1
+                </span>
+                <div>
+                  <p className="font-semibold text-foreground">Rotation Layers</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    Configure shift lengths (12h, 24h, weekly) and rotation start times.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 text-xs">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  2
+                </span>
+                <div>
+                  <p className="font-semibold text-foreground">Assign Responders</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    Add team members in rotation sequence with easy reordering.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 text-xs">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  3
+                </span>
+                <div>
+                  <p className="font-semibold text-foreground">Coverage Overrides</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    Schedule temporary shift replacements or extra coverage anytime.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </aside>

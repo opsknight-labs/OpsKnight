@@ -10,7 +10,7 @@ type LayerUser = {
   position: number;
 };
 
-type LayerRestrictions = {
+export type LayerRestrictions = {
   daysOfWeek?: number[]; // 0=Sun, 1=Mon, ..., 6=Sat
   startHour?: number; // 0-23
   endHour?: number; // 0-23
@@ -93,17 +93,24 @@ function getDayHourInTimeZone(date: Date, timeZone: string): { day: number; hour
   const weekday = parts.find(p => p.type === 'weekday')?.value ?? 'Sun';
   const hour = Number(parts.find(p => p.type === 'hour')?.value ?? '0') % 24;
 
-  const dayMap: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
+  const day =
+    weekday === 'Sun'
+      ? 0
+      : weekday === 'Mon'
+        ? 1
+        : weekday === 'Tue'
+          ? 2
+          : weekday === 'Wed'
+            ? 3
+            : weekday === 'Thu'
+              ? 4
+              : weekday === 'Fri'
+                ? 5
+                : weekday === 'Sat'
+                  ? 6
+                  : 0;
 
-  return { day: dayMap[weekday] ?? 0, hour };
+  return { day, hour };
 }
 
 function getLocalDateTimeParts(date: Date, timeZone: string): Required<LocalDateTimeParts> {
@@ -187,8 +194,7 @@ function addCalendarHoursInTimeZone(base: Date, hours: number, timeZone: string)
 function isCalendarAnchoredRotation(rotationLengthHours: number): boolean {
   if (!Number.isInteger(rotationLengthHours) || rotationLengthHours <= 0) return false;
   return (
-    rotationLengthHours % 24 === 0 ||
-    (rotationLengthHours < 24 && 24 % rotationLengthHours === 0)
+    rotationLengthHours % 24 === 0 || (rotationLengthHours < 24 && 24 % rotationLengthHours === 0)
   );
 }
 
@@ -204,11 +210,7 @@ function getRotationStartAtIndex(
   if (index === 0) return new Date(layerStart);
 
   if (rotationLengthHours % 24 === 0) {
-    return addCalendarDaysInTimeZone(
-      layerStart,
-      index * (rotationLengthHours / 24),
-      timeZone
-    );
+    return addCalendarDaysInTimeZone(layerStart, index * (rotationLengthHours / 24), timeZone);
   }
   if (isCalendarAnchoredRotation(rotationLengthHours)) {
     return addCalendarHoursInTimeZone(layerStart, index * rotationLengthHours, timeZone);
@@ -304,7 +306,12 @@ function generateLayerBlocks(
   const shiftMs = shiftHours * 60 * 60 * 1000;
   const calendarAnchoredRotation = isCalendarAnchoredRotation(layer.rotationLengthHours);
 
-  if (rotationMs <= 0 || shiftMs <= 0 || !Number.isFinite(rotationMs) || !Number.isFinite(shiftMs)) {
+  if (
+    rotationMs <= 0 ||
+    shiftMs <= 0 ||
+    !Number.isFinite(rotationMs) ||
+    !Number.isFinite(shiftMs)
+  ) {
     return [];
   }
 
@@ -439,22 +446,32 @@ function generateLayerBlocks(
   }
 
   if (index - initialIndex >= maxIterations) {
-    throw new RangeError('Requested on-call schedule window exceeds the safe rotation expansion limit.');
+    throw new RangeError(
+      'Requested on-call schedule window exceeds the safe rotation expansion limit.'
+    );
   }
 
   return blocks;
 }
 
-function applyOverrides(blocks: OnCallBlock[], overrides: OverrideInput[]): OnCallBlock[] {
+function applyOverrides(
+  blocks: OnCallBlock[],
+  overrides: OverrideInput[],
+  windowStart: Date,
+  windowEnd: Date
+): OnCallBlock[] {
   const sortedOverrides = [...overrides].sort((a, b) => a.start.getTime() - b.start.getTime());
   let result = [...blocks];
 
   for (const override of sortedOverrides) {
     if (!override.replacesUserId) {
+      const start = override.start > windowStart ? override.start : windowStart;
+      const end = override.end < windowEnd ? override.end : windowEnd;
+      if (start >= end) continue;
       result.push({
         id: `override-${override.id}`,
-        start: override.start,
-        end: override.end,
+        start,
+        end,
         userId: override.userId,
         userName: override.user.name,
         userAvatar: override.user.avatarUrl,
@@ -519,7 +536,7 @@ export function buildScheduleBlocks(
   const blocks = layers.flatMap(layer =>
     generateLayerBlocks(layer, windowStart, windowEnd, timeZone)
   );
-  return applyOverrides(blocks, overrides);
+  return applyOverrides(blocks, overrides, windowStart, windowEnd);
 }
 
 /**
@@ -545,6 +562,7 @@ export function getFinalScheduleBlocks(
     type: 'start' | 'end';
     block: OnCallBlock;
     priority: number;
+    layerPriority: number;
   };
 
   const events: TimelineEvent[] = [];
@@ -554,8 +572,21 @@ export function getFinalScheduleBlocks(
       block.source === 'override'
         ? Number.MAX_SAFE_INTEGER
         : (layerPriority.get(block.layerId) ?? 0);
-    events.push({ time: block.start, type: 'start', block, priority });
-    events.push({ time: block.end, type: 'end', block, priority });
+    const baseLayerPriority = layerPriority.get(block.layerId) ?? 0;
+    events.push({
+      time: block.start,
+      type: 'start',
+      block,
+      priority,
+      layerPriority: baseLayerPriority,
+    });
+    events.push({
+      time: block.end,
+      type: 'end',
+      block,
+      priority,
+      layerPriority: baseLayerPriority,
+    });
   }
 
   // Sort events by time, then by type (ends before starts at same time)
@@ -569,7 +600,10 @@ export function getFinalScheduleBlocks(
   });
 
   const result: OnCallBlock[] = [];
-  const activeBlocks = new Map<string, { block: OnCallBlock; priority: number }>();
+  const activeBlocks = new Map<
+    string,
+    { block: OnCallBlock; priority: number; layerPriority: number }
+  >();
   let lastTime: Date | null = null;
   let lastWinner: OnCallBlock | null = null;
 
@@ -587,7 +621,11 @@ export function getFinalScheduleBlocks(
 
     // Update active blocks
     if (event.type === 'start') {
-      activeBlocks.set(event.block.id, { block: event.block, priority: event.priority });
+      activeBlocks.set(event.block.id, {
+        block: event.block,
+        priority: event.priority,
+        layerPriority: event.layerPriority,
+      });
     } else {
       activeBlocks.delete(event.block.id);
     }
@@ -595,15 +633,25 @@ export function getFinalScheduleBlocks(
     // Find the winner (highest priority active block). Tie-breaker: lexical layerId for determinism.
     let winner: OnCallBlock | null = null;
     let maxPriority = -Infinity;
-    for (const { block, priority } of activeBlocks.values()) {
-      if (priority > maxPriority) {
+    let maxLayerPriority = -Infinity;
+    for (const { block, priority, layerPriority: baseLayerPriority } of activeBlocks.values()) {
+      if (
+        priority > maxPriority ||
+        (priority === maxPriority && baseLayerPriority > maxLayerPriority)
+      ) {
         maxPriority = priority;
+        maxLayerPriority = baseLayerPriority;
         winner = block;
         continue;
       }
-      if (priority === maxPriority && winner && block.layerId < winner.layerId) {
+      if (
+        priority === maxPriority &&
+        baseLayerPriority === maxLayerPriority &&
+        winner &&
+        block.layerId < winner.layerId
+      ) {
         winner = block;
-      } else if (priority === maxPriority && !winner) {
+      } else if (priority === maxPriority && baseLayerPriority === maxLayerPriority && !winner) {
         winner = block;
       }
     }

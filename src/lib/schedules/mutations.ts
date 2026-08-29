@@ -281,6 +281,27 @@ export async function createScheduleOverrideMutation(input: CreateScheduleOverri
       await requireActiveResponder(tx, input.userId, 'userId');
       if (input.replacesUserId) {
         await requireActiveResponder(tx, input.replacesUserId, 'replacesUserId');
+        const assignment = await tx.onCallLayerUser.findFirst({
+          where: {
+            userId: input.replacesUserId,
+            layer: { scheduleId: input.scheduleId },
+          },
+          select: { id: true },
+        });
+        if (!assignment) {
+          throw new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: 'The responder being replaced is not assigned to this schedule.',
+            action: 'Choose a responder from one of this schedule’s rotation layers.',
+            fields: [
+              {
+                field: 'replacesUserId',
+                code: 'not_assigned_to_schedule',
+                message: 'Choose a responder assigned to this schedule.',
+              },
+            ],
+          });
+        }
       }
 
       const exactDuplicate = await tx.onCallOverride.findFirst({

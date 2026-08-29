@@ -83,12 +83,6 @@ async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Prom
       (layer as { priority?: number }).priority ?? 100 - ((layer as { order?: number }).order ?? 0),
     ])
   );
-  const activeUserIds = new Set(
-    schedule.layers.flatMap(layer =>
-      layer.users.filter(member => member.user.status === 'ACTIVE').map(member => member.userId)
-    )
-  );
-
   const blocks = buildScheduleBlocks(
     schedule.layers.map(layer => {
       const rotHours =
@@ -110,15 +104,17 @@ async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Prom
         priority:
           (layer as { priority?: number }).priority ??
           100 - ((layer as { order?: number }).order ?? 0),
-        users: layer.users.map((u, index) => ({
-          userId: u.userId,
-          position: (u as { position?: number }).position ?? index,
-          user: {
-            name: u.user?.name || '',
-            avatarUrl: u.user?.avatarUrl,
-            gender: u.user?.gender,
-          },
-        })),
+        users: layer.users
+          .filter(u => u.user.status === 'ACTIVE')
+          .map((u, index) => ({
+            userId: u.userId,
+            position: (u as { position?: number }).position ?? index,
+            user: {
+              name: u.user?.name || '',
+              avatarUrl: u.user?.avatarUrl,
+              gender: u.user?.gender,
+            },
+          })),
       };
     }),
     schedule.overrides.map(o => ({
@@ -142,10 +138,7 @@ async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Prom
 
   // Find blocks active at atTime
   const activeBlocks = finalBlocks.filter(
-    b =>
-      b.start.getTime() <= atTime.getTime() &&
-      b.end.getTime() > atTime.getTime() &&
-      (b.source === 'override' || activeUserIds.has(b.userId))
+    b => b.start.getTime() <= atTime.getTime() && b.end.getTime() > atTime.getTime()
   );
 
   const userIds = new Set<string>();
@@ -315,14 +308,15 @@ export async function executeEscalation(
 
   if (currentStepIndex >= policySteps.length) {
     // Check how many times this escalation has looped
-    const loopEventsCount = typeof prisma.incidentEvent?.count === 'function'
-      ? await prisma.incidentEvent.count({
-          where: {
-            incidentId,
-            message: { contains: 'Looping back to Step 1' },
-          },
-        })
-      : 0;
+    const loopEventsCount =
+      typeof prisma.incidentEvent?.count === 'function'
+        ? await prisma.incidentEvent.count({
+            where: {
+              incidentId,
+              message: { contains: 'Looping back to Step 1' },
+            },
+          })
+        : 0;
 
     const MAX_LOOPS = 2; // Allow up to 2 retry cycles
     if (loopEventsCount < MAX_LOOPS && incident.status === 'OPEN' && !incident.acknowledgedAt) {

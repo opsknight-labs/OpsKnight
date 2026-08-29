@@ -2,7 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { assertAdminOrResponder, getCurrentUser } from '@/lib/rbac';
+import { assertAdminOrResponder, assertCanCreateScheduleOverride } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { createInAppNotifications, getScheduleUserIds } from '@/lib/in-app-notifications';
 import { parseDateTimeInTimeZone, isValidTimeZone } from '@/lib/timezone';
@@ -19,6 +19,7 @@ import {
   moveScheduleLayerUser,
   removeScheduleLayerUser,
 } from '@/lib/schedules/mutations';
+import { runSerializableTransaction } from '@/lib/db-utils';
 
 type ScheduleFormState = ScheduleActionState;
 
@@ -28,44 +29,6 @@ async function getScheduleName(scheduleId: string) {
     select: { name: true },
   });
   return schedule?.name || 'On-call schedule';
-}
-
-async function assertCanCreateScheduleOverride(scheduleId: string) {
-  const user = await getCurrentUser();
-  if (user.role === 'ADMIN') return user;
-
-  const accessible = await prisma.onCallSchedule.findFirst({
-    where: {
-      id: scheduleId,
-      OR: [
-        { layers: { some: { users: { some: { userId: user.id } } } } },
-        {
-          escalationRules: {
-            some: {
-              policy: {
-                services: {
-                  some: {
-                    team: { members: { some: { userId: user.id, role: 'OWNER' } } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      ],
-    },
-    select: { id: true },
-  });
-
-  if (!accessible) {
-    throw new AppError({
-      code: 'SCHEDULE_OVERRIDE_ACCESS_DENIED',
-      userMessage:
-        'Unauthorized. Only an administrator, owning team lead, or assigned schedule member can create overrides.',
-      details: { scheduleId, userId: user.id },
-    });
-  }
-  return user;
 }
 
 async function notifyScheduleMembers(
@@ -237,6 +200,14 @@ export async function createLayer(
   const rotationLength = Number(formData.get('rotationLengthHours'));
   const shiftLengthValue = formData.get('shiftLengthHours');
   const shiftLength = shiftLengthValue ? Number(shiftLengthValue) : null;
+  const responderIds = Array.from(
+    new Set(
+      formData
+        .getAll('responderIds')
+        .map(value => String(value).trim())
+        .filter(Boolean)
+    )
+  );
 
   const daysOfWeek = formData.getAll('daysOfWeek').map(Number);
   const restrictStartHour = formData.get('restrictStartHour');
@@ -306,16 +277,56 @@ export async function createLayer(
   }
 
   try {
-    const layer = await prisma.onCallLayer.create({
-      data: {
-        scheduleId,
-        name,
-        start: startDate,
-        end: endDate && !Number.isNaN(endDate.getTime()) ? endDate : null,
-        rotationLengthHours: rotationLength,
-        shiftLengthHours: shiftLength,
-        restrictions,
-      },
+    const layer = await runSerializableTransaction(async tx => {
+      const lowestPriorityLayer = await tx.onCallLayer.findFirst({
+        where: { scheduleId },
+        orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
+        select: { priority: true },
+      });
+
+      if (responderIds.length > 0) {
+        const activeResponders = await tx.user.count({
+          where: { id: { in: responderIds }, status: 'ACTIVE' },
+        });
+        if (activeResponders !== responderIds.length) {
+          throw new AppError({
+            code: 'SCHEDULE_RESPONDER_NOT_ACTIVE',
+            userMessage: 'One or more selected responders are no longer active.',
+            action: 'Choose active responders and try again.',
+          });
+        }
+
+        const existingAssignment = await tx.onCallLayerUser.findFirst({
+          where: { userId: { in: responderIds }, layer: { scheduleId } },
+          select: { user: { select: { name: true } }, layer: { select: { name: true } } },
+        });
+        if (existingAssignment) {
+          throw new AppError({
+            code: 'SCHEDULE_LAYER_USER_DUPLICATE',
+            userMessage: `${existingAssignment.user.name} is already assigned to "${existingAssignment.layer.name}" in this schedule.`,
+            action: 'Remove them from that layer before adding them here.',
+          });
+        }
+      }
+
+      return tx.onCallLayer.create({
+        data: {
+          scheduleId,
+          name,
+          start: startDate,
+          end: endDate && !Number.isNaN(endDate.getTime()) ? endDate : null,
+          rotationLengthHours: rotationLength,
+          shiftLengthHours: shiftLength,
+          restrictions,
+          // New layers are appended as fallback coverage. This keeps the visual
+          // order and the effective precedence identical from the first save.
+          priority: lowestPriorityLayer ? lowestPriorityLayer.priority - 1 : 0,
+          users:
+            responderIds.length > 0
+              ? { create: responderIds.map((userId, index) => ({ userId, position: index + 1 })) }
+              : undefined,
+        },
+      });
     });
     await logAudit({
       action: 'schedule.layer.created',
@@ -555,6 +566,75 @@ export async function updateLayer(
     revalidatePath('/schedules');
   } catch (error) {
     return scheduleActionError(error, 'Failed to update layer.');
+  }
+}
+
+export async function moveLayerPrecedence(
+  layerId: string,
+  direction: 'higher' | 'lower'
+): Promise<ScheduleFormState | undefined> {
+  let actorId: string;
+  try {
+    actorId = (await assertAdminOrResponder()).id;
+  } catch (error) {
+    return scheduleActionError(error, 'Unauthorized. Admin or Responder access required.');
+  }
+
+  try {
+    const result = await prisma.$transaction(async tx => {
+      const layer = await tx.onCallLayer.findUnique({
+        where: { id: layerId },
+        select: { scheduleId: true },
+      });
+      if (!layer) {
+        throw new AppError({
+          code: 'SCHEDULE_LAYER_NOT_FOUND',
+          userMessage: 'Layer not found.',
+          details: { layerId },
+        });
+      }
+
+      const layers = await tx.onCallLayer.findMany({
+        where: { scheduleId: layer.scheduleId },
+        select: { id: true },
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      });
+      const currentIndex = layers.findIndex(candidate => candidate.id === layerId);
+      const targetIndex = direction === 'higher' ? currentIndex - 1 : currentIndex + 1;
+      if (currentIndex < 0 || targetIndex < 0 || targetIndex >= layers.length) {
+        throw new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'This layer cannot be moved further in that direction.',
+          details: { layerId, direction },
+        });
+      }
+
+      const reordered = [...layers];
+      const [movedLayer] = reordered.splice(currentIndex, 1);
+      reordered.splice(targetIndex, 0, movedLayer);
+      await Promise.all(
+        reordered.map((candidate, index) =>
+          tx.onCallLayer.update({
+            where: { id: candidate.id },
+            data: { priority: reordered.length - index },
+          })
+        )
+      );
+
+      return { scheduleId: layer.scheduleId };
+    });
+
+    await logAudit({
+      action: 'schedule.layer.precedence_updated',
+      entityType: 'SCHEDULE',
+      entityId: result.scheduleId,
+      actorId,
+      details: { layerId, direction },
+    });
+    revalidatePath(`/schedules/${result.scheduleId}`);
+    revalidatePath('/schedules');
+  } catch (error) {
+    return scheduleActionError(error, 'Failed to update layer precedence.');
   }
 }
 
