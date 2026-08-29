@@ -145,6 +145,7 @@ export default function LayerEditSheet({
               endDefaultValue={layer.end ? formatDateForInput(layer.end, timeZone) : ''}
               disabled={isPending}
               rotationSummary={rotationInfo}
+              timeZone={timeZone}
             />
 
             <LayerRestrictionsFields

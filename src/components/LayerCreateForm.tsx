@@ -15,7 +15,8 @@ import {
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
-import { ArrowRight, Layers, Loader2, Plus, UserRound } from 'lucide-react';
+import { CheckCircle2, Layers, Loader2, Plus, UserRound, Users, X } from 'lucide-react';
+import ResponderCombobox, { type ResponderOption } from './ResponderCombobox';
 import LayerTimingFields from '@/components/schedules/LayerTimingFields';
 import LayerRestrictionsFields from '@/components/schedules/LayerRestrictionsFields';
 
@@ -24,6 +25,8 @@ type LayerCreateFormProps = {
   canManageSchedules: boolean;
   createLayer: (scheduleId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   defaultStartDate: string;
+  timeZone: string;
+  users: ResponderOption[];
 };
 
 export default function LayerCreateForm({
@@ -31,6 +34,8 @@ export default function LayerCreateForm({
   canManageSchedules,
   createLayer,
   defaultStartDate,
+  timeZone,
+  users,
 }: LayerCreateFormProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -43,6 +48,8 @@ export default function LayerCreateForm({
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [startHour, setStartHour] = useState<string>('');
   const [endHour, setEndHour] = useState<string>('');
+  const [selectedResponderIds, setSelectedResponderIds] = useState<string[]>([]);
+  const [configureRespondersLater, setConfigureRespondersLater] = useState(false);
 
   // Computed preview info
   const rotationInfo = useMemo(() => {
@@ -65,6 +72,7 @@ export default function LayerCreateForm({
     selectedDays.forEach(day => {
       formData.append('daysOfWeek', day.toString());
     });
+    selectedResponderIds.forEach(userId => formData.append('responderIds', userId));
 
     startTransition(async () => {
       try {
@@ -79,6 +87,8 @@ export default function LayerCreateForm({
           setStartHour('');
           setEndHour('');
           setShiftDuration('');
+          setSelectedResponderIds([]);
+          setConfigureRespondersLater(false);
           router.refresh();
         }
       } catch {
@@ -88,6 +98,14 @@ export default function LayerCreateForm({
   };
 
   if (!canManageSchedules) return null;
+
+  const selectedResponders = users.filter(user => selectedResponderIds.includes(user.id));
+  const availableResponders = users.filter(user => !selectedResponderIds.includes(user.id));
+  const canSubmit = selectedResponderIds.length > 0 || configureRespondersLater;
+  const coverageSummary =
+    selectedDays.length === 0 && !startHour && !endHour
+      ? '24/7 coverage'
+      : 'Custom coverage window';
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -105,9 +123,7 @@ export default function LayerCreateForm({
             </div>
             <div>
               <SheetTitle className="text-lg font-semibold">Add rotation layer</SheetTitle>
-              <SheetDescription>
-                Start with the essentials. Coverage limits are optional.
-              </SheetDescription>
+              <SheetDescription>Set up a clear, active handoff layer.</SheetDescription>
             </div>
           </div>
         </SheetHeader>
@@ -139,6 +155,78 @@ export default function LayerCreateForm({
               </div>
             </section>
 
+            <section className="space-y-3 rounded-xl border bg-card p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <Users className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-semibold">Responders</h3>
+                    <span className="text-xs text-muted-foreground">
+                      Required for active coverage
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Add people in the order they should take this layer.
+                  </p>
+                </div>
+                <ResponderCombobox
+                  users={availableResponders}
+                  onSelect={userId => {
+                    setSelectedResponderIds(current => [...current, userId]);
+                    setConfigureRespondersLater(false);
+                  }}
+                  disabled={isPending}
+                  label="Add responder"
+                />
+              </div>
+              {selectedResponders.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedResponders.map((responder, index) => (
+                    <div
+                      key={responder.id}
+                      className="flex items-center justify-between rounded-lg bg-muted/[0.45] px-3 py-2"
+                    >
+                      <span className="min-w-0 truncate text-sm font-medium">
+                        <span className="mr-2 text-xs text-muted-foreground">{index + 1}.</span>
+                        {responder.name}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() =>
+                          setSelectedResponderIds(current =>
+                            current.filter(userId => userId !== responder.id)
+                          )
+                        }
+                        aria-label={`Remove ${responder.name}`}
+                        disabled={isPending}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={configureRespondersLater}
+                    onChange={event => setConfigureRespondersLater(event.target.checked)}
+                    disabled={isPending}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Configure responders later. This saves the layer without coverage until people
+                    are added.
+                  </span>
+                </label>
+              )}
+            </section>
+
             <LayerTimingFields
               rotationDuration={rotationDuration}
               onRotationDurationChange={setRotationDuration}
@@ -147,6 +235,7 @@ export default function LayerCreateForm({
               startDefaultValue={defaultStartDate}
               disabled={isPending}
               rotationSummary={rotationInfo}
+              timeZone={timeZone}
             />
 
             <LayerRestrictionsFields
@@ -159,10 +248,17 @@ export default function LayerCreateForm({
               disabled={isPending}
             />
 
-            <div className="flex items-start gap-2 rounded-lg border border-primary/15 bg-primary/[0.04] p-3 text-xs text-muted-foreground">
-              <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-              After creating the layer, add responders and arrange their handoff order from the
-              layer card.
+            <div className="rounded-lg border border-primary/15 bg-primary/[0.04] p-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 font-medium text-foreground">
+                <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                Layer summary
+              </div>
+              <p className="mt-1">
+                {selectedResponderIds.length > 0
+                  ? `${selectedResponderIds.length} responder${selectedResponderIds.length === 1 ? '' : 's'} will rotate ${rotationInfo?.toLowerCase() ?? ''}.`
+                  : 'This layer will be saved without responders.'}{' '}
+                {coverageSummary}.
+              </p>
             </div>
           </div>
 
@@ -176,14 +272,20 @@ export default function LayerCreateForm({
             >
               Cancel
             </Button>
-            <Button type="submit" className="h-10 flex-1 shadow-sm" disabled={isPending}>
+            <Button
+              type="submit"
+              className="h-10 flex-1 shadow-sm"
+              disabled={isPending || !canSubmit}
+            >
               {isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Creating…
                 </>
+              ) : selectedResponderIds.length > 0 ? (
+                'Create active layer'
               ) : (
-                'Create layer'
+                'Save layer setup'
               )}
             </Button>
           </div>

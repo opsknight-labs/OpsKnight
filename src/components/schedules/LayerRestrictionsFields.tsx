@@ -82,9 +82,9 @@ export default function LayerRestrictionsFields({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold">Coverage window</p>
+                <p className="text-sm font-semibold">Layer coverage</p>
                 <Badge variant={hasRestrictions ? 'info' : 'secondary'} size="xs">
-                  {hasRestrictions ? 'Customized' : 'Optional'}
+                  {hasRestrictions ? 'Customized' : '24/7'}
                 </Badge>
               </div>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -107,7 +107,7 @@ export default function LayerRestrictionsFields({
                 <div>
                   <p className="text-sm font-medium">Active days</p>
                   <p className="text-xs text-muted-foreground">
-                    Leave all unselected for every day.
+                    Choose when this layer should provide coverage.
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -167,7 +167,7 @@ export default function LayerRestrictionsFields({
                 <div>
                   <p className="text-sm font-medium">Active hours</p>
                   <p className="text-xs text-muted-foreground">
-                    Leave both empty for continuous coverage.
+                    Leave both empty for 24-hour coverage on the selected days.
                   </p>
                 </div>
               </div>

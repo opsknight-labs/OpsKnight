@@ -57,6 +57,8 @@ export default function ScheduleActionsPanel({
           canManageSchedules={canManageSchedules}
           createLayer={createLayer}
           defaultStartDate={defaultStartDate}
+          timeZone={scheduleTimeZone}
+          users={users}
         />
 
         <OverrideForm

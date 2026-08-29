@@ -18,6 +18,7 @@ import {
   deleteLayer,
   deleteOverride,
   moveLayerUser,
+  moveLayerPrecedence,
   removeLayerUser,
   updateLayer,
   updateSchedule,
@@ -394,6 +395,8 @@ export default async function ScheduleDetailPage({
               canManageSchedules={capabilities.canManageRotation}
               createLayer={createLayer}
               defaultStartDate={formatDateForInput(now, schedule.timeZone)}
+              timeZone={schedule.timeZone}
+              users={assignableUsers}
             />
           )}
         </div>
@@ -471,6 +474,7 @@ export default async function ScheduleDetailPage({
                 end: layer.end ? new Date(layer.end) : null,
                 rotationLengthHours: layer.rotationLengthHours,
                 shiftLengthHours: layer.shiftLengthHours,
+                priority: layer.priority,
                 restrictions: layer.restrictions as {
                   daysOfWeek?: number[];
                   startHour?: number;
@@ -487,7 +491,10 @@ export default async function ScheduleDetailPage({
               addLayerUser={addLayerUser}
               moveLayerUser={moveLayerUser}
               removeLayerUser={removeLayerUser}
+              moveLayerPrecedence={moveLayerPrecedence}
               colorIndex={index}
+              layerPosition={index}
+              layerCount={schedule.layers.length}
             />
           ))}
         </div>

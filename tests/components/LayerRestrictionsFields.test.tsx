@@ -20,7 +20,7 @@ describe('LayerRestrictionsFields', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /coverage window/i });
+    const trigger = screen.getByRole('button', { name: /layer coverage/i });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(trigger);
@@ -47,7 +47,7 @@ describe('LayerRestrictionsFields', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: /coverage window/i })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /layer coverage/i })).toHaveAttribute(
       'aria-expanded',
       'true'
     );

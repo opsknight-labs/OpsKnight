@@ -57,6 +57,7 @@ type LayerCardProps = {
     end: Date | null;
     rotationLengthHours: number;
     shiftLengthHours?: number | null;
+    priority?: number;
     restrictions?: LayerRestrictions | null;
     users: Array<{
       userId: string;
@@ -77,7 +78,13 @@ type LayerCardProps = {
     direction: 'up' | 'down'
   ) => Promise<{ error?: string } | undefined>;
   removeLayerUser: (layerId: string, userId: string) => Promise<{ error?: string } | undefined>;
+  moveLayerPrecedence: (
+    layerId: string,
+    direction: 'higher' | 'lower'
+  ) => Promise<{ error?: string } | undefined>;
   colorIndex?: number;
+  layerPosition: number;
+  layerCount: number;
 };
 
 const LAYER_COLORS = [
@@ -213,7 +220,10 @@ export default function LayerCard({
   addLayerUser,
   moveLayerUser,
   removeLayerUser,
+  moveLayerPrecedence,
   colorIndex = 0,
+  layerPosition,
+  layerCount,
 }: LayerCardProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -284,6 +294,21 @@ export default function LayerCard({
     [layer.id, removeLayerUser, showToast, router]
   );
 
+  const handleMovePrecedence = useCallback(
+    (direction: 'higher' | 'lower') => {
+      startTransition(async () => {
+        const result = await moveLayerPrecedence(layer.id, direction);
+        if (result?.error) {
+          showToast(result.error, 'error');
+          return;
+        }
+        showToast('Layer precedence updated', 'success');
+        router.refresh();
+      });
+    },
+    [layer.id, moveLayerPrecedence, router, showToast]
+  );
+
   // Parent pages should already supply schedule-wide assignable users. Keep a
   // local guard as defense in depth so this component never offers a current
   // layer member even if reused elsewhere.
@@ -316,7 +341,7 @@ export default function LayerCard({
               </div>
               <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                 <Badge variant="secondary" size="xs">
-                  {layer.rotationLengthHours}h rotation
+                  Changes every {layer.rotationLengthHours}h
                 </Badge>
                 {layer.shiftLengthHours && layer.shiftLengthHours !== layer.rotationLengthHours && (
                   <Badge
@@ -324,7 +349,7 @@ export default function LayerCard({
                     size="xs"
                     className="border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-300"
                   >
-                    {layer.shiftLengthHours}h shift
+                    Active for {layer.shiftLengthHours}h
                   </Badge>
                 )}
                 {layer.restrictions &&
@@ -360,6 +385,33 @@ export default function LayerCard({
 
           {canManageSchedules && (
             <div className="flex items-center gap-1">
+              {layerCount > 1 && (
+                <div
+                  className="mr-1 flex items-center rounded-md border bg-background p-0.5"
+                  title="Higher layers take precedence when coverage overlaps"
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleMovePrecedence('higher')}
+                    disabled={layerPosition === 0 || isPending}
+                    className="h-6 w-6"
+                    aria-label={`Move ${layer.name} to higher coverage precedence`}
+                  >
+                    <ArrowUp className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleMovePrecedence('lower')}
+                    disabled={layerPosition === layerCount - 1 || isPending}
+                    className="h-6 w-6"
+                    aria-label={`Move ${layer.name} to lower coverage precedence`}
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -383,6 +435,15 @@ export default function LayerCard({
         </div>
 
         <CardContent className="p-0">
+          {layerCount > 1 && (
+            <div className="border-t bg-muted/[0.08] px-4 py-2 text-[11px] text-muted-foreground">
+              Coverage precedence:{' '}
+              <span className="font-medium text-foreground">
+                {layerPosition + 1} of {layerCount}
+              </span>
+              . Higher layers replace lower layers only when both are active.
+            </div>
+          )}
           <LayerEditSheet
             layer={{
               id: layer.id,

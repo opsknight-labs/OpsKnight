@@ -5,6 +5,11 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/shadcn/collapsible';
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -21,6 +26,7 @@ type LayerTimingFieldsProps = {
   endDefaultValue?: string;
   disabled?: boolean;
   rotationSummary?: string | null;
+  timeZone?: string;
 };
 
 const rotationPresets = [
@@ -39,7 +45,16 @@ export default function LayerTimingFields({
   endDefaultValue = '',
   disabled = false,
   rotationSummary,
+  timeZone,
 }: LayerTimingFieldsProps) {
+  const shiftHours = Number(shiftDuration);
+  const rotationHours = Number(rotationDuration);
+  const leavesLayerInactive =
+    Number.isFinite(shiftHours) &&
+    Number.isFinite(rotationHours) &&
+    shiftHours > 0 &&
+    rotationHours > shiftHours;
+
   return (
     <>
       <section className="overflow-hidden rounded-xl border bg-card">
@@ -49,7 +64,7 @@ export default function LayerTimingFields({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold">Handoff pattern</h3>
+              <h3 className="text-sm font-semibold">Responder handoff</h3>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -64,14 +79,14 @@ export default function LayerTimingFields({
               </TooltipProvider>
             </div>
             <p className="text-xs text-muted-foreground">
-              Choose how frequently this layer moves to the next responder.
+              Choose when the next responder takes over this layer.
             </p>
           </div>
         </div>
 
         <div className="space-y-5 p-4">
           <div className="space-y-3">
-            <Label>Handoff frequency</Label>
+            <Label>Change responder every</Label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {rotationPresets.map(({ hours, label }) => (
                 <Button
@@ -89,7 +104,7 @@ export default function LayerTimingFields({
             </div>
             <div className="flex items-center gap-2">
               <Input
-                aria-label="Custom handoff frequency"
+                aria-label="Custom responder handoff interval"
                 type="number"
                 name="rotationLengthHours"
                 value={rotationDuration}
@@ -106,32 +121,52 @@ export default function LayerTimingFields({
             </div>
           </div>
 
-          <div className="space-y-2 border-t pt-4">
-            <Label className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              Coverage duration
-              <Badge variant="secondary" size="xs">
-                Advanced
-              </Badge>
-            </Label>
-            <div className="flex items-center gap-2">
-              <Input
-                aria-label="Coverage duration"
-                type="number"
-                name="shiftLengthHours"
-                value={shiftDuration}
-                onChange={event => onShiftDurationChange(event.target.value)}
-                min="1"
-                placeholder="Same as handoff"
-                disabled={disabled}
-                className="h-10 w-40"
-              />
-              <span className="text-sm text-muted-foreground">hours</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Leave empty for continuous coverage. A shorter duration creates an intentional gap.
-            </p>
-          </div>
+          <Collapsible defaultOpen={Boolean(shiftDuration)}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between border-t pt-4 text-left"
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  Advanced layer timing
+                </span>
+                <Badge variant="secondary" size="xs">
+                  Optional
+                </Badge>
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4">
+              <div className="space-y-2 rounded-lg bg-muted/[0.25] p-3">
+                <Label htmlFor="layer-active-for">This layer is active for</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="layer-active-for"
+                    aria-label="Layer active duration"
+                    type="number"
+                    name="shiftLengthHours"
+                    value={shiftDuration}
+                    onChange={event => onShiftDurationChange(event.target.value)}
+                    min="1"
+                    placeholder="Entire handoff"
+                    disabled={disabled}
+                    className="h-10 w-40 bg-background"
+                  />
+                  <span className="text-sm text-muted-foreground">hours</span>
+                </div>
+                {leavesLayerInactive ? (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    This layer is inactive for {rotationHours - shiftHours} hours before its next
+                    handoff. Another layer can cover that time.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to keep this layer active until the next responder handoff.
+                  </p>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </section>
 
@@ -141,15 +176,15 @@ export default function LayerTimingFields({
             <Calendar className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold">Active date range</h3>
+            <h3 className="text-sm font-semibold">Schedule period</h3>
             <p className="text-xs text-muted-foreground">
-              Set when this layer becomes part of the schedule.
+              The start time anchors the first responder handoff.
             </p>
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>Starts</Label>
+            <Label>First handoff starts</Label>
             <input
               aria-label="Layer starts"
               type="datetime-local"
@@ -159,6 +194,7 @@ export default function LayerTimingFields({
               disabled={disabled}
               className="h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
+            {timeZone && <p className="text-xs text-muted-foreground">Times use {timeZone}.</p>}
           </div>
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
