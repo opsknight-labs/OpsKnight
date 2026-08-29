@@ -530,8 +530,12 @@ export async function movePolicyStep(
     return { error: 'Target step not found' };
   }
 
+  // Swap targets while preserving timeline positional delays (e.g. Step 1 stays Immediate 0m)
+  const currentDelay = step.delayMinutes;
+  const targetDelay = targetStep.delayMinutes;
+
   try {
-    // Swap step orders via temporary negative index to satisfy @@unique([policyId, stepOrder])
+    // Swap step orders and positional delays via temporary negative index to satisfy @@unique([policyId, stepOrder])
     await prisma.$transaction(async tx => {
       await tx.escalationRule.update({
         where: { id: stepId },
@@ -540,12 +544,12 @@ export async function movePolicyStep(
 
       await tx.escalationRule.update({
         where: { id: targetStep.id },
-        data: { stepOrder: currentOrder },
+        data: { stepOrder: currentOrder, delayMinutes: currentDelay },
       });
 
       await tx.escalationRule.update({
         where: { id: stepId },
-        data: { stepOrder: newOrder },
+        data: { stepOrder: newOrder, delayMinutes: targetDelay },
       });
     });
 
@@ -563,9 +567,11 @@ export async function movePolicyStep(
   }
 }
 
+export type StepReorderItem = string | { id: string; delayMinutes?: number };
+
 export async function reorderPolicySteps(
   policyId: string,
-  newOrder: string[]
+  newOrder: StepReorderItem[]
 ): Promise<{ error?: string } | undefined> {
   let currentUser: { id: string } | null = null;
   try {
@@ -576,37 +582,48 @@ export async function reorderPolicySteps(
     };
   }
 
+  const orderIds = newOrder.map(item => (typeof item === 'string' ? item : item.id));
+  const delayMap = new Map<string, number>();
+  newOrder.forEach(item => {
+    if (typeof item === 'object' && typeof item.delayMinutes === 'number') {
+      delayMap.set(item.id, item.delayMinutes);
+    }
+  });
+
   try {
     await prisma.$transaction(async tx => {
       // Verify all steps belong to the policy
       const steps = await tx.escalationRule.findMany({
         where: {
           policyId,
-          id: { in: newOrder },
+          id: { in: orderIds },
         },
         select: { id: true, stepOrder: true },
       });
 
-      if (steps.length !== newOrder.length) {
+      if (steps.length !== orderIds.length) {
         throw new Error('Invalid step IDs provided for reordering');
       }
 
       // Step 1: Temporarily set all steps to negative indices to prevent @@unique([policyId, stepOrder]) collisions
-      for (let i = 0; i < newOrder.length; i++) {
+      for (let i = 0; i < orderIds.length; i++) {
         await tx.escalationRule.update({
-          where: { id: newOrder[i] },
+          where: { id: orderIds[i] },
           data: {
             stepOrder: -(i + 1),
           },
         });
       }
 
-      // Step 2: Assign final sequential 0-indexed positions
-      for (let i = 0; i < newOrder.length; i++) {
+      // Step 2: Assign final sequential 0-indexed positions & update positional delays if provided
+      for (let i = 0; i < orderIds.length; i++) {
+        const stepId = orderIds[i];
+        const delay = delayMap.get(stepId);
         await tx.escalationRule.update({
-          where: { id: newOrder[i] },
+          where: { id: stepId },
           data: {
             stepOrder: i,
+            ...(typeof delay === 'number' ? { delayMinutes: delay } : {}),
           },
         });
       }
@@ -617,7 +634,7 @@ export async function reorderPolicySteps(
       entityType: 'ESCALATION_POLICY',
       entityId: policyId,
       actorId: currentUser.id,
-      details: { newOrderCount: newOrder.length },
+      details: { newOrderCount: orderIds.length },
     });
 
     revalidatePath(`/policies/${policyId}`);

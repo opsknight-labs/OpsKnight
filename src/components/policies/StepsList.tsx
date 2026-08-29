@@ -34,6 +34,9 @@ type EscalationStep = {
   stepOrder: number;
   delayMinutes: number;
   targetType: 'USER' | 'TEAM' | 'SCHEDULE';
+  targetUserId?: string | null;
+  targetTeamId?: string | null;
+  targetScheduleId?: string | null;
   targetUser: {
     id: string;
     name: string;
@@ -57,11 +60,20 @@ type StepsListProps = {
   updateStep: (stepId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   deleteStep: (stepId: string) => Promise<{ error?: string } | undefined>;
   moveStep: (stepId: string, direction: 'up' | 'down') => Promise<{ error?: string } | undefined>;
-  reorderSteps: (policyId: string, newOrder: string[]) => Promise<{ error?: string } | undefined>;
+  reorderSteps: (
+    policyId: string,
+    newOrder: Array<string | { id: string; delayMinutes?: number }>
+  ) => Promise<{ error?: string } | undefined>;
   addStep: (policyId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
-  users: any[];
-  teams: any[];
-  schedules: any[];
+  users: Array<{
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+    gender?: string | null;
+  }>;
+  teams: Array<{ id: string; name: string }>;
+  schedules: Array<{ id: string; name: string }>;
 };
 
 export default function StepsList({
@@ -80,7 +92,7 @@ export default function StepsList({
   const [steps, setSteps] = useState(initialSteps);
   const { showToast } = useToast();
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   useEffect(() => {
     setSteps(initialSteps);
@@ -101,23 +113,25 @@ export default function StepsList({
         const oldIndex = items.findIndex(item => item.id === active.id);
         const newIndex = items.findIndex(item => item.id === over?.id);
 
-        // 1. Capture original delays in order
+        // 1. Capture original timeline delays in positional order
         const delays = items.map(item => item.delayMinutes);
 
-        // 2. Reorder the items (targets move)
+        // 2. Reorder items (responders move to new positions)
         const newItems = arrayMove(items, oldIndex, newIndex);
 
-        // 3. Re-assign delays based on the *position*
-        // This ensures Step 1 always keeps Step 1's delay (usually 0), etc.
+        // 3. Re-assign delays based on the position so Step 1 always maintains Immediate (0m)
         const itemsWithFixedDelays = newItems.map((item, index) => ({
           ...item,
-          delayMinutes: delays[index],
+          delayMinutes: delays[index] ?? item.delayMinutes,
         }));
 
-        // Trigger server update
+        // 4. Trigger server update persisting both order and positional delays
         startTransition(async () => {
-          const newOrderIds = itemsWithFixedDelays.map(s => s.id);
-          const result = await reorderSteps(policyId, newOrderIds);
+          const reorderPayload = itemsWithFixedDelays.map(s => ({
+            id: s.id,
+            delayMinutes: s.delayMinutes,
+          }));
+          const result = await reorderSteps(policyId, reorderPayload);
           if (result?.error) {
             showToast(result.error, 'error');
             router.refresh(); // Sync back on error
@@ -130,21 +144,24 @@ export default function StepsList({
   }
 
   return (
-    <Card>
+    <Card className="border-slate-200/80 bg-white shadow-2xs">
       <CardHeader className="border-b pb-4">
-        <CardTitle className="flex items-center gap-2">
-          <Clock className="h-5 w-5 text-slate-500" />
+        <CardTitle className="flex items-center gap-2 text-base font-bold">
+          <Clock className="h-4 w-4 text-primary" />
           Escalation Steps
         </CardTitle>
-        <CardDescription>
-          Defines the order of notifications when an incident is triggered.
+        <CardDescription className="text-xs">
+          Defines the order and timing of notifications when an incident is triggered. Drag handles
+          to reorder or click delays to edit.
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 pt-8 space-y-0">
         {steps.length === 0 ? (
           <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-            <p className="text-slate-500 font-medium">No steps defined yet.</p>
-            <p className="text-sm text-slate-400">Add a step below to start.</p>
+            <p className="text-slate-500 font-medium text-xs">No steps defined yet.</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Add a step below to start configuring escalation routing.
+            </p>
           </div>
         ) : (
           <DndContext
@@ -164,7 +181,7 @@ export default function StepsList({
                       targetTeam: step.targetTeam
                         ? {
                             ...step.targetTeam,
-                            teamLead: (step.targetTeam as any).teamLead,
+                            teamLead: (step.targetTeam as any).teamLead, // eslint-disable-line @typescript-eslint/no-explicit-any
                           }
                         : null,
                     }}
@@ -173,6 +190,9 @@ export default function StepsList({
                     updateStep={updateStep}
                     deleteStep={deleteStep}
                     moveStep={moveStep}
+                    users={users}
+                    teams={teams}
+                    schedules={schedules}
                     isFirst={index === 0}
                     isLast={index === steps.length - 1}
                   />
@@ -184,7 +204,7 @@ export default function StepsList({
 
         {canManage && (
           <div className="pt-6 border-t border-slate-100">
-            <h3 className="font-semibold text-sm mb-4">Add New Step</h3>
+            <h3 className="font-semibold text-xs text-foreground mb-3">Add New Step</h3>
             <PolicyStepCreateForm
               policyId={policyId}
               users={users}

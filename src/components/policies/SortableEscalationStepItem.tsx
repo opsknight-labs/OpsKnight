@@ -10,6 +10,9 @@ type EscalationStep = {
   stepOrder: number;
   delayMinutes: number;
   targetType: 'USER' | 'TEAM' | 'SCHEDULE';
+  targetUserId?: string | null;
+  targetTeamId?: string | null;
+  targetScheduleId?: string | null;
   targetUser: {
     id: string;
     name: string;
@@ -34,7 +37,16 @@ type SortableEscalationStepItemProps = {
   isLast: boolean;
   updateStep: (stepId: string, formData: FormData) => Promise<{ error?: string } | undefined>;
   deleteStep: (stepId: string) => Promise<{ error?: string } | undefined>;
-  moveStep: (stepId: string, direction: 'up' | 'down') => Promise<{ error?: string } | undefined>; // Keep for fallback/accessibility
+  moveStep: (stepId: string, direction: 'up' | 'down') => Promise<{ error?: string } | undefined>;
+  users?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+    gender?: string | null;
+  }>;
+  teams?: Array<{ id: string; name: string }>;
+  schedules?: Array<{ id: string; name: string }>;
 };
 
 export default function SortableEscalationStepItem(props: SortableEscalationStepItemProps) {
