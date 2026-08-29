@@ -17,25 +17,34 @@ import {
   User,
   Users,
   Calendar,
-  ShieldAlert,
+  Activity,
   Mail,
   Phone,
-  Globe,
   Building2,
   Briefcase,
+  Globe,
+  Clock,
   Bell,
+  MessageSquare,
+  Smartphone,
+  Shield,
+  ShieldCheck,
+  ShieldAlert,
   CheckCircle2,
   XCircle,
-  ExternalLink,
-  Shield,
-  Clock,
-  Activity,
   AlertTriangle,
+  Flame,
+  ArrowUpRight,
+  Sparkles,
+  Layers,
+  Crown,
   History,
+  Copy,
+  Check,
 } from 'lucide-react';
-import UserAvatar from '@/components/UserAvatar';
+import { notify as toast } from '@/lib/toast';
 
-export type UserDetailProfile = {
+type UserDetailProfile = {
   id: string;
   name: string;
   email: string;
@@ -45,15 +54,13 @@ export type UserDetailProfile = {
   gender?: string | null;
   department?: string | null;
   jobTitle?: string | null;
-  timeZone: string;
   phoneNumber?: string | null;
+  timeZone: string;
   emailNotificationsEnabled: boolean;
   smsNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   whatsappNotificationsEnabled: boolean;
   createdAt: Date | string;
-  updatedAt: Date | string;
-  lastOidcSync?: Date | string | null;
   teamMemberships: Array<{
     id: string;
     role: string;
@@ -93,7 +100,7 @@ export type UserDetailProfile = {
     id: string;
     title: string;
     status: string;
-    urgency?: string;
+    urgency: string;
     priority?: string | null;
     createdAt: Date | string;
     service?: { id: string; name: string } | null;
@@ -120,6 +127,7 @@ export default function UserDetailTabs({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const handleTabChange = (val: string) => {
     setActiveTab(val);
@@ -128,13 +136,30 @@ export default function UserDetailTabs({
     router.replace(`?${params.toString()}`, { scroll: false });
   };
 
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    toast.success('Copied to clipboard');
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const statusVariantMap: Record<
+    string,
+    'default' | 'success' | 'warning' | 'destructive' | 'neutral' | 'info'
+  > = {
+    TRIGGERED: 'destructive',
+    ACKNOWLEDGED: 'warning',
+    RESOLVED: 'success',
+    CLOSED: 'neutral',
+  };
+
   return (
-    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-4">
-      {/* Tab Navigation Pill Bar */}
-      <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto p-1 bg-slate-100/80 rounded-xl border border-slate-200/60">
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-5">
+      {/* Modern High-Contrast Tab Bar */}
+      <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto p-1.5 bg-muted/80 rounded-xl border border-border/60 shadow-xs">
         <TabsTrigger
           value="overview"
-          className="flex items-center gap-1.5 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+          className="flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
         >
           <User className="h-3.5 w-3.5" />
           <span>Profile & Overview</span>
@@ -142,7 +167,7 @@ export default function UserDetailTabs({
 
         <TabsTrigger
           value="teams"
-          className="flex items-center gap-1.5 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+          className="flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
         >
           <Users className="h-3.5 w-3.5" />
           <span>Teams ({user.teamMemberships.length})</span>
@@ -150,7 +175,7 @@ export default function UserDetailTabs({
 
         <TabsTrigger
           value="schedules"
-          className="flex items-center gap-1.5 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+          className="flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
         >
           <Calendar className="h-3.5 w-3.5" />
           <span>On-Call ({user.layerAssignments.length})</span>
@@ -158,7 +183,7 @@ export default function UserDetailTabs({
 
         <TabsTrigger
           value="activity"
-          className="flex items-center gap-1.5 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-xs transition-all"
+          className="flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
         >
           <Activity className="h-3.5 w-3.5" />
           <span>Activity & Routing</span>
@@ -166,366 +191,507 @@ export default function UserDetailTabs({
       </TabsList>
 
       {/* TAB 1: Profile & Overview */}
-      <TabsContent value="overview" className="space-y-4 pt-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Contact & Identity Details */}
-          <Card className="border-slate-200/80 bg-white shadow-2xs">
-            <CardHeader className="pb-3 border-b border-slate-100">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <User className="h-4 w-4 text-primary" />
-                Contact & Identity
-              </CardTitle>
+      <TabsContent value="overview" className="space-y-5 pt-1">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Identity & Personal Info */}
+          <Card className="border-border shadow-xs">
+            <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <User className="h-4 w-4 text-primary" />
+                  <span>Contact & Work Information</span>
+                </CardTitle>
+                <Badge variant="outline" className="text-[10px] font-mono">
+                  ID: {user.id.slice(0, 10)}...
+                </Badge>
+              </div>
             </CardHeader>
-            <CardContent className="p-4 pt-3 space-y-3.5 text-xs">
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Mail className="h-3.5 w-3.5 text-slate-400" /> Email
+            <CardContent className="p-5 space-y-4 text-xs">
+              <div className="flex items-center justify-between py-2 border-b border-border/40">
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-primary/70" /> Email Address
                 </span>
-                <span className="font-medium text-foreground">{user.email}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground">{user.email}</span>
+                  <button
+                    onClick={() => copyToClipboard(user.email, 'email')}
+                    className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
+                    title="Copy Email"
+                  >
+                    {copiedKey === 'email' ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5 text-slate-400" /> Phone Number
+              <div className="flex items-center justify-between py-2 border-b border-border/40">
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-primary/70" /> Mobile / Pager Phone
                 </span>
-                <span className="font-medium text-foreground">
-                  {user.phoneNumber || <span className="text-slate-400 italic">Not set</span>}
+                <div className="flex items-center gap-2">
+                  {user.phoneNumber ? (
+                    <>
+                      <a
+                        href={`tel:${user.phoneNumber}`}
+                        className="font-semibold text-primary hover:underline"
+                      >
+                        {user.phoneNumber}
+                      </a>
+                      <button
+                        onClick={() => copyToClipboard(user.phoneNumber!, 'phone')}
+                        className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
+                        title="Copy Phone"
+                      >
+                        {copiedKey === 'phone' ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground/60 italic">Not specified</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-border/40">
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary/70" /> Department
+                </span>
+                <span className="font-semibold text-foreground">
+                  {user.department || (
+                    <span className="text-muted-foreground/60 italic">Engineering</span>
+                  )}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5 text-slate-400" /> Department
+              <div className="flex items-center justify-between py-2 border-b border-border/40">
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-primary/70" /> Job Title
                 </span>
-                <span className="font-medium text-foreground">
-                  {user.department || <span className="text-slate-400 italic">Unassigned</span>}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Briefcase className="h-3.5 w-3.5 text-slate-400" /> Job Title
-                </span>
-                <span className="font-medium text-foreground">
-                  {user.jobTitle || <span className="text-slate-400 italic">Not specified</span>}
+                <span className="font-semibold text-foreground">
+                  {user.jobTitle || (
+                    <span className="text-muted-foreground/60 italic">On-Call Engineer</span>
+                  )}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between py-1">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Globe className="h-3.5 w-3.5 text-slate-400" /> Authoritative Time Zone
+              <div className="flex items-center justify-between py-2 border-b border-border/40">
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-primary/70" /> Configured Timezone
                 </span>
-                <span className="font-medium text-foreground">{user.timeZone}</span>
+                <Badge
+                  variant="outline"
+                  className="font-mono text-[11px] font-semibold bg-muted/40"
+                >
+                  {user.timeZone || 'UTC'}
+                </Badge>
+              </div>
+
+              <div className="flex items-center justify-between py-2">
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary/70" /> Access & Governance
+                </span>
+                <span className="font-semibold text-foreground capitalize">
+                  {user.role.toLowerCase()} Role Level
+                </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Notification Alert Channels */}
-          <Card className="border-slate-200/80 bg-white shadow-2xs">
-            <CardHeader className="pb-3 border-b border-slate-100">
+          {/* Alert & Paging Delivery Channels Matrix */}
+          <Card className="border-border shadow-xs">
+            <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
                 <Bell className="h-4 w-4 text-primary" />
-                Notification Channels
+                <span>Paging & Notification Channels</span>
               </CardTitle>
+              <CardDescription className="text-xs">
+                Channels utilized when incidents trigger escalations to this user
+              </CardDescription>
             </CardHeader>
-            <CardContent className="p-4 pt-3 space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                  <span className="font-medium">Email Paging</span>
-                  {user.emailNotificationsEnabled ? (
-                    <Badge
-                      variant="outline"
-                      className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] gap-1"
-                    >
-                      <CheckCircle2 className="h-3 w-3" /> Enabled
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] gap-1"
-                    >
-                      <XCircle className="h-3 w-3" /> Disabled
-                    </Badge>
-                  )}
+            <CardContent className="p-5 space-y-3.5">
+              {/* Channel 1: Email */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-card hover:bg-muted/20 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
+                    <Mail className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs">Email Alerts</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      High & critical priority incident pages
+                    </div>
+                  </div>
                 </div>
-
-                <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                  <span className="font-medium">SMS Alerts</span>
-                  {user.smsNotificationsEnabled ? (
-                    <Badge
-                      variant="outline"
-                      className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] gap-1"
-                    >
-                      <CheckCircle2 className="h-3 w-3" /> Enabled
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] gap-1"
-                    >
-                      <XCircle className="h-3 w-3" /> Disabled
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                  <span className="font-medium">Browser Push</span>
-                  {user.pushNotificationsEnabled ? (
-                    <Badge
-                      variant="outline"
-                      className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] gap-1"
-                    >
-                      <CheckCircle2 className="h-3 w-3" /> Enabled
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] gap-1"
-                    >
-                      <XCircle className="h-3 w-3" /> Disabled
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                  <span className="font-medium">WhatsApp Direct</span>
-                  {user.whatsappNotificationsEnabled ? (
-                    <Badge
-                      variant="outline"
-                      className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] gap-1"
-                    >
-                      <CheckCircle2 className="h-3 w-3" /> Enabled
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] gap-1"
-                    >
-                      <XCircle className="h-3 w-3" /> Disabled
-                    </Badge>
-                  )}
-                </div>
+                {user.emailNotificationsEnabled ? (
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                  >
+                    <CheckCircle2 className="h-3 w-3" /> Active
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                    Disabled
+                  </Badge>
+                )}
               </div>
 
-              <p className="text-[11px] text-muted-foreground pt-1">
-                Notification preferences dictate how escalation policies alert this member during
-                active incident rotations.
-              </p>
+              {/* Channel 2: SMS */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-card hover:bg-muted/20 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
+                    <Smartphone className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs">SMS Text Messages</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {user.phoneNumber ? `Paging to ${user.phoneNumber}` : 'Requires phone number'}
+                    </div>
+                  </div>
+                </div>
+                {user.smsNotificationsEnabled && user.phoneNumber ? (
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                  >
+                    <CheckCircle2 className="h-3 w-3" /> Active
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                    {user.phoneNumber ? 'Disabled' : 'Unconfigured'}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Channel 3: Browser / Mobile Push */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-card hover:bg-muted/20 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400">
+                    <Bell className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs">Push Notifications</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Mobile & browser instant alerts
+                    </div>
+                  </div>
+                </div>
+                {user.pushNotificationsEnabled ? (
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                  >
+                    <CheckCircle2 className="h-3 w-3" /> Active
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                    Disabled
+                  </Badge>
+                )}
+              </div>
+
+              {/* Channel 4: WhatsApp */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-card hover:bg-muted/20 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400">
+                    <MessageSquare className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs">WhatsApp Direct</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Direct incident dispatch messages
+                    </div>
+                  </div>
+                </div>
+                {user.whatsappNotificationsEnabled && user.phoneNumber ? (
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                  >
+                    <CheckCircle2 className="h-3 w-3" /> Active
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                    {user.phoneNumber ? 'Disabled' : 'Unconfigured'}
+                  </Badge>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
       </TabsContent>
 
-      {/* TAB 2: Team Memberships */}
+      {/* TAB 2: Teams & Lead Roles */}
       <TabsContent value="teams" className="space-y-4 pt-1">
-        <Card className="border-slate-200/80 bg-white shadow-2xs">
-          <CardHeader className="pb-3 border-b border-slate-100">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />
-              Team Memberships & Lead Roles
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Teams this member contributes to or leads within OpsKnight.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 pt-3">
-            {user.teamMemberships.length === 0 ? (
-              <div className="text-center py-8 text-xs text-muted-foreground bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                This user has not been added to any teams yet.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {user.teamMemberships.map(membership => {
-                  const isLead = user.teamsLed.some(t => t.id === membership.team.id);
-                  return (
-                    <div
-                      key={membership.id}
-                      className="p-3.5 rounded-xl border border-slate-200/80 bg-white shadow-2xs hover:border-primary/40 hover:shadow-xs transition-all flex items-center justify-between"
-                    >
-                      <div className="space-y-1 truncate pr-3">
-                        <Link
-                          href={`/teams/${membership.team.id}`}
-                          className="font-bold text-xs text-foreground hover:text-primary transition-colors flex items-center gap-1.5 truncate"
-                        >
-                          {membership.team.name}
-                          <ExternalLink className="h-3 w-3 opacity-50 shrink-0" />
-                        </Link>
-                        {membership.team.description && (
-                          <p className="text-[10px] text-muted-foreground truncate">
-                            {membership.team.description}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {isLead && (
-                          <Badge
-                            variant="outline"
-                            className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-semibold"
-                          >
-                            Team Lead
-                          </Badge>
-                        )}
-                        <Badge variant="secondary" className="text-[10px]">
-                          {membership.role}
-                        </Badge>
+        {user.teamMemberships.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {user.teamMemberships.map(membership => {
+              const isLead =
+                user.teamsLed.some(t => t.id === membership.team.id) || membership.role === 'LEAD';
+              return (
+                <Card
+                  key={membership.id}
+                  className="border-border hover:border-primary/40 transition-all hover:shadow-md group flex flex-col justify-between"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-base font-bold group-hover:text-primary transition-colors">
+                            {membership.team.name}
+                          </CardTitle>
+                          {isLead && (
+                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] font-bold gap-1">
+                              <Crown className="h-3 w-3 text-amber-500" /> Team Lead
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {membership.team.description || 'Dedicated incident engineering team'}
+                        </p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      {/* TAB 3: On-Call Coverage & Schedules */}
-      <TabsContent value="schedules" className="space-y-4 pt-1">
-        <Card className="border-slate-200/80 bg-white shadow-2xs">
-          <CardHeader className="pb-3 border-b border-slate-100">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-primary" />
-              On-Call Schedules & Rotation Layers
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Schedules where this user is active in rotation layers.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 pt-3">
-            {user.layerAssignments.length === 0 ? (
-              <div className="text-center py-8 text-xs text-muted-foreground bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                This user is not assigned to any on-call rotation layers.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {user.layerAssignments.map(assignment => (
-                  <div
-                    key={assignment.id}
-                    className="p-3.5 rounded-xl border border-slate-200/80 bg-white shadow-2xs hover:border-primary/40 hover:shadow-xs transition-all flex items-center justify-between"
-                  >
-                    <div className="space-y-1 truncate pr-3">
-                      <Link
-                        href={`/schedules/${assignment.layer.schedule.id}`}
-                        className="font-bold text-xs text-foreground hover:text-primary transition-colors flex items-center gap-1.5 truncate"
-                      >
-                        {assignment.layer.schedule.name}
-                        <ExternalLink className="h-3 w-3 opacity-50 shrink-0" />
-                      </Link>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        Layer:{' '}
-                        <span className="font-medium text-slate-700">{assignment.layer.name}</span>
-                      </p>
-                    </div>
-
-                    <Badge
-                      variant="outline"
-                      className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] shrink-0 font-medium"
-                    >
-                      <Clock className="mr-1 h-3 w-3" /> Active
+                  </CardHeader>
+                  <CardContent className="pt-0 flex items-center justify-between border-t border-border/40 py-3 mt-auto bg-muted/10">
+                    <Badge variant="neutral" className="text-[10px] font-semibold uppercase">
+                      Role: {membership.role}
                     </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      {/* TAB 4: Incident Activity & Escalations */}
-      <TabsContent value="activity" className="space-y-4 pt-1">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Escalation Policy Steps */}
-          <Card className="border-slate-200/80 bg-white shadow-2xs">
-            <CardHeader className="pb-3 border-b border-slate-100">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-primary" />
-                Assigned Escalation Policies ({user.escalationRules.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-3">
-              {user.escalationRules.length === 0 ? (
-                <div className="text-center py-6 text-xs text-muted-foreground bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                  User is not directly targeted in any escalation rules.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {user.escalationRules.map(rule => (
-                    <div
-                      key={rule.id}
-                      className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs"
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-primary gap-1 px-2"
                     >
-                      <div className="space-y-0.5 truncate pr-2">
-                        <Link
-                          href={`/policies/${rule.policy.id}`}
-                          className="font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-1.5 truncate"
-                        >
-                          {rule.policy.name}
-                          <ExternalLink className="h-3 w-3 opacity-50 shrink-0" />
-                        </Link>
-                        <span className="text-[10px] text-muted-foreground">
-                          Step {rule.stepOrder + 1}
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-[10px] shrink-0 font-normal">
-                        {rule.delayMinutes === 0 ? 'Immediate' : `+${rule.delayMinutes}m`}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      <Link href={`/teams/${membership.team.id}`}>
+                        <span>View Team</span>
+                        <ArrowUpRight className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <Card className="border-dashed border-2 border-border/80 text-center py-12">
+            <CardContent className="space-y-3">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
+                <Users className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-foreground">No Teams Assigned</h3>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                  This user is not currently a member of any incident response teams.
+                </p>
+              </div>
             </CardContent>
           </Card>
+        )}
+      </TabsContent>
 
-          {/* Assigned Incidents */}
-          <Card className="border-slate-200/80 bg-white shadow-2xs">
-            <CardHeader className="pb-3 border-b border-slate-100">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Activity className="h-4 w-4 text-primary" />
-                Assigned Incidents ({user.assignedIncidents.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-3">
-              {user.assignedIncidents.length === 0 ? (
-                <div className="text-center py-6 text-xs text-muted-foreground bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                  No incidents assigned to this user.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {user.assignedIncidents.slice(0, 5).map(inc => (
-                    <div
-                      key={inc.id}
-                      className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs"
-                    >
-                      <div className="space-y-0.5 truncate pr-2">
-                        <Link
-                          href={`/incidents/${inc.id}`}
-                          className="font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-1.5 truncate"
-                        >
-                          {inc.title}
-                          <ExternalLink className="h-3 w-3 opacity-50 shrink-0" />
-                        </Link>
-                        {inc.service && (
-                          <span className="text-[10px] text-muted-foreground">
-                            {inc.service.name}
-                          </span>
-                        )}
+      {/* TAB 3: On-Call Schedules & Rotation Layers */}
+      <TabsContent value="schedules" className="space-y-4 pt-1">
+        {user.layerAssignments.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {user.layerAssignments.map(assignment => (
+              <Card
+                key={assignment.id}
+                className="border-border hover:border-primary/40 transition-all hover:shadow-md group flex flex-col justify-between"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <CardTitle className="text-base font-bold group-hover:text-primary transition-colors flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-primary" />
+                        <span>{assignment.layer.schedule.name}</span>
+                      </CardTitle>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Layers className="h-3.5 w-3.5 text-muted-foreground/70" />
+                        <span>
+                          Layer:{' '}
+                          <strong className="text-foreground">{assignment.layer.name}</strong>
+                        </span>
                       </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 flex items-center justify-between border-t border-border/40 py-3 mt-auto bg-muted/10">
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold"
+                  >
+                    Active Rotation
+                  </Badge>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-primary gap-1 px-2"
+                  >
+                    <Link href={`/schedules/${assignment.layer.schedule.id}`}>
+                      <span>View Schedule</span>
+                      <ArrowUpRight className="h-3 w-3" />
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="border-dashed border-2 border-border/80 text-center py-12">
+            <CardContent className="space-y-3">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
+                <Calendar className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-foreground">No On-Call Rotations</h3>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                  This user is not currently scheduled on any active on-call rotation layers.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </TabsContent>
+
+      {/* TAB 4: Activity & Escalation Routing */}
+      <TabsContent value="activity" className="space-y-5 pt-1">
+        {/* Escalation Policies Targeting This User */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-foreground">
+              <ShieldAlert className="h-4 w-4 text-primary" />
+              <span>Targeted Escalation Policies ({user.escalationRules.length})</span>
+            </h3>
+          </div>
+
+          {user.escalationRules.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {user.escalationRules.map(rule => (
+                <Card
+                  key={rule.id}
+                  className="border-border hover:border-primary/40 transition-all p-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
                       <Badge
                         variant="outline"
-                        className={
-                          inc.status === 'RESOLVED'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
-                            : 'bg-rose-50 text-rose-700 border-rose-200 text-[10px]'
-                        }
+                        className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold"
+                      >
+                        Step {rule.stepOrder + 1}
+                      </Badge>
+                      <Badge variant="neutral" className="text-[10px]">
+                        {rule.delayMinutes === 0 ? 'Immediately' : `+${rule.delayMinutes}m delay`}
+                      </Badge>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-foreground">{rule.policy.name}</h4>
+                      {rule.policy.description && (
+                        <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                          {rule.policy.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="pt-3 mt-3 border-t border-border/40 flex justify-end">
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[11px] text-primary gap-1 px-1.5"
+                    >
+                      <Link href={`/policies/${rule.policy.id}`}>
+                        <span>View Policy</span>
+                        <ArrowUpRight className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground italic bg-muted/20 p-4 rounded-xl border border-border/50">
+              This user is not directly targeted as a step in any escalation policies.
+            </p>
+          )}
+        </div>
+
+        {/* Assigned Incidents History */}
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-foreground">
+              <Flame className="h-4 w-4 text-primary" />
+              <span>Assigned Incidents ({user.assignedIncidents.length})</span>
+            </h3>
+            {user.assignedIncidents.length > 0 && (
+              <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-primary gap-1">
+                <Link href={`/incidents?assignee=${user.id}`}>
+                  <span>View All in Incidents</span>
+                  <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              </Button>
+            )}
+          </div>
+
+          {user.assignedIncidents.length > 0 ? (
+            <div className="border border-border rounded-xl overflow-hidden shadow-xs">
+              <div className="divide-y divide-border">
+                {user.assignedIncidents.map(inc => (
+                  <div
+                    key={inc.id}
+                    className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/incidents/${inc.id}`}
+                          className="font-bold text-xs hover:text-primary transition-colors truncate"
+                        >
+                          {inc.title}
+                        </Link>
+                        {inc.service && (
+                          <Badge variant="outline" className="text-[10px] shrink-0 font-medium">
+                            {inc.service.name}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                        <span>
+                          Urgency: <strong className="text-foreground">{inc.urgency}</strong>
+                        </span>
+                        <span>•</span>
+                        <span>Opened {new Date(inc.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge
+                        variant={statusVariantMap[inc.status] || 'neutral'}
+                        className="text-[10px] font-bold uppercase"
                       >
                         {inc.status}
                       </Badge>
+                      <Button asChild variant="outline" size="sm" className="h-7 text-xs px-2.5">
+                        <Link href={`/incidents/${inc.id}`}>
+                          <span>Details</span>
+                        </Link>
+                      </Button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground italic bg-muted/20 p-4 rounded-xl border border-border/50">
+              No recent incidents assigned to this user.
+            </p>
+          )}
         </div>
       </TabsContent>
     </Tabs>
