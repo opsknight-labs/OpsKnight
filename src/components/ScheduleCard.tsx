@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn
 import { Badge } from '@/components/ui/shadcn/badge';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
-import { Clock, Layers, Users, Calendar, ArrowRight } from 'lucide-react';
+import { Clock, Layers, Users, Calendar } from 'lucide-react';
 
 type ScheduleCardProps = {
   schedule: {

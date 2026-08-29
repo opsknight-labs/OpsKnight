@@ -31,7 +31,7 @@ export type ScheduleAuditItem = {
   action: string;
   actorName?: string | null;
   actorEmail?: string | null;
-  details?: any;
+  details?: unknown;
   createdAt: Date;
   actor?: {
     id: string;
@@ -49,12 +49,38 @@ interface ActionMeta {
   iconBg: string;
 }
 
-function getActionMeta(action: string, details?: any): ActionMeta {
+type ScheduleAuditDetails = Record<string, unknown>;
+
+function isScheduleAuditDetails(value: unknown): value is ScheduleAuditDetails {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getDetailText(
+  details: ScheduleAuditDetails | undefined,
+  key: 'name' | 'timeZone' | 'direction' | 'userName'
+): string | undefined {
+  const value =
+    key === 'name'
+      ? details?.name
+      : key === 'timeZone'
+        ? details?.timeZone
+        : key === 'direction'
+          ? details?.direction
+          : details?.userName;
+  return typeof value === 'string' ? value : undefined;
+}
+
+function getActionMeta(action: string, rawDetails?: unknown): ActionMeta {
+  const details = isScheduleAuditDetails(rawDetails) ? rawDetails : undefined;
+  const name = getDetailText(details, 'name');
+  const timeZone = getDetailText(details, 'timeZone');
+  const direction = getDetailText(details, 'direction');
+  const userName = getDetailText(details, 'userName');
   switch (action) {
     case 'schedule.created':
       return {
         title: 'Schedule created',
-        description: details?.name ? `Created schedule "${details.name}"` : undefined,
+        description: name ? `Created schedule "${name}"` : undefined,
         icon: CalendarPlus,
         iconColor: 'text-blue-600 dark:text-blue-400',
         iconBg: 'bg-blue-500/10 border-blue-500/20',
@@ -63,11 +89,8 @@ function getActionMeta(action: string, details?: any): ActionMeta {
       return {
         title: 'Schedule settings updated',
         description:
-          details?.name || details?.timeZone
-            ? [
-                details.name && `Name: ${details.name}`,
-                details.timeZone && `Time zone: ${details.timeZone}`,
-              ]
+          name || timeZone
+            ? [name && `Name: ${name}`, timeZone && `Time zone: ${timeZone}`]
                 .filter(Boolean)
                 .join(' · ')
             : undefined,
@@ -78,7 +101,7 @@ function getActionMeta(action: string, details?: any): ActionMeta {
     case 'schedule.layer.created':
       return {
         title: 'Rotation layer created',
-        description: details?.name ? `Added layer "${details.name}"` : undefined,
+        description: name ? `Added layer "${name}"` : undefined,
         icon: Layers,
         iconColor: 'text-emerald-600 dark:text-emerald-400',
         iconBg: 'bg-emerald-500/10 border-emerald-500/20',
@@ -86,7 +109,7 @@ function getActionMeta(action: string, details?: any): ActionMeta {
     case 'schedule.layer.updated':
       return {
         title: 'Layer settings updated',
-        description: details?.name ? `Updated "${details.name}"` : undefined,
+        description: name ? `Updated "${name}"` : undefined,
         icon: Sliders,
         iconColor: 'text-indigo-600 dark:text-indigo-400',
         iconBg: 'bg-indigo-500/10 border-indigo-500/20',
@@ -102,7 +125,7 @@ function getActionMeta(action: string, details?: any): ActionMeta {
     case 'schedule.layer.reordered':
       return {
         title: 'Layer precedence reordered',
-        description: details?.direction ? `Moved layer ${details.direction}` : undefined,
+        description: direction ? `Moved layer ${direction}` : undefined,
         icon: ArrowUpDown,
         iconColor: 'text-violet-600 dark:text-violet-400',
         iconBg: 'bg-violet-500/10 border-violet-500/20',
@@ -111,7 +134,7 @@ function getActionMeta(action: string, details?: any): ActionMeta {
     case 'schedule.member.added':
       return {
         title: 'Responder assigned to layer',
-        description: details?.userName ? `Added ${details.userName}` : undefined,
+        description: userName ? `Added ${userName}` : undefined,
         icon: UserPlus,
         iconColor: 'text-emerald-600 dark:text-emerald-400',
         iconBg: 'bg-emerald-500/10 border-emerald-500/20',
@@ -128,7 +151,7 @@ function getActionMeta(action: string, details?: any): ActionMeta {
     case 'schedule.member.reordered':
       return {
         title: 'Responder rotation order shifted',
-        description: details?.direction ? `Shifted ${details.direction}` : undefined,
+        description: direction ? `Shifted ${direction}` : undefined,
         icon: ArrowUpDown,
         iconColor: 'text-sky-600 dark:text-sky-400',
         iconBg: 'bg-sky-500/10 border-sky-500/20',

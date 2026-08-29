@@ -21,9 +21,12 @@ export default function ScheduleTimezoneNotice({
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
-    setNow(new Date());
+    const initialUpdate = window.setTimeout(() => setNow(new Date()), 0);
     const interval = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialUpdate);
+      clearInterval(interval);
+    };
   }, []);
 
   const localTz = browserTimeZone || userTimeZone || 'UTC';
@@ -35,13 +38,16 @@ export default function ScheduleTimezoneNotice({
   const storageKey = `dismissed_tz_${scheduleTimeZone}_${userTimeZone}_${browserTimeZone}`;
 
   useEffect(() => {
-    try {
-      if (sessionStorage.getItem(storageKey) === 'true') {
-        setIsDismissed(true);
+    const readDismissal = window.setTimeout(() => {
+      try {
+        if (sessionStorage.getItem(storageKey) === 'true') {
+          setIsDismissed(true);
+        }
+      } catch {
+        // Ignore sessionStorage errors
       }
-    } catch {
-      // Ignore sessionStorage errors
-    }
+    }, 0);
+    return () => window.clearTimeout(readDismissal);
   }, [storageKey]);
 
   const handleDismiss = () => {

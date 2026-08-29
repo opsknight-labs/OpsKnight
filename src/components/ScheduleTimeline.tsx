@@ -333,10 +333,10 @@ export default function ScheduleTimeline({
                 sortedShifts.forEach(shift => {
                   let rowIndex = 0;
                   while (true) {
-                    const row = rows[rowIndex];
+                    const row = rows.at(rowIndex);
                     if (!row) {
-                      rows[rowIndex] = [shift];
-                      shiftRowMap.set(shift.id, rowIndex);
+                      rows.push([shift]);
+                      shiftRowMap.set(shift.id, rows.length - 1);
                       break;
                     }
                     const lastShift = row[row.length - 1];
