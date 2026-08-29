@@ -20,33 +20,33 @@ type UserAvatarProps = {
 const sizeClasses: Record<AvatarSize, { container: string; text: string; statusDot: string }> = {
   xs: {
     container: 'h-6 w-6',
-    text: 'text-[8px]',
+    text: 'text-[9px]',
     statusDot: 'h-1.5 w-1.5 -bottom-0 -right-0 border',
   },
   sm: {
     container: 'h-8 w-8',
-    text: 'text-[9px]',
+    text: 'text-[10px]',
     statusDot: 'h-2 w-2 -bottom-0.5 -right-0.5 border-[1.5px]',
   },
   md: {
     container: 'h-10 w-10',
-    text: 'text-[10px]',
+    text: 'text-xs',
     statusDot: 'h-2.5 w-2.5 -bottom-0.5 -right-0.5 border-[1.5px]',
   },
   lg: {
     container: 'h-12 w-12',
-    text: 'text-xs',
+    text: 'text-sm',
     statusDot: 'h-3 w-3 -bottom-0.5 -right-0.5 border-2',
   },
   xl: {
     container: 'h-16 w-16',
-    text: 'text-sm',
+    text: 'text-base',
     statusDot: 'h-3.5 w-3.5 -bottom-0.5 -right-0.5 border-2',
   },
   '2xl': {
-    container: 'h-32 w-32',
-    text: 'text-2xl',
-    statusDot: 'h-5 w-5 bottom-1 right-1 border-[3px]',
+    container: 'h-24 w-24',
+    text: 'text-xl',
+    statusDot: 'h-4 w-4 bottom-0.5 right-0.5 border-2',
   },
 };
 
@@ -75,17 +75,20 @@ export default function UserAvatar({
   const initials = getInitials(name);
 
   return (
-    <div className={cn('relative shrink-0', sizeConfig.container, className)}>
-      <Avatar className="h-full w-full border border-black/5 dark:border-white/10 shadow-xs">
-        <AvatarImage
-          src={avatarUrl}
-          alt={name || 'User avatar'}
-          className="object-cover h-full w-full"
-        />
+    <div
+      className={cn('relative inline-flex shrink-0 select-none', sizeConfig.container, className)}
+    >
+      <Avatar className="h-full w-full rounded-full overflow-hidden border border-border/80 bg-muted/30 shadow-2xs">
+        {avatarUrl && (
+          <AvatarImage
+            src={avatarUrl}
+            alt={name || 'User avatar'}
+            className="h-full w-full object-cover"
+          />
+        )}
         <AvatarFallback
           className={cn(
-            'flex items-center justify-center h-full w-full',
-            'bg-gradient-to-br from-primary/10 to-primary/20 text-primary font-bold',
+            'flex h-full w-full items-center justify-center rounded-full bg-primary/10 font-bold text-primary',
             sizeConfig.text,
             fallbackClassName
           )}
@@ -124,17 +127,20 @@ export function DirectUserAvatar({
   const initials = getInitials(name);
 
   return (
-    <div className={cn('relative shrink-0', sizeConfig.container, className)}>
-      <Avatar className="h-full w-full border border-black/5 dark:border-white/10 shadow-xs">
-        <AvatarImage
-          src={avatarUrl}
-          alt={name || 'User avatar'}
-          className="object-cover h-full w-full"
-        />
+    <div
+      className={cn('relative inline-flex shrink-0 select-none', sizeConfig.container, className)}
+    >
+      <Avatar className="h-full w-full rounded-full overflow-hidden border border-border/80 bg-muted/30 shadow-2xs">
+        {avatarUrl && (
+          <AvatarImage
+            src={avatarUrl}
+            alt={name || 'User avatar'}
+            className="h-full w-full object-cover"
+          />
+        )}
         <AvatarFallback
           className={cn(
-            'flex items-center justify-center h-full w-full',
-            'bg-gradient-to-br from-primary/10 to-primary/20 text-primary font-bold',
+            'flex h-full w-full items-center justify-center rounded-full bg-primary/10 font-bold text-primary',
             sizeConfig.text,
             fallbackClassName
           )}

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Shield, ArrowUpRight, Plus, ExternalLink } from 'lucide-react';
+import { Shield, Plus, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +28,13 @@ export default function TeamOwnedServicesGrid({
   className,
 }: TeamOwnedServicesGridProps) {
   if (services.length === 0) {
+    if (compact) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/70">
+          <Shield className="h-3 w-3" /> No services
+        </span>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 px-4 text-center">
         <Shield className="h-8 w-8 text-muted-foreground/40 mb-2" />
@@ -48,21 +55,29 @@ export default function TeamOwnedServicesGrid({
   }
 
   if (compact) {
+    const maxVisible = 2;
+    const visibleServices = services.slice(0, maxVisible);
+    const remainingCount = services.length - maxVisible;
+
     return (
-      <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
-        {services.slice(0, 3).map(service => (
+      <div className={cn('flex items-center gap-1.5 flex-wrap justify-end', className)}>
+        {visibleServices.map(service => (
           <Link
             key={service.id}
             href={`/services/${service.id}`}
-            className="inline-flex items-center gap-1 rounded-md border border-border/80 bg-background/80 px-2 py-0.5 text-[11px] font-medium text-foreground hover:border-primary/50 transition-colors shadow-2xs group"
+            className="inline-flex items-center gap-1 rounded-md border border-border/80 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground hover:border-primary/50 hover:bg-muted/80 transition-colors shadow-2xs group"
           >
-            <Shield className="h-2.5 w-2.5 text-primary/70 group-hover:text-primary" />
-            <span className="truncate max-w-[120px]">{service.name}</span>
+            <Shield className="h-2.5 w-2.5 text-primary/70 group-hover:text-primary shrink-0" />
+            <span className="truncate max-w-[95px]">{service.name}</span>
           </Link>
         ))}
-        {services.length > 3 && (
-          <Badge variant="secondary" size="xs" className="text-[10px] px-1.5 py-0 font-medium">
-            +{services.length - 3} more
+        {remainingCount > 0 && (
+          <Badge
+            variant="secondary"
+            size="xs"
+            className="text-[10px] px-1.5 py-0.5 font-medium shrink-0"
+          >
+            +{remainingCount}
           </Badge>
         )}
       </div>

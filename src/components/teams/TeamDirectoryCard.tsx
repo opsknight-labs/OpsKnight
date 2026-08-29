@@ -45,7 +45,7 @@ export default function TeamDirectoryCard({ team }: TeamDirectoryCardProps) {
         <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
                 <Users className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
@@ -66,14 +66,14 @@ export default function TeamDirectoryCard({ team }: TeamDirectoryCardProps) {
         </CardHeader>
 
         {/* Card Body: Avatars & Services Preview */}
-        <CardContent className="p-4 space-y-3">
+        <CardContent className="p-4 space-y-2.5">
           {/* Members Stack & Count */}
           <div className="flex items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-1.5 text-muted-foreground font-medium shrink-0">
               <Users className="h-3.5 w-3.5 text-muted-foreground/70" />
               <span>Members ({team._count.members}):</span>
             </div>
-            <TeamAvatarStack members={team.members} maxVisible={5} size="sm" />
+            <TeamAvatarStack members={team.members} maxVisible={4} size="sm" />
           </div>
 
           {/* Owned Services Preview */}
@@ -89,7 +89,7 @@ export default function TeamDirectoryCard({ team }: TeamDirectoryCardProps) {
 
       {/* Card Footer: Action Link */}
       <div className="border-t bg-muted/10 px-4 py-2.5 sm:px-5 flex items-center justify-between">
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-[11px] text-muted-foreground font-medium">
           {team._count.members > 0 ? 'Active roster' : 'Needs setup'}
         </span>
         <Link

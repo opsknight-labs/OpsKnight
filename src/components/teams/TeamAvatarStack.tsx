@@ -36,7 +36,7 @@ export default function TeamAvatarStack({
   if (members.length === 0) {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/70">
-        <Users className="h-3.5 w-3.5" /> No members yet
+        <Users className="h-3 w-3" /> No members
       </span>
     );
   }
@@ -48,7 +48,7 @@ export default function TeamAvatarStack({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className={cn('flex items-center -space-x-1.5', className)}>
+      <div className={cn('flex items-center -space-x-2 py-0.5', className)}>
         {visibleMembers.map((member, index) => {
           const user = member.user;
           const fallbackId = user.id || member.userId || user.name;
@@ -57,12 +57,12 @@ export default function TeamAvatarStack({
           return (
             <Tooltip key={fallbackId || index}>
               <TooltipTrigger asChild>
-                <div className="relative inline-block transition-transform hover:z-10 hover:scale-110">
+                <div className="relative inline-flex shrink-0 transition-transform hover:z-20 hover:scale-110">
                   <DirectUserAvatar
                     avatarUrl={avatarUrl}
                     name={user.name}
                     size="xs"
-                    className={cn(avatarSize, 'ring-2 ring-background shadow-xs font-semibold')}
+                    className={cn(avatarSize, 'ring-2 ring-card shadow-xs')}
                   />
                 </div>
               </TooltipTrigger>
@@ -82,7 +82,7 @@ export default function TeamAvatarStack({
               <div
                 className={cn(
                   avatarSize,
-                  'flex items-center justify-center rounded-full bg-muted font-bold text-[10px] text-muted-foreground ring-2 ring-background shadow-xs cursor-default'
+                  'relative inline-flex items-center justify-center rounded-full bg-muted font-bold text-[10px] text-muted-foreground ring-2 ring-card shadow-xs cursor-default shrink-0 z-10'
                 )}
               >
                 +{remainingCount}
