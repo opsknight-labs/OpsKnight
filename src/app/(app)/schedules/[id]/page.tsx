@@ -269,26 +269,41 @@ export default async function ScheduleDetailPage({
           nextCoverageChange={viewModel.nextCoverageChange}
           scheduleTimeZone={schedule.timeZone}
         />
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Coverage health</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <Card className="overflow-hidden border-border/70 shadow-sm">
+          <CardHeader className="border-b bg-muted/25 pb-4">
             <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Live status
+                </p>
+                <CardTitle className="mt-1 text-lg">Coverage health</CardTitle>
+              </div>
+              <div
+                className={`h-2.5 w-2.5 rounded-full ring-4 ${
+                  viewModel.coverageGap
+                    ? 'bg-amber-500 ring-amber-500/15'
+                    : 'bg-emerald-500 ring-emerald-500/15'
+                }`}
+                aria-hidden="true"
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="divide-y p-0">
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
               <span className="text-sm text-muted-foreground">Current state</span>
               <Badge variant={viewModel.coverageGap ? 'warning' : 'success'}>
                 {viewModel.coverageGap ? 'Gap detected' : 'Covered'}
               </Badge>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
               <span className="text-sm text-muted-foreground">Active overrides</span>
               <span className="font-semibold">{activeOverrides.length}</span>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
               <span className="text-sm text-muted-foreground">Upcoming overrides</span>
               <span className="font-semibold">{upcomingOverrides.length}</span>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
               <span className="text-sm text-muted-foreground">Schedule timezone</span>
               <span className="text-sm font-medium">{schedule.timeZone}</span>
             </div>
@@ -296,13 +311,21 @@ export default async function ScheduleDetailPage({
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Clock3 className="h-4 w-4 text-primary" /> Today&apos;s coverage
-          </CardTitle>
+      <Card className="overflow-hidden border-border/70 shadow-sm">
+        <CardHeader className="border-b bg-muted/20 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Clock3 className="h-4 w-4" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Today&apos;s coverage</CardTitle>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                A 24-hour view in {schedule.timeZone}
+              </p>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-5">
           <CoverageTimeline
             shifts={scheduleBlocks.map(block => ({
               userName: block.userName,
@@ -332,7 +355,7 @@ export default async function ScheduleDetailPage({
 
   const rotation = (
     <>
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-3 border-b pb-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-lg font-semibold">Rotation layers</h2>
           <p className="text-sm text-muted-foreground">
@@ -402,7 +425,7 @@ export default async function ScheduleDetailPage({
 
   const overrides = (
     <>
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-3 border-b pb-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-lg font-semibold">Coverage overrides</h2>
           <p className="text-sm text-muted-foreground">
@@ -428,7 +451,10 @@ export default async function ScheduleDetailPage({
         </Alert>
       )}
 
-      <section className="space-y-3" aria-labelledby="active-overrides-title">
+      <section
+        className="space-y-3 rounded-xl border border-emerald-500/15 bg-emerald-500/[0.03] p-4"
+        aria-labelledby="active-overrides-title"
+      >
         <div className="flex items-center gap-2">
           <h3 id="active-overrides-title" className="font-semibold">
             Active
@@ -445,7 +471,10 @@ export default async function ScheduleDetailPage({
         />
       </section>
 
-      <section className="space-y-3" aria-labelledby="upcoming-overrides-title">
+      <section
+        className="space-y-3 rounded-xl border border-amber-500/15 bg-amber-500/[0.03] p-4"
+        aria-labelledby="upcoming-overrides-title"
+      >
         <div className="flex items-center gap-2">
           <h3 id="upcoming-overrides-title" className="font-semibold">
             Upcoming
@@ -462,7 +491,10 @@ export default async function ScheduleDetailPage({
         />
       </section>
 
-      <section className="space-y-3" aria-labelledby="override-history-title">
+      <section
+        className="space-y-3 rounded-xl border bg-muted/[0.18] p-4"
+        aria-labelledby="override-history-title"
+      >
         <div className="flex items-center gap-2">
           <h3 id="override-history-title" className="font-semibold">
             History
@@ -540,7 +572,7 @@ export default async function ScheduleDetailPage({
   );
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6">
+    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <header className="space-y-4">
         <Link
           href="/schedules"
@@ -548,30 +580,58 @@ export default async function ScheduleDetailPage({
         >
           <ArrowLeft className="h-4 w-4" /> Back to schedules
         </Link>
-        <div className="flex flex-col justify-between gap-4 rounded-2xl border bg-card p-5 shadow-sm md:flex-row md:items-center md:p-6">
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Calendar className="h-5 w-5" />
+        <div className="relative overflow-hidden rounded-2xl border border-primary/10 bg-gradient-to-br from-card via-card to-primary/[0.05] p-5 shadow-sm md:p-7">
+          <div className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-primary/[0.07] blur-3xl" />
+          <div className="relative flex flex-col justify-between gap-5 md:flex-row md:items-center">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/15">
+                <Calendar className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                  On-call schedule
+                </p>
+                <h1 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">
+                  {schedule.name}
+                </h1>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  {viewModel.summary}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{schedule.name}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{viewModel.summary}</p>
+            <div className="grid grid-cols-3 gap-1.5 rounded-xl border bg-background/65 p-1.5 shadow-sm backdrop-blur-sm">
+              <div className="min-w-0 rounded-lg px-3 py-2 text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Responders
+                </p>
+                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold">
+                  <Users className="h-3.5 w-3.5 text-primary" /> {viewModel.participantCount}
+                </p>
+              </div>
+              <div className="min-w-0 rounded-lg border-x px-3 py-2 text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Layers
+                </p>
+                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold">
+                  <Layers3 className="h-3.5 w-3.5 text-primary" /> {viewModel.layerCount}
+                </p>
+              </div>
+              <div className="min-w-0 rounded-lg px-3 py-2 text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Status
+                </p>
+                <p
+                  className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold ${
+                    viewModel.coverageGap
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  }`}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {viewModel.coverageGap ? 'Gap' : 'Covered'}
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2 sm:flex">
-            <Badge variant="outline" className="justify-center gap-1.5 px-3 py-2">
-              <Users className="h-3.5 w-3.5" /> {viewModel.participantCount} responders
-            </Badge>
-            <Badge variant="outline" className="justify-center gap-1.5 px-3 py-2">
-              <Layers3 className="h-3.5 w-3.5" /> {viewModel.layerCount} layers
-            </Badge>
-            <Badge
-              variant={viewModel.coverageGap ? 'warning' : 'success'}
-              className="justify-center gap-1.5 px-3 py-2"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {viewModel.coverageGap ? 'Gap' : 'Covered'}
-            </Badge>
           </div>
         </div>
       </header>

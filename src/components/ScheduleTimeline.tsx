@@ -49,38 +49,38 @@ type ScheduleTimelineProps = {
 const LAYER_COLORS = [
   {
     bg: 'from-indigo-500 to-indigo-600',
-    light: 'bg-indigo-100',
-    text: 'text-indigo-700',
+    light: 'bg-indigo-500/10',
+    text: 'text-indigo-700 dark:text-indigo-300',
     ring: 'ring-indigo-400',
   },
   {
     bg: 'from-emerald-500 to-emerald-600',
-    light: 'bg-emerald-100',
-    text: 'text-emerald-700',
+    light: 'bg-emerald-500/10',
+    text: 'text-emerald-700 dark:text-emerald-300',
     ring: 'ring-emerald-400',
   },
   {
     bg: 'from-amber-500 to-amber-600',
-    light: 'bg-amber-100',
-    text: 'text-amber-700',
+    light: 'bg-amber-500/10',
+    text: 'text-amber-700 dark:text-amber-300',
     ring: 'ring-amber-400',
   },
   {
     bg: 'from-rose-500 to-rose-600',
-    light: 'bg-rose-100',
-    text: 'text-rose-700',
+    light: 'bg-rose-500/10',
+    text: 'text-rose-700 dark:text-rose-300',
     ring: 'ring-rose-400',
   },
   {
     bg: 'from-sky-500 to-sky-600',
-    light: 'bg-sky-100',
-    text: 'text-sky-700',
+    light: 'bg-sky-500/10',
+    text: 'text-sky-700 dark:text-sky-300',
     ring: 'ring-sky-400',
   },
   {
     bg: 'from-violet-500 to-violet-600',
-    light: 'bg-violet-100',
-    text: 'text-violet-700',
+    light: 'bg-violet-500/10',
+    text: 'text-violet-700 dark:text-violet-300',
     ring: 'ring-violet-400',
   },
 ];
@@ -177,8 +177,8 @@ export default function ScheduleTimeline({
   if (!isMounted) return null;
 
   return (
-    <Card className="overflow-hidden border-slate-200/80 shadow-sm">
-      <CardHeader className="border-b border-slate-100 bg-slate-50/70">
+    <Card className="overflow-hidden border-border/70 shadow-sm">
+      <CardHeader className="border-b bg-muted/25">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -201,7 +201,7 @@ export default function ScheduleTimeline({
             <Badge variant="outline" size="xs">
               {timeZone}
             </Badge>
-            <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+            <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
               <Button
                 onClick={() => setDaysToShow(7)}
                 size="sm"
@@ -227,7 +227,7 @@ export default function ScheduleTimeline({
                 variant={showFinalSchedule ? 'secondary' : 'outline'}
                 className={cn(
                   'h-7 px-3 text-xs gap-1.5',
-                  showFinalSchedule && 'bg-slate-800 text-white hover:bg-slate-700'
+                  showFinalSchedule && 'bg-foreground text-background hover:bg-foreground/90'
                 )}
               >
                 <Shield className="h-3 w-3" />
@@ -235,7 +235,7 @@ export default function ScheduleTimeline({
               </Button>
             )}
 
-            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white/70 p-1">
+            <div className="flex items-center gap-1 rounded-lg border bg-background/70 p-1">
               <Button
                 variant="ghost"
                 size="icon"
@@ -270,7 +270,7 @@ export default function ScheduleTimeline({
         <div className="overflow-x-auto">
           <div style={{ minWidth: daysToShow === 7 ? '700px' : '1000px' }}>
             {/* Day Headers */}
-            <div className="flex sticky top-0 bg-white z-10 border-b border-slate-100">
+            <div className="sticky top-0 z-10 flex border-b bg-background">
               {days.map(day => {
                 const dayKey = formatDateKeyInTimeZone(day, timeZone);
                 const weekday = dateFormatters.weekday.format(day);
@@ -282,15 +282,15 @@ export default function ScheduleTimeline({
                   <div
                     key={dayKey}
                     className={cn(
-                      'flex-1 py-3 px-2 text-center border-r border-slate-100 last:border-r-0 transition-colors',
-                      isCurrentDay && 'bg-indigo-50/70',
-                      isWeekend && !isCurrentDay && 'bg-slate-50/50'
+                      'flex-1 border-r px-2 py-3 text-center transition-colors last:border-r-0',
+                      isCurrentDay && 'bg-primary/[0.08]',
+                      isWeekend && !isCurrentDay && 'bg-muted/30'
                     )}
                   >
                     <div
                       className={cn(
                         'text-[10px] font-semibold uppercase tracking-wider mb-0.5',
-                        isCurrentDay ? 'text-indigo-600' : 'text-slate-400'
+                        isCurrentDay ? 'text-primary' : 'text-muted-foreground'
                       )}
                     >
                       {weekday}
@@ -298,7 +298,7 @@ export default function ScheduleTimeline({
                     <div
                       className={cn(
                         'text-lg font-bold',
-                        isCurrentDay ? 'text-indigo-700' : 'text-slate-800'
+                        isCurrentDay ? 'text-primary' : 'text-foreground'
                       )}
                     >
                       {dayNum}
@@ -306,14 +306,14 @@ export default function ScheduleTimeline({
                     <div
                       className={cn(
                         'text-[10px] font-medium',
-                        isCurrentDay ? 'text-indigo-500' : 'text-slate-400'
+                        isCurrentDay ? 'text-primary' : 'text-muted-foreground'
                       )}
                     >
                       {month}
                     </div>
                     {isCurrentDay && (
                       <div className="mt-1">
-                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
                       </div>
                     )}
                   </div>
@@ -322,9 +322,9 @@ export default function ScheduleTimeline({
             </div>
 
             {/* Layer Rows */}
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y">
               {shiftsByLayer.length === 0 ? (
-                <div className="flex items-center justify-center py-16 text-slate-400">
+                <div className="flex items-center justify-center py-16 text-muted-foreground">
                   <div className="text-center">
                     <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
                     <p className="text-sm font-medium">No shifts scheduled</p>
@@ -391,9 +391,9 @@ export default function ScheduleTimeline({
                             <div
                               key={dayKey}
                               className={cn(
-                                'flex-1 border-r border-slate-100/50 last:border-r-0',
-                                isCurrentDay && 'bg-indigo-50/20',
-                                isWeekend && !isCurrentDay && 'bg-slate-50/30'
+                                'flex-1 border-r border-border/50 last:border-r-0',
+                                isCurrentDay && 'bg-primary/[0.03]',
+                                isWeekend && !isCurrentDay && 'bg-muted/20'
                               )}
                             />
                           );
@@ -492,11 +492,11 @@ export default function ScheduleTimeline({
                                         name={shift.userName}
                                         size="xs"
                                       />
-                                      <span className="font-semibold text-slate-900">
+                                      <span className="font-semibold text-foreground">
                                         {shift.userName}
                                       </span>
                                     </div>
-                                    <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                       <Clock className="h-3 w-3" />
                                       {formatDateTime(shift.start, timeZone, {
                                         format: 'short',
@@ -519,7 +519,7 @@ export default function ScheduleTimeline({
                                         {shift.layerName}
                                       </span>
                                       {isOverride && (
-                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-700">
+                                        <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:text-orange-300">
                                           Override
                                         </span>
                                       )}
@@ -539,11 +539,11 @@ export default function ScheduleTimeline({
 
             {/* Final Schedule Row */}
             {showFinalSchedule && finalScheduleBlocks.length > 0 && (
-              <div className="border-t-2 border-slate-300 pt-2 mt-2">
+              <div className="mt-2 border-t-2 border-border pt-2">
                 <div className="relative">
                   {/* Final Schedule Label */}
                   <div className="px-3 py-2 z-20 relative">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-sm bg-slate-800 text-white">
+                    <div className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-background shadow-sm">
                       <Shield className="h-3 w-3" />
                       Final Schedule
                     </div>
@@ -560,9 +560,9 @@ export default function ScheduleTimeline({
                         <div
                           key={dayKey}
                           className={cn(
-                            'flex-1 border-r border-slate-100/50 last:border-r-0',
-                            isCurrentDay && 'bg-indigo-50/20',
-                            isWeekend && !isCurrentDay && 'bg-slate-50/30'
+                            'flex-1 border-r border-border/50 last:border-r-0',
+                            isCurrentDay && 'bg-primary/[0.03]',
+                            isWeekend && !isCurrentDay && 'bg-muted/20'
                           )}
                         />
                       );
@@ -591,8 +591,8 @@ export default function ScheduleTimeline({
                               <div
                                 className={cn(
                                   'absolute h-12 rounded-xl flex items-center gap-2 px-3 cursor-pointer transition-all duration-200',
-                                  'bg-gradient-to-r from-slate-700 to-slate-800 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5',
-                                  'ring-2 ring-slate-600/50'
+                                  'bg-gradient-to-r from-foreground/85 to-foreground shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5',
+                                  'ring-2 ring-foreground/25'
                                 )}
                                 style={{
                                   left: `${leftPercent}%`,
@@ -650,11 +650,11 @@ export default function ScheduleTimeline({
                                     name={block.userName}
                                     size="xs"
                                   />
-                                  <span className="font-semibold text-slate-900">
+                                  <span className="font-semibold text-foreground">
                                     {block.userName}
                                   </span>
                                 </div>
-                                <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                   <Clock className="h-3 w-3" />
                                   {formatDateTime(block.start, timeZone, {
                                     format: 'short',
@@ -666,7 +666,7 @@ export default function ScheduleTimeline({
                                     hour12: false,
                                   })}
                                 </div>
-                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">
+                                <span className="inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground">
                                   Effective On-Call
                                 </span>
                               </div>
@@ -682,8 +682,8 @@ export default function ScheduleTimeline({
 
             {/* Legend */}
             {shiftsByLayer.length > 0 && (
-              <div className="flex flex-wrap items-center gap-4 p-4 border-t border-slate-100 bg-slate-50/50">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <div className="flex flex-wrap items-center gap-4 border-t bg-muted/20 p-4">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Layers:
                 </span>
                 {[...layerColorMap.entries()].map(([layer, color]) => (
@@ -691,17 +691,19 @@ export default function ScheduleTimeline({
                     <div
                       className={cn('h-3 w-3 rounded-md bg-gradient-to-r shadow-sm', color.bg)}
                     />
-                    <span className="text-xs font-medium text-slate-600">{layer}</span>
+                    <span className="text-xs font-medium text-muted-foreground">{layer}</span>
                   </div>
                 ))}
-                <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-200">
-                  <div className="h-3 w-3 rounded-md bg-orange-500 ring-2 ring-orange-200" />
-                  <span className="text-xs font-medium text-slate-600">Override</span>
+                <div className="ml-4 flex items-center gap-2 border-l pl-4">
+                  <div className="h-3 w-3 rounded-md bg-orange-500 ring-2 ring-orange-500/20" />
+                  <span className="text-xs font-medium text-muted-foreground">Override</span>
                 </div>
                 {showFinalSchedule && finalScheduleBlocks.length > 0 && (
-                  <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-200">
-                    <div className="h-3 w-3 rounded-md bg-slate-800 ring-2 ring-slate-400" />
-                    <span className="text-xs font-medium text-slate-600">Final Schedule</span>
+                  <div className="ml-4 flex items-center gap-2 border-l pl-4">
+                    <div className="h-3 w-3 rounded-md bg-foreground ring-2 ring-foreground/20" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Final Schedule
+                    </span>
                   </div>
                 )}
               </div>

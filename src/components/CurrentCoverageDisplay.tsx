@@ -33,23 +33,28 @@ export default function CurrentCoverageDisplay({
   const hasCoverage = currentCoverage.length > 0;
 
   return (
-    <Card className="overflow-hidden border-border/70 shadow-sm">
+    <Card
+      className={cn(
+        'overflow-hidden shadow-sm transition-shadow hover:shadow-md',
+        hasCoverage ? 'border-emerald-500/25' : 'border-amber-500/30'
+      )}
+    >
       <CardHeader
         className={cn(
-          'border-b',
+          'border-b px-5 py-5 md:px-6 md:py-6',
           hasCoverage
-            ? 'border-emerald-500/20 bg-emerald-500/5'
-            : 'border-amber-500/20 bg-amber-500/5'
+            ? 'border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent'
+            : 'border-amber-500/20 bg-gradient-to-br from-amber-500/12 via-amber-500/5 to-transparent'
         )}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
               className={cn(
-                'flex h-11 w-11 items-center justify-center rounded-xl',
+                'flex h-12 w-12 items-center justify-center rounded-2xl ring-1 ring-inset',
                 hasCoverage
-                  ? 'bg-emerald-500/15 text-emerald-600'
-                  : 'bg-amber-500/15 text-amber-600'
+                  ? 'bg-emerald-500/15 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400'
+                  : 'bg-amber-500/15 text-amber-600 ring-amber-500/20 dark:text-amber-400'
               )}
             >
               {hasCoverage ? (
@@ -62,7 +67,7 @@ export default function CurrentCoverageDisplay({
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 On call now
               </p>
-              <CardTitle className="mt-0.5 text-xl">
+              <CardTitle className="mt-1 text-2xl tracking-tight">
                 {hasCoverage
                   ? currentCoverage.length === 1
                     ? currentCoverage[0].userName
@@ -71,7 +76,7 @@ export default function CurrentCoverageDisplay({
               </CardTitle>
             </div>
           </div>
-          <Badge variant={hasCoverage ? 'success' : 'warning'}>
+          <Badge variant={hasCoverage ? 'success' : 'warning'} className="px-2.5 py-1">
             {hasCoverage ? 'Covered' : 'Needs attention'}
           </Badge>
         </div>
@@ -81,7 +86,10 @@ export default function CurrentCoverageDisplay({
         {hasCoverage ? (
           <div className="divide-y">
             {currentCoverage.map(block => (
-              <div key={block.id} className="flex items-center gap-3 px-5 py-4">
+              <div
+                key={block.id}
+                className="flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/30 md:px-6"
+              >
                 <DirectUserAvatar
                   avatarUrl={
                     block.userAvatar ||
@@ -94,6 +102,9 @@ export default function CurrentCoverageDisplay({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold">{block.userName}</p>
+                    <Badge variant="outline" size="xs">
+                      {block.layerName}
+                    </Badge>
                     {block.source === 'override' && (
                       <Badge variant="warning" size="xs">
                         {block.isAdditiveOverride ? 'Extra coverage' : 'Override'}
@@ -117,7 +128,7 @@ export default function CurrentCoverageDisplay({
           </div>
         )}
 
-        <div className="border-t bg-muted/30 px-5 py-3">
+        <div className="border-t bg-muted/35 px-5 py-4 md:px-6">
           <div className="flex items-start gap-2 text-sm">
             <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             {nextCoverageChange ? (

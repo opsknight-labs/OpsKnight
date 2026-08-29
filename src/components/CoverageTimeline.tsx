@@ -110,11 +110,11 @@ export default function CoverageTimeline({ shifts, timeZone }: CoverageTimelineP
           <Badge variant="secondary" size="xs">
             Today
           </Badge>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             {formatDateTime(currentTime, timeZone, { format: 'date' })}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-slate-400">
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
           <Clock className="h-3 w-3" />
           <span>{formatDateTime(currentTime, timeZone, { format: 'time', hour12: false })}</span>
           <Badge variant="outline" size="xs">
@@ -124,17 +124,17 @@ export default function CoverageTimeline({ shifts, timeZone }: CoverageTimelineP
       </div>
 
       {/* Timeline */}
-      <div className="relative rounded-xl border border-slate-200/80 bg-white/90 overflow-hidden shadow-sm">
+      <div className="relative overflow-hidden rounded-xl border bg-background shadow-sm">
         {/* Hour Grid */}
         <div className="absolute inset-0 flex">
           {/* Night (0-6) */}
-          <div className="w-1/4 bg-slate-50/70 border-r border-slate-100" />
+          <div className="w-1/4 border-r bg-muted/30" />
           {/* Day (6-12) */}
-          <div className="w-1/4 bg-amber-50/40 border-r border-slate-100" />
+          <div className="w-1/4 border-r bg-amber-500/[0.04]" />
           {/* Day (12-18) */}
-          <div className="w-1/4 bg-amber-50/40 border-r border-slate-100" />
+          <div className="w-1/4 border-r bg-amber-500/[0.04]" />
           {/* Night (18-24) */}
-          <div className="w-1/4 bg-slate-50/70" />
+          <div className="w-1/4 bg-muted/30" />
         </div>
 
         {/* Shift Blocks */}
@@ -168,7 +168,7 @@ export default function CoverageTimeline({ shifts, timeZone }: CoverageTimelineP
                       className={cn(
                         'absolute top-2 h-8 rounded-lg flex items-center gap-1.5 px-1.5 cursor-pointer transition-all hover:ring-2 hover:ring-offset-1',
                         color.bg,
-                        'hover:ring-slate-300'
+                        'hover:ring-border'
                       )}
                       style={{
                         left: `${leftPercent}%`,
@@ -199,10 +199,10 @@ export default function CoverageTimeline({ shifts, timeZone }: CoverageTimelineP
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
                     <div className="font-medium">{shift.userName}</div>
-                    <div className="text-slate-400">
+                    <div className="text-muted-foreground">
                       {startLabel} - {endLabel}
                     </div>
-                    <div className="text-slate-500">{shift.layerName}</div>
+                    <div className="text-muted-foreground">{shift.layerName}</div>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -221,7 +221,7 @@ export default function CoverageTimeline({ shifts, timeZone }: CoverageTimelineP
         </div>
 
         {/* Hour Labels */}
-        <div className="relative h-5 border-t border-slate-100 flex text-[9px] text-slate-400">
+        <div className="relative flex h-5 border-t text-[9px] text-muted-foreground">
           {hourMarkers.map(hour => (
             <div
               key={hour}
@@ -229,7 +229,7 @@ export default function CoverageTimeline({ shifts, timeZone }: CoverageTimelineP
               style={{ left: `${(hour / 24) * 100}%` }}
             >
               {hour === 6 && <Sun className="h-2.5 w-2.5 text-amber-400" />}
-              {hour === 18 && <Moon className="h-2.5 w-2.5 text-slate-400" />}
+              {hour === 18 && <Moon className="h-2.5 w-2.5 text-muted-foreground" />}
               <span>{formatHourLabel(hour)}</span>
             </div>
           ))}
@@ -242,7 +242,7 @@ export default function CoverageTimeline({ shifts, timeZone }: CoverageTimelineP
           {[...layerColorMap.entries()].map(([layer, color]) => (
             <div key={layer} className="flex items-center gap-1.5">
               <div className={cn('h-2 w-2 rounded-sm', color.bg)} />
-              <span className="text-[10px] text-slate-500">{layer}</span>
+              <span className="text-[10px] text-muted-foreground">{layer}</span>
             </div>
           ))}
         </div>
@@ -251,7 +251,7 @@ export default function CoverageTimeline({ shifts, timeZone }: CoverageTimelineP
       {/* Empty State */}
       {todayShifts.length === 0 && (
         <div className="text-center py-3">
-          <p className="text-xs text-slate-400">No shifts scheduled for today</p>
+          <p className="text-xs text-muted-foreground">No shifts scheduled for today</p>
         </div>
       )}
     </div>

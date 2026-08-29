@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { ArrowRight, Plus, Repeat2, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export type PresentedOverride = {
   id: string;
@@ -85,7 +86,15 @@ export default function OverrideList({
         {overrides.map(override => {
           const isReplacement = Boolean(override.replacesUserId);
           return (
-            <Card key={override.id} className="p-4">
+            <Card
+              key={override.id}
+              className={cn(
+                'border-l-4 p-4 shadow-sm transition-colors hover:bg-muted/20',
+                status === 'ACTIVE' && 'border-l-emerald-500',
+                status === 'UPCOMING' && 'border-l-amber-500',
+                status === 'COMPLETED' && 'border-l-muted-foreground/30'
+              )}
+            >
               <div className="flex items-start gap-3">
                 <DirectUserAvatar
                   avatarUrl={

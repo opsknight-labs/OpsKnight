@@ -67,21 +67,36 @@ type LayerCardProps = {
 };
 
 const LAYER_COLORS = [
-  { bg: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  {
+    bg: 'bg-blue-500',
+    light: 'bg-blue-500/10',
+    text: 'text-blue-700 dark:text-blue-300',
+    border: 'border-blue-500/40',
+  },
   {
     bg: 'bg-violet-500',
-    light: 'bg-violet-50',
-    text: 'text-violet-700',
-    border: 'border-violet-200',
+    light: 'bg-violet-500/10',
+    text: 'text-violet-700 dark:text-violet-300',
+    border: 'border-violet-500/40',
   },
   {
     bg: 'bg-emerald-500',
-    light: 'bg-emerald-50',
-    text: 'text-emerald-700',
-    border: 'border-emerald-200',
+    light: 'bg-emerald-500/10',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-500/40',
   },
-  { bg: 'bg-amber-500', light: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-  { bg: 'bg-rose-500', light: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+  {
+    bg: 'bg-amber-500',
+    light: 'bg-amber-500/10',
+    text: 'text-amber-700 dark:text-amber-300',
+    border: 'border-amber-500/40',
+  },
+  {
+    bg: 'bg-rose-500',
+    light: 'bg-rose-500/10',
+    text: 'text-rose-700 dark:text-rose-300',
+    border: 'border-rose-500/40',
+  },
 ];
 
 function formatShortTime(date: Date, timeZone: string): string {
@@ -157,14 +172,14 @@ function HelpTip({ children }: { children: React.ReactNode }) {
             role="button"
             tabIndex={0}
             aria-label="Layer help"
-            className="inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Info className="h-3 w-3" />
           </span>
         </TooltipTrigger>
         <TooltipContent
           side="right"
-          className="max-w-[250px] text-xs z-50 bg-slate-900 text-white border-slate-800"
+          className="z-50 max-w-[250px] border-border bg-popover text-xs text-popover-foreground"
         >
           {children}
         </TooltipContent>
@@ -263,16 +278,19 @@ export default function LayerCard({
   return (
     <>
       <Card
-        className={cn('overflow-hidden border-l-4 border-slate-200/80 shadow-sm', color.border)}
+        className={cn(
+          'overflow-hidden border-l-4 shadow-sm transition-shadow hover:shadow-md',
+          color.border
+        )}
       >
-        <div className="flex items-start justify-between gap-3 p-3 bg-slate-50/70">
+        <div className="flex items-start justify-between gap-3 bg-muted/25 p-4">
           <div className="flex items-start gap-3 min-w-0 flex-1">
             <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center', color.light)}>
               <Layers className={cn('h-4 w-4', color.text)} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold text-slate-800 truncate">{layer.name}</h3>
+                <h3 className="truncate text-base font-semibold text-foreground">{layer.name}</h3>
                 <HelpTip>
                   <p>
                     <strong>Layer:</strong> A rotation pattern that cycles through responders.
@@ -280,7 +298,7 @@ export default function LayerCard({
                   </p>
                 </HelpTip>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                 <Badge variant="secondary" size="xs">
                   {layer.rotationLengthHours}h rotation
                 </Badge>
@@ -288,7 +306,7 @@ export default function LayerCard({
                   <Badge
                     variant="outline"
                     size="xs"
-                    className="border-orange-200 bg-orange-50 text-orange-700"
+                    className="border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-300"
                   >
                     {layer.shiftLengthHours}h shift
                   </Badge>
@@ -300,7 +318,7 @@ export default function LayerCard({
                       key={index}
                       variant="outline"
                       size="xs"
-                      className="border-purple-200 bg-purple-50 text-purple-700"
+                      className="border-purple-500/25 bg-purple-500/10 text-purple-700 dark:text-purple-300"
                     >
                       {badge}
                     </Badge>
@@ -322,7 +340,7 @@ export default function LayerCard({
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsEditOpen(!isEditOpen)}
-                className={cn('h-7 w-7', isEditOpen && 'bg-slate-200')}
+                className={cn('h-7 w-7', isEditOpen && 'bg-muted')}
                 aria-label={`Edit ${layer.name}`}
               >
                 <Edit3 className="h-3 w-3" />
@@ -331,7 +349,7 @@ export default function LayerCard({
                 variant="ghost"
                 size="icon"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="h-7 w-7 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                className="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 aria-label={`Delete ${layer.name}`}
               >
                 <Trash2 className="h-3 w-3" />
@@ -357,12 +375,12 @@ export default function LayerCard({
             onOpenChange={setIsEditOpen}
           />
 
-          <div className="border-t border-slate-100">
-            <div className="flex items-center justify-between gap-3 p-2.5 px-3 bg-slate-50/50">
-              <div className="flex items-center gap-2 text-xs text-slate-600 min-w-0">
+          <div className="border-t">
+            <div className="flex items-center justify-between gap-3 bg-muted/15 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
                 <Users className="h-3.5 w-3.5 shrink-0" />
                 <span className="font-medium">Responders</span>
-                <Badge variant="secondary" className="h-4 px-1.5 text-[9px] bg-slate-100">
+                <Badge variant="secondary" className="h-4 px-1.5 text-[9px]">
                   {layer.users.length}
                 </Badge>
               </div>
@@ -377,10 +395,12 @@ export default function LayerCard({
 
             {layer.users.length === 0 ? (
               <div className="px-4 py-5 text-center">
-                <Users className="mx-auto mb-1.5 h-5 w-5 text-slate-300" />
-                <p className="text-xs font-medium text-slate-500">No responders in this rotation</p>
+                <Users className="mx-auto mb-1.5 h-5 w-5 text-muted-foreground/40" />
+                <p className="text-xs font-medium text-muted-foreground">
+                  No responders in this rotation
+                </p>
                 {canManageSchedules && (
-                  <p className="mt-0.5 text-[10px] text-slate-400">
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
                     Add an active responder to start coverage.
                   </p>
                 )}
@@ -391,7 +411,7 @@ export default function LayerCard({
                   <div
                     key={layerUser.userId}
                     className={cn(
-                      'flex items-center justify-between py-2 px-2 rounded-md hover:bg-slate-50 group',
+                      'group flex items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-muted/40',
                       isPending && 'opacity-50'
                     )}
                   >
@@ -401,7 +421,7 @@ export default function LayerCard({
                           'w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0',
                           index === 0
                             ? `${color.light} ${color.text}`
-                            : 'bg-slate-100 text-slate-500'
+                            : 'bg-muted text-muted-foreground'
                         )}
                       >
                         {index + 1}
@@ -414,7 +434,7 @@ export default function LayerCard({
                         size="xs"
                         className="h-6 w-6 shrink-0"
                       />
-                      <span className="text-sm font-medium text-slate-700 truncate">
+                      <span className="truncate text-sm font-medium text-foreground">
                         {layerUser.user.name}
                       </span>
                     </div>
@@ -445,7 +465,7 @@ export default function LayerCard({
                           size="icon"
                           onClick={() => handleRemoveUser(layerUser.userId)}
                           disabled={isPending}
-                          className="h-7 w-7 text-slate-400 hover:text-red-500"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
                           aria-label={`Remove ${layerUser.user.name} from ${layer.name}`}
                         >
                           <X className="h-3 w-3" />
