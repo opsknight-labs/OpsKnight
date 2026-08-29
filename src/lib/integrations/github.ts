@@ -1,6 +1,7 @@
 /**
  * GitHub/GitLab Integration Handler
  * Transforms GitHub/GitLab webhook events to standard event format
+ * adhering to industry-standard incident management state machines (PagerDuty / Datadog).
  */
 
 export type GitHubEvent = {
@@ -42,6 +43,24 @@ export type GitHubEvent = {
       | 'skipped'
       | null;
     html_url: string;
+  };
+  workflow_job?: {
+    id: number;
+    run_id?: number;
+    name: string;
+    head_branch?: string;
+    status: 'queued' | 'in_progress' | 'completed' | 'waiting';
+    conclusion?:
+      | 'success'
+      | 'failure'
+      | 'neutral'
+      | 'cancelled'
+      | 'timed_out'
+      | 'action_required'
+      | 'stale'
+      | 'skipped'
+      | null;
+    html_url?: string;
   };
   deployment?: {
     id: number;
@@ -92,8 +111,7 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
       .toLowerCase()
       .replace(/[^a-z0-9-_]/g, '-');
 
-    // Handle pending states as acknowledge
-    if (isPending && !isFailure) {
+    if (isPending) {
       return {
         event_action: 'acknowledge',
         dedup_key: workflowDedupKey,
@@ -116,13 +134,60 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
       };
     }
 
+    if (isResolved) {
+      return {
+        event_action: 'resolve',
+        dedup_key: workflowDedupKey,
+        payload: {
+          summary: `Workflow succeeded: ${workflow.name}`,
+          source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+          severity: 'info',
+          custom_details: {
+            action: payload.action,
+            repository: payload.repository,
+            workflow_run: {
+              id: workflow.id,
+              name: workflow.name,
+              status: workflow.status,
+              conclusion: workflow.conclusion,
+              html_url: workflow.html_url,
+            },
+          },
+        },
+      };
+    }
+
+    if (isFailure) {
+      return {
+        event_action: 'trigger',
+        dedup_key: workflowDedupKey,
+        payload: {
+          summary: `Workflow failed: ${workflow.name}`,
+          source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+          severity: 'critical',
+          custom_details: {
+            action: payload.action,
+            repository: payload.repository,
+            workflow_run: {
+              id: workflow.id,
+              name: workflow.name,
+              status: workflow.status,
+              conclusion: workflow.conclusion,
+              html_url: workflow.html_url,
+            },
+          },
+        },
+      };
+    }
+
+    // Skipped, neutral, or non-failure conclusions -> acknowledge/ignore
     return {
-      event_action: isResolved ? 'resolve' : 'trigger',
+      event_action: 'acknowledge',
       dedup_key: workflowDedupKey,
       payload: {
-        summary: `Workflow failed: ${workflow.name}`,
+        summary: `Workflow ${workflow.conclusion || workflow.status}: ${workflow.name}`,
         source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
-        severity: isFailure ? 'critical' : 'info',
+        severity: 'info',
         custom_details: {
           action: payload.action,
           repository: payload.repository,
@@ -153,8 +218,7 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
       .toLowerCase()
       .replace(/[^a-z0-9-_]/g, '-');
 
-    // Handle pending state as acknowledge
-    if (isPending && !isFailure) {
+    if (isPending) {
       return {
         event_action: 'acknowledge',
         dedup_key: checkDedupKey,
@@ -177,13 +241,60 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
       };
     }
 
+    if (isResolved) {
+      return {
+        event_action: 'resolve',
+        dedup_key: checkDedupKey,
+        payload: {
+          summary: `Check succeeded: ${check.name}`,
+          source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+          severity: 'info',
+          custom_details: {
+            action: payload.action,
+            repository: payload.repository,
+            check_run: {
+              id: check.id,
+              name: check.name,
+              status: check.status,
+              conclusion: check.conclusion,
+              html_url: check.html_url,
+            },
+          },
+        },
+      };
+    }
+
+    if (isFailure) {
+      return {
+        event_action: 'trigger',
+        dedup_key: checkDedupKey,
+        payload: {
+          summary: `Check failed: ${check.name}`,
+          source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+          severity: 'critical',
+          custom_details: {
+            action: payload.action,
+            repository: payload.repository,
+            check_run: {
+              id: check.id,
+              name: check.name,
+              status: check.status,
+              conclusion: check.conclusion,
+              html_url: check.html_url,
+            },
+          },
+        },
+      };
+    }
+
+    // Skipped, neutral, or non-failure conclusions -> acknowledge/ignore
     return {
-      event_action: isResolved ? 'resolve' : 'trigger',
+      event_action: 'acknowledge',
       dedup_key: checkDedupKey,
       payload: {
-        summary: `Check failed: ${check.name}`,
+        summary: `Check ${check.conclusion || check.status}: ${check.name}`,
         source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
-        severity: isFailure ? 'critical' : 'info',
+        severity: 'info',
         custom_details: {
           action: payload.action,
           repository: payload.repository,
@@ -199,6 +310,115 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
     };
   }
 
+  // Handle GitHub workflow_job
+  if (payload.workflow_job) {
+    const job = payload.workflow_job;
+    const isFailure =
+      job.conclusion === 'failure' ||
+      job.conclusion === 'cancelled' ||
+      job.conclusion === 'timed_out';
+    const isResolved = job.status === 'completed' && job.conclusion === 'success';
+    const isPending =
+      job.status === 'queued' || job.status === 'in_progress' || job.status === 'waiting';
+
+    const repoName = payload.repository?.full_name || 'unknown';
+    const branchPart = job.head_branch ? `-${job.head_branch}` : '';
+    const jobDedupKey = `github-job-${repoName}-${job.name || job.id}${branchPart}`
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, '-');
+
+    if (isPending) {
+      return {
+        event_action: 'acknowledge',
+        dedup_key: jobDedupKey,
+        payload: {
+          summary: `Job in progress: ${job.name}`,
+          source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+          severity: 'info',
+          custom_details: {
+            action: payload.action,
+            repository: payload.repository,
+            workflow_job: {
+              id: job.id,
+              name: job.name,
+              status: job.status,
+              conclusion: job.conclusion,
+              html_url: job.html_url,
+            },
+          },
+        },
+      };
+    }
+
+    if (isResolved) {
+      return {
+        event_action: 'resolve',
+        dedup_key: jobDedupKey,
+        payload: {
+          summary: `Job succeeded: ${job.name}`,
+          source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+          severity: 'info',
+          custom_details: {
+            action: payload.action,
+            repository: payload.repository,
+            workflow_job: {
+              id: job.id,
+              name: job.name,
+              status: job.status,
+              conclusion: job.conclusion,
+              html_url: job.html_url,
+            },
+          },
+        },
+      };
+    }
+
+    if (isFailure) {
+      return {
+        event_action: 'trigger',
+        dedup_key: jobDedupKey,
+        payload: {
+          summary: `Job failed: ${job.name}`,
+          source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+          severity: 'critical',
+          custom_details: {
+            action: payload.action,
+            repository: payload.repository,
+            workflow_job: {
+              id: job.id,
+              name: job.name,
+              status: job.status,
+              conclusion: job.conclusion,
+              html_url: job.html_url,
+            },
+          },
+        },
+      };
+    }
+
+    // Skipped, neutral, or non-failure conclusions -> acknowledge/ignore
+    return {
+      event_action: 'acknowledge',
+      dedup_key: jobDedupKey,
+      payload: {
+        summary: `Job ${job.conclusion || job.status}: ${job.name}`,
+        source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+        severity: 'info',
+        custom_details: {
+          action: payload.action,
+          repository: payload.repository,
+          workflow_job: {
+            id: job.id,
+            name: job.name,
+            status: job.status,
+            conclusion: job.conclusion,
+            html_url: job.html_url,
+          },
+        },
+      },
+    };
+  }
+
   // Handle GitHub deployment
   if (payload.deployment) {
     const deployment = payload.deployment;
@@ -206,11 +426,13 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
     const isResolved = deployment.state === 'success';
     const isPending = deployment.state === 'pending';
 
-    // Handle pending state as acknowledge
+    const repoName = payload.repository?.full_name || 'unknown';
+    const deploymentDedupKey = `github-deployment-${repoName}-${deployment.id}`;
+
     if (isPending) {
       return {
         event_action: 'acknowledge',
-        dedup_key: `github-deployment-${deployment.id}`,
+        dedup_key: deploymentDedupKey,
         payload: {
           summary: `Deployment pending: ${deployment.environment}`,
           source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
@@ -228,13 +450,55 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
       };
     }
 
+    if (isResolved) {
+      return {
+        event_action: 'resolve',
+        dedup_key: deploymentDedupKey,
+        payload: {
+          summary: `Deployment succeeded: ${deployment.environment}`,
+          source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+          severity: 'info',
+          custom_details: {
+            action: payload.action,
+            repository: payload.repository,
+            deployment: {
+              id: deployment.id,
+              environment: deployment.environment,
+              state: deployment.state,
+            },
+          },
+        },
+      };
+    }
+
+    if (isFailure) {
+      return {
+        event_action: 'trigger',
+        dedup_key: deploymentDedupKey,
+        payload: {
+          summary: `Deployment ${deployment.state}: ${deployment.environment}`,
+          source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
+          severity: 'critical',
+          custom_details: {
+            action: payload.action,
+            repository: payload.repository,
+            deployment: {
+              id: deployment.id,
+              environment: deployment.environment,
+              state: deployment.state,
+            },
+          },
+        },
+      };
+    }
+
     return {
-      event_action: isResolved ? 'resolve' : 'trigger',
-      dedup_key: `github-deployment-${deployment.id}`,
+      event_action: 'acknowledge',
+      dedup_key: deploymentDedupKey,
       payload: {
         summary: `Deployment ${deployment.state}: ${deployment.environment}`,
         source: `GitHub${payload.repository ? ` - ${payload.repository.full_name}` : ''}`,
-        severity: isFailure ? 'critical' : 'info',
+        severity: 'info',
         custom_details: {
           action: payload.action,
           repository: payload.repository,
@@ -264,7 +528,7 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
         event_action: 'acknowledge',
         dedup_key: gitlabDedupKey,
         payload: {
-          summary: `Build ${payload.build_status || payload.status}: ${payload.ref || 'unknown'}`,
+          summary: `Build ${payload.build_status || payload.status || 'in progress'}: ${payload.ref || 'unknown'}`,
           source: `GitLab${payload.project ? ` - ${payload.project.path_with_namespace}` : ''}`,
           severity: 'info',
           custom_details: {
@@ -279,13 +543,53 @@ export function transformGitHubToEvent(payload: GitHubEvent): {
       };
     }
 
+    if (isResolved) {
+      return {
+        event_action: 'resolve',
+        dedup_key: gitlabDedupKey,
+        payload: {
+          summary: `Build succeeded: ${payload.ref || 'unknown'}`,
+          source: `GitLab${payload.project ? ` - ${payload.project.path_with_namespace}` : ''}`,
+          severity: 'info',
+          custom_details: {
+            object_kind: payload.object_kind,
+            project: payload.project,
+            build_status: payload.build_status,
+            status: payload.status,
+            ref: payload.ref,
+            commit: payload.commit,
+          },
+        },
+      };
+    }
+
+    if (isFailure) {
+      return {
+        event_action: 'trigger',
+        dedup_key: gitlabDedupKey,
+        payload: {
+          summary: `Build ${payload.build_status || payload.status}: ${payload.ref || 'unknown'}`,
+          source: `GitLab${payload.project ? ` - ${payload.project.path_with_namespace}` : ''}`,
+          severity: 'error',
+          custom_details: {
+            object_kind: payload.object_kind,
+            project: payload.project,
+            build_status: payload.build_status,
+            status: payload.status,
+            ref: payload.ref,
+            commit: payload.commit,
+          },
+        },
+      };
+    }
+
     return {
-      event_action: isResolved ? 'resolve' : 'trigger',
+      event_action: 'acknowledge',
       dedup_key: gitlabDedupKey,
       payload: {
         summary: `Build ${payload.build_status || payload.status}: ${payload.ref || 'unknown'}`,
         source: `GitLab${payload.project ? ` - ${payload.project.path_with_namespace}` : ''}`,
-        severity: isFailure ? 'error' : 'info',
+        severity: 'info',
         custom_details: {
           object_kind: payload.object_kind,
           project: payload.project,
