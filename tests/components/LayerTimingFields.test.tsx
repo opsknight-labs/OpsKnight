@@ -24,7 +24,7 @@ describe('LayerTimingFields', () => {
     expect(
       screen.queryByRole('spinbutton', { name: 'Layer active duration' })
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /advanced layer timing/i }));
+    fireEvent.click(screen.getByRole('button', { name: /set a limited layer duration/i }));
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Layer active duration' }), {
       target: { value: '8' },
     });

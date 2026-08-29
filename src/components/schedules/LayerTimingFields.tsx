@@ -15,7 +15,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/shadcn/tooltip';
-import { Calendar, Clock, Info, Repeat } from 'lucide-react';
+import { useState } from 'react';
+import { Calendar, ChevronDown, Info, Repeat, SlidersHorizontal } from 'lucide-react';
 
 type LayerTimingFieldsProps = {
   rotationDuration: string;
@@ -47,6 +48,7 @@ export default function LayerTimingFields({
   rotationSummary,
   timeZone,
 }: LayerTimingFieldsProps) {
+  const [advancedOpen, setAdvancedOpen] = useState(Boolean(shiftDuration));
   const shiftHours = Number(shiftDuration);
   const rotationHours = Number(rotationDuration);
   const leavesLayerInactive =
@@ -121,19 +123,29 @@ export default function LayerTimingFields({
             </div>
           </div>
 
-          <Collapsible defaultOpen={Boolean(shiftDuration)}>
+          <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
             <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className="flex w-full items-center justify-between border-t pt-4 text-left"
+                className="flex w-full items-center gap-3 rounded-lg border border-dashed border-primary/30 bg-primary/[0.045] p-3 text-left transition-colors hover:border-primary/55 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  Advanced layer timing
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <SlidersHorizontal className="h-4 w-4" />
                 </span>
-                <Badge variant="secondary" size="xs">
-                  Optional
-                </Badge>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    Set a limited layer duration
+                    <Badge variant="secondary" size="xs">
+                      Advanced
+                    </Badge>
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Use this only when another layer covers part of the handoff interval.
+                  </span>
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-primary transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+                />
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-4">

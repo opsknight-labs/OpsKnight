@@ -324,9 +324,9 @@ export default function LayerCard({
           color.border
         )}
       >
-        <div className="flex items-start justify-between gap-3 bg-muted/25 p-4">
+        <div className={cn('flex items-start justify-between gap-3 p-3', color.light)}>
           <div className="flex items-start gap-3 min-w-0 flex-1">
-            <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center', color.light)}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/70 shadow-sm ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.08]">
               <Layers className={cn('h-4 w-4', color.text)} />
             </div>
             <div className="min-w-0 flex-1">
@@ -339,7 +339,7 @@ export default function LayerCard({
                   </p>
                 </HelpTip>
               </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                 <Badge variant="secondary" size="xs">
                   Changes every {layer.rotationLengthHours}h
                 </Badge>
@@ -436,7 +436,9 @@ export default function LayerCard({
 
         <CardContent className="p-0">
           {layerCount > 1 && (
-            <div className="border-t bg-muted/[0.08] px-4 py-2 text-[11px] text-muted-foreground">
+            <div
+              className={cn('border-t px-3 py-1.5 text-[11px] text-muted-foreground', color.light)}
+            >
               Coverage precedence:{' '}
               <span className="font-medium text-foreground">
                 {layerPosition + 1} of {layerCount}
@@ -461,7 +463,7 @@ export default function LayerCard({
           />
 
           <Collapsible open={isExpanded} onOpenChange={setIsExpanded} className="border-t">
-            <div className="flex items-center justify-between gap-3 bg-muted/15 px-4 py-3">
+            <div className="flex items-center justify-between gap-3 bg-muted/15 px-3 py-2.5">
               <button
                 type="button"
                 onClick={() => setIsExpanded(value => !value)}

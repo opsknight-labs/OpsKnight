@@ -401,19 +401,19 @@ export default async function ScheduleDetailPage({
           )}
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2 border-t border-primary/10 pt-4 sm:grid-cols-4">
-          <div>
+          <div className="rounded-lg border border-blue-500/15 bg-blue-500/[0.06] px-3 py-2">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Layers
             </p>
             <p className="mt-1 text-lg font-semibold">{schedule.layers.length}</p>
           </div>
-          <div>
+          <div className="rounded-lg border border-violet-500/15 bg-violet-500/[0.06] px-3 py-2">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Responders
             </p>
             <p className="mt-1 text-lg font-semibold">{totalResponderCount}</p>
           </div>
-          <div>
+          <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.06] px-3 py-2">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Ready layers
             </p>
@@ -421,7 +421,7 @@ export default async function ScheduleDetailPage({
               {configuredLayerCount}/{schedule.layers.length}
             </p>
           </div>
-          <div>
+          <div className="rounded-lg border border-amber-500/15 bg-amber-500/[0.06] px-3 py-2">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Restricted
             </p>
@@ -463,7 +463,7 @@ export default async function ScheduleDetailPage({
           </p>
         </Card>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           {schedule.layers.map((layer, index) => (
             <LayerCard
               key={layer.id}
