@@ -1,15 +1,24 @@
+import type React from 'react';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { formatDateTime } from '@/lib/timezone';
-import { Activity, UserPlus, UserMinus, ShieldAlert, Edit, Sparkles } from 'lucide-react';
+import {
+  Activity,
+  UserPlus,
+  UserMinus,
+  ShieldAlert,
+  Edit,
+  Sparkles,
+  type LucideIcon,
+} from 'lucide-react';
 
 type AuditLogItem = {
   id: string;
   action: string;
   actorName?: string | null;
   actorEmail?: string | null;
-  details?: any;
+  details?: Record<string, unknown> | string | null;
   createdAt: Date | string;
   actor?: {
     id: string;
@@ -26,7 +35,7 @@ type TeamActivityTimelineProps = {
 
 function formatActionTitle(action: string): {
   label: string;
-  icon: any;
+  icon: LucideIcon;
   variant: 'default' | 'secondary' | 'warning' | 'destructive' | 'info' | 'success';
 } {
   switch (action) {
@@ -76,13 +85,13 @@ export default function TeamActivityTimeline({
         const actorAvatar =
           log.actor?.avatarUrl || getDefaultAvatar(log.actor?.gender, log.actor?.id || actorName);
 
-        const details =
+        const details: Record<string, unknown> =
           typeof log.details === 'object' && log.details !== null
-            ? log.details
+            ? (log.details as Record<string, unknown>)
             : typeof log.details === 'string'
               ? (() => {
                   try {
-                    return JSON.parse(log.details);
+                    return JSON.parse(log.details) as Record<string, unknown>;
                   } catch {
                     return { text: log.details };
                   }
@@ -116,17 +125,17 @@ export default function TeamActivityTimeline({
                   className="h-4 w-4 shrink-0"
                 />
                 <span className="font-medium text-foreground">{actorName}</span>
-                {details.name && (
+                {typeof details.name === 'string' && (
                   <span>
                     team: <strong className="text-foreground font-semibold">{details.name}</strong>
                   </span>
                 )}
-                {details.role && (
+                {typeof details.role === 'string' && (
                   <span>
                     role: <strong className="text-foreground font-semibold">{details.role}</strong>
                   </span>
                 )}
-                {details.userName && (
+                {typeof details.userName === 'string' && (
                   <span>
                     user:{' '}
                     <strong className="text-foreground font-semibold">{details.userName}</strong>

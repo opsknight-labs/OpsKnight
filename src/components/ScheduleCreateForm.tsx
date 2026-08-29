@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useActionState, useEffect } from 'react';
+import { useState, useRef, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-product-notification';
@@ -20,7 +20,7 @@ import { Plus, X, Loader2, ShieldAlert, AlertCircle } from 'lucide-react';
 import type { ScheduleActionState } from '@/lib/schedule-action-errors';
 
 type ScheduleCreateFormProps = {
-  action: any;
+  action: (prevState: ScheduleActionState, formData: FormData) => Promise<ScheduleActionState>;
   canCreate: boolean;
 };
 
@@ -45,24 +45,27 @@ function SubmitButton() {
 
 export default function ScheduleCreateForm({ action, canCreate }: ScheduleCreateFormProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [state, formAction] = useActionState<ScheduleActionState, FormData>(action, {
-    error: undefined,
-    success: false,
-  });
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
   const { showToast } = useToast();
 
-  useEffect(() => {
-    if (state?.success) {
+  const handleAction = async (prevState: ScheduleActionState, formData: FormData) => {
+    const res = await action(prevState, formData);
+    if (res?.success) {
       showToast('Schedule created successfully', 'success');
       formRef.current?.reset();
       setIsOpen(false);
       router.refresh();
-    } else if (state?.error) {
-      showToast(state.error, 'error');
+    } else if (res?.error) {
+      showToast(res.error, 'error');
     }
-  }, [state, router, showToast]);
+    return res;
+  };
+
+  const [state, formAction] = useActionState<ScheduleActionState, FormData>(handleAction, {
+    error: undefined,
+    success: false,
+  });
 
   if (!canCreate) {
     return (

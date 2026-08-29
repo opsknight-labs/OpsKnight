@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useActionState, useEffect } from 'react';
+import { useState, useRef, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
@@ -16,7 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/shadcn/card';
-import { Plus, X, Loader2, AlertCircle, ShieldAlert, Users } from 'lucide-react';
+import { Plus, X, Loader2, AlertCircle, ShieldAlert } from 'lucide-react';
 
 type FormState = {
   error?: string | null;
@@ -49,21 +49,24 @@ function SubmitButton() {
 
 export default function TeamCreateForm({ action, canCreate = true }: TeamCreateFormProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [state, formAction] = useActionState(action, { error: null, success: false });
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
   const { showToast } = useToast();
 
-  useEffect(() => {
-    if (state?.success) {
+  const handleAction = async (prevState: FormState, formData: FormData) => {
+    const res = await action(prevState, formData);
+    if (res?.success) {
       showToast('Team created successfully', 'success');
       formRef.current?.reset();
       setIsOpen(false);
       router.refresh();
-    } else if (state?.error) {
-      showToast(getUserFacingErrorMessage(state.error), 'error');
+    } else if (res?.error) {
+      showToast(getUserFacingErrorMessage(res.error), 'error');
     }
-  }, [state, router, showToast]);
+    return res;
+  };
+
+  const [state, formAction] = useActionState(handleAction, { error: null, success: false });
 
   if (!canCreate) {
     return (
