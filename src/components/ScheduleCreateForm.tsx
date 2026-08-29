@@ -17,14 +17,10 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Plus, X, Loader2, ShieldAlert, AlertCircle } from 'lucide-react';
-
-type FormState = {
-  error?: string | null;
-  success?: boolean;
-};
+import type { ScheduleActionState } from '@/lib/schedule-action-errors';
 
 type ScheduleCreateFormProps = {
-  action: (prevState: FormState, formData: FormData) => Promise<FormState>;
+  action: any;
   canCreate: boolean;
 };
 
@@ -49,8 +45,8 @@ function SubmitButton() {
 
 export default function ScheduleCreateForm({ action, canCreate }: ScheduleCreateFormProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [state, formAction] = useActionState<FormState, FormData>(action, {
-    error: null,
+  const [state, formAction] = useActionState<ScheduleActionState, FormData>(action, {
+    error: undefined,
     success: false,
   });
   const formRef = useRef<HTMLFormElement | null>(null);
