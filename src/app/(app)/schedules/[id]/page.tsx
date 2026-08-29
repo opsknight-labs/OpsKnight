@@ -39,7 +39,6 @@ import ScheduleCoverageExplorer from '@/components/schedules/ScheduleCoverageExp
 import ScheduleCoveragePreview from '@/components/schedules/ScheduleCoveragePreview';
 import ScheduleActivityFeed from '@/components/schedules/ScheduleActivityFeed';
 import ScheduleHealthCheck from '@/components/ScheduleHealthCheck';
-import ScheduleExportMenu from '@/components/schedules/ScheduleExportMenu';
 import ScheduleLinkedPolicies from '@/components/schedules/ScheduleLinkedPolicies';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -437,7 +436,8 @@ export default async function ScheduleDetailPage({
           />
         }
         calendar={<ScheduleCalendar shifts={calendarShifts} timeZone={schedule.timeZone} />}
-        exportMenu={<ScheduleExportMenu scheduleId={schedule.id} scheduleName={schedule.name} />}
+        scheduleId={schedule.id}
+        scheduleName={schedule.name}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

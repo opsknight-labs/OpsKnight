@@ -10,16 +10,21 @@ import {
   CardContent,
 } from '@/components/ui/shadcn/card';
 import { CalendarDays, GanttChart } from 'lucide-react';
+import ScheduleExportMenu from './ScheduleExportMenu';
+
+type ScheduleCoverageExplorerProps = {
+  timeline: ReactNode;
+  calendar: ReactNode;
+  scheduleId?: string;
+  scheduleName?: string;
+};
 
 export default function ScheduleCoverageExplorer({
   timeline,
   calendar,
-  exportMenu,
-}: {
-  timeline: ReactNode;
-  calendar: ReactNode;
-  exportMenu?: ReactNode;
-}) {
+  scheduleId,
+  scheduleName,
+}: ScheduleCoverageExplorerProps) {
   return (
     <Card
       className="overflow-hidden border-border/70 shadow-sm"
@@ -55,7 +60,9 @@ export default function ScheduleCoverageExplorer({
                 </TabsTrigger>
               </TabsList>
 
-              {exportMenu}
+              {scheduleId ? (
+                <ScheduleExportMenu scheduleId={scheduleId} scheduleName={scheduleName} />
+              ) : null}
             </div>
           </div>
         </CardHeader>
