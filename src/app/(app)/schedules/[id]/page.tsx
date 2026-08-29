@@ -35,6 +35,8 @@ import ScheduleEditForm from '@/components/ScheduleEditForm';
 import ScheduleTimezoneNotice from '@/components/ScheduleTimezoneNotice';
 import ScheduleDetailTabs from '@/components/schedules/ScheduleDetailTabs';
 import ScheduleCoverageExplorer from '@/components/schedules/ScheduleCoverageExplorer';
+import ScheduleCoveragePreview from '@/components/schedules/ScheduleCoveragePreview';
+import ScheduleHealthCheck from '@/components/ScheduleHealthCheck';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -347,6 +349,51 @@ export default async function ScheduleDetailPage({
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
+        <Card className="overflow-hidden border-border/70 shadow-sm">
+          <CardHeader className="border-b bg-muted/20 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                <ShieldAlert className="h-4 w-4" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Schedule checks</CardTitle>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Issues that need attention in the next seven days.
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4">
+            <ScheduleHealthCheck
+              layers={schedule.layers.map(layer => ({
+                id: layer.id,
+                name: layer.name,
+                end: layer.end ? new Date(layer.end) : null,
+                users: layer.users.map(user => ({ userId: user.userId })),
+              }))}
+              shifts={effectiveBlocks.map(block => ({
+                start: block.start.toISOString(),
+                end: block.end.toISOString(),
+              }))}
+              timeZone={schedule.timeZone}
+            />
+          </CardContent>
+        </Card>
+        <ScheduleCoveragePreview
+          effectiveShifts={effectiveBlocks.map(block => ({
+            id: block.id,
+            userName: block.userName,
+            layerName: block.layerName,
+            start: block.start,
+            end: block.end,
+            source: block.source,
+            isAdditiveOverride: block.isAdditiveOverride,
+          }))}
+          timeZone={schedule.timeZone}
+        />
       </div>
 
       <Card className="overflow-hidden border-border/70 shadow-sm">

@@ -439,7 +439,14 @@ export default function LayerCard({
             <div
               className={cn('border-t px-3 py-1.5 text-[11px] text-muted-foreground', color.light)}
             >
-              Coverage precedence:{' '}
+              <span className="font-medium text-foreground">
+                {layerPosition === 0
+                  ? 'Primary escalation'
+                  : layerPosition === 1
+                    ? 'Fallback coverage'
+                    : `Fallback level ${layerPosition}`}
+              </span>
+              {' · '}precedence{' '}
               <span className="font-medium text-foreground">
                 {layerPosition + 1} of {layerCount}
               </span>

@@ -61,6 +61,8 @@ export default function OverrideForm({
     [endTime, scheduleTimeZone]
   );
   const hasValidRange = Boolean(startInstant && endInstant && endInstant > startInstant);
+  const selectedResponder = users.find(user => user.id === selectedUserId);
+  const replacedResponder = users.find(user => user.id === replacesUserId);
 
   const handleQuickDuration = (hours: number) => {
     const start = new Date();
@@ -266,6 +268,15 @@ export default function OverrideForm({
                 <p className="mt-1 text-xs text-muted-foreground">
                   {formatDateTime(startInstant, scheduleTimeZone, { format: 'short' })} →{' '}
                   {formatDateTime(endInstant, scheduleTimeZone, { format: 'short' })}
+                </p>
+              )}
+              {hasValidRange && selectedResponder && (
+                <p className="mt-2 border-t pt-2 text-xs text-foreground">
+                  {mode === 'replacement'
+                    ? replacedResponder
+                      ? `${selectedResponder.name} replaces ${replacedResponder.name} for this period.`
+                      : 'Choose who is being replaced to complete this change.'
+                    : `${selectedResponder.name} is added alongside the current effective responder.`}
                 </p>
               )}
             </div>
