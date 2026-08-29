@@ -4,7 +4,9 @@ import prisma from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/rbac';
 import {
   addTeamMember,
+  assignServicesToTeam,
   deleteTeam,
+  designateTeamLead,
   removeTeamMember,
   updateTeam,
   updateTeamMemberNotifications,
@@ -16,6 +18,8 @@ import TeamOwnedServicesGrid from '@/components/teams/TeamOwnedServicesGrid';
 import TeamActivityTimeline from '@/components/teams/TeamActivityTimeline';
 import TeamMemberRosterTable from '@/components/teams/TeamMemberRosterTable';
 import TeamMemberAddModal from '@/components/teams/TeamMemberAddModal';
+import TeamAssignServicesModal from '@/components/teams/TeamAssignServicesModal';
+import TeamLinkedPolicies from '@/components/teams/TeamLinkedPolicies';
 import TeamDetailTabs from '@/components/teams/TeamDetailTabs';
 import {
   Card,
@@ -25,8 +29,6 @@ import {
   CardTitle,
 } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
-import { Input } from '@/components/ui/shadcn/input';
-import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
   ArrowLeft,
@@ -36,7 +38,8 @@ import {
   CheckCircle2,
   Crown,
   Activity,
-  Trash2,
+  AlertTriangle,
+  Network,
   Settings2,
 } from 'lucide-react';
 import EditTeamForm from './EditTeamForm';
@@ -51,7 +54,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
   const { id } = await params;
   const query = await searchParams;
 
-  const [team, users, auditLogs, permissions] = await Promise.all([
+  const [team, users, allServices, auditLogs, permissions] = await Promise.all([
     prisma.team.findUnique({
       where: { id },
       include: {
@@ -85,6 +88,13 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
             name: true,
             description: true,
             status: true,
+            policy: {
+              select: {
+                id: true,
+                name: true,
+                _count: { select: { steps: true } },
+              },
+            },
           },
         },
         _count: {
@@ -107,6 +117,16 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
       },
       orderBy: { name: 'asc' },
       take: 100,
+    }),
+    prisma.service.findMany({
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        teamId: true,
+        team: { select: { name: true } },
+      },
+      orderBy: { name: 'asc' },
     }),
     prisma.auditLog.findMany({
       where: {
@@ -136,6 +156,14 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
     notFound();
   }
 
+  const teamServiceIds = team.services.map(s => s.id);
+  const activeIncidentsCount = await prisma.incident.count({
+    where: {
+      serviceId: { in: teamServiceIds },
+      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+    },
+  });
+
   const ownerCount = team.members.filter(m => m.role === 'OWNER').length;
   const isTeamOwner = team.members.some(m => m.userId === permissions.id && m.role === 'OWNER');
   const canUpdateTeam = permissions.isAdminOrResponder || isTeamOwner;
@@ -149,6 +177,18 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
 
   const existingMemberUserIds = new Set(team.members.map(m => m.userId));
   const availableUsers = users.filter(u => !existingMemberUserIds.has(u.id));
+
+  // Available services not currently on this team
+  const availableServicesToAssign = allServices.filter(s => s.teamId !== team.id);
+
+  // Extract unique linked escalation policies
+  const policyMap = new Map<string, { id: string; name: string; _count: { steps: number } }>();
+  team.services.forEach(s => {
+    if (s.policy) {
+      policyMap.set(s.policy.id, s.policy);
+    }
+  });
+  const linkedPolicies = Array.from(policyMap.values());
 
   // --- TAB 1: OVERVIEW ---
   const overview = (
@@ -223,6 +263,31 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
         </Card>
       </div>
 
+      {/* Linked Escalation Policies & Blast Radius */}
+      <Card className="overflow-hidden border-border/70 shadow-xs">
+        <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+                <Network className="h-4 w-4" />
+              </div>
+              <div>
+                <CardTitle className="text-sm font-semibold">Linked Escalation Policies</CardTitle>
+                <CardDescription className="text-[11px]">
+                  Policies routing incidents across this team's services
+                </CardDescription>
+              </div>
+            </div>
+            <Badge variant="outline" size="xs">
+              {linkedPolicies.length} {linkedPolicies.length === 1 ? 'policy' : 'policies'}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4">
+          <TeamLinkedPolicies policies={linkedPolicies} />
+        </CardContent>
+      </Card>
+
       {/* Owned Services Grid */}
       <Card className="overflow-hidden border-border/70 shadow-xs">
         <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
@@ -277,7 +342,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
           <div>
             <CardTitle className="text-sm font-semibold">Team Members &amp; Roles</CardTitle>
             <CardDescription className="text-xs">
-              Configure member permissions and incident alert subscriptions
+              Configure member permissions, team lead role, and incident alert subscriptions
             </CardDescription>
           </div>
           <TeamMemberAddModal
@@ -293,6 +358,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
         <TeamMemberRosterTable
           members={team.members}
           teamId={team.id}
+          currentTeamLeadId={team.teamLeadId}
           ownerCount={ownerCount}
           canManageMembers={canManageMembers}
           canManageNotifications={canManageNotifications}
@@ -300,6 +366,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
           updateMemberRole={updateTeamMemberRole}
           updateMemberNotifications={updateTeamMemberNotifications}
           removeMember={removeTeamMember}
+          designateTeamLeadAction={designateTeamLead}
         />
       </CardContent>
     </Card>
@@ -313,16 +380,17 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
           <div>
             <CardTitle className="text-sm font-semibold">Owned Services Matrix</CardTitle>
             <CardDescription className="text-xs">
-              Services assigned to this team for triage and maintenance
+              Services assigned to this team for triage, maintenance, and incident alerting
             </CardDescription>
           </div>
           {canUpdateTeam && (
-            <Button asChild size="sm" variant="outline" className="h-8 text-xs gap-1.5">
-              <Link href="/services">
-                <Shield className="h-3.5 w-3.5" />
-                Manage Service Catalog
-              </Link>
-            </Button>
+            <TeamAssignServicesModal
+              teamId={team.id}
+              teamName={team.name}
+              availableServices={availableServicesToAssign}
+              canManage={canUpdateTeam}
+              assignServicesAction={assignServicesToTeam}
+            />
           )}
         </div>
       </CardHeader>
@@ -347,7 +415,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
           <div>
             <CardTitle className="text-sm font-semibold">Team Audit Trail</CardTitle>
             <CardDescription className="text-xs">
-              Complete history of membership and configuration updates
+              Complete history of membership, leadership, and configuration updates
             </CardDescription>
           </div>
         </div>
@@ -433,7 +501,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
               </div>
             </div>
 
-            {/* Glassmorphic Stats Capsule */}
+            {/* Glassmorphic Stats Capsule with Active Incidents */}
             <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-1.5 backdrop-blur-sm lg:min-w-[330px]">
               <div className="min-w-0 rounded-md px-3 py-2 text-center">
                 <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
@@ -453,11 +521,22 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
               </div>
               <div className="min-w-0 rounded-md px-3 py-2 text-center">
                 <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
-                  Status
+                  Incidents
                 </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-emerald-100">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {team.members.length > 0 ? 'Active' : 'Empty'}
+                <p
+                  className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold ${
+                    activeIncidentsCount > 0 ? 'text-amber-200' : 'text-emerald-100'
+                  }`}
+                >
+                  {activeIncidentsCount > 0 ? (
+                    <>
+                      <AlertTriangle className="h-3.5 w-3.5" /> {activeIncidentsCount} Active
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5" /> 0 Active
+                    </>
+                  )}
                 </p>
               </div>
             </div>

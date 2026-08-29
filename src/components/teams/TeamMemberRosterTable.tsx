@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -11,6 +12,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 import {
@@ -30,16 +32,16 @@ import {
   Trash2,
   Bell,
   BellOff,
-  Shield,
-  ShieldAlert,
-  UserCheck,
+  Crown,
   Loader2,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type TeamMember = {
   id: string;
+  userId: string;
   role: string;
   receiveTeamNotifications: boolean;
   user: {
@@ -55,6 +57,7 @@ type TeamMember = {
 type TeamMemberRosterTableProps = {
   members: TeamMember[];
   teamId: string;
+  currentTeamLeadId?: string | null;
   ownerCount: number;
   canManageMembers: boolean;
   canManageNotifications: boolean;
@@ -68,25 +71,29 @@ type TeamMemberRosterTableProps = {
     receiveNotifications: boolean
   ) => Promise<{ error?: string } | undefined>;
   removeMember: (memberId: string) => Promise<{ error?: string } | undefined>;
+  designateTeamLeadAction?: (
+    teamId: string,
+    userId: string | null
+  ) => Promise<{ error?: string } | undefined>;
 };
 
 function getRoleBadge(role: string) {
   switch (role) {
     case 'OWNER':
       return (
-        <Badge variant="info" size="xs" className="font-semibold text-[10px] px-2 py-0.5">
+        <Badge variant="info" size="xs" className="font-semibold text-[10px] px-1.5 py-0.2">
           Owner
         </Badge>
       );
     case 'ADMIN':
       return (
-        <Badge variant="warning" size="xs" className="font-semibold text-[10px] px-2 py-0.5">
+        <Badge variant="warning" size="xs" className="font-semibold text-[10px] px-1.5 py-0.2">
           Admin
         </Badge>
       );
     default:
       return (
-        <Badge variant="secondary" size="xs" className="text-[10px] px-2 py-0.5">
+        <Badge variant="secondary" size="xs" className="text-[10px] px-1.5 py-0.2">
           Member
         </Badge>
       );
@@ -96,6 +103,7 @@ function getRoleBadge(role: string) {
 export default function TeamMemberRosterTable({
   members,
   teamId,
+  currentTeamLeadId,
   ownerCount,
   canManageMembers,
   canManageNotifications,
@@ -103,7 +111,9 @@ export default function TeamMemberRosterTable({
   updateMemberRole,
   updateMemberNotifications,
   removeMember,
+  designateTeamLeadAction,
 }: TeamMemberRosterTableProps) {
+  const router = useRouter();
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
@@ -132,6 +142,7 @@ export default function TeamMemberRosterTable({
           showToast(res.error, 'error');
         } else {
           showToast(`Role updated to ${role}`, 'success');
+          router.refresh();
         }
       } catch {
         showToast('Failed to update role', 'error');
@@ -150,9 +161,30 @@ export default function TeamMemberRosterTable({
           showToast(res.error, 'error');
         } else {
           showToast(enabled ? 'Team notifications enabled' : 'Team notifications muted', 'success');
+          router.refresh();
         }
       } catch {
         showToast('Failed to update notifications', 'error');
+      } finally {
+        setPendingMemberId(null);
+      }
+    });
+  };
+
+  const handleDesignateLead = (userId: string | null, userName?: string) => {
+    if (!designateTeamLeadAction) return;
+    setPendingMemberId(userId || 'lead');
+    startTransition(async () => {
+      try {
+        const res = await designateTeamLeadAction(teamId, userId);
+        if (res?.error) {
+          showToast(res.error, 'error');
+        } else {
+          showToast(userId ? `${userName} is now the Team Lead` : 'Team Lead removed', 'success');
+          router.refresh();
+        }
+      } catch {
+        showToast('Failed to update team lead', 'error');
       } finally {
         setPendingMemberId(null);
       }
@@ -170,6 +202,7 @@ export default function TeamMemberRosterTable({
           showToast(res.error, 'error');
         } else {
           showToast('Member removed from team', 'success');
+          router.refresh();
         }
       } catch {
         showToast('Failed to remove member', 'error');
@@ -211,11 +244,13 @@ export default function TeamMemberRosterTable({
         <div className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card overflow-hidden shadow-2xs">
           {filteredMembers.map(member => {
             const isSoleOwner = member.role === 'OWNER' && ownerCount === 1;
+            const isLead = currentTeamLeadId === member.userId;
             const canEditRole =
               canManageMembers &&
               !isSoleOwner &&
               (canAssignOwnerAdmin || (member.role !== 'OWNER' && member.role !== 'ADMIN'));
-            const isBusy = pendingMemberId === member.id && isPending;
+            const isBusy =
+              (pendingMemberId === member.id || pendingMemberId === member.userId) && isPending;
 
             return (
               <div
@@ -234,11 +269,17 @@ export default function TeamMemberRosterTable({
                     className="h-8 w-8 shrink-0 ring-1 ring-border/80"
                   />
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-foreground truncate">
                         {member.user.name}
                       </span>
                       {getRoleBadge(member.role)}
+                      {isLead && (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-1 py-0.2 rounded ring-1 ring-inset ring-primary/20">
+                          <Crown className="h-2.5 w-2.5" />
+                          Lead
+                        </span>
+                      )}
                     </div>
                     <p className="text-[11px] text-muted-foreground truncate">
                       {member.user.email}
@@ -247,7 +288,7 @@ export default function TeamMemberRosterTable({
                 </div>
 
                 {/* Actions & controls */}
-                <div className="flex items-center gap-4 self-end sm:self-center">
+                <div className="flex items-center gap-3.5 self-end sm:self-center">
                   {/* Notifications toggle */}
                   {canManageNotifications && (
                     <div
@@ -281,9 +322,10 @@ export default function TeamMemberRosterTable({
                           className="h-7 text-xs font-medium gap-1 px-2 border-border/80"
                         >
                           {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : member.role}
+                          <ChevronDown className="h-3 w-3 opacity-60" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="text-xs w-32">
+                      <DropdownMenuContent align="end" className="text-xs w-36">
                         {canAssignOwnerAdmin && (
                           <DropdownMenuItem onClick={() => handleRoleSelect(member.id, 'OWNER')}>
                             Owner
@@ -297,6 +339,30 @@ export default function TeamMemberRosterTable({
                         <DropdownMenuItem onClick={() => handleRoleSelect(member.id, 'MEMBER')}>
                           Member
                         </DropdownMenuItem>
+
+                        {/* 1-Click Promote to Team Lead */}
+                        {designateTeamLeadAction && canManageMembers && (
+                          <>
+                            <DropdownMenuSeparator />
+                            {isLead ? (
+                              <DropdownMenuItem
+                                onClick={() => handleDesignateLead(null)}
+                                className="text-amber-600 dark:text-amber-400 gap-1.5"
+                              >
+                                <Crown className="h-3 w-3" />
+                                Remove as Lead
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => handleDesignateLead(member.userId, member.user.name)}
+                                className="text-primary font-medium gap-1.5"
+                              >
+                                <Crown className="h-3 w-3 text-primary" />
+                                Set as Team Lead
+                              </DropdownMenuItem>
+                            )}
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   ) : (

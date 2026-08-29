@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
-import { Search, X, Filter, Users } from 'lucide-react';
+import { Search, X, Filter, Users, Sparkles, Plus } from 'lucide-react';
 import TeamDirectoryCard from './TeamDirectoryCard';
 
 type TeamItem = {
@@ -79,74 +79,92 @@ export default function TeamDirectoryList({ teams }: TeamDirectoryListProps) {
   );
   const needsLeadCount = useMemo(() => teams.filter(t => !t.teamLead).length, [teams]);
 
+  // Zero-teams total onboarding empty state
+  if (teams.length === 0) {
+    return (
+      <Card className="border-dashed py-12 text-center shadow-xs">
+        <CardContent className="flex flex-col items-center justify-center p-0 space-y-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+            <Users className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-foreground">Welcome to Teams</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto leading-relaxed">
+              Teams group engineers, define incident escalation hierarchies, and attach service
+              ownership. Create your first team above to get started.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-3.5">
       {/* Search & Filter Toolbar */}
-      {teams.length > 0 && (
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-          {/* Search input */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search teams by name, member, or service..."
-              className="pl-8 pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                aria-label="Clear search"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Status Filter Chips */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        {/* Search input */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search teams by name, member, or service..."
+            className="pl-8 pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
+          />
+          {searchQuery && (
             <button
               type="button"
-              onClick={() => setStatusFilter('all')}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                statusFilter === 'all'
-                  ? 'bg-primary text-primary-foreground shadow-2xs'
-                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
             >
-              All ({teams.length})
+              <X className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('configured')}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                statusFilter === 'configured'
-                  ? 'bg-primary text-primary-foreground shadow-2xs'
-                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
-            >
-              Configured ({configuredCount})
-            </button>
-            {needsLeadCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setStatusFilter('needs-lead')}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                  statusFilter === 'needs-lead'
-                    ? 'bg-amber-600 text-white shadow-2xs'
-                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20'
-                }`}
-              >
-                Needs lead ({needsLeadCount})
-              </button>
-            )}
-          </div>
+          )}
         </div>
-      )}
 
-      {/* Grid or Empty State */}
+        {/* Status Filter Chips */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+              statusFilter === 'all'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            All ({teams.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('configured')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+              statusFilter === 'configured'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            Configured ({configuredCount})
+          </button>
+          {needsLeadCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter('needs-lead')}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                statusFilter === 'needs-lead'
+                  ? 'bg-amber-600 text-white shadow-2xs'
+                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20'
+              }`}
+            >
+              Needs lead ({needsLeadCount})
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Grid or Filtered Empty State */}
       {filteredTeams.length === 0 ? (
         <Card className="border-dashed py-10 text-center">
           <CardContent className="flex flex-col items-center justify-center p-0">
