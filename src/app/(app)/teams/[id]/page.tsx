@@ -54,115 +54,114 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
   const { id } = await params;
   const query = await searchParams;
 
-  const [team, users, allServices, auditLogs, permissions] = await Promise.all([
-    prisma.team.findUnique({
-      where: { id },
-      include: {
-        teamLead: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatarUrl: true,
-            gender: true,
+  const [team, users, allServices, auditLogs, permissions, activeIncidentsCount] =
+    await Promise.all([
+      prisma.team.findUnique({
+        where: { id },
+        include: {
+          teamLead: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+              gender: true,
+            },
           },
-        },
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                status: true,
-                avatarUrl: true,
-                gender: true,
+          members: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  status: true,
+                  avatarUrl: true,
+                  gender: true,
+                },
+              },
+            },
+            orderBy: { role: 'asc' },
+          },
+          services: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              status: true,
+              policy: {
+                select: {
+                  id: true,
+                  name: true,
+                  _count: { select: { steps: true } },
+                },
               },
             },
           },
-          orderBy: { role: 'asc' },
-        },
-        services: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            status: true,
-            policy: {
-              select: {
-                id: true,
-                name: true,
-                _count: { select: { steps: true } },
-              },
+          _count: {
+            select: {
+              members: true,
+              services: true,
             },
           },
         },
-        _count: {
-          select: {
-            members: true,
-            services: true,
+      }),
+      prisma.user.findMany({
+        where: { status: 'ACTIVE' },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          status: true,
+          avatarUrl: true,
+          gender: true,
+        },
+        orderBy: { name: 'asc' },
+        take: 100,
+      }),
+      prisma.service.findMany({
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          teamId: true,
+          team: { select: { name: true } },
+        },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.auditLog.findMany({
+        where: {
+          OR: [
+            { entityType: 'TEAM', entityId: id },
+            { entityType: 'TEAM_MEMBER', entityId: { startsWith: `${id}:` } },
+          ],
+        },
+        include: {
+          actor: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+              gender: true,
+            },
           },
         },
-      },
-    }),
-    prisma.user.findMany({
-      where: { status: 'ACTIVE' },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        status: true,
-        avatarUrl: true,
-        gender: true,
-      },
-      orderBy: { name: 'asc' },
-      take: 100,
-    }),
-    prisma.service.findMany({
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        teamId: true,
-        team: { select: { name: true } },
-      },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.auditLog.findMany({
-      where: {
-        OR: [
-          { entityType: 'TEAM', entityId: id },
-          { entityType: 'TEAM_MEMBER', entityId: { startsWith: `${id}:` } },
-        ],
-      },
-      include: {
-        actor: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatarUrl: true,
-            gender: true,
-          },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+      }),
+      getUserPermissions(),
+      prisma.incident.count({
+        where: {
+          service: { teamId: id },
+          status: { in: ['OPEN', 'ACKNOWLEDGED'] },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 25,
-    }),
-    getUserPermissions(),
-  ]);
+      }),
+    ]);
 
   if (!team) {
     notFound();
   }
-
-  const teamServiceIds = team.services.map(s => s.id);
-  const activeIncidentsCount = await prisma.incident.count({
-    where: {
-      serviceId: { in: teamServiceIds },
-      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
-    },
-  });
 
   const ownerCount = team.members.filter(m => m.role === 'OWNER').length;
   const isTeamOwner = team.members.some(m => m.userId === permissions.id && m.role === 'OWNER');
