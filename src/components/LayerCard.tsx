@@ -25,7 +25,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/shadcn/tooltip';
-import { Trash2, Edit3, Users, Clock, ArrowUp, ArrowDown, Layers, Info, X } from 'lucide-react';
+import {
+  Trash2,
+  Edit3,
+  Users,
+  Clock,
+  ArrowUp,
+  ArrowDown,
+  Layers,
+  Info,
+  X,
+  CheckCircle2,
+  AlertTriangle,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { notify } from '@/lib/toast';
 
@@ -208,6 +220,7 @@ export default function LayerCard({
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   const color = LAYER_COLORS[colorIndex % LAYER_COLORS.length];
+  const hasResponders = layer.users.length > 0;
 
   const handleDelete = useCallback(async () => {
     setShowDeleteConfirm(false);
@@ -330,6 +343,14 @@ export default function LayerCard({
                     ? ` - ${formatShortTime(new Date(layer.end), timeZone)}`
                     : ' - Open ended'}
                 </span>
+                <Badge variant={hasResponders ? 'success' : 'warning'} size="xs" className="gap-1">
+                  {hasResponders ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : (
+                    <AlertTriangle className="h-3 w-3" />
+                  )}
+                  {hasResponders ? 'Ready' : 'Needs responders'}
+                </Badge>
               </div>
             </div>
           </div>

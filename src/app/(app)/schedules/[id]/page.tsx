@@ -213,6 +213,23 @@ export default async function ScheduleDetailPage({
     schedule.layers.flatMap(layer => layer.users.map(member => member.userId))
   );
   const assignableUsers = users.filter(user => !assignedUserIds.has(user.id));
+  const configuredLayerCount = schedule.layers.filter(layer => layer.users.length > 0).length;
+  const totalResponderCount = new Set(
+    schedule.layers.flatMap(layer => layer.users.map(member => member.userId))
+  ).size;
+  const restrictedLayerCount = schedule.layers.filter(layer => {
+    const restrictions = layer.restrictions as {
+      daysOfWeek?: number[];
+      startHour?: number;
+      endHour?: number;
+    } | null;
+    return Boolean(
+      restrictions &&
+      (restrictions.daysOfWeek?.length ||
+        restrictions.startHour != null ||
+        restrictions.endHour != null)
+    );
+  }).length;
 
   const timelineShifts = scheduleBlocks.map(block => ({
     id: block.id,
@@ -355,28 +372,83 @@ export default async function ScheduleDetailPage({
 
   const rotation = (
     <>
-      <div className="flex flex-col justify-between gap-3 border-b pb-4 sm:flex-row sm:items-center">
-        <div>
-          <h2 className="text-lg font-semibold">Rotation layers</h2>
-          <p className="text-sm text-muted-foreground">
-            Configure handoff order, shift timing, and coverage restrictions.
-          </p>
+      <div className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/[0.08] via-card to-card p-5 shadow-sm md:p-6">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/15">
+              <Layers3 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+                Rotation configuration
+              </p>
+              <h2 className="mt-1 text-xl font-semibold tracking-tight">Rotation layers</h2>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                Build the handoff sequence, timing, and coverage rules that power this schedule.
+              </p>
+            </div>
+          </div>
+          {capabilities.canManageRotation && (
+            <LayerCreateForm
+              scheduleId={schedule.id}
+              canManageSchedules={capabilities.canManageRotation}
+              createLayer={createLayer}
+              defaultStartDate={formatDateForInput(now, schedule.timeZone)}
+            />
+          )}
         </div>
-        {capabilities.canManageRotation && (
-          <LayerCreateForm
-            scheduleId={schedule.id}
-            canManageSchedules={capabilities.canManageRotation}
-            createLayer={createLayer}
-            defaultStartDate={formatDateForInput(now, schedule.timeZone)}
-          />
-        )}
+        <div className="mt-5 grid grid-cols-2 gap-2 border-t border-primary/10 pt-4 sm:grid-cols-4">
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Layers
+            </p>
+            <p className="mt-1 text-lg font-semibold">{schedule.layers.length}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Responders
+            </p>
+            <p className="mt-1 text-lg font-semibold">{totalResponderCount}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Ready layers
+            </p>
+            <p className="mt-1 text-lg font-semibold">
+              {configuredLayerCount}/{schedule.layers.length}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Restricted
+            </p>
+            <p className="mt-1 text-lg font-semibold">{restrictedLayerCount}</p>
+          </div>
+        </div>
       </div>
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertTitle>Order is configuration, not a live prediction</AlertTitle>
+      <Alert
+        className={
+          configuredLayerCount === schedule.layers.length && schedule.layers.length > 0
+            ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
+            : 'border-amber-500/25 bg-amber-500/[0.05]'
+        }
+      >
+        {configuredLayerCount === schedule.layers.length && schedule.layers.length > 0 ? (
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+        ) : (
+          <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        )}
+        <AlertTitle>
+          {schedule.layers.length === 0
+            ? 'Add a layer to start coverage'
+            : configuredLayerCount === schedule.layers.length
+              ? 'Rotation is ready for coverage'
+              : `${schedule.layers.length - configuredLayerCount} layer${schedule.layers.length - configuredLayerCount === 1 ? '' : 's'} need responders`}
+        </AlertTitle>
         <AlertDescription>
-          Responder numbers show rotation order. Effective on-call and the next real change are
-          calculated from all layers, restrictions, priorities, and overrides in Overview.
+          Responder numbers show rotation order, not a live prediction. Effective on-call and the
+          next real change are calculated from all layers, restrictions, priorities, and overrides
+          in Overview.
         </AlertDescription>
       </Alert>
       {schedule.layers.length === 0 ? (
@@ -388,7 +460,7 @@ export default async function ScheduleDetailPage({
           </p>
         </Card>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-5 lg:grid-cols-2">
           {schedule.layers.map((layer, index) => (
             <LayerCard
               key={layer.id}
