@@ -88,6 +88,11 @@ export default function CurrentCoverageDisplay({
                 />
                 {hasCoverage && !coverageGap ? 'Covered' : 'Needs attention'}
               </Badge>
+              {activeOverridesCount > 0 && (
+                <Badge variant="warning" size="xs" className="px-1.5 py-0.5 text-[10px]">
+                  {activeOverridesCount} override{activeOverridesCount === 1 ? '' : 's'}
+                </Badge>
+              )}
               <Badge
                 variant="outline"
                 size="xs"

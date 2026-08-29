@@ -57,6 +57,7 @@ export default function ScheduleExportMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
+          aria-label={`Export ${scheduleName ?? 'schedule'} coverage`}
           variant="outline"
           size="sm"
           className={

@@ -10,7 +10,7 @@ type LayerUser = {
   position: number;
 };
 
-type LayerRestrictions = {
+export type LayerRestrictions = {
   daysOfWeek?: number[]; // 0=Sun, 1=Mon, ..., 6=Sat
   startHour?: number; // 0-23
   endHour?: number; // 0-23
@@ -93,17 +93,24 @@ function getDayHourInTimeZone(date: Date, timeZone: string): { day: number; hour
   const weekday = parts.find(p => p.type === 'weekday')?.value ?? 'Sun';
   const hour = Number(parts.find(p => p.type === 'hour')?.value ?? '0') % 24;
 
-  const dayMap: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
+  const day =
+    weekday === 'Sun'
+      ? 0
+      : weekday === 'Mon'
+        ? 1
+        : weekday === 'Tue'
+          ? 2
+          : weekday === 'Wed'
+            ? 3
+            : weekday === 'Thu'
+              ? 4
+              : weekday === 'Fri'
+                ? 5
+                : weekday === 'Sat'
+                  ? 6
+                  : 0;
 
-  return { day: dayMap[weekday] ?? 0, hour };
+  return { day, hour };
 }
 
 function getLocalDateTimeParts(date: Date, timeZone: string): Required<LocalDateTimeParts> {

@@ -4,9 +4,8 @@ import { useState, useMemo } from 'react';
 import ScheduleCard from '@/components/ScheduleCard';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
-import { Search, X, Filter, CalendarClock } from 'lucide-react';
+import { Search, X, Filter } from 'lucide-react';
 
 type ScheduleItem = {
   id: string;
@@ -26,13 +25,9 @@ type ScheduleItem = {
 
 type ScheduleDirectoryListProps = {
   schedules: ScheduleItem[];
-  canManageSchedules: boolean;
 };
 
-export default function ScheduleDirectoryList({
-  schedules,
-  canManageSchedules,
-}: ScheduleDirectoryListProps) {
+export default function ScheduleDirectoryList({ schedules }: ScheduleDirectoryListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'configured' | 'needs-setup'>('all');
 

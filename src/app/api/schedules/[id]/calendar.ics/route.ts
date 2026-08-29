@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { buildScheduleBlocks, getFinalScheduleBlocks } from '@/lib/oncall';
+import { buildScheduleBlocks, getFinalScheduleBlocks, type LayerRestrictions } from '@/lib/oncall';
 import { assertCanViewSchedule } from '@/lib/rbac';
 
 function escapeICalText(value: string): string {
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     end: layer.end ? new Date(layer.end) : null,
     rotationLengthHours: layer.rotationLengthHours,
     shiftLengthHours: layer.shiftLengthHours,
-    restrictions: layer.restrictions as any,
+    restrictions: layer.restrictions as LayerRestrictions | null,
     users: layer.users.map(u => ({
       userId: u.userId,
       position: u.position,

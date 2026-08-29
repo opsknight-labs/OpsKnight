@@ -8,7 +8,6 @@ import {
   addDaysToDateKey,
   formatDateForInput,
   formatDateKeyInTimeZone,
-  formatDateTime,
   startOfDayFromDateKey,
 } from '@/lib/timezone';
 import { buildScheduleDetailViewModel } from '@/lib/schedules/detail-view-model';
@@ -39,7 +38,9 @@ import ScheduleCoverageExplorer from '@/components/schedules/ScheduleCoverageExp
 import ScheduleCoveragePreview from '@/components/schedules/ScheduleCoveragePreview';
 import ScheduleActivityFeed from '@/components/schedules/ScheduleActivityFeed';
 import ScheduleHealthCheck from '@/components/ScheduleHealthCheck';
-import ScheduleLinkedPolicies from '@/components/schedules/ScheduleLinkedPolicies';
+import ScheduleLinkedPolicies, {
+  type LinkedPolicy,
+} from '@/components/schedules/ScheduleLinkedPolicies';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -49,7 +50,6 @@ import {
   Calendar,
   CheckCircle2,
   Clock3,
-  Globe2,
   Info,
   Layers3,
   ShieldAlert,
@@ -442,7 +442,7 @@ export default async function ScheduleDetailPage({
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ScheduleLinkedPolicies linkedRules={linkedRules as any} scheduleId={schedule.id} />
+        <ScheduleLinkedPolicies linkedRules={linkedRules satisfies LinkedPolicy[]} />
         <ScheduleActivityFeed auditLogs={auditLogs} timeZone={schedule.timeZone} />
       </div>
     </>

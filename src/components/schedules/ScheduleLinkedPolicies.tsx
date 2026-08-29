@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn
 import { Badge } from '@/components/ui/shadcn/badge';
 import { ShieldCheck, Server, ArrowUpRight, Link2, Info } from 'lucide-react';
 
-type LinkedPolicy = {
+export type LinkedPolicy = {
   stepOrder: number;
   policy: {
     id: string;
@@ -17,13 +17,9 @@ type LinkedPolicy = {
 
 type ScheduleLinkedPoliciesProps = {
   linkedRules: LinkedPolicy[];
-  scheduleId: string;
 };
 
-export default function ScheduleLinkedPolicies({
-  linkedRules,
-  scheduleId,
-}: ScheduleLinkedPoliciesProps) {
+export default function ScheduleLinkedPolicies({ linkedRules }: ScheduleLinkedPoliciesProps) {
   // Deduplicate by policy ID
   const uniquePoliciesMap = new Map<string, LinkedPolicy['policy']>();
   linkedRules.forEach(rule => {

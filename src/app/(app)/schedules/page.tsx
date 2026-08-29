@@ -132,7 +132,7 @@ export default async function SchedulesPage() {
               </CardContent>
             </Card>
           ) : (
-            <ScheduleDirectoryList schedules={schedules} canManageSchedules={canManageSchedules} />
+            <ScheduleDirectoryList schedules={schedules} />
           )}
         </div>
 
