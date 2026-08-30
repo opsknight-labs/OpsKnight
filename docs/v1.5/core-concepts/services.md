@@ -6,167 +6,209 @@ order: 3
 
 # Services
 
-A service is the routing and reporting boundary for incidents. It joins an owning team, escalation policy, integration keys, notification behavior, SLA targets, Jira mapping, Slack war-room behavior, status-page visibility, and incident history.
+A service is the primary routing, accountability, and reporting boundary for incidents in OpsKnight. It ties together an owning team, escalation policy, inbound alert monitoring integrations, notification behavior, SLA performance targets, Jira issue synchronization, Slack ChatOps war-room coordination, public status-page visibility, and incident history.
+
+```text
+Alert Sources (CloudWatch, Datadog, Prometheus, Webhooks)
+  → Service Ingest Integration (Routing Key + Optional HMAC Secret)
+  → Service Incident Creation & Deduplication
+  → Attached Escalation Policy (Users, Teams, Schedules)
+  → Service Notifications (Slack, Email, SMS, Push, WhatsApp) & ChatOps War Room
+```
 
 ## Permissions
 
-- Signed-in users can view the service directory and service details.
-- **Responders** and **Admins** can create services and manage settings and integrations.
-- Only an **Admin** can delete a service.
+| Role                | Capabilities                                                                                                                                      |
+| :------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Signed-in Users** | View service directory, service detail pages, incident stream, attached policy overview, and health metrics.                                      |
+| **Responders**      | Create new services, edit service metadata, manage inbound alert integrations, and configure notification mappings.                               |
+| **Admins**          | Full control over services, including changing owning teams, escalation policy attachment, Jira mapping, ChatOps overrides, and service deletion. |
 
-## Create a service
+---
 
-1. Open **Services**.
-2. Select **Create New Service**.
-3. Enter a unique service name.
-4. Optionally select an owning team, SLA tier, and escalation policy.
-5. Create the service, then open its **Settings** and **Integrations** tabs to finish routing.
+## Service Directory & Health
 
-A usable paging setup needs both an integration that can create the incident and an escalation policy with a resolvable target. A service without a policy supports manual assignment but does not automatically page through policy steps.
+The **Service Directory** (`/services`) provides an operational command overview of all services in your organization.
 
-## Service fields
+### Health Calculation
 
-| Field                  | Purpose                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| Name                   | Unique product or system name shown throughout OpsKnight.                                   |
-| Description            | Human-readable responsibility and scope.                                                    |
-| Region                 | Optional deployment or business region label.                                               |
-| SLA tier               | Optional Platinum, Gold, Silver, Bronze, or Internal classification.                        |
-| Owning team            | Team accountable for the service.                                                           |
-| Escalation policy      | Policy used when a new incident needs paging.                                               |
-| Acknowledgement target | Default minutes used for acknowledgement SLA calculations. The model default is 15 minutes. |
-| Resolution target      | Default minutes used for resolution SLA calculations. The model default is 120 minutes.     |
+OpsKnight continuously calculates a live health indicator for each service based on active incidents:
 
-The tier label does not by itself configure acknowledgement or resolution targets. The v1.4 service settings page does not expose the model's default target-minute fields, so do not treat changing the tier label as an SLA-target change.
+| Health Status   | Badge                 | Calculation Rule                                                |
+| :-------------- | :-------------------- | :-------------------------------------------------------------- |
+| **Operational** | `Operational` (Green) | No active (Open or Acknowledged) incidents.                     |
+| **Degraded**    | `Degraded` (Yellow)   | One or more active incidents, none classified as critical.      |
+| **Critical**    | `Critical` (Red)      | At least one active incident with critical urgency or severity. |
 
-## Understand service health
+> [!NOTE]
+> Snoozed, suppressed, and resolved incidents are excluded from the active health calculation.
 
-The service directory calculates a live health state from incidents:
+### Directory Features
 
-| Health          | Calculation                                                                               |
-| --------------- | ----------------------------------------------------------------------------------------- |
-| **Operational** | No active incidents.                                                                      |
-| **Degraded**    | One or more active incidents, with none classified as critical by the health calculation. |
-| **Critical**    | At least one active critical incident.                                                    |
+- **Search & Filtering**: Filter services by name, description, owning team, SLA tier, and real-time health status.
+- **Hero Metrics Banner**: Displays aggregate service totals and health breakdowns across your organization.
+- **Empty States**: Standardized empty states guide users when no services match selected filters or when creating a first service.
 
-Resolved, snoozed, and suppressed incidents are excluded from the active count. This calculated display is distinct from the broader stored status values used by status-page configuration.
+---
 
-Use directory search and the team, health, tier, and sort controls to find a service. The service detail page shows active incidents, resolved history, and 30-day operational metrics. The **Dependencies** tab is visible but disabled in v1.4; do not rely on dependency mapping for routing or impact analysis.
+## Redesigned Service Workspace
 
-## Configure ownership and escalation
+The service detail page (`/services/[id]`) provides a centralized, tabbed workspace with a glassmorphic **DetailHeroBanner** and URL-synchronized navigation (`?tab=...`).
 
-Open **Service → Settings** and select:
+### Hero Header & 4-Stat Capsule
 
-- an owning team for accountability and filtering;
-- an escalation policy for automated paging.
+The top hero banner displays the service name, description, owning team, SLA tier, primary region, and live health status badge, accompanied by a 4-stat operational capsule:
 
-Policy changes apply immediately to new incidents. Existing incidents resolve the current policy as escalation advances, so review active incidents before changing or removing a target.
+1. **Availability (30d)**: Rolling 30-day percentage uptime calculated from incident downtime.
+2. **MTTR**: Mean Time to Resolution for incidents in the past 30 days.
+3. **Incidents / mo**: Average monthly incident frequency.
+4. **SLA Compliance**: Percentage of incidents meeting configured acknowledgement and resolution targets.
 
-After saving, trigger a test event and verify the incident is attached to this service and the expected first policy target receives it.
+```text
++-------------------------------------------------------------------------------+
+| Web API Service   [Operational]   Team: Platform Core   Tier: Platinum   US-East |
+| +-----------------+ +-----------------+ +-----------------+ +-----------------+ |
+| | Availability:   | | MTTR:           | | Incidents/mo:   | | SLA Compliance: | |
+| |     99.98%      | |      14m        | |       1.2       | |      98.5%      | |
+| +-----------------+ +-----------------+ +-----------------+ +-----------------+ |
++-------------------------------------------------------------------------------+
+| [ Incidents (3) ]   [ Escalation Policy ]   [ Integrations (2) ]   [ Settings ] |
++-------------------------------------------------------------------------------+
+```
 
-## Add inbound integrations
+---
 
-Open **Service → Integrations** to add one or more supported monitoring sources. Each integration has its own generated routing key. Depending on the selected type, OpsKnight normalizes the provider payload into Events API actions and fields.
+## Tab 1: Incidents
 
-For an integration you can:
+The **Incidents** tab provides the operational stream of current and past incidents for this service:
 
-- copy its routing key;
-- enable or disable it;
-- rotate or clear its optional HMAC signature secret;
-- delete it when it is no longer used.
+- **Active Incidents**: Real-time view of Open and Acknowledged incidents requiring response.
+- **Incident History**: Paginated log of resolved incidents with duration, assigned responders, and severity tags.
+- **Quick Actions**: One-click navigation to create a new incident or view postmortems.
+- **Empty State**: Displays an informative `<EmptyState />` when the service is fully operational with zero active incidents.
 
-Treat keys and signature secrets as credentials. Store them in the source system's secret manager, never in a repository or screenshot. Rotating or deleting an integration breaks senders that still use the previous value.
+---
 
-See the [integration directory](../integrations/README.md) for provider-specific payloads and verification steps.
+## Tab 2: Escalation Policy
 
-## Configure service notifications
+The **Escalation Policy** tab renders a direct visual representation of the escalation ladder attached to the service:
 
-Service notifications are independent of escalation-step notifications. In **Service → Settings**, select channels from Slack, webhook, email, SMS, push, and WhatsApp, then choose which lifecycle events send service-level messages:
+- **Attached Policy Header**: Displays the policy name, description, and an action link to modify the policy in the Escalation Policy editor.
+- **Ordered Step Ladder**: Visualizes the sequential escalation steps, showing:
+  - Step order index and delay timer (e.g. `Step 1 (Immediate)`, `Step 2 (Wait 5m)`).
+  - Target responder type with user avatar, team member count, or on-call schedule link.
+  - Clear indicator if no policy is currently attached (manual assignment mode).
 
-- incident triggered;
-- incident acknowledged;
-- incident resolved;
-- SLA breach.
+---
 
-A selected channel still needs a valid workspace-level provider and any required recipient or service configuration. Test each channel before production. Use notification history and system logs to diagnose delivery failures.
+## Tab 3: Ingest Integrations & Webhooks
 
-### Slack and ChatOps
+The **Integrations & Webhooks** tab manages inbound monitoring endpoints that automatically ingest alerts from third-party tools.
 
-A service can use the active workspace Slack connection or a legacy incoming webhook/channel configuration. When ChatOps is enabled, it can inherit global war-room settings or override automatic channel creation and the video bridge with Jitsi, Zoom, Google Meet, none, or a custom URL.
+### Integration Cards
 
-See [Slack notifications](../integrations/communication/slack.md) and [Slack ChatOps](../integrations/communication/slack-chatops.md).
+Each configured integration is presented as a rich card with:
 
-### Outbound webhooks
+- **Provider Brand Identity**: Official brand icon and distinct background color (e.g. AWS CloudWatch, Datadog, Grafana, Prometheus, Sentry, GitHub).
+- **Metadata Grid**: Provider **Type** and functional **Category** (e.g. `Monitoring & APM`, `Cloud & Infrastructure`, `CI/CD & Version Control`, `Uptime & Status`).
+- **Creation Timestamp & Status Toggle**: Live enable/disable switch allowing responders to pause alert intake without deleting the configuration.
+- **Delete Action**: Clean removal dialog for decommissioned endpoints.
 
-Service webhooks send lifecycle updates to external systems. Configure the endpoint, event selection, authentication/signing options exposed by the form, and enabled state. Use the built-in test before enabling it for real incidents. See [Custom webhooks](../integrations/custom/webhooks.md).
+### Ingest Views by Integration Type
 
-### Jira mapping
+#### 1. Events API v2 (`EVENTS_API_V2`)
 
-When workspace Jira is enabled, map the service to a project and configure:
+- **Events API Endpoint**: Complete, copyable endpoint URL (`/api/events`) for standard Events API v2 payloads.
+- **Routing Key (Service-Bound)**: Copyable unique routing key used to bind incoming events to this service via `Authorization: Token token=<ROUTING_KEY>`.
+- **Quick Test Snippet**: Ready-to-use, fully formed `curl` code sample and one-click copy button prefilled with the endpoint, authorization header, and valid JSON schema payload.
 
-- incident and action-item issue types;
-- default labels and optional component;
-- incident auto-creation and the eligible urgency levels;
-- synchronization state.
+#### 2. Provider-Native Webhooks (CloudWatch, Datadog, Prometheus, Grafana, etc.)
 
-If auto-create is enabled, select at least one urgency. Validate that the Jira token can access the project, issue types, and component. See [Jira](../integrations/issue-tracking/jira.md).
+- **Webhook Ingest URL**: Complete, copyable endpoint URL containing the integration ID and key parameter.
+- **Optional Signature Secret Control**: Integrated HMAC signature verification manager.
 
-## SLA and incident history
+### Optional Signature Secret Management
 
-The service page reports active incidents, total history, acknowledgement/resolution performance, and SLA compliance for the displayed 30-day window. Priority-specific SLA targets take precedence when configured; otherwise OpsKnight uses the service acknowledgement and resolution targets.
+In OpsKnight, webhook signature verification is **completely optional**:
 
-Snoozed and suppressed incidents are excluded from active impact. Review those queues separately so muting does not hide unfinished work.
+> [!IMPORTANT]
+> **Signature verification is optional by default**. If no signature secret is generated, OpsKnight authenticates incoming webhooks using the routing key in the request header or URL. Senders that do not support HMAC signing will function seamlessly.
 
-## Put a service on a status page
+```text
+[ Unconfigured State (Default) ]
+Signature Secret: (optional)
+[ No secret configured (Signature verification disabled) ]  [ Generate Secret ]
 
-Adding a service to a public status page is a separate administrator action. Status-page settings control display name, grouping, visibility, metrics, and privacy. Service ownership or a public incident does not automatically expose the service. See [Status page](status-page.md).
+[ Configured State (HMAC Enforced) ]
+Signature Secret: (optional)                  [ Verification Active (Green) ]
+[ •••••••••••••••••••••••••••••••• ]  [ Copy ]  [ Rotate ]  [ Remove / Disable ]
+```
 
-## Delete a service
+- **Unconfigured State**: Displays `"No secret configured (Signature verification disabled)"` with a `"Generate Secret"` action.
+- **Generating a Secret**: Click `"Generate Secret"` to create a cryptographically random 32-byte hex HMAC secret. OpsKnight immediately enforces HMAC-SHA256 signature verification on incoming webhooks for that integration.
+- **Rotating a Secret**: Click the `Rotate` icon to generate a new secret. Note that external webhook senders must be updated with the new secret immediately.
+- **Disabling / Removing Secret**: Click the `Trash` icon to clear the secret. Webhooks will immediately revert to standard key-based authentication without requiring HMAC headers.
 
-Only an Admin can delete a service. Deletion is destructive and cascades through related service data, including incidents, alerts, and integrations.
+---
 
-Before deleting:
+## Tab 4: Service Settings & ChatOps
 
-1. Confirm the exact service and incident count in the deletion dialog.
-2. Resolve or transfer operational work and preserve any records required by policy.
-3. Remove or reconfigure monitoring senders.
-4. Export required evidence and confirm backup retention.
+The **Service Settings** tab consolidates all administrative and integration configurations for the service:
 
-Do not use deletion as an archival workflow.
+### 1. General Service Metadata
 
-## Production-readiness check
+- **Service Name**: Unique organizational identifier.
+- **Description**: Scope and responsibilities.
+- **Region**: Deployment or business region (e.g. `us-east-1`, `eu-west-1`, `global`).
+- **SLA Tier**: `Platinum`, `Gold`, `Silver`, `Bronze`, or `Internal`.
+- **Owning Team**: Accountable team for incident filtering and ownership.
+- **Escalation Policy**: Attached automated paging policy.
 
-- [ ] Name, description, region, tier, and owner are accurate.
-- [ ] An escalation policy is attached and every target resolves.
-- [ ] Each inbound integration creates the expected deduplicated incident.
-- [ ] A responder receives and acknowledges a test page.
-- [ ] Service-level notification events and channels are intentional.
-- [ ] Slack, webhook, Jira, and war-room settings are tested if enabled.
-- [ ] SLA targets and priority overrides reflect the service objective.
-- [ ] Status-page inclusion and privacy are correct.
+### 2. Service Notifications Mapping
 
-## Troubleshooting
+Configure service-level notifications across channels independent of individual responder paging:
 
-### Incidents are attached to the wrong service
+- **Available Channels**: Slack, Outbound Webhooks, Email, SMS, Web Push, and WhatsApp.
+- **Lifecycle Events**: Triggered, Acknowledged, Resolved, and SLA Breached.
 
-Verify the sender uses the integration key from this service. Integration names are descriptive; the key determines routing.
+### 3. ChatOps War Room Overrides
 
-### No one is paged
+- **Slack War Room**: Choose between workspace default war-room settings or service-specific channel generation.
+- **Video Bridge Provider**: Auto-create video conference links using **Jitsi Meet**, **Zoom**, **Google Meet**, **None**, or a custom meeting URL template.
 
-Confirm a policy is attached, its targets are active, schedules have coverage, and notification providers are configured. Then inspect the incident timeline and notification history.
+### 4. Jira Service Mapping
 
-### Health looks wrong
+- **Project Key**: Target Jira project for automated issue creation.
+- **Issue Types**: Incident issue type (e.g. `Bug`, `Incident`) and Action Item issue type (e.g. `Task`).
+- **Auto-Creation Rules**: Trigger automated Jira ticket creation for selected urgency levels (`HIGH`, `MEDIUM`, `LOW`).
 
-Review active Open and Acknowledged incidents and confirm urgency/priority. Snoozed, suppressed, and resolved incidents do not count as active service impact.
+### 5. Danger Zone (Delete Service)
 
-### Jira creation fails
+- Deleting a service is permanent and cascades to associated alerts, incident links, and integration endpoints.
+- **Verified Deletion**: Uses the accessible `DeleteConfirmDialog`, requiring the user to type the exact service name before unlocking the delete button.
 
-Check workspace Jira configuration, project key, issue type, component, token permissions, and auto-create urgency selection.
+---
 
-## Related topics
+## Production Readiness Checklist
 
-- [Incidents](incidents.md)
-- [Teams](teams.md)
-- [Escalation policies](escalation-policies.md)
-- [Analytics](analytics.md)
-- [Status page](status-page.md)
+Before putting a new service into production, verify the following:
+
+- [ ] **Name & Ownership**: Service name is unique and assigned to the correct accountable team.
+- [ ] **Escalation Policy**: An active escalation policy is attached with valid, resolving user, team, or schedule targets.
+- [ ] **Ingest Integration**: Monitoring integrations are created, and a test alert successfully triggers a deduplicated incident.
+- [ ] **Signature Secret (if required)**: If the upstream provider supports webhook signing, generate an optional HMAC secret and configure it upstream.
+- [ ] **ChatOps & War Room**: Slack channel mapping and video bridge settings are tested.
+- [ ] **Notification Mappings**: Service-level notification events and recipient channels are verified.
+- [ ] **Jira Sync**: Project mapping and issue types are validated if Jira synchronization is enabled.
+- [ ] **Status Page**: Service is added to the public or private status page if customer-facing visibility is desired.
+
+---
+
+## Related Topics
+
+- [How Integrations Work](integrations.md)
+- [Inbound Webhook Reference](../integrations/inbound-webhook-reference.md)
+- [Escalation Policies](escalation-policies.md)
+- [Teams & Ownership](teams.md)
+- [Incident Management](incidents.md)
+- [Analytics & SLA](analytics.md)

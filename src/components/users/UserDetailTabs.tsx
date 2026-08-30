@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
+import EmptyState from '@/components/ui/EmptyState';
 import {
   Card,
   CardContent,
@@ -468,19 +469,12 @@ export default function UserDetailTabs({
             })}
           </div>
         ) : (
-          <Card className="border-dashed border-2 border-border/80 text-center py-12">
-            <CardContent className="space-y-3">
-              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
-                <Users className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-foreground">No Teams Assigned</h3>
-                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                  This user is not currently a member of any incident response teams.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={<Users className="h-6 w-6 text-muted-foreground" />}
+            title="No Teams Assigned"
+            description="This user is not currently a member of any incident response teams."
+            size="md"
+          />
         )}
       </DetailTabContent>
 
@@ -533,19 +527,12 @@ export default function UserDetailTabs({
             ))}
           </div>
         ) : (
-          <Card className="border-dashed border-2 border-border/80 text-center py-12">
-            <CardContent className="space-y-3">
-              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
-                <Calendar className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-foreground">No On-Call Rotations</h3>
-                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                  This user is not currently scheduled on any active on-call rotation layers.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={<Calendar className="h-6 w-6 text-muted-foreground" />}
+            title="No On-Call Rotations"
+            description="This user is not currently scheduled on any active on-call rotation layers."
+            size="md"
+          />
         )}
       </DetailTabContent>
 

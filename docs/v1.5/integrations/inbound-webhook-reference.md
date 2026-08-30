@@ -6,7 +6,7 @@ description: Exact authentication, signature, lifecycle, deduplication, and resp
 
 # Inbound Webhook Reference
 
-This page defines the shared v1.4 contract for provider-native inbound webhooks. Use the provider guide for upstream configuration and this reference for OpsKnight request behavior.
+This page defines the shared v1.5 contract for provider-native inbound webhooks. Use the provider guide for upstream configuration and this reference for OpsKnight request behavior.
 
 ## Endpoint and authentication
 
@@ -30,13 +30,17 @@ X-Integration-Key: INTEGRATION_KEY
 
 The middleware also accepts `Authorization: Token token=…`, `X-API-Key`, or the `integrationKey`, `integration_key`, or `key` query parameter. Prefer a header whenever the sender supports custom headers. A query key can appear in proxy, browser, and provider logs, so treat the complete webhook URL as a secret when a provider requires it.
 
-The integration must exist, be enabled, and point to the intended service. The route validates the route-specific provider schema, but v1.4 does not separately compare the stored integration type with the route segment. Protect each integration ID/key pair and use only the URL generated for its intended sender. A workspace API key is not interchangeable with an integration key.
+The integration must exist, be enabled, and point to the intended service. The route validates the route-specific provider schema. Protect each integration ID/key pair and use only the URL generated for its intended sender. A workspace API key is not interchangeable with an integration key.
 
 Authentication is resolved before OpsKnight consumes the database-backed per-integration rate limit. Requests using a nonexistent integration ID or an invalid integration key therefore do not create arbitrary per-integration rate-limit rows and do not consume the valid integration's quota. This limiter protects authenticated integration traffic; upstream proxy/WAF controls remain appropriate for broad unauthenticated abuse protection.
 
 ## Optional signature verification
 
-The integration key is always required. When a signature secret is configured on the integration, OpsKnight also verifies the raw request according to the route's signature mode unless `INTEGRATION_VERIFY_SIGNATURES=false`. Verification is enabled by default; the environment override is a diagnostic escape hatch, not a production baseline.
+The integration key is always required. In OpsKnight, **signature verification is optional**:
+
+- Newly created integrations start with no signature secret configured (`No secret configured`). Senders are authenticated solely via the integration routing key.
+- When an optional signature secret is generated in the service UI, OpsKnight marks the integration as `Verification Active` and strictly verifies the raw request payload against the configured HMAC secret.
+- If signature verification is no longer needed, the secret can be removed/disabled at any time without recreating the webhook endpoint.
 
 | Signature mode | Routes                                                                                                                                                                                                                | Required header and calculation                                                                                    |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |

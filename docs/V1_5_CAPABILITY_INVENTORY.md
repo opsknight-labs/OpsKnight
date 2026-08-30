@@ -1,6 +1,6 @@
-# OpsKnight v1.4 documentation capability inventory
+# OpsKnight v1.5 documentation capability inventory
 
-This maintainer-only inventory is the completeness gate for the v1.4 documentation work begun in PR #327 and finally reconciled in PR #342 after intermediate phase batches merged. It intentionally lives outside `docs/v1.4`, so docs-sync does not publish it as an end-user page.
+This maintainer-only inventory is the completeness gate for the v1.5 documentation work. It intentionally lives outside `docs/v1.5`, so docs-sync does not publish it as an end-user page.
 
 ## How to use this inventory
 
@@ -8,10 +8,10 @@ This maintainer-only inventory is the completeness gate for the v1.4 documentati
 - **Revise** means a destination exists but still requires a source-verified rewrite.
 - **Add** means the supported capability has no adequate destination yet.
 - **Internal** means implementation detail may support public behavior but is not itself a public contract.
-- **Unsupported** means an older document or index claimed behavior that v1.4 does not provide; the claim must be removed or called out as unavailable.
+- **Unsupported** means an older document or index claimed behavior that v1.5 does not provide; the claim must be removed or called out as unavailable.
 - A phase cannot close while any row assigned to it remains **Add** or **Revise**.
 
-Evidence is based on v1.4 application routes, components, Prisma schema, deployment manifests, tests, and repeatable product workflows. Maintainers should add a PR link or test result to a row when verification needs more context than a source path.
+Evidence is based on v1.5 application routes, components, Prisma schema, deployment manifests, tests, and repeatable product workflows. Maintainers should add a PR link or test result to a row when verification needs more context than a source path.
 
 ## Accountability and verification
 
