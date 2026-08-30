@@ -19,7 +19,7 @@ export type ActivityTimelineItem = {
     avatarUrl?: string | null;
     gender?: string | null;
   } | null;
-  details?: Record<string, unknown> | string | null;
+  details?: unknown;
 };
 
 export type ActivityTimelineProps = {

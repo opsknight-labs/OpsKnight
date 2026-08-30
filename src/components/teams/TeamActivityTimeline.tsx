@@ -16,7 +16,8 @@ export type TeamActivityLog = {
   } | null;
   actorName?: string | null;
   actorEmail?: string | null;
-  details?: Record<string, unknown> | string | null;
+  details?: unknown;
+  [key: string]: any;
 };
 
 type TeamActivityTimelineProps = {
