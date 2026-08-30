@@ -1,4 +1,5 @@
 import prisma from './prisma';
+import { inAppNotificationIntentId } from './notification-identity';
 
 type InAppNotificationInput = {
   userIds: string[];
@@ -7,6 +8,9 @@ type InAppNotificationInput = {
   message: string;
   entityType?: string | null;
   entityId?: string | null;
+  /** Stable event identity. Prefer this over a time-window dedupe. */
+  dedupeKey?: string;
+  /** Compatibility path for callers that do not yet have an event identity. */
   dedupeWindowMs?: number;
 };
 
@@ -17,14 +21,34 @@ export async function createInAppNotifications({
   message,
   entityType,
   entityId,
+  dedupeKey,
   dedupeWindowMs,
 }: InAppNotificationInput) {
   const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
   if (uniqueUserIds.length === 0) return;
 
-  // Event-outbox retries can re-run notification delivery after an external
-  // provider failure. Keep the in-app notification idempotent for the same
-  // user, entity, and message instead of adding a duplicate on every retry.
+  if (dedupeKey) {
+    await prisma.inAppNotification.createMany({
+      data: uniqueUserIds.map(userId => ({
+        id: inAppNotificationIntentId({
+          eventKey: dedupeKey,
+          userId,
+          type,
+          entityType: entityType || null,
+          entityId: entityId || null,
+        }),
+        userId,
+        type,
+        title,
+        message,
+        entityType: entityType || null,
+        entityId: entityId || null,
+      })),
+      skipDuplicates: true,
+    });
+    return;
+  }
+
   const existing =
     dedupeWindowMs && typeof prisma.inAppNotification?.findMany === 'function'
       ? await prisma.inAppNotification.findMany({
@@ -58,16 +82,8 @@ export async function createInAppNotifications({
 
 export async function getScheduleUserIds(scheduleId: string): Promise<string[]> {
   const assignments = await prisma.onCallLayerUser.findMany({
-    where: {
-      user: { status: 'ACTIVE' },
-      layer: {
-        scheduleId,
-      },
-    },
-    select: {
-      userId: true,
-    },
+    where: { user: { status: 'ACTIVE' }, layer: { scheduleId } },
+    select: { userId: true },
   });
-
   return [...new Set(assignments.map(entry => entry.userId))];
 }

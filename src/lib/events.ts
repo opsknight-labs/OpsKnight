@@ -3,7 +3,7 @@ import { logger } from './logger';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
 import { createHash } from 'crypto';
 import { runReadCommittedTransaction } from './db-utils';
-import { enqueueEventSideEffects } from './event-outbox';
+import { enqueueEventSideEffects, enqueueLifecycleSideEffects } from './event-outbox';
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
@@ -59,9 +59,7 @@ const MAX_DESCRIPTION_LENGTH = 10000;
  */
 function normalizeText(text: string): string {
   if (!text) return '';
-  return text
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    .normalize('NFC');
+  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').normalize('NFC');
 }
 
 // Truncate long strings safely (handles unicode)
@@ -338,12 +336,13 @@ export async function processEvent(
           ? truncateString(rawDescription, MAX_DESCRIPTION_LENGTH)
           : null;
 
+        const resolutionAt = new Date();
         const resolvedIncident = await tx.incident.create({
           data: {
             title: sanitizedTitle,
             description: truncatedDescription,
             status: 'RESOLVED',
-            resolvedAt: new Date(),
+            resolvedAt: resolutionAt,
             urgency,
             dedupKey: dedup_key,
             serviceId,
@@ -363,7 +362,17 @@ export async function processEvent(
           },
         });
 
-        await enqueueEventSideEffects(tx, 'resolved', resolvedIncident.id);
+        // This terminal creation bypasses applyIncidentLifecycleCommand, so it
+        // must explicitly enqueue the canonical lifecycle fan-out. The legacy
+        // event-side-effect mapping is intentionally empty for resolve/ACK.
+        await enqueueLifecycleSideEffects(tx, {
+          incidentId: resolvedIncident.id,
+          command: 'RESOLVE',
+          source: 'EVENT',
+          previousStatus: 'OPEN',
+          status: 'RESOLVED',
+          transitionAt: resolutionAt,
+        });
 
         logger.info('event.out_of_order_resolved', {
           incidentId: resolvedIncident.id,

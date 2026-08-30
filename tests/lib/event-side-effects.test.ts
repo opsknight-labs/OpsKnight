@@ -24,39 +24,16 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/lib/notifications', () => ({
-  executeEscalation: vi.fn(),
-}));
-
-vi.mock('@/lib/service-notifications', () => ({
-  sendServiceNotifications: vi.fn(),
-}));
-
-vi.mock('@/lib/user-notifications', () => ({
-  sendIncidentNotifications: vi.fn(),
-}));
-
-vi.mock('@/lib/status-page-webhooks', () => ({
-  triggerWebhooksForService: vi.fn(),
-}));
-
-vi.mock('@/lib/status-page-notifications', () => ({
-  notifyStatusPageSubscribers: vi.fn(),
-}));
-
-vi.mock('@/lib/slack', () => ({
-  notifySlackForIncident: vi.fn(),
-}));
-
+vi.mock('@/lib/notifications', () => ({ executeEscalation: vi.fn() }));
+vi.mock('@/lib/service-notifications', () => ({ sendServiceNotifications: vi.fn() }));
+vi.mock('@/lib/user-notifications', () => ({ sendIncidentNotifications: vi.fn() }));
+vi.mock('@/lib/status-page-webhooks', () => ({ triggerWebhooksForService: vi.fn() }));
+vi.mock('@/lib/status-page-notifications', () => ({ notifyStatusPageSubscribers: vi.fn() }));
+vi.mock('@/lib/slack', () => ({ notifySlackForIncident: vi.fn() }));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
-  default: {
-    incident: {
-      findUnique: vi.fn(),
-    },
-  },
+  default: { incident: { findUnique: vi.fn() } },
 }));
-
 vi.mock('@/lib/chatops/war-room', () => ({
   createIncidentWarRoom: vi.fn(),
   archiveWarRoomChannel: vi.fn(),
@@ -94,15 +71,14 @@ describe('event durable side effects', () => {
     vi.clearAllMocks();
   });
 
-  it('uses service notification fallback only when escalation execution fails', async () => {
+  it('keeps escalation failure isolated so the durable job retries without duplicating service delivery', async () => {
     executeEscalationMock.mockRejectedValue(new Error('escalation unavailable'));
-    sendServiceNotificationsMock.mockResolvedValue(undefined);
 
     await expect(
       processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('escalation unavailable');
 
-    expect(sendServiceNotificationsMock).toHaveBeenCalledTimes(1);
+    expect(sendServiceNotificationsMock).not.toHaveBeenCalled();
     expect(sendIncidentNotificationsMock).not.toHaveBeenCalled();
   });
 
@@ -112,11 +88,9 @@ describe('event durable side effects', () => {
       reason: 'No escalation policy configured',
     });
     sendIncidentNotificationsMock.mockRejectedValue(new Error('provider unavailable'));
-
     await expect(
       processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
     ).rejects.toThrow('provider unavailable');
-
     expect(sendIncidentNotificationsMock).toHaveBeenCalledTimes(1);
     expect(sendServiceNotificationsMock).not.toHaveBeenCalled();
   });
@@ -127,7 +101,6 @@ describe('event durable side effects', () => {
       reason: 'No escalation policy configured',
     });
     sendIncidentNotificationsMock.mockResolvedValue({ success: false, errors: ['push failed'] });
-
     await expect(
       processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
     ).rejects.toThrow('push failed');
@@ -143,7 +116,6 @@ describe('event durable side effects', () => {
       reason: 'No escalation policy configured',
     });
     sendIncidentNotificationsMock.mockResolvedValue(result);
-
     await expect(
       processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
     ).resolves.toBeUndefined();
@@ -159,7 +131,6 @@ describe('event durable side effects', () => {
       outcome: 'RETRYABLE_FAILURE',
       errors: ['provider unavailable'],
     });
-
     await expect(
       processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
     ).rejects.toThrow('provider unavailable');
@@ -175,7 +146,6 @@ describe('event durable side effects', () => {
       outcome: 'PERMANENT_FAILURE',
       errors: ['provider credentials are invalid'],
     });
-
     await expect(
       processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
     ).resolves.toBeUndefined();
@@ -183,9 +153,7 @@ describe('event durable side effects', () => {
 
   it('keeps team assignment intent and recipients distinct from a generic update', async () => {
     sendIncidentNotificationsMock.mockResolvedValue({ success: true, outcome: 'DELIVERED' });
-
     await processEventSideEffect(payload('INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION', 'NOTIFICATION'));
-
     expect(sendIncidentNotificationsMock).toHaveBeenCalledWith('inc-1', 'updated', [], undefined, {
       intent: 'ASSIGNED_TO_TEAM',
     });
@@ -207,9 +175,7 @@ describe('event durable side effects', () => {
       resolvedAt: new Date('2026-08-26T12:01:00Z'),
     });
     triggerWebhooksForServiceMock.mockResolvedValue(undefined);
-
     await processEventSideEffect(payload('TRIGGER_WEBHOOK', 'WEBHOOK'));
-
     expect(triggerWebhooksForServiceMock).toHaveBeenCalledWith(
       'svc-1',
       'incident.created',
@@ -233,7 +199,6 @@ describe('event durable side effects', () => {
       resolvedAt: null,
     });
     triggerWebhooksForServiceMock.mockResolvedValue({ attempted: 2, failed: 1 });
-
     await expect(processEventSideEffect(payload('TRIGGER_WEBHOOK', 'WEBHOOK'))).rejects.toThrow(
       'failed for 1 delivery target'
     );
@@ -256,7 +221,6 @@ describe('event durable side effects', () => {
       resolvedAt: new Date('2026-08-28T06:02:00.000Z'),
     });
     triggerWebhooksForServiceMock.mockResolvedValue(undefined);
-
     await processEventSideEffect(
       payload('LIFECYCLE_WEBHOOK', 'WEBHOOK', {
         command: 'ACKNOWLEDGE',
@@ -267,7 +231,6 @@ describe('event durable side effects', () => {
         snoozedUntil: null,
       })
     );
-
     expect(triggerWebhooksForServiceMock).toHaveBeenCalledWith(
       'svc-1',
       'incident.acknowledged',
@@ -277,7 +240,6 @@ describe('event durable side effects', () => {
 
   it('lets lifecycle notification failures escape to the durable job retry path', async () => {
     sendIncidentNotificationsMock.mockRejectedValue(new Error('notification unavailable'));
-
     await expect(
       processEventSideEffect(
         payload('LIFECYCLE_USER_NOTIFICATION', 'NOTIFICATION', {
@@ -292,6 +254,34 @@ describe('event durable side effects', () => {
     ).rejects.toThrow('notification unavailable');
   });
 
+  it('passes the committed lifecycle generation into personal and service delivery', async () => {
+    const lifecycle = {
+      command: 'RESOLVE' as const,
+      source: 'EVENT' as const,
+      previousStatus: 'ACKNOWLEDGED' as const,
+      status: 'RESOLVED' as const,
+      transitionAt: '2026-08-28T06:02:00.000Z',
+      snoozedUntil: null,
+    };
+    sendIncidentNotificationsMock.mockResolvedValue({ success: true, outcome: 'DELIVERED' });
+    sendServiceNotificationsMock.mockResolvedValue({ success: true });
+
+    await processEventSideEffect(
+      payload('LIFECYCLE_USER_NOTIFICATION', 'PERSONAL_NOTIFICATION', lifecycle)
+    );
+    await processEventSideEffect(
+      payload('LIFECYCLE_SERVICE_NOTIFICATION', 'SERVICE_NOTIFICATION', lifecycle)
+    );
+
+    expect(sendIncidentNotificationsMock).toHaveBeenCalledWith('inc-1', 'resolved', [], undefined, {
+      eventAt: new Date(lifecycle.transitionAt),
+      status: 'RESOLVED',
+    });
+    expect(sendServiceNotificationsMock).toHaveBeenCalledWith('inc-1', 'resolved', {
+      eventAt: new Date(lifecycle.transitionAt),
+    });
+  });
+
   it('recreates an archived war-room on reopen before syncing the OPEN state', async () => {
     prismaMock.incident.findUnique.mockResolvedValue({ status: 'OPEN' });
     createIncidentWarRoomMock.mockResolvedValue({
@@ -301,7 +291,6 @@ describe('event durable side effects', () => {
     });
     postWarRoomUpdateMock.mockResolvedValue({ success: true });
     updateWarRoomTopicMock.mockResolvedValue({ success: true });
-
     await processEventSideEffect(
       payload('LIFECYCLE_WAR_ROOM_ENSURE', 'WAR_ROOM', {
         command: 'REOPEN',
@@ -312,7 +301,6 @@ describe('event durable side effects', () => {
         snoozedUntil: null,
       })
     );
-
     expect(createIncidentWarRoomMock).toHaveBeenCalledWith('inc-1');
     expect(postWarRoomUpdateMock).toHaveBeenCalledWith('inc-1', '🔄 *Status updated to OPEN*');
     expect(updateWarRoomTopicMock).toHaveBeenCalledWith('inc-1', 'OPEN');
@@ -320,7 +308,6 @@ describe('event durable side effects', () => {
 
   it('does not recreate a war-room for a stale reopen after the incident resolved again', async () => {
     prismaMock.incident.findUnique.mockResolvedValue({ status: 'RESOLVED' });
-
     await processEventSideEffect(
       payload('LIFECYCLE_WAR_ROOM_ENSURE', 'WAR_ROOM', {
         command: 'REOPEN',
@@ -331,14 +318,12 @@ describe('event durable side effects', () => {
         snoozedUntil: null,
       })
     );
-
     expect(createIncidentWarRoomMock).not.toHaveBeenCalled();
     expect(postWarRoomUpdateMock).not.toHaveBeenCalled();
   });
 
   it('does not archive a war-room when an old resolve effect runs after reopen', async () => {
     prismaMock.incident.findUnique.mockResolvedValue({ status: 'OPEN', resolvedAt: null });
-
     await processEventSideEffect(
       payload('LIFECYCLE_WAR_ROOM_ARCHIVE', 'WAR_ROOM', {
         command: 'RESOLVE',
@@ -349,7 +334,6 @@ describe('event durable side effects', () => {
         snoozedUntil: null,
       })
     );
-
     expect(archiveWarRoomChannelMock).not.toHaveBeenCalled();
   });
 
@@ -358,7 +342,6 @@ describe('event durable side effects', () => {
       status: 'RESOLVED',
       resolvedAt: new Date('2026-08-28T07:10:00.000Z'),
     });
-
     await processEventSideEffect(
       payload('LIFECYCLE_WAR_ROOM_ARCHIVE', 'WAR_ROOM', {
         command: 'RESOLVE',
@@ -369,7 +352,6 @@ describe('event durable side effects', () => {
         snoozedUntil: null,
       })
     );
-
     expect(archiveWarRoomChannelMock).not.toHaveBeenCalled();
   });
 
@@ -379,7 +361,6 @@ describe('event durable side effects', () => {
       resolvedAt: new Date('2026-08-28T06:02:00.000Z'),
     });
     archiveWarRoomChannelMock.mockResolvedValue({ success: true });
-
     await processEventSideEffect(
       payload('LIFECYCLE_WAR_ROOM_ARCHIVE', 'WAR_ROOM', {
         command: 'RESOLVE',
@@ -390,7 +371,6 @@ describe('event durable side effects', () => {
         snoozedUntil: null,
       })
     );
-
     expect(archiveWarRoomChannelMock).toHaveBeenCalledWith('inc-1');
   });
 
@@ -399,7 +379,6 @@ describe('event durable side effects', () => {
       ...payload('ACK_SLACK', 'SLACK'),
       effect: 'UNKNOWN_EFFECT',
     } as unknown as EventSideEffectPayload;
-
     await expect(processEventSideEffect(invalid)).rejects.toThrow(
       /Unknown EVENT_SIDE_EFFECT effect/
     );

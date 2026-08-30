@@ -1,7 +1,7 @@
 import { processPendingEscalations } from './escalation';
 import { processPendingJobs, cleanupOldJobs } from './jobs/queue';
 import { logger } from './logger';
-import { retryFailedNotifications } from './notification-retry';
+import { getNextNotificationRetryAt, retryFailedNotifications } from './notification-retry';
 import { processAutoUnsnoozeInternal } from '@/lib/unsnooze';
 import { cleanupUserTokens } from '@/lib/user-tokens';
 import { cleanupExpiredRateLimits } from '@/lib/rate-limit';
@@ -189,53 +189,56 @@ async function updateState(data: {
 async function getNextScheduledTime(): Promise<Date> {
   try {
     const prisma = (await import('./prisma')).default;
-    const [nextIncident, nextJob, nextSlaBreach, nextSnooze] = await Promise.all([
-      prisma.incident.findFirst({
-        where: {
-          escalationStatus: 'ESCALATING',
-          nextEscalationAt: { not: null },
-        },
-        orderBy: { nextEscalationAt: 'asc' },
-        select: { nextEscalationAt: true },
-      }),
-      prisma.backgroundJob.findFirst({
-        where: { status: 'PENDING' },
-        orderBy: { scheduledAt: 'asc' },
-        select: { scheduledAt: true },
-      }),
-      prisma.incident.findFirst({
-        where: {
-          status: { in: activeIncidentStatuses() },
-          service: { serviceNotifyOnSlaBreach: true },
-        },
-        orderBy: { createdAt: 'asc' },
-        select: {
-          createdAt: true,
-          acknowledgedAt: true,
-          priority: true,
-          service: {
-            select: {
-              targetAckMinutes: true,
-              targetResolveMinutes: true,
-              serviceNotifyOnSlaBreach: true,
+    const [nextIncident, nextJob, nextSlaBreach, nextSnooze, nextNotificationRetry] =
+      await Promise.all([
+        prisma.incident.findFirst({
+          where: {
+            escalationStatus: 'ESCALATING',
+            nextEscalationAt: { not: null },
+          },
+          orderBy: { nextEscalationAt: 'asc' },
+          select: { nextEscalationAt: true },
+        }),
+        prisma.backgroundJob.findFirst({
+          where: { status: 'PENDING' },
+          orderBy: { scheduledAt: 'asc' },
+          select: { scheduledAt: true },
+        }),
+        prisma.incident.findFirst({
+          where: {
+            status: { in: activeIncidentStatuses() },
+            service: { serviceNotifyOnSlaBreach: true },
+          },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            createdAt: true,
+            acknowledgedAt: true,
+            priority: true,
+            service: {
+              select: {
+                targetAckMinutes: true,
+                targetResolveMinutes: true,
+                serviceNotifyOnSlaBreach: true,
+              },
             },
           },
-        },
-      }),
-      prisma.incident.findFirst({
-        where: {
-          status: 'SNOOZED',
-          snoozedUntil: { not: null },
-        },
-        orderBy: { snoozedUntil: 'asc' },
-        select: { snoozedUntil: true },
-      }),
-    ]);
+        }),
+        prisma.incident.findFirst({
+          where: {
+            status: 'SNOOZED',
+            snoozedUntil: { not: null },
+          },
+          orderBy: { snoozedUntil: 'asc' },
+          select: { snoozedUntil: true },
+        }),
+        getNextNotificationRetryAt(),
+      ]);
 
     const times: (number | null)[] = [
       nextIncident?.nextEscalationAt ? new Date(nextIncident.nextEscalationAt).getTime() : null,
       nextJob?.scheduledAt ? new Date(nextJob.scheduledAt).getTime() : null,
       nextSnooze?.snoozedUntil ? new Date(nextSnooze.snoozedUntil).getTime() : null,
+      nextNotificationRetry?.getTime() ?? null,
     ];
 
     // Add SLA breach check time (proportional warning before ack/resolve target)

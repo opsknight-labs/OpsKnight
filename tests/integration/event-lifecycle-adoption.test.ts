@@ -69,9 +69,18 @@ describeIfRealDB('Event lifecycle engine adoption', { timeout: 30000 }, () => {
     });
     const acknowledgeJobs = jobs.filter(
       job =>
-        (job.payload as SideEffectPayload).effect === 'ACK_SLACK' &&
+        (job.payload as SideEffectPayload).effect?.startsWith('LIFECYCLE_') &&
         (job.payload as SideEffectPayload).incidentId === incident!.id
     );
-    expect(acknowledgeJobs).toHaveLength(1);
+    expect(acknowledgeJobs).toHaveLength(5);
+    expect(acknowledgeJobs.map(job => (job.payload as SideEffectPayload).effect).sort()).toEqual(
+      [
+        'LIFECYCLE_USER_NOTIFICATION',
+        'LIFECYCLE_SERVICE_NOTIFICATION',
+        'LIFECYCLE_STATUS_PAGE',
+        'LIFECYCLE_WEBHOOK',
+        'LIFECYCLE_WAR_ROOM_SYNC',
+      ].sort()
+    );
   });
 });

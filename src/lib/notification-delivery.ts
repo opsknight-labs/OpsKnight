@@ -1,6 +1,8 @@
 import type { IncidentStatus } from '@prisma/client';
 import prisma from './prisma';
 import { CircuitBreakerError, CircuitBreakers } from './circuit-breaker';
+import { notificationEventInstant, notificationIntentEventAt } from './notification-identity';
+import { acquireProviderAdmission, type ProviderAdmissionScope } from './provider-admission';
 
 export const NOTIFICATION_CHANNELS = [
   'EMAIL',
@@ -11,7 +13,6 @@ export const NOTIFICATION_CHANNELS = [
   'WHATSAPP',
 ] as const;
 export type NotificationDeliveryChannel = (typeof NOTIFICATION_CHANNELS)[number];
-
 export const NOTIFICATION_DELIVERY_STATUSES = [
   'PENDING',
   'SENT',
@@ -29,26 +30,30 @@ export const NOTIFICATION_EVENT_TYPES = [
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
 export type NotificationDeliveryOutcome =
   | 'DELIVERED'
+  | 'QUEUED'
   | 'SKIPPED'
   | 'RETRYABLE_FAILURE'
   | 'PERMANENT_FAILURE'
   | 'CIRCUIT_OPEN';
 
-/**
- * The durable outbox uses this contract to decide whether a notification job
- * completed, should be retried, or has reached a terminal state. Policy
- * decisions such as quiet hours and no enabled channels are successful skips,
- * not delivery failures.
- */
 export interface NotificationDeliveryResult {
   success: boolean;
   outcome: NotificationDeliveryOutcome;
   errors?: string[];
   error?: string;
 }
-
 export function isRetryableNotificationOutcome(outcome: NotificationDeliveryOutcome): boolean {
   return outcome === 'RETRYABLE_FAILURE' || outcome === 'CIRCUIT_OPEN';
+}
+
+/** Compatibility key used by the legacy in-memory queue during rolling upgrades. */
+export function notificationDedupeKey(input: {
+  incidentId: string;
+  userId: string;
+  channel: NotificationDeliveryChannel;
+  message: string;
+}): string {
+  return [input.incidentId, input.userId, input.channel, input.message].join('\u001f');
 }
 
 function providerFailureResult(result: {
@@ -62,21 +67,18 @@ function providerFailureResult(result: {
     error: result.error || 'Notification delivery failed',
   };
 }
-
 export interface NotificationRetryPolicy {
   maxAttempts: number;
   initialDelayMs: number;
   maximumDelayMs: number;
   pendingTimeoutMs: number;
 }
-
 export const NOTIFICATION_RETRY_POLICY: Readonly<NotificationRetryPolicy> = Object.freeze({
   maxAttempts: 3,
   initialDelayMs: 5_000,
   maximumDelayMs: 300_000,
-  pendingTimeoutMs: 10 * 60_000,
+  pendingTimeoutMs: 2 * 60_000,
 });
-
 export interface NotificationAttemptResult {
   success: boolean;
   outcome: NotificationDeliveryOutcome;
@@ -84,37 +86,33 @@ export interface NotificationAttemptResult {
   providerMessageId?: string;
   skipped?: boolean;
 }
-
 interface IncidentDeliveryContext {
+  id?: string;
   status: IncidentStatus;
+  createdAt?: Date;
+  updatedAt?: Date;
+  acknowledgedAt?: Date | null;
+  resolvedAt?: Date | null;
+  currentEscalationStep?: number | null;
+  nextEscalationAt?: Date | null;
+  escalationStatus?: string | null;
   service?: { webhookUrl: string | null } | null;
 }
-
 export interface NotificationAttemptInput {
   notificationId: string;
   incidentId: string;
   userId: string;
   channel: NotificationDeliveryChannel;
   eventType: NotificationEventType;
+  message?: string | null;
   incident?: IncidentDeliveryContext | null;
 }
-
 export function notificationRetryDelayMs(
   attempts: number,
   policy: NotificationRetryPolicy = NOTIFICATION_RETRY_POLICY
 ): number {
   return Math.min(policy.initialDelayMs * 2 ** Math.max(0, attempts), policy.maximumDelayMs);
 }
-
-export function notificationDedupeKey(input: {
-  incidentId: string;
-  userId: string;
-  channel: NotificationDeliveryChannel;
-  message: string;
-}): string {
-  return [input.incidentId, input.userId, input.channel, input.message].join('\u001f');
-}
-
 export function notificationEventTypeFromStatus(
   status: IncidentStatus | undefined
 ): Exclude<NotificationEventType, 'updated'> {
@@ -125,24 +123,122 @@ export function notificationEventTypeFromStatus(
       : 'triggered';
 }
 
-/** One channel dispatcher shared by first attempts and durable retries. */
+function staleIntentReason(
+  input: NotificationAttemptInput,
+  incident: IncidentDeliveryContext | null
+): string | null {
+  if (!incident) return null;
+  const expectedAt = notificationIntentEventAt(input.notificationId)?.getTime() ?? null;
+  if (input.eventType === 'triggered') {
+    if (incident.status !== 'OPEN') {
+      return `Triggered notification superseded by incident state ${incident.status}`;
+    }
+    if (
+      expectedAt &&
+      incident.id &&
+      incident.createdAt &&
+      incident.updatedAt &&
+      notificationEventInstant(
+        {
+          id: incident.id,
+          createdAt: incident.createdAt,
+          updatedAt: incident.updatedAt,
+          acknowledgedAt: incident.acknowledgedAt,
+          resolvedAt: incident.resolvedAt,
+          currentEscalationStep: incident.currentEscalationStep,
+          nextEscalationAt: incident.nextEscalationAt,
+          escalationStatus: incident.escalationStatus,
+        },
+        'triggered'
+      ).getTime() !== expectedAt
+    ) {
+      return 'Triggered notification belongs to a superseded escalation generation';
+    }
+    return null;
+  }
+  if (input.eventType === 'acknowledged') {
+    if (incident.status === 'RESOLVED')
+      return 'Acknowledged notification superseded by incident resolution';
+    if (expectedAt && incident.acknowledgedAt?.getTime() !== expectedAt)
+      return 'Acknowledged notification belongs to a superseded lifecycle generation';
+    return null;
+  }
+  if (input.eventType === 'resolved') {
+    if (incident.status !== 'RESOLVED')
+      return `Resolved notification superseded by incident state ${incident.status}`;
+    if (expectedAt && incident.resolvedAt?.getTime() !== expectedAt)
+      return 'Resolved notification belongs to a superseded lifecycle generation';
+    return null;
+  }
+  if (expectedAt && incident.updatedAt?.getTime() !== expectedAt)
+    return 'Incident update notification superseded by a newer incident revision';
+  return null;
+}
+
+async function providerAdmission(
+  input: NotificationAttemptInput,
+  incident: IncidentDeliveryContext
+): Promise<NotificationAttemptResult | null> {
+  if (input.channel === 'SLACK') return null;
+  const scope = input.channel as ProviderAdmissionScope;
+  let providerKey = 'default';
+  if (input.channel === 'WEBHOOK' && incident.service?.webhookUrl) {
+    try {
+      providerKey = new URL(incident.service.webhookUrl).origin;
+    } catch {
+      providerKey = 'service-webhook';
+    }
+  }
+  const admission = await acquireProviderAdmission(scope, providerKey);
+  if (admission.allowed) return null;
+  return {
+    success: true,
+    outcome: 'QUEUED',
+    error: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
+  };
+}
+
 export async function dispatchNotificationAttempt(
   input: NotificationAttemptInput
 ): Promise<NotificationAttemptResult> {
-  const incident =
-    input.incident ??
-    (await prisma.incident.findUnique({
-      where: { id: input.incidentId },
-      select: { status: true, service: { select: { webhookUrl: true } } },
-    }));
+  // Always read the current lifecycle generation immediately before provider
+  // contact. The caller's incident is an immutable rendering snapshot, not a
+  // safe stale-delivery fence: state may have changed after fan-out began.
+  const incident = await prisma.incident.findUnique({
+    where: { id: input.incidentId },
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      acknowledgedAt: true,
+      resolvedAt: true,
+      currentEscalationStep: true,
+      nextEscalationAt: true,
+      escalationStatus: true,
+      service: { select: { webhookUrl: true } },
+    },
+  });
   const type = input.eventType;
+  if (!incident)
+    return { success: false, outcome: 'PERMANENT_FAILURE', error: 'Incident not found' };
+  const staleReason = staleIntentReason(input, incident);
+  if (staleReason) return { success: true, outcome: 'SKIPPED', skipped: true, error: staleReason };
+  const deferred = await providerAdmission(input, incident);
+  if (deferred) return deferred;
 
   try {
     switch (input.channel) {
       case 'EMAIL': {
         const { sendIncidentEmail } = await import('./email');
         return await CircuitBreakers.email().execute(async () => {
-          const result = await sendIncidentEmail(input.userId, input.incidentId, type);
+          const result = await sendIncidentEmail(
+            input.userId,
+            input.incidentId,
+            type,
+            input.notificationId,
+            input.message ?? undefined
+          );
           if (!result.success) return providerFailureResult(result);
           return { ...result, success: true, outcome: 'DELIVERED' };
         });
@@ -154,7 +250,8 @@ export async function dispatchNotificationAttempt(
             input.userId,
             input.incidentId,
             type,
-            input.notificationId
+            input.notificationId,
+            input.message ?? undefined
           );
           if (!result.success) return providerFailureResult(result);
           return {
@@ -166,25 +263,29 @@ export async function dispatchNotificationAttempt(
         });
       }
       case 'PUSH': {
-        const { sendIncidentPush } = await import('./push');
+        const { sendNotificationIntentPush } = await import('./incident-push-delivery');
         return await CircuitBreakers.push().execute(async () => {
-          const result = await sendIncidentPush(input.userId, input.incidentId, type);
+          const result = await sendNotificationIntentPush(
+            input.userId,
+            input.incidentId,
+            type,
+            input.message,
+            input.notificationId
+          );
           if (result.success) return { ...result, success: true, outcome: 'DELIVERED' };
-          if (result.code === 'NO_DEVICE_TOKENS' || result.code === 'NO_WEB_SUBSCRIPTIONS') {
+          if (result.code === 'NO_DEVICE_TOKENS' || result.code === 'NO_WEB_SUBSCRIPTIONS')
             return { ...result, outcome: 'SKIPPED', skipped: true };
-          }
           return providerFailureResult(result);
         });
       }
       case 'WEBHOOK': {
-        const webhookUrl = incident?.service?.webhookUrl;
-        if (!webhookUrl) {
+        const webhookUrl = incident.service?.webhookUrl;
+        if (!webhookUrl)
           return {
             success: false,
             outcome: 'PERMANENT_FAILURE',
             error: 'No webhook URL configured for service',
           };
-        }
         const { sendIncidentWebhook } = await import('./webhooks');
         return await CircuitBreakers.webhook(webhookUrl).execute(async () => {
           const result = await sendIncidentWebhook(webhookUrl, input.incidentId, type);
@@ -199,7 +300,8 @@ export async function dispatchNotificationAttempt(
             input.userId,
             input.incidentId,
             type,
-            input.notificationId
+            input.notificationId,
+            input.message ?? undefined
           );
           if (!result.success) return providerFailureResult(result);
           return {
@@ -211,25 +313,17 @@ export async function dispatchNotificationAttempt(
         });
       }
       case 'SLACK':
-        // Incident Slack delivery is performed by the durable event outbox. This
-        // record acknowledges that ownership rather than contacting Slack twice.
         return { success: true, outcome: 'SKIPPED', skipped: true };
     }
   } catch (error) {
-    if (error instanceof CircuitBreakerError) {
+    if (error instanceof CircuitBreakerError)
       return {
         success: false,
         outcome: 'CIRCUIT_OPEN',
         error: `Service unavailable (circuit open): ${error.serviceName}`,
       };
-    }
-    if (error instanceof Error && 'retryable' in error && error.retryable === false) {
-      return {
-        success: false,
-        outcome: 'PERMANENT_FAILURE',
-        error: error.message,
-      };
-    }
+    if (error instanceof Error && 'retryable' in error && error.retryable === false)
+      return { success: false, outcome: 'PERMANENT_FAILURE', error: error.message };
     return {
       success: false,
       outcome: 'RETRYABLE_FAILURE',

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sendIncidentWhatsApp, sendWhatsApp } from '@/lib/whatsapp';
+import { buildNotificationEnvelope, encodeNotificationEnvelope } from '@/lib/notification-payload';
 
 // Mock dependencies
 vi.mock('@/lib/prisma', () => ({
@@ -115,6 +116,60 @@ describe('WhatsApp Integration', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('no phone number');
+    });
+
+    it('uses immutable snapshot values for delayed WhatsApp templates', async () => {
+      const prisma = (await import('@/lib/prisma')).default;
+      const { getWhatsAppConfig } = await import('@/lib/notification-providers');
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: 'user-1',
+        phoneNumber: '+1234567890',
+      } as never);
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        id: 'inc-1',
+        title: 'Mutated title',
+        urgency: 'LOW',
+        service: { name: 'Renamed Service' },
+      } as never);
+      vi.mocked(getWhatsAppConfig).mockResolvedValue({
+        enabled: true,
+        provider: 'twilio',
+        accountSid: 'TEST_SID',
+        authToken: 'TEST_TOKEN',
+        whatsappNumber: '+1234567890',
+        whatsappContentSid: 'HX1234',
+      });
+      const twilio = (await import('twilio')).default;
+      const create = vi.fn().mockResolvedValue({ sid: 'MSG123' });
+      vi.mocked(twilio).mockReturnValue({ messages: { create } } as never);
+      const eventAt = new Date('2026-08-30T12:00:00.000Z');
+      const durableMessage = encodeNotificationEnvelope(
+        buildNotificationEnvelope(
+          {
+            id: 'inc-1',
+            title: 'Original database outage',
+            urgency: 'HIGH',
+            createdAt: eventAt,
+            updatedAt: eventAt,
+            service: { id: 'svc-1', name: 'Payments' },
+          },
+          'triggered',
+          eventAt,
+          '[Payments] Original database outage'
+        )
+      );
+
+      await expect(
+        sendIncidentWhatsApp('user-1', 'inc-1', 'triggered', 'notification-1', durableMessage)
+      ).resolves.toMatchObject({ success: true, messageSid: 'MSG123' });
+
+      const variables = JSON.parse(create.mock.calls[0]?.[0]?.contentVariables as string);
+      expect(variables).toMatchObject({
+        '1': 'Original database outage',
+        '2': 'Payments',
+        '3': '🚨 Critical Alert',
+      });
+      expect(create.mock.calls[0]?.[0]?.statusCallback).toContain('notification-1');
     });
 
     it('should return error when WhatsApp not enabled', async () => {

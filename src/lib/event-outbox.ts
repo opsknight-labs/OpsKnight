@@ -6,6 +6,7 @@ export type EventOutboxAction = 'triggered' | 'resolved' | 'acknowledged';
 export type EventSideEffect =
   | 'TRIGGER_WEBHOOK'
   | 'TRIGGER_ESCALATION_NOTIFICATIONS'
+  | 'TRIGGER_SERVICE_NOTIFICATION'
   | 'TRIGGER_WAR_ROOM'
   | 'TRIGGER_STATUS_PAGE'
   | 'TRIGGER_JIRA'
@@ -32,6 +33,8 @@ export type EventSideEffectLane =
   | 'ESCALATION'
   | 'WAR_ROOM'
   | 'SLACK'
+  | 'PERSONAL_NOTIFICATION'
+  | 'SERVICE_NOTIFICATION'
   | 'NOTIFICATION'
   | 'STATUS_PAGE'
   | 'INTEGRATION';
@@ -44,7 +47,6 @@ export interface LifecycleSideEffectContext {
   transitionAt: string;
   snoozedUntil: string | null;
 }
-
 export interface EventSideEffectPayload {
   task: 'EVENT_SIDE_EFFECT';
   effect: EventSideEffect;
@@ -53,7 +55,6 @@ export interface EventSideEffectPayload {
   eventOrderAt: string;
   lifecycle?: LifecycleSideEffectContext;
 }
-
 export interface LifecycleOutboxInput {
   incidentId: string;
   command: IncidentLifecycleCommand;
@@ -63,7 +64,6 @@ export interface LifecycleOutboxInput {
   transitionAt: Date;
   snoozedUntil?: Date | null;
 }
-
 export interface IncidentCreationOutboxInput {
   incidentId: string;
   source: 'WEB' | 'MOBILE' | 'REST_API';
@@ -72,114 +72,59 @@ export interface IncidentCreationOutboxInput {
 export function getEventSideEffects(action: EventOutboxAction): readonly EventSideEffect[] {
   switch (action) {
     case 'triggered':
-      return ['TRIGGER_WEBHOOK', 'TRIGGER_ESCALATION_NOTIFICATIONS', 'TRIGGER_WAR_ROOM'];
+      return [
+        'TRIGGER_WEBHOOK',
+        'TRIGGER_ESCALATION_NOTIFICATIONS',
+        'TRIGGER_SERVICE_NOTIFICATION',
+        'TRIGGER_STATUS_PAGE',
+        'TRIGGER_WAR_ROOM',
+      ];
     case 'resolved':
-      return ['RESOLVE_WEBHOOK', 'RESOLVE_SLACK', 'RESOLVE_WAR_ROOM_ARCHIVE'];
     case 'acknowledged':
-      return ['ACK_SLACK'];
+      return [];
   }
 }
 
-/**
- * Manual/mobile and REST creation historically had slightly different external
- * effects. Persist those effects atomically with the new incident while keeping
- * event-ingestion trigger behavior unchanged.
- */
 export function getIncidentCreationSideEffects(
   input: Pick<IncidentCreationOutboxInput, 'source'>
 ): readonly EventSideEffect[] {
   const effects: EventSideEffect[] = [
     'TRIGGER_ESCALATION_NOTIFICATIONS',
+    'TRIGGER_SERVICE_NOTIFICATION',
     'TRIGGER_STATUS_PAGE',
     'TRIGGER_WAR_ROOM',
   ];
-
-  // REST historically emitted the public incident.created status-page webhook.
   if (input.source === 'REST_API') effects.unshift('TRIGGER_WEBHOOK');
-
-  // Interactive creation historically owned Jira auto-create. Keep it durable,
-  // but do not silently add Jira automation to the REST API contract.
   if (input.source === 'WEB' || input.source === 'MOBILE') effects.push('TRIGGER_JIRA');
-
   return effects;
 }
 
-/**
- * Preserve the side-effect semantics each adapter had before lifecycle
- * centralization while making delivery durable. The domain engine owns when a
- * transition happened; this mapping owns which external systems should hear
- * about that committed transition.
- */
 export function getLifecycleSideEffects(
   input: Pick<LifecycleOutboxInput, 'command' | 'source' | 'status'>
 ): readonly EventSideEffect[] {
   const effects = new Set<EventSideEffect>();
-
-  // Event ingestion already persists its ACK/RESOLVE effects through the same
-  // EVENT_SIDE_EFFECT envelope in events.ts. Keep that existing owner until the
-  // creation/trigger outbox is generalized so event jobs are not duplicated.
-  if (input.source === 'EVENT') return [];
-
-  if (input.source === 'WEB' || input.source === 'MOBILE') {
-    effects.add('LIFECYCLE_STATUS_PAGE');
-    effects.add('LIFECYCLE_WEBHOOK');
-
-    if (input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED' || input.status === 'OPEN') {
-      effects.add('LIFECYCLE_USER_NOTIFICATION');
-    }
-
-    if (input.status === 'RESOLVED') {
-      effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');
-    } else if (input.command === 'REOPEN') {
-      // A resolved incident may have an archived war-room. Reopen must ensure a
-      // live room exists instead of trying to post into the archived channel.
-      effects.add('LIFECYCLE_WAR_ROOM_ENSURE');
-    } else {
-      effects.add('LIFECYCLE_WAR_ROOM_SYNC');
-    }
-    return Array.from(effects);
-  }
-
-  if (input.source === 'BULK') {
-    effects.add('LIFECYCLE_WEBHOOK');
-    if (input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED' || input.status === 'OPEN') {
-      effects.add('LIFECYCLE_USER_NOTIFICATION');
-    }
-    if (input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED') {
-      effects.add('LIFECYCLE_STATUS_PAGE');
-    }
-    if (input.status === 'RESOLVED') effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');
-    return Array.from(effects);
-  }
-
-  if (input.source === 'REST_API') {
+  const responderLifecycle =
+    input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED' || input.status === 'OPEN';
+  if (responderLifecycle) {
+    effects.add('LIFECYCLE_USER_NOTIFICATION');
     effects.add('LIFECYCLE_SERVICE_NOTIFICATION');
-    effects.add('LIFECYCLE_WEBHOOK');
-    if (input.status === 'ACKNOWLEDGED' || input.status === 'RESOLVED' || input.status === 'OPEN') {
-      effects.add('LIFECYCLE_STATUS_PAGE');
-    }
-    return Array.from(effects);
   }
-
+  effects.add('LIFECYCLE_STATUS_PAGE');
+  effects.add('LIFECYCLE_WEBHOOK');
   if (input.source === 'CHATOPS') {
-    if (
-      input.status === 'ACKNOWLEDGED' ||
-      input.status === 'RESOLVED' ||
-      input.status === 'SNOOZED'
-    ) {
-      effects.add('LIFECYCLE_USER_NOTIFICATION');
-    }
     if (input.status === 'ACKNOWLEDGED') effects.add('LIFECYCLE_WAR_ROOM_TOPIC');
     if (input.status === 'RESOLVED') effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');
     return Array.from(effects);
   }
-
-  if (input.source === 'SYSTEM' && input.status === 'OPEN') {
-    effects.add('LIFECYCLE_USER_NOTIFICATION');
-    effects.add('LIFECYCLE_STATUS_PAGE');
-    effects.add('LIFECYCLE_WEBHOOK');
-  }
-
+  if (input.status === 'RESOLVED') effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');
+  else if (input.command === 'REOPEN') effects.add('LIFECYCLE_WAR_ROOM_ENSURE');
+  else if (
+    input.status === 'ACKNOWLEDGED' ||
+    input.status === 'OPEN' ||
+    input.status === 'SNOOZED' ||
+    input.status === 'SUPPRESSED'
+  )
+    effects.add('LIFECYCLE_WAR_ROOM_SYNC');
   return Array.from(effects);
 }
 
@@ -190,8 +135,12 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
     case 'LIFECYCLE_WEBHOOK':
     case 'INCIDENT_UPDATE_WEBHOOK':
       return 'WEBHOOK';
+    // The initial escalation resolves the responder audience and materializes
+    // personal channel intents. Keep later ACK/resolve fan-out behind it so a
+    // fast lifecycle transition cannot overtake paging and lose the engaged
+    // responder set. Service integrations use a different lane below.
     case 'TRIGGER_ESCALATION_NOTIFICATIONS':
-      return 'ESCALATION';
+      return 'PERSONAL_NOTIFICATION';
     case 'TRIGGER_WAR_ROOM':
     case 'RESOLVE_WAR_ROOM_ARCHIVE':
     case 'LIFECYCLE_WAR_ROOM_SYNC':
@@ -203,12 +152,14 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
     case 'ACK_SLACK':
       return 'SLACK';
     case 'LIFECYCLE_USER_NOTIFICATION':
-    case 'LIFECYCLE_SERVICE_NOTIFICATION':
     case 'INCIDENT_UPDATE_USER_NOTIFICATION':
     case 'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION':
     case 'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION':
+      return 'PERSONAL_NOTIFICATION';
+    case 'TRIGGER_SERVICE_NOTIFICATION':
+    case 'LIFECYCLE_SERVICE_NOTIFICATION':
     case 'INCIDENT_UPDATE_SERVICE_NOTIFICATION':
-      return 'NOTIFICATION';
+      return 'SERVICE_NOTIFICATION';
     case 'TRIGGER_STATUS_PAGE':
     case 'LIFECYCLE_STATUS_PAGE':
       return 'STATUS_PAGE';
@@ -218,12 +169,9 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
 }
 
 async function databaseClock(tx: Prisma.TransactionClient): Promise<Date> {
-  const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`
-    SELECT clock_timestamp() AS "now"
-  `;
+  const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS "now"`;
   return clock?.now ?? new Date();
 }
-
 async function enqueueSideEffects(
   tx: Prisma.TransactionClient,
   incidentId: string,
@@ -231,10 +179,8 @@ async function enqueueSideEffects(
   lifecycle?: LifecycleSideEffectContext
 ): Promise<void> {
   if (effects.length === 0) return;
-
   const eventOrderAt = await databaseClock(tx);
   const eventOrderAtIso = eventOrderAt.toISOString();
-
   await tx.backgroundJob.createMany({
     data: effects.map(effect => ({
       type: 'SCHEDULED_TASK',
@@ -269,7 +215,6 @@ async function enqueueReopenEscalation(
   input: LifecycleOutboxInput
 ): Promise<void> {
   if (input.command !== 'REOPEN') return;
-
   const incident = await tx.incident.findUnique({
     where: { id: input.incidentId },
     select: {
@@ -279,31 +224,21 @@ async function enqueueReopenEscalation(
       nextEscalationAt: true,
     },
   });
-
   if (
     !incident ||
     incident.status !== 'OPEN' ||
     incident.escalationStatus !== 'ESCALATING' ||
     !incident.nextEscalationAt
-  ) {
+  )
     return;
-  }
-
-  // Resolve/reopen can leave an older delayed escalation job behind. Cancel
-  // pending copies before persisting the canonical post-reopen job so an old
-  // generation cannot page responders early after the incident becomes OPEN.
   await tx.backgroundJob.updateMany({
     where: {
       type: 'ESCALATION',
       status: 'PENDING',
       payload: { path: ['incidentId'], equals: input.incidentId },
     },
-    data: {
-      status: 'CANCELLED',
-      error: 'Superseded by incident reopen',
-    },
+    data: { status: 'CANCELLED', error: 'Superseded by incident reopen' },
   });
-
   await tx.backgroundJob.create({
     data: {
       type: 'ESCALATION',
@@ -319,12 +254,6 @@ async function enqueueReopenEscalation(
   });
 }
 
-/**
- * Persist event-ingestion side-effects in the same database transaction as the
- * incident state change/creation. The existing SCHEDULED_TASK job type is the
- * durable internal outbox envelope, so self-hosted installs need no extra
- * queueing infrastructure.
- */
 export async function enqueueEventSideEffects(
   tx: Prisma.TransactionClient,
   action: EventOutboxAction,
@@ -332,7 +261,6 @@ export async function enqueueEventSideEffects(
 ): Promise<void> {
   await enqueueSideEffects(tx, incidentId, getEventSideEffects(action));
 }
-
 export async function enqueueIncidentUpdateSideEffects(
   tx: Prisma.TransactionClient,
   incidentId: string,
@@ -347,27 +275,12 @@ export async function enqueueIncidentUpdateSideEffects(
 ): Promise<void> {
   await enqueueSideEffects(tx, incidentId, effects);
 }
-
-/**
- * Persist manual/mobile/REST creation side effects in the same transaction as
- * the incident row and creation timeline entry.
- */
 export async function enqueueIncidentCreationSideEffects(
   tx: Prisma.TransactionClient,
   input: IncidentCreationOutboxInput
 ): Promise<void> {
   await enqueueSideEffects(tx, input.incidentId, getIncidentCreationSideEffects(input));
 }
-
-/**
- * Persist lifecycle side-effects atomically with a real lifecycle transition.
- * Idempotent lifecycle no-ops never call this function, so retries do not
- * create duplicate outbox work.
- *
- * Finite snoozes also persist their AUTO_UNSNOOZE timer in the same transaction
- * rather than relying on a post-commit scheduling call. The cron sweep remains
- * a safety net for old/missing jobs.
- */
 export async function enqueueLifecycleSideEffects(
   tx: Prisma.TransactionClient,
   input: LifecycleOutboxInput
@@ -380,11 +293,9 @@ export async function enqueueLifecycleSideEffects(
     transitionAt: input.transitionAt.toISOString(),
     snoozedUntil: input.snoozedUntil?.toISOString() ?? null,
   };
-
   await enqueueSideEffects(tx, input.incidentId, getLifecycleSideEffects(input), lifecycle);
   await enqueueReopenEscalation(tx, input);
-
-  if (input.command === 'SNOOZE' && input.snoozedUntil) {
+  if (input.command === 'SNOOZE' && input.snoozedUntil)
     await tx.backgroundJob.create({
       data: {
         type: 'AUTO_UNSNOOZE',
@@ -394,5 +305,4 @@ export async function enqueueLifecycleSideEffects(
         payload: { incidentId: input.incidentId },
       },
     });
-  }
 }

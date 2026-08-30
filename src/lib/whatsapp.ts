@@ -8,6 +8,7 @@ import { logger } from './logger';
 import { getBaseUrl } from './env-validation';
 import { getWhatsAppConfig } from './notification-providers';
 import { formatToE164 } from './sms';
+import { decodeNotificationEnvelope } from './notification-payload';
 
 export type WhatsAppOptions = {
   userId: string;
@@ -25,7 +26,8 @@ export async function sendIncidentWhatsApp(
   userId: string,
   incidentId: string,
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
-  notificationId?: string
+  notificationId?: string,
+  durableMessage?: string
 ): Promise<{ success: boolean; error?: string; messageSid?: string }> {
   try {
     // Get user and incident
@@ -71,14 +73,25 @@ export async function sendIncidentWhatsApp(
       return { success: false, error: 'Twilio WhatsApp number not configured' };
     }
 
+    const envelope = decodeNotificationEnvelope(durableMessage);
+    const notificationIncident = envelope
+      ? {
+          id: envelope.snapshot.incidentId,
+          title: envelope.snapshot.title,
+          urgency: envelope.snapshot.urgency,
+          service: { name: envelope.snapshot.service.name },
+        }
+      : incident;
+
     // Format message
     const baseUrl = getBaseUrl();
-    const incidentUrl = `${baseUrl}/incidents/${incident.id}`;
+    const incidentUrl = `${baseUrl}/incidents/${notificationIncident.id}`;
 
     let statusLine = '';
 
     if (eventType === 'triggered') {
-      statusLine = incident.urgency === 'HIGH' ? '🚨 Critical Alert' : '⚠️ Incident Alert';
+      statusLine =
+        notificationIncident.urgency === 'HIGH' ? '🚨 Critical Alert' : '⚠️ Incident Alert';
     } else if (eventType === 'acknowledged') {
       statusLine = '👀 Incident Acknowledged';
     } else if (eventType === 'resolved') {
@@ -90,9 +103,9 @@ export async function sendIncidentWhatsApp(
     // Truncate for sanity, though WhatsApp limit is 1600 chars
     const titleMaxLength = 100;
     const title =
-      incident.title.length > titleMaxLength
-        ? incident.title.substring(0, titleMaxLength) + '...'
-        : incident.title;
+      notificationIncident.title.length > titleMaxLength
+        ? notificationIncident.title.substring(0, titleMaxLength) + '...'
+        : notificationIncident.title;
 
     // Send via Twilio WhatsApp API
     const twilioModule = await import('twilio');
@@ -116,7 +129,7 @@ export async function sendIncidentWhatsApp(
           .replace(/[\r\n\t]+/g, ' ')
           .trim()
           .slice(0, 120);
-        const cleanService = (incident.service?.name || 'Service')
+        const cleanService = (notificationIncident.service?.name || 'Service')
           .replace(/[\r\n\t]+/g, ' ')
           .trim()
           .slice(0, 80);
@@ -153,7 +166,7 @@ export async function sendIncidentWhatsApp(
         });
       } else {
         // Fallback to plain text message within session window
-        const body = `${statusLine}\n*${title}*\nService: ${incident.service?.name || 'Unknown'}\nDetails: ${incidentUrl}`;
+        const body = `${statusLine}\n*${title}*\nService: ${notificationIncident.service?.name || 'Unknown'}\nDetails: ${incidentUrl}`;
         messageResult = await client.messages.create({
           from: fromNumber,
           to: whatsappNumber,

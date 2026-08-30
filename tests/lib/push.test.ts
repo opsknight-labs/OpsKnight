@@ -4,6 +4,11 @@ import prisma from '@/lib/prisma';
 import { getPushConfig } from '@/lib/notification-providers';
 import webpush from 'web-push';
 
+const { isDeliveryComplete, markDeliveryComplete } = vi.hoisted(() => ({
+  isDeliveryComplete: vi.fn(),
+  markDeliveryComplete: vi.fn(),
+}));
+
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
@@ -20,6 +25,15 @@ vi.mock('@/lib/notification-providers', () => ({
   getPushConfig: vi.fn(),
 }));
 
+vi.mock('@/lib/delivery-idempotency', () => ({
+  deliveryMarkerId: vi.fn(
+    (_namespace: string, deliveryKey: string, targetId: string) =>
+      `push-marker:${deliveryKey}:${targetId}`
+  ),
+  isDeliveryComplete,
+  markDeliveryComplete,
+}));
+
 vi.mock('web-push', () => ({
   default: {
     sendNotification: vi.fn(),
@@ -32,6 +46,8 @@ describe('sendPush', () => {
     delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     delete process.env.VAPID_PRIVATE_KEY;
     delete process.env.VAPID_SUBJECT;
+    isDeliveryComplete.mockResolvedValue(false);
+    markDeliveryComplete.mockResolvedValue(undefined);
   });
 
   it('sends web push when provider is web-push', async () => {
@@ -143,5 +159,71 @@ describe('sendPush', () => {
     expect(webpush.sendNotification).toHaveBeenCalledTimes(1);
     const payload = JSON.parse(vi.mocked(webpush.sendNotification).mock.calls[0][1] as string);
     expect(payload.actions).toEqual([{ action: 'ack', title: 'Acknowledge' }]);
+  });
+
+  it('retries only failed devices after a partial multi-device delivery', async () => {
+    vi.mocked(getPushConfig).mockResolvedValue({
+      enabled: true,
+      provider: 'web-push',
+      vapidPublicKey: 'public-key',
+      vapidPrivateKey: 'private-key',
+      vapidSubject: 'mailto:test@example.com',
+    });
+    vi.mocked(prisma.userDevice.findMany).mockResolvedValue(
+      ['device-1', 'device-2'].map(id => ({
+        id,
+        deviceId: id,
+        token: JSON.stringify({
+          endpoint: `https://example.com/${id}`,
+          keys: { p256dh: 'p256', auth: 'auth' },
+        }),
+        platform: 'web',
+      })) as unknown as Awaited<ReturnType<typeof prisma.userDevice.findMany>>
+    );
+    vi.mocked(webpush.sendNotification)
+      .mockResolvedValueOnce({} as never)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('push service unavailable'), { statusCode: 503 })
+      );
+
+    const first = await sendPush({
+      userId: 'user-1',
+      title: 'Incident',
+      body: 'First attempt',
+      deliveryKey: 'intent-1',
+    });
+
+    expect(first).toMatchObject({
+      success: false,
+      code: 'DELIVERY_FAILED',
+      deliveredCount: 1,
+      failedCount: 1,
+    });
+    expect(markDeliveryComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: 'device-1', deliveryKey: 'intent-1' })
+    );
+
+    vi.mocked(webpush.sendNotification)
+      .mockClear()
+      .mockResolvedValue({} as never);
+    isDeliveryComplete.mockImplementation(async markerId => markerId.endsWith(':device-1'));
+
+    const retry = await sendPush({
+      userId: 'user-1',
+      title: 'Incident',
+      body: 'Retry',
+      deliveryKey: 'intent-1',
+    });
+
+    expect(retry).toMatchObject({
+      success: true,
+      deliveredCount: 1,
+      checkpointedCount: 1,
+      failedCount: 0,
+    });
+    expect(webpush.sendNotification).toHaveBeenCalledTimes(1);
+    expect(markDeliveryComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: 'device-2', deliveryKey: 'intent-1' })
+    );
   });
 });

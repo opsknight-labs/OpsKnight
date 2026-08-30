@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     const authTokens = [smsConfig.authToken, whatsappConfig.authToken].filter(
       (token): token is string => Boolean(token)
     );
+
     if (
       !signature ||
       !authTokens.some(token => validTwilioSignature(callbackUrl, params, signature, token))
@@ -46,9 +47,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Notification identifier is required' }, { status: 400 });
     }
 
-    const delivered = messageStatus === 'delivered' || messageStatus === 'read';
-    const failed =
-      messageStatus === 'failed' || messageStatus === 'undelivered' || messageStatus === 'canceled';
     const notification = await prisma.notification.findFirst({
       where: {
         OR: [
@@ -56,64 +54,86 @@ export async function POST(request: NextRequest) {
           ...(messageSid ? [{ providerMessageId: messageSid }] : []),
         ],
       },
-      select: {
-        id: true,
-        incidentId: true,
-        userId: true,
-        channel: true,
-        message: true,
-        eventType: true,
-      },
+      select: { id: true, status: true, providerMessageId: true },
     });
-
     if (!notification) {
       logger.warn('twilio.dlr_notification_not_found', { notificationId, messageSid });
       return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
     }
 
-    const updateData = {
-      providerMessageId: messageSid || undefined,
-      status: delivered ? 'DELIVERED' : failed ? 'FAILED' : 'SENT',
-      deliveredAt: delivered ? new Date() : failed ? null : undefined,
-      failedAt: failed ? new Date() : delivered ? null : undefined,
-      errorMsg: failed
-        ? params.get('ErrorMessage') ||
-          `Twilio delivery failed (${params.get('ErrorCode') || 'unknown'})`
-        : null,
-    } as const;
+    // A receipt for an older provider attempt must never overwrite a newer attempt.
+    if (
+      messageSid &&
+      notification.providerMessageId &&
+      notification.providerMessageId !== messageSid
+    ) {
+      logger.info('twilio.dlr_stale_provider_attempt_ignored', {
+        notificationId: notification.id,
+        messageSid,
+      });
+      return new NextResponse(null, { status: 204 });
+    }
+    const providerAttemptFence = messageSid
+      ? { OR: [{ providerMessageId: null }, { providerMessageId: messageSid }] }
+      : { providerMessageId: null };
 
-    if (failed) {
-      await prisma.$transaction(async tx => {
-        const transitioned = await tx.notification.updateMany({
-          where: { id: notification.id, status: { not: 'FAILED' } },
-          data: updateData,
-        });
-        if (transitioned.count === 0) return;
+    const delivered = messageStatus === 'delivered' || messageStatus === 'read';
+    const failed =
+      messageStatus === 'failed' || messageStatus === 'undelivered' || messageStatus === 'canceled';
 
-        await tx.backgroundJob.create({
+    if (delivered) {
+      if (notification.status !== 'DELIVERED') {
+        await prisma.notification.updateMany({
+          where: {
+            id: notification.id,
+            status: { in: ['PENDING', 'SENT', 'FAILED'] },
+            ...providerAttemptFence,
+          },
           data: {
-            type: 'NOTIFICATION',
-            status: 'PENDING',
-            scheduledAt: new Date(),
-            maxAttempts: 3,
-            payload: {
-              mode: 'CHANNEL_FALLBACK',
-              incidentId: notification.incidentId,
-              userId: notification.userId,
-              message: notification.message || 'Incident notification delivery failed',
-              failedChannel: notification.channel,
-              sourceNotificationId: notification.id,
-              eventType: notification.eventType,
-            },
+            providerMessageId: messageSid || undefined,
+            status: 'DELIVERED',
+            deliveredAt: new Date(),
+            failedAt: null,
+            errorMsg: null,
           },
         });
-      });
-    } else {
-      await prisma.notification.update({
-        where: { id: notification.id },
-        data: updateData,
+      }
+    } else if (failed) {
+      // DELIVERED is terminal-successful and must not regress because of a late callback.
+      if (notification.status !== 'DELIVERED' && notification.status !== 'FAILED') {
+        await prisma.notification.updateMany({
+          where: {
+            id: notification.id,
+            status: { in: ['PENDING', 'SENT'] },
+            ...providerAttemptFence,
+          },
+          data: {
+            providerMessageId: messageSid || undefined,
+            status: 'FAILED',
+            failedAt: new Date(),
+            deliveredAt: null,
+            errorMsg:
+              params.get('ErrorMessage') ||
+              `Twilio delivery failed (${params.get('ErrorCode') || 'unknown'})`,
+            attempts: { increment: 1 },
+          },
+        });
+      }
+    } else if (notification.status !== 'DELIVERED' && notification.status !== 'FAILED') {
+      await prisma.notification.updateMany({
+        where: {
+          id: notification.id,
+          status: 'PENDING',
+          ...providerAttemptFence,
+        },
+        data: {
+          providerMessageId: messageSid || undefined,
+          status: 'SENT',
+          errorMsg: null,
+        },
       });
     }
+
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     logger.error('twilio.dlr_failed', { error });

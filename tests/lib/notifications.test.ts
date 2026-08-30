@@ -1,255 +1,270 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { sendNotification } from '@/lib/notifications';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
+import { sendNotification } from '@/lib/notifications';
 import * as emailModule from '@/lib/email';
-import * as pushModule from '@/lib/push';
-import { AppError } from '@/lib/errors';
-
-type NotificationFindResult = Awaited<ReturnType<typeof prisma.notification.findFirst>>;
-type NotificationCreateResult = Awaited<ReturnType<typeof prisma.notification.create>>;
-type IncidentFindResult = Awaited<ReturnType<typeof prisma.incident.findUnique>>;
+import { decodeNotificationEnvelope } from '@/lib/notification-payload';
+import {
+  notificationEventInstant,
+  notificationEventKey,
+  notificationIntentId,
+} from '@/lib/notification-identity';
 
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
-    notification: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    notification: { create: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
     incident: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn() },
     incidentEvent: { create: vi.fn() },
   },
 }));
-
-// Mock sub-modules
 vi.mock('@/lib/email');
-vi.mock('@/lib/sms', () => ({
-  sendIncidentSMS: vi.fn(),
-}));
-vi.mock('@/lib/push', () => ({
-  sendIncidentPush: vi.fn(),
-}));
-vi.mock('@/lib/whatsapp', () => ({
-  sendIncidentWhatsApp: vi.fn(),
-}));
-vi.mock('@/lib/webhooks', () => ({
-  sendIncidentWebhook: vi.fn(),
+vi.mock('@/lib/sms', () => ({ sendIncidentSMS: vi.fn() }));
+vi.mock('@/lib/push', () => ({ sendIncidentPush: vi.fn(), sendPush: vi.fn() }));
+vi.mock('@/lib/whatsapp', () => ({ sendIncidentWhatsApp: vi.fn() }));
+vi.mock('@/lib/webhooks', () => ({ sendIncidentWebhook: vi.fn() }));
+vi.mock('@/lib/incident-push-delivery', () => ({ sendNotificationIntentPush: vi.fn() }));
+vi.mock('@/lib/provider-admission', () => ({
+  acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
 }));
 
-describe('Notifications Library', () => {
+const createdAt = new Date('2026-08-30T12:00:00.000Z');
+const updatedAt = new Date('2026-08-30T12:01:00.000Z');
+const incident = {
+  id: 'inc-1',
+  title: 'Database latency',
+  description: 'Latency above threshold',
+  status: 'OPEN',
+  urgency: 'HIGH',
+  priority: 'P1',
+  serviceId: 'svc-1',
+  createdAt,
+  updatedAt,
+  acknowledgedAt: null,
+  resolvedAt: null,
+  currentEscalationStep: null,
+  nextEscalationAt: null,
+  escalationStatus: null,
+  service: { id: 'svc-1', name: 'Payments', webhookUrl: null },
+  assignee: null,
+  team: null,
+};
+
+function intentIdFor(
+  message: string,
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' = 'triggered',
+  incidentValue: Parameters<typeof notificationEventInstant>[0] = incident
+) {
+  const eventAt = notificationEventInstant(incidentValue, eventType);
+  const eventKey = notificationEventKey({ incident: incidentValue, eventType, message });
+  return notificationIntentId({
+    eventKey,
+    eventType,
+    eventAt,
+    userId: 'user-1',
+    channel: 'EMAIL',
+  });
+}
+
+function pendingIntent(id: string) {
+  return { id, attempts: 0, status: 'PENDING', errorMsg: null } as never;
+}
+
+describe('durable notification intents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue(incident as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      name: 'Responder',
+      email: 'r@example.com',
+    } as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
   });
 
-  it('should route to EMAIL channel correctly', async () => {
-    const incidentId = 'inc-1';
-    const userId = 'user-1';
-    const message = 'Test alert';
-
-    vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notif-1', attempts: 0 } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-      id: incidentId,
-      status: 'TRIGGERED',
-    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+  it('creates one deterministic EMAIL intent and renders from its immutable payload', async () => {
+    const message = '[Payments] Database latency';
+    const notificationId = intentIdFor(message);
+    vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(notificationId));
     vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({ success: true });
 
-    const result = await sendNotification(incidentId, userId, 'EMAIL', message);
+    const result = await sendNotification('inc-1', 'user-1', 'EMAIL', message);
 
-    expect(result.success).toBe(true);
-    expect(emailModule.sendIncidentEmail).toHaveBeenCalledWith(userId, incidentId, 'triggered');
-    expect(prisma.notification.update).toHaveBeenCalledWith(
+    expect(result).toMatchObject({ success: true, outcome: 'DELIVERED', notificationId });
+    expect(result.notificationId).toMatch(/^ntf:triggered:/);
+    const createCall = vi.mocked(prisma.notification.create).mock.calls[0]?.[0];
+    const durableMessage = createCall?.data.message;
+    expect(typeof durableMessage).toBe('string');
+    const envelope = decodeNotificationEnvelope(String(durableMessage));
+    expect(envelope?.snapshot).toMatchObject({
+      incidentId: 'inc-1',
+      title: 'Database latency',
+      status: 'OPEN',
+      eventType: 'triggered',
+    });
+    expect(emailModule.sendIncidentEmail).toHaveBeenCalledWith(
+      'user-1',
+      'inc-1',
+      'triggered',
+      notificationId,
+      durableMessage
+    );
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'notif-1' },
+        where: { id: notificationId, status: 'PENDING' },
         data: expect.objectContaining({ status: 'SENT' }),
       })
     );
   });
 
-  it('should debounce an identical recent notification payload', async () => {
-    const message = '[API] Incident triggered: CPU high';
-    vi.mocked(prisma.notification.findFirst).mockResolvedValue({
-      id: 'notif-existing',
-    } as unknown as NotificationFindResult);
+  it('uses the database primary key as the concurrency idempotency boundary', async () => {
+    const notificationId = intentIdFor('same event');
+    vi.mocked(prisma.notification.create).mockRejectedValueOnce({ code: 'P2002' });
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: notificationId,
+      status: 'SENT',
+      attempts: 0,
+      errorMsg: null,
+    } as never);
 
-    const result = await sendNotification('inc-1', 'user-1', 'EMAIL', message);
+    const result = await sendNotification('inc-1', 'user-1', 'EMAIL', 'same event');
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: true,
       outcome: 'DELIVERED',
-      notificationId: 'notif-existing',
-      debounced: true,
+      notificationId,
+      deduped: true,
     });
-    expect(prisma.notification.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          incidentId: 'inc-1',
-          userId: 'user-1',
-          channel: 'EMAIL',
-          message,
-        }),
-      })
-    );
-    expect(prisma.notification.create).not.toHaveBeenCalled();
     expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
   });
 
-  it('should not let a recent trigger notification suppress a resolved lifecycle message', async () => {
-    const resolvedMessage = '[API] Incident resolved: CPU high';
-    vi.mocked(prisma.notification.findFirst).mockResolvedValue(null);
-    vi.mocked(prisma.notification.create).mockResolvedValue({
-      id: 'notif-resolved',
-      attempts: 0,
-    } as unknown as NotificationCreateResult);
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-      id: 'inc-1',
+  it('does not let a failed persisted channel make the parent replay it', async () => {
+    const notificationId = intentIdFor('failure');
+    vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(notificationId));
+    vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({
+      success: false,
+      error: 'SMTP down',
+    });
+
+    const result = await sendNotification('inc-1', 'user-1', 'EMAIL', 'failure');
+
+    expect(result).toMatchObject({
+      success: false,
+      outcome: 'RETRYABLE_FAILURE',
+      error: 'SMTP down',
+      notificationId,
+    });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING' }),
+        data: expect.objectContaining({ status: 'FAILED', attempts: 1 }),
+      })
+    );
+  });
+
+  it('creates a distinct durable intent for a real later lifecycle event', async () => {
+    const triggeredId = intentIdFor('trigger');
+    const resolvedIncident = {
+      ...incident,
       status: 'RESOLVED',
-    } as unknown as IncidentFindResult);
+      resolvedAt: new Date('2026-08-30T12:03:00.000Z'),
+      updatedAt: new Date('2026-08-30T12:03:00.000Z'),
+    };
+    const resolvedId = intentIdFor('resolve', 'resolved', resolvedIncident);
+    vi.mocked(prisma.notification.create)
+      .mockResolvedValueOnce(pendingIntent(triggeredId))
+      .mockResolvedValueOnce(pendingIntent(resolvedId));
     vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({ success: true });
+
+    await sendNotification('inc-1', 'user-1', 'EMAIL', 'trigger', undefined, 'triggered');
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue(resolvedIncident as never);
+    await sendNotification('inc-1', 'user-1', 'EMAIL', 'resolve', undefined, 'resolved');
+
+    expect(triggeredId).not.toBe(resolvedId);
+    expect(resolvedId).toContain(':resolved:');
+  });
+
+  it('keeps unavailable push recipients terminally skipped', async () => {
+    const { sendNotificationIntentPush } = await import('@/lib/incident-push-delivery');
+    const eventAt = notificationEventInstant(incident, 'triggered');
+    const eventKey = notificationEventKey({ incident, eventType: 'triggered', message: 'push' });
+    const pushId = notificationIntentId({
+      eventKey,
+      eventType: 'triggered',
+      eventAt,
+      userId: 'user-1',
+      channel: 'PUSH',
+    });
+    vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(pushId));
+    vi.mocked(sendNotificationIntentPush).mockResolvedValue({
+      success: false,
+      code: 'NO_DEVICE_TOKENS',
+      error: 'No device tokens',
+    });
+
+    const result = await sendNotification('inc-1', 'user-1', 'PUSH', 'push');
+
+    expect(result).toMatchObject({ success: true, outcome: 'SKIPPED', skipped: true });
+  });
+
+  it('rechecks current lifecycle state before contacting a provider', async () => {
+    const resolvedAt = new Date('2026-08-30T12:03:00.000Z');
+    const resolvedIncident = {
+      ...incident,
+      status: 'RESOLVED',
+      updatedAt: resolvedAt,
+      resolvedAt,
+    };
+    const notificationId = intentIdFor('resolved', 'resolved', resolvedIncident);
+    vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(notificationId));
+    // The fan-out snapshot was RESOLVED, but the incident reopened before the
+    // provider call. The second read must fence the obsolete notification.
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      ...incident,
+      status: 'OPEN',
+      updatedAt: new Date('2026-08-30T12:04:00.000Z'),
+    } as never);
 
     const result = await sendNotification(
       'inc-1',
       'user-1',
       'EMAIL',
-      resolvedMessage,
-      undefined,
+      'resolved',
+      resolvedIncident as never,
       'resolved'
     );
 
-    expect(result.success).toBe(true);
-    expect(prisma.notification.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ message: resolvedMessage }),
-      })
-    );
-    expect(prisma.notification.create).toHaveBeenCalled();
-    expect(emailModule.sendIncidentEmail).toHaveBeenCalledWith('user-1', 'inc-1', 'resolved');
+    expect(result).toMatchObject({ success: true, outcome: 'SKIPPED', skipped: true });
+    expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
   });
 
-  it('preserves acknowledged intent when the incident is already resolved', async () => {
-    vi.mocked(prisma.notification.findFirst).mockResolvedValue(null);
-    vi.mocked(prisma.notification.create).mockResolvedValue({
-      id: 'notif-ack',
-      attempts: 0,
-    } as unknown as NotificationCreateResult);
+  it('fences a failed trigger intent after escalation advances', async () => {
+    const firstStepAt = new Date('2026-08-30T12:02:00.000Z');
+    const firstStep = {
+      ...incident,
+      updatedAt: firstStepAt,
+      currentEscalationStep: 0,
+      nextEscalationAt: firstStepAt,
+      escalationStatus: 'ESCALATING',
+    };
+    const notificationId = intentIdFor('Escalation Level 1', 'triggered', firstStep);
+    vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(notificationId));
     vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-      id: 'inc-1',
-      status: 'RESOLVED',
-    } as unknown as IncidentFindResult);
-    vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({ success: true });
-
-    await sendNotification(
-      'inc-1',
-      'user-1',
-      'EMAIL',
-      'Incident acknowledged',
-      undefined,
-      'acknowledged'
-    );
-
-    expect(emailModule.sendIncidentEmail).toHaveBeenCalledWith('user-1', 'inc-1', 'acknowledged');
-    expect(prisma.notification.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ eventType: 'acknowledged' }) })
-    );
-  });
-
-  it('records an unavailable push recipient as terminally skipped', async () => {
-    vi.mocked(prisma.notification.findFirst).mockResolvedValue(null);
-    vi.mocked(prisma.notification.create).mockResolvedValue({
-      id: 'notif-push',
-      attempts: 0,
-    } as unknown as NotificationCreateResult);
-    vi.mocked(pushModule.sendIncidentPush).mockResolvedValue({
-      success: false,
-      code: 'NO_DEVICE_TOKENS',
-      error: 'No device tokens found for user',
-    });
+      ...firstStep,
+      currentEscalationStep: 1,
+      nextEscalationAt: new Date('2026-08-30T12:07:00.000Z'),
+    } as never);
 
     const result = await sendNotification(
       'inc-1',
       'user-1',
-      'PUSH',
-      'Incident acknowledged',
-      undefined,
-      'acknowledged'
+      'EMAIL',
+      'Escalation Level 1',
+      firstStep as never,
+      'triggered'
     );
 
-    expect(result).toEqual(
-      expect.objectContaining({ success: true, outcome: 'SKIPPED', skipped: true, terminal: true })
-    );
-    expect(prisma.notification.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'SKIPPED' }) })
-    );
-  });
-
-  it('should route to WHATSAPP channel correctly', async () => {
-    const { sendIncidentWhatsApp } = await import('@/lib/whatsapp');
-    const incidentId = 'inc-2';
-    const userId = 'user-2';
-
-    vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notif-2', attempts: 0 } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-      id: incidentId,
-      status: 'TRIGGERED',
-    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-    vi.mocked(sendIncidentWhatsApp).mockResolvedValue({ success: true });
-
-    const result = await sendNotification(incidentId, userId, 'WHATSAPP', 'Hello');
-
-    expect(result.success).toBe(true);
-    expect(sendIncidentWhatsApp).toHaveBeenCalledWith(userId, incidentId, 'triggered', 'notif-2');
-  });
-
-  it('should handle delivery failure', async () => {
-    const incidentId = 'inc-3';
-    const userId = 'user-3';
-
-    vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notif-3', attempts: 0 } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-      id: incidentId,
-      status: 'TRIGGERED',
-    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-    vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({
-      success: false,
-      error: 'SMTP Error',
-    });
-
-    const result = await sendNotification(incidentId, userId, 'EMAIL', 'Fail');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('SMTP Error');
-    expect(prisma.notification.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'notif-3' },
-        data: expect.objectContaining({ status: 'FAILED', errorMsg: 'SMTP Error' }),
-      })
-    );
-  });
-
-  it('marks a typed permanent provider failure terminally without scheduling retries', async () => {
-    vi.mocked(prisma.notification.create).mockResolvedValue({
-      id: 'notif-permanent',
-      attempts: 0,
-    } as unknown as NotificationCreateResult);
-    vi.mocked(emailModule.sendIncidentEmail).mockRejectedValue(
-      new AppError({
-        code: 'INTEGRATION_AUTHENTICATION_FAILED',
-        userMessage: 'Provider credentials rejected',
-        retryable: false,
-      })
-    );
-
-    const result = await sendNotification('inc-4', 'user-4', 'EMAIL', 'Fail permanently');
-
-    expect(result).toEqual(expect.objectContaining({ success: false, outcome: 'PERMANENT_FAILURE' }));
-    expect(prisma.notification.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ attempts: 3 }) })
-    );
-  });
-
-  it('should return error for unknown channel', async () => {
-    vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notif-4', attempts: 0 } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-
-    // @ts-expect-error - testing runtime unknown channel
-    const result = await sendNotification('inc-1', 'user-1', 'INVALID_CHANNEL', 'msg');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Unknown channel');
+    expect(result).toMatchObject({ success: true, outcome: 'SKIPPED', skipped: true });
+    expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
   });
 });

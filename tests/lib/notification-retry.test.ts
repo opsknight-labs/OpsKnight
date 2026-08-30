@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { retryFailedNotifications } from '@/lib/notification-retry';
+import { getNextNotificationRetryAt, retryFailedNotifications } from '@/lib/notification-retry';
 import prisma from '@/lib/prisma';
 
 const sendIncidentEmail = vi.fn();
@@ -7,8 +7,10 @@ const circuitExecute = vi.fn((fn: () => unknown) => fn());
 
 vi.mock('@/lib/prisma', () => ({
   default: {
+    incident: { findUnique: vi.fn() },
     notification: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       updateMany: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
@@ -34,6 +36,9 @@ vi.mock('@/lib/circuit-breaker', () => ({
     webhook: () => ({ execute: (fn: () => unknown) => fn() }),
   },
 }));
+vi.mock('@/lib/provider-admission', () => ({
+  acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
+}));
 vi.mock('@/lib/notifications', () => ({ sendNotification: vi.fn() }));
 vi.mock('@/lib/email', () => ({ sendIncidentEmail }));
 vi.mock('@/lib/sms', () => ({ sendIncidentSMS: vi.fn() }));
@@ -57,6 +62,7 @@ describe('notification retry claiming', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     circuitExecute.mockImplementation((fn: () => unknown) => fn());
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue(failedNotification.incident as never);
     vi.mocked(prisma.notification.findMany).mockResolvedValue([failedNotification] as never);
   });
 
@@ -64,13 +70,13 @@ describe('notification retry claiming', () => {
     const { CircuitBreakerError } = await import('@/lib/circuit-breaker');
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
     circuitExecute.mockRejectedValue(new CircuitBreakerError('Circuit is open', 'email'));
-    vi.mocked(prisma.notification.update).mockResolvedValue({} as never);
 
     const result = await retryFailedNotifications();
 
     expect(result).toEqual({ retried: 1, succeeded: 0, failed: 1 });
-    expect(prisma.notification.update).toHaveBeenCalledWith(
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING' }),
         data: expect.objectContaining({ status: 'FAILED', attempts: 1 }),
       })
     );
@@ -88,7 +94,6 @@ describe('notification retry claiming', () => {
   it('sends only after an atomic FAILED-to-PENDING claim succeeds', async () => {
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
     sendIncidentEmail.mockResolvedValue({ success: true });
-    vi.mocked(prisma.notification.update).mockResolvedValue({} as never);
 
     const result = await retryFailedNotifications();
 
@@ -98,6 +103,50 @@ describe('notification retry claiming', () => {
       expect.objectContaining({
         where: expect.objectContaining({ id: 'notification-1', status: 'FAILED', attempts: 1 }),
       })
+    );
+  });
+
+  it('selects only due retries before applying the batch limit', async () => {
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 0 });
+
+    await retryFailedNotifications();
+
+    expect(prisma.notification.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 100,
+        where: expect.objectContaining({
+          status: 'FAILED',
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              attempts: 0,
+              failedAt: expect.objectContaining({ lte: expect.any(Date) }),
+            }),
+            expect.objectContaining({
+              attempts: 1,
+              failedAt: expect.objectContaining({ lte: expect.any(Date) }),
+            }),
+            expect.objectContaining({
+              attempts: 2,
+              failedAt: expect.objectContaining({ lte: expect.any(Date) }),
+            }),
+          ]),
+        }),
+      })
+    );
+  });
+
+  it('exposes the earliest failed or orphaned intent deadline to the scheduler', async () => {
+    const createdAt = new Date('2026-08-30T12:00:00.000Z');
+    const failedAt = new Date('2026-08-30T12:01:00.000Z');
+    vi.mocked(prisma.notification.findFirst)
+      .mockResolvedValueOnce({ createdAt } as never)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ failedAt } as never)
+      .mockResolvedValueOnce(null);
+
+    await expect(getNextNotificationRetryAt()).resolves.toEqual(
+      new Date(failedAt.getTime() + 10_000)
     );
   });
 });

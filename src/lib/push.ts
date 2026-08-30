@@ -12,6 +12,7 @@ import { logger } from './logger';
 import { getUserTimeZone } from './timezone';
 import { formatPushTimestamp } from './mobile-time';
 import webpush from 'web-push';
+import { deliveryMarkerId, isDeliveryComplete, markDeliveryComplete } from './delivery-idempotency';
 
 // Configure Web Push if keys are present
 // We will configure VAPID details per-request based on DB config or Env variables
@@ -30,6 +31,8 @@ export type PushOptions = {
   body: string;
   data?: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   badge?: number;
+  /** Stable logical intent used to checkpoint delivery independently per device. */
+  deliveryKey?: string;
 };
 
 export type PushFailureCode =
@@ -40,7 +43,14 @@ export type PushFailureCode =
   | 'RECIPIENT_NOT_FOUND'
   | 'DELIVERY_FAILED';
 
-export type PushResult = { success: boolean; error?: string; code?: PushFailureCode };
+export type PushResult = {
+  success: boolean;
+  error?: string;
+  code?: PushFailureCode;
+  deliveredCount?: number;
+  checkpointedCount?: number;
+  failedCount?: number;
+};
 
 /**
  * Send push notification
@@ -83,6 +93,9 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
 
     // Production: Use configured provider
     let successCount = 0;
+    let checkpointedCount = 0;
+    let terminalCount = 0;
+    let retryableFailureCount = 0;
     const errorMessages: string[] = [];
     const resolveVapidDetailsList = () => {
       const details: { subject: string; publicKey: string; privateKey: string }[] = [];
@@ -142,8 +155,17 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
     const vapidDetailsList = resolveVapidDetailsList();
 
     const sendWebPush = async (device: (typeof devices)[number]) => {
+      const markerId = options.deliveryKey
+        ? deliveryMarkerId('push-device', options.deliveryKey, device.id)
+        : null;
+      if (markerId && (await isDeliveryComplete(markerId))) {
+        checkpointedCount++;
+        return;
+      }
+
       if (vapidDetailsList.length === 0) {
         errorMessages.push(`Device ${device.deviceId}: VAPID keys not configured`);
+        retryableFailureCount++;
         return;
       }
 
@@ -165,6 +187,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
           });
         }
         errorMessages.push(`Device ${device.deviceId}: Corrupted token purged`);
+        terminalCount++;
         return;
       }
 
@@ -205,12 +228,33 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
                 Urgency: isHighUrgency ? 'high' : 'normal',
               },
             });
-            await prisma.userDevice.update({
-              where: { id: device.id },
-              data: { lastUsed: new Date() },
-            });
             successCount++;
             sent = true;
+            // Provider acceptance is already irreversible. Persistence errors
+            // must not cause another VAPID-key attempt and duplicate the push.
+            try {
+              await prisma.userDevice.update({
+                where: { id: device.id },
+                data: { lastUsed: new Date() },
+              });
+              if (markerId && options.deliveryKey) {
+                await markDeliveryComplete({
+                  markerId,
+                  namespace: 'push-device',
+                  deliveryKey: options.deliveryKey,
+                  targetId: device.id,
+                });
+              }
+            } catch (checkpointError) {
+              logger.error('push.device_checkpoint_failed_after_acceptance', {
+                userId: options.userId,
+                deviceId: device.deviceId,
+                error:
+                  checkpointError instanceof Error
+                    ? checkpointError.message
+                    : String(checkpointError),
+              });
+            }
             break;
           } catch (error: unknown) {
             const statusCode =
@@ -243,6 +287,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
                 });
               }
               errorMessages.push(`Device ${device.deviceId}: Subscription expired (removed)`);
+              terminalCount++;
               return;
             }
 
@@ -254,6 +299,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
 
             if (!shouldRetry) {
               errorMessages.push(`Device ${device.deviceId}: ${errorMessage}`);
+              retryableFailureCount++;
               return;
             }
           }
@@ -261,6 +307,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
 
         if (!sent) {
           errorMessages.push(`Device ${device.deviceId}: ${lastErrorMessage}`);
+          retryableFailureCount++;
         }
       } catch (error: unknown) {
         const statusCode =
@@ -290,8 +337,10 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
             });
           }
           errorMessages.push(`Device ${device.deviceId}: Subscription expired (removed)`);
+          terminalCount++;
         } else {
           errorMessages.push(`Device ${device.deviceId}: ${errorMessage}`);
+          retryableFailureCount++;
         }
       }
     };
@@ -323,15 +372,32 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
 
     await Promise.allSettled(webDevices.map(device => sendWebPush(device)));
 
-    if (successCount > 0) {
-      return { success: true };
-    } else {
+    if (retryableFailureCount > 0) {
       return {
         success: false,
         code: 'DELIVERY_FAILED',
-        error: errorMessages.join('; ') || 'Failed to send to all devices',
+        error: errorMessages.join('; ') || 'Failed to send to one or more devices',
+        deliveredCount: successCount,
+        checkpointedCount,
+        failedCount: retryableFailureCount,
       };
     }
+    if (successCount + checkpointedCount > 0) {
+      return {
+        success: true,
+        deliveredCount: successCount,
+        checkpointedCount,
+        failedCount: 0,
+      };
+    }
+    return {
+      success: false,
+      code: terminalCount > 0 ? 'NO_WEB_SUBSCRIPTIONS' : 'DELIVERY_FAILED',
+      error: errorMessages.join('; ') || 'No active web push subscriptions remain',
+      deliveredCount: 0,
+      checkpointedCount: 0,
+      failedCount: 0,
+    };
   } catch (error: any) {
     logger.error('Push send error', { component: 'push', error, userId: options.userId });
     return { success: false, code: 'DELIVERY_FAILED', error: error.message };

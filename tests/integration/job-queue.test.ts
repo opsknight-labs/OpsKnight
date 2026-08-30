@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { scheduleJob, claimPendingJobs, markJobFailed, processJob } from '@/lib/jobs/queue';
-import { testPrisma, resetDatabase, createTestUser } from '../helpers/test-db';
+import { testPrisma, resetDatabase } from '../helpers/test-db';
 
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -84,40 +84,27 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
       expect(job?.error).toBe('Third failure');
     });
 
-    it('gives notification delivery all three claimed attempts', async () => {
-      const user = await createTestUser();
-      const service = await testPrisma.service.create({
-        data: { name: `Retry Service ${Date.now()}`, webhookUrl: 'http://127.0.0.1:9' },
-      });
-      const incident = await testPrisma.incident.create({
-        data: { title: 'Retry notification incident', status: 'OPEN', serviceId: service.id },
-      });
+    it('cancels legacy notification jobs during a rolling deployment', async () => {
       const jobId = await scheduleJob(
         'NOTIFICATION',
         new Date(Date.now() - 1000),
         {
-          incidentId: incident.id,
-          userId: user.id,
-          channel: 'WEBHOOK',
-          message: 'retry contract',
+          incidentId: 'legacy-incident',
+          userId: 'legacy-user',
+          channel: 'EMAIL',
+          message: 'legacy notification',
         },
         3
       );
 
-      for (let expectedAttempt = 1; expectedAttempt <= 3; expectedAttempt++) {
-        const [claimed] = await claimPendingJobs(1);
-        expect(claimed.attempts).toBe(expectedAttempt);
-        await processJob(claimed);
+      const [claimed] = await claimPendingJobs(1);
+      expect(claimed.attempts).toBe(1);
+      await processJob(claimed);
 
-        const stored = await testPrisma.backgroundJob.findUnique({ where: { id: jobId } });
-        expect(stored?.status).toBe(expectedAttempt < 3 ? 'PENDING' : 'FAILED');
-        if (expectedAttempt < 3) {
-          await testPrisma.backgroundJob.update({
-            where: { id: jobId },
-            data: { scheduledAt: new Date(Date.now() - 1000) },
-          });
-        }
-      }
+      const stored = await testPrisma.backgroundJob.findUnique({ where: { id: jobId } });
+      expect(stored?.status).toBe('CANCELLED');
+      expect(stored?.completedAt).not.toBeNull();
+      expect(stored?.error).toContain('durable per-channel notification intents');
     });
   });
 
