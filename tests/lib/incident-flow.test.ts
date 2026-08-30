@@ -134,7 +134,7 @@ describe('incident flow safeguards', () => {
     );
 
     const updateData = prismaMock.incident.update.mock.calls[0][0].data;
-    expect(updateData).not.toHaveProperty('acknowledgedAt');
+    expect(updateData.acknowledgedAt).toBeNull();
   });
 
   it('auto-unsnooze job resumes escalation through the lifecycle engine', async () => {

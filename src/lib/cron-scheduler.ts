@@ -29,6 +29,7 @@ const SINGLETON_ID = 'singleton';
 
 // Local state for timer management (not persisted)
 let timer: NodeJS.Timeout | null = null;
+let activeRun: Promise<void> | null = null;
 let initialized = false;
 let lastJobCleanup = 0;
 
@@ -292,7 +293,11 @@ function scheduleNextRun(targetTime: Date, persistToDb: boolean = true) {
     clearTimeout(timer);
   }
 
-  timer = setTimeout(runOnce, delay);
+  timer = setTimeout(() => {
+    activeRun = runOnce().finally(() => {
+      activeRun = null;
+    });
+  }, delay);
 
   // Update DB with next run time only if leader / active scheduler
   if (persistToDb) {
@@ -483,19 +488,17 @@ async function runOnce() {
         // resolutions, reopens, or edits. Missing-row backfill alone cannot
         // repair a rollup whose source incident changed after generation.
         const refreshSince = state.lastRollupRefreshAt || new Date(now.getTime() - 7 * 86400_000);
-        const changedIncidents = await prisma.incident.findMany({
-          where: {
-            updatedAt: { gt: refreshSince },
-            createdAt: { gte: oldestNeeded, lte: yesterday },
-          },
-          select: { createdAt: true },
-          orderBy: { updatedAt: 'asc' },
-          take: 5000,
-        });
-        const dirtyDayKeys = new Set(
-          changedIncidents.map(incident => incident.createdAt.toISOString().split('T')[0])
-        );
-        const dirtyDays = Array.from(dirtyDayKeys).map(key => new Date(`${key}T00:00:00.000Z`));
+        const dirtyDays = (
+          await prisma.$queryRaw<Array<{ day: Date }>>`
+            SELECT DISTINCT
+              date_trunc('day', "createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS "day"
+            FROM "Incident"
+            WHERE "updatedAt" > ${refreshSince}
+              AND "createdAt" >= ${oldestNeeded}
+              AND "createdAt" <= ${yesterday}
+            ORDER BY "day"
+          `
+        ).map(row => row.day);
         for (const day of dirtyDays) {
           await generateAllDailyRollups(day);
         }
@@ -516,7 +519,7 @@ async function runOnce() {
         // drained. Otherwise the next tick will pick up the rest.
         if (missingDays.length <= MAX_BACKFILL_PER_RUN) {
           await updateState({ lastRollupDate: todayKey, lastRollupRefreshAt: now });
-        } else if (changedIncidents.length < 5000) {
+        } else {
           await updateState({ lastRollupRefreshAt: now });
         }
         logger.info('[Cron] Daily rollup maintenance complete', {
@@ -607,13 +610,15 @@ export function startCronScheduler() {
  * Stop the cron scheduler
  */
 export async function stopCronScheduler() {
+  initialized = false;
   if (timer) {
     clearTimeout(timer);
     timer = null;
   }
 
+  if (activeRun) await activeRun;
+
   await releaseLock(new Date());
-  initialized = false; // Allow restart
 
   logger.info('[Cron] Scheduler stopped', { workerId: WORKER_ID });
 }

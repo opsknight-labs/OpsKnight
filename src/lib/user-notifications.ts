@@ -275,6 +275,7 @@ export async function sendIncidentNotifications(
               },
             },
           },
+          team: { include: { members: true } },
           assignee: true,
           watchers: true,
         },
@@ -305,6 +306,12 @@ export async function sendIncidentNotifications(
         (m: { userId: string }) => m.userId
       );
       inAppRecipients.push(...teamUserIds);
+    }
+
+    if (incidentRecord.team?.members && Array.isArray(incidentRecord.team.members)) {
+      inAppRecipients.push(
+        ...incidentRecord.team.members.map((member: { userId: string }) => member.userId)
+      );
     }
 
     // Remove duplicates for In-App notifications
@@ -349,6 +356,15 @@ export async function sendIncidentNotifications(
       }
       if (incidentRecord.watchers && Array.isArray(incidentRecord.watchers)) {
         directRecipients.push(...incidentRecord.watchers.map((w: { userId: string }) => w.userId));
+      }
+      if (
+        eventType === 'updated' &&
+        incidentRecord.team?.members &&
+        Array.isArray(incidentRecord.team.members)
+      ) {
+        directRecipients.push(
+          ...incidentRecord.team.members.map((member: { userId: string }) => member.userId)
+        );
       }
       externalRecipients = [...new Set(directRecipients)].filter(
         id => !excludeUserIds.includes(id)
@@ -510,7 +526,12 @@ export async function sendIncidentNotifications(
     try {
       const { sendServiceNotifications: sendIntegrationNotifications } =
         await import('./service-notifications');
-      await sendIntegrationNotifications(incidentId, eventType);
+      const integrationResult = await sendIntegrationNotifications(incidentId, eventType);
+      if (!integrationResult.success) {
+        errors.push(
+          `Service integrations: ${integrationResult.errors?.join(', ') || 'Delivery failed'}`
+        );
+      }
     } catch (err) {
       logger.error('Failed to send service integration notifications', {
         component: 'user-notifications',
@@ -518,7 +539,7 @@ export async function sendIncidentNotifications(
         serviceId: incidentRecord.serviceId,
         incidentId: incidentRecord.id,
       });
-      // Don't block the response, just log it
+      errors.push(`Service integrations: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     return {

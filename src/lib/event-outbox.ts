@@ -20,7 +20,10 @@ export type EventSideEffect =
   | 'LIFECYCLE_WAR_ROOM_SYNC'
   | 'LIFECYCLE_WAR_ROOM_ENSURE'
   | 'LIFECYCLE_WAR_ROOM_TOPIC'
-  | 'LIFECYCLE_WAR_ROOM_ARCHIVE';
+  | 'LIFECYCLE_WAR_ROOM_ARCHIVE'
+  | 'INCIDENT_UPDATE_USER_NOTIFICATION'
+  | 'INCIDENT_UPDATE_SERVICE_NOTIFICATION'
+  | 'INCIDENT_UPDATE_WEBHOOK';
 
 export type EventSideEffectLane =
   | 'WEBHOOK'
@@ -183,6 +186,7 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
     case 'TRIGGER_WEBHOOK':
     case 'RESOLVE_WEBHOOK':
     case 'LIFECYCLE_WEBHOOK':
+    case 'INCIDENT_UPDATE_WEBHOOK':
       return 'WEBHOOK';
     case 'TRIGGER_ESCALATION_NOTIFICATIONS':
       return 'ESCALATION';
@@ -198,6 +202,8 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
       return 'SLACK';
     case 'LIFECYCLE_USER_NOTIFICATION':
     case 'LIFECYCLE_SERVICE_NOTIFICATION':
+    case 'INCIDENT_UPDATE_USER_NOTIFICATION':
+    case 'INCIDENT_UPDATE_SERVICE_NOTIFICATION':
       return 'NOTIFICATION';
     case 'TRIGGER_STATUS_PAGE':
     case 'LIFECYCLE_STATUS_PAGE':
@@ -321,6 +327,19 @@ export async function enqueueEventSideEffects(
   incidentId: string
 ): Promise<void> {
   await enqueueSideEffects(tx, incidentId, getEventSideEffects(action));
+}
+
+export async function enqueueIncidentUpdateSideEffects(
+  tx: Prisma.TransactionClient,
+  incidentId: string,
+  effects: readonly Extract<
+    EventSideEffect,
+    | 'INCIDENT_UPDATE_USER_NOTIFICATION'
+    | 'INCIDENT_UPDATE_SERVICE_NOTIFICATION'
+    | 'INCIDENT_UPDATE_WEBHOOK'
+  >[]
+): Promise<void> {
+  await enqueueSideEffects(tx, incidentId, effects);
 }
 
 /**

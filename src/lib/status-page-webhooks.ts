@@ -151,7 +151,7 @@ export async function getStatusPagesForService(serviceId: string): Promise<strin
       serviceId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return [];
+    throw error;
   }
 }
 
@@ -162,7 +162,7 @@ export async function triggerStatusPageWebhooks(
   statusPageId: string,
   event: string,
   data: any // eslint-disable-line @typescript-eslint/no-explicit-any
-): Promise<void> {
+): Promise<{ attempted: number; failed: number }> {
   try {
     const allWebhooks = await prisma.statusPageWebhook.findMany({
       where: {
@@ -178,7 +178,7 @@ export async function triggerStatusPageWebhooks(
     });
 
     if (webhooks.length === 0) {
-      return;
+      return { attempted: 0, failed: 0 };
     }
 
     const payload: WebhookPayload = {
@@ -189,21 +189,17 @@ export async function triggerStatusPageWebhooks(
 
     // Deliver to webhooks in concurrency-controlled batches
     const BATCH_SIZE = 25;
+    let failed = 0;
     for (let i = 0; i < webhooks.length; i += BATCH_SIZE) {
       const batch = webhooks.slice(i, i + BATCH_SIZE);
-      await Promise.allSettled(
+      const results = await Promise.allSettled(
         batch.map(async webhook =>
-          deliverWebhook(webhook.url, await decryptStoredSecret(webhook.secret), payload).catch(
-            err => {
-              logger.error('api.status_page.webhook.delivery_exception', {
-                webhookId: webhook.id,
-                error: err instanceof Error ? err.message : String(err),
-              });
-              return false;
-            }
-          )
+          deliverWebhook(webhook.url, await decryptStoredSecret(webhook.secret), payload)
         )
       );
+      failed += results.filter(
+        result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value)
+      ).length;
     }
 
     logger.info('api.status_page.webhooks.triggered', {
@@ -211,12 +207,14 @@ export async function triggerStatusPageWebhooks(
       event,
       webhookCount: webhooks.length,
     });
+    return { attempted: webhooks.length, failed };
   } catch (error: any) {
     logger.error('api.status_page.webhooks.trigger_error', {
       statusPageId,
       event,
       error: error instanceof Error ? error.message : String(error),
     });
+    throw error;
   }
 }
 
@@ -228,7 +226,7 @@ export async function triggerWebhooksForService(
   serviceId: string,
   event: string,
   incidentData: any // eslint-disable-line @typescript-eslint/no-explicit-any
-): Promise<void> {
+): Promise<{ attempted: number; failed: number; skipped?: boolean }> {
   try {
     // Incident visibility is security-sensitive: load it from the database
     // instead of trusting an optional caller-supplied payload field.
@@ -237,9 +235,9 @@ export async function triggerWebhooksForService(
         where: { id: incidentData.id },
         select: { visibility: true },
       });
-      if (!inc || inc.visibility !== 'PUBLIC') return;
+      if (!inc || inc.visibility !== 'PUBLIC') return { attempted: 0, failed: 0, skipped: true };
     } else if (incidentData?.visibility !== 'PUBLIC') {
-      return;
+      return { attempted: 0, failed: 0, skipped: true };
     }
 
     const statusPageIds = await getStatusPagesForService(serviceId);
@@ -247,21 +245,25 @@ export async function triggerWebhooksForService(
     // No explicit mapping means no public delivery. This prevents unrelated
     // services from leaking into an arbitrary default status page.
     if (statusPageIds.length === 0) {
-      return;
+      return { attempted: 0, failed: 0, skipped: true };
     }
 
     // Trigger webhooks for all associated status pages in parallel
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       statusPageIds.map(statusPageId =>
-        triggerStatusPageWebhooks(statusPageId, event, incidentData).catch(err => {
-          logger.error('api.status_page.webhook.trigger_for_service_error', {
-            serviceId,
-            statusPageId,
-            event,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        })
+        triggerStatusPageWebhooks(statusPageId, event, incidentData)
       )
+    );
+    return results.reduce(
+      (total, result) => {
+        if (result.status === 'rejected') total.failed += 1;
+        else {
+          total.attempted += result.value.attempted;
+          total.failed += result.value.failed;
+        }
+        return total;
+      },
+      { attempted: 0, failed: 0 }
     );
   } catch (error: any) {
     logger.error('api.status_page.webhook.trigger_for_service_fatal_error', {
@@ -269,6 +271,7 @@ export async function triggerWebhooksForService(
       event,
       error: error instanceof Error ? error.message : String(error),
     });
+    throw error;
   }
 }
 

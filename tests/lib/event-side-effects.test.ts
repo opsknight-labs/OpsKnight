@@ -121,6 +121,18 @@ describe('event durable side effects', () => {
     expect(sendServiceNotificationsMock).not.toHaveBeenCalled();
   });
 
+  it('retries an explicit notification failure result', async () => {
+    executeEscalationMock.mockResolvedValue({
+      escalated: false,
+      reason: 'No escalation policy configured',
+    });
+    sendIncidentNotificationsMock.mockResolvedValue({ success: false, errors: ['push failed'] });
+
+    await expect(
+      processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
+    ).rejects.toThrow('push failed');
+  });
+
   it('keeps created webhook lifecycle state even if the incident has since resolved', async () => {
     prismaMock.incident.findUnique.mockResolvedValue({
       id: 'inc-1',
@@ -144,6 +156,28 @@ describe('event durable side effects', () => {
       'svc-1',
       'incident.created',
       expect.objectContaining({ status: 'OPEN' })
+    );
+  });
+
+  it('retries partial webhook delivery failures', async () => {
+    prismaMock.incident.findUnique.mockResolvedValue({
+      id: 'inc-1',
+      title: 'Incident',
+      description: null,
+      status: 'OPEN',
+      urgency: 'HIGH',
+      priority: 'P1',
+      serviceId: 'svc-1',
+      service: { id: 'svc-1', name: 'Service' },
+      assignee: null,
+      createdAt: new Date('2026-08-26T12:00:00Z'),
+      acknowledgedAt: null,
+      resolvedAt: null,
+    });
+    triggerWebhooksForServiceMock.mockResolvedValue({ attempted: 2, failed: 1 });
+
+    await expect(processEventSideEffect(payload('TRIGGER_WEBHOOK', 'WEBHOOK'))).rejects.toThrow(
+      'failed for 1 delivery target'
     );
   });
 
@@ -222,10 +256,7 @@ describe('event durable side effects', () => {
     );
 
     expect(createIncidentWarRoomMock).toHaveBeenCalledWith('inc-1');
-    expect(postWarRoomUpdateMock).toHaveBeenCalledWith(
-      'inc-1',
-      '🔄 *Status updated to OPEN*'
-    );
+    expect(postWarRoomUpdateMock).toHaveBeenCalledWith('inc-1', '🔄 *Status updated to OPEN*');
     expect(updateWarRoomTopicMock).toHaveBeenCalledWith('inc-1', 'OPEN');
   });
 
@@ -311,6 +342,8 @@ describe('event durable side effects', () => {
       effect: 'UNKNOWN_EFFECT',
     } as unknown as EventSideEffectPayload;
 
-    await expect(processEventSideEffect(invalid)).rejects.toThrow(/Unknown EVENT_SIDE_EFFECT effect/);
+    await expect(processEventSideEffect(invalid)).rejects.toThrow(
+      /Unknown EVENT_SIDE_EFFECT effect/
+    );
   });
 });
