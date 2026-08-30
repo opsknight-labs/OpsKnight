@@ -6,6 +6,14 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { publicStatusVisibility } from '@/lib/status-page-public-data';
+import { createHash } from 'node:crypto';
+
+export function opaqueRssIncidentGuid(baseUrl: string, statusPageId: string, incidentId: string): string {
+  const opaqueId = createHash('sha256')
+    .update(`${statusPageId}\u0000${incidentId}`)
+    .digest('hex');
+  return `${baseUrl}/status#update-${opaqueId}`;
+}
 
 /**
  * RSS Feed for Status Page
@@ -63,7 +71,7 @@ export async function GET(req: NextRequest) {
 
     const { calculateSLAMetrics } = await import('@/lib/sla-server');
     const metrics =
-      serviceIds.length > 0
+      visibility.showIncidents && serviceIds.length > 0
         ? await calculateSLAMetrics({
             serviceId: serviceIds,
             windowDays: 30, // Last 30 days
@@ -101,7 +109,7 @@ export async function GET(req: NextRequest) {
               : null;
             const guid = visibility.showIncidentId
               ? `${baseUrl}/status#incident-${incident.id}`
-              : `${baseUrl}/status`;
+              : opaqueRssIncidentGuid(baseUrl, statusPage.id, incident.id);
             const serviceName = visibility.showAffectedService
               ? incident.service?.name || 'General'
               : null;

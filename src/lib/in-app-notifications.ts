@@ -7,6 +7,7 @@ type InAppNotificationInput = {
   message: string;
   entityType?: string | null;
   entityId?: string | null;
+  dedupeWindowMs?: number;
 };
 
 export async function createInAppNotifications({
@@ -16,12 +17,35 @@ export async function createInAppNotifications({
   message,
   entityType,
   entityId,
+  dedupeWindowMs,
 }: InAppNotificationInput) {
   const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
   if (uniqueUserIds.length === 0) return;
 
+  // Event-outbox retries can re-run notification delivery after an external
+  // provider failure. Keep the in-app notification idempotent for the same
+  // user, entity, and message instead of adding a duplicate on every retry.
+  const existing =
+    dedupeWindowMs && typeof prisma.inAppNotification?.findMany === 'function'
+      ? await prisma.inAppNotification.findMany({
+          where: {
+            userId: { in: uniqueUserIds },
+            type,
+            title,
+            message,
+            entityType: entityType || null,
+            entityId: entityId || null,
+            createdAt: { gte: new Date(Date.now() - dedupeWindowMs) },
+          },
+          select: { userId: true },
+        })
+      : [];
+  const existingUserIds = new Set(existing.map(notification => notification.userId));
+  const recipients = uniqueUserIds.filter(userId => !existingUserIds.has(userId));
+  if (recipients.length === 0) return;
+
   await prisma.inAppNotification.createMany({
-    data: uniqueUserIds.map(userId => ({
+    data: recipients.map(userId => ({
       userId,
       type,
       title,

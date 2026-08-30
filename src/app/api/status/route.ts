@@ -181,12 +181,14 @@ export async function GET(req: NextRequest) {
       : [];
 
     const uptimeWindow = await getReportingWindowForDays(30, 'incident');
-    const uptimeMap = await calculateMultiServiceUptime(
-      serviceIds,
-      uptimeWindow.start,
-      uptimeWindow.end,
-      'PUBLIC'
-    );
+    const uptimeMap = visibility.showUptime
+      ? await calculateMultiServiceUptime(
+          serviceIds,
+          uptimeWindow.start,
+          uptimeWindow.end,
+          'PUBLIC'
+        )
+      : {};
     const uptimeMetrics = visibility.showUptime
       ? services.map(service => ({
           serviceId: service.id,

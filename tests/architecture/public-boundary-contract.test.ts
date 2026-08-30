@@ -20,4 +20,31 @@ describe('public boundary contract', () => {
 
     expect(actions).toContain('data: { tokenVersion: { increment: 1 } }');
   });
+
+  it('uses the shared visibility policy for rendered and API status outputs', () => {
+    const html = readFileSync('src/app/(public)/status/page.tsx', 'utf8');
+    const statusApi = readFileSync('src/app/api/status/route.ts', 'utf8');
+    const historyApi = readFileSync('src/app/api/status/history/route.ts', 'utf8');
+    const rss = readFileSync('src/app/api/status/rss/route.ts', 'utf8');
+
+    for (const source of [html, statusApi, historyApi, rss]) {
+      expect(source).toContain('publicStatusVisibility');
+    }
+    expect(html).toContain('visibility.showIncidents');
+    expect(html).toContain('visibility.showMetrics');
+    expect(html).toContain('visibility.showUptime');
+  });
+
+  it('revalidates every long-lived stream against the shared authorization scope', () => {
+    for (const file of [
+      'src/app/api/events/stream/route.ts',
+      'src/app/api/realtime/stream/route.ts',
+      'src/app/api/widgets/stream/route.ts',
+    ]) {
+      const stream = readFileSync(file, 'utf8');
+      expect(stream).toContain('resolveStreamAuthorization');
+      expect(stream).toContain('hasSameStreamAuthorizationScope');
+      expect(stream).toContain("type: 'authorization_revoked'");
+    }
+  });
 });

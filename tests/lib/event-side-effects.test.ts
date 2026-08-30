@@ -133,6 +133,64 @@ describe('event durable side effects', () => {
     ).rejects.toThrow('push failed');
   });
 
+  it.each([
+    ['no enabled external channels', { success: true, outcome: 'SKIPPED' }],
+    ['quiet-hours suppression', { success: true, outcome: 'SKIPPED' }],
+    ['successful delivery', { success: true, outcome: 'DELIVERED' }],
+  ])('completes %s without retrying the outbox job', async (_label, result) => {
+    executeEscalationMock.mockResolvedValue({
+      escalated: false,
+      reason: 'No escalation policy configured',
+    });
+    sendIncidentNotificationsMock.mockResolvedValue(result);
+
+    await expect(
+      processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
+    ).resolves.toBeUndefined();
+  });
+
+  it('retries a typed transient notification provider failure', async () => {
+    executeEscalationMock.mockResolvedValue({
+      escalated: false,
+      reason: 'No escalation policy configured',
+    });
+    sendIncidentNotificationsMock.mockResolvedValue({
+      success: false,
+      outcome: 'RETRYABLE_FAILURE',
+      errors: ['provider unavailable'],
+    });
+
+    await expect(
+      processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
+    ).rejects.toThrow('provider unavailable');
+  });
+
+  it('completes a typed permanent notification failure without endless retries', async () => {
+    executeEscalationMock.mockResolvedValue({
+      escalated: false,
+      reason: 'No escalation policy configured',
+    });
+    sendIncidentNotificationsMock.mockResolvedValue({
+      success: false,
+      outcome: 'PERMANENT_FAILURE',
+      errors: ['provider credentials are invalid'],
+    });
+
+    await expect(
+      processEventSideEffect(payload('TRIGGER_ESCALATION_NOTIFICATIONS'))
+    ).resolves.toBeUndefined();
+  });
+
+  it('keeps team assignment intent and recipients distinct from a generic update', async () => {
+    sendIncidentNotificationsMock.mockResolvedValue({ success: true, outcome: 'DELIVERED' });
+
+    await processEventSideEffect(payload('INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION', 'NOTIFICATION'));
+
+    expect(sendIncidentNotificationsMock).toHaveBeenCalledWith('inc-1', 'updated', [], undefined, {
+      intent: 'ASSIGNED_TO_TEAM',
+    });
+  });
+
   it('keeps created webhook lifecycle state even if the incident has since resolved', async () => {
     prismaMock.incident.findUnique.mockResolvedValue({
       id: 'inc-1',

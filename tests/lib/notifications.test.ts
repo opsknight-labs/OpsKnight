@@ -3,6 +3,7 @@ import { sendNotification } from '@/lib/notifications';
 import prisma from '@/lib/prisma';
 import * as emailModule from '@/lib/email';
 import * as pushModule from '@/lib/push';
+import { AppError } from '@/lib/errors';
 
 type NotificationFindResult = Awaited<ReturnType<typeof prisma.notification.findFirst>>;
 type NotificationCreateResult = Awaited<ReturnType<typeof prisma.notification.create>>;
@@ -71,6 +72,7 @@ describe('Notifications Library', () => {
 
     expect(result).toEqual({
       success: true,
+      outcome: 'DELIVERED',
       notificationId: 'notif-existing',
       debounced: true,
     });
@@ -169,7 +171,7 @@ describe('Notifications Library', () => {
     );
 
     expect(result).toEqual(
-      expect.objectContaining({ success: false, skipped: true, terminal: true })
+      expect.objectContaining({ success: true, outcome: 'SKIPPED', skipped: true, terminal: true })
     );
     expect(prisma.notification.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'SKIPPED' }) })
@@ -217,6 +219,27 @@ describe('Notifications Library', () => {
         where: { id: 'notif-3' },
         data: expect.objectContaining({ status: 'FAILED', errorMsg: 'SMTP Error' }),
       })
+    );
+  });
+
+  it('marks a typed permanent provider failure terminally without scheduling retries', async () => {
+    vi.mocked(prisma.notification.create).mockResolvedValue({
+      id: 'notif-permanent',
+      attempts: 0,
+    } as unknown as NotificationCreateResult);
+    vi.mocked(emailModule.sendIncidentEmail).mockRejectedValue(
+      new AppError({
+        code: 'INTEGRATION_AUTHENTICATION_FAILED',
+        userMessage: 'Provider credentials rejected',
+        retryable: false,
+      })
+    );
+
+    const result = await sendNotification('inc-4', 'user-4', 'EMAIL', 'Fail permanently');
+
+    expect(result).toEqual(expect.objectContaining({ success: false, outcome: 'PERMANENT_FAILURE' }));
+    expect(prisma.notification.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ attempts: 3 }) })
     );
   });
 
