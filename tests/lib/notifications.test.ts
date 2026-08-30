@@ -74,7 +74,10 @@ describe('durable notification intents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(prisma.incident.findUnique).mockResolvedValue(incident as never);
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ name: 'Responder', email: 'r@example.com' } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      name: 'Responder',
+      email: 'r@example.com',
+    } as never);
     vi.mocked(prisma.notification.update).mockResolvedValue({} as never);
     vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
   });
@@ -132,7 +135,10 @@ describe('durable notification intents', () => {
   it('does not let a failed persisted channel make the parent replay it', async () => {
     const notificationId = intentIdFor('failure');
     vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(notificationId));
-    vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({ success: false, error: 'SMTP down' });
+    vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({
+      success: false,
+      error: 'SMTP down',
+    });
 
     const result = await sendNotification('inc-1', 'user-1', 'EMAIL', 'failure');
 
@@ -190,5 +196,66 @@ describe('durable notification intents', () => {
     const result = await sendNotification('inc-1', 'user-1', 'PUSH', 'push');
 
     expect(result).toMatchObject({ success: true, outcome: 'SKIPPED', skipped: true });
+  });
+
+  it('rechecks current lifecycle state before contacting a provider', async () => {
+    const resolvedAt = new Date('2026-08-30T12:03:00.000Z');
+    const resolvedIncident = {
+      ...incident,
+      status: 'RESOLVED',
+      updatedAt: resolvedAt,
+      resolvedAt,
+    };
+    const notificationId = intentIdFor('resolved', 'resolved', resolvedIncident);
+    vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(notificationId));
+    // The fan-out snapshot was RESOLVED, but the incident reopened before the
+    // provider call. The second read must fence the obsolete notification.
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      ...incident,
+      status: 'OPEN',
+      updatedAt: new Date('2026-08-30T12:04:00.000Z'),
+    } as never);
+
+    const result = await sendNotification(
+      'inc-1',
+      'user-1',
+      'EMAIL',
+      'resolved',
+      resolvedIncident as never,
+      'resolved'
+    );
+
+    expect(result).toMatchObject({ success: true, outcome: 'SKIPPED', skipped: true });
+    expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
+  });
+
+  it('fences a failed trigger intent after escalation advances', async () => {
+    const firstStepAt = new Date('2026-08-30T12:02:00.000Z');
+    const firstStep = {
+      ...incident,
+      updatedAt: firstStepAt,
+      currentEscalationStep: 0,
+      nextEscalationAt: firstStepAt,
+      escalationStatus: 'ESCALATING',
+    };
+    const notificationId = intentIdFor('Escalation Level 1', 'triggered', firstStep);
+    vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(notificationId));
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      ...firstStep,
+      currentEscalationStep: 1,
+      nextEscalationAt: new Date('2026-08-30T12:07:00.000Z'),
+    } as never);
+
+    const result = await sendNotification(
+      'inc-1',
+      'user-1',
+      'EMAIL',
+      'Escalation Level 1',
+      firstStep as never,
+      'triggered'
+    );
+
+    expect(result).toMatchObject({ success: true, outcome: 'SKIPPED', skipped: true });
+    expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
   });
 });

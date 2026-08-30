@@ -9,7 +9,11 @@ import {
   type NotificationEventType,
 } from './notification-delivery';
 
-export async function retryFailedNotifications(): Promise<{ retried: number; succeeded: number; failed: number }> {
+export async function retryFailedNotifications(): Promise<{
+  retried: number;
+  succeeded: number;
+  failed: number;
+}> {
   await prisma.notification.updateMany({
     where: {
       status: 'PENDING',
@@ -23,8 +27,15 @@ export async function retryFailedNotifications(): Promise<{ retried: number; suc
     },
   });
 
+  const now = Date.now();
   const failedNotifications = await prisma.notification.findMany({
-    where: { status: 'FAILED', failedAt: { not: null }, attempts: { lt: NOTIFICATION_RETRY_POLICY.maxAttempts } },
+    where: {
+      status: 'FAILED',
+      OR: Array.from({ length: NOTIFICATION_RETRY_POLICY.maxAttempts }, (_, attempts) => ({
+        attempts,
+        failedAt: { lte: new Date(now - notificationRetryDelayMs(attempts)) },
+      })),
+    },
     take: 100,
     orderBy: { failedAt: 'asc' },
     include: {
@@ -45,10 +56,7 @@ export async function retryFailedNotifications(): Promise<{ retried: number; suc
   let succeeded = 0;
   let failed = 0;
   let retried = 0;
-  const now = Date.now();
-  const readyToRetry = failedNotifications.filter(notification =>
-    now - (notification.failedAt?.getTime() || 0) >= notificationRetryDelayMs(notification.attempts || 0)
-  );
+  const readyToRetry = failedNotifications;
 
   const BATCH_SIZE = 10;
   for (let i = 0; i < readyToRetry.length; i += BATCH_SIZE) {
@@ -74,22 +82,36 @@ export async function retryFailedNotifications(): Promise<{ retried: number; suc
               incident: notification.incident,
             });
           } catch (dispatchError) {
-            result = { success: false, outcome: 'RETRYABLE_FAILURE' as const, error: dispatchError instanceof Error ? dispatchError.message : 'Provider error' };
+            result = {
+              success: false,
+              outcome: 'RETRYABLE_FAILURE' as const,
+              error: dispatchError instanceof Error ? dispatchError.message : 'Provider error',
+            };
           }
 
           if (result.outcome === 'DELIVERED') {
             await prisma.notification.update({
               where: { id: notification.id },
-              data: { status: 'SENT', sentAt: new Date(), providerMessageId: result.providerMessageId },
+              data: {
+                status: 'SENT',
+                sentAt: new Date(),
+                providerMessageId: result.providerMessageId,
+              },
             });
-            logger.info('notification.retry.success', { notificationId: notification.id, channel: notification.channel });
+            logger.info('notification.retry.success', {
+              notificationId: notification.id,
+              channel: notification.channel,
+            });
             return { success: true, claimed: true };
           }
 
           if (result.outcome === 'SKIPPED') {
             await prisma.notification.update({
               where: { id: notification.id },
-              data: { status: 'SKIPPED', errorMsg: result.error || 'Delivery skipped by notification policy.' },
+              data: {
+                status: 'SKIPPED',
+                errorMsg: result.error || 'Delivery skipped by notification policy.',
+              },
             });
             return { success: true, claimed: true, skipped: true };
           }
@@ -97,7 +119,12 @@ export async function retryFailedNotifications(): Promise<{ retried: number; suc
           if (result.outcome === 'QUEUED') {
             await prisma.notification.update({
               where: { id: notification.id },
-              data: { status: 'FAILED', failedAt: new Date(), errorMsg: result.error || 'Provider admission deferred', attempts: notification.attempts },
+              data: {
+                status: 'FAILED',
+                failedAt: new Date(),
+                errorMsg: result.error || 'Provider admission deferred',
+                attempts: notification.attempts,
+              },
             });
             return { success: false, claimed: true, deferred: true };
           }
@@ -110,15 +137,27 @@ export async function retryFailedNotifications(): Promise<{ retried: number; suc
               status: 'FAILED',
               failedAt: new Date(),
               errorMsg: result.error || 'Retry failed',
-              attempts: circuitOpen ? notification.attempts : permanentFailure ? NOTIFICATION_RETRY_POLICY.maxAttempts : (notification.attempts || 0) + 1,
+              attempts: circuitOpen
+                ? notification.attempts
+                : permanentFailure
+                  ? NOTIFICATION_RETRY_POLICY.maxAttempts
+                  : (notification.attempts || 0) + 1,
             },
           });
           return { success: false, claimed: true };
         } catch (error: unknown) {
-          logger.error('notification.retry.error', { notificationId: notification.id, error: error instanceof Error ? error.message : String(error) });
+          logger.error('notification.retry.error', {
+            notificationId: notification.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
           await prisma.notification.update({
             where: { id: notification.id },
-            data: { status: 'FAILED', failedAt: new Date(), errorMsg: error instanceof Error ? error.message : String(error), attempts: (notification.attempts || 0) + 1 },
+            data: {
+              status: 'FAILED',
+              failedAt: new Date(),
+              errorMsg: error instanceof Error ? error.message : String(error),
+              attempts: (notification.attempts || 0) + 1,
+            },
           });
           return { success: false, claimed: true };
         }
@@ -136,11 +175,55 @@ export async function retryFailedNotifications(): Promise<{ retried: number; suc
   return { retried, succeeded, failed };
 }
 
-export async function getNotificationRetryStats(): Promise<{ pending: number; failed: number; failedRecent: number }> {
+/** Earliest time at which the scheduler has notification recovery work. */
+export async function getNextNotificationRetryAt(): Promise<Date | null> {
+  const attempts = Array.from(
+    { length: NOTIFICATION_RETRY_POLICY.maxAttempts },
+    (_, value) => value
+  );
+  const [pending, ...failedByAttempt] = await Promise.all([
+    prisma.notification.findFirst({
+      where: {
+        status: 'PENDING',
+        attempts: { lt: NOTIFICATION_RETRY_POLICY.maxAttempts },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    }),
+    ...attempts.map(attempt =>
+      prisma.notification.findFirst({
+        where: { status: 'FAILED', attempts: attempt, failedAt: { not: null } },
+        orderBy: { failedAt: 'asc' },
+        select: { failedAt: true },
+      })
+    ),
+  ]);
+
+  const dueTimes = [
+    pending?.createdAt
+      ? pending.createdAt.getTime() + NOTIFICATION_RETRY_POLICY.pendingTimeoutMs
+      : null,
+    ...failedByAttempt.map((notification, attempt) =>
+      notification?.failedAt
+        ? notification.failedAt.getTime() + notificationRetryDelayMs(attempt)
+        : null
+    ),
+  ].filter((value): value is number => value !== null);
+
+  return dueTimes.length > 0 ? new Date(Math.min(...dueTimes)) : null;
+}
+
+export async function getNotificationRetryStats(): Promise<{
+  pending: number;
+  failed: number;
+  failedRecent: number;
+}> {
   const [pending, failed, failedRecent] = await Promise.all([
     prisma.notification.count({ where: { status: 'PENDING' } }),
     prisma.notification.count({ where: { status: 'FAILED' } }),
-    prisma.notification.count({ where: { status: 'FAILED', failedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } }),
+    prisma.notification.count({
+      where: { status: 'FAILED', failedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    }),
   ]);
   return { pending, failed, failedRecent };
 }

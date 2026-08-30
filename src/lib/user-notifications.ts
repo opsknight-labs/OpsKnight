@@ -11,7 +11,7 @@
  */
 
 import prisma from './prisma';
-import type { Prisma } from '@prisma/client';
+import type { IncidentStatus, Prisma } from '@prisma/client';
 import { sendNotification, type NotificationChannel } from './notifications';
 import { isChannelAvailable } from './notification-providers';
 import { createInAppNotifications } from './in-app-notifications';
@@ -31,6 +31,9 @@ export type IncidentNotificationIntent =
 
 export type SendIncidentNotificationOptions = {
   intent?: IncidentNotificationIntent;
+  /** Committed lifecycle generation carried by the outbox payload. */
+  eventAt?: Date;
+  status?: IncidentStatus;
 };
 
 export type UserNotificationDisposition = NotificationDeliveryOutcome;
@@ -75,12 +78,23 @@ function summarizeChannelAttempts(attempts: ChannelAttempt[]): {
   channelsUsed: NotificationChannel[];
   errors?: string[];
 } {
-  const channelsUsed = attempts.filter(item => item.outcome === 'DELIVERED').map(item => item.channel);
+  const channelsUsed = attempts
+    .filter(item => item.outcome === 'DELIVERED')
+    .map(item => item.channel);
   const unpersistedFailures = attempts.filter(item => !item.success && !item.notificationId);
   const persistedFailures = attempts.filter(item => !item.success && item.notificationId);
   const errors = attempts
     .filter(item => !item.success)
     .map(item => `${item.channel}: ${item.error || 'Delivery failed'}`);
+
+  if (attempts.some(item => item.outcome === 'QUEUED')) {
+    return {
+      success: true,
+      outcome: 'QUEUED',
+      channelsUsed,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  }
 
   if (unpersistedFailures.length > 0) {
     const permanentOnly = unpersistedFailures.every(item => item.outcome === 'PERMANENT_FAILURE');
@@ -94,7 +108,10 @@ function summarizeChannelAttempts(attempts: ChannelAttempt[]): {
 
   if (persistedFailures.length > 0) {
     const retryQueued = persistedFailures.some(
-      item => item.outcome === 'RETRYABLE_FAILURE' || item.outcome === 'CIRCUIT_OPEN' || item.outcome === 'QUEUED'
+      item =>
+        item.outcome === 'RETRYABLE_FAILURE' ||
+        item.outcome === 'CIRCUIT_OPEN' ||
+        item.outcome === 'QUEUED'
     );
     return {
       success: true,
@@ -267,7 +284,14 @@ export async function sendUserNotification(
 
   const attempts = await Promise.all(
     channels.map(async channel => {
-      const result = await sendNotification(incidentId, userId, channel, message, undefined, eventType);
+      const result = await sendNotification(
+        incidentId,
+        userId,
+        channel,
+        message,
+        undefined,
+        eventType
+      );
       if (result.outcome === 'DELIVERED') {
         logger.info(`[UserNotification] Successfully delivered via ${channel}`, {
           incidentId,
@@ -382,8 +406,23 @@ export async function sendIncidentNotifications(
         : intent === 'ASSIGNED_TO_TEAM'
           ? `[${incidentRecord.service.name}] ${incidentRecord.title} has been assigned to your team`
           : `[${incidentRecord.service.name}] ${incidentRecord.title}`;
+    const notificationIncident = options.eventAt
+      ? {
+          ...incidentRecord,
+          status: options.status ?? incidentRecord.status,
+          updatedAt: options.eventAt,
+          acknowledgedAt:
+            eventType === 'acknowledged' ? options.eventAt : incidentRecord.acknowledgedAt,
+          resolvedAt:
+            eventType === 'resolved'
+              ? options.eventAt
+              : options.status === 'OPEN'
+                ? null
+                : incidentRecord.resolvedAt,
+        }
+      : incidentRecord;
     const eventKey = notificationEventKey({
-      incident: incidentRecord,
+      incident: notificationIncident,
       eventType,
       purpose: intent,
       message: eventMessage,
@@ -417,9 +456,7 @@ export async function sendIncidentNotifications(
       if (eventType === 'acknowledged' || eventType === 'resolved') {
         engaged.push(...(await previouslyEngagedResponderIds(incidentId)));
       }
-      externalRecipients = [...new Set(engaged)].filter(
-        userId => !excludeUserIds.includes(userId)
-      );
+      externalRecipients = [...new Set(engaged)].filter(userId => !excludeUserIds.includes(userId));
     }
 
     if (externalRecipients.length === 0) {
@@ -471,7 +508,11 @@ export async function sendIncidentNotifications(
           return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
         }
 
-        const quietHoursResult = filterChannelsForQuietHours(channels, incidentRecord.urgency, user);
+        const quietHoursResult = filterChannelsForQuietHours(
+          channels,
+          incidentRecord.urgency,
+          user
+        );
         if (quietHoursResult.channels.length === 0 && quietHoursResult.blockedChannels.size > 0) {
           return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
         }
@@ -483,7 +524,7 @@ export async function sendIncidentNotifications(
               userId,
               channel,
               eventMessage,
-              incidentRecord,
+              notificationIncident,
               eventType
             );
             return { channel, ...result } satisfies ChannelAttempt;
@@ -493,8 +534,8 @@ export async function sendIncidentNotifications(
       })
     );
 
-    const errors = recipientResults.flatMap(result =>
-      result.errors?.map(error => `User ${result.userId}: ${error}`) ?? []
+    const errors = recipientResults.flatMap(
+      result => result.errors?.map(error => `User ${result.userId}: ${error}`) ?? []
     );
     const unpersistedFailure = recipientResults.find(result => !result.success);
     if (unpersistedFailure) {
