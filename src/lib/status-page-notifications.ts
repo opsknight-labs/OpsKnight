@@ -5,6 +5,13 @@ import { logger } from '@/lib/logger';
 import { getBaseUrl } from '@/lib/env-validation';
 import { getStatusPageLogoUrl, getStatusPagePublicUrl } from '@/lib/status-page-url';
 import {
+  buildSubscriberIncidentPresentation,
+  incidentSubscriberDeliveryKey,
+  isStatusDeliveryComplete,
+  markStatusDeliveryComplete,
+  statusDeliveryMarkerId,
+} from '@/lib/status-page-delivery';
+import {
   EmailContainer,
   EmailContent,
   SubscriberEmailHeader,
@@ -27,7 +34,8 @@ export async function notifyStatusPageSubscribers(
     | 'triggered'
     | 'acknowledged'
     | 'snoozed'
-    | 'suppressed'
+    | 'suppressed',
+  deliveryKey?: string
 ): Promise<{ success: boolean; sent: number; failed: number; skipped?: boolean }> {
   let totalSent = 0;
   let totalFailed = 0;
@@ -51,6 +59,8 @@ export async function notifyStatusPageSubscribers(
       );
       return { success: true, sent: 0, failed: 0, skipped: true };
     }
+
+    const effectiveDeliveryKey = incidentSubscriberDeliveryKey(incident, eventType, deliveryKey);
 
     // 2. Find all status pages that include this service
     const statusPages = await prisma.statusPage.findMany({
@@ -96,15 +106,12 @@ export async function notifyStatusPageSubscribers(
 
     // 4. Send notifications for each status page
     for (const page of pagesWithSubscribers) {
-      // Get email config from pre-fetched map
       const emailConfig = emailConfigMap.get(page.id);
       if (!emailConfig?.enabled) {
         logger.warn(`Email not configured for status page ${page.name} (${page.id})`);
         continue;
       }
 
-      // Prepare email content
-      // Prepare email content
       const displayName = (page as any).organizationName || page.name; // eslint-disable-line @typescript-eslint/no-explicit-any
       const branding =
         page.branding && typeof page.branding === 'object' && !Array.isArray(page.branding)
@@ -118,17 +125,22 @@ export async function notifyStatusPageSubscribers(
           : rawLogoUrl;
       const brandLogoUrl = resolveBrandLogoUrl(logoUrl, statusPageUrl);
       const safeBrandLogoUrl = brandLogoUrl ? escapeHtml(brandLogoUrl) : undefined;
-      const subject = formatSubject(displayName, incident.title, eventType);
+      const presentation = buildSubscriberIncidentPresentation(page, incident);
+      const subject = formatSubject(displayName, presentation.incident.title, eventType);
       const html = formatEmailBody(
         displayName,
-        incident,
+        presentation.incident,
         eventType,
         statusPageUrl,
         page.contactUrl,
-        safeBrandLogoUrl
+        safeBrandLogoUrl,
+        {
+          showAffectedService: presentation.showAffectedService,
+          showDescription: presentation.showDescription,
+          showTimestamp: presentation.showTimestamp,
+        }
       );
 
-      // Send to all subscribers
       logger.info(
         `Sending notifications to ${page.subscriptions.length} subscribers for page ${page.name}`
       );
@@ -140,8 +152,17 @@ export async function notifyStatusPageSubscribers(
       for (let i = 0; i < page.subscriptions.length; i += BATCH_SIZE) {
         const batch = page.subscriptions.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
-          batch.map(sub =>
-            sendEmail(
+          batch.map(async sub => {
+            const markerId = statusDeliveryMarkerId(
+              'SUBSCRIBER_EMAIL',
+              effectiveDeliveryKey,
+              sub.id
+            );
+            if (await isStatusDeliveryComplete(markerId)) {
+              return { success: true, skipped: true };
+            }
+
+            const result = await sendEmail(
               {
                 to: sub.email,
                 subject,
@@ -154,11 +175,24 @@ export async function notifyStatusPageSubscribers(
                 source: `status-page-${page.id}`,
                 ...emailConfig,
               }
-            )
-          )
+            );
+
+            if (result.success) {
+              await markStatusDeliveryComplete({
+                markerId,
+                target: 'SUBSCRIBER_EMAIL',
+                deliveryKey: effectiveDeliveryKey,
+                targetId: sub.id,
+              });
+            }
+
+            return { success: result.success, skipped: false };
+          })
         );
 
-        sent += results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        sent += results.filter(
+          r => r.status === 'fulfilled' && r.value.success && !r.value.skipped
+        ).length;
         failed += results.filter(
           r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
         ).length;
@@ -235,7 +269,12 @@ function formatEmailBody(
   eventType: string,
   statusPageUrl: string,
   contactUrl?: string | null,
-  logoUrl?: string
+  logoUrl?: string,
+  privacy: {
+    showAffectedService: boolean;
+    showDescription: boolean;
+    showTimestamp: boolean;
+  } = { showAffectedService: true, showDescription: true, showTimestamp: true }
 ): string {
   const statusMap: Record<
     string,
@@ -258,13 +297,12 @@ function formatEmailBody(
   const safeServiceName = escapeHtml(incident.service?.name || 'Service');
   const safeDescription = incident.description
     ? escapeHtml(incident.description)
-    : 'No additional details provided.';
+    : 'Additional incident details are not published.';
   const safeStatusPageUrl = escapeHtml(statusPageUrl);
   const supportUrl = normalizeSupportUrl(contactUrl);
   const safeSupportUrl = supportUrl ? escapeHtml(supportUrl) : '';
   const safeStatusLabel = escapeHtml(statusInfo.label);
 
-  // Build the email content using components
   const headerGradients: Record<string, string> = {
     success: 'linear-gradient(135deg, #166534 0%, #16a34a 45%, #22c55e 100%)',
     warning: 'linear-gradient(135deg, #92400e 0%, #d97706 50%, #f59e0b 100%)',
@@ -296,8 +334,9 @@ function formatEmailBody(
     brandName: safePageName,
   });
 
-  // Main content body
-  let contentBody = `
+  let contentBody = '';
+  if (privacy.showAffectedService) {
+    contentBody += `
         <div style="margin-bottom: 24px;">
             <p style="font-size: 16px; color: #4b5563; margin-bottom: 8px; font-weight: 500;">
                 Affecting Service:
@@ -305,22 +344,27 @@ function formatEmailBody(
             <h2 style="font-size: 20px; color: #1f2937; margin: 0; font-weight: 700;">
                 ${safeServiceName}
             </h2>
-        </div>
+        </div>`;
+  }
 
+  contentBody += `
         <div style="background: #f9fafb; border-radius: 12px; padding: 24px; border: 1px solid #e5e7eb; margin-bottom: 32px;">
             <h3 style="font-size: 14px; text-transform: uppercase; color: #6b7280; margin: 0 0 12px 0; letter-spacing: 0.05em; font-weight: 600;">
                 Update Details
             </h3>
             <p style="font-size: 16px; line-height: 1.6; color: #374151; margin: 0; white-space: pre-wrap;">
-                ${safeDescription}
+                ${privacy.showDescription ? safeDescription : 'Additional incident details are not published.'}
             </p>
-            <p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">
+            ${
+              privacy.showTimestamp
+                ? `<p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">
                 Posted on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-            </p>
+            </p>`
+                : ''
+            }
         </div>
     `;
 
-  // Add CTA Button
   const buttonTheme = buttonThemes[statusInfo.badge] || buttonThemes.info;
   contentBody += EmailButton('View Status Page', safeStatusPageUrl, {
     buttonBackground: buttonTheme.background,
@@ -340,8 +384,6 @@ function formatEmailBody(
   }
 
   const body = EmailContent(contentBody);
-
-  // We need to inject the unsubscribe URL at send time, so we keep the placeholder
   const footer = SubscriberEmailFooter('{{unsubscribe_url}}', safePageName);
 
   return EmailContainer(header + body + footer);
@@ -395,7 +437,6 @@ export async function notifyStatusPageSubscribersAnnouncement(
     }
 
     // 4. Prepare email content
-    // 4. Prepare email content
     const displayName = (page as any).organizationName || page.name; // eslint-disable-line @typescript-eslint/no-explicit-any
     const branding =
       page.branding && typeof page.branding === 'object' && !Array.isArray(page.branding)
@@ -413,7 +454,6 @@ export async function notifyStatusPageSubscribersAnnouncement(
     const safeAnnouncementTitle = escapeHtml(announcement.title || 'Announcement');
     const safeAnnouncementMessage = escapeHtml(announcement.message || '');
 
-    // Define theme based on announcement type
     const themes: Record<
       string,
       { label: string; color: string; bg: string; borderColor: string }
@@ -435,8 +475,6 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     let html = '';
 
-    // Build the email content using components
-    // We pass the theme label (e.g., "Maintenance") as the badge text
     const announcementHeader = SubscriberEmailHeader(
       safeDisplayName,
       escapeHtml(theme.label),
@@ -457,7 +495,6 @@ export async function notifyStatusPageSubscribersAnnouncement(
       }
     );
 
-    // Main content body with themed styles
     const contentBody = `
             <div style="background: ${theme.bg}; border-radius: 12px; padding: 24px; border: 1px solid ${theme.borderColor}; margin-bottom: 32px;">
                 <h3 style="font-size: 14px; text-transform: uppercase; color: ${theme.color}; margin: 0 0 12px 0; letter-spacing: 0.05em; font-weight: 700;">
@@ -494,7 +531,6 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     html = EmailContainer(announcementHeader + body + footer);
 
-    // 5. Send to all subscribers
     logger.info(
       `Sending announcement notifications to ${page.subscriptions.length} subscribers for page ${page.name}`
     );

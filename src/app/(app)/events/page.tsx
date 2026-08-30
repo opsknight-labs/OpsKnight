@@ -48,7 +48,6 @@ export default async function EventLogsPage() {
   const totalEvents = events.length;
   const uniqueIncidents = new Set(events.map(e => e.incident.id)).size;
   const uniqueServices = new Set(events.map(e => e.incident.service.name)).size;
-
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       {/* Centralized Hero Header */}
