@@ -6,6 +6,10 @@ import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { getReportingWindowForDays } from '@/lib/retention-policy';
+import {
+  publicStatusVisibility,
+  serializePublicStatusIncident,
+} from '@/lib/status-page-public-data';
 
 /**
  * Get Status Page Historical Data
@@ -62,6 +66,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const visibility = publicStatusVisibility(statusPage);
+
     const serviceIds = statusPage.services.filter(sp => sp.showOnPage).map(sp => sp.serviceId);
 
     if (serviceId && !serviceIds.includes(serviceId)) {
@@ -82,16 +88,20 @@ export async function GET(req: NextRequest) {
       serviceId: effectiveServiceIds,
       startDate: window.start,
       endDate: window.end,
-      includeIncidents: true,
-      incidentLimit: 100,
+      includeIncidents: visibility.showIncidents,
+      incidentLimit: visibility.showIncidents ? 100 : 1,
       visibility: 'PUBLIC',
     });
 
     const { serializeRecentIncidents } = await import('@/lib/sla');
-
-    // Serialize incidents to convert Date fields to ISO strings for proper JSON response
-    const incidents = serializeRecentIncidents(metrics.recentIncidents);
-    const services = metrics.serviceMetrics.map(s => ({ id: s.id, name: s.name }));
+    const incidents = visibility.showIncidents
+      ? serializeRecentIncidents(metrics.recentIncidents).map(incident =>
+          serializePublicStatusIncident(incident, statusPage)
+        )
+      : [];
+    const services = visibility.showServices
+      ? metrics.serviceMetrics.map(s => ({ id: s.id, name: s.name }))
+      : [];
 
     const response = jsonOk(
       {
