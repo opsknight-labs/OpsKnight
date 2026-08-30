@@ -140,7 +140,7 @@ export function normalizeLegacyActionItems(
       completedAt:
         entry.completedAt instanceof Date || typeof entry.completedAt === 'string'
           ? entry.completedAt
-          : null,
+          : undefined,
     };
   });
 }
@@ -156,7 +156,7 @@ export function serializeActionItemRecord(record: ActionItemRecordLike): ActionI
     dueDate: formatActionItemDueDate(record.dueDate),
     status: record.status,
     priority: record.priority,
-    completedAt: record.completedAt,
+    completedAt: record.completedAt ?? undefined,
     externalIssue: externalIssue
       ? {
           linkId: externalIssue.id,

@@ -38,8 +38,6 @@ import {
   AlertOctagon,
   Circle,
   MoreVertical,
-  ChevronDown,
-  ExternalLink,
 } from 'lucide-react';
 
 export interface BoardActionItem extends ActionItem {

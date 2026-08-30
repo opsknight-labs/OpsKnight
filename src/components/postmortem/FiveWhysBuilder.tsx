@@ -4,15 +4,7 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import {
-  HelpCircle,
-  ArrowDown,
-  Plus,
-  Trash2,
-  GitCommit,
-  CheckCircle2,
-  Sparkles,
-} from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Sparkles } from 'lucide-react';
 
 export type FiveWhysStep = {
   id: string;

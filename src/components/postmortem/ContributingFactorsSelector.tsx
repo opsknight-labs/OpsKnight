@@ -20,50 +20,67 @@ export type FactorType =
   | 'MONITORING_GAP'
   | 'CONFIGURATION';
 
-export const CONTRIBUTING_FACTORS_CONFIG: Record<
-  FactorType,
-  {
-    label: string;
-    icon: typeof Server;
-    style: string;
+export const ALL_FACTORS: FactorType[] = [
+  'INFRASTRUCTURE',
+  'CODE_DEFECT',
+  'PROCESS',
+  'HUMAN_FACTOR',
+  'VENDOR_DEPENDENCY',
+  'MONITORING_GAP',
+  'CONFIGURATION',
+];
+
+export function getFactorConfig(factor: FactorType): {
+  label: string;
+  icon: typeof Server;
+  style: string;
+} {
+  switch (factor) {
+    case 'INFRASTRUCTURE':
+      return {
+        label: 'Infrastructure',
+        icon: Server,
+        style: 'bg-blue-50 text-blue-700 border-blue-200/80',
+      };
+    case 'CODE_DEFECT':
+      return {
+        label: 'Code Defect',
+        icon: Code2,
+        style: 'bg-rose-50 text-rose-700 border-rose-200/80',
+      };
+    case 'PROCESS':
+      return {
+        label: 'Process / Runbook',
+        icon: BookOpen,
+        style: 'bg-amber-50 text-amber-700 border-amber-200/80',
+      };
+    case 'HUMAN_FACTOR':
+      return {
+        label: 'Human Factor',
+        icon: UserCheck,
+        style: 'bg-purple-50 text-purple-700 border-purple-200/80',
+      };
+    case 'VENDOR_DEPENDENCY':
+      return {
+        label: 'Third-Party Vendor',
+        icon: Building2,
+        style: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
+      };
+    case 'MONITORING_GAP':
+      return {
+        label: 'Monitoring Gap',
+        icon: Activity,
+        style: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+      };
+    case 'CONFIGURATION':
+    default:
+      return {
+        label: 'Configuration Drift',
+        icon: Sliders,
+        style: 'bg-slate-100 text-slate-700 border-slate-200/80',
+      };
   }
-> = {
-  INFRASTRUCTURE: {
-    label: 'Infrastructure',
-    icon: Server,
-    style: 'bg-blue-50 text-blue-700 border-blue-200/80',
-  },
-  CODE_DEFECT: {
-    label: 'Code Defect',
-    icon: Code2,
-    style: 'bg-rose-50 text-rose-700 border-rose-200/80',
-  },
-  PROCESS: {
-    label: 'Process / Runbook',
-    icon: BookOpen,
-    style: 'bg-amber-50 text-amber-700 border-amber-200/80',
-  },
-  HUMAN_FACTOR: {
-    label: 'Human Factor',
-    icon: UserCheck,
-    style: 'bg-purple-50 text-purple-700 border-purple-200/80',
-  },
-  VENDOR_DEPENDENCY: {
-    label: 'Third-Party Vendor',
-    icon: Building2,
-    style: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
-  },
-  MONITORING_GAP: {
-    label: 'Monitoring Gap',
-    icon: Activity,
-    style: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
-  },
-  CONFIGURATION: {
-    label: 'Configuration Drift',
-    icon: Sliders,
-    style: 'bg-slate-100 text-slate-700 border-slate-200/80',
-  },
-};
+}
 
 export type ContributingFactorsSelectorProps = {
   selectedFactors?: FactorType[];
@@ -90,8 +107,7 @@ function ContributingFactorsSelector({
     return (
       <div className={cn('flex flex-wrap gap-2', className)}>
         {selectedFactors.map(factor => {
-          const config = CONTRIBUTING_FACTORS_CONFIG[factor];
-          if (!config) return null;
+          const config = getFactorConfig(factor);
           const Icon = config.icon;
 
           return (
@@ -113,8 +129,8 @@ function ContributingFactorsSelector({
 
   return (
     <div className={cn('flex flex-wrap gap-2', className)}>
-      {(Object.keys(CONTRIBUTING_FACTORS_CONFIG) as FactorType[]).map(factor => {
-        const config = CONTRIBUTING_FACTORS_CONFIG[factor];
+      {ALL_FACTORS.map(factor => {
+        const config = getFactorConfig(factor);
         const Icon = config.icon;
         const isSelected = selectedFactors.includes(factor);
 

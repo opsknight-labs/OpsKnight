@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import PostmortemTimeline from './PostmortemTimeline';
 import PostmortemImpactMetrics from './PostmortemImpactMetrics';
-import FiveWhysBuilder, { type FiveWhysStep } from './FiveWhysBuilder';
+import FiveWhysBuilder from './FiveWhysBuilder';
 import ContributingFactorsSelector, { type FactorType } from './ContributingFactorsSelector';
 import DueDateBadge from '@/components/action-items/DueDateBadge';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -14,7 +14,7 @@ import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import UserAvatar from '@/components/UserAvatar';
 import { cn } from '@/lib/utils';
-import { Calendar, Pencil, Globe, Eye, EyeOff, Check, ShieldCheck, Sparkles } from 'lucide-react';
+import { Pencil, Globe, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { normalizeLegacyActionItems } from '@/lib/action-items';
 import ActionItemJiraBadge from '@/components/action-items/ActionItemJiraBadge';
 import { togglePostmortemPublicStatus } from '@/app/(app)/postmortems/actions';
