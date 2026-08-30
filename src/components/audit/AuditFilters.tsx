@@ -29,7 +29,7 @@ export type AuditFiltersProps = {
     actorName: string | null;
     actorEmail: string | null;
     actor?: { name: string | null; email: string | null } | null;
-    details?: unknown;
+    details?: string;
   }>;
 };
 
@@ -81,7 +81,7 @@ export default function AuditFilters({
         { header: 'Entity ID', accessor: row => row.entityId || '-' },
         {
           header: 'Details',
-          accessor: row => (row.details ? JSON.stringify(row.details) : ''),
+          accessor: row => (row.details === '-' ? '' : row.details || ''),
         },
       ],
       logsData
