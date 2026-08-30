@@ -82,6 +82,7 @@ export default async function PostmortemsPage({
             resilient systems.
           </p>
         }
+        statsPlacement="bottom"
         actions={
           canCreate && resolvedIncidentsWithoutPostmortems.length > 0 ? (
             <Button

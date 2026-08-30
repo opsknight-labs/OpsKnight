@@ -184,7 +184,7 @@ export default function DetailHeroBanner({
         {statsPlacement === 'bottom' && stats.length > 0 && (
           <div
             className={cn(
-              'mt-5 grid gap-2 md:gap-3 rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 p-2 backdrop-blur-sm',
+              'mt-5 grid gap-2 sm:gap-3',
               stats.length === 1 && 'grid-cols-1',
               stats.length === 2 && 'grid-cols-2',
               stats.length === 3 && 'grid-cols-1 sm:grid-cols-3',
@@ -195,12 +195,12 @@ export default function DetailHeroBanner({
             {stats.map((stat, idx) => {
               const statContent = (
                 <>
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/75 truncate">
                     {stat.label}
                   </p>
                   <div
                     className={cn(
-                      'mt-0.5 flex items-center justify-center gap-1.5 text-base font-bold text-primary-foreground',
+                      'mt-1 flex items-center justify-center gap-1.5 text-base sm:text-lg font-bold text-primary-foreground',
                       stat.valueClassName
                     )}
                   >
@@ -208,26 +208,19 @@ export default function DetailHeroBanner({
                     <span>{stat.value}</span>
                   </div>
                   {stat.subtext && (
-                    <p className="text-[9px] text-primary-foreground/70 mt-0.5">{stat.subtext}</p>
+                    <p className="text-[9px] text-primary-foreground/70 mt-0.5 truncate">
+                      {stat.subtext}
+                    </p>
                   )}
                 </>
               );
 
               const itemClassName = cn(
-                'min-w-0 rounded-lg px-3 py-2 text-center transition-all duration-150',
-                idx > 0 && stats.length <= 3 && 'sm:border-l border-primary-foreground/20',
-                idx > 0 && stats.length === 4 && 'sm:border-l border-primary-foreground/20',
-                idx % 2 === 1 &&
-                  stats.length === 4 &&
-                  'border-l border-primary-foreground/20 sm:border-l',
-                idx > 0 && stats.length >= 5 && 'lg:border-l border-primary-foreground/20',
-                idx % 2 === 1 &&
-                  stats.length >= 5 &&
-                  'border-l border-primary-foreground/20 lg:border-l',
+                'min-w-0 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-2.5 text-center backdrop-blur-sm transition-all duration-150',
                 stat.href &&
-                  'hover:bg-primary-foreground/15 hover:scale-[1.01] cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary-foreground/50',
+                  'hover:bg-primary-foreground/20 hover:scale-[1.01] hover:border-primary-foreground/30 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary-foreground/50',
                 stat.active &&
-                  'bg-primary-foreground/20 ring-1 ring-inset ring-primary-foreground/30 font-bold',
+                  'bg-primary-foreground/25 border-primary-foreground/40 ring-1 ring-primary-foreground/40 font-bold',
                 stat.className
               );
 

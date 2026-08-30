@@ -185,6 +185,7 @@ export default async function ActionItemsPage({
             recurrence.
           </p>
         }
+        statsPlacement="bottom"
         stats={[
           {
             label: 'Total',

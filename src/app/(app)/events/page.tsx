@@ -64,6 +64,7 @@ export default async function EventLogsPage() {
             trail across all services.
           </p>
         }
+        statsPlacement="bottom"
         actions={
           <Button
             asChild
