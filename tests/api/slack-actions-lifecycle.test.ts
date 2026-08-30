@@ -220,8 +220,8 @@ describe('Slack interactive lifecycle actions', () => {
         id: 'inc-1',
         serviceId: 'svc-1',
         slackChannelId: 'C123',
-      } as any)
-      .mockResolvedValueOnce({ assigneeId: 'user-1', teamId: null } as any);
+      } as never)
+      .mockResolvedValueOnce({ assigneeId: 'user-1', teamId: null } as never);
 
     const response = await handleSlackActionRequest(payload('assign_me'));
     const body = await response.json();

@@ -248,7 +248,7 @@ describe('sendIncidentSMS', () => {
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       id: 'inc-1',
       title: 'Test Incident',
-    } as any);
+    } as never);
 
     const result = await sendIncidentSMS('user-1', 'inc-1', 'triggered');
 
@@ -263,7 +263,7 @@ describe('sendIncidentSMS', () => {
       id: 'user-1',
       name: 'Test User',
       phoneNumber: '+15551234567',
-    } as any);
+    } as never);
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce(null);
 
     const result = await sendIncidentSMS('user-1', 'inc-1', 'triggered');
@@ -279,14 +279,14 @@ describe('sendIncidentSMS', () => {
       id: 'user-1',
       name: 'Test User',
       phoneNumber: null,
-    } as any);
+    } as never);
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       id: 'inc-1',
       title: 'Test Incident',
       urgency: 'HIGH',
       service: { name: 'API Service' },
       assignee: null,
-    } as any);
+    } as never);
 
     const result = await sendIncidentSMS('user-1', 'inc-1', 'triggered');
 
@@ -301,14 +301,14 @@ describe('sendIncidentSMS', () => {
       id: 'user-1',
       name: 'Test User',
       phoneNumber: '+15551234567',
-    } as any);
+    } as never);
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       id: 'inc-1',
       title: 'Database connection timeout',
       urgency: 'HIGH',
       service: { name: 'API Service' },
       assignee: null,
-    } as any);
+    } as never);
     vi.mocked(getSMSConfig).mockResolvedValueOnce({
       enabled: false, // Will fail early, but message was constructed
       provider: null,
@@ -332,14 +332,14 @@ describe('sendIncidentSMS', () => {
       id: 'user-1',
       name: 'Test User',
       phoneNumber: '+15551234567',
-    } as any);
+    } as never);
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       id: 'inc-1',
       title: 'Test Incident',
       urgency: 'MEDIUM',
       service: { name: 'Web App' },
       assignee: { name: 'Assigned User' },
-    } as any);
+    } as never);
     vi.mocked(getSMSConfig).mockResolvedValueOnce({
       enabled: false,
       provider: null,
@@ -356,14 +356,14 @@ describe('sendIncidentSMS', () => {
       id: 'user-1',
       name: 'Test User',
       phoneNumber: '+15551234567',
-    } as any);
+    } as never);
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       id: 'inc-1',
       title: 'Test Incident',
       urgency: 'LOW',
       service: { name: 'Batch Jobs' },
       assignee: null,
-    } as any);
+    } as never);
     vi.mocked(getSMSConfig).mockResolvedValueOnce({
       enabled: false,
       provider: null,
@@ -380,7 +380,7 @@ describe('sendIncidentSMS', () => {
       id: 'user-1',
       name: 'Test User',
       phoneNumber: '+15551234567',
-    } as any);
+    } as never);
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       id: 'inc-1',
       title:
@@ -388,7 +388,7 @@ describe('sendIncidentSMS', () => {
       urgency: 'HIGH',
       service: { name: 'Very Long Service Name That Should Also Be Truncated' },
       assignee: null,
-    } as any);
+    } as never);
     vi.mocked(getSMSConfig).mockResolvedValueOnce({
       enabled: false,
       provider: null,
@@ -405,14 +405,14 @@ describe('sendIncidentSMS', () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
       id: 'user-1',
       phoneNumber: '+15551234567',
-    } as any);
+    } as never);
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       id: 'inc-1',
       title: 'Mutated incident title',
       urgency: 'LOW',
       service: { name: 'Renamed Service' },
       assignee: null,
-    } as any);
+    } as never);
     vi.mocked(getSMSConfig).mockResolvedValueOnce({
       enabled: true,
       provider: 'twilio',

@@ -124,13 +124,13 @@ describe('WhatsApp Integration', () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: 'user-1',
         phoneNumber: '+1234567890',
-      } as any);
+      } as never);
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-1',
         title: 'Mutated title',
         urgency: 'LOW',
         service: { name: 'Renamed Service' },
-      } as any);
+      } as never);
       vi.mocked(getWhatsAppConfig).mockResolvedValue({
         enabled: true,
         provider: 'twilio',
@@ -138,10 +138,10 @@ describe('WhatsApp Integration', () => {
         authToken: 'TEST_TOKEN',
         whatsappNumber: '+1234567890',
         whatsappContentSid: 'HX1234',
-      } as any);
+      });
       const twilio = (await import('twilio')).default;
       const create = vi.fn().mockResolvedValue({ sid: 'MSG123' });
-      vi.mocked(twilio).mockReturnValue({ messages: { create } } as any);
+      vi.mocked(twilio).mockReturnValue({ messages: { create } } as never);
       const eventAt = new Date('2026-08-30T12:00:00.000Z');
       const durableMessage = encodeNotificationEnvelope(
         buildNotificationEnvelope(
