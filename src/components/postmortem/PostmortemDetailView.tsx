@@ -73,7 +73,6 @@ export default function PostmortemDetailView({
   isPublicView: initialPublicView = false,
 }: PostmortemDetailViewProps) {
   const { userTimeZone } = useTimezone();
-  const [, startTransition] = useTransition();
 
   const [isPublic, setIsPublic] = useState(postmortem.isPublic ?? true);
   const [isUpdatingPublic, setIsUpdatingPublic] = useState(false);
