@@ -3,7 +3,8 @@ import { assertAdmin, getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
-import { ShieldAlert, Server, ArrowRight, HelpCircle, Users, Calendar } from 'lucide-react';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { ShieldAlert, Server, Layers, HelpCircle, ArrowRight, Calendar, Users } from 'lucide-react';
 import PolicyCreateForm from '@/components/policies/PolicyCreateForm';
 import PolicyDirectoryList from '@/components/policies/PolicyDirectoryList';
 import { createPolicyAction } from './actions';
@@ -71,68 +72,48 @@ export default async function PoliciesPage({
   }));
 
   return (
-    <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-6">
-      {/* Centralized Hero Header with 3-Stat Capsule */}
-      <div className="bg-gradient-to-r from-primary via-primary/95 to-primary/80 text-white rounded-2xl p-6 sm:p-7 shadow-lg relative overflow-hidden">
-        <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/5 pointer-events-none blur-2xl" />
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-1.5 max-w-2xl">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/15 text-white/90 backdrop-blur-xs border border-white/20">
-                Incident Response Routing
-              </span>
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Centralized Hero Header */}
+      <DetailHeroBanner
+        tag="Incident Response Routing"
+        title="Escalation Policies"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <ShieldAlert className="h-6 w-6" aria-hidden="true" />
+          </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Define multi-tier responder routing, failover delays, and notification cadences when
+            critical incidents occur across your services.
+          </p>
+        }
+        stats={[
+          {
+            label: 'Total Policies',
+            value: totalPolicies,
+            icon: <ShieldAlert className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'In Use',
+            value: inUsePoliciesCount,
+            icon: <Server className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName: inUsePoliciesCount > 0 ? 'text-emerald-200' : undefined,
+          },
+          {
+            label: 'Total Steps',
+            value: totalStepsCount,
+            icon: <Layers className="h-3.5 w-3.5" />,
+          },
+        ]}
+        alert={
+          errorCode === 'duplicate-policy' ? (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium">
+              An escalation policy with this name already exists. Please choose a unique name.
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2.5 text-white">
-              <ShieldAlert className="h-7 w-7 sm:h-8 sm:w-8 shrink-0 text-white/90" />
-              Escalation Policies
-            </h1>
-            <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
-              Define multi-tier responder routing, failover delays, and notification cadences when
-              critical incidents occur across your services.
-            </p>
-          </div>
-
-          {/* 3-Stat Capsule */}
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 w-full lg:w-auto shrink-0">
-            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
-              <CardContent className="p-3 sm:p-4 text-center">
-                <div className="text-xl sm:text-2xl font-black tracking-tight">{totalPolicies}</div>
-                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
-                  Total Policies
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
-              <CardContent className="p-3 sm:p-4 text-center">
-                <div className="text-xl sm:text-2xl font-black tracking-tight text-emerald-200">
-                  {inUsePoliciesCount}
-                </div>
-                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
-                  In Use (Services)
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
-              <CardContent className="p-3 sm:p-4 text-center">
-                <div className="text-xl sm:text-2xl font-black tracking-tight text-blue-200">
-                  {totalStepsCount}
-                </div>
-                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
-                  Total Steps
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-
-      {errorCode === 'duplicate-policy' && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium">
-          An escalation policy with this name already exists. Please choose a unique name.
-        </div>
-      )}
+          ) : undefined
+        }
+      />
 
       {/* Interactive Dashed Expander Create Policy Form */}
       {canManagePolicies && (

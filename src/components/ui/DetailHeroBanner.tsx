@@ -97,9 +97,10 @@ export default function DetailHeroBanner({
               <div
                 className={cn(
                   'grid gap-1.5 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-1.5 backdrop-blur-sm',
-                  stats.length === 2 && 'grid-cols-2 lg:min-w-[200px]',
-                  stats.length === 3 && 'grid-cols-3 lg:min-w-[300px]',
-                  stats.length >= 4 && 'grid-cols-4 lg:min-w-[360px]'
+                  stats.length === 1 && 'grid-cols-1 min-w-[120px]',
+                  stats.length === 2 && 'grid-cols-2 min-w-[200px]',
+                  stats.length === 3 && 'grid-cols-3 min-w-[280px]',
+                  stats.length >= 4 && 'grid-cols-2 sm:grid-cols-4 min-w-[240px] sm:min-w-[360px]'
                 )}
               >
                 {stats.map((stat, idx) => (
@@ -107,7 +108,11 @@ export default function DetailHeroBanner({
                     key={stat.label || idx}
                     className={cn(
                       'min-w-0 rounded-md px-2.5 py-1.5 text-center',
-                      idx > 0 && 'border-l border-primary-foreground/20',
+                      idx > 0 && stats.length <= 3 && 'border-l border-primary-foreground/20',
+                      idx > 0 && stats.length >= 4 && 'sm:border-l sm:border-primary-foreground/20',
+                      idx % 2 === 1 &&
+                        stats.length >= 4 &&
+                        'border-l border-primary-foreground/20 sm:border-l',
                       stat.className
                     )}
                   >
