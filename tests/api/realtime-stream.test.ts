@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { GET } from '@/app/api/realtime/stream/route';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
@@ -28,24 +29,38 @@ describe('API Route - Realtime Stream', () => {
 
     it('returns SSE stream for authenticated users', async () => {
         const controller = new AbortController();
-        vi.mocked(getCurrentUser).mockResolvedValue({
+        const currentUser: Awaited<ReturnType<typeof getCurrentUser>> = {
             id: 'user-1',
             role: 'ADMIN',
+            email: 'admin@example.com',
+            name: 'Admin User',
+            timeZone: 'UTC',
+            status: 'ACTIVE',
             tokenVersion: 0,
-        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-        vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        };
+        const streamUser = {
             id: 'user-1',
             role: 'ADMIN',
             status: 'ACTIVE',
             tokenVersion: 0,
             teamMemberships: [],
-        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+        } satisfies Prisma.UserGetPayload<{
+            select: {
+                id: true;
+                role: true;
+                status: true;
+                tokenVersion: true;
+                teamMemberships: { select: { teamId: true } };
+            };
+        }>;
+        vi.mocked(getCurrentUser).mockResolvedValue(currentUser);
+        vi.mocked(prisma.user.findUnique).mockResolvedValue(streamUser as never);
         vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
         vi.mocked(prisma.incident.count).mockResolvedValue(0);
 
-        const req = new NextRequest(new URL('http://localhost:3000/api/realtime/stream'), {
+        const req = new NextRequest('http://localhost:3000/api/realtime/stream', {
             signal: controller.signal,
-        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+        });
         const res = await GET(req);
 
         expect(res.status).toBe(200);
