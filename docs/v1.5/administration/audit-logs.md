@@ -1,7 +1,7 @@
 ---
 order: 7
 title: Audit Logs
-description: Review the administrative changes recorded by OpsKnight v1.4 and understand the evidence boundary.
+description: Review administrative changes recorded by OpsKnight and understand the evidence boundary.
 ---
 
 # Audit Logs
@@ -14,7 +14,7 @@ The audit log answers a focused question: **who changed supported OpsKnight conf
 2. Under **Insights**, select **Audit Log**.
 3. Read entries from newest to oldest.
 
-The page shows the newest **250** records. v1.4 has no audit search, filtering, pagination, or export. Query or export the PostgreSQL `AuditLog` table through an operator-controlled process if an investigation needs older records.
+The page shows records newest first in pages of 50. Search by actor, action, or entity ID, narrow results by entity type, and move through result pages. **Export CSV** exports the currently visible page. Use an operator-controlled PostgreSQL export for a complete large-range extract.
 
 > **Access boundary:** The Audit Log page (`/audit`) and its settings link are strictly restricted to Administrators (`ADMIN` role only). Users and Responders cannot access this page and will not see it in the sidebar navigation or settings overview. Treat audit metadata as sensitive and restrict application access at the identity or reverse-proxy layer when policy requires tighter separation.
 
@@ -45,7 +45,7 @@ This is an implemented-family summary, not a guarantee that every UI action crea
 ## Investigation workflow
 
 1. Record the incident window and affected user, team, service, or policy.
-2. Capture relevant rows before newer activity pushes them outside the 250-row view.
+2. Search and filter for relevant rows, then preserve the relevant result pages before the retention period expires.
 3. Match actor and entity IDs to current records; names and membership may have changed.
 4. Correlate with application, identity-provider, proxy, and database evidence.
 5. Preserve evidence externally according to your incident-response procedure.
@@ -54,7 +54,9 @@ If an expected row is absent, verify the change completed and its workflow has a
 
 ## Retention and compliance boundary
 
-The **System Logs** retention setting deletes `LogEntry` records; it does **not** delete `AuditLog` records. v1.4 has no configurable audit-retention/export job and does not claim append-only or tamper-evident storage.
+The **Audit & Event History** retention setting controls `AuditLog` and incident-event cleanup, alongside stored application logs. New installations default to one year; existing saved policies are not changed automatically. The 2-, 5-, and 7-year presets retain audit and event history for their stated duration.
+
+OpsKnight has no legal-hold, immutable-store, or tamper-evident audit capability. Do not run destructive cleanup for records subject to a hold; export them to approved, access-controlled storage first.
 
 For high-assurance use, back up PostgreSQL, export audit records to access-controlled immutable storage, define external retention, restrict database access, and validate coverage for each intended control. These records can contribute evidence, but do not by themselves make a deployment compliant.
 

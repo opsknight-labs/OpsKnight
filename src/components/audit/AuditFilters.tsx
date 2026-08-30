@@ -14,6 +14,7 @@ import SearchFilterBar from '@/components/ui/SearchFilterBar';
 import LivePulseBadge from '@/components/ui/LivePulseBadge';
 import { exportToCsv } from '@/lib/export-csv';
 import { Download } from 'lucide-react';
+import { AUDIT_ENTITY_TYPES } from '@/lib/audit-filters';
 
 export type AuditFiltersProps = {
   currentEntityType?: string;
@@ -31,17 +32,6 @@ export type AuditFiltersProps = {
     details?: unknown;
   }>;
 };
-
-const ENTITY_TYPES = [
-  'USER',
-  'TEAM',
-  'SERVICE',
-  'ESCALATION_POLICY',
-  'SCHEDULE',
-  'INTEGRATION',
-  'SETTING',
-  'CUSTOM_FIELD',
-];
 
 export default function AuditFilters({
   currentEntityType = 'ALL',
@@ -103,6 +93,7 @@ export default function AuditFilters({
       searchValue={currentSearch}
       onSearchChange={val => updateParam('search', val)}
       searchPlaceholder="Search actor, action, or entity ID..."
+      searchDebounceMs={300}
       hasActiveFilters={hasActiveFilters}
       onResetFilters={handleReset}
       filters={
@@ -115,7 +106,7 @@ export default function AuditFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">All Entity Types</SelectItem>
-            {ENTITY_TYPES.map(type => (
+            {AUDIT_ENTITY_TYPES.map(type => (
               <SelectItem key={type} value={type}>
                 {type.replace(/_/g, ' ')}
               </SelectItem>

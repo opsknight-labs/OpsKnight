@@ -18,8 +18,8 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import { Shield, FileText } from 'lucide-react';
 import { assertAuditorOrAdmin } from '@/lib/rbac';
-import type { AuditEntityType } from '@prisma/client';
-import Link from 'next/link';
+import type { Prisma } from '@prisma/client';
+import { parseAuditEntityType } from '@/lib/audit-filters';
 
 import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 import AuditFilters from '@/components/audit/AuditFilters';
@@ -41,7 +41,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
   await assertAuditorOrAdmin();
 
   const awaitedParams = await searchParams;
-  const entityType = awaitedParams?.entityType as AuditEntityType | undefined;
+  const entityType = parseAuditEntityType(awaitedParams?.entityType);
   const entityId = awaitedParams?.entityId;
   const actorId = awaitedParams?.actorId;
   const action = awaitedParams?.action;
@@ -56,7 +56,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     : null;
   const userTimeZone = getUserTimeZone(user ?? undefined);
 
-  const baseWhere: Record<string, unknown> = {
+  const where: Prisma.AuditLogWhereInput = {
     ...(entityType ? { entityType } : {}),
     ...(entityId ? { entityId } : {}),
     ...(actorId ? { actorId } : {}),
@@ -65,7 +65,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
 
   if (search && search.trim()) {
     const q = search.trim();
-    baseWhere.OR = [
+    where.OR = [
       { action: { contains: q, mode: 'insensitive' } },
       { entityId: { contains: q, mode: 'insensitive' } },
       { actorName: { contains: q, mode: 'insensitive' } },
@@ -74,8 +74,6 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
       { actor: { email: { contains: q, mode: 'insensitive' } } },
     ];
   }
-
-  const where = baseWhere;
 
   const [logs, totalLogs] = await Promise.all([
     prisma.auditLog.findMany({

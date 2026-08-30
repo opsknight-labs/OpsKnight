@@ -1,20 +1,11 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/shadcn/table';
-import { Card } from '@/components/ui/shadcn/card';
+import { getUserTimeZone } from '@/lib/timezone';
 import { Button } from '@/components/ui/shadcn/button';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import EmptyState from '@/components/ui/EmptyState';
 import { Activity, Sparkles, Layers, Clock } from 'lucide-react';
 import { assertAdmin } from '@/lib/rbac';
 
@@ -22,8 +13,21 @@ import EventsListTable from '@/components/events/EventsListTable';
 
 export const dynamic = 'force-dynamic';
 
-export default async function EventLogsPage() {
+type EventLogsPageProps = {
+  searchParams?: Promise<{
+    page?: string;
+    search?: string;
+    service?: string;
+  }>;
+};
+
+export default async function EventLogsPage({ searchParams }: EventLogsPageProps) {
   await assertAdmin();
+  const params = await searchParams;
+  const page = Math.max(1, Number.parseInt(params?.page || '1', 10) || 1);
+  const pageSize = 50;
+  const search = params?.search?.trim().slice(0, 200) || undefined;
+  const service = params?.service?.trim().slice(0, 200) || undefined;
   const session = await getServerSession(await getAuthOptions());
   const email = session?.user?.email ?? null;
   const user = email
@@ -31,21 +35,42 @@ export default async function EventLogsPage() {
     : null;
   const userTimeZone = getUserTimeZone(user ?? undefined);
 
-  const events = await prisma.incidentEvent.findMany({
-    include: {
-      incident: {
-        select: {
-          id: true,
-          title: true,
-          service: { select: { name: true } },
+  const filters: Prisma.IncidentEventWhereInput[] = [];
+  if (service) {
+    filters.push({ incident: { service: { name: service } } });
+  }
+  if (search) {
+    filters.push({
+      OR: [
+        { message: { contains: search, mode: 'insensitive' } },
+        { incidentId: { contains: search, mode: 'insensitive' } },
+        { incident: { title: { contains: search, mode: 'insensitive' } } },
+        { incident: { service: { name: { contains: search, mode: 'insensitive' } } } },
+      ],
+    });
+  }
+  const where: Prisma.IncidentEventWhereInput = filters.length > 0 ? { AND: filters } : {};
+
+  const [events, totalEvents, services] = await Promise.all([
+    prisma.incidentEvent.findMany({
+      where,
+      include: {
+        incident: {
+          select: {
+            id: true,
+            title: true,
+            service: { select: { name: true } },
+          },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-  });
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.incidentEvent.count({ where }),
+    prisma.service.findMany({ select: { name: true }, orderBy: { name: 'asc' } }),
+  ]);
 
-  const totalEvents = events.length;
   const uniqueIncidents = new Set(events.map(e => e.incident.id)).size;
   const uniqueServices = new Set(events.map(e => e.incident.service.name)).size;
   return (
@@ -79,32 +104,40 @@ export default async function EventLogsPage() {
         }
         stats={[
           {
-            label: 'Retained Events',
+            label: 'Matching Events',
             value: totalEvents,
             icon: <Activity className="h-3.5 w-3.5" />,
           },
           {
-            label: 'Incidents Touched',
+            label: 'Incidents on Page',
             value: uniqueIncidents,
             icon: <Layers className="h-3.5 w-3.5 text-rose-200" />,
             valueClassName: uniqueIncidents > 0 ? 'text-rose-200' : undefined,
           },
           {
-            label: 'Services Active',
+            label: 'Services on Page',
             value: uniqueServices,
             icon: <Layers className="h-3.5 w-3.5 text-blue-200" />,
             valueClassName: uniqueServices > 0 ? 'text-blue-200' : undefined,
           },
           {
-            label: 'Window',
-            value: 'Recent 200',
+            label: 'Page',
+            value: `${page} of ${Math.max(1, Math.ceil(totalEvents / pageSize))}`,
             icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
           },
         ]}
       />
 
-      {/* Events List Table with Search, Filter & CSV Export */}
-      <EventsListTable initialEvents={events} userTimeZone={userTimeZone} />
+      <EventsListTable
+        initialEvents={events}
+        userTimeZone={userTimeZone}
+        currentSearch={search}
+        currentService={service}
+        serviceNames={services.map(item => item.name)}
+        page={page}
+        totalCount={totalEvents}
+        pageSize={pageSize}
+      />
     </main>
   );
 }

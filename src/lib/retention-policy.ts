@@ -16,7 +16,7 @@ import {
  * Settings:
  * - incidentRetentionDays: How long to keep incident data (default: 730 = 2 years)
  * - alertRetentionDays: How long to keep alert data (default: 365 = 1 year)
- * - logRetentionDays: How long to keep log entries (default: 90 days)
+ * - logRetentionDays: How long to keep audit and event history (default: 365 days)
  * - metricsRetentionDays: How long to keep metric rollups (default: 365 = 1 year)
  * - realTimeWindowDays: Use real-time queries for this period, rollups for older (default: 90 days)
  */
@@ -39,7 +39,7 @@ export interface RetentionPolicy {
 const DEFAULT_POLICY: RetentionPolicy = {
   incidentRetentionDays: 730, // 2 years
   alertRetentionDays: 365, // 1 year
-  logRetentionDays: 90, // 90 days
+  logRetentionDays: 365, // 1 year for event and audit history
   metricsRetentionDays: 365, // 1 year
   realTimeWindowDays: 90, // 90 days for real-time, older uses rollups
   businessHoursTimeZone: 'UTC',
@@ -193,7 +193,7 @@ export async function updateRetentionPolicy(
     validated.alertRetentionDays = Math.max(7, Math.min(3650, policy.alertRetentionDays)); // 7 days to 10 years
   }
   if (policy.logRetentionDays !== undefined) {
-    validated.logRetentionDays = Math.max(1, Math.min(365, policy.logRetentionDays)); // 1 day to 1 year
+    validated.logRetentionDays = Math.max(1, Math.min(3650, policy.logRetentionDays)); // 1 day to 10 years
   }
   if (policy.metricsRetentionDays !== undefined) {
     validated.metricsRetentionDays = Math.max(30, Math.min(3650, policy.metricsRetentionDays)); // 30 days to 10 years

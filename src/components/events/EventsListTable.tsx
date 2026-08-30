@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { formatDateTime } from '@/lib/timezone';
 import {
   Table,
@@ -43,49 +44,41 @@ export type EventItem = {
 export type EventsListTableProps = {
   initialEvents: EventItem[];
   userTimeZone: string;
+  currentSearch?: string;
+  currentService?: string;
+  serviceNames: string[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
 };
 
-export default function EventsListTable({ initialEvents, userTimeZone }: EventsListTableProps) {
-  const [search, setSearch] = useState('');
-  const [selectedService, setSelectedService] = useState('ALL');
-  const [page, setPage] = useState(1);
-  const pageSize = 25;
+export default function EventsListTable({
+  initialEvents,
+  userTimeZone,
+  currentSearch = '',
+  currentService = '',
+  serviceNames,
+  page,
+  pageSize,
+  totalCount,
+}: EventsListTableProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [, startTransition] = useTransition();
 
-  const services = useMemo(() => {
-    const set = new Set<string>();
-    initialEvents.forEach(e => {
-      if (e.incident?.service?.name) {
-        set.add(e.incident.service.name);
-      }
-    });
-    return Array.from(set).sort();
-  }, [initialEvents]);
+  const updateParam = (key: string, value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (!value || value === 'ALL') params.delete(key);
+    else params.set(key, value);
+    params.delete('page');
+    startTransition(() => router.push(`/events?${params.toString()}`));
+  };
 
-  const filteredEvents = useMemo(() => {
-    let result = initialEvents;
-
-    if (selectedService !== 'ALL') {
-      result = result.filter(e => e.incident?.service?.name === selectedService);
-    }
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(
-        e =>
-          e.message.toLowerCase().includes(q) ||
-          e.incident?.title.toLowerCase().includes(q) ||
-          e.incident?.service?.name.toLowerCase().includes(q) ||
-          e.incident?.id.toLowerCase().includes(q)
-      );
-    }
-
-    return result;
-  }, [initialEvents, selectedService, search]);
-
-  const paginatedEvents = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredEvents.slice(start, start + pageSize);
-  }, [filteredEvents, page, pageSize]);
+  const pageHref = (targetPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', String(targetPage));
+    return `/events?${params.toString()}`;
+  };
 
   const handleExportCsv = () => {
     exportToCsv(
@@ -98,45 +91,38 @@ export default function EventsListTable({ initialEvents, userTimeZone }: EventsL
         { header: 'Service', accessor: row => row.incident?.service?.name ?? '' },
         { header: 'Message', accessor: 'message' },
       ],
-      filteredEvents
+      initialEvents
     );
   };
 
-  const hasActiveFilters = Boolean(search) || selectedService !== 'ALL';
+  const hasActiveFilters = Boolean(currentSearch) || Boolean(currentService);
 
   const handleResetFilters = () => {
-    setSearch('');
-    setSelectedService('ALL');
-    setPage(1);
+    startTransition(() => router.push('/events'));
   };
 
   return (
     <div className="space-y-4">
       {/* Search & Filter Toolbar */}
       <SearchFilterBar
-        searchValue={search}
-        onSearchChange={val => {
-          setSearch(val);
-          setPage(1);
-        }}
+        searchValue={currentSearch}
+        onSearchChange={val => updateParam('search', val)}
         searchPlaceholder="Search event messages, incidents, services..."
+        searchDebounceMs={300}
         hasActiveFilters={hasActiveFilters}
         onResetFilters={handleResetFilters}
         filters={
-          services.length > 0 ? (
+          serviceNames.length > 0 ? (
             <Select
-              value={selectedService}
-              onValueChange={val => {
-                setSelectedService(val);
-                setPage(1);
-              }}
+              value={currentService || 'ALL'}
+              onValueChange={val => updateParam('service', val)}
             >
               <SelectTrigger className="h-9 w-[160px] bg-slate-50/60 text-xs">
                 <SelectValue placeholder="All Services" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Services</SelectItem>
-                {services.map(svc => (
+                {serviceNames.map(svc => (
                   <SelectItem key={svc} value={svc}>
                     {svc}
                   </SelectItem>
@@ -152,7 +138,7 @@ export default function EventsListTable({ initialEvents, userTimeZone }: EventsL
               variant="outline"
               size="sm"
               onClick={handleExportCsv}
-              disabled={filteredEvents.length === 0}
+              disabled={initialEvents.length === 0}
               className="h-9 gap-1.5 text-xs shadow-sm hover:bg-slate-100"
             >
               <Download className="h-3.5 w-3.5 text-muted-foreground" />
@@ -164,7 +150,7 @@ export default function EventsListTable({ initialEvents, userTimeZone }: EventsL
 
       {/* Events Card & Table */}
       <Card className="bg-white overflow-hidden shadow-sm">
-        {filteredEvents.length === 0 ? (
+        {initialEvents.length === 0 ? (
           <div className="p-6">
             <EmptyState
               icon={<Activity className="h-6 w-6 text-muted-foreground/60" />}
@@ -208,7 +194,7 @@ export default function EventsListTable({ initialEvents, userTimeZone }: EventsL
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedEvents.map(event => (
+                  {initialEvents.map(event => (
                     <TableRow
                       key={event.id}
                       className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
@@ -250,8 +236,8 @@ export default function EventsListTable({ initialEvents, userTimeZone }: EventsL
             <TablePaginationFooter
               page={page}
               pageSize={pageSize}
-              totalCount={filteredEvents.length}
-              onPageChange={newPage => setPage(newPage)}
+              totalCount={totalCount}
+              pageHref={pageHref}
             />
           </>
         )}

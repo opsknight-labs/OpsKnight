@@ -19,6 +19,7 @@ export interface CleanupResult {
   logs: number;
   metrics: number;
   events: number;
+  auditLogs: number;
   inAppNotifications: number;
   slaPerformanceLogs: number;
   executionTimeMs: number;
@@ -54,22 +55,30 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
   const metricsCutoff = new Date(now);
   metricsCutoff.setDate(metricsCutoff.getDate() - policy.metricsRetentionDays);
 
+  // Incident events are deleted with their parent incident. Do not let a
+  // shorter incident-retention period silently remove event history that is
+  // still inside the separately configured audit/event retention period.
+  const resolvedIncidentCleanupWhere = {
+    createdAt: { lt: incidentCutoff },
+    status: 'RESOLVED' as const,
+    events: { none: { createdAt: { gte: logCutoff } } },
+  };
+
   let incidentCount = 0;
   let alertCount = 0;
   let logCount = 0;
   let metricsCount = 0;
   let eventCount = 0;
+  let auditLogCount = 0;
   let inAppNotificationCount = 0;
   let slaPerformanceLogCount = 0;
 
   try {
     // 1. Count what would be deleted
-    const [incidentsToDelete, alertsToDelete, logsToDelete] = await Promise.all([
+    const [incidentsToDelete, alertsToDelete, logsToDelete, eventsToDelete, auditLogsToDelete] =
+      await Promise.all([
       prisma.incident.count({
-        where: {
-          createdAt: { lt: incidentCutoff },
-          status: 'RESOLVED', // Only delete resolved incidents
-        },
+        where: resolvedIncidentCleanupWhere,
       }),
       prisma.alert.count({
         where: { createdAt: { lt: alertCutoff } },
@@ -77,12 +86,16 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
       prisma.logEntry.count({
         where: { timestamp: { lt: logCutoff } },
       }),
+      prisma.incidentEvent.count({ where: { createdAt: { lt: logCutoff } } }),
+      prisma.auditLog.count({ where: { createdAt: { lt: logCutoff } } }),
     ]);
 
     logger.info('[DataCleanup] Records to cleanup', {
       incidents: incidentsToDelete,
       alerts: alertsToDelete,
       logs: logsToDelete,
+      events: eventsToDelete,
+      auditLogs: auditLogsToDelete,
       cutoffs: {
         incident: incidentCutoff.toISOString(),
         alert: alertCutoff.toISOString(),
@@ -96,7 +109,8 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
         alerts: alertsToDelete,
         logs: logsToDelete,
         metrics: 0,
-        events: 0,
+        events: eventsToDelete,
+        auditLogs: auditLogsToDelete,
         inAppNotifications: 0,
         slaPerformanceLogs: 0,
         executionTimeMs: Date.now() - startTime,
@@ -109,7 +123,7 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
     const BATCH_SIZE = 500;
     while (true) {
       const incidentIds = await prisma.incident.findMany({
-        where: { createdAt: { lt: incidentCutoff }, status: 'RESOLVED' },
+        where: resolvedIncidentCleanupWhere,
         select: { id: true },
         orderBy: { id: 'asc' },
         take: BATCH_SIZE,
@@ -179,6 +193,26 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
         }),
       ids => prisma.alert.deleteMany({ where: { id: { in: ids } } })
     );
+    eventCount += await deleteInBatches(
+      () =>
+        prisma.incidentEvent.findMany({
+          where: { createdAt: { lt: logCutoff } },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+          take: BATCH_SIZE,
+        }),
+      ids => prisma.incidentEvent.deleteMany({ where: { id: { in: ids } } })
+    );
+    auditLogCount = await deleteInBatches(
+      () =>
+        prisma.auditLog.findMany({
+          where: { createdAt: { lt: logCutoff } },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+          take: BATCH_SIZE,
+        }),
+      ids => prisma.auditLog.deleteMany({ where: { id: { in: ids } } })
+    );
     logCount = await deleteInBatches(
       () =>
         prisma.logEntry.findMany({
@@ -218,6 +252,7 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
     logger.info('[DataCleanup] Cleanup completed', {
       incidents: incidentCount,
       events: eventCount,
+      auditLogs: auditLogCount,
       alerts: alertCount,
       logs: logCount,
       metrics: metricsCount,
@@ -232,6 +267,7 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
       logs: logCount,
       metrics: metricsCount,
       events: eventCount,
+      auditLogs: auditLogCount,
       inAppNotifications: inAppNotificationCount,
       slaPerformanceLogs: slaPerformanceLogCount,
       executionTimeMs,

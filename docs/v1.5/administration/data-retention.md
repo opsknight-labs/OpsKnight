@@ -19,19 +19,21 @@ You need the **ADMIN** role.
 
 Presets only populate the form; they do not run cleanup. **Reset to Defaults** also changes the form without saving it.
 
-| Data set              |  Default | Accepted range | Effect                                                           |
-| --------------------- | -------: | -------------: | ---------------------------------------------------------------- |
-| Resolved incidents    | 730 days |       30–3,650 | Bounds history and selects old resolved incidents for cleanup.   |
-| Unlinked alerts       | 365 days |        7–3,650 | Selects old alerts after retained-incident links are considered. |
-| Stored log entries    |  90 days |          1–365 | Selects PostgreSQL `LogEntry` rows.                              |
-| Metric rollups        | 365 days |       30–3,650 | Bounds historical metric queries and rollup cleanup.             |
-| High-precision window |  90 days |          7–365 | Controls the live-data analytics window, not a separate archive. |
+| Data set              |  Default | Accepted range | Effect                                                                                 |
+| --------------------- | -------: | -------------: | -------------------------------------------------------------------------------------- |
+| Resolved incidents    | 730 days |       30–3,650 | Bounds history and selects eligible old resolved incidents for cleanup.                |
+| Alerts                | 365 days |        7–3,650 | Selects raw alerts older than the alert cutoff.                                        |
+| Audit & event history | 365 days |        1–3,650 | Selects `AuditLog`, `IncidentEvent`, `LogEntry`, and in-app notification records.     |
+| Metric rollups        | 365 days |       30–3,650 | Bounds historical metric queries and rollup cleanup.                                   |
+| Live analytics window |  90 days |          7–365 | Controls the live-data analytics window, not a separate archive.                       |
 
-The server clamps out-of-range values. Internal endpoint users should read back the saved policy because the UI and server minimum for the high-precision window differ.
+The UI and server enforce the same ranges. Requests outside those ranges are rejected rather than silently changed.
 
 ## Preset boundary
 
-Minimal, Standard, Extended, Enterprise, and Compliance presets are convenience templates, not legal advice or certifications. Some labels summarize incident retention while alert and log windows are shorter.
+Minimal, Standard, Extended, Enterprise, and Compliance presets are convenience templates, not legal advice or certifications. Audit and event history is retained for 14 days, 1 year, 2 years, 5 years, and 7 years respectively. The server supports up to 10 years (3,650 days).
+
+New installations and new `SystemSettings` records default Audit & Event History to one year. Existing saved settings are deliberately left unchanged; an administrator must select a preset or save the desired value.
 
 ## Preview and execute cleanup
 
@@ -41,19 +43,19 @@ The settings route uses the signed-in browser session and requires `ADMIN`. It i
 
 ## What cleanup actually removes
 
-| Category      | Selection and action                                                                                                                           |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Incidents     | Deletes only `RESOLVED` incidents whose **creation time** predates the cutoff, after deleting timeline events, notes, and custom-field values. |
-| Linked alerts | Detaches alerts from incidents selected for deletion.                                                                                          |
-| Alerts        | Deletes alerts older than their cutoff only when no longer linked to an incident.                                                              |
-| Logs          | Deletes old PostgreSQL `LogEntry` rows, not audit records or the System Logs memory buffer.                                                    |
-| Metrics       | Deletes metric and SLA rollups older than the metric cutoff.                                                                                   |
+| Category              | Selection and action                                                                                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Incidents             | Deletes only eligible `RESOLVED` incidents whose **creation time** predates the cutoff, after deleting dependent timeline events, notes, and custom-field values. |
+| Incident-event safety | An incident is not eligible while it still has an event inside the configured Audit & Event History period.                                                       |
+| Alerts                | Deletes raw alerts older than their alert cutoff.                                                                                                                |
+| Audit & event history | Deletes expired `AuditLog`, `IncidentEvent`, PostgreSQL `LogEntry`, and in-app notification rows in bounded batches.                                             |
+| Metrics               | Deletes metric and SLA rollups older than the metric cutoff.                                                                                                     |
 
-Open incidents are not deleted. v1.4 does not copy deleted incidents to cold storage; its archive helper only reports candidates.
+Open incidents are not deleted. OpsKnight does not copy deleted incidents to cold storage; its archive helper only reports candidates.
 
 ### Dry-run limitation
 
-Preview reports incident, alert, and log candidates. It reports zero metrics and events even though execution may delete those records. It is a safety check, not a complete deletion manifest.
+Preview reports incident, alert, stored-log, audit-log, and incident-event candidates. It reports zero metrics and notification candidates. It is a safety check, not a complete deletion manifest.
 
 ## Automatic schedule
 
@@ -64,9 +66,9 @@ The application scheduler runs this cleanup service on its cleanup job. See [Mai
 - **All Time** analytics can be clipped and display a retention notice.
 - Incident deletion removes timeline, notes, and custom-field values.
 - Public status and RSS history cannot show deleted records.
-- Audit records and the per-process System Logs buffer are unaffected.
+- Audit records and incident events are removed when their Audit & Event History period expires; the per-process System Logs buffer is unaffected.
 
-Before reducing a window, identify legal and reporting needs, restore-test a recent backup, export required data, reconcile Preview, notify data owners, observe execution, and verify analytics, status history, storage, and job logs.
+Before reducing a window, identify legal and reporting needs, restore-test a recent backup, export required data, reconcile Preview, notify data owners, observe execution, and verify analytics, status history, storage, and job logs. OpsKnight does not provide a legal hold or immutable archive, so preserve records subject to either requirement outside the cleanup path first.
 
 If cleanup fails, preserve the error and check PostgreSQL health, application logs, and migration activity before retrying.
 
