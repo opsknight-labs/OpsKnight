@@ -512,6 +512,20 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                       <div className="space-y-3 pt-1">
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                              Webhook Ingest URL
+                            </Label>
+                            <CopyButton text={webhookUrl} />
+                          </div>
+                          <Input
+                            readOnly
+                            value={webhookUrl}
+                            className="font-mono text-xs bg-muted/40 h-8 text-ellipsis"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
                             <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                               <Key className="h-3 w-3" /> Routing / API Key
                             </Label>

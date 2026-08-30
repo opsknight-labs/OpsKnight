@@ -28,7 +28,7 @@ Application **Responders** and **Admins** can manage service integrations.
 2. Select **Add Monitoring Integration** to browse available providers by category.
 3. Choose a provider type, enter a descriptive integration name, and create the integration.
 4. From the newly generated integration card:
-   - For **Events API v2**: copy the unique **Routing / API Key** and use the provided `curl` quick test.
+   - For **Events API v2**: copy the **Webhook Ingest URL** (`/api/events`) and unique **Routing / API Key**, and use the provided `curl` quick test.
    - For **Provider Webhooks**: copy the complete **Webhook Ingest URL**.
 5. **Optional Signature Verification**: By default, signature verification is disabled (`No secret configured`), allowing senders that do not support HMAC signatures to function with standard key authentication. If your upstream provider supports HMAC webhook signing, click **Generate Secret** and configure the resulting 32-byte secret in your provider's webhook settings.
 6. Send a synthetic trigger and recovery alert to verify intake.
