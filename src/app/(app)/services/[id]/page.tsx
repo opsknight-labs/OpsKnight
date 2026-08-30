@@ -36,6 +36,9 @@ import {
   ExternalLink,
   Plus,
   Server,
+  Key,
+  Terminal,
+  Webhook,
 } from 'lucide-react';
 
 // Custom Components
@@ -53,7 +56,7 @@ import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings'
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { IntegrationType } from '@/components/service/integration-types';
+import { INTEGRATION_TYPES, IntegrationType } from '@/components/service/integration-types';
 
 export const revalidate = 0;
 
@@ -421,58 +424,151 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       {service.integrations && service.integrations.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {service.integrations.map((integration: any) => {
-            const webhookUrl = getWebhookUrl(
-              integration.type as IntegrationType,
-              integration.id,
-              integration.key
-            );
+            const integrationType = integration.type as IntegrationType;
+            const typeInfo = INTEGRATION_TYPES.find(t => t.value === integrationType) || {
+              label: integration.type,
+              icon: <Webhook className="h-5 w-5 text-white" />,
+              category: 'Other' as const,
+              iconBg: '#475569',
+            };
+            const webhookUrl = getWebhookUrl(integrationType, integration.id, integration.key);
 
             return (
-              <Card key={integration.id} className="border-border shadow-xs">
+              <Card
+                key={integration.id}
+                className="border-border shadow-xs flex flex-col justify-between overflow-hidden"
+              >
                 <CardHeader className="pb-3 border-b bg-muted/20">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-sm font-bold">{integration.name}</CardTitle>
-                      <CardDescription className="text-[11px] font-mono mt-0.5">
-                        {integration.type}
-                      </CardDescription>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-10 h-10 flex items-center justify-center rounded-xl shadow-xs ring-1 ring-black/5 shrink-0"
+                        style={{ backgroundColor: typeInfo.iconBg }}
+                      >
+                        {typeInfo.icon}
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <CardTitle className="text-sm font-bold truncate" title={integration.name}>
+                          {integration.name}
+                        </CardTitle>
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <span className="font-mono font-medium">{typeInfo.label}</span>
+                          <span>•</span>
+                          <span>
+                            {new Date(integration.createdAt).toLocaleDateString('en-US', {
+                              timeZone: 'UTC',
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <IntegrationStatusToggle
-                      integrationId={integration.id}
-                      serviceId={id}
-                      initialEnabled={integration.enabled}
-                      canManage={canManageService}
-                    />
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <IntegrationStatusToggle
+                        integrationId={integration.id}
+                        serviceId={id}
+                        initialEnabled={integration.enabled}
+                        canManage={canManageService}
+                      />
+                      {canManageService && (
+                        <DeleteIntegrationButton
+                          action={async () => {
+                            'use server';
+                            await deleteIntegration(integration.id, id);
+                          }}
+                          integrationName={integration.name}
+                          variant="icon"
+                        />
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-4 space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-[11px] text-muted-foreground">
-                      Webhook Endpoint URL
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        readOnly
-                        value={webhookUrl}
-                        className="font-mono text-xs bg-muted/40 h-8 text-ellipsis"
-                      />
-                      <CopyButton text={webhookUrl} />
-                    </div>
-                  </div>
 
-                  <div className="pt-2 border-t flex items-center justify-between">
-                    <IntegrationSecretControl
-                      integrationId={integration.id}
-                      serviceId={id}
-                      hasSecret={Boolean(integration.key)}
-                    />
-                    <DeleteIntegrationButton
-                      action={async () => {
-                        'use server';
-                        await deleteIntegration(integration.id, id);
-                      }}
-                      integrationName={integration.name}
-                    />
+                <CardContent className="p-4 space-y-4 flex-1 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-muted/30 p-2 rounded-lg border border-border/50">
+                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block mb-0.5">
+                          Type
+                        </span>
+                        <span className="font-medium text-foreground text-xs">
+                          {typeInfo.label}
+                        </span>
+                      </div>
+                      <div className="bg-muted/30 p-2 rounded-lg border border-border/50">
+                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block mb-0.5">
+                          Category
+                        </span>
+                        <span className="font-medium text-foreground text-xs">
+                          {typeInfo.category}
+                        </span>
+                      </div>
+                    </div>
+
+                    {integrationType === 'EVENTS_API_V2' ? (
+                      <div className="space-y-3 pt-1">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                              <Key className="h-3 w-3" /> Routing / API Key
+                            </Label>
+                            <CopyButton text={integration.key} />
+                          </div>
+                          <Input
+                            readOnly
+                            value={integration.key}
+                            className="font-mono text-xs bg-muted/40 h-8"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <Terminal className="h-3 w-3" /> Quick Test
+                          </div>
+                          <pre className="bg-slate-950 text-slate-200 p-2.5 rounded-lg overflow-x-auto text-[10px] font-mono leading-relaxed border border-slate-800 shadow-inner">
+                            <span className="text-purple-400">curl</span> -X POST {webhookUrl} \
+                            <br />
+                            &nbsp; -H{' '}
+                            <span className="text-green-400">
+                              "Authorization: Token token={integration.key.substring(0, 8)}..."
+                            </span>{' '}
+                            \<br />
+                            &nbsp; -d{' '}
+                            <span className="text-yellow-400">
+                              '{`{ "event_action": "trigger", "summary": "Alert" }`}'
+                            </span>
+                          </pre>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 pt-1">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                              Webhook Ingest URL
+                            </Label>
+                            <CopyButton text={webhookUrl} />
+                          </div>
+                          <Input
+                            readOnly
+                            value={webhookUrl}
+                            className="font-mono text-xs bg-muted/40 h-8 text-ellipsis"
+                          />
+                        </div>
+
+                        <div className="pt-2 border-t border-dashed border-border/80">
+                          <IntegrationSecretControl
+                            integrationId={integration.id}
+                            serviceId={id}
+                            hasSecret={Boolean(integration.signatureSecret)}
+                            className="w-full"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
