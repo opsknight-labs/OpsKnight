@@ -8,20 +8,39 @@ import crypto from 'crypto';
 import { decryptStoredSecret } from './encryption';
 import { retry } from './retry';
 import { CircuitBreakers } from './circuit-breaker';
+import {
+  isStatusDeliveryComplete,
+  markStatusDeliveryComplete,
+  statusDeliveryMarkerId,
+  statusWebhookDeliveryId,
+  statusWebhookDeliveryKey,
+} from './status-page-delivery';
 
 export interface WebhookPayload {
   event: string;
   timestamp: string;
-  data: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  data: unknown;
+}
+
+function asWebhookRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return { value };
 }
 
 /**
- * Deliver webhook payload to a URL
+ * Deliver webhook payload to a URL.
+ *
+ * The caller may provide a semantic delivery ID. Keeping this identifier stable
+ * across durable retries lets receivers implement exactly-once effects even
+ * though HTTP itself remains at-least-once.
  */
 export async function deliverWebhook(
   url: string,
   secret: string,
-  payload: WebhookPayload
+  payload: WebhookPayload,
+  deliveryId: string = crypto.randomUUID()
 ): Promise<boolean> {
   try {
     // SSRF Protection: Validate webhook URL before making request
@@ -39,13 +58,14 @@ export async function deliverWebhook(
       .createHmac('sha256', secret)
       .update(`${signatureTimestamp}.${payloadString}`)
       .digest('hex');
-    const deliveryId = crypto.randomUUID();
 
     const cb = CircuitBreakers.webhook(url);
 
     const retryResult = await retry(
       async () => {
         const response = await cb.execute(async () => {
+          // Revalidate on every network attempt to defend against DNS rebinding
+          // and configuration changes between retries.
           await assertSafeOutboundUrl(url);
           const res = await fetch(url, {
             method: 'POST',
@@ -88,6 +108,7 @@ export async function deliverWebhook(
     if (!retryResult.success || !retryResult.data) {
       logger.warn('api.status_page.webhook.delivery_failed', {
         url,
+        deliveryId,
         error:
           retryResult.error instanceof Error
             ? retryResult.error.message
@@ -108,13 +129,15 @@ export async function deliverWebhook(
 
     logger.warn('api.status_page.webhook.delivery_failed_status', {
       url,
+      deliveryId,
       status: response.status,
       statusText: response.statusText,
     });
     return false;
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('api.status_page.webhook.delivery_error', {
       url,
+      deliveryId,
       error: error instanceof Error ? error.message : String(error),
     });
     return false;
@@ -146,7 +169,7 @@ export async function getStatusPagesForService(serviceId: string): Promise<strin
     return statusPageServices
       .filter(sps => sps.statusPage.enabled && sps.statusPage.showIncidents)
       .map(sps => sps.statusPageId);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('api.status_page.get_status_pages_for_service_error', {
       serviceId,
       error: error instanceof Error ? error.message : String(error),
@@ -156,12 +179,17 @@ export async function getStatusPagesForService(serviceId: string): Promise<strin
 }
 
 /**
- * Trigger webhooks for a status page event
+ * Trigger webhooks for a status page event.
+ *
+ * Delivery completion is persisted per webhook target. If a durable parent job
+ * is retried after partial success, already-completed targets are skipped and
+ * only failed targets are attempted again.
  */
 export async function triggerStatusPageWebhooks(
   statusPageId: string,
   event: string,
-  data: any // eslint-disable-line @typescript-eslint/no-explicit-any
+  data: unknown,
+  deliveryKey?: string
 ): Promise<{ attempted: number; failed: number }> {
   try {
     const allWebhooks = await prisma.statusPageWebhook.findMany({
@@ -181,6 +209,11 @@ export async function triggerStatusPageWebhooks(
       return { attempted: 0, failed: 0 };
     }
 
+    const effectiveDeliveryKey = statusWebhookDeliveryKey(
+      event,
+      asWebhookRecord(data),
+      deliveryKey
+    );
     const payload: WebhookPayload = {
       event,
       timestamp: new Date().toISOString(),
@@ -189,26 +222,60 @@ export async function triggerStatusPageWebhooks(
 
     // Deliver to webhooks in concurrency-controlled batches
     const BATCH_SIZE = 25;
+    let attempted = 0;
     let failed = 0;
     for (let i = 0; i < webhooks.length; i += BATCH_SIZE) {
       const batch = webhooks.slice(i, i + BATCH_SIZE);
       const results = await Promise.allSettled(
-        batch.map(async webhook =>
-          deliverWebhook(webhook.url, await decryptStoredSecret(webhook.secret), payload)
-        )
+        batch.map(async webhook => {
+          const markerId = statusDeliveryMarkerId(
+            'STATUS_WEBHOOK',
+            effectiveDeliveryKey,
+            webhook.id
+          );
+          if (await isStatusDeliveryComplete(markerId)) {
+            return { attempted: false, success: true };
+          }
+
+          const stableDeliveryId = statusWebhookDeliveryId(effectiveDeliveryKey, webhook.id);
+          const success = await deliverWebhook(
+            webhook.url,
+            await decryptStoredSecret(webhook.secret),
+            payload,
+            stableDeliveryId
+          );
+
+          if (success) {
+            await markStatusDeliveryComplete({
+              markerId,
+              target: 'STATUS_WEBHOOK',
+              deliveryKey: effectiveDeliveryKey,
+              targetId: webhook.id,
+            });
+          }
+
+          return { attempted: true, success };
+        })
       );
+
+      attempted += results.filter(
+        result => result.status === 'fulfilled' && result.value.attempted
+      ).length;
       failed += results.filter(
-        result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value)
+        result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.success)
       ).length;
     }
 
     logger.info('api.status_page.webhooks.triggered', {
       statusPageId,
       event,
+      deliveryKey: effectiveDeliveryKey,
       webhookCount: webhooks.length,
+      attempted,
+      failed,
     });
-    return { attempted: webhooks.length, failed };
-  } catch (error: any) {
+    return { attempted, failed };
+  } catch (error: unknown) {
     logger.error('api.status_page.webhooks.trigger_error', {
       statusPageId,
       event,
@@ -225,18 +292,21 @@ export async function triggerStatusPageWebhooks(
 export async function triggerWebhooksForService(
   serviceId: string,
   event: string,
-  incidentData: any // eslint-disable-line @typescript-eslint/no-explicit-any
+  incidentData: unknown,
+  deliveryKey?: string
 ): Promise<{ attempted: number; failed: number; skipped?: boolean }> {
   try {
+    const incidentRecord = asWebhookRecord(incidentData);
+
     // Incident visibility is security-sensitive: load it from the database
     // instead of trusting an optional caller-supplied payload field.
-    if (incidentData?.id) {
+    if (typeof incidentRecord.id === 'string' && incidentRecord.id) {
       const inc = await prisma.incident.findUnique({
-        where: { id: incidentData.id },
+        where: { id: incidentRecord.id },
         select: { visibility: true },
       });
       if (!inc || inc.visibility !== 'PUBLIC') return { attempted: 0, failed: 0, skipped: true };
-    } else if (incidentData?.visibility !== 'PUBLIC') {
+    } else if (incidentRecord.visibility !== 'PUBLIC') {
       return { attempted: 0, failed: 0, skipped: true };
     }
 
@@ -251,7 +321,7 @@ export async function triggerWebhooksForService(
     // Trigger webhooks for all associated status pages in parallel
     const results = await Promise.allSettled(
       statusPageIds.map(statusPageId =>
-        triggerStatusPageWebhooks(statusPageId, event, incidentData)
+        triggerStatusPageWebhooks(statusPageId, event, incidentData, deliveryKey)
       )
     );
     return results.reduce(
@@ -265,7 +335,7 @@ export async function triggerWebhooksForService(
       },
       { attempted: 0, failed: 0 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('api.status_page.webhook.trigger_for_service_fatal_error', {
       serviceId,
       event,

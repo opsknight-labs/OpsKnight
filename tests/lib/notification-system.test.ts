@@ -202,7 +202,7 @@ describe('Notification System Tests', () => {
       const notifModule = await import('@/lib/notifications');
       const sendNotifSpy = vi
         .spyOn(notifModule, 'sendNotification')
-        .mockResolvedValue({ success: true, notificationId: 'notif-1' });
+        .mockResolvedValue({ success: true, outcome: 'DELIVERED', notificationId: 'notif-1' });
 
       vi.spyOn(notificationProviders, 'isChannelAvailable').mockResolvedValue(true);
 

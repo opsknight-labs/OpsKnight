@@ -47,6 +47,17 @@ async function postEvent(req: NextRequest) {
           })
         );
       }
+      // Routing keys are provider-scoped. Accepting a key generated for a
+      // provider integration here would bypass that provider route's parser
+      // and optional signature verification.
+      if (integration.type !== 'EVENTS_API_V2') {
+        return jsonError(
+          new AppError({
+            code: 'INTEGRATION_AUTHENTICATION_FAILED',
+            userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+          })
+        );
+      }
       integrationId = integration.id;
       serviceId = integration.serviceId;
     } else {

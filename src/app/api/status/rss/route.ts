@@ -5,6 +5,15 @@ import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
+import { publicStatusVisibility } from '@/lib/status-page-public-data';
+import { createHash } from 'node:crypto';
+
+export function opaqueRssIncidentGuid(baseUrl: string, statusPageId: string, incidentId: string): string {
+  const opaqueId = createHash('sha256')
+    .update(`${statusPageId}\u0000${incidentId}`)
+    .digest('hex');
+  return `${baseUrl}/status#update-${opaqueId}`;
+}
 
 /**
  * RSS Feed for Status Page
@@ -54,13 +63,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const visibility = publicStatusVisibility(statusPage);
+
     const serviceIds = statusPage.services.map(sp => sp.serviceId);
 
     const baseUrl = getBaseUrl();
 
     const { calculateSLAMetrics } = await import('@/lib/sla-server');
     const metrics =
-      serviceIds.length > 0
+      visibility.showIncidents && serviceIds.length > 0
         ? await calculateSLAMetrics({
             serviceId: serviceIds,
             windowDays: 30, // Last 30 days
@@ -70,7 +81,7 @@ export async function GET(req: NextRequest) {
           })
         : null;
 
-    const incidents = statusPage.showIncidents ? metrics?.recentIncidents || [] : [];
+    const incidents = visibility.showIncidents ? metrics?.recentIncidents || [] : [];
 
     const description = metrics?.isClipped
       ? `Current status and incidents (limited to ${metrics.retentionDays} days retention)`
@@ -93,21 +104,28 @@ export async function GET(req: NextRequest) {
                 : incident.status === 'ACKNOWLEDGED'
                   ? 'Acknowledged'
                   : 'Investigating';
-            const pubDate = new Date(incident.createdAt).toUTCString();
-            const guid = `${baseUrl}/status#incident-${incident.id}`;
-            const serviceName = incident.service?.name || 'General';
-            const incidentDetails = statusPage.showIncidentDescriptions
-              ? incident.description || incident.title
-              : incident.title;
+            const pubDate = visibility.showIncidentTimestamp
+              ? new Date(incident.createdAt).toUTCString()
+              : null;
+            const guid = visibility.showIncidentId
+              ? `${baseUrl}/status#incident-${incident.id}`
+              : opaqueRssIncidentGuid(baseUrl, statusPage.id, incident.id);
+            const serviceName = visibility.showAffectedService
+              ? incident.service?.name || 'General'
+              : null;
+            const incidentTitle = visibility.showIncidentTitle ? incident.title : 'Status update';
+            const incidentDetails = visibility.showIncidentDescription
+              ? incident.description || incidentTitle
+              : incidentTitle;
 
             return `
         <item>
-            <title>${escapeXml(incident.title)} - ${status}</title>
+            <title>${escapeXml(incidentTitle)} - ${status}</title>
             <link>${guid}</link>
             <guid isPermaLink="false">${guid}</guid>
-            <pubDate>${pubDate}</pubDate>
-            <description>${escapeXml(incidentDetails)} - Service: ${escapeXml(serviceName)}</description>
-            <category>${escapeXml(serviceName)}</category>
+            ${pubDate ? `<pubDate>${pubDate}</pubDate>` : ''}
+            <description>${escapeXml(incidentDetails)}${serviceName ? ` - Service: ${escapeXml(serviceName)}` : ''}</description>
+            ${serviceName ? `<category>${escapeXml(serviceName)}</category>` : ''}
         </item>`;
           })
           .join('')}

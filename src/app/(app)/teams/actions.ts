@@ -421,6 +421,14 @@ export async function removeTeamMember(memberId: string): Promise<{ error?: stri
       where: { id: memberId },
     });
 
+    // Team membership is part of the authorization scope. Revoke existing
+    // sessions so regular requests and long-lived streams cannot retain the
+    // removed team's access.
+    await tx.user.update({
+      where: { id: member.userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+
     // Clear teamLeadId if the removed member was the team lead
     await tx.team.updateMany({
       where: { id: member.teamId, teamLeadId: member.userId },

@@ -26,7 +26,11 @@ export async function sendNotification(
   eventType: NotificationEventType = 'triggered'
 ) {
   if (!NOTIFICATION_CHANNELS.includes(channel)) {
-    return { success: false, error: `Unknown channel: ${String(channel)}` };
+    return {
+      success: false,
+      outcome: 'PERMANENT_FAILURE' as const,
+      error: `Unknown channel: ${String(channel)}`,
+    };
   }
 
   // Responder eligibility is security- and correctness-sensitive. Validate it
@@ -63,6 +67,7 @@ export async function sendNotification(
     if (existingNotification) {
       return {
         success: true,
+        outcome: 'DELIVERED' as const,
         notificationId: existingNotification.id,
         debounced: true,
       };
@@ -126,7 +131,7 @@ export async function sendNotification(
         }
       } catch (_) {}
 
-      return { success: true, notificationId: notification.id };
+      return { success: true, outcome: 'DELIVERED' as const, notificationId: notification.id };
     }
 
     if (result.outcome === 'SKIPPED') {
@@ -138,7 +143,8 @@ export async function sendNotification(
         },
       });
       return {
-        success: false,
+        success: true,
+        outcome: 'SKIPPED' as const,
         skipped: true,
         terminal: true,
         error: result.error,
@@ -163,6 +169,7 @@ export async function sendNotification(
     });
     return {
       success: false,
+      outcome: result.outcome,
       terminal: permanentFailure,
       circuitOpen,
       error: result.error || 'Notification delivery failed',
@@ -183,6 +190,7 @@ export async function sendNotification(
 
     return {
       success: false,
+      outcome: 'RETRYABLE_FAILURE' as const,
       error: errorMessage,
       notificationId: notification.id,
       circuitOpen: false,

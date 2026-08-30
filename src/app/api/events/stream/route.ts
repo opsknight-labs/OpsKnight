@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
+  hasSameStreamAuthorizationScope,
+  resolveStreamAuthorization,
+  type StreamAuthorization,
+} from '@/lib/realtime-stream-authorization';
+import {
   getCachedDashboardMetrics,
   getCachedServiceIncidents,
   getCachedIncidentDetails,
@@ -47,11 +52,20 @@ export async function GET(req: NextRequest) {
   const incidentId = searchParams.get('incidentId');
   const serviceId = searchParams.get('serviceId');
 
-  const isPrivileged = hasCapability(user.role, CAPABILITIES.INCIDENT_READ_ALL);
+  const initialAuthorization = await resolveStreamAuthorization(user.id, sessionTokenVersion);
+  if (!initialAuthorization) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+  let streamAuthorization: StreamAuthorization = initialAuthorization;
+
+  let isPrivileged = hasCapability(
+    streamAuthorization.role,
+    CAPABILITIES.INCIDENT_READ_ALL
+  );
   const hasTeamAccess = (teamId?: string | null) => {
     if (isPrivileged) return true;
     if (!teamId) return false;
-    return user.teamMemberships.some(membership => membership.teamId === teamId);
+    return streamAuthorization.teamIds.includes(teamId);
   };
 
   if (incidentId) {
@@ -129,47 +143,54 @@ export async function GET(req: NextRequest) {
         tickCount++;
         try {
           if (tickCount % 12 === 0) {
-            const currentUser = await prisma.user.findUnique({
-              where: { id: user.id },
-              select: {
-                status: true,
-                role: true,
-                tokenVersion: true,
-                teamMemberships: { select: { teamId: true } },
-              },
-            });
-            const currentTeamIds = new Set(
-              currentUser?.teamMemberships.map(membership => membership.teamId) || []
+            const nextAuthorization = await resolveStreamAuthorization(
+              user.id,
+              sessionTokenVersion
             );
-            let stillAuthorized =
-              currentUser?.status === 'ACTIVE' &&
-              (currentUser.tokenVersion ?? 0) === sessionTokenVersion;
-            const currentlyPrivileged = currentUser
-              ? hasCapability(currentUser.role, CAPABILITIES.INCIDENT_READ_ALL)
-              : false;
-            if (stillAuthorized && !currentlyPrivileged && incidentId) {
-              const target = await prisma.incident.findUnique({
-                where: { id: incidentId },
-                select: { service: { select: { teamId: true } } },
-              });
-              stillAuthorized = Boolean(
-                target?.service.teamId && currentTeamIds.has(target.service.teamId)
-              );
-            }
-            if (stillAuthorized && !currentlyPrivileged && serviceId) {
-              const target = await prisma.service.findUnique({
-                where: { id: serviceId },
-                select: { teamId: true },
-              });
-              stillAuthorized = Boolean(target?.teamId && currentTeamIds.has(target.teamId));
-            }
-            if (!stillAuthorized) {
+            if (
+              !nextAuthorization ||
+              !hasSameStreamAuthorizationScope(streamAuthorization, nextAuthorization)
+            ) {
               send({ type: 'authorization_revoked' });
               cleanup();
               try {
                 controller.close();
               } catch {}
               return;
+            }
+            streamAuthorization = nextAuthorization;
+            isPrivileged = hasCapability(
+              streamAuthorization.role,
+              CAPABILITIES.INCIDENT_READ_ALL
+            );
+
+            if (!isPrivileged && incidentId) {
+              const target = await prisma.incident.findUnique({
+                where: { id: incidentId },
+                select: { service: { select: { teamId: true } } },
+              });
+              if (!target?.service.teamId || !streamAuthorization.teamIds.includes(target.service.teamId)) {
+                send({ type: 'authorization_revoked' });
+                cleanup();
+                try {
+                  controller.close();
+                } catch {}
+                return;
+              }
+            }
+            if (!isPrivileged && serviceId) {
+              const target = await prisma.service.findUnique({
+                where: { id: serviceId },
+                select: { teamId: true },
+              });
+              if (!target?.teamId || !streamAuthorization.teamIds.includes(target.teamId)) {
+                send({ type: 'authorization_revoked' });
+                cleanup();
+                try {
+                  controller.close();
+                } catch {}
+                return;
+              }
             }
           }
           let sentUpdate = false;
@@ -212,11 +233,10 @@ export async function GET(req: NextRequest) {
             }
           } else {
             // Stream dashboard updates using cached metrics
-            const teamIds = user.teamMemberships.map(m => m.teamId);
             const result = await getCachedDashboardMetrics(
               user.id,
-              user.role,
-              teamIds,
+              streamAuthorization.role,
+              [...streamAuthorization.teamIds],
               lastDataHash
             );
 

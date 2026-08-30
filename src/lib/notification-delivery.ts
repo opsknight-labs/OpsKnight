@@ -34,6 +34,35 @@ export type NotificationDeliveryOutcome =
   | 'PERMANENT_FAILURE'
   | 'CIRCUIT_OPEN';
 
+/**
+ * The durable outbox uses this contract to decide whether a notification job
+ * completed, should be retried, or has reached a terminal state. Policy
+ * decisions such as quiet hours and no enabled channels are successful skips,
+ * not delivery failures.
+ */
+export interface NotificationDeliveryResult {
+  success: boolean;
+  outcome: NotificationDeliveryOutcome;
+  errors?: string[];
+  error?: string;
+}
+
+export function isRetryableNotificationOutcome(outcome: NotificationDeliveryOutcome): boolean {
+  return outcome === 'RETRYABLE_FAILURE' || outcome === 'CIRCUIT_OPEN';
+}
+
+function providerFailureResult(result: {
+  success: boolean;
+  error?: string;
+  retryable?: boolean;
+}): NotificationAttemptResult {
+  return {
+    success: false,
+    outcome: result.retryable === false ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
+    error: result.error || 'Notification delivery failed',
+  };
+}
+
 export interface NotificationRetryPolicy {
   maxAttempts: number;
   initialDelayMs: number;
@@ -114,7 +143,7 @@ export async function dispatchNotificationAttempt(
         const { sendIncidentEmail } = await import('./email');
         return await CircuitBreakers.email().execute(async () => {
           const result = await sendIncidentEmail(input.userId, input.incidentId, type);
-          if (!result.success) throw new Error(result.error || 'Email delivery failed');
+          if (!result.success) return providerFailureResult(result);
           return { ...result, success: true, outcome: 'DELIVERED' };
         });
       }
@@ -127,7 +156,7 @@ export async function dispatchNotificationAttempt(
             type,
             input.notificationId
           );
-          if (!result.success) throw new Error(result.error || 'SMS delivery failed');
+          if (!result.success) return providerFailureResult(result);
           return {
             ...result,
             success: true,
@@ -144,7 +173,7 @@ export async function dispatchNotificationAttempt(
           if (result.code === 'NO_DEVICE_TOKENS' || result.code === 'NO_WEB_SUBSCRIPTIONS') {
             return { ...result, outcome: 'SKIPPED', skipped: true };
           }
-          throw new Error(result.error || 'Push delivery failed');
+          return providerFailureResult(result);
         });
       }
       case 'WEBHOOK': {
@@ -159,7 +188,7 @@ export async function dispatchNotificationAttempt(
         const { sendIncidentWebhook } = await import('./webhooks');
         return await CircuitBreakers.webhook(webhookUrl).execute(async () => {
           const result = await sendIncidentWebhook(webhookUrl, input.incidentId, type);
-          if (!result.success) throw new Error(result.error || 'Webhook delivery failed');
+          if (!result.success) return providerFailureResult(result);
           return { ...result, success: true, outcome: 'DELIVERED' };
         });
       }
@@ -172,7 +201,7 @@ export async function dispatchNotificationAttempt(
             type,
             input.notificationId
           );
-          if (!result.success) throw new Error(result.error || 'WhatsApp delivery failed');
+          if (!result.success) return providerFailureResult(result);
           return {
             ...result,
             success: true,
@@ -192,6 +221,13 @@ export async function dispatchNotificationAttempt(
         success: false,
         outcome: 'CIRCUIT_OPEN',
         error: `Service unavailable (circuit open): ${error.serviceName}`,
+      };
+    }
+    if (error instanceof Error && 'retryable' in error && error.retryable === false) {
+      return {
+        success: false,
+        outcome: 'PERMANENT_FAILURE',
+        error: error.message,
       };
     }
     return {
