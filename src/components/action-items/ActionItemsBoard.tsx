@@ -49,6 +49,7 @@ export interface BoardActionItem extends ActionItem {
   incidentTitle: string;
   serviceName: string;
   createdAt: Date;
+  completedAt?: Date | string | null;
 }
 
 export interface ActionItemsBoardProps {
