@@ -12,7 +12,8 @@ import {
   normalizeIncidentStatus,
 } from '@/lib/incidents-query';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/shadcn/card';
-import { AlertTriangle } from 'lucide-react';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from 'lucide-react';
 
 export const revalidate = 0;
 
@@ -167,62 +168,67 @@ export default async function IncidentsPage({
   ].filter((value): value is string => Boolean(value));
 
   return (
-    <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
-      {/* Metric panel: keep same */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg p-4 md:p-6 shadow-lg">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2 text-white">
-              <AlertTriangle className="h-6 w-6 md:h-8 md:w-8" />
-              Incidents
-            </h1>
-            <p className="text-xs md:text-sm opacity-90 mt-1 text-white">
-              {validCreatedAfter || validCreatedBefore
-                ? 'Counts scoped to the selected incident creation period'
-                : 'Current-state counts across all retained incident records'}
-            </p>
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Centralized Hero Header with 5-Stat Drilldown Pills */}
+      <DetailHeroBanner
+        tag="Real-Time Response Center"
+        title="Incidents"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <AlertTriangle className="h-6 w-6" aria-hidden="true" />
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-4 w-full lg:w-auto">
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold">{mineCount}</div>
-                <div className="text-[10px] md:text-xs opacity-90">Mine</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-red-200">{activeCount}</div>
-                <div className="text-[10px] md:text-xs opacity-90">Active</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-green-200">
-                  {resolvedCount}
-                </div>
-                <div className="text-[10px] md:text-xs opacity-90">Resolved</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-yellow-200">
-                  {snoozedCount}
-                </div>
-                <div className="text-[10px] md:text-xs opacity-90">Snoozed</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-gray-200">
-                  {suppressedCount}
-                </div>
-                <div className="text-[10px] md:text-xs opacity-90">Suppressed</div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            {validCreatedAfter || validCreatedBefore
+              ? 'Counts scoped to the selected incident creation period'
+              : 'Monitor real-time outages, coordinate incident triage, manage on-call assignments, and restore services.'}
+          </p>
+        }
+        stats={[
+          {
+            label: 'Mine',
+            value: mineCount,
+            icon: <User className="h-3.5 w-3.5" />,
+            href: '/incidents?filter=mine',
+            active: currentFilter === 'mine',
+          },
+          {
+            label: 'Active',
+            value: activeCount,
+            icon: <AlertCircle className="h-3.5 w-3.5 text-rose-200" />,
+            valueClassName: activeCount > 0 ? 'text-rose-200' : undefined,
+            href: '/incidents?filter=all',
+            active:
+              currentFilter === 'all' &&
+              (!currentStatus || currentStatus === 'OPEN' || currentStatus === 'ACKNOWLEDGED'),
+          },
+          {
+            label: 'Resolved',
+            value: resolvedCount,
+            icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName: resolvedCount > 0 ? 'text-emerald-200' : undefined,
+            href: '/incidents?status=RESOLVED',
+            active: currentStatus === 'RESOLVED',
+          },
+          {
+            label: 'Snoozed',
+            value: snoozedCount,
+            icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
+            valueClassName: snoozedCount > 0 ? 'text-amber-200' : undefined,
+            href: '/incidents?status=SNOOZED',
+            active: currentStatus === 'SNOOZED',
+          },
+          {
+            label: 'Suppressed',
+            value: suppressedCount,
+            icon: <ShieldOff className="h-3.5 w-3.5 text-slate-200" />,
+            valueClassName: suppressedCount > 0 ? 'text-slate-200' : undefined,
+            href: '/incidents?status=SUPPRESSED',
+            active: currentStatus === 'SUPPRESSED',
+          },
+        ]}
+      />
 
       {drilldownScope.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
