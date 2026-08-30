@@ -33,29 +33,35 @@ const SEVERITY_TO_URGENCY: Record<EventSeverity, IncidentUrgency> = {
   info: 'LOW',
 };
 
+const URGENCY_RANK: Record<IncidentUrgency, number> = {
+  LOW: 0,
+  MEDIUM: 1,
+  HIGH: 2,
+};
+
 function mapSeverityToUrgency(severity: EventSeverity): IncidentUrgency {
   return SEVERITY_TO_URGENCY[severity] ?? 'MEDIUM'; // Default to MEDIUM if unknown
+}
+
+function maxUrgency(current: IncidentUrgency, incoming: IncidentUrgency): IncidentUrgency {
+  return URGENCY_RANK[incoming] > URGENCY_RANK[current] ? incoming : current;
 }
 
 // Maximum description length to prevent DB insert failures
 const MAX_DESCRIPTION_LENGTH = 10000;
 
-// Sanitize text to prevent XSS and remove control characters
-function sanitizeText(text: string): string {
+/**
+ * Normalize externally supplied text for safe canonical storage.
+ *
+ * XSS escaping deliberately belongs at the HTML/rendering boundary. Persisting
+ * HTML entities here corrupts domain data for REST clients, webhooks, exports,
+ * and integrations and can result in double escaping in React/email renderers.
+ */
+function normalizeText(text: string): string {
   if (!text) return '';
-  return (
-    text
-      // Remove null bytes and control characters (except newlines/tabs)
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-      // Normalize Unicode to prevent homoglyph attacks
-      .normalize('NFC')
-      // Basic HTML entity encoding for XSS prevention
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;')
-  );
+  return text
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .normalize('NFC');
 }
 
 // Truncate long strings safely (handles unicode)
@@ -165,6 +171,8 @@ export async function processEvent(
     eventData.summary = `Alert from ${eventData.source}`;
   }
 
+  const normalizedSource = truncateString(normalizeText(eventData.source.trim()), 500);
+
   const result = await runReadCommittedTransaction(async tx => {
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
@@ -226,7 +234,7 @@ export async function processEvent(
       logger.info(`event.${event_action}_no_match`, {
         dedupKey: dedup_key,
         serviceId,
-        source: eventData.source,
+        source: normalizedSource,
       });
       return {
         action: 'ignored',
@@ -249,7 +257,7 @@ export async function processEvent(
       logger.info('event.resolve_buffered_for_out_of_order', {
         dedupKey: dedup_key,
         serviceId,
-        source: eventData.source,
+        source: normalizedSource,
         alertId: alert.id,
       });
       return {
@@ -261,26 +269,41 @@ export async function processEvent(
 
     if (event_action === 'trigger') {
       if (existingIncident) {
-        // Deduplication: Just append the alert to the incident
+        // Deduplication: append the alert and monotonically raise urgency when a
+        // stronger signal arrives. Alert retries must never lower an incident.
         await tx.alert.update({
           where: { id: alert.id },
           data: { incidentId: existingIncident.id },
         });
 
+        const incomingUrgency = mapSeverityToUrgency(eventData.severity);
+        const effectiveUrgency = maxUrgency(existingIncident.urgency, incomingUrgency);
+        const urgencyRaised = effectiveUrgency !== existingIncident.urgency;
+        if (urgencyRaised) {
+          await tx.incident.update({
+            where: { id: existingIncident.id },
+            data: { urgency: effectiveUrgency },
+          });
+          existingIncident.urgency = effectiveUrgency;
+        }
+
         // Log an event instead of note (no userId needed)
-        const safeSummary = truncateString(sanitizeText(eventData.summary.trim()), 500);
+        const safeSummary = truncateString(normalizeText(eventData.summary.trim()), 500);
         await tx.incidentEvent.create({
           data: {
             incidentId: existingIncident.id,
-            message: `Re-triggered by event from ${eventData.source}. Summary: ${safeSummary}`,
+            message: `Re-triggered by event from ${normalizedSource}. Summary: ${safeSummary}${urgencyRaised ? ` Urgency raised to ${effectiveUrgency}.` : ''}`,
           },
         });
 
         logger.info('event.deduplicated', {
           incidentId: existingIncident.id,
           dedupKey: dedup_key,
-          source: eventData.source,
+          source: normalizedSource,
           alertCount: 'appended',
+          incomingUrgency,
+          effectiveUrgency,
+          urgencyRaised,
         });
 
         return { action: 'deduplicated', incident: existingIncident };
@@ -301,8 +324,9 @@ export async function processEvent(
       // Create New Incident with proper severity → urgency mapping
       const urgency = mapSeverityToUrgency(eventData.severity);
 
-      // Sanitize title to prevent XSS and truncate to reasonable length
-      const sanitizedTitle = truncateString(sanitizeText(eventData.summary.trim()), 500);
+      // Keep canonical text in persistence. React/email/API boundaries are
+      // responsible for context-appropriate output escaping.
+      const sanitizedTitle = truncateString(normalizeText(eventData.summary.trim()), 500);
 
       // Creation is not a lifecycle transition. A buffered upstream resolve may
       // legitimately create the incident directly in its terminal state.
@@ -335,7 +359,7 @@ export async function processEvent(
         await tx.incidentEvent.create({
           data: {
             incidentId: resolvedIncident.id,
-            message: `Incident created in resolved state: resolve event was received prior to trigger event from ${eventData.source}`,
+            message: `Incident created in resolved state: resolve event was received prior to trigger event from ${normalizedSource}`,
           },
         });
 
@@ -344,7 +368,7 @@ export async function processEvent(
         logger.info('event.out_of_order_resolved', {
           incidentId: resolvedIncident.id,
           dedupKey: dedup_key,
-          source: eventData.source,
+          source: normalizedSource,
         });
 
         return { action: 'resolved', incident: resolvedIncident };
@@ -377,7 +401,7 @@ export async function processEvent(
         {
           incidentId: newIncident.id,
           dedupKey: dedup_key,
-          source: eventData.source,
+          source: normalizedSource,
           severity: eventData.severity,
           urgency,
           isFlapping,
@@ -395,8 +419,8 @@ export async function processEvent(
         data: {
           incidentId: newIncident.id,
           message: isFlapping
-            ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${eventData.source}. Notifications muted until signal stabilises.`
-            : `Incident triggered via API from ${eventData.source}`,
+            ? `Incident created in SUPPRESSED state: rapid alert oscillations detected from ${normalizedSource}. Notifications muted until signal stabilises.`
+            : `Incident triggered via API from ${normalizedSource}`,
         },
       });
 
@@ -422,7 +446,7 @@ export async function processEvent(
         incidentId: existingIncident!.id,
         command: 'RESOLVE',
         source: 'EVENT',
-        eventMessage: `Auto-resolved by event from ${eventData.source}.`,
+        eventMessage: `Auto-resolved by event from ${normalizedSource}.`,
       });
       const resolvedIncident = await reloadIncident(tx, existingIncident!.id);
 
@@ -433,7 +457,7 @@ export async function processEvent(
       logger.info('event.incident_resolved', {
         incidentId: resolvedIncident.id,
         dedupKey: dedup_key,
-        source: eventData.source,
+        source: normalizedSource,
         changed: transition.changed,
       });
 
@@ -463,7 +487,7 @@ export async function processEvent(
       logger.info('event.incident_acknowledged', {
         incidentId: ackIncident.id,
         dedupKey: dedup_key,
-        source: eventData.source,
+        source: normalizedSource,
         changed: transition.changed,
       });
 
@@ -474,7 +498,7 @@ export async function processEvent(
     logger.warn('event.unknown_action', {
       eventAction: event_action,
       dedupKey: dedup_key,
-      source: eventData.source,
+      source: normalizedSource,
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
   }, EVENT_TRANSACTION_MAX_ATTEMPTS);
