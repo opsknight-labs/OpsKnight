@@ -289,7 +289,8 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
                 page={page}
                 pageSize={pageSize}
                 totalCount={totalLogs}
-                pageHref={pageHref}
+                prevHref={page > 1 ? pageHref(page - 1) : undefined}
+                nextHref={page < totalPages ? pageHref(page + 1) : undefined}
               />
             </>
           )}
