@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
 import {
   Card,
   CardContent,
@@ -147,47 +147,40 @@ export default function UserDetailTabs({
     CLOSED: 'neutral',
   };
 
+  const tabItems = [
+    {
+      id: 'overview',
+      label: 'Overview',
+      icon: <User className="h-4 w-4" />,
+    },
+    {
+      id: 'teams',
+      label: 'Teams',
+      icon: <Users className="h-4 w-4" />,
+      count: user.teamMemberships.length,
+    },
+    {
+      id: 'schedules',
+      label: 'On-Call',
+      icon: <Calendar className="h-4 w-4" />,
+      count: user.layerAssignments.length,
+    },
+    {
+      id: 'activity',
+      label: 'Activity & Routing',
+      icon: <Activity className="h-4 w-4" />,
+    },
+  ];
+
   return (
-    <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-      {/* Standard Tab Navigation Bar */}
-      <div className="overflow-x-auto pb-1">
-        <TabsList className="grid h-auto min-w-[520px] grid-cols-4 rounded-xl border bg-card/90 p-1.5 shadow-xs">
-          <TabsTrigger
-            value="overview"
-            className="gap-2 rounded-lg py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-          >
-            <User className="h-4 w-4" />
-            Overview
-          </TabsTrigger>
-
-          <TabsTrigger
-            value="teams"
-            className="gap-2 rounded-lg py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-          >
-            <Users className="h-4 w-4" />
-            Teams ({user.teamMemberships.length})
-          </TabsTrigger>
-
-          <TabsTrigger
-            value="schedules"
-            className="gap-2 rounded-lg py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-          >
-            <Calendar className="h-4 w-4" />
-            On-Call ({user.layerAssignments.length})
-          </TabsTrigger>
-
-          <TabsTrigger
-            value="activity"
-            className="gap-2 rounded-lg py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-xs"
-          >
-            <Activity className="h-4 w-4" />
-            Activity & Routing
-          </TabsTrigger>
-        </TabsList>
-      </div>
-
+    <DetailTabs
+      tabs={tabItems}
+      defaultTab={defaultTab}
+      activeTab={activeTab}
+      onTabChange={handleTabChange}
+    >
       {/* TAB 1: Profile & Overview */}
-      <TabsContent value="overview" className="space-y-5 pt-1">
+      <DetailTabContent value="overview" className="space-y-5 pt-1">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Identity & Personal Info */}
           <Card className="border-border shadow-xs">
@@ -421,10 +414,10 @@ export default function UserDetailTabs({
             </CardContent>
           </Card>
         </div>
-      </TabsContent>
+      </DetailTabContent>
 
       {/* TAB 2: Teams & Lead Roles */}
-      <TabsContent value="teams" className="space-y-4 pt-1">
+      <DetailTabContent value="teams" className="space-y-4 pt-1">
         {user.teamMemberships.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {user.teamMemberships.map(membership => {
@@ -489,10 +482,10 @@ export default function UserDetailTabs({
             </CardContent>
           </Card>
         )}
-      </TabsContent>
+      </DetailTabContent>
 
       {/* TAB 3: On-Call Schedules & Rotation Layers */}
-      <TabsContent value="schedules" className="space-y-4 pt-1">
+      <DetailTabContent value="schedules" className="space-y-4 pt-1">
         {user.layerAssignments.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {user.layerAssignments.map(assignment => (
@@ -554,10 +547,10 @@ export default function UserDetailTabs({
             </CardContent>
           </Card>
         )}
-      </TabsContent>
+      </DetailTabContent>
 
       {/* TAB 4: Activity & Escalation Routing */}
-      <TabsContent value="activity" className="space-y-5 pt-1">
+      <DetailTabContent value="activity" className="space-y-5 pt-1">
         {/* Escalation Policies Targeting This User */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -689,7 +682,7 @@ export default function UserDetailTabs({
             </p>
           )}
         </div>
-      </TabsContent>
-    </Tabs>
+      </DetailTabContent>
+    </DetailTabs>
   );
 }

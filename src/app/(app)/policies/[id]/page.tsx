@@ -14,6 +14,7 @@ import {
   movePolicyStep,
   reorderPolicySteps,
 } from '../actions';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import {
   Card,
   CardContent,
@@ -314,85 +315,49 @@ export default async function PolicyDetailPage({
   );
 
   return (
-    <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-6">
-      {/* Navigation Breadcrumb Bar */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Link
-            href="/policies"
-            className="hover:text-foreground font-medium flex items-center gap-1 transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Escalation Policies
-          </Link>
-          <ChevronRight className="h-3 w-3 text-slate-400" />
-          <span className="text-foreground font-semibold truncate max-w-[200px]">
-            {policy.name}
-          </span>
-        </div>
-      </div>
-
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       {/* Centralized Hero Header */}
-      <div className="bg-gradient-to-r from-primary via-primary/95 to-primary/80 text-white rounded-2xl p-6 sm:p-7 shadow-lg relative overflow-hidden">
-        <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/5 pointer-events-none blur-2xl" />
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-1.5 max-w-2xl">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/15 text-white/90 backdrop-blur-xs border border-white/20">
-                Incident Response Routing
-              </span>
+      <DetailHeroBanner
+        breadcrumb={{
+          label: 'Escalation Policies',
+          href: '/policies',
+          current: policy.name,
+        }}
+        tag="Incident Response Routing"
+        title={policy.name}
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <ShieldAlert className="h-6 w-6" aria-hidden="true" />
+          </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            {policy.description || 'No description provided for this escalation policy.'}
+          </p>
+        }
+        stats={[
+          {
+            label: 'Steps',
+            value: policy.steps.length,
+          },
+          {
+            label: 'Services',
+            value: services.length,
+          },
+          {
+            label: 'Cycle Time',
+            value: `~${totalDuration}m`,
+          },
+        ]}
+        alert={
+          errorCode === 'duplicate-policy' ? (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              An escalation policy with this name already exists.
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2 text-white">
-              <ShieldAlert className="h-7 w-7 shrink-0 text-white/90" />
-              {policy.name}
-            </h1>
-            <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
-              {policy.description || 'No description provided for this escalation policy.'}
-            </p>
-          </div>
-
-          {/* 3-Stat Capsule */}
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5 w-full lg:w-auto shrink-0">
-            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
-              <CardContent className="p-3 sm:p-4 text-center">
-                <div className="text-xl sm:text-2xl font-black tracking-tight">
-                  {policy.steps.length}
-                </div>
-                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">Steps</div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
-              <CardContent className="p-3 sm:p-4 text-center">
-                <div className="text-xl sm:text-2xl font-black tracking-tight text-emerald-200">
-                  {services.length}
-                </div>
-                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
-                  Services
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/10 border-white/20 backdrop-blur-md text-white shadow-xs">
-              <CardContent className="p-3 sm:p-4 text-center">
-                <div className="text-xl sm:text-2xl font-black tracking-tight text-blue-200">
-                  ~{totalDuration}m
-                </div>
-                <div className="text-[10px] sm:text-xs text-white/75 font-medium mt-0.5">
-                  Cycle Time
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-
-      {errorCode === 'duplicate-policy' && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-medium flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4" />
-          An escalation policy with this name already exists.
-        </div>
-      )}
+          ) : undefined
+        }
+      />
 
       {/* Clean Tabbed Workspace Layout */}
       <PolicyDetailTabs
