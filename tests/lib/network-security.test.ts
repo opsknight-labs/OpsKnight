@@ -31,6 +31,9 @@ describe('outbound URL security', () => {
 
   it('blocks reserved IPv6 ranges', () => {
     expect(isPrivateIp('::')).toBe(true);
+    expect(isPrivateIp('::ffff:7f00:1')).toBe(true);
+    expect(isPrivateIp('::7f00:1')).toBe(true);
+    expect(isPrivateIp('fe90::1')).toBe(true);
     expect(isPrivateIp('2001:db8::1')).toBe(true);
     expect(isPrivateIp('ff02::1')).toBe(true);
     expect(isPrivateIp('2606:4700:4700::1111')).toBe(false);

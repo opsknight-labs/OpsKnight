@@ -16,6 +16,7 @@ import {
 import { getRateLimitStatus } from '@/lib/integrations/rate-limiter';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { assertCanViewService } from '@/lib/rbac';
 
 export async function GET(req: NextRequest) {
   try {
@@ -47,6 +48,12 @@ export async function GET(req: NextRequest) {
 
       if (!integration) {
         return jsonError('Integration not found', 404);
+      }
+
+      try {
+        await assertCanViewService(integration.service.id);
+      } catch {
+        return jsonError('Forbidden', 403);
       }
 
       const metrics = getMetricsByIntegration(integrationId);
@@ -112,13 +119,19 @@ export async function POST(req: NextRequest) {
       select: {
         id: true,
         type: true,
-        key: true,
+        serviceId: true,
         enabled: true,
       },
     });
 
     if (!integration) {
       return jsonError('Integration not found', 404);
+    }
+
+    try {
+      await assertCanViewService(integration.serviceId);
+    } catch {
+      return jsonError('Forbidden', 403);
     }
 
     // Parse test payload

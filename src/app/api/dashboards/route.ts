@@ -4,6 +4,8 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
+const dashboardVisibilities = new Set(['PRIVATE', 'TEAM', 'PUBLIC']);
+
 export const dynamic = 'force-dynamic';
 
 /**
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true },
+      select: { id: true, teamMemberships: { select: { teamId: true } } },
     });
 
     if (!user) {
@@ -112,8 +114,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, description, templateId, visibility = 'PRIVATE', teamId, widgets = [] } = body;
 
-    if (!name || typeof name !== 'string') {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    if (!name || typeof name !== 'string' || !dashboardVisibilities.has(visibility)) {
+      return NextResponse.json({ error: 'Invalid dashboard configuration' }, { status: 400 });
+    }
+    const teamIds = new Set(user.teamMemberships.map(membership => membership.teamId));
+    if (
+      (visibility === 'TEAM' && (typeof teamId !== 'string' || !teamIds.has(teamId))) ||
+      (visibility !== 'TEAM' && teamId !== undefined && teamId !== null)
+    ) {
+      return NextResponse.json({ error: 'Invalid team dashboard configuration' }, { status: 403 });
     }
 
     // If creating from template, clone the template's widgets
@@ -123,15 +132,20 @@ export async function POST(request: NextRequest) {
         where: { id: templateId },
         include: { widgets: true },
       });
-      if (template) {
-        widgetsToCreate = template.widgets.map(w => ({
-          widgetType: w.widgetType,
-          metricKey: w.metricKey,
-          title: w.title,
-          position: w.position,
-          config: w.config,
-        }));
-      }
+      if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+      const canReadTemplate =
+        template.isTemplate ||
+        template.visibility === 'PUBLIC' ||
+        template.userId === user.id ||
+        (template.teamId !== null && teamIds.has(template.teamId));
+      if (!canReadTemplate) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      widgetsToCreate = template.widgets.map(w => ({
+        widgetType: w.widgetType,
+        metricKey: w.metricKey,
+        title: w.title,
+        position: w.position,
+        config: w.config,
+      }));
     }
 
     const dashboard = await prisma.dashboard.create({
