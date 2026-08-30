@@ -16,6 +16,8 @@ import { logger } from './logger';
 import { filterChannelsForQuietHours } from './quiet-hours';
 import type { NotificationEventType } from './notification-delivery';
 
+export type UserNotificationDisposition = 'DELIVERED' | 'SKIPPED' | 'RETRYABLE_FAILURE';
+
 /**
  * Get user's enabled notification channels based on their preferences
  * and system provider availability
@@ -100,9 +102,11 @@ export async function sendUserNotification(
   } = {}
 ): Promise<{
   success: boolean;
+  disposition: UserNotificationDisposition;
   channelsUsed: NotificationChannel[];
   errors?: string[];
   suppressedByQuietHours?: boolean;
+  suppressedByPreference?: boolean;
 }> {
   // Create In-App Notification first. In-app remains available during quiet hours.
   if (options.createInApp !== false) {
@@ -144,11 +148,14 @@ export async function sendUserNotification(
   const channelsUsed: NotificationChannel[] = [];
 
   if (channels.length === 0) {
-    // Even if no channels, In-App was created. Return success false for external channels only.
+    // In-app delivery already happened above. Respecting an explicit preference
+    // is a successful policy decision and must not make durable outbox workers
+    // retry the whole notification operation (which would duplicate in-app work).
     return {
-      success: false,
+      success: true,
+      disposition: 'SKIPPED',
       channelsUsed: [],
-      errors: ['User has not enabled any notification channels. In-App notification created.'],
+      suppressedByPreference: true,
     };
   }
 
@@ -194,7 +201,7 @@ export async function sendUserNotification(
       });
 
       primarySuccess = true;
-    } else {
+    } else if (!result.skipped) {
       errors.push(`${channel}: ${result.error || 'Failed'}`);
     }
   }
@@ -221,7 +228,7 @@ export async function sendUserNotification(
           userId,
         });
         break;
-      } else {
+      } else if (!fbResult.skipped) {
         errors.push(`Fallback ${fbChannel}: ${fbResult.error || 'Failed'}`);
       }
     }
@@ -236,6 +243,7 @@ export async function sendUserNotification(
     });
     return {
       success: true,
+      disposition: 'SKIPPED',
       channelsUsed: [],
       suppressedByQuietHours: true,
     };
@@ -243,6 +251,7 @@ export async function sendUserNotification(
 
   return {
     success: channelsUsed.length > 0,
+    disposition: channelsUsed.length > 0 ? 'DELIVERED' : 'RETRYABLE_FAILURE',
     channelsUsed,
     errors: errors.length > 0 ? errors : undefined,
   };
@@ -257,7 +266,11 @@ export async function sendIncidentNotifications(
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
   excludeUserIds: string[] = [],
   incident?: any // eslint-disable-line @typescript-eslint/no-explicit-any
-): Promise<{ success: boolean; errors?: string[] }> {
+): Promise<{
+  success: boolean;
+  disposition: UserNotificationDisposition;
+  errors?: string[];
+}> {
   try {
     const incidentData =
       incident ||
@@ -282,7 +295,11 @@ export async function sendIncidentNotifications(
       }));
 
     if (!incidentData || !incidentData.service) {
-      return { success: false, errors: ['Incident or service not found'] };
+      return {
+        success: false,
+        disposition: 'RETRYABLE_FAILURE',
+        errors: ['Incident or service not found'],
+      };
     }
 
     const incidentRecord = incidentData;
@@ -371,10 +388,13 @@ export async function sendIncidentNotifications(
       );
     }
 
+    let deliveredExternally = false;
+    let skippedByPreference = false;
+
     if (externalRecipients.length > 0) {
       // Batch fetch user notification preferences to avoid N+1 queries
       const users = await prisma.user.findMany({
-        where: { id: { in: externalRecipients } },
+        where: { id: { in: externalRecipients }, status: 'ACTIVE' },
         select: {
           id: true,
           emailNotificationsEnabled: true,
@@ -412,7 +432,9 @@ export async function sendIncidentNotifications(
       const notificationPromises = externalRecipients.map(async userId => {
         const user = userMap.get(userId);
         if (!user) {
-          return { userId, success: false, error: 'User not found' };
+          // An inactive/deleted recipient is a terminal policy skip. The central
+          // notification dispatcher independently enforces the same rule.
+          return { userId, success: true, skipped: true, channelsUsed: [] as NotificationChannel[] };
         }
 
         // Determine channels for this user
@@ -434,9 +456,9 @@ export async function sendIncidentNotifications(
         if (channels.length === 0) {
           return {
             userId,
-            success: false,
-            error:
-              'User has not enabled any notification channels. Please configure notification preferences in Settings.',
+            success: true,
+            skipped: true,
+            channelsUsed: [] as NotificationChannel[],
           };
         }
 
@@ -455,6 +477,7 @@ export async function sendIncidentNotifications(
           return {
             userId,
             success: true,
+            skipped: true,
             channelsUsed: [] as NotificationChannel[],
             suppressedByQuietHours: true,
           };
@@ -497,14 +520,15 @@ export async function sendIncidentNotifications(
             if (!isHighUrgency && primarySuccess) {
               break;
             }
-          } else {
+          } else if (!result.skipped) {
             failed.push({ channel, result });
           }
         }
 
         return {
           userId,
-          success: successful.length > 0,
+          success: successful.length > 0 || failed.length === 0,
+          skipped: successful.length === 0 && failed.length === 0,
           channelsUsed: successful.map(r => r.channel),
           errors: failed.map(r => `${r.channel}: ${r.result.error || 'Failed'}`),
         };
@@ -513,9 +537,11 @@ export async function sendIncidentNotifications(
       const notificationResults = await Promise.all(notificationPromises);
 
       for (const result of notificationResults) {
+        if (result.channelsUsed.length > 0) deliveredExternally = true;
+        if (result.skipped) skippedByPreference = true;
         if (!result.success) {
           errors.push(
-            `User ${result.userId}: ${result.error || result.errors?.join(', ') || 'Failed'}`
+            `User ${result.userId}: ${result.errors?.join(', ') || 'Failed'}`
           );
         }
       }
@@ -542,14 +568,26 @@ export async function sendIncidentNotifications(
       errors.push(`Service integrations: ${err instanceof Error ? err.message : String(err)}`);
     }
 
+    if (errors.length > 0) {
+      return {
+        success: false,
+        disposition: 'RETRYABLE_FAILURE',
+        errors,
+      };
+    }
+
     return {
-      success: errors.length === 0,
-      errors: errors.length > 0 ? errors : undefined,
+      success: true,
+      disposition: deliveredExternally ? 'DELIVERED' : skippedByPreference ? 'SKIPPED' : 'DELIVERED',
     };
   } catch (error) {
     logger.error('Service notification error', {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
-    return { success: false, errors: [error instanceof Error ? error.message : 'Unknown error'] };
+    return {
+      success: false,
+      disposition: 'RETRYABLE_FAILURE',
+      errors: [error instanceof Error ? error.message : 'Unknown error'],
+    };
   }
 }
