@@ -1,6 +1,4 @@
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
@@ -51,8 +49,25 @@ const auditLogInclude = {
 
 type AuditLogRow = Prisma.AuditLogGetPayload<{ include: typeof auditLogInclude }>;
 
+type AuditLogView = Omit<AuditLogRow, 'createdAt' | 'details'> & {
+  createdAt: string;
+  details: string;
+};
+
+function serializeAuditDetails(details: Prisma.JsonValue | null): string {
+  if (details === null) return '-';
+
+  try {
+    return JSON.stringify(details);
+  } catch (error) {
+    // A malformed historical value should not make the audit log unavailable.
+    logger.warn('[AuditLog] Could not serialize record details', { error });
+    return '[Details unavailable]';
+  }
+}
+
 export default async function AuditLogPage({ searchParams }: AuditLogPageProps) {
-  await assertAuditorOrAdmin();
+  const currentUser = await assertAuditorOrAdmin();
 
   const awaitedParams = await searchParams;
   const entityType = parseAuditEntityType(awaitedParams?.entityType);
@@ -63,12 +78,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
   const page = Math.max(1, Number.parseInt(awaitedParams?.page || '1', 10) || 1);
   const pageSize = 50;
 
-  const session = await getServerSession(await getAuthOptions());
-  const email = session?.user?.email ?? null;
-  const user = email
-    ? await prisma.user.findUnique({ where: { email }, select: { timeZone: true } })
-    : null;
-  const userTimeZone = getUserTimeZone(user ?? undefined);
+  const userTimeZone = getUserTimeZone(currentUser);
 
   const where: Prisma.AuditLogWhereInput = {
     ...(entityType ? { entityType } : {}),
@@ -113,6 +123,11 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     });
     throw error;
   }
+  const viewLogs: AuditLogView[] = logs.map(log => ({
+    ...log,
+    createdAt: log.createdAt.toISOString(),
+    details: serializeAuditDetails(log.details),
+  }));
   const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
   const pageHref = (targetPage: number) => {
     const params = new URLSearchParams();
@@ -150,7 +165,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
           },
           {
             label: 'Page Entries',
-            value: logs.length,
+            value: viewLogs.length,
             icon: <FileText className="h-3.5 w-3.5 text-blue-200" />,
           },
           {
@@ -167,12 +182,12 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
           currentEntityType={entityType}
           currentAction={action}
           currentSearch={search}
-          logsData={logs}
+          logsData={viewLogs}
         />
 
         {/* Audit Table */}
         <Card className="bg-white overflow-hidden shadow-sm">
-          {logs.length === 0 ? (
+          {viewLogs.length === 0 ? (
             <div className="p-6">
               <EmptyState
                 icon={<Shield className="h-6 w-6 text-muted-foreground/60" />}
@@ -212,7 +227,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {logs.map(log => (
+                    {viewLogs.map(log => (
                       <TableRow
                         key={log.id}
                         className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
@@ -261,7 +276,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
                           </div>
                         </TableCell>
                         <TableCell className="p-4 text-xs font-mono text-muted-foreground max-w-xs truncate">
-                          {log.details ? JSON.stringify(log.details) : '-'}
+                          {log.details}
                         </TableCell>
                       </TableRow>
                     ))}
