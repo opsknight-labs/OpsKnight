@@ -4,6 +4,8 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
+const dashboardVisibilities = new Set(['PRIVATE', 'TEAM', 'PUBLIC']);
+
 export const dynamic = 'force-dynamic';
 
 /**
@@ -79,7 +81,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true },
+      select: { id: true, teamMemberships: { select: { teamId: true } } },
     });
 
     if (!user) {
@@ -89,7 +91,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Check ownership
     const existing = await prisma.dashboard.findUnique({
       where: { id },
-      select: { userId: true },
+      select: { userId: true, visibility: true, teamId: true },
     });
 
     if (!existing) {
@@ -105,6 +107,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const body = await request.json();
     const { name, description, layout, config, visibility, teamId, widgets } = body;
+    const effectiveVisibility = visibility ?? existing.visibility;
+    const effectiveTeamId = teamId ?? existing.teamId;
+    if (!dashboardVisibilities.has(effectiveVisibility)) {
+      return NextResponse.json({ error: 'Invalid dashboard visibility' }, { status: 400 });
+    }
+    const teamIds = new Set(user.teamMemberships.map(membership => membership.teamId));
+    if (effectiveVisibility === 'TEAM') {
+      if (typeof effectiveTeamId !== 'string' || !teamIds.has(effectiveTeamId)) {
+        return NextResponse.json({ error: 'Team dashboard access denied' }, { status: 403 });
+      }
+    } else if (teamId !== undefined) {
+      return NextResponse.json({ error: 'Only team dashboards can specify a team' }, { status: 400 });
+    }
 
     // Transaction: Update dashboard and replace widgets
     const dashboard = await prisma.$transaction(async tx => {
@@ -122,7 +137,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           ...(layout !== undefined && { layout }),
           ...(config !== undefined && { config }),
           ...(visibility !== undefined && { visibility }),
-          ...(teamId !== undefined && { teamId: visibility === 'TEAM' ? teamId : null }),
+          ...(visibility !== undefined && {
+            teamId: effectiveVisibility === 'TEAM' ? effectiveTeamId : null,
+          }),
+          ...(visibility === undefined && teamId !== undefined && { teamId: effectiveTeamId }),
           ...(widgets &&
             Array.isArray(widgets) && {
               widgets: {
