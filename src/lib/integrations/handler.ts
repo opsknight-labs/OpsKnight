@@ -305,7 +305,7 @@ export async function withIntegrationMiddleware(
 
   const integration = await prisma.integration.findUnique({
     where: { id: integrationId },
-    select: { key: true, enabled: true },
+    select: { key: true, enabled: true, type: true },
   });
 
   if (!integration) {
@@ -340,6 +340,30 @@ export async function withIntegrationMiddleware(
         code: 'INTEGRATION_DISABLED',
         userMessage: 'Integration is disabled',
         details: { integrationId },
+      })
+    );
+  }
+
+  // A routing key is scoped to one configured provider. Without this check a
+  // key for one integration could be submitted to a different provider route
+  // and handled with that route's parser and signature policy.
+  if (integration.type !== integrationType) {
+    logger.warn('integration.type_mismatch', {
+      integrationId,
+      expectedType: integrationType,
+      actualType: integration.type,
+    });
+    recordWebhookReceived(
+      integrationType,
+      integrationId,
+      false,
+      performance.now() - startTime,
+      'UNAUTHORIZED'
+    );
+    return jsonError(
+      new AppError({
+        code: 'INTEGRATION_AUTHENTICATION_FAILED',
+        userMessage: LEGACY_INVALID_INPUT_MESSAGE,
       })
     );
   }

@@ -2,10 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
+import {
+  IntegrationBodyTooLargeError,
+  readIntegrationBody,
+} from '@/lib/integrations/request-security';
+import { z } from 'zod';
 
 const MAX_BODY_SIZE = 50 * 1024; // 50KB
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 30; // 30 logs per minute per IP
+const ClientLogSchema = z.object({
+  level: z.enum(['error', 'warn', 'debug', 'info']).optional(),
+  message: z.string().trim().min(1).max(10_000),
+  context: z.record(z.unknown()).optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,19 +30,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
     }
 
-    // Body size check
-    const contentLength = Number(req.headers.get('content-length') || 0);
-    if (contentLength > MAX_BODY_SIZE) {
-      return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
+    let body: unknown;
+    try {
+      body = JSON.parse(await readIntegrationBody(req, MAX_BODY_SIZE));
+    } catch (error) {
+      if (error instanceof IntegrationBodyTooLargeError) {
+        return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
+      }
+      return NextResponse.json({ error: 'Invalid log payload' }, { status: 400 });
     }
 
-    const body = await req.json();
-    const { level, message, context } = body;
+    const parsed = ClientLogSchema.safeParse(body);
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid log payload' }, { status: 400 });
 
-    // Ensure we don't log undefined
-    if (!message) {
-      return NextResponse.json({ error: 'Message is required' }, { status: 400 });
-    }
+    const { level, message, context } = parsed.data;
 
     const logContext = {
       ...context,
