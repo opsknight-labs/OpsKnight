@@ -31,7 +31,12 @@ export type SendIncidentNotificationOptions = {
   intent?: IncidentNotificationIntent;
 };
 
-export type UserNotificationDisposition = 'DELIVERED' | 'SKIPPED' | 'RETRYABLE_FAILURE';
+export type UserNotificationDisposition = NotificationDeliveryOutcome;
+
+type IncidentNotificationResult = NotificationDeliveryResult & {
+  // Kept for existing callers while `outcome` is the shared durable-delivery contract.
+  disposition: UserNotificationDisposition;
+};
 
 const incidentNotificationInclude = {
   service: {
@@ -303,7 +308,7 @@ export async function sendIncidentNotifications(
   excludeUserIds: string[] = [],
   incident?: unknown,
   options: SendIncidentNotificationOptions = {}
-): Promise<NotificationDeliveryResult> {
+): Promise<IncidentNotificationResult> {
   try {
     const incidentData: IncidentNotificationRecord | null = incident
       ? (incident as IncidentNotificationRecord)
@@ -316,8 +321,9 @@ export async function sendIncidentNotifications(
       return {
         success: false,
         outcome: 'PERMANENT_FAILURE',
+        disposition: 'PERMANENT_FAILURE',
         errors: ['Incident or service not found'],
-      };
+      } satisfies IncidentNotificationResult;
     }
 
     const incidentRecord = incidentData;
@@ -608,12 +614,14 @@ export async function sendIncidentNotifications(
       const outcome = deliveryOutcomes.some(isRetryableNotificationOutcome)
         ? 'RETRYABLE_FAILURE'
         : 'PERMANENT_FAILURE';
-      return { success: false, outcome, errors };
+      return { success: false, outcome, disposition: outcome, errors };
     }
 
+    const outcome = deliveryOutcomes.includes('DELIVERED') ? 'DELIVERED' : 'SKIPPED';
     return {
       success: true,
-      outcome: deliveryOutcomes.includes('DELIVERED') ? 'DELIVERED' : 'SKIPPED',
+      outcome,
+      disposition: outcome,
     };
   } catch (error) {
     logger.error('Service notification error', {
@@ -622,6 +630,7 @@ export async function sendIncidentNotifications(
     return {
       success: false,
       outcome: 'RETRYABLE_FAILURE',
+      disposition: 'RETRYABLE_FAILURE',
       errors: [error instanceof Error ? error.message : 'Unknown error'],
     };
   }

@@ -85,7 +85,7 @@ describe('incident notification outcomes', () => {
   it('treats no enabled external channels as a successful policy skip', async () => {
     const result = await sendIncidentNotifications('inc-1', 'updated');
 
-    expect(result).toEqual({ success: true, outcome: 'SKIPPED' });
+    expect(result).toMatchObject({ success: true, outcome: 'SKIPPED' });
     expect(mocks.sendNotification).not.toHaveBeenCalled();
   });
 
@@ -98,7 +98,7 @@ describe('incident notification outcomes', () => {
 
     const result = await sendIncidentNotifications('inc-1', 'updated');
 
-    expect(result).toEqual({ success: true, outcome: 'SKIPPED' });
+    expect(result).toMatchObject({ success: true, outcome: 'SKIPPED' });
     expect(mocks.sendNotification).not.toHaveBeenCalled();
   });
 
@@ -115,7 +115,7 @@ describe('incident notification outcomes', () => {
     );
 
     mocks.sendNotification.mockResolvedValueOnce({ success: true, outcome: 'DELIVERED' });
-    await expect(sendIncidentNotifications('inc-1', 'updated')).resolves.toEqual({
+    await expect(sendIncidentNotifications('inc-1', 'updated')).resolves.toMatchObject({
       success: true,
       outcome: 'DELIVERED',
     });
@@ -143,7 +143,7 @@ describe('incident notification outcomes', () => {
       sendIncidentNotifications('inc-1', 'updated', [], undefined, {
         intent: 'ASSIGNED_TO_TEAM',
       })
-    ).resolves.toEqual({ success: true, outcome: 'DELIVERED' });
+    ).resolves.toMatchObject({ success: true, outcome: 'DELIVERED' });
 
     expect(mocks.createInAppNotifications).toHaveBeenCalledWith(
       expect.objectContaining({
