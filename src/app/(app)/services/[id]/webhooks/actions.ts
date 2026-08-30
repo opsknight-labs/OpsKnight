@@ -102,7 +102,7 @@ export async function updateWebhookIntegration(
     });
   } catch (error) {
     if (error instanceof UniqueNameConflictError) {
-      redirect(`/services/${serviceId}/webhooks/${integrationId}/edit?error=duplicate-webhook`);
+      redirect(`/services/${ownedServiceId}/webhooks/${integrationId}/edit?error=duplicate-webhook`);
     }
     throw error;
   }
