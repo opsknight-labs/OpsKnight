@@ -14,9 +14,8 @@ OpsKnight postmortems capture what happened, the impact, why it happened, how se
 - Responders and administrators can create, edit, publish, archive, and delete postmortems.
 - A postmortem can be created only for an incident whose status is **Resolved**.
 - The supported statuses are **Draft**, **Published**, and **Archived**.
-- There is no separate `IN_REVIEW` state or approval workflow in v1.4.
-
-The `isPublic` setting controls whether a published review is eligible for the public status-page postmortem view. Review its content for secrets, personal data, internal URLs, and exploitable implementation details before making it public.
+- **Public Visibility Control**: Responders can toggle **Publish to Status Page** with one click.
+- **Customer Preview Mode**: Responders can preview the customer-redacted view (anonymized responder names, internal SLA details hidden) directly from the postmortem studio without logging out.
 
 ## Choose incidents that need a review
 
@@ -29,7 +28,7 @@ Do not use the postmortem to assign blame. Describe system conditions, signals, 
 1. Resolve the incident.
 2. Open **Postmortems**.
 3. Select **Create Postmortem**.
-4. Choose one of the most recent resolved incidents without a postmortem. The chooser loads up to 100 incidents.
+4. Choose one of the most recent resolved incidents without a postmortem.
 5. Enter a title (maximum 100 characters).
 6. Complete the relevant sections described below.
 7. Leave the status as **Draft** while the content is being reviewed.
@@ -37,51 +36,41 @@ Do not use the postmortem to assign blame. Describe system conditions, signals, 
 
 You can also create or open a postmortem from its incident page when that action is available.
 
-## Use Auto-Draft carefully
-
-**Auto-Draft** builds a starting point from the incident's stored data and timeline. It is a deterministic product helper, not an external assertion that the generated root cause is correct.
-
-After generating a draft:
-
-1. Check every timestamp and actor.
-2. Replace inferred root-cause language with evidence.
-3. Quantify impact from authoritative data.
-4. Remove irrelevant or sensitive timeline entries.
-5. Add owners and due dates to corrective actions.
-
 ## Fields and sections
 
-| Section           | What to record                                                                                                                            |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Title             | A short identifier for this incident review                                                                                               |
-| Executive Summary | What happened, impact, duration, and restoration in plain language                                                                        |
-| Timeline          | Detection, escalation, mitigation, and resolution events with timestamps, titles, descriptions, and optional actors                       |
-| Impact            | Users affected, downtime, error rate, services affected, SLA breaches, revenue impact, API errors, and performance degradation when known |
-| Root Cause        | The technical and organizational conditions that produced the incident                                                                    |
-| Resolution        | What restored service and how recovery was verified                                                                                       |
-| Action Items      | Corrective work with owner, due date, priority, and status                                                                                |
-| Lessons Learned   | What helped, what hindered, and what should change                                                                                        |
-| Status            | Draft, Published, or Archived                                                                                                             |
-| Visibility        | Public or private status-page eligibility                                                                                                 |
+| Section                 | What to record                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Title                   | A short identifier for this incident review                                                                                                |
+| Executive Summary       | What happened, impact, duration, and restoration in plain language                                                                         |
+| Timeline                | Detection, escalation, mitigation, and resolution events with timestamps, titles, descriptions, and optional actors                        |
+| Impact                  | Users affected, downtime, error rate, services affected, SLA breaches, revenue impact, API errors, and performance degradation             |
+| 5-Whys Root Cause Chain | Step-by-step sequential causal diagram (Problem ➔ Why #1 ➔ Why #2 ➔ ... ➔ Root Cause Finding)                                              |
+| Contributing Factors    | Standardized tags: `Infrastructure`, `Code Defect`, `Process / Runbook`, `Human Factor`, `Vendor`, `Monitoring Gap`, `Configuration Drift` |
+| Resolution              | What restored service and how recovery was verified                                                                                        |
+| Action Items            | Corrective work with owner, smart due date countdown, priority, and one-click status transitions                                           |
+| Lessons Learned         | What helped, what hindered, and what should change for future resiliency                                                                   |
+| Status                  | Draft, Published, or Archived                                                                                                              |
+| Visibility & Preview    | Public on Status Page toggle with interactive Customer Preview Mode                                                                        |
 
-Only the title is enforced as required by the form. Your organization's review policy may require additional fields.
+## 5-Whys Root Cause Analysis
 
-## Build the timeline
+The interactive 5-Whys builder helps teams uncover the underlying systemic cause rather than stopping at surface symptoms:
 
-Timeline entries support four types:
+1. Each step documents a specific question and answer.
+2. The final step highlights the identified **Root Cause Finding**.
+3. Visual node connectors illustrate the unbroken causal chain.
 
-- Detection
-- Escalation
-- Mitigation
-- Resolution
+## Contributing Factors Taxonomy
 
-Use the user's configured time zone consistently. Record why a decision was made, not only that a button was clicked. Preserve uncertainty where the team did not know something at the time.
+Tagging contributing factors enables pattern discovery across incident retrospectives:
 
-## Quantify impact
-
-Use measured values when available and label estimates. The form supports users affected, downtime minutes, error rate, affected services, SLA breaches, revenue impact, API errors, and performance degradation.
-
-Avoid double-counting. For example, API errors and affected users measure different things and should not be summed into one impact number.
+- **Infrastructure**: Network partition, host exhaustion, cloud provider degradation.
+- **Code Defect**: Unhandled exception, query regression, missing test coverage.
+- **Process / Runbook**: Outdated documentation, ambiguous handoff procedure.
+- **Human Factor**: Alert fatigue, manual typo during emergency maintenance.
+- **Third-Party Vendor**: External API downtime, webhook delivery failure.
+- **Monitoring Gap**: Silent failure, delayed alert trigger, telemetry blindspot.
+- **Configuration Drift**: Missing environment variable, mismatched deployment flags.
 
 ## Track corrective actions
 
@@ -89,10 +78,10 @@ Each action item supports:
 
 - title and description;
 - one active-user owner or no owner;
-- due date;
+- smart due date countdown badge;
 - High, Medium, or Low priority;
 - Open, In Progress, Completed, or Blocked status;
-- an optional Jira issue link.
+- an optional Jira / GitHub issue link.
 
 The postmortem shows completion progress and marks past-due, incomplete items as overdue. The main **Action Items** page provides the organization-wide board and filters. See [Action Items](./action-items).
 
@@ -101,42 +90,10 @@ The postmortem shows completion progress and marks past-due, incomplete items as
 Before setting **Published**:
 
 1. Confirm the incident is the correct one.
-2. Verify the summary, timeline, impact, root cause, and resolution.
+2. Verify the summary, timeline, impact, 5-whys, and resolution.
 3. Give each required action item an accountable owner and realistic due date.
-4. Decide whether the postmortem is safe for public status-page display.
-5. Save and review the rendered page.
-
-Published postmortems receive a publication timestamp. Use **Archived** for a historical record that should no longer appear as active review work.
-
-## Find and manage postmortems
-
-The list shows totals for all, published, draft, and archived records. Filter by status and move through paginated results. The standard page size is 50.
-
-Deleting a postmortem also deletes its normalized action items and their links through database relations. This is destructive and cannot be undone through the UI. Preserve required records before deletion.
-
-## Public status-page view
-
-A public, published postmortem can be displayed at the status-page postmortem route for its incident when status-page settings allow post-incident reviews. This is not a generic unauthenticated share link for every private postmortem.
-
-## Not supported as public v1.4 contracts
-
-- There is no published Postmortems REST API in v1.4.
-- There is no postmortem approval/comment/reviewer workflow.
-- There is no custom postmortem-template editor.
-- There is no built-in postmortem meeting scheduler.
-- PDF, Markdown, HTML, and JSON postmortem exports are not published features.
-- Jira is the documented issue-tracker integration for action items; GitHub Issues, Linear, and Asana action-item sync are not published features.
-
-## Troubleshooting
-
-| Problem                                               | Check                                                                                                     |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Create Postmortem** is unavailable                  | Your account must be a responder or administrator.                                                        |
-| An incident is not in the chooser                     | It must be Resolved, have no existing postmortem, and fall within the 100 most recent eligible incidents. |
-| Save says the incident is not resolved                | Reopen the incident, complete response work, and resolve it before creating the review.                   |
-| An action item is missing from the organization board | Save the postmortem and clear board filters.                                                              |
-| A postmortem is absent from the public status page    | Confirm it is Published, marked public, and the status page allows post-incident reviews.                 |
-| Jira actions fail                                     | Configure workspace Jira and the incident service's Jira mapping.                                         |
+4. Use **Preview Customer View** to verify that internal notes or credentials are not exposed.
+5. Toggle **Publish to Status Page** if appropriate for customer transparency.
 
 ## Related guides
 
