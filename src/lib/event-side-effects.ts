@@ -4,6 +4,44 @@ import { notifySlackForIncident } from './slack';
 import { logger } from './logger';
 import type { EventSideEffectPayload, LifecycleSideEffectContext } from './event-outbox';
 
+function requireDelivery(
+  result: { success?: boolean; error?: string; errors?: string[] } | undefined,
+  label: string
+): void {
+  // Some existing test doubles return void; production delivery functions
+  // return an explicit success contract.
+  if (result?.success === false) {
+    throw new Error(
+      `${label} failed: ${result.error || result.errors?.join('; ') || 'unknown error'}`
+    );
+  }
+}
+
+function requireWebhookDelivery(result: { failed: number } | undefined, label: string): void {
+  if (result && result.failed > 0) {
+    throw new Error(`${label} failed for ${result.failed} delivery target(s)`);
+  }
+}
+
+const EXPECTED_WAR_ROOM_SKIPS = [
+  'Incident not found',
+  'ChatOps is not enabled',
+  'auto-creation disabled',
+  'does not meet urgency/priority threshold',
+  'No war-room channel',
+  'No active war-room channel',
+  'War-room channel is archived',
+  'Archive on resolve is disabled',
+  'No Slack bot token',
+  'not configured',
+];
+
+function requireWarRoomDelivery(result: { success: boolean; error?: string }, label: string): void {
+  if (result.success || EXPECTED_WAR_ROOM_SKIPS.some(reason => result.error?.includes(reason)))
+    return;
+  throw new Error(`${label} failed: ${result.error || 'unknown error'}`);
+}
+
 export function escalationNotificationRoute(result: {
   escalated?: boolean;
   reason?: string;
@@ -58,7 +96,10 @@ async function sendEventWebhook(
       : {}),
   };
 
-  await triggerWebhooksForService(incident.serviceId, eventType, webhookPayload);
+  requireWebhookDelivery(
+    await triggerWebhooksForService(incident.serviceId, eventType, webhookPayload),
+    eventType
+  );
 }
 
 async function runTriggerEscalationAndNotifications(incidentId: string): Promise<void> {
@@ -73,7 +114,10 @@ async function runTriggerEscalationAndNotifications(incidentId: string): Promise
       error: error instanceof Error ? error.message : String(error),
     });
     const { sendServiceNotifications } = await import('./service-notifications');
-    await sendServiceNotifications(incidentId, 'triggered');
+    requireDelivery(
+      await sendServiceNotifications(incidentId, 'triggered'),
+      'service notification'
+    );
     return;
   }
 
@@ -81,10 +125,13 @@ async function runTriggerEscalationAndNotifications(incidentId: string): Promise
 
   if (route === 'service') {
     const { sendServiceNotifications } = await import('./service-notifications');
-    await sendServiceNotifications(incidentId, 'triggered');
+    requireDelivery(
+      await sendServiceNotifications(incidentId, 'triggered'),
+      'service notification'
+    );
   } else {
     const { sendIncidentNotifications } = await import('./user-notifications');
-    await sendIncidentNotifications(incidentId, 'triggered');
+    requireDelivery(await sendIncidentNotifications(incidentId, 'triggered'), 'user notification');
   }
 
   logger.info('event.outbox.notifications_sent', {
@@ -96,7 +143,10 @@ async function runTriggerEscalationAndNotifications(incidentId: string): Promise
 
 async function notifyCreatedIncidentStatusPage(incidentId: string): Promise<void> {
   const { notifyStatusPageSubscribers } = await import('./status-page-notifications');
-  await notifyStatusPageSubscribers(incidentId, 'triggered');
+  requireDelivery(
+    await notifyStatusPageSubscribers(incidentId, 'triggered'),
+    'status page notification'
+  );
 }
 
 async function createJiraIssueForIncident(incidentId: string): Promise<void> {
@@ -225,19 +275,52 @@ async function sendLifecycleWebhook(payload: EventSideEffectPayload): Promise<vo
       ? incident.resolvedAt?.toISOString() || lifecycle.transitionAt
       : incident.resolvedAt?.toISOString() || null;
 
-  await triggerWebhooksForService(incident.serviceId, lifecycleWebhookEvent(lifecycle), {
+  const result = await triggerWebhooksForService(
+    incident.serviceId,
+    lifecycleWebhookEvent(lifecycle),
+    {
+      id: incident.id,
+      title: incident.title,
+      description: incident.description,
+      status: lifecycle.status,
+      urgency: incident.urgency,
+      priority: incident.priority,
+      service: incident.service,
+      assignee: incident.assignee,
+      createdAt: incident.createdAt.toISOString(),
+      acknowledgedAt: incident.acknowledgedAt?.toISOString() || null,
+      resolvedAt,
+    }
+  );
+  requireWebhookDelivery(result, 'lifecycle webhook');
+}
+
+async function sendIncidentUpdateWebhook(payload: EventSideEffectPayload): Promise<void> {
+  const incident = await prisma.incident.findUnique({
+    where: { id: payload.incidentId },
+    include: {
+      service: { select: { id: true, name: true } },
+      assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
+    },
+  });
+  if (!incident) return;
+
+  const { triggerWebhooksForService } = await import('./status-page-webhooks');
+  const result = await triggerWebhooksForService(incident.serviceId, 'incident.updated', {
     id: incident.id,
     title: incident.title,
     description: incident.description,
-    status: lifecycle.status,
+    status: incident.status,
     urgency: incident.urgency,
     priority: incident.priority,
+    visibility: incident.visibility,
     service: incident.service,
     assignee: incident.assignee,
     createdAt: incident.createdAt.toISOString(),
     acknowledgedAt: incident.acknowledgedAt?.toISOString() || null,
-    resolvedAt,
+    resolvedAt: incident.resolvedAt?.toISOString() || null,
   });
+  requireWebhookDelivery(result, 'incident update webhook');
 }
 
 async function syncLifecycleWarRoom(payload: EventSideEffectPayload): Promise<void> {
@@ -254,13 +337,15 @@ async function syncLifecycleWarRoom(payload: EventSideEffectPayload): Promise<vo
     SUPPRESSED: '🔇',
   } as const;
 
-  await Promise.all([
+  const [postResult, topicResult] = await Promise.all([
     postWarRoomUpdate(
       payload.incidentId,
       `${statusEmoji[lifecycle.status]} *Status updated to ${lifecycle.status}*`
     ),
     updateWarRoomTopic(payload.incidentId, lifecycle.status),
   ]);
+  requireWarRoomDelivery(postResult, 'war-room status update');
+  requireWarRoomDelivery(topicResult, 'war-room topic update');
 }
 
 async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<void> {
@@ -291,6 +376,7 @@ async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<
       incidentId: payload.incidentId,
       error: result.error,
     });
+    requireWarRoomDelivery(result, 'war-room ensure');
     return;
   }
 
@@ -329,7 +415,7 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
   }
 
   const { archiveWarRoomChannel } = await import('./chatops/war-room');
-  await archiveWarRoomChannel(payload.incidentId);
+  requireWarRoomDelivery(await archiveWarRoomChannel(payload.incidentId), 'war-room archive');
 }
 
 export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {
@@ -361,6 +447,7 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
           channelName: result.channelName,
         });
       }
+      requireWarRoomDelivery(result, 'war-room creation');
       return;
     }
 
@@ -377,7 +464,10 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
 
     case 'RESOLVE_SLACK':
-      await notifySlackForIncident(payload.incidentId, 'resolved');
+      requireDelivery(
+        await notifySlackForIncident(payload.incidentId, 'resolved'),
+        'Slack resolve'
+      );
       return;
 
     case 'RESOLVE_WAR_ROOM_ARCHIVE':
@@ -385,36 +475,67 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
 
     case 'ACK_SLACK':
-      await notifySlackForIncident(payload.incidentId, 'acknowledged');
+      requireDelivery(
+        await notifySlackForIncident(payload.incidentId, 'acknowledged'),
+        'Slack acknowledge'
+      );
       return;
 
     case 'LIFECYCLE_USER_NOTIFICATION': {
       const { sendIncidentNotifications } = await import('./user-notifications');
-      await sendIncidentNotifications(
-        payload.incidentId,
-        lifecycleNotificationEvent(lifecycleContext(payload))
+      requireDelivery(
+        await sendIncidentNotifications(
+          payload.incidentId,
+          lifecycleNotificationEvent(lifecycleContext(payload))
+        ),
+        'lifecycle user notification'
       );
       return;
     }
 
     case 'LIFECYCLE_SERVICE_NOTIFICATION': {
       const { sendServiceNotifications } = await import('./service-notifications');
-      await sendServiceNotifications(
-        payload.incidentId,
-        lifecycleNotificationEvent(lifecycleContext(payload))
+      requireDelivery(
+        await sendServiceNotifications(
+          payload.incidentId,
+          lifecycleNotificationEvent(lifecycleContext(payload))
+        ),
+        'lifecycle service notification'
       );
       return;
     }
 
     case 'LIFECYCLE_STATUS_PAGE': {
       const { notifyStatusPageSubscribers } = await import('./status-page-notifications');
-      const notify = notifyStatusPageSubscribers as (
-        incidentId: string,
-        eventType: string
-      ) => Promise<void>;
-      await notify(payload.incidentId, lifecycleStatusPageEvent(lifecycleContext(payload)));
+      const result = await notifyStatusPageSubscribers(
+        payload.incidentId,
+        lifecycleStatusPageEvent(lifecycleContext(payload))
+      );
+      requireDelivery(result, 'lifecycle status page notification');
       return;
     }
+
+    case 'INCIDENT_UPDATE_USER_NOTIFICATION': {
+      const { sendIncidentNotifications } = await import('./user-notifications');
+      requireDelivery(
+        await sendIncidentNotifications(payload.incidentId, 'updated'),
+        'incident update user notification'
+      );
+      return;
+    }
+
+    case 'INCIDENT_UPDATE_SERVICE_NOTIFICATION': {
+      const { sendServiceNotifications } = await import('./service-notifications');
+      requireDelivery(
+        await sendServiceNotifications(payload.incidentId, 'updated'),
+        'incident update service notification'
+      );
+      return;
+    }
+
+    case 'INCIDENT_UPDATE_WEBHOOK':
+      await sendIncidentUpdateWebhook(payload);
+      return;
 
     case 'LIFECYCLE_WEBHOOK':
       await sendLifecycleWebhook(payload);
@@ -431,7 +552,10 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
     case 'LIFECYCLE_WAR_ROOM_TOPIC': {
       const lifecycle = lifecycleContext(payload);
       const { updateWarRoomTopic } = await import('./chatops/war-room');
-      await updateWarRoomTopic(payload.incidentId, lifecycle.status);
+      requireWarRoomDelivery(
+        await updateWarRoomTopic(payload.incidentId, lifecycle.status),
+        'war-room topic update'
+      );
       return;
     }
 

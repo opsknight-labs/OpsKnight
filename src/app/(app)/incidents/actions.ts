@@ -16,6 +16,7 @@ import {
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
 import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
+import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
 
 const LEGACY_NOT_FOUND_MESSAGE =
   'The requested item could not be found. It may have been deleted or you may not have access to it.';
@@ -238,6 +239,7 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
           message: 'Incident unassigned',
         },
       });
+      await enqueueIncidentUpdateSideEffects(tx, incidentId, ['INCIDENT_UPDATE_USER_NOTIFICATION']);
     });
 
     // ChatOps: Sync unassignment & update topic in war-room
@@ -282,56 +284,8 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
           message: `Incident assigned to team: ${teamRecord.name}`,
         },
       });
+      await enqueueIncidentUpdateSideEffects(tx, incidentId, ['INCIDENT_UPDATE_USER_NOTIFICATION']);
     });
-
-    // Notify all team members
-    try {
-      const { sendUserNotification } = await import('@/lib/user-notifications');
-      const teamWithMembers = await prisma.team.findUnique({
-        where: { id: teamId },
-        include: {
-          members: true,
-        },
-      });
-
-      if (teamWithMembers) {
-        const incident = await prisma.incident.findUnique({
-          where: { id: incidentId },
-          include: {
-            // Fetch service info for notification context
-            service: {
-              include: {
-                team: {
-                  include: { members: { include: { user: true } } },
-                },
-              },
-            },
-            assignee: true,
-          },
-        });
-
-        const message = `[OpsKnight] ${incident?.title || 'Incident'} assigned to your team: ${teamWithMembers.name}`;
-        for (const member of teamWithMembers.members) {
-          await sendUserNotification(incidentId, member.userId, message, undefined, {
-            eventType: 'updated',
-          });
-        }
-
-        // --- ADDED: Send Service-Level Notification for Reassignment (Team) ---
-        if (incident) {
-          const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-          // 'updated' is a catch-all that triggers service notifications
-          await sendIncidentNotifications(incident.id, 'updated', [], incident);
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to notify team members', {
-        component: 'incidents-actions',
-        error,
-        incidentId,
-        teamId,
-      });
-    } // Continue even if notifications fail
 
     // ChatOps: Sync team assignment, auto-invite members & update topic in war-room
     try {
@@ -381,15 +335,8 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
           message: `Incident manually reassigned to ${assigneeRecord.name}`,
         },
       });
+      await enqueueIncidentUpdateSideEffects(tx, incidentId, ['INCIDENT_UPDATE_USER_NOTIFICATION']);
     });
-
-    // --- ADDED: Send Service-Level Notification for Reassignment (User) ---
-    try {
-      const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-      await sendIncidentNotifications(incidentId, 'updated');
-    } catch (error) {
-      logger.error('Failed to send reassignment notification', { error, incidentId });
-    }
 
     // ChatOps: Sync user assignment, auto-invite user & update topic in war-room
     try {
@@ -449,9 +396,16 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
 export async function removeWatcher(incidentId: string, watcherId: string) {
   await assertResponderOrAbove();
   await prisma.$transaction(async tx => {
-    await tx.incidentWatcher.delete({
-      where: { id: watcherId },
+    const removed = await tx.incidentWatcher.deleteMany({
+      where: { id: watcherId, incidentId },
     });
+    if (removed.count !== 1) {
+      throw new AppError({
+        code: 'RESOURCE_NOT_FOUND',
+        userMessage: LEGACY_NOT_FOUND_MESSAGE,
+        details: { resource: 'incidentWatcher', incidentId, watcherId },
+      });
+    }
 
     await tx.incidentEvent.create({
       data: {

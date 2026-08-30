@@ -636,7 +636,10 @@ export async function archiveWarRoomChannel(
 /**
  * Update the Slack war-room channel topic when incident status or metadata changes
  */
-export async function updateWarRoomTopic(incidentId: string, newStatus?: string): Promise<void> {
+export async function updateWarRoomTopic(
+  incidentId: string,
+  newStatus?: string
+): Promise<{ success: boolean; error?: string }> {
   try {
     const incident = await prisma.incident.findUnique({
       where: { id: incidentId },
@@ -652,10 +655,10 @@ export async function updateWarRoomTopic(incidentId: string, newStatus?: string)
       },
     });
 
-    if (!incident?.slackChannelId || incident.warRoomArchivedAt) return;
+    if (!incident?.slackChannelId || incident.warRoomArchivedAt) return { success: true };
 
     const botToken = await getSlackBotToken(incident.serviceId);
-    if (!botToken) return;
+    if (!botToken) return { success: true };
 
     const appUrl = getBaseUrl();
     const dashboardUrl = `${appUrl}/incidents/${incidentId}`;
@@ -669,12 +672,15 @@ export async function updateWarRoomTopic(incidentId: string, newStatus?: string)
         : '';
     const topic = `${statusIcon} ${incident.title} | ${displayStatus} | ${incident.urgency}${assigneeText} | ${dashboardUrl}`;
 
-    await slackApiCall('conversations.setTopic', botToken, {
+    const result = await slackApiCall('conversations.setTopic', botToken, {
       channel: incident.slackChannelId,
       topic: topic.slice(0, 250),
-    }).catch(() => {});
+    });
+    if (!result.ok) return { success: false, error: result.error || 'Slack topic update failed' };
+    return { success: true };
   } catch (err) {
     logger.warn('[ChatOps] Failed to update war-room topic', { incidentId, error: err });
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
