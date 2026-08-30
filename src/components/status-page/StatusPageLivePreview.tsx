@@ -6,6 +6,7 @@ import StatusPageServices from '@/components/status-page/StatusPageServices';
 import StatusPageIncidents from '@/components/status-page/StatusPageIncidents';
 import StatusPageAnnouncements from '@/components/status-page/StatusPageAnnouncements';
 import { logger } from '@/lib/logger';
+import { toSafeStyleTagContent } from '@/lib/status-page-content';
 
 interface StatusPageLivePreviewProps {
     previewData: {
@@ -398,7 +399,11 @@ export default function StatusPageLivePreview({ previewData, maxWidth = '1280px'
         <>
             {/* Custom CSS */}
             {previewData.branding?.customCss && (
-                <style dangerouslySetInnerHTML={{ __html: previewData.branding.customCss }} />
+                <style
+                    dangerouslySetInnerHTML={{
+                        __html: toSafeStyleTagContent(previewData.branding.customCss),
+                    }}
+                />
             )}
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Device & Zoom Controls */}
