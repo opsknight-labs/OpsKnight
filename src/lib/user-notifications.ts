@@ -9,6 +9,7 @@
  */
 
 import prisma from './prisma';
+import type { Prisma } from '@prisma/client';
 import { sendNotification, NotificationChannel } from './notifications';
 import { isChannelAvailable } from './notification-providers';
 import { createInAppNotifications } from './in-app-notifications';
@@ -29,6 +30,29 @@ export type IncidentNotificationIntent =
 export type SendIncidentNotificationOptions = {
   intent?: IncidentNotificationIntent;
 };
+
+export type UserNotificationDisposition = 'DELIVERED' | 'SKIPPED' | 'RETRYABLE_FAILURE';
+
+const incidentNotificationInclude = {
+  service: {
+    include: {
+      team: {
+        include: {
+          members: {
+            include: { user: true },
+          },
+        },
+      },
+    },
+  },
+  team: { include: { members: true } },
+  assignee: true,
+  watchers: true,
+} satisfies Prisma.IncidentInclude;
+
+type IncidentNotificationRecord = Prisma.IncidentGetPayload<{
+  include: typeof incidentNotificationInclude;
+}>;
 
 /**
  * Get user's enabled notification channels based on their preferences
@@ -114,9 +138,11 @@ export async function sendUserNotification(
   } = {}
 ): Promise<{
   success: boolean;
+  disposition: UserNotificationDisposition;
   channelsUsed: NotificationChannel[];
   errors?: string[];
   suppressedByQuietHours?: boolean;
+  suppressedByPreference?: boolean;
 }> {
   // Create In-App Notification first. In-app remains available during quiet hours.
   if (options.createInApp !== false) {
@@ -158,11 +184,14 @@ export async function sendUserNotification(
   const channelsUsed: NotificationChannel[] = [];
 
   if (channels.length === 0) {
-    // Even if no channels, In-App was created. Return success false for external channels only.
+    // In-app delivery already happened above. Respecting an explicit preference
+    // is a successful policy decision and must not make durable outbox workers
+    // retry the whole notification operation (which would duplicate in-app work).
     return {
-      success: false,
+      success: true,
+      disposition: 'SKIPPED',
       channelsUsed: [],
-      errors: ['User has not enabled any notification channels. In-App notification created.'],
+      suppressedByPreference: true,
     };
   }
 
@@ -208,7 +237,7 @@ export async function sendUserNotification(
       });
 
       primarySuccess = true;
-    } else {
+    } else if (!result.skipped) {
       errors.push(`${channel}: ${result.error || 'Failed'}`);
     }
   }
@@ -235,7 +264,7 @@ export async function sendUserNotification(
           userId,
         });
         break;
-      } else {
+      } else if (!fbResult.skipped) {
         errors.push(`Fallback ${fbChannel}: ${fbResult.error || 'Failed'}`);
       }
     }
@@ -250,6 +279,7 @@ export async function sendUserNotification(
     });
     return {
       success: true,
+      disposition: 'SKIPPED',
       channelsUsed: [],
       suppressedByQuietHours: true,
     };
@@ -257,6 +287,7 @@ export async function sendUserNotification(
 
   return {
     success: channelsUsed.length > 0,
+    disposition: channelsUsed.length > 0 ? 'DELIVERED' : 'RETRYABLE_FAILURE',
     channelsUsed,
     errors: errors.length > 0 ? errors : undefined,
   };
@@ -270,31 +301,16 @@ export async function sendIncidentNotifications(
   incidentId: string,
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
   excludeUserIds: string[] = [],
-  incident?: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  incident?: unknown,
   options: SendIncidentNotificationOptions = {}
 ): Promise<NotificationDeliveryResult> {
   try {
-    const incidentData =
-      incident ||
-      (await prisma.incident.findUnique({
+    const incidentData: IncidentNotificationRecord | null = incident
+      ? (incident as IncidentNotificationRecord)
+      : await prisma.incident.findUnique({
         where: { id: incidentId },
-        include: {
-          service: {
-            include: {
-              team: {
-                include: {
-                  members: {
-                    include: { user: true },
-                  },
-                },
-              },
-            },
-          },
-          team: { include: { members: true } },
-          assignee: true,
-          watchers: true,
-        },
-      }));
+        include: incidentNotificationInclude,
+        });
 
     if (!incidentData || !incidentData.service) {
       return {
@@ -398,7 +414,7 @@ export async function sendIncidentNotifications(
     if (externalRecipients.length > 0) {
       // Batch fetch user notification preferences to avoid N+1 queries
       const users = await prisma.user.findMany({
-        where: { id: { in: externalRecipients } },
+        where: { id: { in: externalRecipients }, status: 'ACTIVE' },
         select: {
           id: true,
           emailNotificationsEnabled: true,
@@ -436,11 +452,12 @@ export async function sendIncidentNotifications(
       const notificationPromises = externalRecipients.map(async userId => {
         const user = userMap.get(userId);
         if (!user) {
+          // An inactive/deleted recipient is a terminal policy skip.
           return {
             userId,
-            success: false,
-            outcome: 'PERMANENT_FAILURE' as const,
-            error: 'User not found',
+            success: true,
+            outcome: 'SKIPPED' as const,
+            channelsUsed: [] as NotificationChannel[],
           };
         }
 
@@ -527,7 +544,7 @@ export async function sendIncidentNotifications(
             if (!isHighUrgency && primarySuccess) {
               break;
             }
-          } else {
+          } else if (!result.skipped) {
             failed.push({
               channel,
               outcome: result.outcome ?? 'RETRYABLE_FAILURE',
@@ -538,13 +555,15 @@ export async function sendIncidentNotifications(
 
         return {
           userId,
-          success: successful.length > 0,
+          success: successful.length > 0 || failed.length === 0,
           outcome:
             successful.length > 0
               ? ('DELIVERED' as const)
               : failed.some(result => isRetryableNotificationOutcome(result.outcome))
                 ? ('RETRYABLE_FAILURE' as const)
-                : ('PERMANENT_FAILURE' as const),
+                : failed.length === 0
+                  ? ('SKIPPED' as const)
+                  : ('PERMANENT_FAILURE' as const),
           channelsUsed: successful.map(r => r.channel),
           errors: failed.map(result => `${result.channel}: ${result.error || 'Failed'}`),
         };
@@ -556,7 +575,7 @@ export async function sendIncidentNotifications(
         deliveryOutcomes.push(result.outcome);
         if (!result.success) {
           errors.push(
-            `User ${result.userId}: ${result.error || result.errors?.join(', ') || 'Failed'}`
+            `User ${result.userId}: ${result.errors?.join(', ') || 'Failed'}`
           );
         }
       }

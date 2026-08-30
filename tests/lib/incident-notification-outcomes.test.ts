@@ -153,7 +153,7 @@ describe('incident notification outcomes', () => {
       })
     );
     expect(mocks.userFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: { in: ['team-member'] } } })
+      expect.objectContaining({ where: { id: { in: ['team-member'] }, status: 'ACTIVE' } })
     );
     expect(mocks.sendNotification).toHaveBeenCalledWith(
       'inc-1',

@@ -14,6 +14,9 @@ import {
 } from '@/components/ui/shadcn/table';
 import { Card } from '@/components/ui/shadcn/card';
 
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import EmptyState from '@/components/ui/EmptyState';
+import { Shield, FileText } from 'lucide-react';
 import { assertAuditorOrAdmin } from '@/lib/rbac';
 import type { AuditEntityType } from '@prisma/client';
 import Link from 'next/link';
@@ -87,93 +90,125 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
   };
 
   return (
-    <main className="p-4 [zoom:0.8]">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Audit Log</h1>
-          <p className="text-muted-foreground">User, team, and service configuration changes.</p>
-        </div>
-      </div>
+    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Centralized Hero Header */}
+      <DetailHeroBanner
+        tag="Security & Compliance"
+        title="Audit Log"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <Shield className="h-6 w-6" aria-hidden="true" />
+          </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Track administrative operations, team changes, permission assignments, and
+            security-sensitive service modifications.
+          </p>
+        }
+        stats={[
+          {
+            label: 'Total Records',
+            value: totalLogs,
+            icon: <Shield className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Page Entries',
+            value: logs.length,
+            icon: <FileText className="h-3.5 w-3.5 text-blue-200" />,
+          },
+          {
+            label: 'Current Page',
+            value: `${Math.min(page, totalPages)} / ${totalPages}`,
+            icon: <FileText className="h-3.5 w-3.5 text-emerald-200" />,
+          },
+        ]}
+      />
 
       {/* Audit Table */}
-      <Card className="bg-white overflow-hidden">
-        <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
-          <Table className="min-w-[800px]">
-            <TableHeader className="bg-slate-50 border-b border-border">
-              <TableRow>
-                <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                  Timestamp
-                </TableHead>
-                <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                  Actor
-                </TableHead>
-                <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                  Action
-                </TableHead>
-                <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                  Entity
-                </TableHead>
-                <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                  Details
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.map(log => (
-                <TableRow key={log.id} className="border-b border-slate-100">
-                  <TableCell className="p-4 font-mono text-xs text-muted-foreground">
-                    {formatDateTime(log.createdAt, userTimeZone, { format: 'datetime' })}
-                  </TableCell>
-                  <TableCell className="p-4">
-                    <div className="flex items-center gap-3">
-                      {log.actor ? (
-                        <DirectUserAvatar
-                          avatarUrl={
-                            log.actor.avatarUrl ||
-                            getDefaultAvatar(
-                              log.actor.gender,
-                              log.actor.id || log.actor.name || 'user'
-                            )
-                          }
-                          name={log.actor.name}
-                          size="sm"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[0.7rem] font-semibold text-gray-500">
-                          SYS
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-semibold">
-                          {log.actor?.name || log.actorName || 'System'}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {log.actor?.email || log.actorEmail || '-'}
+      <Card className="bg-white overflow-hidden shadow-sm">
+        {logs.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              icon={<Shield className="h-6 w-6 text-muted-foreground/60" />}
+              title="No audit entries found"
+              description="Actions on users, teams, escalation policies, and services will appear here."
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+            <Table className="min-w-[800px]">
+              <TableHeader className="bg-slate-50 border-b border-border">
+                <TableRow>
+                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                    Timestamp
+                  </TableHead>
+                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                    Actor
+                  </TableHead>
+                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                    Action
+                  </TableHead>
+                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                    Entity
+                  </TableHead>
+                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                    Details
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.map(log => (
+                  <TableRow
+                    key={log.id}
+                    className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
+                  >
+                    <TableCell className="p-4 font-mono text-xs text-muted-foreground">
+                      {formatDateTime(log.createdAt, userTimeZone, { format: 'datetime' })}
+                    </TableCell>
+                    <TableCell className="p-4">
+                      <div className="flex items-center gap-3">
+                        {log.actor ? (
+                          <DirectUserAvatar
+                            avatarUrl={
+                              log.actor.avatarUrl ||
+                              getDefaultAvatar(
+                                log.actor.gender,
+                                log.actor.id || log.actor.name || 'user'
+                              )
+                            }
+                            name={log.actor.name}
+                            size="sm"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[0.7rem] font-semibold text-gray-500">
+                            SYS
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-semibold text-sm">
+                            {log.actor?.name || log.actorName || 'System'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {log.actor?.email || log.actorEmail || '-'}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="p-4 font-semibold">{log.action}</TableCell>
-                  <TableCell className="p-4">
-                    <div className="text-sm">{log.entityType}</div>
-                    <div className="text-xs text-muted-foreground">{log.entityId || '-'}</div>
-                  </TableCell>
-                  <TableCell className="p-4 text-sm text-muted-foreground">
-                    {log.details ? JSON.stringify(log.details) : '-'}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {logs.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="p-8 text-center text-muted-foreground">
-                    No audit entries yet. Actions on users, teams, and services will appear here.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                    </TableCell>
+                    <TableCell className="p-4 font-semibold text-sm">{log.action}</TableCell>
+                    <TableCell className="p-4">
+                      <div className="text-sm font-medium">{log.entityType}</div>
+                      <div className="text-xs text-muted-foreground">{log.entityId || '-'}</div>
+                    </TableCell>
+                    <TableCell className="p-4 text-xs font-mono text-muted-foreground max-w-xs truncate">
+                      {log.details ? JSON.stringify(log.details) : '-'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </Card>
       <div className="mt-4 flex items-center justify-between text-sm">
         <span className="text-muted-foreground">
@@ -181,12 +216,18 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
         </span>
         <div className="flex gap-2">
           {page > 1 && (
-            <Link className="rounded border px-3 py-2 hover:bg-muted" href={pageHref(page - 1)}>
+            <Link
+              className="rounded border px-3 py-2 hover:bg-muted font-medium"
+              href={pageHref(page - 1)}
+            >
               Previous
             </Link>
           )}
           {page < totalPages && (
-            <Link className="rounded border px-3 py-2 hover:bg-muted" href={pageHref(page + 1)}>
+            <Link
+              className="rounded border px-3 py-2 hover:bg-muted font-medium"
+              href={pageHref(page + 1)}
+            >
               Next
             </Link>
           )}

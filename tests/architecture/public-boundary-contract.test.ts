@@ -36,12 +36,12 @@ describe('public boundary contract', () => {
   });
 
   it('revalidates every long-lived stream against the shared authorization scope', () => {
-    for (const file of [
-      'src/app/api/events/stream/route.ts',
-      'src/app/api/realtime/stream/route.ts',
-      'src/app/api/widgets/stream/route.ts',
-    ]) {
-      const stream = readFileSync(file, 'utf8');
+    const streams = [
+      readFileSync('src/app/api/events/stream/route.ts', 'utf8'),
+      readFileSync('src/app/api/realtime/stream/route.ts', 'utf8'),
+      readFileSync('src/app/api/widgets/stream/route.ts', 'utf8'),
+    ];
+    for (const stream of streams) {
       expect(stream).toContain('resolveStreamAuthorization');
       expect(stream).toContain('hasSameStreamAuthorizationScope');
       expect(stream).toContain("type: 'authorization_revoked'");
