@@ -21,7 +21,7 @@ Only an application **Admin** can create, change, reorder, or delete policies an
 
 Delays mean “wait before this step,” not “wait after the previous notification.” A zero delay executes the step immediately.
 
-Policies do not repeat in v1.4. A policy that executes through its valid steps can finish as completed; terminal routing failures remain failed so operators can distinguish exhaustion from successful execution.
+Policies do not repeat in v1.5. A policy that executes through its valid steps can finish as completed; terminal routing failures remain failed so operators can distinguish exhaustion from successful execution.
 
 ## Target types
 
@@ -41,17 +41,15 @@ For a Team target, service ownership is not required. For a Schedule target, an 
 4. Open it and add ordered steps.
 5. For each step, select User, Team, or Schedule and set a non-negative delay.
 6. Drag or move steps into final order.
-7. Attach the policy from **Service → Settings**.
+7. Attach the policy to a service from **Service → Settings** or view the full ladder directly in the service's **Escalation Policy** tab.
 
 The policy can be saved with no steps, but it cannot page anyone until at least one valid step exists.
 
-### Channel behavior in the v1.4 interface
+### Channel behavior
 
-New steps created in the current v1.4 policy interface do not expose a per-step channel selector. They use each resolved user's enabled notification preferences and the configured workspace providers. Although the data model supports stored step-channel overrides, do not depend on an undocumented database-level configuration as a public workflow.
+New steps created in the policy interface use each resolved user's enabled notification preferences and the configured workspace providers. Although the data model supports stored step-channel overrides, do not depend on an undocumented database-level configuration as a public workflow.
 
 Personal Quiet Hours is a separate recipient policy. It is off by default and must be explicitly enabled by the user. When active, it can suppress LOW-urgency Push, SMS, and WhatsApp delivery for that recipient; Email and in-app remain available, and MEDIUM/HIGH urgency bypasses Quiet Hours. Fallback does not reintroduce a channel that Quiet Hours intentionally suppressed.
-
-Likewise, the current add-step interface does not expose the Team Lead-only toggle. Existing lead-only steps can execute and are labeled in the policy view, but new policy design should not depend on setting that flag through the v1.4 UI.
 
 ## Design a resilient policy
 

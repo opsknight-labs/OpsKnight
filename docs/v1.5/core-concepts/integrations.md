@@ -24,14 +24,16 @@ See the [integration catalog](../integrations/README.md) for exact routes and ve
 
 Application **Responders** and **Admins** can manage service integrations.
 
-1. Open **Services**, select the receiving service, and open **Integrations**.
-2. Select the provider type and enter a descriptive unique name.
-3. Create the integration.
-4. Copy its integration ID, provider-native URL, and generated integration key.
-5. If the provider can sign raw webhooks using the scheme supported by its OpsKnight route, rotate/create a signature secret and configure the same value at the provider.
-6. Send a synthetic trigger and recovery.
+1. Open **Services**, select the receiving service, and switch to the **Integrations & Webhooks** tab.
+2. Select **Add Monitoring Integration** to browse available providers by category.
+3. Choose a provider type, enter a descriptive integration name, and create the integration.
+4. From the newly generated integration card:
+   - For **Events API v2**: copy the unique **Routing / API Key** and use the provided `curl` quick test.
+   - For **Provider Webhooks**: copy the complete **Webhook Ingest URL**.
+5. **Optional Signature Verification**: By default, signature verification is disabled (`No secret configured`), allowing senders that do not support HMAC signatures to function with standard key authentication. If your upstream provider supports HMAC webhook signing, click **Generate Secret** and configure the resulting 32-byte secret in your provider's webhook settings.
+6. Send a synthetic trigger and recovery alert to verify intake.
 
-An integration record contains its ID, type, service, generated 32-character hexadecimal key, enabled state, and optional signature secret.
+An integration record contains its ID, type, service, generated 32-character hexadecimal routing key, enabled state, and optional HMAC signature secret.
 
 ## Authenticate provider-native routes
 
@@ -57,17 +59,21 @@ X-Integration-Key: INTEGRATION_KEY
 
 `X-API-Key` is also accepted. For senders that cannot set headers, `integrationKey`, `integration_key`, or `key` query parameters are fallback options.
 
-Prefer a header. Query values leak more easily through provider UI, browser history, proxies, access logs, and monitoring. The integration ID is not a credential and does not authorize a request by itself.
+Prefer a header whenever possible. Query values leak more easily through provider UI, browser history, proxies, access logs, and monitoring. The integration ID is not a credential and does not authorize a request by itself.
 
 The Events API uses the integration/routing key without an integration ID; follow the [Events API](../api/events.md) contract for that path.
 
-## Signature verification
+## Optional signature verification
+
+In OpsKnight, signature verification is **strictly optional**:
+
+- **Default (Unconfigured)**: The integration displays `No secret configured (Signature verification disabled)`. Senders authenticate solely via their routing key in the header or URL.
+- **Configured (Active)**: When a secret is generated, OpsKnight marks the integration with `Verification Active` and requires valid HMAC signatures matching the route's provider mode.
+- **Removing / Disabling**: You can remove the secret at any time using the Remove Secret dialog, reverting the integration to optional key-only verification without downtime or re-creating the endpoint.
 
 When `INTEGRATION_VERIFY_SIGNATURES` is not `false`, a stored signature secret activates the signature check for routes that do not explicitly skip it. The exact header and message construction depend on the route's provider mode, such as GitHub, GitLab, Sentry, Grafana, Vercel, or generic HMAC.
 
 Do not assume every vendor uses `X-Signature` or the same encoding. Follow the provider guide and validate a deliberately bad signature before production. The integration key remains required even when HMAC succeeds.
-
-If no signature secret is stored, key validation is the baseline request authentication. If a provider cannot generate the required signature format, keep the key in a header, restrict network ingress where possible, and document the limitation.
 
 ## Normalization
 

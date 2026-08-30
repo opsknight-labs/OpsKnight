@@ -85,7 +85,7 @@ See [Escalation policies](escalation-policies.md).
 
 ## Find and audit teams
 
-The Teams page supports name/description search, minimum member and service counts, sorting by creation time, name, member count, or service count, and 10 teams per page. Each card shows members, services, team statistics, and recent team/member audit activity.
+The Teams page supports name/description search, minimum member and service counts, sorting by creation time, name, member count, or service count, and 10 teams per page. Each card shows members, services, team statistics, standardized empty states when unpopulated, and recent team/member audit activity powered by the unified `ActivityTimeline`.
 
 Use the workspace **Audit Log** for broader investigation and retention-based history. The activity panel is an operational convenience, not a separate audit store.
 
