@@ -79,6 +79,7 @@ export default function ScheduleDirectoryList({ schedules }: ScheduleDirectoryLi
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search schedules by name, responder, or timezone..."
               className="pl-8 pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
+              style={{ paddingLeft: '2.25rem', paddingRight: '2rem' }}
             />
             {searchQuery && (
               <button
