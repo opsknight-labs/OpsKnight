@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   teamFindUnique: vi.fn(),
   userFindUnique: vi.fn(),
   incidentEventCreate: vi.fn(),
+  enqueueIncidentUpdateSideEffects: vi.fn(),
   transaction: vi.fn(),
 }));
 
@@ -23,6 +24,10 @@ vi.mock('@/lib/rbac', () => ({
 
 vi.mock('@/lib/incidents/creation', () => ({
   executeIncidentCreation: mocks.executeIncidentCreation,
+}));
+
+vi.mock('@/lib/event-outbox', () => ({
+  enqueueIncidentUpdateSideEffects: mocks.enqueueIncidentUpdateSideEffects,
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -122,5 +127,23 @@ describe('incident server-action typed errors', () => {
       details: { resource: 'team', teamId: 'team-missing' },
     });
     expect(mocks.incidentUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not enqueue user notifications when an incident is unassigned', async () => {
+    await reassignIncident('inc-1', '', '');
+
+    expect(mocks.enqueueIncidentUpdateSideEffects).not.toHaveBeenCalled();
+  });
+
+  it('enqueues an assignment-specific team notification intent', async () => {
+    mocks.teamFindUnique.mockResolvedValue({ name: 'Platform' });
+
+    await reassignIncident('inc-1', '', 'team-1');
+
+    expect(mocks.enqueueIncidentUpdateSideEffects).toHaveBeenCalledWith(
+      expect.anything(),
+      'inc-1',
+      ['INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION']
+    );
   });
 });
