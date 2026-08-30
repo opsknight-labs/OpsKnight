@@ -4,8 +4,8 @@ import { useState, useMemo } from 'react';
 import ScheduleCard from '@/components/ScheduleCard';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { Card, CardContent } from '@/components/ui/shadcn/card';
-import { Search, X, Filter } from 'lucide-react';
+import { Search, X, Filter, Calendar } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
 
 type ScheduleItem = {
   id: string;
@@ -135,30 +135,30 @@ export default function ScheduleDirectoryList({ schedules }: ScheduleDirectoryLi
 
       {/* Grid or Empty Search State */}
       {filteredSchedules.length === 0 ? (
-        <Card className="border-dashed py-10 text-center">
-          <CardContent className="flex flex-col items-center justify-center p-0">
-            <Filter className="h-8 w-8 text-muted-foreground/50 mb-2" />
-            <p className="text-sm font-semibold text-foreground">No matching schedules</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {searchQuery
-                ? `No schedules matched "${searchQuery}". Try a different search term.`
-                : 'No schedules match the selected filter.'}
-            </p>
-            {(searchQuery || statusFilter !== 'all') && (
+        <EmptyState
+          icon={<Calendar className="h-6 w-6 text-muted-foreground/60" />}
+          title="No matching schedules"
+          description={
+            searchQuery
+              ? `No schedules matched "${searchQuery}". Try a different search term.`
+              : 'No schedules match the selected filter.'
+          }
+          action={
+            searchQuery || statusFilter !== 'all' ? (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => {
                   setSearchQuery('');
                   setStatusFilter('all');
                 }}
-                className="mt-3 text-xs"
+                className="text-xs h-8"
               >
                 Reset filters
               </Button>
-            )}
-          </CardContent>
-        </Card>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {filteredSchedules.map((schedule, index) => (

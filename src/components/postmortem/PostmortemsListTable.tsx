@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 
 import Pagination from '@/components/incident/Pagination';
+import EmptyState from '@/components/ui/EmptyState';
 import {
   MoreHorizontal,
   FileText,
@@ -131,15 +132,12 @@ export default function PostmortemsListTable({
 
   if (postmortems.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-12 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 mb-4">
-          <FileText className="h-6 w-6 text-slate-400" />
-        </div>
-        <h3 className="text-sm font-medium text-slate-900">No postmortems found</h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Try adjusting your filters or create a new postmortem.
-        </p>
-      </div>
+      <EmptyState
+        icon={<FileText className="h-6 w-6 text-muted-foreground/60" />}
+        title="No postmortems found"
+        description="Try adjusting your filters or create a new postmortem report."
+        size="md"
+      />
     );
   }
 

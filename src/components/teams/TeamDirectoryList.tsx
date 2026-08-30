@@ -3,8 +3,8 @@
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Search, X, Filter, Users } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
 import TeamDirectoryCard from './TeamDirectoryCard';
 
 type TeamItem = {
@@ -82,20 +82,12 @@ export default function TeamDirectoryList({ teams }: TeamDirectoryListProps) {
   // Zero-teams total onboarding empty state
   if (teams.length === 0) {
     return (
-      <Card className="border-dashed py-12 text-center shadow-xs">
-        <CardContent className="flex flex-col items-center justify-center p-0 space-y-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
-            <Users className="h-6 w-6" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-foreground">Welcome to Teams</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto leading-relaxed">
-              Teams group engineers, define incident escalation hierarchies, and attach service
-              ownership. Create your first team above to get started.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={<Users className="h-6 w-6 text-primary" />}
+        title="Welcome to Teams"
+        description="Teams group engineers, define incident escalation hierarchies, and attach service ownership. Create your first team above to get started."
+        size="lg"
+      />
     );
   }
 
@@ -166,30 +158,30 @@ export default function TeamDirectoryList({ teams }: TeamDirectoryListProps) {
 
       {/* Grid or Filtered Empty State */}
       {filteredTeams.length === 0 ? (
-        <Card className="border-dashed py-10 text-center">
-          <CardContent className="flex flex-col items-center justify-center p-0">
-            <Filter className="h-8 w-8 text-muted-foreground/40 mb-2" />
-            <p className="text-sm font-semibold text-foreground">No matching teams</p>
-            <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
-              {searchQuery
-                ? `No teams matched "${searchQuery}". Try searching with a different term.`
-                : 'No teams match the selected filter.'}
-            </p>
-            {(searchQuery || statusFilter !== 'all') && (
+        <EmptyState
+          icon={<Users className="h-6 w-6 text-muted-foreground/60" />}
+          title="No matching teams"
+          description={
+            searchQuery
+              ? `No teams matched "${searchQuery}". Try searching with a different term.`
+              : 'No teams match the selected filter.'
+          }
+          action={
+            searchQuery || statusFilter !== 'all' ? (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => {
                   setSearchQuery('');
                   setStatusFilter('all');
                 }}
-                className="mt-3 text-xs"
+                className="text-xs h-8"
               >
                 Reset filters
               </Button>
-            )}
-          </CardContent>
-        </Card>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid gap-3.5 sm:grid-cols-2">
           {filteredTeams.map(team => (

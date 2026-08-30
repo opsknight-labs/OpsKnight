@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Search, X, ShieldAlert, Layers } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
 import PolicyDirectoryCard, { type PolicyDirectoryItem } from './PolicyDirectoryCard';
 
 type FilterType = 'all' | 'in-use' | 'unassigned';
@@ -180,30 +181,26 @@ export default function PolicyDirectoryList({
           ))}
         </div>
       ) : (
-        <div className="text-center py-12 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 space-y-3">
-          <Layers className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-          <div className="space-y-1">
-            <h4 className="font-semibold text-sm text-foreground">
-              No matching escalation policies
-            </h4>
-            <p className="text-xs text-muted-foreground">
-              Try adjusting your search query or switching active filter tabs.
-            </p>
-          </div>
-          {(searchQuery || activeFilter !== 'all') && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSearchQuery('');
-                setActiveFilter('all');
-              }}
-              className="text-xs h-8"
-            >
-              Clear Filters
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          icon={<Layers className="h-6 w-6 text-muted-foreground/60" />}
+          title="No matching escalation policies"
+          description="Try adjusting your search query or switching active filter tabs."
+          action={
+            searchQuery || activeFilter !== 'all' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setActiveFilter('all');
+                }}
+                className="text-xs h-8"
+              >
+                Reset Filters
+              </Button>
+            ) : undefined
+          }
+        />
       )}
     </div>
   );

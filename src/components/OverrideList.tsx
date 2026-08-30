@@ -12,7 +12,8 @@ import { DirectUserAvatar } from './UserAvatar';
 import { Card } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
-import { ArrowRight, Plus, Repeat2, Trash2 } from 'lucide-react';
+import { ArrowRight, Plus, Repeat2, Trash2, CalendarClock } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 
 export type PresentedOverride = {
@@ -74,9 +75,14 @@ export default function OverrideList({
 
   if (overrides.length === 0) {
     return (
-      <Card className="border-dashed p-6 text-center text-sm text-muted-foreground">
-        {emptyMessage}
-      </Card>
+      <EmptyState
+        icon={<CalendarClock className="h-6 w-6 text-muted-foreground/60" />}
+        title="No active or upcoming overrides"
+        description={
+          emptyMessage || 'Temporary coverage shifts and substitutions will appear here.'
+        }
+        size="sm"
+      />
     );
   }
 
