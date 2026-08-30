@@ -30,10 +30,11 @@ import {
   Slack,
   Webhook,
   Plus,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { updateServiceNotificationSettings } from '@/app/(app)/services/actions';
 
 type ServiceNotificationSettingsProps = {
   serviceId: string;
@@ -71,6 +72,7 @@ export default function ServiceNotificationSettings({
   serviceNotifyOnResolved,
   serviceNotifyOnSlaBreach,
 }: ServiceNotificationSettingsProps) {
+  const saveNotificationSettings = updateServiceNotificationSettings.bind(null, serviceId);
   const [channels, setChannels] = useState<string[]>(serviceNotificationChannels || []);
   const [notifyOnTriggered, setNotifyOnTriggered] = useState(serviceNotifyOnTriggered ?? true);
   const [notifyOnAck, setNotifyOnAck] = useState(serviceNotifyOnAck ?? true);
@@ -272,7 +274,7 @@ export default function ServiceNotificationSettings({
   );
 
   return (
-    <div className="space-y-6">
+    <form action={saveNotificationSettings} className="space-y-6">
       {/* Hidden input for validation */}
       <input
         ref={selectRef}
@@ -708,6 +710,11 @@ export default function ServiceNotificationSettings({
           </CardContent>
         </Card>
       )}
-    </div>
+      <div className="flex justify-end">
+        <Button type="submit" size="sm">
+          Save notification settings
+        </Button>
+      </div>
+    </form>
   );
 }

@@ -1,6 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import { NotificationChannel } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
@@ -11,6 +12,18 @@ import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/uniqu
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
 
 const JIRA_AUTO_CREATE_URGENCIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
+const SERVICE_NOTIFICATION_CHANNELS = new Set<NotificationChannel>([
+  'SLACK',
+  'WEBHOOK',
+  'EMAIL',
+  'SMS',
+  'PUSH',
+  'WHATSAPP',
+]);
+
+function serviceSettingsRedirect(serviceId: string) {
+  return `/services/${serviceId}?tab=settings&saved=1`;
+}
 
 export async function createIntegration(formData: FormData) {
   const serviceId = formData.get('serviceId') as string;
@@ -90,8 +103,6 @@ export async function updateService(serviceId: string, formData: FormData) {
   const description = formData.get('description') as string;
   const region = formData.get('region') as string;
   const slaTier = formData.get('slaTier') as string;
-  const slackWebhookUrl = formData.get('slackWebhookUrl') as string;
-  const slackChannel = formData.get('slackChannel') as string;
   const teamId = formData.get('teamId') as string;
   const escalationPolicyId = formData.get('escalationPolicyId') as string;
 
@@ -105,29 +116,6 @@ export async function updateService(serviceId: string, formData: FormData) {
     }
   }
 
-  // Notification preferences
-  const serviceNotifyOnTriggered = formData.get('serviceNotifyOnTriggered') === 'true';
-  const serviceNotifyOnAck = formData.get('serviceNotifyOnAck') === 'true';
-  const serviceNotifyOnResolved = formData.get('serviceNotifyOnResolved') === 'true';
-  const serviceNotifyOnSlaBreach = formData.get('serviceNotifyOnSlaBreach') === 'true';
-
-  // Get service notification channels (isolated from escalation)
-  // Filter to only valid NotificationChannel enum values
-  const allChannels = formData.getAll('serviceNotificationChannels') as string[];
-  const validChannels = ['SLACK', 'WEBHOOK', 'EMAIL', 'SMS', 'PUSH', 'WHATSAPP'];
-  const serviceNotificationChannels = allChannels.filter(
-    ch => validChannels.includes(ch) && !ch.includes(',')
-  );
-
-  // ChatOps war-room overrides
-  const autoCreateWarRoomValue = formData.get('autoCreateWarRoom');
-  const autoCreateWarRoom = autoCreateWarRoomValue === 'on' || autoCreateWarRoomValue === 'true';
-  const warRoomVideoBridgeRaw = formData.get('warRoomVideoBridge') as string | null;
-  const warRoomVideoBridge =
-    warRoomVideoBridgeRaw && warRoomVideoBridgeRaw !== 'INHERIT' ? warRoomVideoBridgeRaw : null;
-  const warRoomCustomBridgeUrl =
-    ((formData.get('warRoomCustomBridgeUrl') as string | null) ?? '').trim() || null;
-
   try {
     const normalizedName = await assertServiceNameAvailable(name, { excludeId: serviceId });
 
@@ -138,21 +126,8 @@ export async function updateService(serviceId: string, formData: FormData) {
         description,
         region: region || null,
         slaTier: slaTier || null,
-        slackWebhookUrl: slackWebhookUrl || null,
-        slackChannel: slackChannel || null,
         teamId: teamId || null,
         escalationPolicyId: escalationPolicyId || null,
-        serviceNotificationChannels:
-          serviceNotificationChannels.length > 0
-            ? (serviceNotificationChannels as any[]) // eslint-disable-line @typescript-eslint/no-explicit-any
-            : [], // Default: no channels selected
-        serviceNotifyOnTriggered,
-        serviceNotifyOnAck,
-        serviceNotifyOnResolved,
-        serviceNotifyOnSlaBreach,
-        autoCreateWarRoom,
-        warRoomVideoBridge,
-        warRoomCustomBridgeUrl,
       },
     });
 
@@ -172,14 +147,86 @@ export async function updateService(serviceId: string, formData: FormData) {
     revalidatePath(`/services/${serviceId}/settings`);
     revalidatePath('/services');
     revalidatePath('/audit');
-    redirect(`/services/${serviceId}/settings?saved=1`);
+    redirect(serviceSettingsRedirect(serviceId));
   } catch (error) {
     if (error instanceof UniqueNameConflictError) {
-      redirect(`/services/${serviceId}/settings?error=duplicate-service`);
+      redirect(`/services/${serviceId}?tab=settings&error=duplicate-service`);
     }
 
     throw error;
   }
+}
+
+export async function updateServiceNotificationSettings(serviceId: string, formData: FormData) {
+  const currentUser = await assertCanModifyService(serviceId);
+  const channels = formData
+    .getAll('serviceNotificationChannels')
+    .map(value => String(value))
+    .filter((value): value is NotificationChannel =>
+      SERVICE_NOTIFICATION_CHANNELS.has(value as NotificationChannel)
+    );
+  const slackChannel = formData.has('slackChannel')
+    ? String(formData.get('slackChannel') ?? '').trim() || null
+    : undefined;
+  const slackWebhookUrl = formData.has('slackWebhookUrl')
+    ? String(formData.get('slackWebhookUrl') ?? '').trim() || null
+    : undefined;
+
+  await prisma.service.update({
+    where: { id: serviceId },
+    data: {
+      serviceNotificationChannels: channels,
+      serviceNotifyOnTriggered: formData.get('serviceNotifyOnTriggered') === 'true',
+      serviceNotifyOnAck: formData.get('serviceNotifyOnAck') === 'true',
+      serviceNotifyOnResolved: formData.get('serviceNotifyOnResolved') === 'true',
+      serviceNotifyOnSlaBreach: formData.get('serviceNotifyOnSlaBreach') === 'true',
+      ...(slackChannel === undefined ? {} : { slackChannel }),
+      ...(slackWebhookUrl === undefined ? {} : { slackWebhookUrl }),
+    },
+  });
+
+  await logAudit({
+    action: 'service.notifications.updated',
+    entityType: 'SERVICE',
+    entityId: serviceId,
+    actorId: currentUser.id,
+    details: {
+      channels,
+      slackChannel: slackChannel !== undefined && Boolean(slackChannel),
+      slackWebhook: slackWebhookUrl !== undefined && Boolean(slackWebhookUrl),
+    },
+  });
+
+  revalidatePath(`/services/${serviceId}`);
+  redirect(serviceSettingsRedirect(serviceId));
+}
+
+export async function updateServiceChatOpsSettings(serviceId: string, formData: FormData) {
+  const currentUser = await assertCanModifyService(serviceId);
+  const bridge = String(formData.get('warRoomVideoBridge') ?? 'INHERIT');
+  const warRoomVideoBridge = bridge === 'INHERIT' ? null : bridge;
+  const warRoomCustomBridgeUrl =
+    String(formData.get('warRoomCustomBridgeUrl') ?? '').trim() || null;
+
+  await prisma.service.update({
+    where: { id: serviceId },
+    data: {
+      autoCreateWarRoom: formData.get('autoCreateWarRoom') === 'on',
+      warRoomVideoBridge,
+      warRoomCustomBridgeUrl,
+    },
+  });
+
+  await logAudit({
+    action: 'service.chatops.updated',
+    entityType: 'SERVICE',
+    entityId: serviceId,
+    actorId: currentUser.id,
+    details: { warRoomVideoBridge, hasCustomBridgeUrl: Boolean(warRoomCustomBridgeUrl) },
+  });
+
+  revalidatePath(`/services/${serviceId}`);
+  redirect(serviceSettingsRedirect(serviceId));
 }
 
 export async function saveJiraServiceMapping(

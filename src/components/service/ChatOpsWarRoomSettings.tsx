@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { MessageCircle } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
+import { updateServiceChatOpsSettings } from '@/app/(app)/services/actions';
 
 const VIDEO_BRIDGE_OPTIONS = [
   { value: 'INHERIT', label: 'Inherit Global' },
@@ -35,6 +37,8 @@ export default function ChatOpsWarRoomSettings({
   chatOpsEnabled: boolean;
   canManage: boolean;
 }) {
+  const saveChatOpsSettings = updateServiceChatOpsSettings.bind(null, serviceId);
+
   return (
     <Card>
       <CardHeader className="pb-4">
@@ -45,7 +49,8 @@ export default function ChatOpsWarRoomSettings({
               ChatOps & War Room Settings
             </CardTitle>
             <CardDescription>
-              Configure Slack channel creation and video war rooms for incidents affecting this service.
+              Configure Slack channel creation and video war rooms for incidents affecting this
+              service.
             </CardDescription>
           </div>
           <Badge variant={chatOpsEnabled ? 'default' : 'secondary'}>
@@ -54,9 +59,7 @@ export default function ChatOpsWarRoomSettings({
         </div>
       </CardHeader>
       <CardContent>
-          {/* Note: This component doesn't have its own form action. It is part of the parent service settings form. */}
-          <input type="hidden" name="chatops-serviceId" value={serviceId} />
-          
+        <form action={saveChatOpsSettings} className="space-y-4">
           <div className="space-y-4">
             <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
               <input
@@ -80,7 +83,9 @@ export default function ChatOpsWarRoomSettings({
                   className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {VIDEO_BRIDGE_OPTIONS.map(option => (
-                     <option key={option.value} value={option.value}>{option.label}</option>
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -96,6 +101,14 @@ export default function ChatOpsWarRoomSettings({
               </div>
             </div>
           </div>
+          {canManage && (
+            <div className="flex justify-end">
+              <Button type="submit" size="sm">
+                Save ChatOps settings
+              </Button>
+            </div>
+          )}
+        </form>
       </CardContent>
     </Card>
   );
