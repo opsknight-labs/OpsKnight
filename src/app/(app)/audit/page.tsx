@@ -1,6 +1,4 @@
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
@@ -18,8 +16,9 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import { Shield, FileText } from 'lucide-react';
 import { assertAuditorOrAdmin } from '@/lib/rbac';
-import type { AuditEntityType } from '@prisma/client';
-import Link from 'next/link';
+import type { Prisma } from '@prisma/client';
+import { parseAuditEntityType } from '@/lib/audit-filters';
+import { logger } from '@/lib/logger';
 
 import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 import AuditFilters from '@/components/audit/AuditFilters';
@@ -37,11 +36,41 @@ type AuditLogPageProps = {
   }>;
 };
 
+const auditLogInclude = {
+  actor: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      avatarUrl: true,
+    },
+  },
+} satisfies Prisma.AuditLogInclude;
+
+type AuditLogRow = Prisma.AuditLogGetPayload<{ include: typeof auditLogInclude }>;
+
+type AuditLogView = Omit<AuditLogRow, 'createdAt' | 'details'> & {
+  createdAt: string;
+  details: string;
+};
+
+function serializeAuditDetails(details: Prisma.JsonValue | null): string {
+  if (details === null) return '-';
+
+  try {
+    return JSON.stringify(details);
+  } catch (error) {
+    // A malformed historical value should not make the audit log unavailable.
+    logger.warn('[AuditLog] Could not serialize record details', { error });
+    return '[Details unavailable]';
+  }
+}
+
 export default async function AuditLogPage({ searchParams }: AuditLogPageProps) {
-  await assertAuditorOrAdmin();
+  const currentUser = await assertAuditorOrAdmin();
 
   const awaitedParams = await searchParams;
-  const entityType = awaitedParams?.entityType as AuditEntityType | undefined;
+  const entityType = parseAuditEntityType(awaitedParams?.entityType);
   const entityId = awaitedParams?.entityId;
   const actorId = awaitedParams?.actorId;
   const action = awaitedParams?.action;
@@ -49,14 +78,9 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
   const page = Math.max(1, Number.parseInt(awaitedParams?.page || '1', 10) || 1);
   const pageSize = 50;
 
-  const session = await getServerSession(await getAuthOptions());
-  const email = session?.user?.email ?? null;
-  const user = email
-    ? await prisma.user.findUnique({ where: { email }, select: { timeZone: true } })
-    : null;
-  const userTimeZone = getUserTimeZone(user ?? undefined);
+  const userTimeZone = getUserTimeZone(currentUser);
 
-  const baseWhere: Record<string, unknown> = {
+  const where: Prisma.AuditLogWhereInput = {
     ...(entityType ? { entityType } : {}),
     ...(entityId ? { entityId } : {}),
     ...(actorId ? { actorId } : {}),
@@ -65,7 +89,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
 
   if (search && search.trim()) {
     const q = search.trim();
-    baseWhere.OR = [
+    where.OR = [
       { action: { contains: q, mode: 'insensitive' } },
       { entityId: { contains: q, mode: 'insensitive' } },
       { actorName: { contains: q, mode: 'insensitive' } },
@@ -75,28 +99,35 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     ];
   }
 
-  const where = baseWhere;
-
-  const [logs, totalLogs] = await Promise.all([
-    prisma.auditLog.findMany({
-      where,
-      include: {
-        actor: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatarUrl: true,
-            gender: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.auditLog.count({ where }),
-  ]);
+  let logs: AuditLogRow[];
+  let totalLogs: number;
+  try {
+    [logs, totalLogs] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        include: auditLogInclude,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
+  } catch (error) {
+    logger.error('[AuditLog] Failed to load records', {
+      error,
+      entityType,
+      hasEntityIdFilter: Boolean(entityId),
+      hasActorIdFilter: Boolean(actorId),
+      hasActionFilter: Boolean(action),
+      hasSearchFilter: Boolean(search),
+    });
+    throw error;
+  }
+  const viewLogs: AuditLogView[] = logs.map(log => ({
+    ...log,
+    createdAt: log.createdAt.toISOString(),
+    details: serializeAuditDetails(log.details),
+  }));
   const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
   const pageHref = (targetPage: number) => {
     const params = new URLSearchParams();
@@ -134,7 +165,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
           },
           {
             label: 'Page Entries',
-            value: logs.length,
+            value: viewLogs.length,
             icon: <FileText className="h-3.5 w-3.5 text-blue-200" />,
           },
           {
@@ -151,12 +182,12 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
           currentEntityType={entityType}
           currentAction={action}
           currentSearch={search}
-          logsData={logs}
+          logsData={viewLogs}
         />
 
         {/* Audit Table */}
         <Card className="bg-white overflow-hidden shadow-sm">
-          {logs.length === 0 ? (
+          {viewLogs.length === 0 ? (
             <div className="p-6">
               <EmptyState
                 icon={<Shield className="h-6 w-6 text-muted-foreground/60" />}
@@ -196,7 +227,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {logs.map(log => (
+                    {viewLogs.map(log => (
                       <TableRow
                         key={log.id}
                         className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
@@ -211,7 +242,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
                                 avatarUrl={
                                   log.actor.avatarUrl ||
                                   getDefaultAvatar(
-                                    log.actor.gender,
+                                    undefined,
                                     log.actor.id || log.actor.name || 'user'
                                   )
                                 }
@@ -245,7 +276,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
                           </div>
                         </TableCell>
                         <TableCell className="p-4 text-xs font-mono text-muted-foreground max-w-xs truncate">
-                          {log.details ? JSON.stringify(log.details) : '-'}
+                          {log.details}
                         </TableCell>
                       </TableRow>
                     ))}

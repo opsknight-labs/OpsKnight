@@ -1263,7 +1263,7 @@ model SystemSettings {
   // Data Retention Policy (days)
   incidentRetentionDays Int @default(730) // 2 years - how long to keep incident data
   alertRetentionDays    Int @default(365) // 1 year - how long to keep alert data
-  logRetentionDays      Int @default(90) // 90 days - how long to keep log entries
+  logRetentionDays      Int @default(365) // 1 year - audit and incident event history
   metricsRetentionDays  Int @default(365) // 1 year - how long to keep metric rollups
   realTimeWindowDays    Int @default(90) // 90 days - real-time queries, older uses rollups
 
