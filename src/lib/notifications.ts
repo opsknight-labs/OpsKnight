@@ -32,6 +32,23 @@ export async function sendNotification(
       error: `Unknown channel: ${String(channel)}`,
     };
   }
+
+  // Responder eligibility is security- and correctness-sensitive. Validate it
+  // at the central delivery boundary so every caller (web, REST, escalation,
+  // bulk jobs, retries) fails closed even if an upstream adapter is stale.
+  const recipient = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { status: true },
+  });
+  if (!recipient || recipient.status !== 'ACTIVE') {
+    return {
+      success: false,
+      skipped: true,
+      terminal: true,
+      error: 'Notification recipient is not an active user.',
+    };
+  }
+
   // Check for duplicate pending/sent notification with the same payload within debounce window (60s)
   if (typeof prisma.notification?.findFirst === 'function') {
     const debounceWindow = new Date(Date.now() - 60_000);
@@ -91,7 +108,7 @@ export async function sendNotification(
       });
 
       // Fetch recipient details for attribution
-      const recipient = prisma.user?.findUnique
+      const recipientDetails = prisma.user?.findUnique
         ? await prisma.user
             .findUnique({
               where: { id: userId },
@@ -99,7 +116,7 @@ export async function sendNotification(
             })
             .catch(() => null)
         : null;
-      const recipientName = recipient?.name || recipient?.email || userId;
+      const recipientName = recipientDetails?.name || recipientDetails?.email || userId;
 
       // Log to incident timeline
       try {
