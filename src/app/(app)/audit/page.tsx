@@ -21,6 +21,9 @@ import { assertAuditorOrAdmin } from '@/lib/rbac';
 import type { AuditEntityType } from '@prisma/client';
 import Link from 'next/link';
 
+import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
+import AuditFilters from '@/components/audit/AuditFilters';
+
 export const dynamic = 'force-dynamic';
 
 type AuditLogPageProps = {
@@ -29,6 +32,7 @@ type AuditLogPageProps = {
     entityId?: string;
     actorId?: string;
     action?: string;
+    search?: string;
     page?: string;
   }>;
 };
@@ -41,6 +45,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
   const entityId = awaitedParams?.entityId;
   const actorId = awaitedParams?.actorId;
   const action = awaitedParams?.action;
+  const search = awaitedParams?.search;
   const page = Math.max(1, Number.parseInt(awaitedParams?.page || '1', 10) || 1);
   const pageSize = 50;
 
@@ -51,12 +56,26 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     : null;
   const userTimeZone = getUserTimeZone(user ?? undefined);
 
-  const where = {
+  const baseWhere: Record<string, unknown> = {
     ...(entityType ? { entityType } : {}),
     ...(entityId ? { entityId } : {}),
     ...(actorId ? { actorId } : {}),
     ...(action ? { action } : {}),
   };
+
+  if (search && search.trim()) {
+    const q = search.trim();
+    baseWhere.OR = [
+      { action: { contains: q, mode: 'insensitive' } },
+      { entityId: { contains: q, mode: 'insensitive' } },
+      { actorName: { contains: q, mode: 'insensitive' } },
+      { actorEmail: { contains: q, mode: 'insensitive' } },
+      { actor: { name: { contains: q, mode: 'insensitive' } } },
+      { actor: { email: { contains: q, mode: 'insensitive' } } },
+    ];
+  }
+
+  const where = baseWhere;
 
   const [logs, totalLogs] = await Promise.all([
     prisma.auditLog.findMany({
@@ -85,6 +104,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     if (entityId) params.set('entityId', entityId);
     if (actorId) params.set('actorId', actorId);
     if (action) params.set('action', action);
+    if (search) params.set('search', search);
     params.set('page', String(targetPage));
     return `/audit?${params.toString()}`;
   };
@@ -125,113 +145,124 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
         ]}
       />
 
-      {/* Audit Table */}
-      <Card className="bg-white overflow-hidden shadow-sm">
-        {logs.length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              icon={<Shield className="h-6 w-6 text-muted-foreground/60" />}
-              title="No audit entries found"
-              description="Actions on users, teams, escalation policies, and services will appear here."
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
-            <Table className="min-w-[800px]">
-              <TableHeader className="bg-slate-50 border-b border-border">
-                <TableRow>
-                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                    Timestamp
-                  </TableHead>
-                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                    Actor
-                  </TableHead>
-                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                    Action
-                  </TableHead>
-                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                    Entity
-                  </TableHead>
-                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                    Details
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.map(log => (
-                  <TableRow
-                    key={log.id}
-                    className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
-                  >
-                    <TableCell className="p-4 font-mono text-xs text-muted-foreground">
-                      {formatDateTime(log.createdAt, userTimeZone, { format: 'datetime' })}
-                    </TableCell>
-                    <TableCell className="p-4">
-                      <div className="flex items-center gap-3">
-                        {log.actor ? (
-                          <DirectUserAvatar
-                            avatarUrl={
-                              log.actor.avatarUrl ||
-                              getDefaultAvatar(
-                                log.actor.gender,
-                                log.actor.id || log.actor.name || 'user'
-                              )
-                            }
-                            name={log.actor.name}
-                            size="sm"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[0.7rem] font-semibold text-gray-500">
-                            SYS
+      <div className="space-y-4">
+        {/* Search & Filter Toolbar with CSV Export and Live Badge */}
+        <AuditFilters
+          currentEntityType={entityType}
+          currentAction={action}
+          currentSearch={search}
+          logsData={logs}
+        />
+
+        {/* Audit Table */}
+        <Card className="bg-white overflow-hidden shadow-sm">
+          {logs.length === 0 ? (
+            <div className="p-6">
+              <EmptyState
+                icon={<Shield className="h-6 w-6 text-muted-foreground/60" />}
+                title={
+                  search || entityType || action
+                    ? 'No matching audit entries'
+                    : 'No audit entries found'
+                }
+                description={
+                  search || entityType || action
+                    ? 'Try clearing or modifying your filter criteria.'
+                    : 'Actions on users, teams, escalation policies, and services will appear here.'
+                }
+              />
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+                <Table className="min-w-[800px]">
+                  <TableHeader className="bg-slate-50 border-b border-border">
+                    <TableRow>
+                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                        Timestamp
+                      </TableHead>
+                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                        Actor
+                      </TableHead>
+                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                        Action
+                      </TableHead>
+                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                        Entity
+                      </TableHead>
+                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                        Details
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {logs.map(log => (
+                      <TableRow
+                        key={log.id}
+                        className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
+                      >
+                        <TableCell className="p-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                          {formatDateTime(log.createdAt, userTimeZone, { format: 'datetime' })}
+                        </TableCell>
+                        <TableCell className="p-4">
+                          <div className="flex items-center gap-3">
+                            {log.actor ? (
+                              <DirectUserAvatar
+                                avatarUrl={
+                                  log.actor.avatarUrl ||
+                                  getDefaultAvatar(
+                                    log.actor.gender,
+                                    log.actor.id || log.actor.name || 'user'
+                                  )
+                                }
+                                name={log.actor.name}
+                                size="sm"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[0.7rem] font-semibold text-gray-500">
+                                SYS
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-semibold text-sm">
+                                {log.actor?.name || log.actorName || 'System'}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {log.actor?.email || log.actorEmail || '-'}
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        <div>
-                          <div className="font-semibold text-sm">
-                            {log.actor?.name || log.actorName || 'System'}
+                        </TableCell>
+                        <TableCell className="p-4">
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800">
+                            {log.action}
+                          </span>
+                        </TableCell>
+                        <TableCell className="p-4">
+                          <div className="text-sm font-medium">{log.entityType}</div>
+                          <div className="text-xs text-muted-foreground font-mono">
+                            {log.entityId || '-'}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {log.actor?.email || log.actorEmail || '-'}
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="p-4 font-semibold text-sm">{log.action}</TableCell>
-                    <TableCell className="p-4">
-                      <div className="text-sm font-medium">{log.entityType}</div>
-                      <div className="text-xs text-muted-foreground">{log.entityId || '-'}</div>
-                    </TableCell>
-                    <TableCell className="p-4 text-xs font-mono text-muted-foreground max-w-xs truncate">
-                      {log.details ? JSON.stringify(log.details) : '-'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </Card>
-      <div className="mt-4 flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">
-          Page {Math.min(page, totalPages)} of {totalPages} · {totalLogs} entries
-        </span>
-        <div className="flex gap-2">
-          {page > 1 && (
-            <Link
-              className="rounded border px-3 py-2 hover:bg-muted font-medium"
-              href={pageHref(page - 1)}
-            >
-              Previous
-            </Link>
+                        </TableCell>
+                        <TableCell className="p-4 text-xs font-mono text-muted-foreground max-w-xs truncate">
+                          {log.details ? JSON.stringify(log.details) : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Standardized Pagination Footer */}
+              <TablePaginationFooter
+                page={page}
+                pageSize={pageSize}
+                totalCount={totalLogs}
+                pageHref={pageHref}
+              />
+            </>
           )}
-          {page < totalPages && (
-            <Link
-              className="rounded border px-3 py-2 hover:bg-muted font-medium"
-              href={pageHref(page + 1)}
-            >
-              Next
-            </Link>
-          )}
-        </div>
+        </Card>
       </div>
     </main>
   );

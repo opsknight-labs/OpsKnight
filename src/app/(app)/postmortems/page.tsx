@@ -12,10 +12,12 @@ import PostmortemsListTable from '@/components/postmortem/PostmortemsListTable';
 import { getUserTimeZone } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 
+import PostmortemsFilters from '@/components/postmortem/PostmortemsFilters';
+
 export default async function PostmortemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string }>;
+  searchParams: Promise<{ status?: string; search?: string; serviceId?: string; page?: string }>;
 }) {
   const session = await getServerSession(await getAuthOptions());
   if (!session) {
@@ -24,9 +26,17 @@ export default async function PostmortemsPage({
 
   const params = await searchParams;
   const status = params.status as 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' | undefined;
+  const search = params.search;
+  const serviceId = params.serviceId;
   const page = params.page ? parseInt(params.page) : 1;
 
-  const { postmortems, pagination } = await getAllPostmortems({ status, page });
+  const [{ postmortems, pagination }, services] = await Promise.all([
+    getAllPostmortems({ status, search, serviceId, page }),
+    prisma.service.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
   const permissions = await getUserPermissions();
   const canCreate = permissions.isResponderOrAbove;
 
@@ -135,57 +145,15 @@ export default async function PostmortemsPage({
       />
 
       <div className="space-y-4 md:space-y-6">
-        {/* Actions & Filters */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex gap-2 p-1 bg-slate-100 rounded-lg border border-slate-200">
-            <Link
-              href="/postmortems"
-              className={cn(
-                'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200',
-                !status
-                  ? 'bg-white text-primary shadow-sm'
-                  : 'text-muted-foreground hover:bg-slate-200/50 hover:text-foreground'
-              )}
-            >
-              All
-            </Link>
-            <Link
-              href="/postmortems?status=PUBLISHED"
-              className={cn(
-                'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200',
-                status === 'PUBLISHED'
-                  ? 'bg-white text-primary shadow-sm'
-                  : 'text-muted-foreground hover:bg-slate-200/50 hover:text-foreground'
-              )}
-            >
-              Published
-            </Link>
-            <Link
-              href="/postmortems?status=DRAFT"
-              className={cn(
-                'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200',
-                status === 'DRAFT'
-                  ? 'bg-white text-primary shadow-sm'
-                  : 'text-muted-foreground hover:bg-slate-200/50 hover:text-foreground'
-              )}
-            >
-              Drafts
-            </Link>
-          </div>
+        {/* Unified Search & Filters Toolbar */}
+        <PostmortemsFilters
+          currentStatus={status}
+          currentSearch={search}
+          currentServiceId={serviceId}
+          services={services}
+          postmortemsData={postmortems}
+        />
 
-          {resolvedIncidentsWithoutPostmortems.length > 0 && (
-            <Link href="/postmortems/create">
-              <Button className="shadow-sm">
-                Create Postmortem
-                <span className="ml-2 bg-primary-foreground/20 px-1.5 py-0.5 rounded text-xs">
-                  {resolvedIncidentsWithoutPostmortems.length}
-                </span>
-              </Button>
-            </Link>
-          )}
-        </div>
-
-        {/* Postmortems List */}
         {/* Postmortems List */}
         <PostmortemsListTable
           postmortems={postmortems}
