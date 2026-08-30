@@ -64,15 +64,24 @@ export async function createWebhookIntegration(serviceId: string, formData: Form
 
 export async function updateWebhookIntegration(
   integrationId: string,
-  serviceId: string,
+  _serviceId: string,
   formData: FormData
 ) {
+  // Always authorize against the integration's persisted service. The route
+  // parameter is client-controlled and must not determine access.
+  const existing = await prisma.webhookIntegration.findUnique({
+    where: { id: integrationId },
+    select: { serviceId: true, secret: true },
+  });
+  if (!existing) throw new Error('Webhook integration not found');
+
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertCanModifyService(serviceId);
+    currentUser = await assertCanModifyService(existing.serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
+  const ownedServiceId = existing.serviceId;
 
   const name = formData.get('name') as string;
   const type = formData.get('type') as string;
@@ -85,11 +94,6 @@ export async function updateWebhookIntegration(
     throw new Error('Name, type, and URL are required');
   }
   await assertSafeOutboundUrl(url);
-
-  // Get existing webhook to preserve secret if not provided
-  const existing = await prisma.webhookIntegration.findUnique({
-    where: { id: integrationId },
-  });
 
   let normalizedName = name;
   try {
@@ -109,7 +113,7 @@ export async function updateWebhookIntegration(
       name: normalizedName,
       type,
       url,
-      secret: secret ? await encrypt(secret) : existing?.secret || null,
+      secret: secret ? await encrypt(secret) : existing.secret || null,
       channel: channel || null,
       enabled,
     },
@@ -118,20 +122,26 @@ export async function updateWebhookIntegration(
   await logAudit({
     action: 'webhook.integration.updated',
     entityType: 'SERVICE',
-    entityId: serviceId,
+    entityId: ownedServiceId,
     actorId: currentUser.id,
     details: { integrationId, name: normalizedName, type },
   });
 
-  revalidatePath(`/services/${serviceId}/settings`);
-  revalidatePath(`/services/${serviceId}/webhooks`);
-  redirect(`/services/${serviceId}/settings?saved=1`);
+  revalidatePath(`/services/${ownedServiceId}/settings`);
+  revalidatePath(`/services/${ownedServiceId}/webhooks`);
+  redirect(`/services/${ownedServiceId}/settings?saved=1`);
 }
 
-export async function deleteWebhookIntegration(integrationId: string, serviceId: string) {
+export async function deleteWebhookIntegration(integrationId: string, _serviceId: string) {
+  const existing = await prisma.webhookIntegration.findUnique({
+    where: { id: integrationId },
+    select: { serviceId: true },
+  });
+  if (!existing) throw new Error('Webhook integration not found');
+
   let currentUser: { id: string } | null = null;
   try {
-    currentUser = await assertCanModifyService(serviceId);
+    currentUser = await assertCanModifyService(existing.serviceId);
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Unauthorized');
   }
@@ -143,10 +153,10 @@ export async function deleteWebhookIntegration(integrationId: string, serviceId:
   await logAudit({
     action: 'webhook.integration.deleted',
     entityType: 'SERVICE',
-    entityId: serviceId,
+    entityId: existing.serviceId,
     actorId: currentUser.id,
     details: { integrationId },
   });
 
-  revalidatePath(`/services/${serviceId}/settings`);
+  revalidatePath(`/services/${existing.serviceId}/settings`);
 }

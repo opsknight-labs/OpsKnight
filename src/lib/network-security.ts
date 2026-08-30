@@ -43,23 +43,35 @@ export function isPrivateIp(ip: string): boolean {
 
   // IPv6 checks
   if (ip.includes(':')) {
+    const ipv6Parts = expandIpv6(ip);
+    if (!ipv6Parts) return true;
+
+    const firstHextet = ipv6Parts[0];
+    const isIpv4Embedded =
+      ipv6Parts.slice(0, 5).every(part => part === 0) &&
+      (ipv6Parts[5] === 0 || ipv6Parts[5] === 0xffff);
+    if (isIpv4Embedded) {
+      const ipv4 = `${ipv6Parts[6] >> 8}.${ipv6Parts[6] & 0xff}.${ipv6Parts[7] >> 8}.${ipv6Parts[7] & 0xff}`;
+      return isPrivateIp(ipv4);
+    }
+
     // Loopback
     if (lowerIp === '::1') return true;
     // Link-local (fe80::/10)
-    if (lowerIp.startsWith('fe80:')) return true;
+    if (firstHextet >= 0xfe80 && firstHextet <= 0xfebf) return true;
     // Unique Local Addresses (fc00::/7 includes fd00::/8)
-    if (lowerIp.startsWith('fc') || lowerIp.startsWith('fd')) return true;
-    // IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
-    if (lowerIp.startsWith('::ffff:')) {
-      const ipv4Part = ip.slice(7); // Extract IPv4 part
-      return isPrivateIp(ipv4Part);
-    }
+    if ((firstHextet & 0xfe00) === 0xfc00) return true;
     // Site-local (deprecated but still blocked) fec0::/10
-    if (lowerIp.startsWith('fec')) return true;
-    // Unspecified address and IPv4-compatible encodings.
-    if (lowerIp === '::' || lowerIp.startsWith('::ffff:0:')) return true;
+    if (firstHextet >= 0xfec0 && firstHextet <= 0xfeff) return true;
+    // Unspecified address.
+    if (lowerIp === '::') return true;
     // Documentation and multicast ranges.
-    if (lowerIp.startsWith('2001:db8:') || lowerIp.startsWith('ff')) return true;
+    if (
+      (firstHextet === 0x2001 && ipv6Parts[1] === 0x0db8) ||
+      (firstHextet & 0xff00) === 0xff00
+    ) {
+      return true;
+    }
     return false;
   }
 
@@ -112,6 +124,25 @@ export function isPrivateIp(ip: string): boolean {
   if (parts[0] >= 240) return true;
 
   return false;
+}
+
+function expandIpv6(ip: string): number[] | null {
+  const [address] = ip.split('%');
+  if (!address || address.includes('.')) return null;
+
+  const halves = address.split('::');
+  if (halves.length > 2) return null;
+  const parseHalf = (half: string) =>
+    half
+      ? half.split(':').map(part => (/^[0-9a-f]{1,4}$/i.test(part) ? parseInt(part, 16) : NaN))
+      : [];
+  const head = parseHalf(halves[0]);
+  const tail = parseHalf(halves[1] ?? '');
+  if ([...head, ...tail].some(Number.isNaN)) return null;
+
+  if (halves.length === 1) return head.length === 8 ? head : null;
+  const omitted = 8 - head.length - tail.length;
+  return omitted >= 1 ? [...head, ...Array(omitted).fill(0), ...tail] : null;
 }
 
 export async function assertSafeOutboundUrl(

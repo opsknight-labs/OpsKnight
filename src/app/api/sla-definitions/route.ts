@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
-import { assertAdmin } from '@/lib/rbac';
+import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import { serviceReadWhere } from '@/lib/authorization-filters';
 
 const createSchema = z.object({
   serviceId: z.string().min(1),
@@ -15,15 +15,21 @@ const createSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(await getAuthOptions());
-  if (!session?.user) {
+  const user = await getCurrentUser().catch(() => null);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const actor = await resolveUserActor(user.id);
+  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const serviceId = searchParams.get('serviceId');
 
-  const where = serviceId ? { serviceId, activeTo: null } : { activeTo: null };
+  const where = {
+    ...(serviceId ? { serviceId } : {}),
+    activeTo: null,
+    service: serviceReadWhere(actor),
+  };
 
   const definitions = await prisma.sLADefinition.findMany({
     where,
