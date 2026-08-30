@@ -11,6 +11,7 @@ import {
   type IncidentLifecycleCommand,
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
+import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
 
 type BulkLifecycleStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 
@@ -146,7 +147,7 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
     await prisma.$transaction(async tx => {
       await tx.incident.updateMany({
         where: { id: { in: incidentIds } },
-        data: { assigneeId },
+        data: { assigneeId, teamId: null },
       });
       await tx.incidentEvent.createMany({
         data: incidentIds.map(incidentId => ({
@@ -154,48 +155,15 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
           message: `Bulk reassigned to ${assignee.name}${user ? ` by ${user.name}` : ''}`,
         })),
       });
+      await Promise.all(
+        incidentIds.map(incidentId =>
+          enqueueIncidentUpdateSideEffects(tx, incidentId, [
+            'INCIDENT_UPDATE_USER_NOTIFICATION',
+            'INCIDENT_UPDATE_WEBHOOK',
+          ])
+        )
+      );
     });
-
-    const incidents = await prisma.incident.findMany({
-      where: { id: { in: incidentIds } },
-      include: {
-        service: { select: { id: true, name: true } },
-        assignee: {
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-        },
-      },
-    });
-
-    const { sendIncidentNotifications } = await import('@/lib/user-notifications');
-    const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-
-    await Promise.allSettled(
-      incidents.map(async incident => {
-        try {
-          await Promise.all([
-            sendIncidentNotifications(incident.id, 'updated'),
-            triggerWebhooksForService(incident.serviceId, 'incident.updated', {
-              id: incident.id,
-              title: incident.title,
-              description: incident.description,
-              status: incident.status,
-              urgency: incident.urgency,
-              priority: incident.priority,
-              service: incident.service,
-              assignee: incident.assignee,
-              createdAt: incident.createdAt.toISOString(),
-            }),
-          ]);
-        } catch (error) {
-          logger.error('Failed to send notifications for incident', {
-            component: 'bulk-actions',
-            action: 'reassign',
-            error,
-            incidentId: incident.id,
-          });
-        }
-      })
-    );
 
     revalidatePath('/incidents');
     return { success: true, count: incidentIds.length };
@@ -385,23 +353,23 @@ export async function bulkUpdateUrgency(incidentIds: string[], urgency: 'HIGH' |
   }
 
   try {
-    await prisma.incident.updateMany({
-      where: {
-        id: { in: incidentIds },
-      },
-      data: { urgency },
-    });
-
     const user = await getCurrentUser();
-    await prisma.incidentEvent.createMany({
-      data: incidentIds.map(incidentId => ({
-        incidentId,
-        message: `Bulk urgency updated to ${urgency}${user ? ` by ${user.name}` : ''}`,
-      })),
+    const updatedCount = await prisma.$transaction(async tx => {
+      const updated = await tx.incident.updateMany({
+        where: { id: { in: incidentIds } },
+        data: { urgency },
+      });
+      await tx.incidentEvent.createMany({
+        data: incidentIds.map(incidentId => ({
+          incidentId,
+          message: `Bulk urgency updated to ${urgency}${user ? ` by ${user.name}` : ''}`,
+        })),
+      });
+      return updated.count;
     });
 
     revalidatePath('/incidents');
-    return { success: true, count: incidentIds.length };
+    return { success: true, count: updatedCount };
   } catch (error) {
     logger.error('Bulk urgency update failed', {
       component: 'bulk-actions',

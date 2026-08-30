@@ -26,7 +26,11 @@ export async function notifyStatusPageSubscribers(
     | 'completed'
     | 'triggered'
     | 'acknowledged'
-) {
+    | 'snoozed'
+    | 'suppressed'
+): Promise<{ success: boolean; sent: number; failed: number; skipped?: boolean }> {
+  let totalSent = 0;
+  let totalFailed = 0;
   try {
     // 1. Get incident details with service
     const incident = await prisma.incident.findUnique({
@@ -38,14 +42,14 @@ export async function notifyStatusPageSubscribers(
 
     if (!incident) {
       logger.error(`Incident ${incidentId} not found for status page notifications`);
-      return;
+      return { success: true, sent: 0, failed: 0, skipped: true };
     }
 
     if (incident.visibility && incident.visibility !== 'PUBLIC') {
       logger.info(
         `Incident ${incidentId} has non-public visibility (${incident.visibility}). Skipping public status page notifications.`
       );
-      return;
+      return { success: true, sent: 0, failed: 0, skipped: true };
     }
 
     // 2. Find all status pages that include this service
@@ -74,7 +78,7 @@ export async function notifyStatusPageSubscribers(
       logger.info(
         `No status pages found displaying service ${incident.serviceId} for incident ${incidentId}`
       );
-      return; // No status pages configured for this service
+      return { success: true, sent: 0, failed: 0, skipped: true };
     }
 
     logger.info(`Found ${statusPages.length} status pages for incident ${incidentId}`);
@@ -161,12 +165,16 @@ export async function notifyStatusPageSubscribers(
       }
 
       logger.info(`Status page notifications sent: ${sent} success, ${failed} failed`);
+      totalSent += sent;
+      totalFailed += failed;
     }
+    return { success: totalFailed === 0, sent: totalSent, failed: totalFailed };
   } catch (error) {
     logger.error('Failed to notify status page subscribers', {
       error: error instanceof Error ? error.message : 'Unknown error',
       incidentId,
     });
+    return { success: false, sent: totalSent, failed: totalFailed + 1 };
   }
 }
 

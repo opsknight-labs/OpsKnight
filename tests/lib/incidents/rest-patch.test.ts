@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   runSerializableTransaction: vi.fn(),
   applyIncidentLifecycleTargetStatus: vi.fn(),
   executeIdempotentOperation: vi.fn(),
+  enqueueIncidentUpdateSideEffects: vi.fn(),
 }));
 
 vi.mock('@/lib/db-utils', () => ({
@@ -16,6 +17,10 @@ vi.mock('@/lib/incidents/lifecycle', () => ({
 
 vi.mock('@/lib/idempotency', () => ({
   executeIdempotentOperation: mocks.executeIdempotentOperation,
+}));
+
+vi.mock('@/lib/event-outbox', () => ({
+  enqueueIncidentUpdateSideEffects: mocks.enqueueIncidentUpdateSideEffects,
 }));
 
 import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
@@ -114,7 +119,7 @@ describe('REST incident patch transaction', () => {
     );
     expect(tx.incident.update).toHaveBeenCalledWith({
       where: { id: 'inc-1' },
-      data: { urgency: 'HIGH', assigneeId: 'user-2' },
+      data: { urgency: 'HIGH', assigneeId: 'user-2', teamId: null },
     });
     expect(tx.incidentEvent.create).toHaveBeenCalledWith({
       data: { incidentId: 'inc-1', message: 'Urgency updated to HIGH' },
@@ -134,7 +139,12 @@ describe('REST incident patch transaction', () => {
   it('passes the entire mixed mutation through one persistent idempotency key', async () => {
     tx.incident.findUnique
       .mockResolvedValueOnce({ id: 'inc-key', status: 'OPEN', urgency: 'LOW', assigneeId: null })
-      .mockResolvedValueOnce({ id: 'inc-key', status: 'ACKNOWLEDGED', urgency: 'HIGH', assigneeId: null });
+      .mockResolvedValueOnce({
+        id: 'inc-key',
+        status: 'ACKNOWLEDGED',
+        urgency: 'HIGH',
+        assigneeId: null,
+      });
     mocks.applyIncidentLifecycleTargetStatus.mockResolvedValue({
       incidentId: 'inc-key',
       command: 'ACKNOWLEDGE',
@@ -191,6 +201,29 @@ describe('REST incident patch transaction', () => {
     expect(tx.incident.findUnique).not.toHaveBeenCalled();
     expect(tx.incident.update).not.toHaveBeenCalled();
     expect(mocks.applyIncidentLifecycleTargetStatus).not.toHaveBeenCalled();
+  });
+
+  it('persists metadata side effects in the same transaction', async () => {
+    tx.incident.findUnique
+      .mockResolvedValueOnce({ id: 'inc-update', status: 'OPEN', urgency: 'LOW', assigneeId: null })
+      .mockResolvedValueOnce({
+        id: 'inc-update',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        assigneeId: null,
+      });
+
+    await applyRestIncidentPatch({
+      incidentId: 'inc-update',
+      urgency: 'HIGH',
+      hasAssigneeUpdate: false,
+      actor: { id: 'api-user' },
+    });
+
+    expect(mocks.enqueueIncidentUpdateSideEffects).toHaveBeenCalledWith(tx, 'inc-update', [
+      'INCIDENT_UPDATE_SERVICE_NOTIFICATION',
+      'INCIDENT_UPDATE_WEBHOOK',
+    ]);
   });
 
   it('preserves lifecycle no-op semantics without writing duplicate metadata or events', async () => {

@@ -214,70 +214,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return jsonError(error);
   }
 
-  const { incident, lifecycle, urgencyChanged, assigneeChanged, idempotencyReplayed } = result;
+  const { incident, idempotencyReplayed } = result;
   logger.info('api.incident.updated', {
     incidentId: incident.id,
     apiKeyId: apiKey.id,
     changed: result.changed,
     idempotencyReplayed,
   });
-
-  // Lifecycle effects are already persisted in the same transaction as the
-  // status change. Keep the existing immediate path only for a new, pure
-  // urgency/assignee update; idempotent replays must not resend these effects.
-  if (!idempotencyReplayed && !lifecycle?.changed && (urgencyChanged || assigneeChanged)) {
-    try {
-      const updatedIncident = await prisma.incident.findUnique({
-        where: { id },
-        include: {
-          service: { select: { id: true, name: true } },
-          assignee: {
-            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-          },
-        },
-      });
-
-      if (updatedIncident) {
-        const { triggerWebhooksForService } = await import('@/lib/status-page-webhooks');
-        await triggerWebhooksForService(updatedIncident.serviceId, 'incident.updated', {
-          id: updatedIncident.id,
-          title: updatedIncident.title,
-          description: updatedIncident.description,
-          status: updatedIncident.status,
-          urgency: updatedIncident.urgency,
-          priority: updatedIncident.priority,
-          service: {
-            id: updatedIncident.service.id,
-            name: updatedIncident.service.name,
-          },
-          assignee: updatedIncident.assignee,
-          createdAt: updatedIncident.createdAt.toISOString(),
-          acknowledgedAt: updatedIncident.acknowledgedAt?.toISOString() || null,
-          resolvedAt: updatedIncident.resolvedAt?.toISOString() || null,
-        });
-      }
-    } catch (error) {
-      logger.error('api.incident.webhook_trigger_failed', {
-        error: error instanceof Error ? error.message : String(error),
-        incidentId: id,
-      });
-    }
-
-    try {
-      const { sendServiceNotifications } = await import('@/lib/service-notifications');
-      sendServiceNotifications(incident.id, 'updated').catch(error => {
-        logger.error('api.incident.service_notification_failed', {
-          error: error instanceof Error ? error.message : String(error),
-          incidentId: incident.id,
-        });
-      });
-    } catch (error) {
-      logger.error('api.incident.service_notification_import_failed', {
-        error: error instanceof Error ? error.message : String(error),
-        incidentId: incident.id,
-      });
-    }
-  }
 
   return jsonOk(
     { incident },
