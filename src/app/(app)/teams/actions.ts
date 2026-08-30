@@ -510,7 +510,7 @@ export async function designateTeamLead(teamId: string, userId: string | null) {
 }
 
 export async function assignServicesToTeam(teamId: string, serviceIds: string[]) {
-  let currentUser: { id: string } | null = null;
+  let currentUser: { id: string; role: string } | null = null;
   try {
     currentUser = await assertAdminOrTeamOwner(teamId);
   } catch (error) {
@@ -524,6 +524,17 @@ export async function assignServicesToTeam(teamId: string, serviceIds: string[])
 
   if (serviceIds.length === 0) {
     return { error: 'Please select at least one service to assign.' };
+  }
+
+  const services = await prisma.service.findMany({
+    where: { id: { in: serviceIds } },
+    select: { id: true, teamId: true },
+  });
+  if (services.length !== new Set(serviceIds).size) {
+    return { error: 'One or more services could not be found.' };
+  }
+  if (currentUser.role !== 'ADMIN' && services.some(service => service.teamId !== null && service.teamId !== teamId)) {
+    return { error: 'Only administrators can move a service between teams.' };
   }
 
   await prisma.service.updateMany({

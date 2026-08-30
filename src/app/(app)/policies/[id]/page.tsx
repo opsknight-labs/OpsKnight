@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { assertAdmin, getUserPermissions } from '@/lib/rbac';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import StepsList from '@/components/policies/StepsList';
@@ -49,6 +49,11 @@ export default async function PolicyDetailPage({
 }) {
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
+  try {
+    await assertAdmin();
+  } catch {
+    notFound();
+  }
   const errorCode = resolvedSearchParams?.error;
   const defaultTab = resolvedSearchParams?.tab;
 

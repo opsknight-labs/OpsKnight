@@ -114,6 +114,23 @@ export async function assertAdminOrTeamOwner(teamId: string) {
   return user;
 }
 
+export async function getViewableTeamWhere(): Promise<Prisma.TeamWhereInput> {
+  const user = await getCurrentUser();
+  if (hasCapability(user.role as AppRole, CAPABILITIES.SERVICE_READ_ALL)) return {};
+  return { members: { some: { userId: user.id } } };
+}
+
+export async function assertCanViewTeam(teamId: string) {
+  const team = await prisma.team.findFirst({
+    where: { id: teamId, ...(await getViewableTeamWhere()) },
+    select: { id: true },
+  });
+  if (team) return getCurrentUser();
+  throw appError('AUTHORIZATION_DENIED', 'Unauthorized. You do not have permission to view this team.', {
+    teamId,
+  });
+}
+
 export async function assertResponderOrAbove() {
   return assertCapability(
     CAPABILITIES.OPERATIONS_MANAGE,

@@ -38,6 +38,7 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Users, UserCheck, UserPlus, UserX, ArrowUpDown } from 'lucide-react';
 import { isAppRole } from '@/lib/authorization';
+import { assertAdmin } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +78,11 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   const session = await getServerSession(await getAuthOptions());
   if (!session) {
     redirect('/login?callbackUrl=/users');
+  }
+  try {
+    await assertAdmin();
+  } catch {
+    redirect('/');
   }
 
   const userCount = await prisma.user.count();
