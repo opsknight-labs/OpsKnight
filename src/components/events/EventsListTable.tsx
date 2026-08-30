@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatDateTime } from '@/lib/timezone';
@@ -26,7 +26,8 @@ import LivePulseBadge from '@/components/ui/LivePulseBadge';
 import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 import EmptyState from '@/components/ui/EmptyState';
 import { exportToCsv } from '@/lib/export-csv';
-import { Activity, Download } from 'lucide-react';
+import { Activity, Download, Copy, Check } from 'lucide-react';
+import EventLifecycleBadge from './EventLifecycleBadge';
 
 export type EventItem = {
   id: string;
@@ -65,6 +66,7 @@ export default function EventsListTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -74,10 +76,23 @@ export default function EventsListTable({
     startTransition(() => router.push(`/events?${params.toString()}`));
   };
 
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
   const pageHref = (targetPage: number) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('page', String(targetPage));
     return `/events?${params.toString()}`;
+  };
+
+  const handleCopyId = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      // ignore
+    }
   };
 
   const handleExportCsv = () => {
@@ -176,17 +191,17 @@ export default function EventsListTable({
         ) : (
           <>
             <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
-              <Table className="min-w-[700px]">
+              <Table className="min-w-[750px]">
                 <TableHeader className="bg-slate-50 border-b border-border">
                   <TableRow>
-                    <TableHead className="text-left p-4 font-semibold text-muted-foreground">
+                    <TableHead className="text-left p-4 font-semibold text-muted-foreground w-[170px]">
                       Timestamp
                     </TableHead>
-                    <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                      Incident
+                    <TableHead className="text-left p-4 font-semibold text-muted-foreground w-[130px]">
+                      Type
                     </TableHead>
                     <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                      Service
+                      Incident & Service
                     </TableHead>
                     <TableHead className="text-left p-4 font-semibold text-muted-foreground">
                       Event Message
@@ -197,34 +212,54 @@ export default function EventsListTable({
                   {initialEvents.map(event => (
                     <TableRow
                       key={event.id}
-                      className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
+                      className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors group"
                     >
                       <TableCell className="p-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
-                        {formatDateTime(event.createdAt, userTimeZone, { format: 'datetime' })}
+                        <div>
+                          {formatDateTime(event.createdAt, userTimeZone, { format: 'datetime' })}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={e => handleCopyId(event.id, e)}
+                          className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 hover:text-foreground mt-0.5"
+                          title="Copy Event ID"
+                        >
+                          {copiedId === event.id ? (
+                            <>
+                              <Check className="h-2.5 w-2.5 text-emerald-600" />
+                              <span className="text-emerald-600">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-2.5 w-2.5" />
+                              <span>{event.id.slice(0, 8)}...</span>
+                            </>
+                          )}
+                        </button>
                       </TableCell>
                       <TableCell className="p-4">
-                        <Link
-                          href={`/incidents/${event.incident.id}`}
-                          className="text-primary font-semibold hover:underline"
-                        >
-                          #{event.incident.id.slice(-5).toUpperCase()}
-                        </Link>
-                        <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                        <EventLifecycleBadge message={event.message} />
+                      </TableCell>
+                      <TableCell className="p-4">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Link
+                            href={`/incidents/${event.incident.id}`}
+                            className="text-primary font-semibold text-xs hover:underline font-mono"
+                          >
+                            #{event.incident.id.slice(-5).toUpperCase()}
+                          </Link>
+                          <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">
+                            {event.incident.service.name}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1 line-clamp-1">
                           {event.incident.title}
                         </div>
                       </TableCell>
-                      <TableCell className="p-4 text-sm font-medium">
-                        <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                          {event.incident.service.name}
-                        </span>
-                      </TableCell>
                       <TableCell className="p-4">
-                        <div className="flex items-start gap-2">
-                          <span className="inline-block w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
-                          <span className="text-sm text-foreground leading-relaxed">
-                            {event.message}
-                          </span>
-                        </div>
+                        <span className="text-xs text-foreground leading-relaxed">
+                          {event.message}
+                        </span>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -237,7 +272,8 @@ export default function EventsListTable({
               page={page}
               pageSize={pageSize}
               totalCount={totalCount}
-              pageHref={pageHref}
+              prevHref={page > 1 ? pageHref(page - 1) : undefined}
+              nextHref={page < totalPages ? pageHref(page + 1) : undefined}
             />
           </>
         )}

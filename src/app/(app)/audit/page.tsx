@@ -13,15 +13,14 @@ import {
 import { Card } from '@/components/ui/shadcn/card';
 
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import EmptyState from '@/components/ui/EmptyState';
 import { Shield, FileText } from 'lucide-react';
 import { assertAuditorOrAdmin } from '@/lib/rbac';
 import type { Prisma } from '@prisma/client';
 import { parseAuditEntityType } from '@/lib/audit-filters';
 import { logger } from '@/lib/logger';
 
-import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 import AuditFilters from '@/components/audit/AuditFilters';
+import AuditLogTable from '@/components/audit/AuditLogTable';
 
 export const dynamic = 'force-dynamic';
 
@@ -140,6 +139,8 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     return `/audit?${params.toString()}`;
   };
 
+  const hasActiveFilters = Boolean(entityType) || Boolean(action) || Boolean(search);
+
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       {/* Centralized Hero Header */}
@@ -185,116 +186,17 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
           logsData={viewLogs}
         />
 
-        {/* Audit Table */}
-        <Card className="bg-white overflow-hidden shadow-sm">
-          {viewLogs.length === 0 ? (
-            <div className="p-6">
-              <EmptyState
-                icon={<Shield className="h-6 w-6 text-muted-foreground/60" />}
-                title={
-                  search || entityType || action
-                    ? 'No matching audit entries'
-                    : 'No audit entries found'
-                }
-                description={
-                  search || entityType || action
-                    ? 'Try clearing or modifying your filter criteria.'
-                    : 'Actions on users, teams, escalation policies, and services will appear here.'
-                }
-              />
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
-                <Table className="min-w-[800px]">
-                  <TableHeader className="bg-slate-50 border-b border-border">
-                    <TableRow>
-                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                        Timestamp
-                      </TableHead>
-                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                        Actor
-                      </TableHead>
-                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                        Action
-                      </TableHead>
-                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                        Entity
-                      </TableHead>
-                      <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                        Details
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {viewLogs.map(log => (
-                      <TableRow
-                        key={log.id}
-                        className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
-                      >
-                        <TableCell className="p-4 font-mono text-xs text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(log.createdAt, userTimeZone, { format: 'datetime' })}
-                        </TableCell>
-                        <TableCell className="p-4">
-                          <div className="flex items-center gap-3">
-                            {log.actor ? (
-                              <DirectUserAvatar
-                                avatarUrl={
-                                  log.actor.avatarUrl ||
-                                  getDefaultAvatar(
-                                    undefined,
-                                    log.actor.id || log.actor.name || 'user'
-                                  )
-                                }
-                                name={log.actor.name}
-                                size="sm"
-                              />
-                            ) : (
-                              <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[0.7rem] font-semibold text-gray-500">
-                                SYS
-                              </div>
-                            )}
-                            <div>
-                              <div className="font-semibold text-sm">
-                                {log.actor?.name || log.actorName || 'System'}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {log.actor?.email || log.actorEmail || '-'}
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="p-4">
-                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800">
-                            {log.action}
-                          </span>
-                        </TableCell>
-                        <TableCell className="p-4">
-                          <div className="text-sm font-medium">{log.entityType}</div>
-                          <div className="text-xs text-muted-foreground font-mono">
-                            {log.entityId || '-'}
-                          </div>
-                        </TableCell>
-                        <TableCell className="p-4 text-xs font-mono text-muted-foreground max-w-xs truncate">
-                          {log.details}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Standardized Pagination Footer */}
-              <TablePaginationFooter
-                page={page}
-                pageSize={pageSize}
-                totalCount={totalLogs}
-                prevHref={page > 1 ? pageHref(page - 1) : undefined}
-                nextHref={page < totalPages ? pageHref(page + 1) : undefined}
-              />
-            </>
-          )}
-        </Card>
+        {/* Centralized Interactive Audit Table */}
+        <AuditLogTable
+          logs={viewLogs}
+          userTimeZone={userTimeZone}
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalLogs}
+          prevHref={page > 1 ? pageHref(page - 1) : undefined}
+          nextHref={page < totalPages ? pageHref(page + 1) : undefined}
+          hasFilters={hasActiveFilters}
+        />
       </div>
     </main>
   );

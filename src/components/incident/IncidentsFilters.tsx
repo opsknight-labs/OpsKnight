@@ -235,7 +235,8 @@ export default function IncidentsFilters({
               <Input
                 id="incident-search"
                 placeholder="Title, description, or ID"
-                className="h-9 pl-8 text-sm bg-muted/30 focus:bg-background transition-colors"
+                className="h-9 pl-10 text-sm bg-muted/30 focus:bg-background transition-colors"
+                style={{ paddingLeft: '2.5rem' }}
                 value={currentSearch}
                 onChange={e => updateParams({ search: e.target.value.trim() })}
               />
