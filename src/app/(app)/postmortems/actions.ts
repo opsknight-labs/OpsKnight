@@ -328,24 +328,44 @@ export async function getPostmortem(incidentId: string) {
 }
 
 /**
- * Get all postmortems with pagination
+ * Get all postmortems with pagination, search, and service filtering
  */
 export async function getAllPostmortems(
   options: {
     status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+    search?: string;
+    serviceId?: string;
     page?: number;
     limit?: number;
   } = {}
 ) {
-  const { status, page = 1, limit = 50 } = options;
+  const { status, search, serviceId, page = 1, limit = 50 } = options;
   const skip = (page - 1) * limit;
 
   const permissions = await getUserPermissions();
-  const where = permissions.isResponderOrAbove
+  const baseWhere: Record<string, unknown> = permissions.isResponderOrAbove
     ? status
       ? { status }
       : {}
     : { status: 'PUBLISHED' as const };
+
+  if (serviceId && serviceId !== 'all') {
+    baseWhere.incident = {
+      ...((baseWhere.incident as Record<string, unknown>) || {}),
+      serviceId,
+    };
+  }
+
+  if (search && search.trim()) {
+    const q = search.trim();
+    baseWhere.OR = [
+      { title: { contains: q, mode: 'insensitive' } },
+      { incident: { title: { contains: q, mode: 'insensitive' } } },
+      { incident: { service: { name: { contains: q, mode: 'insensitive' } } } },
+    ];
+  }
+
+  const where = baseWhere;
 
   const [postmortems, total] = await Promise.all([
     prisma.postmortem.findMany({

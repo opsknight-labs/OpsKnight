@@ -18,6 +18,8 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Activity, Sparkles, Layers, Clock } from 'lucide-react';
 import { assertAdmin } from '@/lib/rbac';
 
+import EventsListTable from '@/components/events/EventsListTable';
+
 export const dynamic = 'force-dynamic';
 
 export default async function EventLogsPage() {
@@ -102,76 +104,8 @@ export default async function EventLogsPage() {
         ]}
       />
 
-      {/* Event Log Table */}
-      <Card className="bg-white overflow-hidden shadow-sm">
-        {events.length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              icon={<Activity className="h-6 w-6 text-muted-foreground/60" />}
-              title="No events logged yet"
-              description="Events will appear here in real-time when incidents are triggered, acknowledged, or resolved."
-              action={
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/events/test">Trigger test event</Link>
-                </Button>
-              }
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
-            <Table className="min-w-[700px]">
-              <TableHeader className="bg-slate-50 border-b border-border">
-                <TableRow>
-                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                    Timestamp
-                  </TableHead>
-                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                    Incident
-                  </TableHead>
-                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                    Service
-                  </TableHead>
-                  <TableHead className="text-left p-4 font-semibold text-muted-foreground">
-                    Event
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {events.map(event => (
-                  <TableRow
-                    key={event.id}
-                    className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
-                  >
-                    <TableCell className="p-4 font-mono text-xs text-muted-foreground">
-                      {formatDateTime(event.createdAt, userTimeZone, { format: 'datetime' })}
-                    </TableCell>
-                    <TableCell className="p-4">
-                      <Link
-                        href={`/incidents/${event.incident.id}`}
-                        className="text-primary font-semibold hover:underline"
-                      >
-                        #{event.incident.id.slice(-5).toUpperCase()}
-                      </Link>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {event.incident.title}
-                      </div>
-                    </TableCell>
-                    <TableCell className="p-4 text-sm font-medium">
-                      {event.incident.service.name}
-                    </TableCell>
-                    <TableCell className="p-4">
-                      <div className="flex items-start gap-2">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
-                        <span className="text-sm text-foreground">{event.message}</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </Card>
+      {/* Events List Table with Search, Filter & CSV Export */}
+      <EventsListTable initialEvents={events} userTimeZone={userTimeZone} />
     </main>
   );
 }
