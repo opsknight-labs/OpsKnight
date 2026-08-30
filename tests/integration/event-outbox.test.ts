@@ -39,11 +39,17 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
       orderBy: { createdAt: 'asc' },
     });
 
-    expect(jobs).toHaveLength(3);
+    expect(jobs).toHaveLength(5);
     expect(jobs.every(job => job.status === 'PENDING')).toBe(true);
     expect(jobs.every(job => job.maxAttempts === 5)).toBe(true);
     expect(jobs.map(job => (job.payload as SideEffectPayload).effect).sort()).toEqual(
-      ['TRIGGER_ESCALATION_NOTIFICATIONS', 'TRIGGER_WAR_ROOM', 'TRIGGER_WEBHOOK'].sort()
+      [
+        'TRIGGER_ESCALATION_NOTIFICATIONS',
+        'TRIGGER_SERVICE_NOTIFICATION',
+        'TRIGGER_STATUS_PAGE',
+        'TRIGGER_WAR_ROOM',
+        'TRIGGER_WEBHOOK',
+      ].sort()
     );
     expect(
       jobs.every(job => (job.payload as SideEffectPayload).incidentId === result.incident?.id)
@@ -69,7 +75,7 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
 
     expect(first.action).toBe('triggered');
     expect(second.action).toBe('deduplicated');
-    expect(await testPrisma.backgroundJob.count({ where: { type: 'SCHEDULED_TASK' } })).toBe(3);
+    expect(await testPrisma.backgroundJob.count({ where: { type: 'SCHEDULED_TASK' } })).toBe(5);
   });
 
   it('enqueues action-specific jobs for acknowledge and resolve', async () => {
@@ -110,11 +116,17 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
     });
     const effects = jobs.map(job => (job.payload as SideEffectPayload).effect);
 
-    expect(jobs).toHaveLength(7);
-    expect(effects.filter(effect => effect === 'ACK_SLACK')).toHaveLength(1);
-    expect(effects.filter(effect => effect === 'RESOLVE_WEBHOOK')).toHaveLength(1);
-    expect(effects.filter(effect => effect === 'RESOLVE_SLACK')).toHaveLength(1);
-    expect(effects.filter(effect => effect === 'RESOLVE_WAR_ROOM_ARCHIVE')).toHaveLength(1);
+    expect(jobs).toHaveLength(15);
+    for (const effect of [
+      'LIFECYCLE_USER_NOTIFICATION',
+      'LIFECYCLE_SERVICE_NOTIFICATION',
+      'LIFECYCLE_STATUS_PAGE',
+      'LIFECYCLE_WEBHOOK',
+    ]) {
+      expect(effects.filter(candidate => candidate === effect)).toHaveLength(2);
+    }
+    expect(effects.filter(effect => effect === 'LIFECYCLE_WAR_ROOM_SYNC')).toHaveLength(1);
+    expect(effects.filter(effect => effect === 'LIFECYCLE_WAR_ROOM_ARCHIVE')).toHaveLength(1);
   });
 
   it('claims later lifecycle work only after older jobs in the same lane complete', async () => {
@@ -154,16 +166,15 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
     expect(firstEffects).toContain('TRIGGER_WEBHOOK');
     expect(firstEffects).toContain('TRIGGER_WAR_ROOM');
     expect(firstEffects).toContain('TRIGGER_ESCALATION_NOTIFICATIONS');
-    expect(firstEffects).toContain('RESOLVE_SLACK');
-    expect(firstEffects).not.toContain('RESOLVE_WEBHOOK');
-    expect(firstEffects).not.toContain('RESOLVE_WAR_ROOM_ARCHIVE');
+    expect(firstEffects).toContain('TRIGGER_SERVICE_NOTIFICATION');
+    expect(firstEffects).toContain('TRIGGER_STATUS_PAGE');
+    expect(firstEffects).not.toContain('LIFECYCLE_USER_NOTIFICATION');
+    expect(firstEffects).not.toContain('LIFECYCLE_SERVICE_NOTIFICATION');
+    expect(firstEffects).not.toContain('LIFECYCLE_STATUS_PAGE');
+    expect(firstEffects).not.toContain('LIFECYCLE_WEBHOOK');
+    expect(firstEffects).not.toContain('LIFECYCLE_WAR_ROOM_ARCHIVE');
 
-    const completedLaneJobs = firstClaim
-      .filter(job => {
-        const effect = (job.payload as SideEffectPayload).effect;
-        return effect === 'TRIGGER_WEBHOOK' || effect === 'TRIGGER_WAR_ROOM';
-      })
-      .map(job => job.id);
+    const completedLaneJobs = firstClaim.map(job => job.id);
 
     await testPrisma.backgroundJob.updateMany({
       where: { id: { in: completedLaneJobs } },
@@ -172,8 +183,15 @@ describeIfRealDB('Event Transactional Outbox', { timeout: 30000 }, () => {
 
     const secondClaim = await claimPendingJobs(20, 'SCHEDULED_TASK');
     const secondEffects = secondClaim.map(job => (job.payload as SideEffectPayload).effect);
-    expect(secondEffects).toContain('RESOLVE_WEBHOOK');
-    expect(secondEffects).toContain('RESOLVE_WAR_ROOM_ARCHIVE');
+    expect(secondEffects.sort()).toEqual(
+      [
+        'LIFECYCLE_USER_NOTIFICATION',
+        'LIFECYCLE_SERVICE_NOTIFICATION',
+        'LIFECYCLE_STATUS_PAGE',
+        'LIFECYCLE_WEBHOOK',
+        'LIFECYCLE_WAR_ROOM_ARCHIVE',
+      ].sort()
+    );
   });
 
   it('does not leave outbox jobs when event transaction fails', async () => {
