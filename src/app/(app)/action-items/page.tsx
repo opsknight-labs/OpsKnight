@@ -5,7 +5,8 @@ import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/rbac';
 import ActionItemsBoard from '@/components/action-items/ActionItemsBoard';
-import ActionItemsStats from '@/components/action-items/ActionItemsStats';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { resolveStoredActionItems, type ActionItem } from '@/lib/action-items';
 
 export const dynamic = 'force-dynamic';
@@ -168,18 +169,64 @@ export default async function ActionItemsPage({
   const canManage = permissions.isResponderOrAbove;
 
   return (
-    <div className="p-6">
-      <div className="mb-8 pb-6 border-b-2 border-slate-200">
-        <h1 className="text-[2.5rem] font-extrabold mb-2 bg-gradient-to-br from-slate-800 to-slate-500 bg-clip-text text-transparent tracking-tight">
-          Action Items
-        </h1>
-        <p className="text-muted-foreground text-base leading-relaxed">
-          Track and manage action items from postmortems
-        </p>
-      </div>
-
-      {/* Statistics */}
-      <ActionItemsStats stats={stats} />
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Centralized Hero Header */}
+      <DetailHeroBanner
+        tag="Postmortem Follow-Up"
+        title="Action Items"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <CheckSquare className="h-6 w-6" aria-hidden="true" />
+          </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Track preventive action items, assign ownership, manage SLAs, and prevent incident
+            recurrence.
+          </p>
+        }
+        stats={[
+          {
+            label: 'Total',
+            value: stats.total,
+            icon: <CheckSquare className="h-3.5 w-3.5" />,
+            href: '/action-items',
+            active: !status && !priority && !owner,
+          },
+          {
+            label: 'Open',
+            value: stats.open,
+            icon: <Circle className="h-3.5 w-3.5 text-blue-200" />,
+            valueClassName: stats.open > 0 ? 'text-blue-200' : undefined,
+            href: '/action-items?status=OPEN',
+            active: status === 'OPEN',
+          },
+          {
+            label: 'In Progress',
+            value: stats.inProgress,
+            icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
+            valueClassName: stats.inProgress > 0 ? 'text-amber-200' : undefined,
+            href: '/action-items?status=IN_PROGRESS',
+            active: status === 'IN_PROGRESS',
+          },
+          {
+            label: 'Completed',
+            value: stats.completed,
+            icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName: stats.completed > 0 ? 'text-emerald-200' : undefined,
+            href: '/action-items?status=COMPLETED',
+            active: status === 'COMPLETED',
+          },
+          {
+            label: 'Blocked',
+            value: stats.blocked,
+            icon: <AlertOctagon className="h-3.5 w-3.5 text-rose-200" />,
+            valueClassName: stats.blocked > 0 ? 'text-rose-200' : undefined,
+            href: '/action-items?status=BLOCKED',
+            active: status === 'BLOCKED',
+          },
+        ]}
+      />
 
       {/* Board/List View */}
       <ActionItemsBoard

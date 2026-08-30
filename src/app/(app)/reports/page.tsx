@@ -12,6 +12,8 @@ import {
   CardTitle,
 } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import EmptyState from '@/components/ui/EmptyState';
 import {
   LayoutDashboard,
   Plus,
@@ -20,7 +22,6 @@ import {
   Shield,
   Users,
   Minus,
-  Clock,
   ArrowRight,
 } from 'lucide-react';
 import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
@@ -67,56 +68,65 @@ export default async function ReportsPage() {
   });
 
   return (
-    <div className="w-full px-4 py-6 space-y-8 [zoom:0.8]">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg p-4 md:p-6 shadow-lg">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2 text-white">
-              <LayoutDashboard className="h-6 w-6 md:h-8 md:w-8" />
-              Reports &amp; Dashboards
-            </h1>
-            <p className="text-xs md:text-sm opacity-90 mt-1 text-white">
-              Build customizable dashboards with drag-and-drop widgets
-            </p>
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Centralized Hero Header */}
+      <DetailHeroBanner
+        tag="Operational Analytics"
+        title="Reports & Dashboards"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <LayoutDashboard className="h-6 w-6" aria-hidden="true" />
           </div>
-          <Link href="/reports/executive/new">
-            <Button size="lg" className="bg-white text-primary hover:bg-white/90 gap-2 shadow-md">
-              <Plus className="h-5 w-5" />
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Build customizable executive dashboards, track reliability metrics, and visualize
+            operational performance widgets.
+          </p>
+        }
+        actions={
+          <Button
+            asChild
+            className="gap-2 shadow-sm font-semibold bg-background text-foreground hover:bg-background/90"
+          >
+            <Link href="/reports/executive/new">
+              <Plus className="h-4 w-4" />
               Create Dashboard
-            </Button>
-          </Link>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-          <div className="bg-white/10 backdrop-blur rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold">{dashboards.length}</div>
-            <div className="text-xs opacity-80">Your Dashboards</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold">{DASHBOARD_TEMPLATES.length}</div>
-            <div className="text-xs opacity-80">Templates</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold">30+</div>
-            <div className="text-xs opacity-80">Widget Types</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold">∞</div>
-            <div className="text-xs opacity-80">Customizations</div>
-          </div>
-        </div>
-      </div>
+            </Link>
+          </Button>
+        }
+        stats={[
+          {
+            label: 'Your Dashboards',
+            value: dashboards.length,
+            icon: <LayoutDashboard className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Templates',
+            value: DASHBOARD_TEMPLATES.length,
+            icon: <Sparkles className="h-3.5 w-3.5 text-amber-200" />,
+          },
+          {
+            label: 'Widget Types',
+            value: '30+',
+            icon: <Terminal className="h-3.5 w-3.5 text-emerald-200" />,
+          },
+          {
+            label: 'Customizations',
+            value: '∞',
+            icon: <Shield className="h-3.5 w-3.5 text-blue-200" />,
+          },
+        ]}
+      />
 
       {/* Templates Section */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <h2 className="text-xl font-semibold">Dashboard Templates</h2>
+            <h2 className="text-lg font-bold text-foreground">Dashboard Templates</h2>
           </div>
-          <span className="text-sm text-muted-foreground">Click to preview or clone</span>
+          <span className="text-xs text-muted-foreground">Click to preview or clone</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -124,7 +134,7 @@ export default async function ReportsPage() {
             const Icon = TEMPLATE_ICONS[template.id] || LayoutDashboard;
             return (
               <Link key={template.id} href={`/reports/executive?template=${template.id}`}>
-                <Card className="h-full hover:shadow-lg hover:border-primary/50 transition-all cursor-pointer group">
+                <Card className="h-full hover:shadow-md hover:border-primary/50 transition-all cursor-pointer group bg-white">
                   <CardHeader className="pb-3">
                     <div
                       className="w-10 h-10 rounded-lg flex items-center justify-center mb-2"
@@ -132,7 +142,7 @@ export default async function ReportsPage() {
                     >
                       <Icon className="h-5 w-5" style={{ color: template.color }} />
                     </div>
-                    <CardTitle className="text-base group-hover:text-primary transition-colors">
+                    <CardTitle className="text-sm font-bold group-hover:text-primary transition-colors">
                       {template.name}
                     </CardTitle>
                     <CardDescription className="text-xs line-clamp-2">
@@ -153,47 +163,41 @@ export default async function ReportsPage() {
       </section>
 
       {/* My Dashboards Section */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">My Dashboards</h2>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-foreground">My Dashboards</h2>
           {dashboards.length > 0 && (
             <Link href="/reports/executive/new">
               <Button variant="outline" size="sm" className="gap-1">
                 <Plus className="h-4 w-4" />
-                New
+                New Dashboard
               </Button>
             </Link>
           )}
         </div>
 
         {dashboards.length === 0 ? (
-          <Card className="p-8 text-center border-dashed">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                <LayoutDashboard className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-lg font-medium mb-1">No dashboards yet</p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Create your first custom dashboard or start from a template
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <Link href="/reports/executive/new">
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
+          <EmptyState
+            icon={<LayoutDashboard className="h-6 w-6 text-muted-foreground/60" />}
+            title="No custom dashboards yet"
+            description="Create your first custom operational dashboard or start from an executive template."
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Button asChild size="sm">
+                  <Link href="/reports/executive/new">
+                    <Plus className="mr-1.5 h-4 w-4" />
                     Create from scratch
-                  </Button>
-                </Link>
-                <Link href={`/reports/executive?template=executive-summary`}>
-                  <Button variant="outline" className="gap-2">
-                    <Sparkles className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/reports/executive?template=executive-summary`}>
+                    <Sparkles className="mr-1.5 h-4 w-4" />
                     Use template
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
-            </div>
-          </Card>
+            }
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {dashboards.map(dashboard => (
