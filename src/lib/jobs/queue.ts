@@ -18,6 +18,7 @@ import prisma from '../prisma';
 import type { NotificationChannel } from '../notifications';
 
 const MAX_RETRY_BACKOFF_MS = 15 * 60 * 1000;
+const PROCESSING_LEASE_HEARTBEAT_MS = 60 * 1000;
 
 export type JobType =
   | 'ESCALATION'
@@ -280,10 +281,25 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
  * Process a single job
  */
 export async function processJob(job: any): Promise<boolean> {
+  let leaseHeartbeat: NodeJS.Timeout | null = null;
   try {
     if (job.status !== 'PROCESSING') {
       await markJobProcessing(job.id);
     }
+
+    leaseHeartbeat = setInterval(() => {
+      void prisma.backgroundJob
+        .updateMany({
+          where: { id: job.id, status: 'PROCESSING' },
+          data: { startedAt: new Date() },
+        })
+        .catch(error =>
+          logger.warn('jobs.processing_lease_heartbeat_failed', {
+            jobId: job.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        );
+    }, PROCESSING_LEASE_HEARTBEAT_MS);
 
     switch (job.type) {
       case 'ESCALATION':
@@ -407,7 +423,13 @@ export async function processJob(job: any): Promise<boolean> {
 
       case 'STATUS_PAGE_NOTIFICATION': {
         const { notifyStatusPageSubscribers } = await import('../status-page-notifications');
-        await notifyStatusPageSubscribers(job.payload.incidentId, job.payload.eventType);
+        const subscriberResult = await notifyStatusPageSubscribers(
+          job.payload.incidentId,
+          job.payload.eventType
+        );
+        if (!subscriberResult.success) {
+          throw new Error(`Status page subscriber delivery failed (${subscriberResult.failed})`);
+        }
         const incidentForWebhook = await prisma.incident.findUnique({
           where: { id: job.payload.incidentId },
           select: {
@@ -435,7 +457,7 @@ export async function processJob(job: any): Promise<boolean> {
             updated: 'incident.updated',
             investigating: 'incident.updated',
           };
-          await triggerWebhooksForService(
+          const webhookResult = await triggerWebhooksForService(
             incidentForWebhook.serviceId,
             eventMap[job.payload.eventType] || 'incident.updated',
             {
@@ -451,6 +473,9 @@ export async function processJob(job: any): Promise<boolean> {
               resolvedAt: incidentForWebhook.resolvedAt?.toISOString() || null,
             }
           );
+          if (webhookResult.failed > 0) {
+            throw new Error(`Status page webhook delivery failed (${webhookResult.failed})`);
+          }
         }
         await markJobCompleted(job.id);
         return true;
@@ -520,6 +545,8 @@ export async function processJob(job: any): Promise<boolean> {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     await markJobFailed(job.id, errorMessage);
     return false;
+  } finally {
+    if (leaseHeartbeat) clearInterval(leaseHeartbeat);
   }
 }
 

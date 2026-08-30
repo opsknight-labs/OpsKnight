@@ -500,7 +500,7 @@ model Incident {
   dedupKey               String? // Key for deduplication
   serviceId              String
   assigneeId             String?
-  teamId                 String? // Team assignment (mutually exclusive with assigneeId)
+  teamId                 String? // Team assignment; DB check constraint keeps it exclusive with assigneeId
   currentEscalationStep  Int? // Current step index (0-based)
   nextEscalationAt       DateTime? // When to execute next escalation step
   escalationStatus       String? // ESCALATING, COMPLETED, PAUSED

@@ -7,6 +7,7 @@ import {
   applyIncidentLifecycleTargetStatus,
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
+import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
 
 export type RestIncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 export type RestIncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -88,7 +89,7 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
             where: { id: input.incidentId },
             data: {
               ...(urgencyChanged ? { urgency: input.urgency } : {}),
-              ...(assigneeChanged ? { assigneeId: input.assigneeId ?? null } : {}),
+              ...(assigneeChanged ? { assigneeId: input.assigneeId ?? null, teamId: null } : {}),
             },
           });
         }
@@ -111,6 +112,13 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
                 : 'Incident unassigned',
             },
           });
+        }
+
+        if (!lifecycle?.changed && (urgencyChanged || assigneeChanged)) {
+          await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [
+            'INCIDENT_UPDATE_SERVICE_NOTIFICATION',
+            'INCIDENT_UPDATE_WEBHOOK',
+          ]);
         }
 
         const incident = await tx.incident.findUnique({ where: { id: input.incidentId } });

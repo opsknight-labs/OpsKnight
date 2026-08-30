@@ -34,6 +34,8 @@ import {
   ChevronRight,
   Plus,
   ExternalLink,
+  Layers,
+  Clock,
 } from 'lucide-react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -344,14 +346,17 @@ export default async function PolicyDetailPage({
           {
             label: 'Steps',
             value: policy.steps.length,
+            icon: <Layers className="h-3.5 w-3.5" />,
           },
           {
             label: 'Services',
             value: services.length,
+            icon: <Server className="h-3.5 w-3.5" />,
           },
           {
             label: 'Cycle Time',
             value: `~${totalDuration}m`,
+            icon: <Clock className="h-3.5 w-3.5" />,
           },
         ]}
         alert={

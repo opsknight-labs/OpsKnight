@@ -186,6 +186,7 @@ describe('incident lifecycle command engine', () => {
         where: { id: 'inc-reopen' },
         data: expect.objectContaining({
           status: 'OPEN',
+          acknowledgedAt: null,
           resolvedAt: null,
           currentEscalationStep: 0,
           escalationStatus: 'ESCALATING',
@@ -222,6 +223,7 @@ describe('incident lifecycle command engine', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           status: 'OPEN',
+          acknowledgedAt: null,
           escalationStatus: 'ESCALATING',
           nextEscalationAt: new Date('2026-08-27T12:20:00.000Z'),
         }),

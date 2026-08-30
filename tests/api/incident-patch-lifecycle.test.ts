@@ -127,7 +127,7 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
     expect(mocks.sendServiceNotifications).not.toHaveBeenCalled();
   });
 
-  it('keeps immediate updated effects for a pure non-lifecycle urgency patch', async () => {
+  it('does not duplicate transactionally enqueued effects for a pure metadata patch', async () => {
     const patchedIncident = { ...incident('OPEN'), urgency: 'HIGH' };
     mocks.applyRestIncidentPatch.mockResolvedValue({
       incident: patchedIncident,
@@ -149,12 +149,8 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
     const res = await PATCH(req, context);
 
     expect(res.status).toBe(200);
-    expect(mocks.triggerWebhooksForService).toHaveBeenCalledWith(
-      'svc-1',
-      'incident.updated',
-      expect.objectContaining({ id: 'inc-1', status: 'OPEN' })
-    );
-    expect(mocks.sendServiceNotifications).toHaveBeenCalledWith('inc-1', 'updated');
+    expect(mocks.triggerWebhooksForService).not.toHaveBeenCalled();
+    expect(mocks.sendServiceNotifications).not.toHaveBeenCalled();
   });
 
   it('does not repeat immediate non-lifecycle effects when an Idempotency-Key is replayed', async () => {

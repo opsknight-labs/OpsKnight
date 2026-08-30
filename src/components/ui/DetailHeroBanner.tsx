@@ -29,6 +29,7 @@ export type DetailHeroBannerProps = {
   icon?: ReactNode;
   stats?: DetailStatItem[];
   actions?: ReactNode;
+  action?: ReactNode;
   alert?: ReactNode;
   className?: string;
 };
@@ -42,9 +43,11 @@ export default function DetailHeroBanner({
   icon,
   stats = [],
   actions,
+  action,
   alert,
   className,
 }: DetailHeroBannerProps) {
+  const bannerActions = actions || action;
   return (
     <header className={cn('space-y-4', className)}>
       {/* Breadcrumb Trail */}
@@ -166,7 +169,7 @@ export default function DetailHeroBanner({
               </div>
             )}
 
-            {actions && <div className="shrink-0">{actions}</div>}
+            {bannerActions && <div className="shrink-0">{bannerActions}</div>}
           </div>
         </div>
       </div>

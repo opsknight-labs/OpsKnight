@@ -381,6 +381,7 @@ function updateDataForCommand(
 
     case 'REOPEN': {
       const delayMinutes = escalationDelayMinutes(incident, 0);
+      data.acknowledgedAt = null;
       data.resolvedAt = null;
       data.currentEscalationStep = 0;
       data.escalationStatus = 'ESCALATING';
@@ -392,6 +393,7 @@ function updateDataForCommand(
 
     case 'UNACKNOWLEDGE': {
       const stepIndex = incident.currentEscalationStep ?? 0;
+      data.acknowledgedAt = null;
       data.escalationStatus = 'ESCALATING';
       data.nextEscalationAt = atDelay(now, escalationDelayMinutes(incident, stepIndex));
       data.snoozedUntil = null;
