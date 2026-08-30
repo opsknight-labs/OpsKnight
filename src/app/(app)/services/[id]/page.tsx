@@ -513,7 +513,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
                             <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                              Webhook Ingest URL
+                              Events API Endpoint
                             </Label>
                             <CopyButton text={webhookUrl} />
                           </div>
@@ -527,7 +527,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
                             <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                              <Key className="h-3 w-3" /> Routing / API Key
+                              <Key className="h-3 w-3" /> Routing Key (Service-Bound)
                             </Label>
                             <CopyButton text={integration.key} />
                           </div>
@@ -536,23 +536,39 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                             value={integration.key}
                             className="font-mono text-xs bg-muted/40 h-8"
                           />
+                          <p className="text-[11px] text-muted-foreground leading-tight">
+                            Pass in request header as{' '}
+                            <code className="px-1 py-0.5 rounded bg-muted font-mono text-[10px] text-foreground font-medium">
+                              Authorization: Token token=&lt;ROUTING_KEY&gt;
+                            </code>
+                          </p>
                         </div>
 
-                        <div className="space-y-1">
-                          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                            <Terminal className="h-3 w-3" /> Quick Test
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                              <Terminal className="h-3 w-3" /> Quick Test (Working cURL)
+                            </div>
+                            <CopyButton
+                              text={`curl -X POST ${webhookUrl} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Token token=${integration.key}" \\\n  -d '{\n    "event_action": "trigger",\n    "dedup_key": "test-${id.substring(0, 8)}-001",\n    "payload": {\n      "summary": "${service.name} Alert Test",\n      "source": "api-client",\n      "severity": "critical"\n    }\n  }'`}
+                            />
                           </div>
-                          <pre className="bg-slate-950 text-slate-200 p-2.5 rounded-lg overflow-x-auto text-[10px] font-mono leading-relaxed border border-slate-800 shadow-inner">
+                          <pre className="bg-slate-950 text-slate-200 p-2.5 rounded-lg overflow-x-auto text-[10px] font-mono leading-relaxed border border-slate-800 shadow-inner select-all">
                             <span className="text-purple-400">curl</span> -X POST {webhookUrl} \
                             <br />
                             &nbsp; -H{' '}
+                            <span className="text-blue-300">
+                              "Content-Type: application/json"
+                            </span>{' '}
+                            \<br />
+                            &nbsp; -H{' '}
                             <span className="text-green-400">
-                              "Authorization: Token token={integration.key.substring(0, 8)}..."
+                              "Authorization: Token token={integration.key.substring(0, 10)}..."
                             </span>{' '}
                             \<br />
                             &nbsp; -d{' '}
                             <span className="text-yellow-400">
-                              '{`{ "event_action": "trigger", "summary": "Alert" }`}'
+                              {`'{\n    "event_action": "trigger",\n    "dedup_key": "test-${id.substring(0, 8)}-001",\n    "payload": {\n      "summary": "${service.name} Alert Test",\n      "source": "api-client",\n      "severity": "critical"\n    }\n  }'`}
                             </span>
                           </pre>
                         </div>

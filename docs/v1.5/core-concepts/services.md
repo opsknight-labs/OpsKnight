@@ -118,9 +118,9 @@ Each configured integration is presented as a rich card with:
 
 #### 1. Events API v2 (`EVENTS_API_V2`)
 
-- **Webhook Ingest URL**: Complete, copyable endpoint URL (`/api/events`) for standard Events API v2 payloads.
-- **Routing / API Key**: Copyable unique routing key used in standard OpsKnight Events API v2 payloads.
-- **Quick Test Snippet**: Ready-to-use `curl` code sample prefilled with the endpoint and authorization header.
+- **Events API Endpoint**: Complete, copyable endpoint URL (`/api/events`) for standard Events API v2 payloads.
+- **Routing Key (Service-Bound)**: Copyable unique routing key used to bind incoming events to this service via `Authorization: Token token=<ROUTING_KEY>`.
+- **Quick Test Snippet**: Ready-to-use, fully formed `curl` code sample and one-click copy button prefilled with the endpoint, authorization header, and valid JSON schema payload.
 
 #### 2. Provider-Native Webhooks (CloudWatch, Datadog, Prometheus, Grafana, etc.)
 
