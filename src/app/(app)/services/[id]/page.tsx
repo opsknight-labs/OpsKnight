@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import type { WebhookIntegration } from '@prisma/client';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCanModifyService, assertCanViewService } from '@/lib/rbac';
@@ -810,13 +811,15 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             slackChannel={service.slackChannel || null}
             slackWebhookUrl={service.slackWebhookUrl || null}
             slackIntegration={globalSlackIntegration}
-            webhookIntegrations={(service.webhookIntegrations || []).map((w: any) => ({
-              id: w.id,
-              name: w.name,
-              type: w.type,
-              url: w.url || '',
-              enabled: w.enabled,
-            }))}
+            webhookIntegrations={(service.webhookIntegrations || []).map(
+              (w: WebhookIntegration) => ({
+                id: w.id,
+                name: w.name,
+                type: w.type,
+                url: w.url || '',
+                enabled: w.enabled,
+              })
+            )}
             serviceNotifyOnTriggered={service.serviceNotifyOnTriggered ?? true}
             serviceNotifyOnAck={service.serviceNotifyOnAck ?? true}
             serviceNotifyOnResolved={service.serviceNotifyOnResolved ?? true}
