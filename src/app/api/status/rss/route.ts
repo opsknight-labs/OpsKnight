@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
+import { publicStatusVisibility } from '@/lib/status-page-public-data';
 
 /**
  * RSS Feed for Status Page
@@ -54,6 +55,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const visibility = publicStatusVisibility(statusPage);
+
     const serviceIds = statusPage.services.map(sp => sp.serviceId);
 
     const baseUrl = getBaseUrl();
@@ -70,7 +73,7 @@ export async function GET(req: NextRequest) {
           })
         : null;
 
-    const incidents = statusPage.showIncidents ? metrics?.recentIncidents || [] : [];
+    const incidents = visibility.showIncidents ? metrics?.recentIncidents || [] : [];
 
     const description = metrics?.isClipped
       ? `Current status and incidents (limited to ${metrics.retentionDays} days retention)`
@@ -93,21 +96,28 @@ export async function GET(req: NextRequest) {
                 : incident.status === 'ACKNOWLEDGED'
                   ? 'Acknowledged'
                   : 'Investigating';
-            const pubDate = new Date(incident.createdAt).toUTCString();
-            const guid = `${baseUrl}/status#incident-${incident.id}`;
-            const serviceName = incident.service?.name || 'General';
-            const incidentDetails = statusPage.showIncidentDescriptions
-              ? incident.description || incident.title
-              : incident.title;
+            const pubDate = visibility.showIncidentTimestamp
+              ? new Date(incident.createdAt).toUTCString()
+              : null;
+            const guid = visibility.showIncidentId
+              ? `${baseUrl}/status#incident-${incident.id}`
+              : `${baseUrl}/status`;
+            const serviceName = visibility.showAffectedService
+              ? incident.service?.name || 'General'
+              : null;
+            const incidentTitle = visibility.showIncidentTitle ? incident.title : 'Status update';
+            const incidentDetails = visibility.showIncidentDescription
+              ? incident.description || incidentTitle
+              : incidentTitle;
 
             return `
         <item>
-            <title>${escapeXml(incident.title)} - ${status}</title>
+            <title>${escapeXml(incidentTitle)} - ${status}</title>
             <link>${guid}</link>
             <guid isPermaLink="false">${guid}</guid>
-            <pubDate>${pubDate}</pubDate>
-            <description>${escapeXml(incidentDetails)} - Service: ${escapeXml(serviceName)}</description>
-            <category>${escapeXml(serviceName)}</category>
+            ${pubDate ? `<pubDate>${pubDate}</pubDate>` : ''}
+            <description>${escapeXml(incidentDetails)}${serviceName ? ` - Service: ${escapeXml(serviceName)}` : ''}</description>
+            ${serviceName ? `<category>${escapeXml(serviceName)}</category>` : ''}
         </item>`;
           })
           .join('')}

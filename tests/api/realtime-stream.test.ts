@@ -3,19 +3,17 @@ import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/realtime/stream/route';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
-import { resolveUserActor } from '@/lib/authorization-actors';
 
 vi.mock('@/lib/rbac', () => ({
     getCurrentUser: vi.fn(),
 }));
 
-vi.mock('@/lib/authorization-actors', () => ({
-    resolveUserActor: vi.fn(),
-}));
-
 vi.mock('@/lib/prisma', () => ({
     __esModule: true,
     default: {
+        user: {
+            findUnique: vi.fn(),
+        },
         incident: {
             findMany: vi.fn(),
             count: vi.fn(),
@@ -33,13 +31,15 @@ describe('API Route - Realtime Stream', () => {
         vi.mocked(getCurrentUser).mockResolvedValue({
             id: 'user-1',
             role: 'ADMIN',
+            tokenVersion: 0,
         } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-        vi.mocked(resolveUserActor).mockResolvedValue({
+        vi.mocked(prisma.user.findUnique).mockResolvedValue({
             id: 'user-1',
             role: 'ADMIN',
             status: 'ACTIVE',
-            teamIds: [],
-        });
+            tokenVersion: 0,
+            teamMemberships: [],
+        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
         vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
         vi.mocked(prisma.incident.count).mockResolvedValue(0);
 

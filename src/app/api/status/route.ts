@@ -8,6 +8,10 @@ import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { serializeRecentIncidents } from '@/lib/sla';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { getReportingWindowForDays } from '@/lib/retention-policy';
+import {
+  publicStatusVisibility,
+  serializePublicStatusApiIncident,
+} from '@/lib/status-page-public-data';
 
 /**
  * Status Page API
@@ -27,6 +31,22 @@ export async function GET(req: NextRequest) {
         statusApiRateLimitEnabled: true,
         statusApiRateLimitMax: true,
         statusApiRateLimitWindowSec: true,
+        showServices: true,
+        showIncidents: true,
+        showMetrics: true,
+        showIncidentDetails: true,
+        showIncidentTitles: true,
+        showIncidentDescriptions: true,
+        showAffectedServices: true,
+        showIncidentTimestamps: true,
+        showServiceMetrics: true,
+        showServiceRegions: true,
+        showServiceOwners: true,
+        showServiceSlaTier: true,
+        showTeamInformation: true,
+        showIncidentUrgency: true,
+        showUptimeHistory: true,
+        showRecentIncidents: true,
         services: {
           select: {
             serviceId: true,
@@ -70,6 +90,8 @@ export async function GET(req: NextRequest) {
         return jsonError('Authentication required', 401);
       }
     }
+
+    const visibility = publicStatusVisibility(statusPage);
 
     const serviceIds = statusPage.services.filter(sp => sp.showOnPage).map(sp => sp.serviceId);
 
@@ -142,15 +164,21 @@ export async function GET(req: NextRequest) {
           ? 'degraded'
           : 'operational';
 
-    const servicesData = services.map(service => ({
-      id: service.id,
-      name: service.name,
-      region: service.region ?? null,
-      slaTier: service.slaTier ?? null,
-      ownerTeam: service.team ? { id: service.team.id, name: service.team.name } : null,
-      status: serviceStatusMap.get(service.id) || service.status,
-      activeIncidents: serviceActiveCountMap.get(service.id) || 0,
-    }));
+    const servicesData = visibility.showServices
+      ? services.map(service => ({
+          id: service.id,
+          name: service.name,
+          ...(visibility.showServiceRegion ? { region: service.region ?? null } : {}),
+          ...(visibility.showServiceSlaTier ? { slaTier: service.slaTier ?? null } : {}),
+          ...(visibility.showTeam
+            ? { ownerTeam: service.team ? { id: service.team.id, name: service.team.name } : null }
+            : {}),
+          status: serviceStatusMap.get(service.id) || service.status,
+          ...(visibility.showMetrics
+            ? { activeIncidents: serviceActiveCountMap.get(service.id) || 0 }
+            : {}),
+        }))
+      : [];
 
     const uptimeWindow = await getReportingWindowForDays(30, 'incident');
     const uptimeMap = await calculateMultiServiceUptime(
@@ -159,10 +187,12 @@ export async function GET(req: NextRequest) {
       uptimeWindow.end,
       'PUBLIC'
     );
-    const uptimeMetrics = services.map(service => ({
-      serviceId: service.id,
-      uptime: parseFloat((uptimeMap[service.id] ?? 100).toFixed(3)),
-    }));
+    const uptimeMetrics = visibility.showUptime
+      ? services.map(service => ({
+          serviceId: service.id,
+          uptime: parseFloat((uptimeMap[service.id] ?? 100).toFixed(3)),
+        }))
+      : [];
 
     const headers: Record<string, string> = {
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -174,15 +204,11 @@ export async function GET(req: NextRequest) {
       {
         status: overallStatus,
         services: servicesData,
-        incidents: serializeRecentIncidents(recentIncidents).map(inc => ({
-          id: inc.id,
-          title: inc.title,
-          status: inc.status,
-          service: inc.service.name,
-          serviceRegion: inc.service.region ?? null,
-          createdAt: inc.createdAt,
-          resolvedAt: inc.resolvedAt,
-        })),
+        incidents: visibility.showIncidents
+          ? serializeRecentIncidents(recentIncidents).map(inc =>
+              serializePublicStatusApiIncident(inc, statusPage)
+            )
+          : [],
         metrics: {
           uptime: uptimeMetrics,
         },
