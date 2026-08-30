@@ -36,7 +36,9 @@ import EscalationStatusBadge from './EscalationStatusBadge';
 import PriorityBadge from './PriorityBadge';
 import AssigneeSection from './AssigneeSection';
 import { Badge } from '@/components/ui/shadcn/badge';
+import EmptyState from '@/components/ui/EmptyState';
 import {
+  AlertTriangle,
   CheckCircle2,
   MoreHorizontal,
   PauseCircle,
@@ -601,11 +603,16 @@ export default function IncidentsListTable({
       {/* Content */}
       <div className="p-3 md:p-4 lg:p-5">
         {incidents.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-white p-10 text-center">
-            <div className="text-4xl opacity-30 mb-3">!</div>
-            <p className="text-base font-bold text-slate-700 mb-1">No incidents found</p>
-            <p className="text-sm text-slate-500 m-0">Try adjusting filters to see more results.</p>
-          </div>
+          <EmptyState
+            icon={<AlertTriangle className="h-6 w-6" />}
+            title="No incidents found"
+            description="There are no incidents matching your active filter criteria. Try adjusting or clearing filters to see more results."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link href="/incidents">Clear all filters</Link>
+              </Button>
+            }
+          />
         ) : (
           <div className="flex flex-col gap-3">
             {incidents.map((incident, idx) => {

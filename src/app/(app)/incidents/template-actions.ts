@@ -49,7 +49,7 @@ export async function createTemplate(formData: FormData) {
   });
 
   revalidatePath('/incidents/templates');
-  revalidatePath('/incidents/create');
+  revalidatePath('/incidents');
 
   redirect('/incidents/templates');
 }
