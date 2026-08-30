@@ -2,7 +2,7 @@ import prisma from '@/lib/prisma';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { getUserPermissions } from '@/lib/rbac';
+import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Mail,
@@ -49,6 +49,10 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
     redirect(`/login?callbackUrl=/users/${id}`);
+  }
+  const viewer = await getCurrentUser();
+  if (viewer.role !== 'ADMIN' && viewer.id !== id) {
+    notFound();
   }
 
   const [user, permissions, currentUser] = await Promise.all([

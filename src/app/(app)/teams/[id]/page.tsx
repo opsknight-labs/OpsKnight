@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { assertCanViewTeam, getUserPermissions } from '@/lib/rbac';
 import {
   addTeamMember,
   assignServicesToTeam,
@@ -53,9 +53,13 @@ type TeamDetailPageProps = {
 export default async function TeamDetailPage({ params, searchParams }: TeamDetailPageProps) {
   const { id } = await params;
   const query = await searchParams;
+  try {
+    await assertCanViewTeam(id);
+  } catch {
+    notFound();
+  }
 
-  const [team, users, allServices, auditLogs, permissions, activeIncidentsCount] =
-    await Promise.all([
+  const [team, permissions, activeIncidentsCount] = await Promise.all([
       prisma.team.findUnique({
         where: { id },
         include: {
@@ -106,50 +110,6 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
           },
         },
       }),
-      prisma.user.findMany({
-        where: { status: 'ACTIVE' },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          status: true,
-          avatarUrl: true,
-          gender: true,
-        },
-        orderBy: { name: 'asc' },
-        take: 100,
-      }),
-      prisma.service.findMany({
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          teamId: true,
-          team: { select: { name: true } },
-        },
-        orderBy: { name: 'asc' },
-      }),
-      prisma.auditLog.findMany({
-        where: {
-          OR: [
-            { entityType: 'TEAM', entityId: id },
-            { entityType: 'TEAM_MEMBER', entityId: { startsWith: `${id}:` } },
-          ],
-        },
-        include: {
-          actor: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatarUrl: true,
-              gender: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 25,
-      }),
       getUserPermissions(),
       prisma.incident.count({
         where: {
@@ -165,14 +125,65 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
 
   const ownerCount = team.members.filter(m => m.role === 'OWNER').length;
   const isTeamOwner = team.members.some(m => m.userId === permissions.id && m.role === 'OWNER');
-  const canUpdateTeam = permissions.isAdminOrResponder || isTeamOwner;
+  const canUpdateTeam = permissions.isAdmin || isTeamOwner;
   const canDeleteTeam = permissions.isAdmin;
-  const canManageMembers = permissions.isAdminOrResponder || isTeamOwner;
-  const canManageNotifications =
-    permissions.isAdmin ||
-    isTeamOwner ||
-    (permissions.isAdminOrResponder && team.members.some(m => m.userId === permissions.id));
+  const canManageMembers = permissions.isAdmin || isTeamOwner;
+  const canManageNotifications = permissions.isAdmin || isTeamOwner;
   const canAssignOwnerAdmin = permissions.isAdmin || isTeamOwner;
+
+  const [users, allServices, auditLogs] = await Promise.all([
+    canManageMembers
+      ? prisma.user.findMany({
+          where: { status: 'ACTIVE' },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            status: true,
+            avatarUrl: true,
+            gender: true,
+          },
+          orderBy: { name: 'asc' },
+          take: 100,
+        })
+      : Promise.resolve([]),
+    canUpdateTeam
+      ? prisma.service.findMany({
+          where: permissions.isAdmin ? {} : { teamId: null },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            teamId: true,
+            team: { select: { name: true } },
+          },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    canManageMembers
+      ? prisma.auditLog.findMany({
+          where: {
+            OR: [
+              { entityType: 'TEAM', entityId: id },
+              { entityType: 'TEAM_MEMBER', entityId: { startsWith: `${id}:` } },
+            ],
+          },
+          include: {
+            actor: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+                gender: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+        })
+      : Promise.resolve([]),
+  ]);
 
   const existingMemberUserIds = new Set(team.members.map(m => m.userId));
   const availableUsers = users.filter(u => !existingMemberUserIds.has(u.id));

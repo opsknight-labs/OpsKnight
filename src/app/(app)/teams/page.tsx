@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { getUserPermissions, getViewableTeamWhere } from '@/lib/rbac';
 import { createTeam } from './actions';
 import TeamDirectoryList from '@/components/teams/TeamDirectoryList';
 import TeamStatsCapsule from '@/components/teams/TeamStatsCapsule';
@@ -10,7 +10,9 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Users, Shield, ArrowUpRight, Sparkles, UserCheck } from 'lucide-react';
 
 export default async function TeamsPage() {
+  const teamScope = await getViewableTeamWhere();
   const teams = await prisma.team.findMany({
+    where: teamScope,
     include: {
       teamLead: {
         select: {
