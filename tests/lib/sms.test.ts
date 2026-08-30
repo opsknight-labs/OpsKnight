@@ -10,6 +10,9 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { formatToE164, sendSMS, sendIncidentSMS } from '@/lib/sms';
+import { buildNotificationEnvelope, encodeNotificationEnvelope } from '@/lib/notification-payload';
+
+const twilioCreate = vi.hoisted(() => vi.fn());
 
 // Mock notification providers
 vi.mock('@/lib/notification-providers', () => ({
@@ -38,7 +41,7 @@ vi.mock('@/lib/env-validation', () => ({
 vi.mock('twilio', () => ({
   default: vi.fn().mockReturnValue({
     messages: {
-      create: vi.fn().mockRejectedValue(new Error('Twilio error: 20003')),
+      create: twilioCreate,
     },
   }),
 }));
@@ -49,6 +52,7 @@ import prisma from '@/lib/prisma';
 describe('sendSMS', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    twilioCreate.mockRejectedValue(new Error('Twilio error: 20003'));
   });
 
   describe('SMS Disabled', () => {
@@ -236,6 +240,7 @@ describe('sendSMS', () => {
 describe('sendIncidentSMS', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    twilioCreate.mockRejectedValue(new Error('Twilio error: 20003'));
   });
 
   it('returns error when user not found', async () => {
@@ -395,11 +400,64 @@ describe('sendIncidentSMS', () => {
     expect(result.success).toBe(false);
     // Long title handling verified by not throwing
   });
+
+  it('renders delayed SMS from the immutable notification snapshot', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: 'user-1',
+      phoneNumber: '+15551234567',
+    } as any);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
+      id: 'inc-1',
+      title: 'Mutated incident title',
+      urgency: 'LOW',
+      service: { name: 'Renamed Service' },
+      assignee: null,
+    } as any);
+    vi.mocked(getSMSConfig).mockResolvedValueOnce({
+      enabled: true,
+      provider: 'twilio',
+      accountSid: 'AC123',
+      authToken: 'token123',
+      fromNumber: '+15550001111',
+    });
+    twilioCreate.mockResolvedValue({ sid: 'SM123', status: 'queued' });
+    const eventAt = new Date('2026-08-30T12:00:00.000Z');
+    const durableMessage = encodeNotificationEnvelope(
+      buildNotificationEnvelope(
+        {
+          id: 'inc-1',
+          title: 'Original database outage',
+          urgency: 'HIGH',
+          createdAt: eventAt,
+          updatedAt: eventAt,
+          service: { id: 'svc-1', name: 'Payments' },
+        },
+        'triggered',
+        eventAt,
+        '[Payments] Original database outage'
+      )
+    );
+
+    await expect(
+      sendIncidentSMS('user-1', 'inc-1', 'triggered', 'notification-1', durableMessage)
+    ).resolves.toMatchObject({ success: true, messageSid: 'SM123' });
+
+    expect(twilioCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining('Original database outage'),
+        statusCallback: expect.stringContaining('notification-1'),
+      })
+    );
+    expect(twilioCreate.mock.calls[0]?.[0]?.body).toContain('Payments');
+    expect(twilioCreate.mock.calls[0]?.[0]?.body).not.toContain('Mutated incident title');
+    expect(twilioCreate.mock.calls[0]?.[0]?.body).not.toContain('Renamed Service');
+  });
 });
 
 describe('Error Handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    twilioCreate.mockRejectedValue(new Error('Twilio error: 20003'));
   });
 
   it('handles unverified number error (Twilio trial)', async () => {

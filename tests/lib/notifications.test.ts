@@ -12,7 +12,7 @@ import {
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
-    notification: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    notification: { create: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
     incident: { findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
     incidentEvent: { create: vi.fn() },
@@ -78,7 +78,7 @@ describe('durable notification intents', () => {
       name: 'Responder',
       email: 'r@example.com',
     } as never);
-    vi.mocked(prisma.notification.update).mockResolvedValue({} as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
     vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
   });
 
@@ -108,6 +108,12 @@ describe('durable notification intents', () => {
       'triggered',
       notificationId,
       durableMessage
+    );
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: notificationId, status: 'PENDING' },
+        data: expect.objectContaining({ status: 'SENT' }),
+      })
     );
   });
 
@@ -148,8 +154,11 @@ describe('durable notification intents', () => {
       error: 'SMTP down',
       notificationId,
     });
-    expect(prisma.notification.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED', attempts: 1 }) })
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING' }),
+        data: expect.objectContaining({ status: 'FAILED', attempts: 1 }),
+      })
     );
   });
 

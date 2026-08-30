@@ -11,6 +11,8 @@ import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
 } from '@/lib/incidents/chatops-lifecycle';
+import { runSerializableTransaction } from '@/lib/db-utils';
+import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
 
 /**
  * Resolve the Slack user who pressed a button to an OpsKnight account and a
@@ -144,7 +146,6 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       let responseMessage = '';
       let timelineMessage = '';
       let lifecycleRecordedTimeline = false;
-      let notifyNonLifecycleUpdate = false;
 
       if (actionType === 'ack') {
         let result;
@@ -230,14 +231,35 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
               });
             }
 
-            await prisma.incident.update({
-              where: { id: incidentId },
-              data: { assigneeId: targetUser.id, teamId: null },
+            const assignmentChanged = await runSerializableTransaction(async tx => {
+              const current = await tx.incident.findUnique({
+                where: { id: incidentId },
+                select: { assigneeId: true, teamId: true },
+              });
+              if (!current) throw new Error('Incident not found');
+              if (current.assigneeId === targetUser.id && current.teamId === null) return false;
+
+              await tx.incident.update({
+                where: { id: incidentId },
+                data: { assigneeId: targetUser.id, teamId: null },
+              });
+              await tx.incidentEvent.create({
+                data: {
+                  incidentId,
+                  type: 'ASSIGNMENT',
+                  message: `Assigned to ${targetUser.name} via Slack button`,
+                },
+              });
+              await enqueueIncidentUpdateSideEffects(tx, incidentId, [
+                'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
+              ]);
+              return true;
             });
             updateWarRoomTopic(incidentId).catch(() => {});
-            responseMessage = `🙋 Incident assigned to *${targetUser.name}* (<@${slackUserId}>)`;
-            timelineMessage = `Assigned to ${targetUser.name} via Slack button`;
-            notifyNonLifecycleUpdate = true;
+            responseMessage = assignmentChanged
+              ? `🙋 Incident assigned to *${targetUser.name}* (<@${slackUserId}>)`
+              : `ℹ️ Incident is already assigned to *${targetUser.name}* (<@${slackUserId}>)`;
+            lifecycleRecordedTimeline = true;
           } catch (err) {
             logger.warn('[Slack] Assign to Me failed', { error: err, incidentId });
             return NextResponse.json({
@@ -291,7 +313,6 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         await executeEscalation(incidentId);
         responseMessage = `⚡ Incident escalated by <@${slackUserId || 'responder'}>`;
         timelineMessage = `Escalated via Slack button by ${actorName}`;
-        notifyNonLifecycleUpdate = true;
       } else {
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
       }
@@ -307,20 +328,6 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             },
           })
           .catch(() => {});
-      }
-
-      // Assignment/escalation are not lifecycle transitions and retain their
-      // existing immediate notification path. Lifecycle delivery is outboxed.
-      if (notifyNonLifecycleUpdate) {
-        import('@/lib/user-notifications')
-          .then(({ sendIncidentNotifications }) => sendIncidentNotifications(incidentId, 'updated'))
-          .catch(err =>
-            logger.error('[Slack] Failed to send notifications for button action', {
-              error: err instanceof Error ? err.message : String(err),
-              incidentId,
-              actionType,
-            })
-          );
       }
 
       return NextResponse.json({

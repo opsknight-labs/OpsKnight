@@ -33,7 +33,10 @@ export async function POST(request: NextRequest) {
       (token): token is string => Boolean(token)
     );
 
-    if (!signature || !authTokens.some(token => validTwilioSignature(callbackUrl, params, signature, token))) {
+    if (
+      !signature ||
+      !authTokens.some(token => validTwilioSignature(callbackUrl, params, signature, token))
+    ) {
       return NextResponse.json({ error: 'Invalid Twilio signature' }, { status: 401 });
     }
 
@@ -59,13 +62,20 @@ export async function POST(request: NextRequest) {
     }
 
     // A receipt for an older provider attempt must never overwrite a newer attempt.
-    if (messageSid && notification.providerMessageId && notification.providerMessageId !== messageSid) {
+    if (
+      messageSid &&
+      notification.providerMessageId &&
+      notification.providerMessageId !== messageSid
+    ) {
       logger.info('twilio.dlr_stale_provider_attempt_ignored', {
         notificationId: notification.id,
         messageSid,
       });
       return new NextResponse(null, { status: 204 });
     }
+    const providerAttemptFence = messageSid
+      ? { OR: [{ providerMessageId: null }, { providerMessageId: messageSid }] }
+      : { providerMessageId: null };
 
     const delivered = messageStatus === 'delivered' || messageStatus === 'read';
     const failed =
@@ -73,8 +83,12 @@ export async function POST(request: NextRequest) {
 
     if (delivered) {
       if (notification.status !== 'DELIVERED') {
-        await prisma.notification.update({
-          where: { id: notification.id },
+        await prisma.notification.updateMany({
+          where: {
+            id: notification.id,
+            status: { in: ['PENDING', 'SENT', 'FAILED'] },
+            ...providerAttemptFence,
+          },
           data: {
             providerMessageId: messageSid || undefined,
             status: 'DELIVERED',
@@ -87,8 +101,12 @@ export async function POST(request: NextRequest) {
     } else if (failed) {
       // DELIVERED is terminal-successful and must not regress because of a late callback.
       if (notification.status !== 'DELIVERED' && notification.status !== 'FAILED') {
-        await prisma.notification.update({
-          where: { id: notification.id },
+        await prisma.notification.updateMany({
+          where: {
+            id: notification.id,
+            status: { in: ['PENDING', 'SENT'] },
+            ...providerAttemptFence,
+          },
           data: {
             providerMessageId: messageSid || undefined,
             status: 'FAILED',
@@ -102,8 +120,12 @@ export async function POST(request: NextRequest) {
         });
       }
     } else if (notification.status !== 'DELIVERED' && notification.status !== 'FAILED') {
-      await prisma.notification.update({
-        where: { id: notification.id },
+      await prisma.notification.updateMany({
+        where: {
+          id: notification.id,
+          status: 'PENDING',
+          ...providerAttemptFence,
+        },
         data: {
           providerMessageId: messageSid || undefined,
           status: 'SENT',

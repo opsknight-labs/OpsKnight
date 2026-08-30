@@ -250,7 +250,8 @@ export async function dispatchNotificationAttempt(
             input.userId,
             input.incidentId,
             type,
-            input.notificationId
+            input.notificationId,
+            input.message ?? undefined
           );
           if (!result.success) return providerFailureResult(result);
           return {
@@ -299,7 +300,8 @@ export async function dispatchNotificationAttempt(
             input.userId,
             input.incidentId,
             type,
-            input.notificationId
+            input.notificationId,
+            input.message ?? undefined
           );
           if (!result.success) return providerFailureResult(result);
           return {

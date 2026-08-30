@@ -70,13 +70,13 @@ describe('notification retry claiming', () => {
     const { CircuitBreakerError } = await import('@/lib/circuit-breaker');
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
     circuitExecute.mockRejectedValue(new CircuitBreakerError('Circuit is open', 'email'));
-    vi.mocked(prisma.notification.update).mockResolvedValue({} as never);
 
     const result = await retryFailedNotifications();
 
     expect(result).toEqual({ retried: 1, succeeded: 0, failed: 1 });
-    expect(prisma.notification.update).toHaveBeenCalledWith(
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING' }),
         data: expect.objectContaining({ status: 'FAILED', attempts: 1 }),
       })
     );
@@ -94,7 +94,6 @@ describe('notification retry claiming', () => {
   it('sends only after an atomic FAILED-to-PENDING claim succeeds', async () => {
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
     sendIncidentEmail.mockResolvedValue({ success: true });
-    vi.mocked(prisma.notification.update).mockResolvedValue({} as never);
 
     const result = await retryFailedNotifications();
 

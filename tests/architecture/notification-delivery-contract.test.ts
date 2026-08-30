@@ -23,4 +23,12 @@ describe('notification delivery architecture', () => {
     expect(queue).not.toMatch(/Math\.pow\(2,\s*retryCount\)/);
     expect(retry).not.toContain('INITIAL_RETRY_DELAY_MS');
   });
+
+  it('does not fire-and-forget personal incident notifications from API adapters', () => {
+    const slackActions = readFileSync('src/app/api/slack/actions/route.ts', 'utf8');
+
+    expect(slackActions).toContain('enqueueIncidentUpdateSideEffects');
+    expect(slackActions).not.toContain("import('@/lib/user-notifications')");
+    expect(slackActions).not.toMatch(/sendIncidentNotifications\s*\(/);
+  });
 });

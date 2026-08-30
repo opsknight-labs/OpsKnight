@@ -2,14 +2,14 @@ import { createHmac } from 'crypto';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { findFirst, update } = vi.hoisted(() => ({
+const { findFirst, updateMany } = vi.hoisted(() => ({
   findFirst: vi.fn(),
-  update: vi.fn(),
+  updateMany: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
   default: {
-    notification: { findFirst, update },
+    notification: { findFirst, updateMany },
   },
 }));
 
@@ -50,16 +50,20 @@ describe('Twilio delivery receipt webhook', () => {
       status: 'SENT',
       providerMessageId: 'SM123',
     });
-    update.mockResolvedValue({ id: 'notif-1' });
+    updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('verifies the callback and records delivered messages', async () => {
     const response = await POST(signedRequest('MessageSid=SM123&MessageStatus=delivered'));
 
     expect(response.status).toBe(204);
-    expect(update).toHaveBeenCalledWith(
+    expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'notif-1' },
+        where: expect.objectContaining({
+          id: 'notif-1',
+          status: { in: ['PENDING', 'SENT', 'FAILED'] },
+          OR: [{ providerMessageId: null }, { providerMessageId: 'SM123' }],
+        }),
         data: expect.objectContaining({
           providerMessageId: 'SM123',
           status: 'DELIVERED',
@@ -77,7 +81,7 @@ describe('Twilio delivery receipt webhook', () => {
     );
 
     expect(response.status).toBe(401);
-    expect(update).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it('records a failed delivery on the same durable intent without scheduling a fallback', async () => {
@@ -86,9 +90,13 @@ describe('Twilio delivery receipt webhook', () => {
     );
 
     expect(response.status).toBe(204);
-    expect(update).toHaveBeenCalledWith(
+    expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'notif-1' },
+        where: expect.objectContaining({
+          id: 'notif-1',
+          status: { in: ['PENDING', 'SENT'] },
+          OR: [{ providerMessageId: null }, { providerMessageId: 'SM123' }],
+        }),
         data: expect.objectContaining({
           providerMessageId: 'SM123',
           status: 'FAILED',
@@ -111,7 +119,7 @@ describe('Twilio delivery receipt webhook', () => {
     );
 
     expect(response.status).toBe(204);
-    expect(update).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it('ignores receipts from a superseded provider attempt', async () => {
@@ -124,6 +132,6 @@ describe('Twilio delivery receipt webhook', () => {
     const response = await POST(signedRequest('MessageSid=SM-old&MessageStatus=delivered'));
 
     expect(response.status).toBe(204);
-    expect(update).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 });

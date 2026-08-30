@@ -90,8 +90,8 @@ export async function retryFailedNotifications(): Promise<{
           }
 
           if (result.outcome === 'DELIVERED') {
-            await prisma.notification.update({
-              where: { id: notification.id },
+            await prisma.notification.updateMany({
+              where: { id: notification.id, status: 'PENDING' },
               data: {
                 status: 'SENT',
                 sentAt: new Date(),
@@ -106,8 +106,8 @@ export async function retryFailedNotifications(): Promise<{
           }
 
           if (result.outcome === 'SKIPPED') {
-            await prisma.notification.update({
-              where: { id: notification.id },
+            await prisma.notification.updateMany({
+              where: { id: notification.id, status: 'PENDING' },
               data: {
                 status: 'SKIPPED',
                 errorMsg: result.error || 'Delivery skipped by notification policy.',
@@ -117,8 +117,8 @@ export async function retryFailedNotifications(): Promise<{
           }
 
           if (result.outcome === 'QUEUED') {
-            await prisma.notification.update({
-              where: { id: notification.id },
+            await prisma.notification.updateMany({
+              where: { id: notification.id, status: 'PENDING' },
               data: {
                 status: 'FAILED',
                 failedAt: new Date(),
@@ -131,8 +131,8 @@ export async function retryFailedNotifications(): Promise<{
 
           const circuitOpen = result.outcome === 'CIRCUIT_OPEN';
           const permanentFailure = result.outcome === 'PERMANENT_FAILURE';
-          await prisma.notification.update({
-            where: { id: notification.id },
+          await prisma.notification.updateMany({
+            where: { id: notification.id, status: 'PENDING' },
             data: {
               status: 'FAILED',
               failedAt: new Date(),
@@ -150,8 +150,8 @@ export async function retryFailedNotifications(): Promise<{
             notificationId: notification.id,
             error: error instanceof Error ? error.message : String(error),
           });
-          await prisma.notification.update({
-            where: { id: notification.id },
+          await prisma.notification.updateMany({
+            where: { id: notification.id, status: 'PENDING' },
             data: {
               status: 'FAILED',
               failedAt: new Date(),

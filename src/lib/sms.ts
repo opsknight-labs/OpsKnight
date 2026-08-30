@@ -18,6 +18,7 @@ import prisma from './prisma';
 import { getSMSConfig } from './notification-providers';
 import { getBaseUrl } from './env-validation';
 import { logger } from './logger';
+import { decodeNotificationEnvelope } from './notification-payload';
 
 export type SMSOptions = {
   to: string; // Phone number in E.164 format (e.g., +1234567890)
@@ -100,14 +101,8 @@ export async function sendSMS(
       // Load Twilio dynamically
       let twilio: TwilioFactory | null = null;
       try {
-        const loadTwilio = () => {
-          try {
-            return require('twilio'); // eslint-disable-line @typescript-eslint/no-require-imports
-          } catch {
-            return null;
-          }
-        };
-        twilio = loadTwilio();
+        const twilioModule = await import('twilio');
+        twilio = (twilioModule.default || twilioModule) as unknown as TwilioFactory;
         if (!twilio) {
           throw new Error('Twilio package not installed');
         }
@@ -343,7 +338,8 @@ export async function sendIncidentSMS(
   userId: string,
   incidentId: string,
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
-  notificationId?: string
+  notificationId?: string,
+  durableMessage?: string
 ): Promise<{ success: boolean; error?: string; messageSid?: string }> {
   try {
     const [user, incident] = await Promise.all([
@@ -365,18 +361,26 @@ export async function sendIncidentSMS(
       return { success: false, error: 'User has no phone number configured' };
     }
 
+    const envelope = decodeNotificationEnvelope(durableMessage);
+    const notificationIncident = envelope
+      ? {
+          title: envelope.snapshot.title,
+          urgency: envelope.snapshot.urgency,
+          service: { name: envelope.snapshot.service.name },
+        }
+      : incident;
     const baseUrl = getBaseUrl();
     const incidentUrl = `${baseUrl}/incidents/${incidentId}`;
 
     // Emojis and labels based on event type and urgency
     const eventEmoji =
-      incident.urgency === 'HIGH'
+      notificationIncident.urgency === 'HIGH'
         ? eventType === 'triggered'
           ? '🚨'
           : eventType === 'acknowledged'
             ? '⚠️'
             : '✅'
-        : incident.urgency === 'MEDIUM'
+        : notificationIncident.urgency === 'MEDIUM'
           ? eventType === 'triggered'
             ? '⚠️'
             : eventType === 'acknowledged'
@@ -393,9 +397,9 @@ export async function sendIncidentSMS(
         ? 'RESOLVED'
         : eventType === 'acknowledged'
           ? 'ACK'
-          : incident.urgency === 'HIGH'
+          : notificationIncident.urgency === 'HIGH'
             ? 'CRITICAL'
-            : incident.urgency === 'MEDIUM'
+            : notificationIncident.urgency === 'MEDIUM'
               ? 'ELEVATED'
               : 'INCIDENT';
 
@@ -404,14 +408,14 @@ export async function sendIncidentSMS(
     const serviceMaxLength = 15;
 
     const title =
-      incident.title.length > titleMaxLength
-        ? incident.title.substring(0, titleMaxLength - 1) + '…'
-        : incident.title;
+      notificationIncident.title.length > titleMaxLength
+        ? notificationIncident.title.substring(0, titleMaxLength - 1) + '…'
+        : notificationIncident.title;
 
     const service =
-      incident.service.name.length > serviceMaxLength
-        ? incident.service.name.substring(0, serviceMaxLength - 1) + '…'
-        : incident.service.name;
+      notificationIncident.service.name.length > serviceMaxLength
+        ? notificationIncident.service.name.substring(0, serviceMaxLength - 1) + '…'
+        : notificationIncident.service.name;
 
     // Professional OpsKnight SMS format with clean structure:
     // Line 1: [OpsKnight] STATUS
@@ -426,9 +430,9 @@ export async function sendIncidentSMS(
           : eventType === 'updated'
             ? `[OpsKnight] ${eventEmoji} Updated: ${title}\nℹ ${service}\n${incidentUrl}`
             : `[OpsKnight] ${eventEmoji} ${
-                incident.urgency === 'HIGH'
+                notificationIncident.urgency === 'HIGH'
                   ? 'CRITICAL'
-                  : incident.urgency === 'MEDIUM'
+                  : notificationIncident.urgency === 'MEDIUM'
                     ? 'Elevated'
                     : 'Incident'
               }: ${title}\n⚠ ${service}\n${incidentUrl}`;
