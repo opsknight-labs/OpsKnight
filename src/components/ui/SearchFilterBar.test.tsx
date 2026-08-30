@@ -15,7 +15,7 @@ describe('SearchFilterBar', () => {
 
     const input = screen.getByPlaceholderText('Search postmortems, incidents, services...');
     expect(input).toBeInTheDocument();
-    expect(input).toHaveClass('pl-9');
+    expect(input).toHaveClass('pl-10');
     expect(input).not.toHaveClass('px-3');
   });
 

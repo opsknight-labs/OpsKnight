@@ -162,7 +162,8 @@ export default function UserFilters({ teams }: UserFiltersProps) {
               <Input
                 id="q"
                 placeholder="Name or email..."
-                className="h-10 pl-9 bg-muted/30 focus:bg-background transition-colors"
+                className="h-10 pl-10 bg-muted/30 focus:bg-background transition-colors"
+                style={{ paddingLeft: '2.5rem' }}
                 value={query}
                 onChange={e => handleFilterChange('q', e.target.value)}
               />
