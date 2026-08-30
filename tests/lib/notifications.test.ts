@@ -53,7 +53,7 @@ const incident = {
 function intentIdFor(
   message: string,
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated' = 'triggered',
-  incidentValue = incident
+  incidentValue: Parameters<typeof notificationEventInstant>[0] = incident
 ) {
   const eventAt = notificationEventInstant(incidentValue, eventType);
   const eventKey = notificationEventKey({ incident: incidentValue, eventType, message });
