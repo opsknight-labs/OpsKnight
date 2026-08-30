@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -121,6 +122,7 @@ function isOverdue(item: ActionItem) {
 }
 
 function ActionItemCard({ item, users, userTimeZone, canManage }: ActionItemCardProps) {
+  const router = useRouter();
   const overdue = isOverdue(item);
   const statusConfig = STATUS_CONFIG[item.status];
   const priorityConfig = PRIORITY_CONFIG[item.priority];
@@ -134,7 +136,7 @@ function ActionItemCard({ item, users, userTimeZone, canManage }: ActionItemCard
         'transition-all duration-200 ease-out',
         'hover:-translate-y-0.5 hover:shadow-lg'
       )}
-      onClick={() => (window.location.href = `/postmortems/${item.incidentId}`)}
+      onClick={() => router.push(`/postmortems/${item.incidentId}`)}
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1">
@@ -194,6 +196,7 @@ export default function ActionItemsBoard({
   view,
   filters,
 }: ActionItemsBoardProps) {
+  const router = useRouter();
   const { userTimeZone } = useTimezone();
   const [search, setSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState(filters.status || '');
@@ -278,7 +281,7 @@ export default function ActionItemsBoard({
     setSelectedStatus('');
     setSelectedOwner('');
     setSelectedPriority('');
-    window.location.href = '/action-items';
+    router.push('/action-items');
   };
 
   return (
@@ -297,7 +300,7 @@ export default function ActionItemsBoard({
               onValueChange={value => {
                 const newValue = value === 'all' ? '' : value;
                 setSelectedStatus(newValue);
-                window.location.href = buildFilterUrl({ status: newValue });
+                router.push(buildFilterUrl({ status: newValue }));
               }}
             >
               <SelectTrigger className="h-9 w-[130px] bg-slate-50/60 text-xs">
@@ -317,7 +320,7 @@ export default function ActionItemsBoard({
               onValueChange={value => {
                 const newValue = value === 'all' ? '' : value;
                 setSelectedOwner(newValue);
-                window.location.href = buildFilterUrl({ owner: newValue });
+                router.push(buildFilterUrl({ owner: newValue }));
               }}
             >
               <SelectTrigger className="h-9 w-[140px] bg-slate-50/60 text-xs">
@@ -338,7 +341,7 @@ export default function ActionItemsBoard({
               onValueChange={value => {
                 const newValue = value === 'all' ? '' : value;
                 setSelectedPriority(newValue);
-                window.location.href = buildFilterUrl({ priority: newValue });
+                router.push(buildFilterUrl({ priority: newValue }));
               }}
             >
               <SelectTrigger className="h-9 w-[130px] bg-slate-50/60 text-xs">
@@ -474,7 +477,7 @@ export default function ActionItemsBoard({
                     'transition-all duration-200 ease-out',
                     'hover:translate-x-1 hover:shadow-md'
                   )}
-                  onClick={() => (window.location.href = `/postmortems/${item.incidentId}`)}
+                  onClick={() => router.push(`/postmortems/${item.incidentId}`)}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">

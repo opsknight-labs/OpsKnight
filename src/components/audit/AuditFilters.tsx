@@ -51,7 +51,7 @@ export default function AuditFilters({
 }: AuditFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
