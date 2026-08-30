@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
           errors: validation.errors,
           integrationId,
         });
-        // Azure might send non-standard payloads, log but continue
+        return jsonError('Invalid Azure webhook payload', 400, { errors: validation.errors });
       }
 
       // Transform to standard event format

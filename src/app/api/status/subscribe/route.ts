@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 
 /**
  * Subscribe to Status Page Updates (Public API)
@@ -10,8 +11,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
  */
 export async function POST(req: NextRequest) {
   try {
-    const ipHeader = req.headers.get('x-forwarded-for') || '';
-    const ip = ipHeader.split(',')[0]?.trim() || 'anonymous';
+    const ip = getClientIp(req.headers);
     const rate = await checkRateLimit(`api:status:subscribe:ip:${ip}`, 10, 60_000);
     if (!rate.allowed) {
       const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
@@ -40,14 +40,17 @@ export async function POST(req: NextRequest) {
       `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/status-page/subscribe`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // The canonical endpoint also rate-limits by client address. Forward
+        // the normalized address so this compatibility route does not collapse
+        // every request into one server-side rate-limit bucket.
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': ip },
         body: JSON.stringify({ statusPageId, email }),
       }
     );
 
     const data = await response.json();
     return jsonOk(data, response.status);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('api.status.subscribe.error', {
       error: error instanceof Error ? error.message : String(error),
     });
