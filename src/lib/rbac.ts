@@ -14,6 +14,7 @@ import {
   type Capability,
 } from '@/lib/authorization';
 import { resolveUserActor } from '@/lib/authorization-actors';
+import { serviceReadWhere } from '@/lib/authorization-filters';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import {
   deriveScheduleUICapabilities,
@@ -394,6 +395,32 @@ export async function assertCanModifyService(serviceId: string) {
     'SERVICE_ACCESS_DENIED',
     'Unauthorized. You do not have permission to modify this service.',
     { serviceId, userId: user.id }
+  );
+}
+
+export async function assertCanViewService(serviceId: string) {
+  const user = await getCurrentUser();
+  const actor = await resolveUserActor(user.id);
+  if (!actor) {
+    throw new AuthorizationError(
+      'Unauthorized. You do not have permission to view this service.',
+      CAPABILITIES.SERVICE_READ_SCOPED
+    );
+  }
+
+  const service = await prisma.service.findFirst({
+    where: { id: serviceId, ...serviceReadWhere(actor) },
+    select: { id: true },
+  });
+  if (service) return user;
+
+  throw appError(
+    'SERVICE_ACCESS_DENIED',
+    'Unauthorized. You do not have permission to view this service.',
+    {
+      serviceId,
+      userId: user.id,
+    }
   );
 }
 

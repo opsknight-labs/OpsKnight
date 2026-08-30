@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getUserPermissions } from '@/lib/rbac';
+import { assertCanModifyService, assertCanViewService } from '@/lib/rbac';
 import { deleteService, updateService, deleteIntegration } from '../actions';
 
 // UI Components
@@ -146,6 +146,21 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const isSaved = resolvedSearchParams?.saved === '1';
   const skip = (page - 1) * INCIDENTS_PER_PAGE;
 
+  let currentUser: Awaited<ReturnType<typeof assertCanViewService>>;
+  try {
+    currentUser = await assertCanViewService(id);
+  } catch {
+    notFound();
+  }
+
+  let canManageService = false;
+  try {
+    await assertCanModifyService(id);
+    canManageService = true;
+  } catch {
+    // The service is viewable but this user cannot change its configuration.
+  }
+
   const { calculateSLAMetrics, calculateMultiServiceUptime } = await import('@/lib/sla-server');
   const slaWindowDays = 30;
   const now = new Date();
@@ -160,7 +175,6 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     policies,
     globalSlackIntegration,
     jiraConfig,
-    permissions,
     chatOpsConfig,
   ] = await Promise.all([
     prisma.service.findUnique({
@@ -218,25 +232,32 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       includeActiveIncidents: true,
     }),
     calculateMultiServiceUptime([id], thirtyDaysAgo, now),
-    prisma.team.findMany({ orderBy: { name: 'asc' } }),
-    prisma.escalationPolicy.findMany({
-      select: { id: true, name: true, description: true },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.slackIntegration.findFirst({
-      where: { enabled: true, services: { none: {} } },
-      select: { id: true, workspaceName: true, workspaceId: true, enabled: true },
-      orderBy: { updatedAt: 'desc' },
-    }),
-    prisma.jiraConfig.findUnique({
-      where: { id: 'default' },
-      select: { enabled: true },
-    }),
-    getUserPermissions(),
-    prisma.chatOpsConfig.findUnique({
-      where: { id: 'default' },
-      select: { enabled: true },
-    }),
+    canManageService ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
+    canManageService
+      ? prisma.escalationPolicy.findMany({
+          select: { id: true, name: true, description: true },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    canManageService
+      ? prisma.slackIntegration.findFirst({
+          where: { enabled: true, services: { none: {} } },
+          select: { id: true, workspaceName: true, workspaceId: true, enabled: true },
+          orderBy: { updatedAt: 'desc' },
+        })
+      : Promise.resolve(null),
+    canManageService
+      ? prisma.jiraConfig.findUnique({
+          where: { id: 'default' },
+          select: { enabled: true },
+        })
+      : Promise.resolve(null),
+    canManageService
+      ? prisma.chatOpsConfig.findUnique({
+          where: { id: 'default' },
+          select: { enabled: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   if (!serviceRaw) {
@@ -245,8 +266,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = serviceRaw as any;
-  const canManageService = permissions.isAdminOrResponder;
-  const canDeleteService = permissions.isAdmin;
+  const canDeleteService = currentUser.role === 'ADMIN';
 
   // SLA and Health Computations
   const dynamicStatus = slaMetrics.dynamicStatus;
@@ -431,7 +451,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               category: 'Other' as const,
               iconBg: '#475569',
             };
-            const webhookUrl = getWebhookUrl(integrationType, integration.id, integration.key);
+            const webhookUrl = canManageService
+              ? getWebhookUrl(integrationType, integration.id, integration.key)
+              : null;
 
             return (
               <Card
@@ -508,7 +530,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                       </div>
                     </div>
 
-                    {integrationType === 'EVENTS_API_V2' ? (
+                    {!canManageService ? (
+                      <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                        Integration connection details are visible to service managers only.
+                      </p>
+                    ) : integrationType === 'EVENTS_API_V2' && webhookUrl ? (
                       <div className="space-y-3 pt-1">
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
@@ -573,7 +599,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           </pre>
                         </div>
                       </div>
-                    ) : (
+                    ) : webhookUrl ? (
                       <div className="space-y-3 pt-1">
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
@@ -598,7 +624,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                           />
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>
@@ -614,20 +640,22 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       )}
 
       {/* Add New Integration Grid */}
-      <Card className="border-border shadow-xs">
-        <CardHeader className="pb-3 border-b bg-muted/20">
-          <CardTitle className="text-sm font-bold flex items-center gap-2">
-            <Plus className="h-4 w-4 text-primary" />
-            Add Monitoring Integration
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Choose a provider to generate a unique webhook endpoint for this service.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-5">
-          <AddIntegrationGrid serviceId={id} />
-        </CardContent>
-      </Card>
+      {canManageService && (
+        <Card className="border-border shadow-xs">
+          <CardHeader className="pb-3 border-b bg-muted/20">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <Plus className="h-4 w-4 text-primary" />
+              Add Monitoring Integration
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Choose a provider to generate a unique webhook endpoint for this service.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5">
+            <AddIntegrationGrid serviceId={id} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 
@@ -648,203 +676,215 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         </div>
       )}
 
-      {/* Core Service Metadata Form */}
-      <Card className="border-border shadow-xs">
-        <CardHeader className="pb-4 border-b bg-muted/20">
-          <CardTitle className="text-sm font-bold flex items-center gap-2">
-            <Settings className="h-4 w-4 text-primary" />
-            General Service Configuration
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Manage service name, SLA tier, regional placement, and team ownership.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-5">
-          <form action={boundUpdateService} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="name" className="text-xs font-semibold">
-                  Service Name *
-                </Label>
-                <Input
-                  id="name"
-                  name="name"
-                  defaultValue={service.name}
-                  required
-                  className="text-xs h-9"
+      {canManageService ? (
+        <>
+          {/* Core Service Metadata Form */}
+          <Card className="border-border shadow-xs">
+            <CardHeader className="pb-4 border-b bg-muted/20">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Settings className="h-4 w-4 text-primary" />
+                General Service Configuration
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Manage service name, SLA tier, regional placement, and team ownership.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-5">
+              <form action={boundUpdateService} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="name" className="text-xs font-semibold">
+                      Service Name *
+                    </Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      defaultValue={service.name}
+                      required
+                      className="text-xs h-9"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="teamId" className="text-xs font-semibold">
+                      Owning Team
+                    </Label>
+                    <select
+                      id="teamId"
+                      name="teamId"
+                      defaultValue={service.teamId || ''}
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="">No Owning Team</option>
+                      {teams.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="description" className="text-xs font-semibold">
+                    Description
+                  </Label>
+                  <Textarea
+                    id="description"
+                    name="description"
+                    defaultValue={service.description || ''}
+                    rows={2}
+                    placeholder="What does this service do?"
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="escalationPolicyId" className="text-xs font-semibold">
+                      Escalation Policy
+                    </Label>
+                    <select
+                      id="escalationPolicyId"
+                      name="escalationPolicyId"
+                      defaultValue={service.escalationPolicyId || ''}
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="">No Policy Attached</option>
+                      {policies.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="slaTier" className="text-xs font-semibold">
+                      SLA Tier
+                    </Label>
+                    <select
+                      id="slaTier"
+                      name="slaTier"
+                      defaultValue={service.slaTier || ''}
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="">None</option>
+                      <option value="Platinum">Platinum</option>
+                      <option value="Gold">Gold</option>
+                      <option value="Silver">Silver</option>
+                      <option value="Bronze">Bronze</option>
+                      <option value="Internal">Internal</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="region" className="text-xs font-semibold">
+                      Primary Region
+                    </Label>
+                    <Input
+                      id="region"
+                      name="region"
+                      defaultValue={service.region || ''}
+                      placeholder="e.g. us-east-1"
+                      className="text-xs h-9"
+                    />
+                  </div>
+                </div>
+
+                {canManageService && (
+                  <div className="pt-2 flex justify-end">
+                    <Button type="submit" size="sm" className="text-xs">
+                      Save Changes
+                    </Button>
+                  </div>
+                )}
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Slack & ChatOps Integration Settings */}
+          <ServiceNotificationSettings
+            serviceId={id}
+            serviceNotificationChannels={service.serviceNotificationChannels || []}
+            slackChannel={service.slackChannel || null}
+            slackWebhookUrl={service.slackWebhookUrl || null}
+            slackIntegration={globalSlackIntegration}
+            webhookIntegrations={(service.webhookIntegrations || []).map((w: any) => ({
+              id: w.id,
+              name: w.name,
+              type: w.type,
+              url: w.url || '',
+              enabled: w.enabled,
+            }))}
+            serviceNotifyOnTriggered={service.serviceNotifyOnTriggered ?? true}
+            serviceNotifyOnAck={service.serviceNotifyOnAck ?? true}
+            serviceNotifyOnResolved={service.serviceNotifyOnResolved ?? true}
+            serviceNotifyOnSlaBreach={service.serviceNotifyOnSlaBreach ?? false}
+          />
+
+          <ChatOpsWarRoomSettings
+            serviceId={id}
+            autoCreateWarRoom={service.autoCreateWarRoom ?? true}
+            warRoomVideoBridge={service.warRoomVideoBridge || null}
+            warRoomCustomBridgeUrl={service.warRoomCustomBridgeUrl || null}
+            chatOpsEnabled={Boolean(chatOpsConfig?.enabled)}
+            canManage={canManageService}
+          />
+
+          {/* Jira Integration Mapping */}
+          <JiraServiceMappingSettings
+            serviceId={id}
+            mapping={service.jiraServiceMapping}
+            jiraEnabled={Boolean(jiraConfig?.enabled)}
+            canManage={canManageService}
+          />
+
+          {/* Danger Zone: Delete Service */}
+          {canDeleteService && (
+            <Card className="border-destructive/30 bg-destructive/5 shadow-xs">
+              <CardHeader className="pb-3 border-b border-destructive/20">
+                <CardTitle className="text-sm font-bold text-destructive flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Danger Zone
+                </CardTitle>
+                <CardDescription className="text-xs text-destructive/80">
+                  Permanently delete this service. This action cannot be undone.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Delete {service.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Requires typing the exact service name to confirm permanent removal.
+                  </p>
+                </div>
+                <DeleteConfirmDialog
+                  title={`Delete Service ${service.name}`}
+                  description={
+                    <span>
+                      Are you sure you want to delete <strong>{service.name}</strong>? All
+                      associated webhooks and configuration will be permanently removed.
+                    </span>
+                  }
+                  requireMatchText={service.name}
+                  onConfirm={boundDeleteService}
+                  trigger={
+                    <Button variant="destructive" size="sm" className="text-xs shrink-0">
+                      Delete Service
+                    </Button>
+                  }
                 />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="teamId" className="text-xs font-semibold">
-                  Owning Team
-                </Label>
-                <select
-                  id="teamId"
-                  name="teamId"
-                  defaultValue={service.teamId || ''}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="">No Owning Team</option>
-                  {teams.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="description" className="text-xs font-semibold">
-                Description
-              </Label>
-              <Textarea
-                id="description"
-                name="description"
-                defaultValue={service.description || ''}
-                rows={2}
-                placeholder="What does this service do?"
-                className="text-xs"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="escalationPolicyId" className="text-xs font-semibold">
-                  Escalation Policy
-                </Label>
-                <select
-                  id="escalationPolicyId"
-                  name="escalationPolicyId"
-                  defaultValue={service.escalationPolicyId || ''}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="">No Policy Attached</option>
-                  {policies.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="slaTier" className="text-xs font-semibold">
-                  SLA Tier
-                </Label>
-                <select
-                  id="slaTier"
-                  name="slaTier"
-                  defaultValue={service.slaTier || ''}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="">None</option>
-                  <option value="Tier 1">Tier 1 (Mission Critical)</option>
-                  <option value="Tier 2">Tier 2 (High Priority)</option>
-                  <option value="Tier 3">Tier 3 (Standard)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="region" className="text-xs font-semibold">
-                  Primary Region
-                </Label>
-                <Input
-                  id="region"
-                  name="region"
-                  defaultValue={service.region || ''}
-                  placeholder="e.g. us-east-1"
-                  className="text-xs h-9"
-                />
-              </div>
-            </div>
-
-            {canManageService && (
-              <div className="pt-2 flex justify-end">
-                <Button type="submit" size="sm" className="text-xs">
-                  Save Changes
-                </Button>
-              </div>
-            )}
-          </form>
-        </CardContent>
-      </Card>
-
-      {/* Slack & ChatOps Integration Settings */}
-      <ServiceNotificationSettings
-        serviceId={id}
-        serviceNotificationChannels={service.serviceNotificationChannels || []}
-        slackChannel={service.slackChannel || null}
-        slackWebhookUrl={service.slackWebhookUrl || null}
-        slackIntegration={globalSlackIntegration}
-        webhookIntegrations={(service.webhookIntegrations || []).map((w: any) => ({
-          id: w.id,
-          name: w.name,
-          type: w.type,
-          url: w.url || '',
-          enabled: w.enabled,
-        }))}
-        serviceNotifyOnTriggered={service.serviceNotifyOnTriggered ?? true}
-        serviceNotifyOnAck={service.serviceNotifyOnAck ?? true}
-        serviceNotifyOnResolved={service.serviceNotifyOnResolved ?? true}
-        serviceNotifyOnSlaBreach={service.serviceNotifyOnSlaBreach ?? false}
-      />
-
-      <ChatOpsWarRoomSettings
-        serviceId={id}
-        autoCreateWarRoom={service.autoCreateWarRoom ?? true}
-        warRoomVideoBridge={service.warRoomVideoBridge || null}
-        warRoomCustomBridgeUrl={service.warRoomCustomBridgeUrl || null}
-        chatOpsEnabled={Boolean(chatOpsConfig?.enabled)}
-        canManage={canManageService}
-      />
-
-      {/* Jira Integration Mapping */}
-      <JiraServiceMappingSettings
-        serviceId={id}
-        mapping={service.jiraServiceMapping}
-        jiraEnabled={Boolean(jiraConfig?.enabled)}
-        canManage={canManageService}
-      />
-
-      {/* Danger Zone: Delete Service */}
-      {canDeleteService && (
-        <Card className="border-destructive/30 bg-destructive/5 shadow-xs">
-          <CardHeader className="pb-3 border-b border-destructive/20">
-            <CardTitle className="text-sm font-bold text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Danger Zone
-            </CardTitle>
-            <CardDescription className="text-xs text-destructive/80">
-              Permanently delete this service. This action cannot be undone.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold text-foreground">Delete {service.name}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Requires typing the exact service name to confirm permanent removal.
-              </p>
-            </div>
-            <DeleteConfirmDialog
-              title={`Delete Service ${service.name}`}
-              description={
-                <span>
-                  Are you sure you want to delete <strong>{service.name}</strong>? All associated
-                  webhooks and configuration will be permanently removed.
-                </span>
-              }
-              requireMatchText={service.name}
-              onConfirm={boundDeleteService}
-              trigger={
-                <Button variant="destructive" size="sm" className="text-xs shrink-0">
-                  Delete Service
-                </Button>
-              }
-            />
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      ) : (
+        <EmptyState
+          icon={<Settings className="h-8 w-8 text-muted-foreground" />}
+          title="Service settings are restricted"
+          description="Only service managers can view or change integration and notification settings."
+        />
       )}
     </div>
   );
