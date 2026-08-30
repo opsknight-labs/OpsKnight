@@ -5,7 +5,11 @@ import { getCachedWidgetData } from '@/lib/widget-data-cache';
 import prisma from '@/lib/prisma';
 import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
 import { dashboardMetricsScope } from '@/lib/authorization-filters';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import {
+  hasSameStreamAuthorizationScope,
+  resolveStreamAuthorization,
+  type StreamAuthorization,
+} from '@/lib/realtime-stream-authorization';
 
 /**
  * Server-Sent Events (SSE) Stream for Real-time Widget Updates
@@ -18,27 +22,22 @@ export async function GET(request: Request) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    const sessionUser = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: {
-        id: true,
-        role: true,
-        status: true,
-        teamMemberships: { select: { teamId: true } },
-      },
+      select: { id: true },
     });
 
-    if (!user || user.status !== 'ACTIVE') {
+    if (!sessionUser) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const actor: AuthorizationActor = {
-      id: user.id,
-      role: user.role,
-      status: user.status,
-      teamIds: user.teamMemberships.map(membership => membership.teamId),
-    };
-    const metricsScope = dashboardMetricsScope(actor);
+    const expectedTokenVersion = session.user.tokenVersion ?? 0;
+    const initialAuthorization = await resolveStreamAuthorization(
+      sessionUser.id,
+      expectedTokenVersion
+    );
+    if (!initialAuthorization) return new Response('Unauthorized', { status: 401 });
+    let actor: StreamAuthorization = initialAuthorization;
 
     const encoder = new TextEncoder();
     const searchParams = new URL(request.url).searchParams;
@@ -49,7 +48,7 @@ export async function GET(request: Request) {
     const serviceParam = searchParams.get('service');
 
     const dateFilter = await buildRetainedDateFilter(range, startDate, endDate);
-    const widgetFilters = {
+    const baseWidgetFilters = {
       serviceId: serviceParam && serviceParam !== 'all' ? serviceParam : undefined,
       assigneeId: assigneeParam === null ? undefined : assigneeParam === '' ? null : assigneeParam,
       urgency: (searchParams.get('urgency') as 'HIGH' | 'MEDIUM' | 'LOW' | null) || undefined,
@@ -64,8 +63,12 @@ export async function GET(request: Request) {
       startDate: dateFilter.window.start,
       endDate: dateFilter.window.end,
       includeAllTime: range === 'all',
-      ...metricsScope,
     };
+    const buildWidgetFilters = () => ({
+      ...baseWidgetFilters,
+       ...dashboardMetricsScope(actor),
+    });
+    let widgetFilters = buildWidgetFilters();
 
     let cleanup: () => void = () => {};
 
@@ -74,6 +77,7 @@ export async function GET(request: Request) {
         let isClosed = false;
         let intervalId: NodeJS.Timeout | null = null;
         let isUpdating = false;
+        let authorizationCounter = 0;
 
         cleanup = () => {
           isClosed = true;
@@ -86,12 +90,16 @@ export async function GET(request: Request) {
           } catch (_error) {
             // Already closed
           }
-          logger.info('sse.widgets.stream_closed', { userId: user.id });
+           logger.info('sse.widgets.stream_closed', { userId: actor.id });
         };
 
         // Send initial data immediately
         try {
-          const initialData = await getCachedWidgetData(user.id, user.role, widgetFilters);
+          const initialData = await getCachedWidgetData(
+             actor.id,
+             actor.role,
+            widgetFilters
+          );
           if (!isClosed) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(initialData)}\n\n`));
           }
@@ -106,7 +114,34 @@ export async function GET(request: Request) {
           if (isClosed || isUpdating) return;
           isUpdating = true;
           try {
-            const data = await getCachedWidgetData(user.id, user.role, widgetFilters);
+            authorizationCounter++;
+            if (authorizationCounter >= 6) {
+              authorizationCounter = 0;
+              const nextAuthorization = await resolveStreamAuthorization(
+                 actor.id,
+                expectedTokenVersion
+              );
+              if (
+                !nextAuthorization ||
+                 !hasSameStreamAuthorizationScope(actor, nextAuthorization)
+              ) {
+                if (!isClosed) {
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ type: 'authorization_revoked' })}\n\n`)
+                  );
+                }
+                cleanup();
+                return;
+              }
+               actor = nextAuthorization;
+              widgetFilters = buildWidgetFilters();
+            }
+
+            const data = await getCachedWidgetData(
+               actor.id,
+               actor.role,
+              widgetFilters
+            );
             if (!isClosed) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
             }

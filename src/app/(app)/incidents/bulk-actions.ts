@@ -158,7 +158,7 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
       await Promise.all(
         incidentIds.map(incidentId =>
           enqueueIncidentUpdateSideEffects(tx, incidentId, [
-            'INCIDENT_UPDATE_USER_NOTIFICATION',
+            'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
             'INCIDENT_UPDATE_WEBHOOK',
           ])
         )

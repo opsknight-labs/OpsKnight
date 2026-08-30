@@ -3,13 +3,32 @@ import { executeEscalation } from './notifications';
 import { notifySlackForIncident } from './slack';
 import { logger } from './logger';
 import type { EventSideEffectPayload, LifecycleSideEffectContext } from './event-outbox';
+import {
+  isRetryableNotificationOutcome,
+  type NotificationDeliveryOutcome,
+} from './notification-delivery';
 
 function requireDelivery(
-  result: { success?: boolean; error?: string; errors?: string[] } | undefined,
+  result:
+    | {
+        success?: boolean;
+        outcome?: NotificationDeliveryOutcome;
+        error?: string;
+        errors?: string[];
+      }
+    | undefined,
   label: string
 ): void {
   // Some existing test doubles return void; production delivery functions
   // return an explicit success contract.
+  if (result?.outcome && !isRetryableNotificationOutcome(result.outcome)) return;
+
+  if (result?.outcome && isRetryableNotificationOutcome(result.outcome)) {
+    throw new Error(
+      `${label} failed: ${result.error || result.errors?.join('; ') || 'retryable delivery failure'}`
+    );
+  }
+
   if (result?.success === false) {
     throw new Error(
       `${label} failed: ${result.error || result.errors?.join('; ') || 'unknown error'}`
@@ -520,6 +539,28 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       requireDelivery(
         await sendIncidentNotifications(payload.incidentId, 'updated'),
         'incident update user notification'
+      );
+      return;
+    }
+
+    case 'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION': {
+      const { sendIncidentNotifications } = await import('./user-notifications');
+      requireDelivery(
+        await sendIncidentNotifications(payload.incidentId, 'updated', [], undefined, {
+          intent: 'ASSIGNED_TO_USER',
+        }),
+        'incident assignment notification'
+      );
+      return;
+    }
+
+    case 'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION': {
+      const { sendIncidentNotifications } = await import('./user-notifications');
+      requireDelivery(
+        await sendIncidentNotifications(payload.incidentId, 'updated', [], undefined, {
+          intent: 'ASSIGNED_TO_TEAM',
+        }),
+        'team assignment notification'
       );
       return;
     }

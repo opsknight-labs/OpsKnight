@@ -239,7 +239,6 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
           message: 'Incident unassigned',
         },
       });
-      await enqueueIncidentUpdateSideEffects(tx, incidentId, ['INCIDENT_UPDATE_USER_NOTIFICATION']);
     });
 
     // ChatOps: Sync unassignment & update topic in war-room
@@ -284,7 +283,9 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
           message: `Incident assigned to team: ${teamRecord.name}`,
         },
       });
-      await enqueueIncidentUpdateSideEffects(tx, incidentId, ['INCIDENT_UPDATE_USER_NOTIFICATION']);
+      await enqueueIncidentUpdateSideEffects(tx, incidentId, [
+        'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION',
+      ]);
     });
 
     // ChatOps: Sync team assignment, auto-invite members & update topic in war-room
@@ -335,7 +336,9 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
           message: `Incident manually reassigned to ${assigneeRecord.name}`,
         },
       });
-      await enqueueIncidentUpdateSideEffects(tx, incidentId, ['INCIDENT_UPDATE_USER_NOTIFICATION']);
+      await enqueueIncidentUpdateSideEffects(tx, incidentId, [
+        'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
+      ]);
     });
 
     // ChatOps: Sync user assignment, auto-invite user & update topic in war-room

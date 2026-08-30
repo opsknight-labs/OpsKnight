@@ -1,8 +1,12 @@
 import { NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/rbac';
-import { resolveUserActor } from '@/lib/authorization-actors';
 import { logger } from '@/lib/logger';
 import { getCachedDashboardMetrics, getCachedRecentIncidents } from '@/lib/realtime-cache';
+import {
+  hasSameStreamAuthorizationScope,
+  resolveStreamAuthorization,
+  type StreamAuthorization,
+} from '@/lib/realtime-stream-authorization';
 
 /**
  * Server-Sent Events (SSE) endpoint for real-time updates
@@ -12,10 +16,12 @@ export async function GET(req: NextRequest) {
   try {
     // Get current user for authorization
     const user = await getCurrentUser();
-    const actor = await resolveUserActor(user.id);
-    if (!actor) {
+    const expectedTokenVersion = user.tokenVersion ?? 0;
+    const initialAuthorization = await resolveStreamAuthorization(user.id, expectedTokenVersion);
+    if (!initialAuthorization) {
       return new Response('Unauthorized', { status: 401 });
     }
+    let streamAuthorization: StreamAuthorization = initialAuthorization;
 
     let cleanup: () => void = () => {};
 
@@ -70,25 +76,25 @@ export async function GET(req: NextRequest) {
             authorizationCounter++;
             if (authorizationCounter >= 12) {
               authorizationCounter = 0;
-              const prisma = (await import('@/lib/prisma')).default;
-              const currentUser = await prisma.user.findUnique({
-                where: { id: user.id },
-                select: { status: true, tokenVersion: true },
-              });
+              const nextAuthorization = await resolveStreamAuthorization(
+                user.id,
+                expectedTokenVersion
+              );
               if (
-                currentUser?.status !== 'ACTIVE' ||
-                (currentUser.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)
+                !nextAuthorization ||
+                !hasSameStreamAuthorizationScope(streamAuthorization, nextAuthorization)
               ) {
                 send(JSON.stringify({ type: 'authorization_revoked' }));
                 cleanup();
                 return;
               }
+              streamAuthorization = nextAuthorization;
             }
             // Get recent incident updates using cached query
             const incidentResult = await getCachedRecentIncidents(
               user.id,
-              actor.role,
-              [...actor.teamIds],
+              streamAuthorization.role,
+              [...streamAuthorization.teamIds],
               lastMetricsHash ? undefined : undefined // Always check for incidents
             );
 
@@ -106,8 +112,8 @@ export async function GET(req: NextRequest) {
             // Get dashboard metrics using cached query (reduces DB load by 80%)
             const metricsResult = await getCachedDashboardMetrics(
               user.id,
-              actor.role,
-              [...actor.teamIds],
+              streamAuthorization.role,
+              [...streamAuthorization.teamIds],
               lastMetricsHash
             );
 
