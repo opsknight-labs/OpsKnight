@@ -20,6 +20,7 @@ import { Shield, FileText } from 'lucide-react';
 import { assertAuditorOrAdmin } from '@/lib/rbac';
 import type { Prisma } from '@prisma/client';
 import { parseAuditEntityType } from '@/lib/audit-filters';
+import { logger } from '@/lib/logger';
 
 import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 import AuditFilters from '@/components/audit/AuditFilters';
@@ -36,6 +37,19 @@ type AuditLogPageProps = {
     page?: string;
   }>;
 };
+
+const auditLogInclude = {
+  actor: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      avatarUrl: true,
+    },
+  },
+} satisfies Prisma.AuditLogInclude;
+
+type AuditLogRow = Prisma.AuditLogGetPayload<{ include: typeof auditLogInclude }>;
 
 export default async function AuditLogPage({ searchParams }: AuditLogPageProps) {
   await assertAuditorOrAdmin();
@@ -75,26 +89,30 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     ];
   }
 
-  const [logs, totalLogs] = await Promise.all([
-    prisma.auditLog.findMany({
-      where,
-      include: {
-        actor: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatarUrl: true,
-            gender: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.auditLog.count({ where }),
-  ]);
+  let logs: AuditLogRow[];
+  let totalLogs: number;
+  try {
+    [logs, totalLogs] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        include: auditLogInclude,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
+  } catch (error) {
+    logger.error('[AuditLog] Failed to load records', {
+      error,
+      entityType,
+      hasEntityIdFilter: Boolean(entityId),
+      hasActorIdFilter: Boolean(actorId),
+      hasActionFilter: Boolean(action),
+      hasSearchFilter: Boolean(search),
+    });
+    throw error;
+  }
   const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
   const pageHref = (targetPage: number) => {
     const params = new URLSearchParams();
@@ -209,7 +227,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
                                 avatarUrl={
                                   log.actor.avatarUrl ||
                                   getDefaultAvatar(
-                                    log.actor.gender,
+                                    undefined,
                                     log.actor.id || log.actor.name || 'user'
                                   )
                                 }
