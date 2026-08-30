@@ -29,8 +29,8 @@ vi.mock('@/lib/encryption', () => ({
 }));
 
 vi.mock('@/lib/rbac', () => ({
-  getCurrentUser: vi.fn().mockResolvedValue({ id: 'user-123', role: 'ADMIN' }),
-  assertAdmin: vi.fn().mockResolvedValue(true),
+  assertAdmin: vi.fn().mockResolvedValue({ id: 'user-123', role: 'ADMIN' }),
+  assertCanModifyService: vi.fn().mockResolvedValue({ id: 'user-123', role: 'ADMIN' }),
 }));
 
 vi.mock('@/lib/logger', () => ({

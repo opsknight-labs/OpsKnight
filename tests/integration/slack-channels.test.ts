@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GET, POST } from '@/app/api/slack/channels/route';
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/rbac';
+import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { retryFetch } from '@/lib/retry';
+import { AppError } from '@/lib/errors';
 
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
@@ -18,7 +19,8 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 vi.mock('@/lib/rbac', () => ({
-  getCurrentUser: vi.fn(),
+  assertAdmin: vi.fn(),
+  assertCanModifyService: vi.fn(),
 }));
 
 vi.mock('@/lib/encryption', () => ({
@@ -42,13 +44,20 @@ const initialSlackToken = process.env.SLACK_BOT_TOKEN;
 describe('Slack Channels API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getCurrentUser).mockResolvedValue({
+    vi.mocked(assertAdmin).mockResolvedValue({
       id: 'user-1',
       name: 'Test User',
       email: 'user@example.com',
       role: 'ADMIN',
       timeZone: 'UTC',
-    } as Awaited<ReturnType<typeof getCurrentUser>>);
+    } as Awaited<ReturnType<typeof assertAdmin>>);
+    vi.mocked(assertCanModifyService).mockResolvedValue({
+      id: 'user-1',
+      name: 'Test User',
+      email: 'user@example.com',
+      role: 'ADMIN',
+      timeZone: 'UTC',
+    } as Awaited<ReturnType<typeof assertCanModifyService>>);
     vi.mocked(prisma.slackIntegration.findFirst).mockResolvedValue({
       id: 'integration-1',
       workspaceId: 'T123',
@@ -71,9 +80,9 @@ describe('Slack Channels API', () => {
     }
   });
 
-  it('returns 401 when user is not authenticated', async () => {
-    vi.mocked(getCurrentUser).mockResolvedValueOnce(
-      null as unknown as Awaited<ReturnType<typeof getCurrentUser>>
+  it('returns 401 when an administrator is not authenticated', async () => {
+    vi.mocked(assertAdmin).mockRejectedValueOnce(
+      new AppError({ code: 'AUTHENTICATION_REQUIRED' })
     );
 
     const req = new NextRequest('http://localhost:3000/api/slack/channels');
@@ -82,6 +91,18 @@ describe('Slack Channels API', () => {
 
     expect(response.status).toBe(401);
     expect(body.code).toBe('AUTHENTICATION_REQUIRED');
+  });
+
+  it('requires service-management access for service-scoped channel operations', async () => {
+    vi.mocked(assertCanModifyService).mockRejectedValueOnce(
+      new AppError({ code: 'SERVICE_ACCESS_DENIED' })
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/slack/channels?serviceId=svc-1');
+    const response = await GET(req);
+
+    expect(response.status).toBe(403);
+    expect(assertCanModifyService).toHaveBeenCalledWith('svc-1');
   });
 
   it('returns a non-retryable typed error when bot token is missing', async () => {

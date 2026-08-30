@@ -139,7 +139,7 @@ export default function ServiceNotificationSettings({
       const res = await fetch('/api/slack/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelId: channel.id, channelName: channel.name }),
+        body: JSON.stringify({ serviceId, channelId: channel.id, channelName: channel.name }),
       });
       setTestState({ testing: false, result: res.ok ? 'success' : 'error' });
       setTimeout(() => setTestState({ testing: false, result: null }), 3000);

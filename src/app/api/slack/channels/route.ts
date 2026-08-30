@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/rbac';
+import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
 import { getSlackBotToken } from '@/lib/slack';
@@ -30,13 +30,13 @@ function slackNotConfigured() {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
-    }
-
     const { searchParams } = new URL(request.url);
     const serviceId = searchParams.get('serviceId');
+    if (serviceId) {
+      await assertCanModifyService(serviceId);
+    } else {
+      await assertAdmin();
+    }
     const botToken = await getSlackBotToken(serviceId || undefined);
 
     if (!botToken) {
@@ -109,11 +109,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
-    }
-
     let body: unknown;
     try {
       body = await request.json();
@@ -133,6 +128,12 @@ export async function POST(request: NextRequest) {
           fields: [{ field: 'channelId', code: 'required', message: 'Channel ID is required' }],
         })
       );
+    }
+
+    if (serviceId) {
+      await assertCanModifyService(serviceId);
+    } else {
+      await assertAdmin();
     }
 
     const botToken = await getSlackBotToken(serviceId || undefined);
