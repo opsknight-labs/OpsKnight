@@ -103,6 +103,7 @@ export default function TeamDirectoryList({ teams }: TeamDirectoryListProps) {
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search teams by name, member, or service..."
             className="pl-8 pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
+            style={{ paddingLeft: '2.25rem', paddingRight: '2rem' }}
           />
           {searchQuery && (
             <button

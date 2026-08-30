@@ -121,6 +121,7 @@ export default function PolicyDirectoryList({
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search policies by name, description, or service..."
               className="pl-8 pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
+              style={{ paddingLeft: '2.25rem', paddingRight: '2rem' }}
             />
             {searchQuery && (
               <button
