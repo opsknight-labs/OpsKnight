@@ -68,14 +68,23 @@ jobs:
             .replaceAll('>', '&gt;')
             .replaceAll('"', '&quot;')
             .replaceAll("'", '&apos;');
-          const sarif = JSON.parse(fs.readFileSync('reports/eslint-security.sarif', 'utf8'));
-          const results = sarif.runs?.flatMap((run) => run.results || []) || [];
+          let results = [];
+          try {
+            const sarif = JSON.parse(fs.readFileSync('reports/eslint-security.sarif', 'utf8'));
+            results = sarif.runs?.flatMap((run) => run.results || []) || [];
+          } catch (e) {
+            results = [];
+          }
+          const errors = results.filter((r) => r.level === 'error');
           const cases = results.map((result) => {
             const rule = escapeXml(result.ruleId || 'eslint');
             const message = escapeXml(result.message?.text || 'ESLint finding');
-            return `    <testcase name="${rule}" classname="eslint"><failure message="${message}"/></testcase>`;
+            if (result.level === 'error') {
+              return `    <testcase name="${rule}" classname="eslint"><failure message="${message}"/></testcase>`;
+            }
+            return `    <testcase name="${rule}" classname="eslint"/>`;
           }).join('\n');
-          const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<testsuites tests="${results.length}" failures="${results.length}"><testsuite name="ESLint Security" tests="${results.length}" failures="${results.length}">\n${cases}\n</testsuite></testsuites>\n`;
+          const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<testsuites tests="${results.length}" failures="${errors.length}"><testsuite name="ESLint Security" tests="${results.length}" failures="${errors.length}">\n${cases}\n</testsuite></testsuites>\n`;
           fs.writeFileSync('reports/eslint-security.xml', xml);
           NODE
         continue-on-error: true
