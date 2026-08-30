@@ -11,7 +11,6 @@ import {
   Card,
   CardHeader,
   CardTitle,
-  CardDescription,
   CardContent,
 } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -60,6 +59,7 @@ interface CleanupResult {
   logs: number;
   metrics: number;
   events: number;
+  auditLogs: number;
   executionTimeMs: number;
   dryRun: boolean;
 }
@@ -67,7 +67,7 @@ interface CleanupResult {
 const DEFAULT_POLICY: RetentionPolicy = {
   incidentRetentionDays: 730,
   alertRetentionDays: 365,
-  logRetentionDays: 90,
+  logRetentionDays: 365,
   metricsRetentionDays: 365,
   realTimeWindowDays: 90,
 };
@@ -124,24 +124,24 @@ export default function RetentionPolicySettings() {
     const errors: Partial<Record<keyof RetentionPolicy, string>> = {};
     let isValid = true;
 
-    if (currentPolicy.incidentRetentionDays < 30) {
-      errors.incidentRetentionDays = 'Must be at least 30 days';
+    if (currentPolicy.incidentRetentionDays < 30 || currentPolicy.incidentRetentionDays > 3650) {
+      errors.incidentRetentionDays = 'Must be between 30 days and 10 years';
       isValid = false;
     }
-    if (currentPolicy.alertRetentionDays < 7) {
-      errors.alertRetentionDays = 'Must be at least 7 days';
+    if (currentPolicy.alertRetentionDays < 7 || currentPolicy.alertRetentionDays > 3650) {
+      errors.alertRetentionDays = 'Must be between 7 days and 10 years';
       isValid = false;
     }
-    if (currentPolicy.logRetentionDays < 1) {
-      errors.logRetentionDays = 'Must be at least 1 day';
+    if (currentPolicy.logRetentionDays < 1 || currentPolicy.logRetentionDays > 3650) {
+      errors.logRetentionDays = 'Must be between 1 day and 10 years';
       isValid = false;
     }
-    if (currentPolicy.metricsRetentionDays < 30) {
-      errors.metricsRetentionDays = 'Must be at least 30 days';
+    if (currentPolicy.metricsRetentionDays < 30 || currentPolicy.metricsRetentionDays > 3650) {
+      errors.metricsRetentionDays = 'Must be between 30 days and 10 years';
       isValid = false;
     }
-    if (currentPolicy.realTimeWindowDays < 1) {
-      errors.realTimeWindowDays = 'Must be at least 1 day';
+    if (currentPolicy.realTimeWindowDays < 7 || currentPolicy.realTimeWindowDays > 365) {
+      errors.realTimeWindowDays = 'Must be between 7 days and 1 year';
       isValid = false;
     }
 
@@ -249,10 +249,12 @@ export default function RetentionPolicySettings() {
   };
 
   const handleInputChange = (field: keyof RetentionPolicy, value: string) => {
-    const num = parseInt(value);
+    const num = Number.parseInt(value, 10);
     if (!policy) return;
 
     // Clear error for this field when user types
+    // `field` is a compile-time `keyof RetentionPolicy`, not request input.
+    // eslint-disable-next-line security/detect-object-injection
     if (validationErrors[field]) {
       setValidationErrors(prev => ({ ...prev, [field]: undefined }));
       if (Object.keys(validationErrors).length <= 1) setGeneralError(null);
@@ -381,6 +383,7 @@ export default function RetentionPolicySettings() {
                   value={policy.incidentRetentionDays}
                   onChange={v => handleInputChange('incidentRetentionDays', v)}
                   min={30}
+                  max={3650}
                   error={validationErrors.incidentRetentionDays}
                 />
 
@@ -390,15 +393,17 @@ export default function RetentionPolicySettings() {
                   value={policy.alertRetentionDays}
                   onChange={v => handleInputChange('alertRetentionDays', v)}
                   min={7}
+                  max={3650}
                   error={validationErrors.alertRetentionDays}
                 />
 
                 <RetentionFieldRow
-                  label="System Logs"
-                  description="Audit trails and debug events."
+                  label="Audit & Event History"
+                  description="Audit trails and incident events. One year is the default."
                   value={policy.logRetentionDays}
                   onChange={v => handleInputChange('logRetentionDays', v)}
                   min={1}
+                  max={3650}
                   error={validationErrors.logRetentionDays}
                 />
 
@@ -408,15 +413,17 @@ export default function RetentionPolicySettings() {
                   value={policy.metricsRetentionDays}
                   onChange={v => handleInputChange('metricsRetentionDays', v)}
                   min={30}
+                  max={3650}
                   error={validationErrors.metricsRetentionDays}
                 />
 
                 <RetentionFieldRow
-                  label="High-Precision Metrics"
-                  description="Raw, real-time metric data points."
+                  label="Live Analytics Window"
+                  description="Uses direct incident and alert data; older eligible ranges use rollups."
                   value={policy.realTimeWindowDays}
                   onChange={v => handleInputChange('realTimeWindowDays', v)}
-                  min={1}
+                  min={7}
+                  max={365}
                   error={validationErrors.realTimeWindowDays}
                 />
               </>
@@ -476,10 +483,12 @@ export default function RetentionPolicySettings() {
                     </Badge>
                   </h5>
                 </div>
-                <div className="flex gap-8 text-sm">
+                <div className="flex flex-wrap gap-8 text-sm">
                   <StatItem label="Incidents" value={cleanupResult.incidents} />
                   <StatItem label="Alerts" value={cleanupResult.alerts} />
                   <StatItem label="Logs" value={cleanupResult.logs} />
+                  <StatItem label="Audit logs" value={cleanupResult.auditLogs} />
+                  <StatItem label="Events" value={cleanupResult.events} />
                   <StatItem label="Metrics" value={cleanupResult.metrics} />
                 </div>
                 {cleanupResult.dryRun && (
@@ -555,6 +564,7 @@ function RetentionFieldRow({
   value,
   onChange,
   min,
+  max,
   error,
 }: {
   label: string;
@@ -562,6 +572,7 @@ function RetentionFieldRow({
   value: number | string;
   onChange: (val: string) => void;
   min?: number;
+  max?: number;
   error?: string;
 }) {
   return (
@@ -580,6 +591,7 @@ function RetentionFieldRow({
         <Input
           type="number"
           min={min}
+          max={max}
           value={value}
           onChange={e => onChange(e.target.value)}
           className={`w-24 rounded-r-none border-r-0 ${error ? 'border-destructive focus-visible:ring-destructive' : ''}`}

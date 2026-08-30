@@ -14,11 +14,11 @@ import { z } from 'zod';
 
 const RetentionUpdateSchema = z
   .object({
-    incidentRetentionDays: z.number().int().min(1).max(3650).optional(),
-    alertRetentionDays: z.number().int().min(1).max(3650).optional(),
+    incidentRetentionDays: z.number().int().min(30).max(3650).optional(),
+    alertRetentionDays: z.number().int().min(7).max(3650).optional(),
     logRetentionDays: z.number().int().min(1).max(3650).optional(),
-    metricsRetentionDays: z.number().int().min(1).max(3650).optional(),
-    realTimeWindowDays: z.number().int().min(1).max(365).optional(),
+    metricsRetentionDays: z.number().int().min(30).max(3650).optional(),
+    realTimeWindowDays: z.number().int().min(7).max(365).optional(),
   })
   .refine(data => Object.keys(data).length > 0, { message: 'No valid fields provided' });
 
@@ -60,7 +60,7 @@ export async function GET() {
           name: 'Standard (1 year)',
           incidentRetentionDays: 365,
           alertRetentionDays: 180,
-          logRetentionDays: 30,
+          logRetentionDays: 365,
           metricsRetentionDays: 365,
           realTimeWindowDays: 60,
         },
@@ -68,7 +68,7 @@ export async function GET() {
           name: 'Extended (2 years)',
           incidentRetentionDays: 730,
           alertRetentionDays: 365,
-          logRetentionDays: 90,
+          logRetentionDays: 730,
           metricsRetentionDays: 730,
           realTimeWindowDays: 90,
         },
@@ -76,7 +76,7 @@ export async function GET() {
           name: 'Enterprise (5 years)',
           incidentRetentionDays: 1825,
           alertRetentionDays: 730,
-          logRetentionDays: 180,
+          logRetentionDays: 1825,
           metricsRetentionDays: 1825,
           realTimeWindowDays: 90,
         },
@@ -84,7 +84,7 @@ export async function GET() {
           name: 'Compliance (7 years)',
           incidentRetentionDays: 2555,
           alertRetentionDays: 1825,
-          logRetentionDays: 365,
+          logRetentionDays: 2555,
           metricsRetentionDays: 2555,
           realTimeWindowDays: 90,
         },

@@ -10,13 +10,13 @@ The **Event Logs** page is a cross-incident view of incident lifecycle events. I
 
 ## Review lifecycle events
 
-Open **Event Logs** from the main navigation (restricted to **Administrators**; hidden from Users and Responders). The page displays the 200 most recent incident events, newest first.
+Open **Event Logs** from the main navigation (restricted to **Administrators**; hidden from Users and Responders). The page displays incident events newest first in pages of 50, so history is not limited to an initial 200-record window.
 
 Each row contains the timestamp in your configured time zone, a short incident identifier and title, the incident's service, and the lifecycle message. Select the incident identifier to open the full incident timeline.
 
 Typical messages appear after an incident is triggered, acknowledged, escalated, reassigned, commented on, reopened, automatically resolved, or manually resolved. Older records may not have a structured event type, so the human-readable message remains important.
 
-The v1.4 Event Logs page does not provide pagination, filters, or export. Use the incident page when you need the complete history for one incident.
+Use the search field to find event messages, incident IDs or titles, and service names. You can also filter by service and move between result pages. **Export CSV** exports the currently visible page; use an operator-controlled database export for a complete large-range extract. Use the incident page when you need the complete timeline for one incident.
 
 ## Send a test event from the UI
 
@@ -47,7 +47,7 @@ The Events API uses the service and `dedup_key` to correlate repeated trigger, a
 | Test returns 404                                | The integration key may have been deleted or may no longer identify a service.                                      |
 | Acknowledge/resolve cannot find the incident    | Reuse the exact deduplication key and integration key from the trigger request.                                     |
 | The incident exists but no off-box page arrived | Check the service policy, current schedule coverage, user preferences, provider settings, and notification history. |
-| An old event is missing                         | The page shows only the 200 most recent incident events. Open the incident for its own timeline.                    |
+| An old event is missing                         | Clear filters and move through result pages. Confirm the configured Audit & Event History retention period has not expired. |
 
 ## Related guides
 
