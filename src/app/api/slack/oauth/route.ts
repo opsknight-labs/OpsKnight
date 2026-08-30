@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/rbac';
+import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
@@ -14,10 +14,12 @@ import { SLACK_BOT_SCOPES } from '@/lib/slack/app-manifest';
 
 export async function GET(request: NextRequest) {
   try {
-    // Require authentication
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { searchParams } = new URL(request.url);
+    const serviceId = searchParams.get('serviceId');
+    if (serviceId) {
+      await assertCanModifyService(serviceId);
+    } else {
+      await assertAdmin();
     }
 
     // Get OAuth config from database (fallback to env for backward compatibility)
@@ -67,8 +69,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const serviceId = searchParams.get('serviceId'); // Optional: for service-specific integration
     const state = crypto.randomBytes(32).toString('hex');
 
     // Store state in session/cookie (in production, use Redis or encrypted cookie)

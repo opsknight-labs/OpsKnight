@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { assertAdminOrResponder } from '@/lib/rbac';
+import { assertAdminOrResponder, assertCanModifyService } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
 import { getSlackBotToken } from '@/lib/slack';
@@ -13,8 +13,6 @@ import { integrationProviderError, jsonProviderError } from '@/lib/provider-erro
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = await assertAdminOrResponder();
-
     let body: unknown;
     try {
       body = await request.json();
@@ -24,6 +22,11 @@ export async function POST(request: NextRequest) {
     const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
     const channelId = typeof payload.channelId === 'string' ? payload.channelId : null;
     const channelName = typeof payload.channelName === 'string' ? payload.channelName : null;
+    const serviceId = typeof payload.serviceId === 'string' ? payload.serviceId : null;
+
+    const user = serviceId
+      ? await assertCanModifyService(serviceId)
+      : await assertAdminOrResponder();
 
     if (!channelId) {
       return jsonError(
@@ -35,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const botToken = await getSlackBotToken();
+    const botToken = await getSlackBotToken(serviceId || undefined);
     if (!botToken) {
       return jsonError(
         new AppError({

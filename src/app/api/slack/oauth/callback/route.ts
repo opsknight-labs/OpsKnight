@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/rbac';
+import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { encrypt, decrypt } from '@/lib/encryption';
@@ -49,14 +49,6 @@ export async function GET(request: NextRequest) {
         ? requestOrigin
         : configuredAppUrl;
 
-    // Require authentication
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.redirect(
-        getFullUrl('/login?callbackUrl=' + encodeURIComponent(request.url), appUrl)
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
     const state = searchParams.get('state');
@@ -85,6 +77,7 @@ export async function GET(request: NextRequest) {
 
     // Get service ID if provided
     const serviceId = request.cookies.get('slack_oauth_service_id')?.value || null;
+    const user = serviceId ? await assertCanModifyService(serviceId) : await assertAdmin();
 
     // Get OAuth config from database (fallback to env for backward compatibility)
     const config = await prisma.slackOAuthConfig.findFirst({

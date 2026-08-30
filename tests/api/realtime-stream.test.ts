@@ -3,9 +3,14 @@ import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/realtime/stream/route';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
+import { resolveUserActor } from '@/lib/authorization-actors';
 
 vi.mock('@/lib/rbac', () => ({
     getCurrentUser: vi.fn(),
+}));
+
+vi.mock('@/lib/authorization-actors', () => ({
+    resolveUserActor: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -29,6 +34,12 @@ describe('API Route - Realtime Stream', () => {
             id: 'user-1',
             role: 'ADMIN',
         } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+        vi.mocked(resolveUserActor).mockResolvedValue({
+            id: 'user-1',
+            role: 'ADMIN',
+            status: 'ACTIVE',
+            teamIds: [],
+        });
         vi.mocked(prisma.incident.findMany).mockResolvedValue([]);
         vi.mocked(prisma.incident.count).mockResolvedValue(0);
 
