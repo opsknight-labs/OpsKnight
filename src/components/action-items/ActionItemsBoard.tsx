@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader } from '@/components/ui/shadcn/card';
@@ -13,16 +13,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/shadcn/dropdown-menu';
 import { useTimezone } from '@/contexts/TimezoneContext';
-import { formatDateTime } from '@/lib/timezone';
 import { cn } from '@/lib/utils';
 import type { ActionItem } from '@/lib/action-items';
+import { ActionItemStatus } from '@prisma/client';
 import ActionItemJiraBadge from '@/components/action-items/ActionItemJiraBadge';
+import DueDateBadge from '@/components/action-items/DueDateBadge';
 import SearchFilterBar from '@/components/ui/SearchFilterBar';
+import EmptyState from '@/components/ui/EmptyState';
 import { exportToCsv } from '@/lib/export-csv';
-import { Download, LayoutGrid, List } from 'lucide-react';
+import { updateActionItemStatus } from '@/app/(app)/action-items/actions';
+import {
+  Download,
+  LayoutGrid,
+  List,
+  CheckCircle2,
+  Clock,
+  AlertOctagon,
+  Circle,
+  MoreVertical,
+  ChevronDown,
+  ExternalLink,
+} from 'lucide-react';
 
-interface BoardActionItem extends ActionItem {
+export interface BoardActionItem extends ActionItem {
   postmortemId: string;
   postmortemTitle: string;
   incidentId: string;
@@ -31,7 +51,7 @@ interface BoardActionItem extends ActionItem {
   createdAt: Date;
 }
 
-interface ActionItemsBoardProps {
+export interface ActionItemsBoardProps {
   actionItems: BoardActionItem[];
   users: Array<{ id: string; name: string; email: string }>;
   canManage: boolean;
@@ -48,61 +68,67 @@ interface ActionItemCardProps {
   users: Array<{ id: string; name: string; email: string }>;
   userTimeZone: string;
   canManage: boolean;
+  onStatusChange: (itemId: string, status: ActionItemStatus) => void;
+  isUpdating?: boolean;
 }
 
 const STATUS_CONFIG = {
   OPEN: {
-    color: 'text-blue-500',
+    color: 'text-blue-600',
     bgColor: 'bg-blue-500',
-    borderColor: 'border-blue-500/40',
-    hoverBorderColor: 'hover:border-blue-500/60',
+    borderColor: 'border-blue-200/80',
+    hoverBorderColor: 'hover:border-blue-400',
     dotGlow: 'shadow-[0_0_8px_rgba(59,130,246,0.6)]',
     label: 'Open',
     badgeVariant: 'info' as const,
+    icon: Circle,
   },
   IN_PROGRESS: {
-    color: 'text-amber-500',
+    color: 'text-amber-600',
     bgColor: 'bg-amber-500',
-    borderColor: 'border-amber-500/40',
-    hoverBorderColor: 'hover:border-amber-500/60',
+    borderColor: 'border-amber-200/80',
+    hoverBorderColor: 'hover:border-amber-400',
     dotGlow: 'shadow-[0_0_8px_rgba(245,158,11,0.6)]',
     label: 'In Progress',
     badgeVariant: 'warning' as const,
+    icon: Clock,
   },
   COMPLETED: {
-    color: 'text-green-500',
-    bgColor: 'bg-green-500',
-    borderColor: 'border-green-500/40',
-    hoverBorderColor: 'hover:border-green-500/60',
+    color: 'text-emerald-600',
+    bgColor: 'bg-emerald-500',
+    borderColor: 'border-emerald-200/80',
+    hoverBorderColor: 'hover:border-emerald-400',
     dotGlow: 'shadow-[0_0_8px_rgba(34,197,94,0.6)]',
     label: 'Completed',
     badgeVariant: 'success' as const,
+    icon: CheckCircle2,
   },
   BLOCKED: {
-    color: 'text-red-500',
-    bgColor: 'bg-red-500',
-    borderColor: 'border-red-500/40',
-    hoverBorderColor: 'hover:border-red-500/60',
+    color: 'text-rose-600',
+    bgColor: 'bg-rose-500',
+    borderColor: 'border-rose-200/80',
+    hoverBorderColor: 'hover:border-rose-400',
     dotGlow: 'shadow-[0_0_8px_rgba(239,68,68,0.6)]',
     label: 'Blocked',
     badgeVariant: 'danger' as const,
+    icon: AlertOctagon,
   },
 };
 
 const PRIORITY_CONFIG = {
   HIGH: {
-    color: 'text-red-500',
-    bgColor: 'bg-red-500/20',
+    color: 'text-rose-700',
+    bgColor: 'bg-rose-50 border-rose-200/80',
     label: 'High',
   },
   MEDIUM: {
-    color: 'text-amber-500',
-    bgColor: 'bg-amber-500/20',
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-50 border-amber-200/80',
     label: 'Medium',
   },
   LOW: {
-    color: 'text-gray-500',
-    bgColor: 'bg-gray-500/20',
+    color: 'text-slate-700',
+    bgColor: 'bg-slate-100 border-slate-200/80',
     label: 'Low',
   },
 };
@@ -116,81 +142,149 @@ function getOwnerName(
   return user?.name || 'Unknown';
 }
 
-function isOverdue(item: ActionItem) {
-  if (!item.dueDate || item.status === 'COMPLETED') return false;
-  return new Date(item.dueDate) < new Date();
-}
-
-function ActionItemCard({ item, users, userTimeZone, canManage }: ActionItemCardProps) {
+function ActionItemCard({
+  item,
+  users,
+  userTimeZone,
+  canManage,
+  onStatusChange,
+  isUpdating = false,
+}: ActionItemCardProps) {
   const router = useRouter();
-  const overdue = isOverdue(item);
-  const statusConfig = STATUS_CONFIG[item.status];
-  const priorityConfig = PRIORITY_CONFIG[item.priority];
+  const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.OPEN;
+  const priorityConfig = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.MEDIUM;
 
   return (
     <div
       className={cn(
-        'p-4 bg-white rounded-md cursor-pointer',
-        'border-2 border-l-4',
+        'group p-3.5 bg-white rounded-lg border shadow-sm transition-all duration-200',
         statusConfig.borderColor,
-        'transition-all duration-200 ease-out',
-        'hover:-translate-y-0.5 hover:shadow-lg'
+        statusConfig.hoverBorderColor,
+        'hover:shadow-md hover:-translate-y-0.5 relative',
+        isUpdating && 'opacity-60 pointer-events-none'
       )}
       onClick={() => router.push(`/postmortems/${item.incidentId}`)}
     >
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span
-              className={cn(
-                'px-2 py-0.5 rounded text-xs font-semibold',
-                priorityConfig.bgColor,
-                priorityConfig.color
-              )}
-            >
-              {priorityConfig.label}
-            </span>
-            {overdue && (
-              <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-500">
-                Overdue
-              </span>
+      {/* Top Header: Priority & Quick Status Dropdown */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span
+            className={cn(
+              'px-1.5 py-0.5 rounded text-[11px] font-semibold border',
+              priorityConfig.bgColor,
+              priorityConfig.color
             )}
-          </div>
-          <h4 className="text-base font-semibold mb-1">{item.title}</h4>
-          <ActionItemJiraBadge
-            actionItemId={item.id}
-            externalIssue={item.externalIssue}
-            canManage={canManage}
-            compact
+          >
+            {priorityConfig.label}
+          </span>
+          <DueDateBadge
+            dueDate={item.dueDate}
+            completedAt={item.completedAt}
+            status={item.status}
+            userTimeZone={userTimeZone}
           />
-          {item.description && (
-            <p className="text-sm text-muted-foreground mb-2">
-              {item.description.substring(0, 100)}
-              {item.description.length > 100 ? '...' : ''}
-            </p>
-          )}
         </div>
+
+        {canManage && (
+          <div onClick={e => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground opacity-60 group-hover:opacity-100 transition-opacity"
+                  title="Change status"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                  <span className="sr-only">Actions</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44 text-xs">
+                <DropdownMenuItem
+                  onClick={() => onStatusChange(item.id, ActionItemStatus.OPEN)}
+                  disabled={item.status === 'OPEN'}
+                  className="gap-2"
+                >
+                  <Circle className="h-3.5 w-3.5 text-blue-500" />
+                  <span>Set to Open</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onStatusChange(item.id, ActionItemStatus.IN_PROGRESS)}
+                  disabled={item.status === 'IN_PROGRESS'}
+                  className="gap-2"
+                >
+                  <Clock className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Set to In Progress</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onStatusChange(item.id, ActionItemStatus.COMPLETED)}
+                  disabled={item.status === 'COMPLETED'}
+                  className="gap-2 text-emerald-600 focus:text-emerald-700"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Mark Completed</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onStatusChange(item.id, ActionItemStatus.BLOCKED)}
+                  disabled={item.status === 'BLOCKED'}
+                  className="gap-2 text-rose-600 focus:text-rose-700"
+                >
+                  <AlertOctagon className="h-3.5 w-3.5 text-rose-600" />
+                  <span>Mark Blocked</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
 
-      <div className="text-xs text-muted-foreground space-y-1">
-        <div>👤 {getOwnerName(item.owner, users)}</div>
-        {item.dueDate && (
-          <div>📅 {formatDateTime(item.dueDate, userTimeZone, { format: 'date' })}</div>
-        )}
-        <div>
-          📋{' '}
-          <Link href={`/postmortems/${item.incidentId}`} className="text-primary hover:underline">
-            {item.postmortemTitle}
+      {/* Title & Description */}
+      <h4 className="text-sm font-semibold text-foreground mb-1 leading-snug line-clamp-2">
+        {item.title}
+      </h4>
+      {item.description && (
+        <p className="text-xs text-muted-foreground line-clamp-2 mb-2.5 leading-relaxed">
+          {item.description}
+        </p>
+      )}
+
+      {/* Jira / GitHub External Link */}
+      <div className="mb-2.5">
+        <ActionItemJiraBadge
+          actionItemId={item.id}
+          externalIssue={item.externalIssue}
+          canManage={canManage}
+          compact
+        />
+      </div>
+
+      {/* Metadata Footer */}
+      <div className="pt-2 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-foreground truncate max-w-[150px]">
+            👤 {getOwnerName(item.owner, users)}
+          </span>
+          <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-700 truncate max-w-[100px]">
+            {item.serviceName}
+          </span>
+        </div>
+        <div className="truncate text-slate-500">
+          From{' '}
+          <Link
+            href={`/postmortems/${item.incidentId}`}
+            className="hover:underline text-primary"
+            onClick={e => e.stopPropagation()}
+          >
+            {item.incidentTitle}
           </Link>
         </div>
-        <div className="text-[0.7rem] mt-1">Incident: {item.incidentTitle}</div>
       </div>
     </div>
   );
 }
 
 export default function ActionItemsBoard({
-  actionItems,
+  actionItems: initialItems,
   users,
   canManage,
   view,
@@ -198,10 +292,48 @@ export default function ActionItemsBoard({
 }: ActionItemsBoardProps) {
   const router = useRouter();
   const { userTimeZone } = useTimezone();
+  const [, startTransition] = useTransition();
+
+  const [items, setItems] = useState<BoardActionItem[]>(initialItems);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
   const [search, setSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState(filters.status || '');
   const [selectedOwner, setSelectedOwner] = useState(filters.owner || '');
   const [selectedPriority, setSelectedPriority] = useState(filters.priority || '');
+
+  // Keep internal state in sync with server-passed props
+  useMemo(() => {
+    setItems(initialItems);
+  }, [initialItems]);
+
+  const handleStatusChange = async (itemId: string, newStatus: ActionItemStatus) => {
+    // Optimistic UI update
+    setItems(prev =>
+      prev.map(it =>
+        it.id === itemId
+          ? {
+              ...it,
+              status: newStatus,
+              completedAt: newStatus === ActionItemStatus.COMPLETED ? new Date() : null,
+            }
+          : it
+      )
+    );
+
+    setUpdatingId(itemId);
+    try {
+      const res = await updateActionItemStatus(itemId, newStatus);
+      if (!res.success) {
+        // Rollback if failed
+        setItems(initialItems);
+      }
+    } catch {
+      setItems(initialItems);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const buildFilterUrl = (updates: {
     status?: string;
@@ -224,19 +356,36 @@ export default function ActionItemsBoard({
   };
 
   const filteredItems = useMemo(() => {
-    if (!search.trim()) return actionItems;
-    const q = search.toLowerCase();
-    return actionItems.filter(item => {
-      const ownerName = getOwnerName(item.owner, users).toLowerCase();
-      return (
-        item.title.toLowerCase().includes(q) ||
-        (item.description && item.description.toLowerCase().includes(q)) ||
-        item.incidentTitle.toLowerCase().includes(q) ||
-        item.serviceName.toLowerCase().includes(q) ||
-        ownerName.includes(q)
-      );
-    });
-  }, [actionItems, search, users]);
+    let result = items;
+
+    if (selectedStatus && selectedStatus !== 'all') {
+      result = result.filter(item => item.status === selectedStatus);
+    }
+
+    if (selectedOwner && selectedOwner !== 'all') {
+      result = result.filter(item => item.owner === selectedOwner);
+    }
+
+    if (selectedPriority && selectedPriority !== 'all') {
+      result = result.filter(item => item.priority === selectedPriority);
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(item => {
+        const ownerName = getOwnerName(item.owner, users).toLowerCase();
+        return (
+          item.title.toLowerCase().includes(q) ||
+          (item.description && item.description.toLowerCase().includes(q)) ||
+          item.incidentTitle.toLowerCase().includes(q) ||
+          item.serviceName.toLowerCase().includes(q) ||
+          ownerName.includes(q)
+        );
+      });
+    }
+
+    return result;
+  }, [items, search, selectedStatus, selectedOwner, selectedPriority, users]);
 
   const groupedByStatus = useMemo(
     () => ({
@@ -281,7 +430,7 @@ export default function ActionItemsBoard({
     setSelectedStatus('');
     setSelectedOwner('');
     setSelectedPriority('');
-    router.push('/action-items');
+    startTransition(() => router.push('/action-items'));
   };
 
   return (
@@ -290,7 +439,7 @@ export default function ActionItemsBoard({
       <SearchFilterBar
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search action items, descriptions, owners..."
+        searchPlaceholder="Search action items, postmortems, owners..."
         hasActiveFilters={hasActiveFilters}
         onResetFilters={handleReset}
         filters={
@@ -300,7 +449,7 @@ export default function ActionItemsBoard({
               onValueChange={value => {
                 const newValue = value === 'all' ? '' : value;
                 setSelectedStatus(newValue);
-                router.push(buildFilterUrl({ status: newValue }));
+                startTransition(() => router.push(buildFilterUrl({ status: newValue })));
               }}
             >
               <SelectTrigger className="h-9 w-[130px] bg-slate-50/60 text-xs">
@@ -320,7 +469,7 @@ export default function ActionItemsBoard({
               onValueChange={value => {
                 const newValue = value === 'all' ? '' : value;
                 setSelectedOwner(newValue);
-                router.push(buildFilterUrl({ owner: newValue }));
+                startTransition(() => router.push(buildFilterUrl({ owner: newValue })));
               }}
             >
               <SelectTrigger className="h-9 w-[140px] bg-slate-50/60 text-xs">
@@ -341,7 +490,7 @@ export default function ActionItemsBoard({
               onValueChange={value => {
                 const newValue = value === 'all' ? '' : value;
                 setSelectedPriority(newValue);
-                router.push(buildFilterUrl({ priority: newValue }));
+                startTransition(() => router.push(buildFilterUrl({ priority: newValue })));
               }}
             >
               <SelectTrigger className="h-9 w-[130px] bg-slate-50/60 text-xs">
@@ -405,45 +554,46 @@ export default function ActionItemsBoard({
       {/* Board or List View */}
       {view === 'board' ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Object.entries(groupedByStatus).map(([status, items]) => {
+          {Object.entries(groupedByStatus).map(([status, groupItems]) => {
             const config = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG];
+            const StatusIcon = config.icon;
+
             return (
               <Card
                 key={status}
                 className={cn(
-                  'p-4 min-h-[450px] rounded-xl',
-                  'bg-gradient-to-br from-white to-slate-50',
-                  'border-2',
+                  'p-3.5 min-h-[480px] rounded-xl flex flex-col',
+                  'bg-slate-50/50 border-2',
                   config.borderColor,
                   'shadow-sm'
                 )}
               >
-                <CardHeader className="p-0 mb-4 pb-3 border-b border-slate-200/60">
+                <CardHeader className="p-0 mb-3 pb-2.5 border-b border-slate-200/70">
                   <div className="flex items-center justify-between">
-                    <h3 className={cn('text-sm font-bold flex items-center gap-2', config.color)}>
-                      <span
-                        className={cn('w-2 h-2 rounded-full', config.bgColor, config.dotGlow)}
-                      />
-                      {config.label}
+                    <h3 className={cn('text-xs font-bold flex items-center gap-1.5', config.color)}>
+                      <StatusIcon className="h-3.5 w-3.5" />
+                      <span>{config.label}</span>
                     </h3>
                     <Badge variant={config.badgeVariant} size="xs" className="font-bold">
-                      {items.length}
+                      {groupItems.length}
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="p-0 flex flex-col gap-3">
-                  {items.length === 0 ? (
+                <CardContent className="p-0 flex flex-col gap-2.5 flex-1 overflow-y-auto max-h-[75vh]">
+                  {groupItems.length === 0 ? (
                     <div className="p-6 text-center text-muted-foreground text-xs italic">
                       No items
                     </div>
                   ) : (
-                    items.map(item => (
+                    groupItems.map(item => (
                       <ActionItemCard
                         key={item.id}
                         item={item}
                         users={users}
                         userTimeZone={userTimeZone}
                         canManage={canManage}
+                        onStatusChange={handleStatusChange}
+                        isUpdating={updatingId === item.id}
                       />
                     ))
                   )}
@@ -455,33 +605,38 @@ export default function ActionItemsBoard({
       ) : (
         <div className="flex flex-col gap-3">
           {filteredItems.length === 0 ? (
-            <Card className="p-8 text-center bg-gradient-to-br from-white to-slate-50 border-slate-200 rounded-lg shadow-sm">
-              <p className="text-sm text-muted-foreground">
-                No action items found matching the filters.
-              </p>
+            <Card className="p-8 text-center bg-white border-slate-200 rounded-lg shadow-sm">
+              <EmptyState
+                icon={<LayoutGrid className="h-6 w-6 text-muted-foreground/60" />}
+                title="No action items found"
+                description={
+                  hasActiveFilters
+                    ? 'Try clearing or modifying your filter criteria.'
+                    : 'Preventative action items from postmortems will appear here.'
+                }
+              />
             </Card>
           ) : (
             filteredItems.map(item => {
-              const overdue = isOverdue(item);
-              const statusConfig = STATUS_CONFIG[item.status];
-              const priorityConfig = PRIORITY_CONFIG[item.priority];
+              const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.OPEN;
+              const priorityConfig = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.MEDIUM;
+              const isUpdating = updatingId === item.id;
 
               return (
                 <Card
                   key={item.id}
                   className={cn(
-                    'p-4 rounded-lg cursor-pointer shadow-sm',
-                    'bg-gradient-to-br from-white to-slate-50',
-                    'border-2 border-l-4',
+                    'p-4 rounded-lg cursor-pointer shadow-sm bg-white',
+                    'border-2 border-l-4 transition-all duration-200 ease-out',
                     statusConfig.borderColor,
-                    'transition-all duration-200 ease-out',
-                    'hover:translate-x-1 hover:shadow-md'
+                    'hover:shadow-md hover:translate-x-0.5',
+                    isUpdating && 'opacity-60 pointer-events-none'
                   )}
                   onClick={() => router.push(`/postmortems/${item.incidentId}`)}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <Badge
                           variant={statusConfig.badgeVariant}
                           size="xs"
@@ -491,20 +646,21 @@ export default function ActionItemsBoard({
                         </Badge>
                         <span
                           className={cn(
-                            'px-2 py-0.5 rounded text-xs font-semibold',
+                            'px-2 py-0.5 rounded text-xs font-semibold border',
                             priorityConfig.bgColor,
                             priorityConfig.color
                           )}
                         >
                           {priorityConfig.label} Priority
                         </span>
-                        {overdue && (
-                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-500">
-                            Overdue
-                          </span>
-                        )}
+                        <DueDateBadge
+                          dueDate={item.dueDate}
+                          completedAt={item.completedAt}
+                          status={item.status}
+                          userTimeZone={userTimeZone}
+                        />
                       </div>
-                      <h3 className="text-base font-semibold mb-1">{item.title}</h3>
+                      <h3 className="text-base font-semibold mb-1 text-foreground">{item.title}</h3>
                       <ActionItemJiraBadge
                         actionItemId={item.id}
                         externalIssue={item.externalIssue}
@@ -517,19 +673,36 @@ export default function ActionItemsBoard({
                         </p>
                       )}
                     </div>
-                  </div>
-                  <div className="flex gap-4 pt-2.5 border-t border-slate-200 text-xs text-muted-foreground flex-wrap">
-                    <span>👤 {getOwnerName(item.owner, users)}</span>
-                    {item.dueDate && (
-                      <span>
-                        📅 Due: {formatDateTime(item.dueDate, userTimeZone, { format: 'date' })}
-                      </span>
+
+                    {canManage && (
+                      <div onClick={e => e.stopPropagation()} className="shrink-0">
+                        <Select
+                          value={item.status}
+                          onValueChange={val =>
+                            handleStatusChange(item.id, val as ActionItemStatus)
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-[130px] text-xs bg-slate-50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent align="end">
+                            <SelectItem value="OPEN">Open</SelectItem>
+                            <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                            <SelectItem value="COMPLETED">Completed</SelectItem>
+                            <SelectItem value="BLOCKED">Blocked</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     )}
+                  </div>
+
+                  <div className="flex gap-4 pt-2.5 border-t border-slate-100 text-xs text-muted-foreground flex-wrap items-center">
+                    <span>👤 {getOwnerName(item.owner, users)}</span>
                     <span>
                       📋{' '}
                       <Link
                         href={`/postmortems/${item.incidentId}`}
-                        className="text-primary hover:underline"
+                        className="text-primary hover:underline font-medium"
                         onClick={e => e.stopPropagation()}
                       >
                         {item.postmortemTitle}
@@ -539,13 +712,15 @@ export default function ActionItemsBoard({
                       🔗{' '}
                       <Link
                         href={`/incidents/${item.incidentId}`}
-                        className="text-primary hover:underline"
+                        className="text-primary hover:underline font-medium"
                         onClick={e => e.stopPropagation()}
                       >
                         {item.incidentTitle}
                       </Link>
                     </span>
-                    <span>🏷️ {item.serviceName}</span>
+                    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-slate-700">
+                      {item.serviceName}
+                    </span>
                   </div>
                 </Card>
               );

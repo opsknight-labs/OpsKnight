@@ -614,3 +614,42 @@ export async function bulkDeletePostmortems(ids: string[]) {
   revalidatePath('/postmortems');
   return { success: true, count: deleted.count };
 }
+
+/**
+ * Toggle public status page visibility of a postmortem
+ */
+export async function togglePostmortemPublicStatus(
+  postmortemId: string,
+  isPublic: boolean
+): Promise<{ success: boolean; error?: string; isPublic?: boolean }> {
+  try {
+    await assertResponderOrAbove();
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unauthorized',
+    };
+  }
+
+  try {
+    const updated = await prisma.postmortem.update({
+      where: { id: postmortemId },
+      data: {
+        isPublic,
+        updatedAt: new Date(),
+      },
+      select: { id: true, incidentId: true, isPublic: true },
+    });
+
+    revalidatePath('/postmortems');
+    revalidatePath(`/postmortems/${updated.incidentId}`);
+    revalidatePath('/status');
+
+    return { success: true, isPublic: updated.isPublic };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update visibility',
+    };
+  }
+}
