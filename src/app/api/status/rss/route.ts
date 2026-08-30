@@ -55,25 +55,24 @@ export async function GET(req: NextRequest) {
     }
 
     const serviceIds = statusPage.services.map(sp => sp.serviceId);
-    const effectiveServiceIds =
-      serviceIds.length > 0
-        ? serviceIds
-        : (await prisma.service.findMany({ select: { id: true } })).map(s => s.id);
 
     const baseUrl = getBaseUrl();
 
     const { calculateSLAMetrics } = await import('@/lib/sla-server');
-    const metrics = await calculateSLAMetrics({
-      serviceId: effectiveServiceIds,
-      windowDays: 30, // Last 30 days
-      includeIncidents: true,
-      incidentLimit: 50,
-      visibility: 'PUBLIC',
-    });
+    const metrics =
+      serviceIds.length > 0
+        ? await calculateSLAMetrics({
+            serviceId: serviceIds,
+            windowDays: 30, // Last 30 days
+            includeIncidents: true,
+            incidentLimit: 50,
+            visibility: 'PUBLIC',
+          })
+        : null;
 
-    const incidents = statusPage.showIncidents ? metrics.recentIncidents || [] : [];
+    const incidents = statusPage.showIncidents ? metrics?.recentIncidents || [] : [];
 
-    const description = metrics.isClipped
+    const description = metrics?.isClipped
       ? `Current status and incidents (limited to ${metrics.retentionDays} days retention)`
       : 'Current status and incidents';
 
@@ -120,7 +119,7 @@ export async function GET(req: NextRequest) {
         'Content-Type': 'application/rss+xml; charset=utf-8',
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('api.status.rss_error', {
       error: error instanceof Error ? error.message : String(error),
     });

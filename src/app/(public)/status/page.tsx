@@ -26,6 +26,7 @@ import StatusPageMetrics from '@/components/status-page/StatusPageMetrics';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import StatusPageAutoRefresh from '@/components/status-page/StatusPageAutoRefresh';
 import { getReportingWindowForDays } from '@/lib/retention-policy';
+import { serializeJsonForHtml, toSafeStyleTagContent } from '@/lib/status-page-content';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -270,7 +271,7 @@ async function renderStatusPage(statusPage: any) {
 
   const backgroundColor = branding.backgroundColor || '#ffffff';
   const textColor = branding.textColor || 'var(--status-text, #111827)';
-  const customCss = branding.customCss || '';
+  const customCss = toSafeStyleTagContent(branding.customCss);
   const layout = branding.layout || 'default';
   const showHeader = branding.showHeader !== false;
   const showFooter = branding.showFooter !== false;
@@ -606,7 +607,7 @@ async function renderStatusPage(statusPage: any) {
       {/* Structured Data (JSON-LD) */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonForHtml(structuredData) }}
       />
 
       {/* Custom CSS */}
