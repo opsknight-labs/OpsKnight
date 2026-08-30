@@ -13,13 +13,19 @@ const mockStore = {
   put: vi.fn(item => {
     requestStore.set(item.id, item);
     const req = { onsuccess: null as any };
-    setTimeout(() => req.onsuccess && req.onsuccess({} as any), 0);
+    queueMicrotask(() => {
+      req.onsuccess && req.onsuccess({} as any);
+      mockTransaction.oncomplete && mockTransaction.oncomplete({} as any);
+    });
     return req;
   }),
   delete: vi.fn(id => {
     requestStore.delete(id);
     const req = { onsuccess: null as any };
-    setTimeout(() => req.onsuccess && req.onsuccess({} as any), 0);
+    queueMicrotask(() => {
+      req.onsuccess && req.onsuccess({} as any);
+      mockTransaction.oncomplete && mockTransaction.oncomplete({} as any);
+    });
     return req;
   }),
   index: vi.fn(() => ({
@@ -37,14 +43,15 @@ const mockStore = {
               advance();
             },
           };
+          request.onsuccess && request.onsuccess({} as any);
         } else {
           request.result = null;
+          request.onsuccess && request.onsuccess({} as any);
+          mockTransaction.oncomplete && mockTransaction.oncomplete({} as any);
         }
-        request.onsuccess && request.onsuccess({} as any);
       };
 
-      // Trigger first result asynchronously
-      setTimeout(advance, 0);
+      queueMicrotask(advance);
       return request;
     }),
   })),
@@ -59,7 +66,6 @@ const mockTransaction = {
 
 const mockDb = {
   transaction: vi.fn(() => {
-    setTimeout(() => mockTransaction.oncomplete && mockTransaction.oncomplete({} as any), 10);
     return mockTransaction;
   }),
   createObjectStore: vi.fn(() => mockStore),
