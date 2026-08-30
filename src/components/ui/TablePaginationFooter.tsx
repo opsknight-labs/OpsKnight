@@ -9,6 +9,8 @@ export type TablePaginationFooterProps = {
   page: number;
   pageSize: number;
   totalCount: number;
+  prevHref?: string;
+  nextHref?: string;
   pageHref?: (page: number) => string;
   onPageChange?: (page: number) => void;
   className?: string;
@@ -18,6 +20,8 @@ export default function TablePaginationFooter({
   page,
   pageSize,
   totalCount,
+  prevHref,
+  nextHref,
   pageHref,
   onPageChange,
   className,
@@ -28,6 +32,10 @@ export default function TablePaginationFooter({
 
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
+
+  const resolvedPrevHref = prevHref ?? (pageHref && hasPrev ? pageHref(page - 1) : undefined);
+  const resolvedNextHref = nextHref ?? (pageHref && hasNext ? pageHref(page + 1) : undefined);
+  const isLinkMode = Boolean(prevHref || nextHref || pageHref);
 
   return (
     <div
@@ -43,17 +51,17 @@ export default function TablePaginationFooter({
       </div>
 
       <div className="flex items-center gap-1.5">
-        {pageHref ? (
+        {isLinkMode ? (
           <>
             <Button
-              asChild={hasPrev}
+              asChild={hasPrev && Boolean(resolvedPrevHref)}
               variant="outline"
               size="sm"
-              disabled={!hasPrev}
+              disabled={!hasPrev || !resolvedPrevHref}
               className="h-8 gap-1 px-2.5"
             >
-              {hasPrev ? (
-                <Link href={pageHref(page - 1)} aria-label="Previous page">
+              {hasPrev && resolvedPrevHref ? (
+                <Link href={resolvedPrevHref} aria-label="Previous page">
                   <ChevronLeft className="h-3.5 w-3.5" />
                   <span>Previous</span>
                 </Link>
@@ -70,14 +78,14 @@ export default function TablePaginationFooter({
             </span>
 
             <Button
-              asChild={hasNext}
+              asChild={hasNext && Boolean(resolvedNextHref)}
               variant="outline"
               size="sm"
-              disabled={!hasNext}
+              disabled={!hasNext || !resolvedNextHref}
               className="h-8 gap-1 px-2.5"
             >
-              {hasNext ? (
-                <Link href={pageHref(page + 1)} aria-label="Next page">
+              {hasNext && resolvedNextHref ? (
+                <Link href={resolvedNextHref} aria-label="Next page">
                   <span>Next</span>
                   <ChevronRight className="h-3.5 w-3.5" />
                 </Link>
