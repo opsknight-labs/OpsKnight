@@ -1,0 +1,143 @@
+import React, { type ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+export type DetailStatItem = {
+  label: string;
+  value: ReactNode;
+  icon?: ReactNode;
+  subtext?: string;
+  className?: string;
+  valueClassName?: string;
+};
+
+export type DetailBreadcrumb = {
+  label: string;
+  href: string;
+  current: string;
+};
+
+export type DetailHeroBannerProps = {
+  breadcrumb?: DetailBreadcrumb;
+  tag?: string;
+  title: string;
+  subtitle?: ReactNode;
+  badges?: ReactNode;
+  icon?: ReactNode;
+  stats?: DetailStatItem[];
+  actions?: ReactNode;
+  alert?: ReactNode;
+  className?: string;
+};
+
+export default function DetailHeroBanner({
+  breadcrumb,
+  tag,
+  title,
+  subtitle,
+  badges,
+  icon,
+  stats = [],
+  actions,
+  alert,
+  className,
+}: DetailHeroBannerProps) {
+  return (
+    <header className={cn('space-y-4', className)}>
+      {/* Breadcrumb Trail */}
+      {breadcrumb && (
+        <Link
+          href={breadcrumb.href}
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>{breadcrumb.label}</span>
+          <span className="opacity-40">/</span>
+          <span className="font-medium text-foreground">{breadcrumb.current}</span>
+        </Link>
+      )}
+
+      {/* Main Glassmorphic Hero Banner */}
+      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
+        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
+
+        <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          {/* Left: Icon/Avatar & Identity Details */}
+          <div className="flex items-start gap-4">
+            {icon && <div className="shrink-0">{icon}</div>}
+
+            <div className="min-w-0">
+              {(tag || badges) && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {tag && (
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-foreground/75">
+                      {tag}
+                    </p>
+                  )}
+                  {badges}
+                </div>
+              )}
+
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary-foreground md:text-3xl">
+                {title}
+              </h1>
+
+              {subtitle && (
+                <div className="mt-1 text-xs text-primary-foreground/85 leading-relaxed">
+                  {subtitle}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Summary Metric Capsules & Action Slots */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {stats.length > 0 && (
+              <div
+                className={cn(
+                  'grid gap-1.5 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-1.5 backdrop-blur-sm',
+                  stats.length === 2 && 'grid-cols-2 lg:min-w-[200px]',
+                  stats.length === 3 && 'grid-cols-3 lg:min-w-[300px]',
+                  stats.length >= 4 && 'grid-cols-4 lg:min-w-[360px]'
+                )}
+              >
+                {stats.map((stat, idx) => (
+                  <div
+                    key={stat.label || idx}
+                    className={cn(
+                      'min-w-0 rounded-md px-2.5 py-1.5 text-center',
+                      idx > 0 && 'border-l border-primary-foreground/20',
+                      stat.className
+                    )}
+                  >
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+                      {stat.label}
+                    </p>
+                    <div
+                      className={cn(
+                        'mt-0.5 flex items-center justify-center gap-1 text-sm font-semibold text-primary-foreground',
+                        stat.valueClassName
+                      )}
+                    >
+                      {stat.icon}
+                      <span>{stat.value}</span>
+                    </div>
+                    {stat.subtext && (
+                      <p className="text-[9px] text-primary-foreground/70 mt-0.5">{stat.subtext}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {actions && <div className="shrink-0">{actions}</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* Optional Alert Banner */}
+      {alert && <div>{alert}</div>}
+    </header>
+  );
+}

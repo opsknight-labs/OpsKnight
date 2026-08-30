@@ -21,6 +21,7 @@ import TeamMemberAddModal from '@/components/teams/TeamMemberAddModal';
 import TeamAssignServicesModal from '@/components/teams/TeamAssignServicesModal';
 import TeamLinkedPolicies from '@/components/teams/TeamLinkedPolicies';
 import TeamDetailTabs from '@/components/teams/TeamDetailTabs';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import {
   Card,
   CardContent,
@@ -460,87 +461,55 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       {/* Header with Breadcrumbs & Hero Banner */}
-      <header className="space-y-4">
-        <Link
-          href="/teams"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Teams</span>
-          <span className="opacity-40">/</span>
-          <span className="font-medium text-foreground">{team.name}</span>
-        </Link>
-
-        {/* Hero Banner with Glassmorphic Stats Capsule */}
-        <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
-          <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
-          <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
-                <Users className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-foreground/75">
-                    Team Workspace
-                  </p>
-                  {team.teamLead && (
-                    <span className="rounded-full bg-primary-foreground/20 px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
-                      Lead: {team.teamLead.name}
-                    </span>
-                  )}
-                </div>
-                <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary-foreground md:text-3xl">
-                  {team.name}
-                </h1>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
-                  {team.description || 'No mission description defined.'}
-                </p>
-              </div>
-            </div>
-
-            {/* Glassmorphic Stats Capsule with Active Incidents */}
-            <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-1.5 backdrop-blur-sm lg:min-w-[330px]">
-              <div className="min-w-0 rounded-md px-3 py-2 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
-                  Members
-                </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground">
-                  <UserCheck className="h-3.5 w-3.5" /> {team._count.members}
-                </p>
-              </div>
-              <div className="min-w-0 rounded-md border-x border-primary-foreground/20 px-3 py-2 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
-                  Services
-                </p>
-                <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground">
-                  <Shield className="h-3.5 w-3.5" /> {team._count.services}
-                </p>
-              </div>
-              <div className="min-w-0 rounded-md px-3 py-2 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
-                  Incidents
-                </p>
-                <p
-                  className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold ${
-                    activeIncidentsCount > 0 ? 'text-amber-200' : 'text-emerald-100'
-                  }`}
-                >
-                  {activeIncidentsCount > 0 ? (
-                    <>
-                      <AlertTriangle className="h-3.5 w-3.5" /> {activeIncidentsCount} Active
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-3.5 w-3.5" /> 0 Active
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
+      <DetailHeroBanner
+        breadcrumb={{
+          label: 'Teams',
+          href: '/teams',
+          current: team.name,
+        }}
+        tag="Team Workspace"
+        badges={
+          team.teamLead ? (
+            <span className="rounded-full bg-primary-foreground/20 px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+              Lead: {team.teamLead.name}
+            </span>
+          ) : undefined
+        }
+        title={team.name}
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <Users className="h-5 w-5" aria-hidden="true" />
           </div>
-        </div>
-      </header>
+        }
+        subtitle={
+          <p className="max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
+            {team.description || 'No mission description defined.'}
+          </p>
+        }
+        stats={[
+          {
+            label: 'Members',
+            value: team._count.members,
+            icon: <UserCheck className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Services',
+            value: team._count.services,
+            icon: <Shield className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Incidents',
+            value: `${activeIncidentsCount} Active`,
+            icon:
+              activeIncidentsCount > 0 ? (
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-200" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-100" />
+              ),
+            valueClassName: activeIncidentsCount > 0 ? 'text-amber-200' : 'text-emerald-100',
+          },
+        ]}
+      />
 
       {/* Controlled Tabs */}
       <TeamDetailTabs
