@@ -1,7 +1,7 @@
 'use server';
 
 import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/rbac';
+import { assertAdmin } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
@@ -16,10 +16,7 @@ import { integrationProviderError, jsonProviderError } from '@/lib/provider-erro
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
-    }
+    const user = await assertAdmin();
 
     let body: unknown;
     try {

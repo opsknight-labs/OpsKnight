@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/rbac';
+import { resolveUserActor } from '@/lib/authorization-actors';
 import { logger } from '@/lib/logger';
 import { getCachedDashboardMetrics, getCachedRecentIncidents } from '@/lib/realtime-cache';
 
@@ -11,7 +12,8 @@ export async function GET(req: NextRequest) {
   try {
     // Get current user for authorization
     const user = await getCurrentUser();
-    if (!user) {
+    const actor = await resolveUserActor(user.id);
+    if (!actor) {
       return new Response('Unauthorized', { status: 401 });
     }
 
@@ -85,8 +87,8 @@ export async function GET(req: NextRequest) {
             // Get recent incident updates using cached query
             const incidentResult = await getCachedRecentIncidents(
               user.id,
-              user.role,
-              [], // Team IDs would need to be fetched if needed
+              actor.role,
+              [...actor.teamIds],
               lastMetricsHash ? undefined : undefined // Always check for incidents
             );
 
@@ -104,8 +106,8 @@ export async function GET(req: NextRequest) {
             // Get dashboard metrics using cached query (reduces DB load by 80%)
             const metricsResult = await getCachedDashboardMetrics(
               user.id,
-              user.role,
-              [], // Team IDs
+              actor.role,
+              [...actor.teamIds],
               lastMetricsHash
             );
 
