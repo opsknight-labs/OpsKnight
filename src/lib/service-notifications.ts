@@ -53,8 +53,8 @@ export async function sendServiceNotifications(incidentId: string, eventType: Se
       if (service.slackWebhookUrl && eventType !== 'updated') {
         const result = await once(deliveryKey, `slack-webhook:${service.id}`, async () => {
           try {
-            await notifySlackForIncident(incidentId, eventType);
-            return { success: true };
+            const response = await notifySlackForIncident(incidentId, eventType);
+            return { success: response.success, error: response.error };
           } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : String(error) };
           }

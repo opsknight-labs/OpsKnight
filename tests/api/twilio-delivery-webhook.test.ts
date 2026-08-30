@@ -2,18 +2,14 @@ import { createHmac } from 'crypto';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { findFirst, update, updateMany, backgroundJobCreate, transaction } = vi.hoisted(() => ({
+const { findFirst, update } = vi.hoisted(() => ({
   findFirst: vi.fn(),
   update: vi.fn(),
-  updateMany: vi.fn(),
-  backgroundJobCreate: vi.fn(),
-  transaction: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
   default: {
     notification: { findFirst, update },
-    $transaction: transaction,
   },
 }));
 
@@ -51,21 +47,10 @@ describe('Twilio delivery receipt webhook', () => {
     vi.clearAllMocks();
     findFirst.mockResolvedValue({
       id: 'notif-1',
-      incidentId: 'incident-1',
-      userId: 'user-1',
-      channel: 'SMS',
-      message: 'message',
-      eventType: 'resolved',
+      status: 'SENT',
+      providerMessageId: 'SM123',
     });
     update.mockResolvedValue({ id: 'notif-1' });
-    updateMany.mockResolvedValue({ count: 1 });
-    backgroundJobCreate.mockResolvedValue({ id: 'job-1' });
-    transaction.mockImplementation(async callback =>
-      callback({
-        notification: { updateMany },
-        backgroundJob: { create: backgroundJobCreate },
-      })
-    );
   });
 
   it('verifies the callback and records delivered messages', async () => {
@@ -95,20 +80,50 @@ describe('Twilio delivery receipt webhook', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('preserves notification intent when scheduling a failed-delivery fallback', async () => {
+  it('records a failed delivery on the same durable intent without scheduling a fallback', async () => {
     const response = await POST(
       signedRequest('MessageSid=SM123&MessageStatus=undelivered&ErrorCode=30003')
     );
 
     expect(response.status).toBe(204);
-    expect(backgroundJobCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        type: 'NOTIFICATION',
-        payload: expect.objectContaining({
-          sourceNotificationId: 'notif-1',
-          eventType: 'resolved',
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'notif-1' },
+        data: expect.objectContaining({
+          providerMessageId: 'SM123',
+          status: 'FAILED',
+          failedAt: expect.any(Date),
+          attempts: { increment: 1 },
         }),
-      }),
+      })
+    );
+  });
+
+  it('does not regress a delivered notification when a late failure receipt arrives', async () => {
+    findFirst.mockResolvedValue({
+      id: 'notif-1',
+      status: 'DELIVERED',
+      providerMessageId: 'SM123',
     });
+
+    const response = await POST(
+      signedRequest('MessageSid=SM123&MessageStatus=undelivered&ErrorCode=30003')
+    );
+
+    expect(response.status).toBe(204);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('ignores receipts from a superseded provider attempt', async () => {
+    findFirst.mockResolvedValue({
+      id: 'notif-1',
+      status: 'SENT',
+      providerMessageId: 'SM-new',
+    });
+
+    const response = await POST(signedRequest('MessageSid=SM-old&MessageStatus=delivered'));
+
+    expect(response.status).toBe(204);
+    expect(update).not.toHaveBeenCalled();
   });
 });

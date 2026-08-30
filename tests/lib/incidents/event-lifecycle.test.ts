@@ -5,6 +5,7 @@ const NOW = new Date('2026-08-28T05:30:00.000Z');
 
 function createTx() {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([{ now: NOW }]),
     incident: {
       findUnique: vi.fn().mockResolvedValue({
         status: 'OPEN',
@@ -25,6 +26,9 @@ function createTx() {
     },
     incidentEvent: {
       create: vi.fn().mockResolvedValue({}),
+    },
+    backgroundJob: {
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   };
 }

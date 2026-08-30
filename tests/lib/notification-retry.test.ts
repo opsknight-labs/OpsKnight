@@ -34,6 +34,9 @@ vi.mock('@/lib/circuit-breaker', () => ({
     webhook: () => ({ execute: (fn: () => unknown) => fn() }),
   },
 }));
+vi.mock('@/lib/provider-admission', () => ({
+  acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
+}));
 vi.mock('@/lib/notifications', () => ({ sendNotification: vi.fn() }));
 vi.mock('@/lib/email', () => ({ sendIncidentEmail }));
 vi.mock('@/lib/sms', () => ({ sendIncidentSMS: vi.fn() }));

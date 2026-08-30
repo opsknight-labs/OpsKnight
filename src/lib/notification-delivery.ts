@@ -16,6 +16,17 @@ export interface NotificationDeliveryResult { success: boolean; outcome: Notific
 export function isRetryableNotificationOutcome(outcome: NotificationDeliveryOutcome): boolean {
   return outcome === 'RETRYABLE_FAILURE' || outcome === 'CIRCUIT_OPEN';
 }
+
+/** Compatibility key used by the legacy in-memory queue during rolling upgrades. */
+export function notificationDedupeKey(input: {
+  incidentId: string;
+  userId: string;
+  channel: NotificationDeliveryChannel;
+  message: string;
+}): string {
+  return [input.incidentId, input.userId, input.channel, input.message].join('\u001f');
+}
+
 function providerFailureResult(result: { success: boolean; error?: string; retryable?: boolean }): NotificationAttemptResult {
   return { success: false, outcome: result.retryable === false ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE', error: result.error || 'Notification delivery failed' };
 }
