@@ -26,7 +26,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/shadcn/alert-dialog';
 import { useToast } from '@/hooks/use-product-notification';
-import { Search, Trash2, Bell, BellOff, Crown, Loader2, X, ChevronDown } from 'lucide-react';
+import { Search, Trash2, Bell, BellOff, Crown, Loader2, X, ChevronDown, Users } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
 
 type TeamMember = {
   id: string;
@@ -226,9 +227,16 @@ export default function TeamMemberRosterTable({
 
       {/* Members List */}
       {filteredMembers.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-8 text-center text-xs text-muted-foreground">
-          {searchQuery ? `No members match "${searchQuery}"` : 'No members on this team yet.'}
-        </div>
+        <EmptyState
+          icon={<Users className="h-6 w-6 text-muted-foreground/60" />}
+          title={searchQuery ? `No members match "${searchQuery}"` : 'No members on this team yet'}
+          description={
+            searchQuery
+              ? 'Try adjusting your search query.'
+              : 'Add members above to staff this team.'
+          }
+          size="sm"
+        />
       ) : (
         <div className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card overflow-hidden shadow-2xs">
           {filteredMembers.map(member => {

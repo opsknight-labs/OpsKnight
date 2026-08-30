@@ -1,107 +1,84 @@
-'use client';
-
-import { ReactNode } from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/shadcn/button';
+import React, { type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-interface EmptyStateProps {
-  title: string;
-  description?: string;
+export type EmptyStateProps = {
   icon?: ReactNode;
-  action?: {
-    label: string;
-    href?: string;
-    onClick?: () => void;
-  };
-  image?: ReactNode;
-  className?: string;
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  secondaryAction?: ReactNode;
+  variant?: 'dashed' | 'card' | 'simple';
   size?: 'sm' | 'md' | 'lg';
-}
+  className?: string;
+};
 
-/**
- * Standardized EmptyState component for consistent empty states across the app
- *
- * @example
- * <EmptyState
- *   title="No incidents found"
- *   description="Create your first incident to get started"
- *   icon={<IncidentIcon />}
- *   action={{ label: "Create Incident", href: "/incidents/create" }}
- * />
- */
 export default function EmptyState({
+  icon,
   title,
   description,
-  icon,
   action,
-  image,
-  className = '',
+  secondaryAction,
+  variant = 'dashed',
   size = 'md',
+  className,
 }: EmptyStateProps) {
-  const sizeClasses = {
-    sm: {
-      container: 'p-8 min-h-[200px]',
-      icon: 'w-12 h-12 text-5xl',
-      title: 'text-lg',
-    },
-    md: {
-      container: 'p-12 min-h-[300px]',
-      icon: 'w-16 h-16 text-6xl',
-      title: 'text-xl',
-    },
-    lg: {
-      container: 'p-16 min-h-[400px]',
-      icon: 'w-20 h-20 text-7xl',
-      title: 'text-2xl',
-    },
-  };
-
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center text-center',
-        sizeClasses[size].container,
+        'flex flex-col items-center justify-center text-center transition-all',
+        variant === 'dashed' &&
+          'rounded-xl border border-dashed border-border/80 bg-muted/20 hover:bg-muted/30',
+        variant === 'card' && 'rounded-xl border border-border bg-card shadow-2xs',
+        variant === 'simple' && 'p-4',
+        size === 'sm' && 'p-6 gap-2',
+        size === 'md' && 'p-8 sm:p-10 gap-3',
+        size === 'lg' && 'p-12 sm:p-16 gap-4',
         className
       )}
-      role="status"
-      aria-live="polite"
     >
-      {image && <div className="mb-6">{image}</div>}
-      {icon && !image && (
+      {icon && (
         <div
           className={cn(
-            'flex items-center justify-center mb-4 opacity-40 text-muted-foreground',
-            sizeClasses[size].icon
+            'flex items-center justify-center rounded-2xl bg-muted text-muted-foreground transition-colors',
+            size === 'sm' && 'h-10 w-10 [&>svg]:h-5 [&>svg]:w-5',
+            size === 'md' && 'h-12 w-12 [&>svg]:h-6 [&>svg]:w-6',
+            size === 'lg' && 'h-16 w-16 [&>svg]:h-8 [&>svg]:w-8'
           )}
-          aria-hidden="true"
         >
           {icon}
         </div>
       )}
-      <h3
-        className={cn(
-          'font-semibold text-secondary-foreground',
-          sizeClasses[size].title,
-          description ? 'mb-2' : action ? 'mb-4' : 'mb-0'
-        )}
-      >
-        {title}
-      </h3>
-      {description && (
-        <p className="text-base text-muted-foreground max-w-md mb-6 leading-relaxed">
-          {description}
-        </p>
-      )}
-      {action && (
-        <div className="mt-4">
-          {action.href ? (
-            <Button asChild>
-              <Link href={action.href}>{action.label}</Link>
-            </Button>
-          ) : (
-            <Button onClick={action.onClick}>{action.label}</Button>
+
+      <div className="max-w-md space-y-1">
+        <h3
+          className={cn(
+            'font-semibold text-foreground tracking-tight',
+            size === 'sm' && 'text-xs sm:text-sm',
+            size === 'md' && 'text-sm sm:text-base',
+            size === 'lg' && 'text-base sm:text-lg'
           )}
+        >
+          {title}
+        </h3>
+
+        {description && (
+          <div
+            className={cn(
+              'text-muted-foreground leading-relaxed',
+              size === 'sm' && 'text-[11px]',
+              size === 'md' && 'text-xs sm:text-sm',
+              size === 'lg' && 'text-sm'
+            )}
+          >
+            {description}
+          </div>
+        )}
+      </div>
+
+      {(action || secondaryAction) && (
+        <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+          {action}
+          {secondaryAction}
         </div>
       )}
     </div>

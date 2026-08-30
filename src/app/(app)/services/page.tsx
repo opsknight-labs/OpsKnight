@@ -8,8 +8,10 @@ import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/uniqu
 import ServicesListTable from '@/components/service/ServicesListTable';
 import ServicesFilters from '@/components/service/ServicesFilters';
 import CreateServiceForm from '@/components/service/CreateServiceForm';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import EmptyState from '@/components/ui/EmptyState';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
-import { Server, AlertTriangle, XCircle } from 'lucide-react';
+import { Server, AlertTriangle, XCircle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 
@@ -222,60 +224,47 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const canCreateService = permissions.isAdminOrResponder;
 
   return (
-    <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
-      {/* Metric panel */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg p-4 md:p-6 shadow-lg">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2 text-white">
-              <Server className="h-6 w-6 md:h-8 md:w-8" />
-              Services
-            </h1>
-            <p className="text-xs md:text-sm opacity-90 mt-1 text-white">
-              Monitor service health and performance
-            </p>
-            <p className="text-[11px] md:text-xs opacity-80 mt-1">
-              Metrics shown for the last 30 days.
-            </p>
-            <p className="text-[11px] md:text-xs opacity-80">
-              Active incident counts exclude snoozed and suppressed incidents.
-            </p>
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Centralized Hero Banner */}
+      <DetailHeroBanner
+        tag="Infrastructure Directory"
+        title="Services"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <Server className="h-6 w-6" aria-hidden="true" />
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-4 w-full lg:w-auto">
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold">{totalServices}</div>
-                <div className="text-[10px] md:text-xs opacity-90">Total Services</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-emerald-200">
-                  {operationalCount}
-                </div>
-                <div className="text-[10px] md:text-xs opacity-90">Operational</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-yellow-200">
-                  {degradedCount}
-                </div>
-                <div className="text-[10px] md:text-xs opacity-90">Degraded</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-white/10 border-white/20 backdrop-blur">
-              <CardContent className="p-3 md:p-4 text-center">
-                <div className="text-xl md:text-2xl font-extrabold text-red-200">
-                  {criticalCount}
-                </div>
-                <div className="text-[10px] md:text-xs opacity-90">Critical</div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Monitor real-time service health, SLA compliance, and incident response routing.
+          </p>
+        }
+        stats={[
+          {
+            label: 'Total Services',
+            value: totalServices,
+            icon: <Server className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Operational',
+            value: operationalCount,
+            icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName: 'text-emerald-200',
+          },
+          {
+            label: 'Degraded',
+            value: degradedCount,
+            icon: <AlertTriangle className="h-3.5 w-3.5 text-amber-200" />,
+            valueClassName: degradedCount > 0 ? 'text-amber-200' : undefined,
+          },
+          {
+            label: 'Critical',
+            value: criticalCount,
+            icon: <XCircle className="h-3.5 w-3.5 text-rose-200" />,
+            valueClassName: criticalCount > 0 ? 'text-rose-200' : undefined,
+          },
+        ]}
+      />
 
       <div className="space-y-4 md:space-y-5">
         {/* Error Alert */}

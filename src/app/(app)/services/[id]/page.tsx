@@ -1,186 +1,193 @@
 import prisma from '@/lib/prisma';
-import { activeIncidentStatuses } from '@/lib/incident-status';
-import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getUserPermissions } from '@/lib/rbac';
-import { deleteService } from '../actions';
+import { deleteService, updateService, deleteIntegration } from '../actions';
 
 // UI Components
-import { Card, CardContent } from '@/components/ui/shadcn/card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import EmptyState from '@/components/ui/EmptyState';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
+import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
 
 // Icons
 import {
-  ChevronLeft,
   CheckCircle2,
   AlertTriangle,
   XCircle,
   Globe,
-  Settings,
+  ShieldCheck,
+  ShieldAlert,
+  Flame,
   Zap,
+  Users,
+  Activity,
+  Clock,
+  Settings,
+  ExternalLink,
+  Plus,
+  Server,
 } from 'lucide-react';
 
 // Custom Components
 import IncidentList from '@/components/service/IncidentList';
 import Pagination from '@/components/service/Pagination';
-import DeleteServiceButton from '@/components/service/DeleteServiceButton';
 import CreateIncidentButton from '@/components/incident/CreateIncidentButton';
+import AddIntegrationGrid from '@/components/service/AddIntegrationGrid';
+import CopyButton from '@/components/service/CopyButton';
+import IntegrationStatusToggle from '@/components/service/IntegrationStatusToggle';
+import IntegrationSecretControl from '@/components/service/IntegrationSecretControl';
+import DeleteIntegrationButton from '@/components/service/DeleteIntegrationButton';
+import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
+import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingSettings';
+import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
+import { Label } from '@/components/ui/shadcn/label';
+import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
+import { IntegrationType } from '@/components/service/integration-types';
+
+export const revalidate = 0;
 
 const INCIDENTS_PER_PAGE = 20;
 
 type ServiceDetailPageProps = {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ page?: string; tab?: string }>;
+  searchParams?: Promise<{ page?: string; tab?: string; error?: string; saved?: string }>;
 };
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'OPERATIONAL') {
-    return (
-      <Badge variant="success" size="sm" className="gap-1 pl-1 pr-2">
-        <CheckCircle2 className="h-4 w-4 fill-emerald-500 text-white" />
-        Operational
-      </Badge>
-    );
+function getWebhookUrl(
+  integrationType: IntegrationType,
+  integrationId: string,
+  integrationKey: string
+): string {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  const keyParam = `&integrationKey=${encodeURIComponent(integrationKey)}`;
+
+  switch (integrationType) {
+    case 'CLOUDWATCH':
+      return `${baseUrl}/api/integrations/cloudwatch?integrationId=${integrationId}${keyParam}`;
+    case 'AZURE':
+      return `${baseUrl}/api/integrations/azure?integrationId=${integrationId}${keyParam}`;
+    case 'DATADOG':
+      return `${baseUrl}/api/integrations/datadog?integrationId=${integrationId}${keyParam}`;
+    case 'GRAFANA':
+      return `${baseUrl}/api/integrations/grafana?integrationId=${integrationId}${keyParam}`;
+    case 'PROMETHEUS':
+      return `${baseUrl}/api/integrations/prometheus?integrationId=${integrationId}${keyParam}`;
+    case 'NEWRELIC':
+      return `${baseUrl}/api/integrations/newrelic?integrationId=${integrationId}${keyParam}`;
+    case 'SENTRY':
+      return `${baseUrl}/api/integrations/sentry?integrationId=${integrationId}${keyParam}`;
+    case 'GITHUB':
+      return `${baseUrl}/api/integrations/github?integrationId=${integrationId}${keyParam}`;
+    case 'GOOGLE_CLOUD_MONITORING':
+      return `${baseUrl}/api/integrations/google-cloud-monitoring?integrationId=${integrationId}${keyParam}`;
+    case 'SPLUNK_ONCALL':
+      return `${baseUrl}/api/integrations/splunk-oncall?integrationId=${integrationId}${keyParam}`;
+    case 'SPLUNK_OBSERVABILITY':
+      return `${baseUrl}/api/integrations/splunk-observability?integrationId=${integrationId}${keyParam}`;
+    case 'DYNATRACE':
+      return `${baseUrl}/api/integrations/dynatrace?integrationId=${integrationId}${keyParam}`;
+    case 'APPDYNAMICS':
+      return `${baseUrl}/api/integrations/appdynamics?integrationId=${integrationId}${keyParam}`;
+    case 'ELASTIC':
+      return `${baseUrl}/api/integrations/elastic?integrationId=${integrationId}${keyParam}`;
+    case 'HONEYCOMB':
+      return `${baseUrl}/api/integrations/honeycomb?integrationId=${integrationId}${keyParam}`;
+    case 'BITBUCKET':
+      return `${baseUrl}/api/integrations/bitbucket?integrationId=${integrationId}${keyParam}`;
+    case 'UPTIMEROBOT':
+      return `${baseUrl}/api/integrations/uptimerobot?integrationId=${integrationId}${keyParam}`;
+    case 'PINGDOM':
+      return `${baseUrl}/api/integrations/pingdom?integrationId=${integrationId}${keyParam}`;
+    case 'BETTER_UPTIME':
+      return `${baseUrl}/api/integrations/better-uptime?integrationId=${integrationId}${keyParam}`;
+    case 'UPTIME_KUMA':
+      return `${baseUrl}/api/integrations/uptime-kuma?integrationId=${integrationId}${keyParam}`;
+    case 'NAGIOS':
+      return `${baseUrl}/api/integrations/nagios?integrationId=${integrationId}${keyParam}`;
+    case 'ICINGA':
+      return `${baseUrl}/api/integrations/icinga?integrationId=${integrationId}${keyParam}`;
+    case 'ZABBIX':
+      return `${baseUrl}/api/integrations/zabbix?integrationId=${integrationId}${keyParam}`;
+    case 'PAGERDUTY':
+      return `${baseUrl}/api/integrations/pagerduty/v2/enqueue?integrationId=${integrationId}${keyParam}`;
+    case 'GITLAB':
+      return `${baseUrl}/api/integrations/gitlab?integrationId=${integrationId}${keyParam}`;
+    case 'VERCEL':
+      return `${baseUrl}/api/integrations/vercel?integrationId=${integrationId}${keyParam}`;
+    case 'WEBHOOK':
+      return `${baseUrl}/api/integrations/webhook?integrationId=${integrationId}${keyParam}`;
+    case 'EVENTS_API_V2':
+    default:
+      return `${baseUrl}/api/events`;
   }
-  if (status === 'DEGRADED') {
-    return (
-      <Badge variant="warning" size="sm" className="gap-1 pl-1 pr-2">
-        <AlertTriangle className="h-4 w-4 fill-yellow-500 text-white" />
-        Degraded
-      </Badge>
-    );
-  }
-  if (status === 'CRITICAL') {
-    return (
-      <Badge variant="danger" size="sm" className="gap-1 pl-1 pr-2">
-        <XCircle className="h-4 w-4 fill-red-500 text-white" />
-        Critical
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="neutral" size="sm">
-      Unknown
-    </Badge>
-  );
 }
 
-async function ServiceMetricsSummary({ serviceId }: { serviceId: string }) {
+export default async function ServiceDetailPage({ params, searchParams }: ServiceDetailPageProps) {
+  const { id } = await params;
+  const resolvedSearchParams = await searchParams;
+  const page = Math.max(1, parseInt(resolvedSearchParams?.page || '1', 10));
+  const activeTab = resolvedSearchParams?.tab || 'incidents';
+  const errorCode = resolvedSearchParams?.error;
+  const isSaved = resolvedSearchParams?.saved === '1';
+  const skip = (page - 1) * INCIDENTS_PER_PAGE;
+
   const { calculateSLAMetrics, calculateMultiServiceUptime } = await import('@/lib/sla-server');
   const slaWindowDays = 30;
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - slaWindowDays * 24 * 60 * 60 * 1000);
 
-  const [slaMetrics, uptimeByService] = await Promise.all([
-    calculateSLAMetrics({
-      serviceId,
-      windowDays: slaWindowDays,
-      includeActiveIncidents: true,
-    }),
-    calculateMultiServiceUptime([serviceId], thirtyDaysAgo, now),
-  ]);
-
-  const activeIncidentsCount = slaMetrics.activeIncidents;
-  const windowTotalIncidents = slaMetrics.totalIncidents;
-  const slaCompliance = slaMetrics.resolveCompliance;
-  const mttr = slaMetrics.mttr ? slaMetrics.mttr / 60 : undefined; // Convert minutes to hours
-
-  const effectiveDurationDays =
-    (slaMetrics.effectiveEnd.getTime() - slaMetrics.effectiveStart.getTime()) /
-    (1000 * 60 * 60 * 24);
-  const incidentsPerMonth =
-    effectiveDurationDays > 0 ? (windowTotalIncidents / effectiveDurationDays) * 30 : 0;
-
-  const availability = Math.max(0, Math.min(100, uptimeByService[serviceId] ?? 100));
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mt-6">
-      <Card className="bg-white/10 border-white/20 backdrop-blur">
-        <CardContent className="p-3 md:p-4 text-center">
-          <div className="text-xl md:text-2xl font-extrabold">{availability.toFixed(2)}%</div>
-          <div className="text-[10px] md:text-xs opacity-90">Availability</div>
-        </CardContent>
-      </Card>
-      <Card className="bg-white/10 border-white/20 backdrop-blur">
-        <CardContent className="p-3 md:p-4 text-center">
-          <div className="text-xl md:text-2xl font-extrabold">
-            {mttr !== undefined
-              ? mttr < 1
-                ? `${Math.round(mttr * 60)}m`
-                : mttr < 24
-                  ? `${mttr.toFixed(1)}h`
-                  : `${(mttr / 24).toFixed(1)}d`
-              : '-'}
-          </div>
-          <div className="text-[10px] md:text-xs opacity-90">MTTR</div>
-        </CardContent>
-      </Card>
-      <Card className="bg-white/10 border-white/20 backdrop-blur">
-        <CardContent className="p-3 md:p-4 text-center">
-          <div className="text-xl md:text-2xl font-extrabold">
-            {incidentsPerMonth < 1 ? '<1' : incidentsPerMonth.toFixed(1)}
-          </div>
-          <div className="text-[10px] md:text-xs opacity-90">Incidents / month</div>
-        </CardContent>
-      </Card>
-      <Card className="bg-white/10 border-white/20 backdrop-blur">
-        <CardContent className="p-3 md:p-4 text-center">
-          <div className="text-xl md:text-2xl font-extrabold">
-            {slaCompliance !== null ? `${slaCompliance.toFixed(1)}%` : '-'}
-          </div>
-          <div className="text-[10px] md:text-xs opacity-90">SLA Compliance</div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function ServiceMetricsSkeleton() {
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mt-6">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <Card key={index} className="bg-white/10 border-white/20 backdrop-blur">
-          <CardContent className="p-3 md:p-4 text-center">
-            <div className="mx-auto h-6 md:h-7 w-16 rounded bg-white/25 animate-pulse" />
-            <div className="mx-auto mt-2 h-3 w-24 rounded bg-white/20 animate-pulse" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-export default async function ServiceDetailPage({ params, searchParams }: ServiceDetailPageProps) {
-  const { id } = await params;
-  const searchParamsResolved = await searchParams;
-  const page = Math.max(1, parseInt(searchParamsResolved?.page || '1', 10));
-  const tab = (searchParamsResolved?.tab as 'incidents' | 'history') || 'incidents';
-  const skip = (page - 1) * INCIDENTS_PER_PAGE;
-
-  // Define status filter based on active tab
-  const incidentWhere =
-    tab === 'incidents'
-      ? { status: { in: activeIncidentStatuses() } }
-      : { status: 'RESOLVED' as const };
-
-  // Parallelize data fetching
-  const { calculateSLAMetrics } = await import('@/lib/sla-server');
-  const slaWindowDays = 30;
-
-  const [serviceRaw, totalIncidentCount, slaMetrics] = await Promise.all([
-    // 1. Service Data (with filtering for the list)
+  const [
+    serviceRaw,
+    totalIncidentCount,
+    slaMetrics,
+    uptimeByService,
+    teams,
+    policies,
+    globalSlackIntegration,
+    jiraConfig,
+    permissions,
+    chatOpsConfig,
+  ] = await Promise.all([
     prisma.service.findUnique({
       where: { id },
       include: {
-        team: true,
-        policy: {
-          select: { id: true, name: true },
+        team: {
+          select: { id: true, name: true, description: true },
         },
+        policy: {
+          include: {
+            steps: {
+              include: {
+                targetUser: {
+                  select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+                },
+                targetTeam: { select: { id: true, name: true } },
+                targetSchedule: { select: { id: true, name: true } },
+              },
+              orderBy: { stepOrder: 'asc' },
+            },
+          },
+        },
+        integrations: {
+          orderBy: { createdAt: 'desc' },
+        },
+        webhookIntegrations: {
+          orderBy: { createdAt: 'desc' },
+        },
+        jiraServiceMapping: true,
         incidents: {
-          where: incidentWhere as any,
           include: {
             assignee: {
               select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
@@ -194,7 +201,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           take: INCIDENTS_PER_PAGE,
         },
         _count: {
-          select: { incidents: { where: incidentWhere as any } },
+          select: {
+            incidents: true,
+            integrations: true,
+          },
         },
       },
     }),
@@ -204,6 +214,26 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       windowDays: slaWindowDays,
       includeActiveIncidents: true,
     }),
+    calculateMultiServiceUptime([id], thirtyDaysAgo, now),
+    prisma.team.findMany({ orderBy: { name: 'asc' } }),
+    prisma.escalationPolicy.findMany({
+      select: { id: true, name: true, description: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.slackIntegration.findFirst({
+      where: { enabled: true, services: { none: {} } },
+      select: { id: true, workspaceName: true, workspaceId: true, enabled: true },
+      orderBy: { updatedAt: 'desc' },
+    }),
+    prisma.jiraConfig.findUnique({
+      where: { id: 'default' },
+      select: { enabled: true },
+    }),
+    getUserPermissions(),
+    prisma.chatOpsConfig.findUnique({
+      where: { id: 'default' },
+      select: { enabled: true },
+    }),
   ]);
 
   if (!serviceRaw) {
@@ -212,173 +242,606 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = serviceRaw as any;
-
-  const dynamicStatus = slaMetrics.dynamicStatus;
-
-  // Use the filtered count for pagination
-  const filteredTotalIncidents = service._count.incidents;
-  const filteredTotalPages = Math.ceil(filteredTotalIncidents / INCIDENTS_PER_PAGE);
-
-  const permissions = await getUserPermissions();
+  const canManageService = permissions.isAdminOrResponder;
   const canDeleteService = permissions.isAdmin;
 
+  // SLA and Health Computations
+  const dynamicStatus = slaMetrics.dynamicStatus;
   const activeIncidentsCount = slaMetrics.activeIncidents;
-  const allTimeTotalIncidents = totalIncidentCount;
+  const windowTotalIncidents = slaMetrics.totalIncidents;
+  const slaCompliance = slaMetrics.resolveCompliance;
+  const mttr = slaMetrics.mttr ? slaMetrics.mttr / 60 : undefined;
+  const effectiveDurationDays =
+    (slaMetrics.effectiveEnd.getTime() - slaMetrics.effectiveStart.getTime()) /
+    (1000 * 60 * 60 * 24);
+  const incidentsPerMonth =
+    effectiveDurationDays > 0 ? (windowTotalIncidents / effectiveDurationDays) * 30 : 0;
+  const availability = Math.max(0, Math.min(100, uptimeByService[id] ?? 100));
 
-  const deleteServiceWithId = deleteService.bind(null, service.id);
+  const totalIncidents = service._count.incidents;
+  const totalPages = Math.ceil(totalIncidents / INCIDENTS_PER_PAGE);
+
+  const boundUpdateService = updateService.bind(null, service.id);
+  const boundDeleteService = async () => {
+    'use server';
+    await deleteService(service.id);
+  };
+
+  // --- TAB 1: INCIDENTS CONTENT ---
+  const incidentsContent = (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Flame className="h-4 w-4 text-primary" />
+            Service Incidents ({service.incidents.length})
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Real-time and historical incident record for {service.name}.
+          </p>
+        </div>
+        <CreateIncidentButton serviceId={id} className="gap-2" />
+      </div>
+
+      {service.incidents.length > 0 ? (
+        <Card className="border-border shadow-xs overflow-hidden">
+          <IncidentList
+            incidents={service.incidents.map((i: any) => ({
+              id: i.id,
+              title: i.title,
+              status: i.status,
+              urgency: i.urgency,
+              priority: i.priority,
+              createdAt: i.createdAt,
+              resolvedAt: i.resolvedAt,
+              assignee: i.assignee,
+              team: i.team,
+            }))}
+            serviceId={id}
+          />
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={totalIncidents}
+              itemsPerPage={INCIDENTS_PER_PAGE}
+            />
+          )}
+        </Card>
+      ) : (
+        <EmptyState
+          icon={<ShieldCheck className="h-8 w-8 text-emerald-500" />}
+          title="All systems operational"
+          description="There are currently no incidents affecting this service."
+          action={<CreateIncidentButton serviceId={id} />}
+        />
+      )}
+    </div>
+  );
+
+  // --- TAB 2: ESCALATION POLICY CONTENT ---
+  const escalationContent = (
+    <div className="space-y-5">
+      {service.policy ? (
+        <Card className="border-border shadow-xs">
+          <CardHeader className="border-b bg-muted/20 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 text-primary" />
+                  <span>{service.policy.name}</span>
+                </CardTitle>
+                <CardDescription className="text-xs mt-1">
+                  {service.policy.description ||
+                    'Alert notifications page through configured steps sequentially.'}
+                </CardDescription>
+              </div>
+              <Button asChild variant="outline" size="sm" className="text-xs gap-1.5 h-8">
+                <Link href={`/policies/${service.policy.id}`}>
+                  <span>View Full Policy</span>
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-5 space-y-4">
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Escalation Step Order ({service.policy.steps?.length || 0} Steps)
+              </h4>
+              <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+                {service.policy.steps?.map((step: any, idx: number) => (
+                  <div
+                    key={step.id}
+                    className="p-3.5 flex items-center justify-between gap-4 text-xs hover:bg-muted/20 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-[11px]">
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <p className="font-semibold text-foreground">
+                          {step.targetUser?.name ||
+                            step.targetTeam?.name ||
+                            step.targetSchedule?.name ||
+                            'Unassigned Step Target'}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Target:{' '}
+                          {step.targetUser
+                            ? 'User'
+                            : step.targetTeam
+                              ? 'Team'
+                              : step.targetSchedule
+                                ? 'On-Call Schedule'
+                                : 'None'}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      <Clock className="h-3 w-3 mr-1" />+{step.delayMinutes}m Delay
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <EmptyState
+          icon={<ShieldAlert className="h-8 w-8 text-amber-500" />}
+          title="No escalation policy attached"
+          description="Attach an escalation policy so incoming alerts automatically notify on-call responders in step order."
+          action={
+            <Button asChild size="sm" className="text-xs">
+              <Link href="?tab=settings">Configure Policy in Settings</Link>
+            </Button>
+          }
+        />
+      )}
+    </div>
+  );
+
+  // --- TAB 3: INTEGRATIONS & WEBHOOKS CONTENT ---
+  const integrationsContent = (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Zap className="h-4 w-4 text-primary" />
+            Configured Ingest Integrations ({service.integrations?.length || 0})
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Connect your monitoring tools, APM providers, and alert sources to trigger incidents
+            automatically.
+          </p>
+        </div>
+      </div>
+
+      {service.integrations && service.integrations.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {service.integrations.map((integration: any) => {
+            const webhookUrl = getWebhookUrl(
+              integration.type as IntegrationType,
+              integration.id,
+              integration.key
+            );
+
+            return (
+              <Card key={integration.id} className="border-border shadow-xs">
+                <CardHeader className="pb-3 border-b bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm font-bold">{integration.name}</CardTitle>
+                      <CardDescription className="text-[11px] font-mono mt-0.5">
+                        {integration.type}
+                      </CardDescription>
+                    </div>
+                    <IntegrationStatusToggle
+                      integrationId={integration.id}
+                      serviceId={id}
+                      initialEnabled={integration.enabled}
+                      canManage={canManageService}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] text-muted-foreground">
+                      Webhook Endpoint URL
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={webhookUrl}
+                        className="font-mono text-xs bg-muted/40 h-8 text-ellipsis"
+                      />
+                      <CopyButton text={webhookUrl} />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t flex items-center justify-between">
+                    <IntegrationSecretControl
+                      integrationId={integration.id}
+                      serviceId={id}
+                      hasSecret={Boolean(integration.key)}
+                    />
+                    <DeleteIntegrationButton
+                      action={async () => {
+                        'use server';
+                        await deleteIntegration(integration.id, id);
+                      }}
+                      integrationName={integration.name}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState
+          icon={<Zap className="h-8 w-8 text-primary" />}
+          title="No integrations configured yet"
+          description="Add a monitoring integration below to begin receiving automated alerts from CloudWatch, Datadog, Prometheus, Grafana, and more."
+        />
+      )}
+
+      {/* Add New Integration Grid */}
+      <Card className="border-border shadow-xs">
+        <CardHeader className="pb-3 border-b bg-muted/20">
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <Plus className="h-4 w-4 text-primary" />
+            Add Monitoring Integration
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Choose a provider to generate a unique webhook endpoint for this service.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-5">
+          <AddIntegrationGrid serviceId={id} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // --- TAB 4: SETTINGS & CHATOPS CONTENT ---
+  const settingsContent = (
+    <div className="space-y-6">
+      {isSaved && (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 p-3.5 text-xs flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>Service settings updated successfully.</span>
+        </div>
+      )}
+
+      {errorCode === 'duplicate-service' && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50 text-rose-800 p-3.5 text-xs flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+          <span>A service with this name already exists. Please choose a unique name.</span>
+        </div>
+      )}
+
+      {/* Core Service Metadata Form */}
+      <Card className="border-border shadow-xs">
+        <CardHeader className="pb-4 border-b bg-muted/20">
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <Settings className="h-4 w-4 text-primary" />
+            General Service Configuration
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Manage service name, SLA tier, regional placement, and team ownership.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-5">
+          <form action={boundUpdateService} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="name" className="text-xs font-semibold">
+                  Service Name *
+                </Label>
+                <Input
+                  id="name"
+                  name="name"
+                  defaultValue={service.name}
+                  required
+                  className="text-xs h-9"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="teamId" className="text-xs font-semibold">
+                  Owning Team
+                </Label>
+                <select
+                  id="teamId"
+                  name="teamId"
+                  defaultValue={service.teamId || ''}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">No Owning Team</option>
+                  {teams.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="description" className="text-xs font-semibold">
+                Description
+              </Label>
+              <Textarea
+                id="description"
+                name="description"
+                defaultValue={service.description || ''}
+                rows={2}
+                placeholder="What does this service do?"
+                className="text-xs"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="escalationPolicyId" className="text-xs font-semibold">
+                  Escalation Policy
+                </Label>
+                <select
+                  id="escalationPolicyId"
+                  name="escalationPolicyId"
+                  defaultValue={service.escalationPolicyId || ''}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">No Policy Attached</option>
+                  {policies.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="slaTier" className="text-xs font-semibold">
+                  SLA Tier
+                </Label>
+                <select
+                  id="slaTier"
+                  name="slaTier"
+                  defaultValue={service.slaTier || ''}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">None</option>
+                  <option value="Tier 1">Tier 1 (Mission Critical)</option>
+                  <option value="Tier 2">Tier 2 (High Priority)</option>
+                  <option value="Tier 3">Tier 3 (Standard)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="region" className="text-xs font-semibold">
+                  Primary Region
+                </Label>
+                <Input
+                  id="region"
+                  name="region"
+                  defaultValue={service.region || ''}
+                  placeholder="e.g. us-east-1"
+                  className="text-xs h-9"
+                />
+              </div>
+            </div>
+
+            {canManageService && (
+              <div className="pt-2 flex justify-end">
+                <Button type="submit" size="sm" className="text-xs">
+                  Save Changes
+                </Button>
+              </div>
+            )}
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Slack & ChatOps Integration Settings */}
+      <ServiceNotificationSettings
+        serviceId={id}
+        serviceNotificationChannels={service.serviceNotificationChannels || []}
+        slackChannel={service.slackChannel || null}
+        slackWebhookUrl={service.slackWebhookUrl || null}
+        slackIntegration={globalSlackIntegration}
+        webhookIntegrations={(service.webhookIntegrations || []).map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          type: w.type,
+          url: w.url || '',
+          enabled: w.enabled,
+        }))}
+        serviceNotifyOnTriggered={service.serviceNotifyOnTriggered ?? true}
+        serviceNotifyOnAck={service.serviceNotifyOnAck ?? true}
+        serviceNotifyOnResolved={service.serviceNotifyOnResolved ?? true}
+        serviceNotifyOnSlaBreach={service.serviceNotifyOnSlaBreach ?? false}
+      />
+
+      <ChatOpsWarRoomSettings
+        serviceId={id}
+        autoCreateWarRoom={service.autoCreateWarRoom ?? true}
+        warRoomVideoBridge={service.warRoomVideoBridge || null}
+        warRoomCustomBridgeUrl={service.warRoomCustomBridgeUrl || null}
+        chatOpsEnabled={Boolean(chatOpsConfig?.enabled)}
+        canManage={canManageService}
+      />
+
+      {/* Jira Integration Mapping */}
+      <JiraServiceMappingSettings
+        serviceId={id}
+        mapping={service.jiraServiceMapping}
+        jiraEnabled={Boolean(jiraConfig?.enabled)}
+        canManage={canManageService}
+      />
+
+      {/* Danger Zone: Delete Service */}
+      {canDeleteService && (
+        <Card className="border-destructive/30 bg-destructive/5 shadow-xs">
+          <CardHeader className="pb-3 border-b border-destructive/20">
+            <CardTitle className="text-sm font-bold text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Danger Zone
+            </CardTitle>
+            <CardDescription className="text-xs text-destructive/80">
+              Permanently delete this service. This action cannot be undone.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-foreground">Delete {service.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Requires typing the exact service name to confirm permanent removal.
+              </p>
+            </div>
+            <DeleteConfirmDialog
+              title={`Delete Service ${service.name}`}
+              description={
+                <span>
+                  Are you sure you want to delete <strong>{service.name}</strong>? All associated
+                  webhooks and configuration will be permanently removed.
+                </span>
+              }
+              requireMatchText={service.name}
+              onConfirm={boundDeleteService}
+              trigger={
+                <Button variant="destructive" size="sm" className="text-xs shrink-0">
+                  Delete Service
+                </Button>
+              }
+            />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 
   return (
-    <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
-      {/* Breadcrumb / Back Link */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link
-          href="/services"
-          className="hover:text-primary transition-colors flex items-center gap-1"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Services
-        </Link>
-        <span className="opacity-30">/</span>
-        <span className="font-medium text-foreground">{service.name}</span>
-      </div>
-
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-lg p-4 md:p-6 shadow-lg">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={dynamicStatus} />
-              {service.team && (
-                <Badge variant="secondary" size="xs" className="gap-1.5">
-                  {service.team.name}
-                </Badge>
-              )}
-              {service.slaTier && (
-                <Badge variant="secondary" size="xs" className="gap-1.5">
-                  SLA {service.slaTier}
-                </Badge>
-              )}
-              {service.region && (
-                <Badge variant="secondary" size="xs" className="gap-1.5">
-                  <Globe className="h-3.5 w-3.5 opacity-70" />
-                  {service.region}
-                </Badge>
-              )}
-            </div>
-
-            <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-                {service.name}
-              </h1>
-              {service.description && (
-                <p className="text-xs md:text-sm opacity-90 max-w-3xl">{service.description}</p>
-              )}
-              <p className="text-[11px] md:text-xs opacity-80 mt-1">
-                Metrics shown for the last 30 days.
-              </p>
-              <p className="text-[11px] md:text-xs opacity-80">
-                Active incident counts exclude snoozed and suppressed incidents.
-              </p>
-            </div>
+    <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Centralized Hero Header */}
+      <DetailHeroBanner
+        breadcrumb={{
+          label: 'Services',
+          href: '/services',
+          current: service.name,
+        }}
+        tag="Service Reliability"
+        title={service.name}
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <Server className="h-6 w-6" aria-hidden="true" />
           </div>
+        }
+        badges={
+          <>
+            <Badge
+              variant={
+                dynamicStatus === 'OPERATIONAL'
+                  ? 'success'
+                  : dynamicStatus === 'DEGRADED'
+                    ? 'warning'
+                    : 'danger'
+              }
+              size="xs"
+              className="uppercase font-bold text-[10px] gap-1"
+            >
+              {dynamicStatus === 'OPERATIONAL' && <CheckCircle2 className="h-3 w-3" />}
+              {dynamicStatus === 'DEGRADED' && <AlertTriangle className="h-3 w-3" />}
+              {dynamicStatus === 'CRITICAL' && <XCircle className="h-3 w-3" />}
+              {dynamicStatus}
+            </Badge>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="gap-2 bg-white text-slate-900" asChild>
-              <Link href={`/services/${id}/integrations`}>
-                <Zap className="h-4 w-4" />
-                Integrations
-              </Link>
-            </Button>
-            <Button variant="outline" className="gap-2 bg-white text-slate-900" asChild>
-              <Link href={`/services/${id}/settings`}>
-                <Settings className="h-4 w-4" />
-                Settings
-              </Link>
-            </Button>
-            {canDeleteService && (
-              <DeleteServiceButton
-                action={deleteServiceWithId}
-                serviceName={service.name}
-                incidentCount={allTimeTotalIncidents}
-                hasOpenIncidents={activeIncidentsCount > 0}
-                className="bg-white hover:bg-red-50 border-white/40 text-red-600 hover:text-red-700 hover:border-red-200"
-              />
+            {service.team && (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px]"
+              >
+                <Users className="h-3 w-3 mr-1" />
+                {service.team.name}
+              </Badge>
             )}
-          </div>
-        </div>
 
-        <Suspense fallback={<ServiceMetricsSkeleton />}>
-          <ServiceMetricsSummary serviceId={id} />
-        </Suspense>
-      </div>
-
-      <Tabs defaultValue={tab} className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 rounded-xl">
-          <TabsTrigger
-            value="incidents"
-            asChild
-            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm cursor-pointer"
-          >
-            <Link href={`/services/${id}?tab=incidents`}>Active Incidents</Link>
-          </TabsTrigger>
-          <TabsTrigger
-            value="history"
-            asChild
-            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm cursor-pointer"
-          >
-            <Link href={`/services/${id}?tab=history`}>Incident History</Link>
-          </TabsTrigger>
-          <TabsTrigger
-            value="dependencies"
-            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
-            disabled
-          >
-            Dependencies
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={tab} className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">
-                {tab === 'incidents' ? 'Active Incidents' : 'Incident History'}
-              </h3>
-              <p className="text-sm text-slate-500">
-                {tab === 'incidents'
-                  ? 'Viewing incidents currently affecting this service.'
-                  : 'Viewing Resolved and Closed incidents.'}
-              </p>
-            </div>
-            {tab === 'incidents' && <CreateIncidentButton serviceId={id} className="gap-2" />}
-          </div>
-
-          <Card className="border-slate-200 shadow-sm overflow-hidden">
-            <IncidentList
-              incidents={(service as any).incidents.map((i: any) => ({
-                id: i.id,
-                title: i.title,
-                status: i.status === 'RESOLVED' && tab === 'incidents' ? 'OPEN' : i.status, // Safety fallback, though query handles it
-                urgency: i.urgency,
-                priority: i.priority,
-                createdAt: i.createdAt,
-                resolvedAt: i.resolvedAt,
-                assignee: i.assignee,
-                team: i.team,
-              }))}
-              serviceId={id}
-            />
-
-            {filteredTotalPages > 1 && (
-              <Pagination
-                currentPage={page}
-                totalPages={filteredTotalPages}
-                totalItems={filteredTotalIncidents}
-                itemsPerPage={INCIDENTS_PER_PAGE}
-              />
+            {service.slaTier && (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px]"
+              >
+                {service.slaTier}
+              </Badge>
             )}
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+
+            {service.region && (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px]"
+              >
+                <Globe className="h-3 w-3 mr-1" />
+                {service.region}
+              </Badge>
+            )}
+          </>
+        }
+        subtitle={
+          <div className="space-y-1">
+            <p className="text-xs text-primary-foreground/85 leading-relaxed max-w-3xl">
+              {service.description || 'No description provided for this service.'}
+            </p>
+            <p className="text-[11px] text-primary-foreground/70">
+              30-day reliability metrics • Active incident count excludes snoozed alerts
+            </p>
+          </div>
+        }
+        stats={[
+          {
+            label: 'Availability',
+            value: `${availability.toFixed(2)}%`,
+            icon: <Activity className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'MTTR',
+            value:
+              mttr !== undefined
+                ? mttr < 1
+                  ? `${Math.round(mttr * 60)}m`
+                  : mttr < 24
+                    ? `${mttr.toFixed(1)}h`
+                    : `${(mttr / 24).toFixed(1)}d`
+                : '-',
+            icon: <Clock className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Incidents/mo',
+            value: incidentsPerMonth < 1 ? '<1' : incidentsPerMonth.toFixed(1),
+            icon: <Flame className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'SLA Compliance',
+            value: slaCompliance !== null ? `${slaCompliance.toFixed(1)}%` : '-',
+            icon: <ShieldCheck className="h-3.5 w-3.5" />,
+          },
+        ]}
+      />
+
+      {/* Tabbed Workspace */}
+      <ServiceDetailTabs
+        defaultTab={activeTab}
+        activeIncidentCount={activeIncidentsCount}
+        integrationCount={service.integrations?.length || 0}
+        incidentsContent={incidentsContent}
+        escalationContent={escalationContent}
+        integrationsContent={integrationsContent}
+        settingsContent={settingsContent}
+      />
+    </main>
   );
 }

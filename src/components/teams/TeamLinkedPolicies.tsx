@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Network, ArrowUpRight } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 
 type PolicyItem = {
@@ -22,14 +23,12 @@ type TeamLinkedPoliciesProps = {
 export default function TeamLinkedPolicies({ policies, className }: TeamLinkedPoliciesProps) {
   if (policies.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 px-4 text-center">
-        <Network className="h-8 w-8 text-muted-foreground/40 mb-2" />
-        <p className="text-xs font-semibold text-foreground">No escalation policies attached</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5 max-w-sm">
-          Escalation policies attached to this team&apos;s services will route incidents to these
-          members.
-        </p>
-      </div>
+      <EmptyState
+        icon={<Network className="h-6 w-6 text-muted-foreground/60" />}
+        title="No escalation policies attached"
+        description="Escalation policies attached to this team's services will route incidents to these members."
+        className={className}
+      />
     );
   }
 

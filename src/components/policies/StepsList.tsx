@@ -25,7 +25,8 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/shadcn/card';
-import { Clock } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
+import { Clock, Plus, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
 import PolicyStepCreateForm from '@/components/PolicyStepCreateForm';
 
@@ -157,12 +158,12 @@ export default function StepsList({
       </CardHeader>
       <CardContent className="p-6 pt-8 space-y-0">
         {steps.length === 0 ? (
-          <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-            <p className="text-slate-500 font-medium text-xs">No steps defined yet.</p>
-            <p className="text-xs text-slate-400 mt-1">
-              Add a step below to start configuring escalation routing.
-            </p>
-          </div>
+          <EmptyState
+            icon={<ShieldAlert className="h-6 w-6 text-muted-foreground/60" />}
+            title="No steps defined yet"
+            description="Add a step below to configure escalation delays and notification targets."
+            size="sm"
+          />
         ) : (
           <DndContext
             sensors={sensors}

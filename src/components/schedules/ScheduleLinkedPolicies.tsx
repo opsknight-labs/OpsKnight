@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { ShieldCheck, Server, ArrowUpRight, Link2, Info } from 'lucide-react';
+import { ShieldCheck, Server, ArrowUpRight, Link2, ShieldAlert } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
 
 export type LinkedPolicy = {
   stepOrder: number;
@@ -56,23 +57,12 @@ export default function ScheduleLinkedPolicies({ linkedRules }: ScheduleLinkedPo
 
       <CardContent className="p-3.5 sm:p-4">
         {policies.length === 0 ? (
-          <div className="flex items-start gap-2.5 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-            <Info className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground/70" />
-            <div>
-              <p className="font-medium text-foreground">No escalation policies attached</p>
-              <p className="text-[11px] mt-0.5">
-                This schedule is not currently receiving incident alerts. To route alerts to this
-                schedule, add it as a step in an{' '}
-                <Link
-                  href="/policies"
-                  className="font-medium text-primary underline underline-offset-2 hover:opacity-80"
-                >
-                  Escalation Policy
-                </Link>
-                .
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            icon={<ShieldAlert className="h-5 w-5 text-muted-foreground/60" />}
+            title="No escalation policies attached"
+            description="This schedule is not currently receiving incident alerts. Add it as a step in an escalation policy to route alerts here."
+            size="sm"
+          />
         ) : (
           <div className="space-y-2.5">
             {policies.map(policy => (

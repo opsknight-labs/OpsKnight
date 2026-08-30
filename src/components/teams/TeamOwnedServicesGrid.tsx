@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Shield, Plus, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
+import EmptyState from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 
 type ServiceItem = {
@@ -36,22 +37,21 @@ export default function TeamOwnedServicesGrid({
       );
     }
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 px-4 text-center">
-        <Shield className="h-8 w-8 text-muted-foreground/40 mb-2" />
-        <p className="text-xs font-semibold text-foreground">No services assigned to this team</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5 max-w-sm">
-          Services assigned to this team will inherit this team&apos;s members and escalation
-          routing.
-        </p>
-        {canManage && (
-          <Button asChild size="sm" variant="outline" className="mt-3 h-7 text-xs gap-1.5">
-            <Link href="/services">
-              <Plus className="h-3.5 w-3.5" />
-              Assign Services
-            </Link>
-          </Button>
-        )}
-      </div>
+      <EmptyState
+        icon={<Shield className="h-6 w-6 text-muted-foreground/60" />}
+        title="No services assigned to this team"
+        description="Services assigned to this team will inherit this team's members and escalation routing."
+        action={
+          canManage ? (
+            <Button asChild size="sm" variant="outline" className="h-7 text-xs gap-1.5">
+              <Link href="/services">
+                <Plus className="h-3.5 w-3.5" />
+                Assign Services
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
     );
   }
 

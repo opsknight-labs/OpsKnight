@@ -24,7 +24,9 @@ import {
   Shield,
   Users,
   Loader2,
+  Server,
 } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
 
 export type ServiceListItem = {
   id: string;
@@ -146,13 +148,12 @@ export default function ServicesListTable({
           </div>
         )}
         {services.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-white p-10 text-center">
-            <div className="text-4xl opacity-30 mb-3">!</div>
-            <p className="text-base font-bold text-slate-700 mb-1">No services found</p>
-            <p className="text-sm text-slate-500 m-0">
-              Try adjusting filters or create a new service.
-            </p>
-          </div>
+          <EmptyState
+            icon={<Server className="h-6 w-6 text-muted-foreground" />}
+            title="No services found"
+            description="Try adjusting your search query or filters to find services."
+            size="md"
+          />
         ) : (
           <div className="flex flex-col gap-3">
             {services.map(service => (
