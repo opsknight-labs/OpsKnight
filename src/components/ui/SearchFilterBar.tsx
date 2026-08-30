@@ -76,7 +76,7 @@ export default function SearchFilterBar({
               placeholder={searchPlaceholder}
               value={draftSearch}
               onChange={e => handleSearchChange(e.target.value)}
-              className="h-9 !pl-10 !pr-8 text-xs sm:text-sm bg-slate-50/60 focus:bg-white transition-colors"
+              className="h-9 pl-9 pr-8 text-xs sm:text-sm bg-slate-50/60 focus:bg-white transition-colors"
             />
             {draftSearch && (
               <button
