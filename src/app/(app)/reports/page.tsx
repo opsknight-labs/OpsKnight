@@ -84,6 +84,7 @@ export default async function ReportsPage() {
             operational performance widgets.
           </p>
         }
+        statsPlacement="bottom"
         actions={
           <Button
             asChild
@@ -97,7 +98,7 @@ export default async function ReportsPage() {
         }
         stats={[
           {
-            label: 'Your Dashboards',
+            label: 'Dashboards',
             value: dashboards.length,
             icon: <LayoutDashboard className="h-3.5 w-3.5" />,
           },
