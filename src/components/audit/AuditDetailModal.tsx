@@ -13,17 +13,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
 import AuditActionBadge from './AuditActionBadge';
-import {
-  Copy,
-  Check,
-  ExternalLink,
-  ShieldCheck,
-  User,
-  Layers,
-  Calendar,
-  Clock,
-  Activity,
-} from 'lucide-react';
+import { Copy, Check, ExternalLink, ShieldCheck, User, Layers } from 'lucide-react';
 import { formatDateTime } from '@/lib/timezone';
 
 export type AuditLogEntry = {

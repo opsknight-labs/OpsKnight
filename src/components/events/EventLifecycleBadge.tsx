@@ -1,14 +1,6 @@
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
-import {
-  AlertCircle,
-  Eye,
-  CheckCircle2,
-  ArrowRightCircle,
-  MessageSquare,
-  Activity,
-  Flame,
-} from 'lucide-react';
+import { Eye, CheckCircle2, ArrowRightCircle, MessageSquare, Activity, Flame } from 'lucide-react';
 
 export type EventLifecycleBadgeProps = {
   message: string;
