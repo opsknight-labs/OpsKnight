@@ -5,7 +5,7 @@ import {
   CircuitBreakerTimeoutError,
   CircuitBreakers,
 } from './circuit-breaker';
-import { notificationEventInstant, notificationIntentEventAt } from './notification-identity';
+import { notificationIntentEventAt, notificationIntentTriggerGeneration } from './notification-identity';
 import { acquireProviderAdmission, type ProviderAdmissionScope } from './provider-admission';
 
 export const NOTIFICATION_CHANNELS = [
@@ -101,6 +101,7 @@ interface IncidentDeliveryContext {
   currentEscalationStep?: number | null;
   nextEscalationAt?: Date | null;
   escalationStatus?: string | null;
+  escalationGeneration?: number;
   service?: { webhookUrl: string | null } | null;
 }
 export interface NotificationAttemptInput {
@@ -144,24 +145,10 @@ function staleIntentReason(
     if (incident.status !== 'OPEN') {
       return `Triggered notification superseded by incident state ${incident.status}`;
     }
+    const expectedGeneration = notificationIntentTriggerGeneration(input.notificationId);
     if (
-      expectedAt &&
-      incident.id &&
-      incident.createdAt &&
-      incident.updatedAt &&
-      notificationEventInstant(
-        {
-          id: incident.id,
-          createdAt: incident.createdAt,
-          updatedAt: incident.updatedAt,
-          acknowledgedAt: incident.acknowledgedAt,
-          resolvedAt: incident.resolvedAt,
-          currentEscalationStep: incident.currentEscalationStep,
-          nextEscalationAt: incident.nextEscalationAt,
-          escalationStatus: incident.escalationStatus,
-        },
-        'triggered'
-      ).getTime() !== expectedAt
+      expectedGeneration != null &&
+      (incident.escalationGeneration ?? 0) !== expectedGeneration
     ) {
       return 'Triggered notification belongs to a superseded escalation generation';
     }
@@ -227,6 +214,7 @@ export async function dispatchNotificationAttempt(
       currentEscalationStep: true,
       nextEscalationAt: true,
       escalationStatus: true,
+      escalationGeneration: true,
       service: { select: { webhookUrl: true } },
     },
   });

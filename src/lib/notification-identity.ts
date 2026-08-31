@@ -31,11 +31,9 @@ export function notificationEventInstant(
     return incident.updatedAt;
   }
 
-  const escalationOwned =
-    incident.escalationStatus === 'ESCALATING' || incident.currentEscalationStep != null;
-  if (escalationOwned) {
-    return incident.nextEscalationAt ?? incident.updatedAt;
-  }
+  // A triggered event is born when the incident is created. Escalation
+  // scheduling fields are deliberately excluded: they change while the same
+  // event's Email, Push, SMS, and WhatsApp intents are being fanned out.
   return incident.createdAt;
 }
 
@@ -52,7 +50,11 @@ export function notificationEventKey(input: {
     input.eventType === 'triggered' && input.incident.currentEscalationStep != null
       ? `:step-${input.incident.currentEscalationStep}`
       : '';
-  return `${input.incident.id}:${input.eventType}:${eventAt.toISOString()}:${purpose}${escalationStep}:${messageDigest}`;
+  const escalationGeneration =
+    input.eventType === 'triggered'
+      ? `:generation-${input.incident.escalationGeneration ?? 0}`
+      : '';
+  return `${input.incident.id}:${input.eventType}:${eventAt.toISOString()}:${purpose}${escalationGeneration}${escalationStep}:${messageDigest}`;
 }
 
 export function notificationIntentId(input: {
@@ -61,13 +63,18 @@ export function notificationIntentId(input: {
   eventAt: Date;
   userId: string;
   channel: NotificationDeliveryChannel;
+  triggerGeneration?: number;
 }): string {
   const digest = hash([input.eventKey, input.userId, input.channel].join('\u001f'));
-  return `ntf:${input.eventType}:${input.eventAt.getTime()}:${digest}`;
+  const generation =
+    input.eventType === 'triggered' && input.triggerGeneration != null
+      ? `:g${input.triggerGeneration}`
+      : '';
+  return `ntf:${input.eventType}:${input.eventAt.getTime()}${generation}:${digest}`;
 }
 
 export function notificationIntentEventAt(notificationId: string): Date | null {
-  const match = /^ntf:(?:triggered|acknowledged|resolved|updated):(\d+):[a-f0-9]{64}$/.exec(
+  const match = /^ntf:(?:triggered|acknowledged|resolved|updated):(\d+)(?::g\d+)?:[a-f0-9]{64}$/.exec(
     notificationId
   );
   if (!match) return null;
@@ -75,6 +82,14 @@ export function notificationIntentEventAt(notificationId: string): Date | null {
   if (!Number.isSafeInteger(millis)) return null;
   const value = new Date(millis);
   return Number.isFinite(value.getTime()) ? value : null;
+}
+
+/** Returns the durable trigger generation carried by newer legacy intent IDs. */
+export function notificationIntentTriggerGeneration(notificationId: string): number | null {
+  const match = /^ntf:triggered:\d+:g(\d+):[a-f0-9]{64}$/.exec(notificationId);
+  if (!match) return null;
+  const generation = Number(match[1]);
+  return Number.isSafeInteger(generation) && generation >= 0 ? generation : null;
 }
 
 export function inAppNotificationIntentId(input: {

@@ -45,6 +45,39 @@ const getStatusColor = (eventType: SlackEventType) => STATUS_COLORS.get(eventTyp
 const getStatusEmoji = (eventType: SlackEventType) =>
   STATUS_EMOJI.get(eventType) ?? ':information_source:';
 
+export type SlackDeliveryResult = {
+  success: boolean;
+  error?: string;
+  errorCode?: string;
+  statusCode?: number;
+  retryAfterMs?: number;
+};
+
+function slackRetryAfterMs(response: Response): number | undefined {
+  const value = response.headers.get('Retry-After');
+  if (!value) return undefined;
+  const seconds = Number.parseInt(value, 10);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1_000;
+  const deadline = new Date(value).getTime();
+  return Number.isFinite(deadline) ? Math.max(1_000, deadline - Date.now()) : undefined;
+}
+
+function slackFailure(
+  errorCode: string,
+  response: Response
+): SlackDeliveryResult {
+  // Slack reports this workspace-wide free-plan usage cap as an API error,
+  // rather than an HTTP 429. Waiting seconds and retrying cannot clear it.
+  const rateLimited = errorCode === 'rate_limited' || response.status === 429;
+  return {
+    success: false,
+    error: errorCode,
+    errorCode,
+    statusCode: rateLimited ? 429 : response.status,
+    retryAfterMs: rateLimited ? slackRetryAfterMs(response) : undefined,
+  };
+}
+
 /**
  * Get Slack bot token for a service (from OAuth integration or env fallback)
  */
@@ -97,7 +130,7 @@ export async function sendSlackNotification(
   additionalMessage?: string,
   webhookUrl?: string | null,
   options: { maxAttempts?: number } = {}
-): Promise<{ success: boolean; error?: string; statusCode?: number; retryAfterMs?: number }> {
+): Promise<SlackDeliveryResult> {
   const targetUrl = webhookUrl || SLACK_WEBHOOK_URL;
 
   if (!targetUrl) {
@@ -166,7 +199,7 @@ export async function sendSlackNotification(
         error: errorText,
         incident: incident.id,
       });
-      return { success: false, error: errorText };
+      return slackFailure(errorText.trim() || `HTTP ${response.status}`, response);
     }
 
     if (!response.ok) {
@@ -178,8 +211,12 @@ export async function sendSlackNotification(
         error: errorText,
         incident: incident.id,
       });
-      return { success: false, error: errorText };
+      return slackFailure(errorText.trim() || `HTTP ${response.status}`, response);
     }
+
+    const responseText =
+      typeof response.text === 'function' ? await response.text() : 'ok';
+    if (responseText.trim() !== 'ok') return slackFailure(responseText.trim(), response);
 
     logger.info(
       `[Slack] Notification sent via ${webhookUrl ? 'Service' : 'Global'} Webhook: ${eventType} - ${incident.title}`
@@ -431,7 +468,7 @@ export async function sendSlackMessageToChannel(
   serviceId?: string,
   additionalMessage?: string,
   options: { maxAttempts?: number } = {}
-): Promise<{ success: boolean; error?: string; statusCode?: number; retryAfterMs?: number }> {
+): Promise<SlackDeliveryResult> {
   // Get bot token (from OAuth integration or env fallback)
   const botToken = await getSlackBotToken(serviceId);
 
@@ -493,12 +530,12 @@ export async function sendSlackMessageToChannel(
       }
     );
 
-    const responseData = await response.json();
+    const responseData = (await response.json()) as { ok?: boolean; error?: string };
 
     if (!response.ok || !responseData.ok) {
       const errorMsg = responseData.error || `HTTP ${response.status}`;
       logger.error('[Slack] API call failed', { error: errorMsg, channel });
-      return { success: false, error: errorMsg };
+      return slackFailure(errorMsg, response);
     }
 
     logger.info(

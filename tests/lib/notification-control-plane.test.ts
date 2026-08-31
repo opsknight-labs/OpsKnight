@@ -12,6 +12,7 @@ import { acquireProviderAdmission, acquireProviderConcurrency } from '@/lib/prov
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
+  sendIncidentEmail: vi.fn(),
   encrypt: vi.fn(async (value: string) => `encrypted:${value}`),
   decrypt: vi.fn(async (value: string) => value.replace(/^encrypted:/, '')),
 }));
@@ -25,6 +26,7 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       updateMany: vi.fn(),
     },
+    incident: { findUnique: vi.fn() },
     notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn() },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(async (operation: unknown) =>
@@ -42,7 +44,10 @@ vi.mock('@/lib/encryption', () => ({
   decrypt: mocks.decrypt,
   getEncryptionKey: vi.fn(() => '11'.repeat(32)),
 }));
-vi.mock('@/lib/email', () => ({ sendEmail: mocks.sendEmail }));
+vi.mock('@/lib/email', () => ({
+  sendEmail: mocks.sendEmail,
+  sendIncidentEmail: mocks.sendIncidentEmail,
+}));
 vi.mock('@/lib/provider-admission', () => ({
   acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
   acquireProviderConcurrency: vi.fn().mockResolvedValue({ allowed: true, leaseKey: 'lease-1' }),
@@ -167,6 +172,50 @@ describe('central notification control plane', () => {
         data: expect.objectContaining({ status: 'SENT', payloadEncrypted: null }),
       })
     );
+  });
+
+  it('does not let a later escalation step skip a sibling triggered channel', async () => {
+    const due = new Date(Date.now() - 60_000);
+    const payload = {
+      kind: 'INCIDENT_EMAIL' as const,
+      userId: 'user-1',
+      incidentId: 'incident-1',
+      eventType: 'triggered' as const,
+      eventAt: '2026-08-30T12:00:00.000Z',
+      escalationGeneration: 4,
+      escalationStep: 0,
+      durableMessage: 'encrypted message snapshot',
+    };
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+        id: 'notification_sibling_channel',
+        status: 'PENDING',
+        category: 'INCIDENT',
+        attempts: 0,
+        maxAttempts: 5,
+        nextAttemptAt: due,
+        scheduledAt: due,
+        lastAttemptAt: null,
+        expiresAt: null,
+        payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+      } as never);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue(
+      {
+        status: 'OPEN',
+        updatedAt: new Date('2026-08-30T12:01:00.000Z'),
+        acknowledgedAt: null,
+        resolvedAt: null,
+        currentEscalationStep: 1,
+        escalationGeneration: 4,
+      } as never
+    );
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    mocks.sendIncidentEmail.mockResolvedValue({ success: true, providerMessageId: 'email-1' });
+
+    await expect(deliverCentralNotification('notification_sibling_channel')).resolves.toEqual({
+      success: true,
+      claimed: true,
+    });
+    expect(mocks.sendIncidentEmail).toHaveBeenCalledTimes(1);
   });
 
   it('uses lease expiry as the next scheduler deadline for active claims', async () => {

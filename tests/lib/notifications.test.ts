@@ -68,6 +68,8 @@ function intentIdFor(
     eventAt,
     userId: 'user-1',
     channel: 'EMAIL',
+    triggerGeneration:
+      eventType === 'triggered' ? incidentValue.escalationGeneration ?? 0 : undefined,
   });
 }
 
@@ -275,7 +277,7 @@ describe('durable notification intents', () => {
     expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
   });
 
-  it('fences a failed trigger intent after escalation advances', async () => {
+  it('delivers every triggered channel when only escalation bookkeeping advances', async () => {
     const firstStepAt = new Date('2026-08-30T12:02:00.000Z');
     const firstStep = {
       ...incident,
@@ -283,6 +285,7 @@ describe('durable notification intents', () => {
       currentEscalationStep: 0,
       nextEscalationAt: firstStepAt,
       escalationStatus: 'ESCALATING',
+      escalationGeneration: 4,
     };
     const notificationId = intentIdFor('Escalation Level 1', 'triggered', firstStep);
     vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(notificationId));
@@ -291,6 +294,7 @@ describe('durable notification intents', () => {
       currentEscalationStep: 1,
       nextEscalationAt: new Date('2026-08-30T12:07:00.000Z'),
     } as never);
+    vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({ success: true });
 
     const result = await sendNotification(
       'inc-1',
@@ -301,7 +305,7 @@ describe('durable notification intents', () => {
       'triggered'
     );
 
-    expect(result).toMatchObject({ success: true, outcome: 'SKIPPED', skipped: true });
-    expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: true, outcome: 'DELIVERED' });
+    expect(emailModule.sendIncidentEmail).toHaveBeenCalledTimes(1);
   });
 });

@@ -197,7 +197,15 @@ export async function sendNotification(
   const eventAt = notificationEventInstant(identityIncident, eventType);
   const eventKey =
     explicitEventKey ?? notificationEventKey({ incident: identityIncident, eventType, message });
-  const notificationId = notificationIntentId({ eventKey, eventType, eventAt, userId, channel });
+  const notificationId = notificationIntentId({
+    eventKey,
+    eventType,
+    eventAt,
+    userId,
+    channel,
+    triggerGeneration:
+      eventType === 'triggered' ? identityIncident.escalationGeneration ?? 0 : undefined,
+  });
   const durableMessage = encodeNotificationEnvelope(
     buildNotificationEnvelope(identityIncident, eventType, eventAt, message)
   );

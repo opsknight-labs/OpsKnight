@@ -598,7 +598,7 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
 }
 
 function isPermanentProviderError(message: string): boolean {
-  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|official Slack host|webhook URL is required|invalid or restricted Webhook URL/i.test(
+  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded/i.test(
     message
   );
 }
@@ -636,12 +636,6 @@ async function incidentPayloadSuperseded(
       incident.escalationGeneration !== incidentPayload.escalationGeneration
     ) {
       return 'Escalation generation was superseded';
-    }
-    if (
-      incidentPayload.escalationStep != null &&
-      incident.currentEscalationStep !== incidentPayload.escalationStep
-    ) {
-      return 'Escalation step was superseded';
     }
     return null;
   }

@@ -134,6 +134,34 @@ describe('Slack Integration', () => {
             expect(result.error).toContain('Bad Request');
         });
 
+        it('classifies Slack free-workspace message caps as terminal provider errors', async () => {
+            vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                text: async () => 'message_limit_exceeded',
+            } as unknown as Response);
+
+            const result = await sendSlackNotification(
+                'triggered',
+                {
+                    id: 'inc-limit',
+                    title: 'Capacity exhausted',
+                    status: 'OPEN',
+                    urgency: 'HIGH',
+                    serviceName: 'API',
+                },
+                undefined,
+                'https://hooks.slack.com/test'
+            );
+
+            expect(result).toMatchObject({
+                success: false,
+                error: 'message_limit_exceeded',
+                errorCode: 'message_limit_exceeded',
+                statusCode: 200,
+            });
+        });
+
         it('should include custom message in notification payload', async () => {
             const mockFetch = vi.fn().mockResolvedValue({
                 ok: true,
