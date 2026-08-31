@@ -11,6 +11,7 @@ data:
   PORT: {{ .Values.config.port | quote }}
   HOSTNAME: {{ .Values.config.hostname | quote }}
   NEXT_TELEMETRY_DISABLED: {{ .Values.config.nextTelemetryDisabled | quote }}
+  NOTIFICATION_CONTROL_PLANE_PERSONAL: {{ .Values.config.notificationControlPlanePersonal | quote }}
   POSTGRES_DB: {{ .Values.postgresql.database | quote }}
   {{- if .Values.postgresql.enabled }}
   POSTGRES_HOST: {{ include "opsknight.postgresql.serviceName" . | quote }}

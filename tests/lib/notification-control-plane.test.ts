@@ -27,11 +27,13 @@ vi.mock('@/lib/prisma', () => ({
     },
     notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn() },
     $queryRaw: vi.fn(),
-    $transaction: vi.fn(async (operation: (tx: unknown) => unknown) =>
-      operation({
-        notification: { updateMany: vi.fn() },
-        notificationDeliveryAttempt: { create: vi.fn() },
-      })
+    $transaction: vi.fn(async (operation: unknown) =>
+      Array.isArray(operation)
+        ? Promise.all(operation)
+        : (operation as (tx: unknown) => unknown)({
+            notification: { updateMany: vi.fn() },
+            notificationDeliveryAttempt: { create: vi.fn() },
+          })
     ),
   },
 }));

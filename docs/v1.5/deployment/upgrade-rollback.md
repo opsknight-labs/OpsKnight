@@ -25,6 +25,12 @@ This release adds audit actor snapshots and indexes, API-key expiry/indexing, an
 
 The release also writes new protected secrets using v3 authenticated encryption. Keep the current encryption key available during upgrade. If rotating at the same time, deploy `ENCRYPTION_KEYS=new-id:NEW_KEY,old-id:OLD_KEY` consistently to every replica, rotate/re-save credentials, validate them, and only then retire the old key. Existing plaintext webhook/signature secrets must be rotated or re-saved to gain encryption at rest.
 
+Notification control-plane upgrades use a compatibility gate. Deploy the version whose legacy
+worker ignores encrypted control-plane rows to every replica before enabling
+`NOTIFICATION_CONTROL_PLANE_PERSONAL=true`. Keep a stable `NOTIFICATION_IDENTITY_KEY` across
+replicas and encryption-key rotations. During rollback, disable new personal control-plane
+producers first, allow in-flight work to drain, and only then roll back application replicas.
+
 ## Deploy
 
 ### Docker Compose

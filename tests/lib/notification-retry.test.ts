@@ -28,6 +28,7 @@ vi.mock('@/lib/circuit-breaker', () => ({
       this.serviceName = serviceName;
     }
   },
+  CircuitBreakerTimeoutError: class CircuitBreakerTimeoutError extends Error {},
   CircuitBreakers: {
     email: () => ({ execute: circuitExecute }),
     sms: () => ({ execute: (fn: () => unknown) => fn() }),

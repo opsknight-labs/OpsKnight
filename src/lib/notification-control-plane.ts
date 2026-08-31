@@ -43,6 +43,13 @@ type IncidentPresentation = {
 
 export type CentralNotificationPayload =
   | {
+      kind: 'INCIDENT_EMAIL' | 'INCIDENT_SMS' | 'INCIDENT_PUSH' | 'INCIDENT_WHATSAPP';
+      userId: string;
+      incidentId: string;
+      eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
+      durableMessage: string;
+    }
+  | {
       kind: 'EMAIL';
       to: string;
       subject: string;
@@ -121,6 +128,7 @@ type DeliveryResult = {
   providerMessageId?: string;
   statusCode?: number;
   retryAfterMs?: number;
+  errorCode?: string;
 };
 
 function normalizedRecipient(channel: NotificationChannel, recipient: string): string {
@@ -172,6 +180,10 @@ function intentId(deliveryKey: string): string {
 }
 
 function channelForPayload(payload: CentralNotificationPayload): NotificationChannel {
+  if (payload.kind === 'INCIDENT_EMAIL') return 'EMAIL';
+  if (payload.kind === 'INCIDENT_SMS') return 'SMS';
+  if (payload.kind === 'INCIDENT_PUSH') return 'PUSH';
+  if (payload.kind === 'INCIDENT_WHATSAPP') return 'WHATSAPP';
   if (payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK') return 'SLACK';
   if (payload.kind === 'STATUS_PAGE_WEBHOOK') return 'WEBHOOK';
   return payload.kind;
@@ -188,6 +200,16 @@ function hasText(value: unknown): value is string {
 function isCentralNotificationPayload(value: unknown): value is CentralNotificationPayload {
   if (!isRecord(value)) return false;
   switch (value.kind) {
+    case 'INCIDENT_EMAIL':
+    case 'INCIDENT_SMS':
+    case 'INCIDENT_PUSH':
+    case 'INCIDENT_WHATSAPP':
+      return (
+        hasText(value.userId) &&
+        hasText(value.incidentId) &&
+        hasText(value.eventType) &&
+        hasText(value.durableMessage)
+      );
     case 'EMAIL':
       return hasText(value.to) && hasText(value.subject) && hasText(value.html);
     case 'SMS':
@@ -348,6 +370,56 @@ async function dispatchPayload(
   notificationId: string
 ): Promise<DeliveryResult> {
   switch (payload.kind) {
+    case 'INCIDENT_EMAIL': {
+      const { sendIncidentEmail } = await import('./email');
+      return CircuitBreakers.email().execute(() =>
+        sendIncidentEmail(
+          payload.userId,
+          payload.incidentId,
+          payload.eventType,
+          notificationId,
+          payload.durableMessage
+        )
+      );
+    }
+    case 'INCIDENT_SMS': {
+      const { sendIncidentSMS } = await import('./sms');
+      return CircuitBreakers.sms().execute(async () => {
+        const result = await sendIncidentSMS(
+          payload.userId,
+          payload.incidentId,
+          payload.eventType,
+          notificationId,
+          payload.durableMessage
+        );
+        return { ...result, providerMessageId: result.messageSid };
+      });
+    }
+    case 'INCIDENT_PUSH': {
+      const { sendNotificationIntentPush } = await import('./incident-push-delivery');
+      return CircuitBreakers.push().execute(() =>
+        sendNotificationIntentPush(
+          payload.userId,
+          payload.incidentId,
+          payload.eventType,
+          payload.durableMessage,
+          notificationId
+        )
+      );
+    }
+    case 'INCIDENT_WHATSAPP': {
+      const { sendIncidentWhatsApp } = await import('./whatsapp');
+      return CircuitBreakers.whatsapp().execute(async () => {
+        const result = await sendIncidentWhatsApp(
+          payload.userId,
+          payload.incidentId,
+          payload.eventType,
+          notificationId,
+          payload.durableMessage
+        );
+        return { ...result, providerMessageId: result.messageSid };
+      });
+    }
     case 'EMAIL': {
       const { sendEmail } = await import('./email');
       const config = payload.providerScope?.statusPageId
@@ -371,14 +443,23 @@ async function dispatchPayload(
     case 'SMS': {
       const { sendSMS } = await import('./sms');
       return CircuitBreakers.sms().execute(async () => {
-        const result = await sendSMS({ to: payload.to, message: payload.message });
+        const result = await sendSMS({
+          to: payload.to,
+          message: payload.message,
+          notificationId,
+        });
         return { ...result, providerMessageId: result.messageSid };
       });
     }
     case 'WHATSAPP': {
       const { sendWhatsApp } = await import('./whatsapp');
       return CircuitBreakers.whatsapp().execute(async () => {
-        const result = await sendWhatsApp(payload.to, payload.message, payload.from);
+        const result = await sendWhatsApp(
+          payload.to,
+          payload.message,
+          payload.from,
+          notificationId
+        );
         return { ...result, providerMessageId: result.messageSid };
       });
     }
@@ -695,24 +776,33 @@ export async function deliverCentralNotification(
       await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
     }
     if (result.success) {
-      const committed = await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-        data: {
-          status: 'SENT',
-          sentAt: new Date(),
-          failedAt: null,
-          errorMsg: null,
-          providerMessageId: result.providerMessageId,
-          ...terminalPayload(candidate.category),
-        },
-      });
-      await finishAttempt({
-        notificationId: candidate.id,
-        ordinal,
-        outcome: committed.count > 0 ? 'ACCEPTED' : 'SUPERSEDED',
-        startedAt,
-        providerMessageId: result.providerMessageId,
-      });
+      const finishedAt = new Date();
+      const [committed] = await prisma.$transaction([
+        prisma.notification.updateMany({
+          where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+          data: {
+            status: 'SENT',
+            sentAt: finishedAt,
+            failedAt: null,
+            errorMsg: null,
+            providerMessageId: result.providerMessageId,
+            ...terminalPayload(candidate.category),
+          },
+        }),
+        prisma.notificationDeliveryAttempt.create({
+          data: {
+            notificationId: candidate.id,
+            ordinal,
+            outcome: 'ACCEPTED',
+            provider: identity.providerKey,
+            providerMessageId: result.providerMessageId,
+            startedAt,
+            finishedAt,
+            latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
+          },
+        }),
+      ]);
+      if (committed.count === 0) return { success: false, claimed: false };
       return { success: true, claimed: true };
     }
 
@@ -741,7 +831,7 @@ export async function deliverCentralNotification(
         outcome: 'RATE_LIMITED',
         startedAt,
         provider: identity.providerKey,
-        errorCode: result.statusCode ? String(result.statusCode) : undefined,
+        errorCode: result.errorCode ?? (result.statusCode ? String(result.statusCode) : undefined),
         errorMessage,
       });
       return { success: false, claimed: true, error: errorMessage };
@@ -769,7 +859,9 @@ export async function deliverCentralNotification(
       ordinal,
       outcome: permanent || exhausted ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
       startedAt,
+      provider: identity.providerKey,
       errorMessage,
+      errorCode: result.errorCode,
     });
     return { success: false, claimed: true, error: errorMessage };
   } catch (error) {
@@ -795,13 +887,16 @@ export async function deliverCentralNotification(
             notificationId: candidate.id,
             ordinal,
             outcome: 'AMBIGUOUS',
+            provider: identity.providerKey,
             errorMessage,
             startedAt,
             finishedAt: new Date(),
           },
         });
       });
-      return { success: false, claimed: true, error: errorMessage };
+      // Suppress synchronous channel fallback: the provider may still accept
+      // the mutation after our client-side timeout.
+      return { success: true, claimed: true, error: errorMessage };
     }
     if (circuitOpen) {
       const retryAt = new Date(Date.now() + notificationRetryDelayMs(Math.max(1, deliveryAttempt)));
@@ -837,6 +932,7 @@ export async function deliverCentralNotification(
       ordinal,
       outcome: exhausted ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
       startedAt,
+      provider: identity.providerKey,
       errorMessage,
     });
     return { success: false, claimed: true, error: errorMessage };

@@ -50,6 +50,8 @@ export type PushResult = {
   deliveredCount?: number;
   checkpointedCount?: number;
   failedCount?: number;
+  statusCode?: number;
+  retryAfterMs?: number;
 };
 
 /**
@@ -96,6 +98,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
     let checkpointedCount = 0;
     let terminalCount = 0;
     let retryableFailureCount = 0;
+    let rateLimited = false;
     const errorMessages: string[] = [];
     const resolveVapidDetailsList = () => {
       const details: { subject: string; publicKey: string; privateKey: string }[] = [];
@@ -266,6 +269,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
                 ? String((error as { message?: unknown }).message ?? '')
                 : 'Unknown error';
             lastErrorMessage = errorMessage;
+            if (statusCode === 429) rateLimited = true;
 
             const isExpiredOrRevoked =
               statusCode === 410 ||
@@ -318,6 +322,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
           typeof error === 'object' && error !== null && 'message' in error
             ? String((error as { message?: unknown }).message ?? '')
             : 'Unknown error';
+        if (statusCode === 429) rateLimited = true;
 
         const isExpiredOrRevoked =
           statusCode === 410 ||
@@ -380,6 +385,8 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
         deliveredCount: successCount,
         checkpointedCount,
         failedCount: retryableFailureCount,
+        statusCode: rateLimited ? 429 : undefined,
+        retryAfterMs: rateLimited ? 60_000 : undefined,
       };
     }
     if (successCount + checkpointedCount > 0) {
