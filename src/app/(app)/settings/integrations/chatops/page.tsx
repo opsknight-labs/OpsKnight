@@ -23,11 +23,10 @@ export default async function GlobalChatOpsIntegrationPage() {
       <SettingsPageHeader
         title="ChatOps Integration"
         description="Configure automatic Slack channel creation and video war rooms for incidents."
-        backHref="/settings/integrations"
-        backLabel="Back to Integrations"
+        backHref="/settings"
+        backLabel="Back to Settings"
         breadcrumbs={[
           { label: 'Settings', href: '/settings' },
-          { label: 'Integrations', href: '/settings/integrations' },
           { label: 'ChatOps', href: '/settings/integrations/chatops' },
         ]}
       />

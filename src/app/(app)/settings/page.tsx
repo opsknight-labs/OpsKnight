@@ -24,6 +24,7 @@ import {
   MessageSquare,
   KeyRound,
   SlidersHorizontal,
+  Tickets,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -44,6 +45,7 @@ const itemIcons: Record<string, LucideIcon> = {
   integrations: Puzzle,
   slack: MessageSquare,
   chatops: MessageSquare,
+  jira: Tickets,
   'health-center': Activity,
   system: Settings,
   'notifications-admin': Bell,

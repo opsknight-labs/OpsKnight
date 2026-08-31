@@ -27,11 +27,10 @@ export default async function GlobalJiraIntegrationPage() {
       <SettingsPageHeader
         title="Jira Integration"
         description="Connect Jira to turn incidents and postmortem action items into tracked engineering work."
-        backHref="/settings/integrations"
-        backLabel="Back to Integrations"
+        backHref="/settings"
+        backLabel="Back to Settings"
         breadcrumbs={[
           { label: 'Settings', href: '/settings' },
-          { label: 'Integrations', href: '/settings/integrations' },
           { label: 'Jira', href: '/settings/integrations/jira' },
         ]}
       />
