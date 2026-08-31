@@ -50,11 +50,10 @@ export default async function GlobalSlackIntegrationPage() {
       <SettingsPageHeader
         title="Slack Integration"
         description="Connect your Slack workspace to receive incident notifications."
-        backHref="/settings/integrations"
-        backLabel="Back to Integrations"
+        backHref="/settings"
+        backLabel="Back to Settings"
         breadcrumbs={[
           { label: 'Settings', href: '/settings' },
-          { label: 'Integrations', href: '/settings/integrations' },
           { label: 'Slack', href: '/settings/integrations/slack' },
         ]}
       />
