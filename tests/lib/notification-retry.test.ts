@@ -154,6 +154,7 @@ describe('notification retry claiming', () => {
         take: 100,
         where: expect.objectContaining({
           status: 'FAILED',
+          deliveryKey: null,
           OR: expect.arrayContaining([
             expect.objectContaining({
               attempts: 0,
@@ -170,6 +171,21 @@ describe('notification retry claiming', () => {
           ]),
         }),
       })
+    );
+  });
+
+  it('excludes control-plane rows from the legacy retry owner', async () => {
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 0 });
+
+    await retryFailedNotifications();
+
+    const recoveryQuery = vi.mocked(prisma.notification.updateMany).mock.calls[0]?.[0];
+    expect(recoveryQuery).toEqual(
+      expect.objectContaining({ where: expect.objectContaining({ deliveryKey: null }) })
+    );
+    expect(prisma.notification.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ deliveryKey: null }) })
     );
   });
 

@@ -482,9 +482,15 @@ export async function sendSlackMessageToChannel(
   const botToken = await getSlackBotToken(serviceId);
 
   if (!botToken) {
-    logger.warn('[Slack] No bot token configured, falling back to webhook');
-    // Fallback to webhook if API token not available
-    return sendSlackNotification(eventType, incident, additionalMessage, undefined, options);
+    logger.warn('[Slack] No bot token configured for channel delivery', {
+      channel: normalizedChannel,
+      serviceId,
+    });
+    return {
+      success: false,
+      error: 'No Slack bot token configured for channel delivery',
+      errorCode: 'SLACK_BOT_TOKEN_MISSING',
+    };
   }
 
   const color = getStatusColor(eventType);

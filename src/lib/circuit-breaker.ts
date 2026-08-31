@@ -41,6 +41,15 @@ interface CircuitBreakerState {
   halfOpenRequestInFlight?: boolean;
 }
 
+export type CircuitExecutionOptions<T> = {
+  /**
+   * Classifies a resolved provider result as an upstream outage. Caller-side
+   * validation, recipient errors, and quota responses should not open the
+   * shared provider circuit.
+   */
+  shouldCountFailure?: (result: T) => boolean;
+};
+
 const DEFAULT_CONFIG: Omit<CircuitBreakerConfig, 'name'> = {
   failureThreshold: 5,
   resetTimeout: 30000, // 30 seconds
@@ -70,7 +79,7 @@ export class CircuitBreaker {
   /**
    * Execute a function with circuit breaker protection
    */
-  async execute<T>(fn: () => Promise<T>): Promise<T> {
+  async execute<T>(fn: () => Promise<T>, options: CircuitExecutionOptions<T> = {}): Promise<T> {
     if (this.state.state === 'OPEN') {
       const now = Date.now();
       if (now - this.state.lastFailureTime >= this.config.resetTimeout) {
@@ -102,12 +111,12 @@ export class CircuitBreaker {
     try {
       // Execute with timeout
       const result = await this.executeWithTimeout(fn);
-      if (
+      const reportedFailure =
         result &&
         typeof result === 'object' &&
         'success' in result &&
-        (result as { success?: unknown }).success === false
-      ) {
+        (result as { success?: unknown }).success === false;
+      if (reportedFailure && (options.shouldCountFailure?.(result) ?? true)) {
         this.onFailure(
           new Error(
             'error' in result && typeof (result as { error?: unknown }).error === 'string'

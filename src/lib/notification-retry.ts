@@ -19,6 +19,7 @@ export async function retryFailedNotifications(): Promise<{
   await prisma.notification.updateMany({
     where: {
       category: 'INCIDENT',
+      deliveryKey: null,
       payloadEncrypted: null,
       status: 'PENDING',
       createdAt: { lt: new Date(Date.now() - NOTIFICATION_RETRY_POLICY.pendingTimeoutMs) },
@@ -35,6 +36,7 @@ export async function retryFailedNotifications(): Promise<{
   const failedNotifications = await prisma.notification.findMany({
     where: {
       category: 'INCIDENT',
+      deliveryKey: null,
       payloadEncrypted: null,
       status: 'FAILED',
       incidentId: { not: null },
@@ -215,6 +217,7 @@ export async function getNextNotificationRetryAt(): Promise<Date | null> {
           category: 'INCIDENT',
           payloadEncrypted: null,
           status: 'FAILED',
+          deliveryKey: null,
           attempts: attempt,
           failedAt: { not: null },
         },

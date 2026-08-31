@@ -12,6 +12,7 @@ import {
   CircuitBreakerError,
   CircuitBreakerTimeoutError,
   CircuitBreakers,
+  type CircuitBreaker,
 } from './circuit-breaker';
 import { decrypt, encrypt, getEncryptionKey } from './encryption';
 import {
@@ -386,6 +387,17 @@ function providerAdmissionIdentity(payload: CentralNotificationPayload) {
   };
 }
 
+/** Only upstream 5xx responses poison shared provider health. */
+function executeProvider<T extends DeliveryResult>(
+  breaker: CircuitBreaker,
+  operation: () => Promise<T>
+): Promise<T> {
+  return breaker.execute(operation, {
+    shouldCountFailure: (result: T) =>
+      result.success === false && (result.statusCode ?? 0) >= 500,
+  });
+}
+
 async function dispatchPayload(
   payload: CentralNotificationPayload,
   notificationId: string
@@ -393,7 +405,7 @@ async function dispatchPayload(
   switch (payload.kind) {
     case 'INCIDENT_EMAIL': {
       const { sendIncidentEmail } = await import('./email');
-      return CircuitBreakers.email().execute(() =>
+      return executeProvider(CircuitBreakers.email(), () =>
         sendIncidentEmail(
           payload.userId,
           payload.incidentId,
@@ -405,7 +417,7 @@ async function dispatchPayload(
     }
     case 'INCIDENT_SMS': {
       const { sendIncidentSMS } = await import('./sms');
-      return CircuitBreakers.sms().execute(async () => {
+      return executeProvider(CircuitBreakers.sms(), async () => {
         const result = await sendIncidentSMS(
           payload.userId,
           payload.incidentId,
@@ -418,7 +430,7 @@ async function dispatchPayload(
     }
     case 'INCIDENT_PUSH': {
       const { sendNotificationIntentPush } = await import('./incident-push-delivery');
-      return CircuitBreakers.push().execute(async () => {
+      return executeProvider(CircuitBreakers.push(), async () => {
         const result = await sendNotificationIntentPush(
           payload.userId,
           payload.incidentId,
@@ -433,7 +445,7 @@ async function dispatchPayload(
     }
     case 'INCIDENT_WHATSAPP': {
       const { sendIncidentWhatsApp } = await import('./whatsapp');
-      return CircuitBreakers.whatsapp().execute(async () => {
+      return executeProvider(CircuitBreakers.whatsapp(), async () => {
         const result = await sendIncidentWhatsApp(
           payload.userId,
           payload.incidentId,
@@ -451,7 +463,7 @@ async function dispatchPayload(
             module.getStatusPageEmailConfig(payload.providerScope!.statusPageId)
           )
         : undefined;
-      return CircuitBreakers.email().execute(() =>
+      return executeProvider(CircuitBreakers.email(), () =>
         sendEmail(
           {
             to: payload.to,
@@ -466,7 +478,7 @@ async function dispatchPayload(
     }
     case 'SMS': {
       const { sendSMS } = await import('./sms');
-      return CircuitBreakers.sms().execute(async () => {
+      return executeProvider(CircuitBreakers.sms(), async () => {
         const result = await sendSMS({
           to: payload.to,
           message: payload.message,
@@ -477,7 +489,7 @@ async function dispatchPayload(
     }
     case 'WHATSAPP': {
       const { sendWhatsApp } = await import('./whatsapp');
-      return CircuitBreakers.whatsapp().execute(async () => {
+      return executeProvider(CircuitBreakers.whatsapp(), async () => {
         const result = await sendWhatsApp(
           payload.to,
           payload.message,
@@ -489,7 +501,7 @@ async function dispatchPayload(
     }
     case 'PUSH': {
       const { sendPush } = await import('./push');
-      return CircuitBreakers.push().execute(() =>
+      return executeProvider(CircuitBreakers.push(), () =>
         sendPush({
           userId: payload.userId,
           title: payload.title,
@@ -502,7 +514,7 @@ async function dispatchPayload(
     }
     case 'SLACK_CHANNEL': {
       const { sendSlackMessageToChannel } = await import('./slack');
-      return CircuitBreakers.slack().execute(() =>
+      return executeProvider(CircuitBreakers.slack(), () =>
         sendSlackMessageToChannel(
           payload.channel,
           payload.incident,
@@ -516,7 +528,7 @@ async function dispatchPayload(
     }
     case 'SLACK_WEBHOOK': {
       const { sendSlackNotification } = await import('./slack');
-      return CircuitBreakers.slack().execute(() =>
+      return executeProvider(CircuitBreakers.slack(), () =>
         sendSlackNotification(
           payload.eventType,
           payload.incident,
@@ -528,7 +540,7 @@ async function dispatchPayload(
     }
     case 'WEBHOOK': {
       const { sendWebhook } = await import('./webhooks');
-      return CircuitBreakers.webhook(payload.url).execute(() =>
+      return executeProvider(CircuitBreakers.webhook(payload.url), () =>
         sendWebhook({
           url: payload.url,
           payload: payload.payload,
@@ -542,7 +554,7 @@ async function dispatchPayload(
     }
     case 'STATUS_PAGE_WEBHOOK': {
       const { deliverWebhook } = await import('./status-page-webhooks');
-      const result = await CircuitBreakers.webhook(payload.url).execute(() =>
+      const result = await executeProvider(CircuitBreakers.webhook(payload.url), () =>
         deliverWebhook(payload.url, payload.secret, payload.payload, payload.deliveryId, {
           maxAttempts: 1,
           webhookId: payload.webhookId,

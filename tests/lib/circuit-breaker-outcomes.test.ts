@@ -35,4 +35,21 @@ describe('circuit breaker provider outcomes', () => {
     await rejection;
     expect(breaker.getState()).toBe('OPEN');
   });
+
+  it('does not count a caller-classified recipient failure as a provider outage', async () => {
+    const breaker = new CircuitBreaker({
+      name: 'recipient-failure',
+      failureThreshold: 1,
+      resetTimeout: 60_000,
+      successThreshold: 1,
+      timeout: 1_000,
+    });
+
+    await breaker.execute(
+      async () => ({ success: false, statusCode: 400 }),
+      { shouldCountFailure: result => (result.statusCode ?? 0) >= 500 }
+    );
+
+    expect(breaker.getState()).toBe('CLOSED');
+  });
 });

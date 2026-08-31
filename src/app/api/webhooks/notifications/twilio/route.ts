@@ -115,7 +115,6 @@ export async function POST(request: NextRequest) {
             errorMsg:
               params.get('ErrorMessage') ||
               `Twilio delivery failed (${params.get('ErrorCode') || 'unknown'})`,
-            attempts: { increment: 1 },
           },
         });
       }

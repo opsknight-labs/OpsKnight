@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { sendSlackNotification } from '@/lib/slack';
+import { sendSlackMessageToChannel, sendSlackNotification } from '@/lib/slack';
 import * as retryModule from '@/lib/retry';
 
 // Mock dependencies
-vi.mock('@/lib/prisma');
+const slackPrisma = vi.hoisted(() => ({
+    findService: vi.fn().mockResolvedValue(null),
+    findIntegration: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/prisma', () => ({
+    default: {
+        service: { findUnique: slackPrisma.findService },
+        slackIntegration: { findFirst: slackPrisma.findIntegration },
+    },
+}));
 
 vi.mock('@/lib/env-validation', () => ({
     getBaseUrl: () => 'https://test.example.com',
@@ -258,6 +267,28 @@ describe('Slack Integration', () => {
 
             // Resolved should have green color
             expect(body.attachments[0].color).toBe('#388e3c');
+        });
+    });
+
+    describe('sendSlackMessageToChannel - Channel Mode', () => {
+        it('does not fall back to a webhook when the channel credential is unavailable', async () => {
+            const result = await sendSlackMessageToChannel(
+                'C123',
+                {
+                    id: 'inc-123',
+                    title: 'Database Outage',
+                    status: 'OPEN',
+                    urgency: 'HIGH',
+                    serviceName: 'API',
+                },
+                'triggered'
+            );
+
+            expect(result).toMatchObject({
+                success: false,
+                errorCode: 'SLACK_BOT_TOKEN_MISSING',
+            });
+            expect(retryModule.retryFetch).not.toHaveBeenCalled();
         });
     });
 });

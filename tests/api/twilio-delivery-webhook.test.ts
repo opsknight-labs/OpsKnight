@@ -84,13 +84,14 @@ describe('Twilio delivery receipt webhook', () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 
-  it('records a failed delivery on the same durable intent without scheduling a fallback', async () => {
+  it('records a failed delivery without consuming a second dispatch attempt', async () => {
     const response = await POST(
       signedRequest('MessageSid=SM123&MessageStatus=undelivered&ErrorCode=30003')
     );
 
     expect(response.status).toBe(204);
-    expect(updateMany).toHaveBeenCalledWith(
+    const update = updateMany.mock.calls[0]?.[0];
+    expect(update).toEqual(
       expect.objectContaining({
         where: expect.objectContaining({
           id: 'notif-1',
@@ -101,10 +102,10 @@ describe('Twilio delivery receipt webhook', () => {
           providerMessageId: 'SM123',
           status: 'FAILED',
           failedAt: expect.any(Date),
-          attempts: { increment: 1 },
         }),
       })
     );
+    expect(update?.data).not.toHaveProperty('attempts');
   });
 
   it('does not regress a delivered notification when a late failure receipt arrives', async () => {
