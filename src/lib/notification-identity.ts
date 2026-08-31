@@ -97,6 +97,16 @@ export function notificationIntentTriggerGeneration(notificationId: string): num
   return Number.isSafeInteger(generation) && generation >= 0 ? generation : null;
 }
 
+/**
+ * IDs written before durable escalation generations were introduced. They are
+ * intentionally distinguishable from malformed IDs so the upgrade fence can
+ * stop a replayed legacy row from duplicating a new generation-zero intent.
+ */
+export function isLegacyTriggeredNotificationIntent(notificationId: string): boolean {
+  const parsed = parseNotificationIntentId(notificationId);
+  return parsed?.eventType === 'triggered' && parsed.generation === undefined;
+}
+
 function isDecimal(value: string): boolean {
   return value.length > 0 && [...value].every(char => char >= '0' && char <= '9');
 }

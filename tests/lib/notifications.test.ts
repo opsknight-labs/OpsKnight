@@ -9,6 +9,7 @@ import {
   notificationIntentEventAt,
   notificationIntentId,
   notificationIntentTriggerGeneration,
+  isLegacyTriggeredNotificationIntent,
 } from '@/lib/notification-identity';
 
 const centralMocks = vi.hoisted(() => ({ enqueue: vi.fn() }));
@@ -98,6 +99,8 @@ describe('durable notification intents', () => {
     expect(notificationIntentEventAt(`ntf:triggered:${timestamp}:${digest}`)).toEqual(createdAt);
     expect(notificationIntentTriggerGeneration(`ntf:triggered:${timestamp}:${digest}`)).toBeNull();
     expect(notificationIntentTriggerGeneration(`ntf:triggered:${timestamp}:g4:${digest}`)).toBe(4);
+    expect(isLegacyTriggeredNotificationIntent(`ntf:triggered:${timestamp}:${digest}`)).toBe(true);
+    expect(isLegacyTriggeredNotificationIntent(`ntf:triggered:${timestamp}:g4:${digest}`)).toBe(false);
     expect(notificationIntentEventAt(`ntf:triggered:${timestamp}:g4:${digest}:extra`)).toBeNull();
   });
 

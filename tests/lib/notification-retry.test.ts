@@ -107,6 +107,42 @@ describe('notification retry claiming', () => {
     );
   });
 
+  it('fences a pre-generation triggered intent so a new g0 replay cannot duplicate it', async () => {
+    const legacyId = `ntf:triggered:${Date.now()}:${'a'.repeat(64)}`;
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      {
+        ...failedNotification,
+        id: legacyId,
+        eventType: 'triggered',
+        incident: {
+          ...failedNotification.incident,
+          escalationGeneration: 0,
+        },
+      },
+    ] as never);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      ...failedNotification.incident,
+      escalationGeneration: 0,
+    } as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
+
+    await expect(retryFailedNotifications()).resolves.toEqual({
+      retried: 1,
+      succeeded: 1,
+      failed: 0,
+    });
+    expect(sendIncidentEmail).not.toHaveBeenCalled();
+    expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { id: legacyId, status: 'PENDING' },
+        data: expect.objectContaining({
+          status: 'SKIPPED',
+          errorMsg: 'Triggered notification predates immutable escalation generation',
+        }),
+      })
+    );
+  });
+
   it('selects only due retries before applying the batch limit', async () => {
     vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 0 });

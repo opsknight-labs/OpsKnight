@@ -80,4 +80,16 @@ describe('notification control-plane architecture', () => {
     expect(controlPlane?.match(/maxAttempts: 1/g)?.length).toBeGreaterThanOrEqual(4);
     expect(admission).toContain("'SLACK'");
   });
+
+  it('fences pre-generation triggered rows during the durable generation migration', () => {
+    const migration = ts.sys.readFile(
+      path.join(
+        process.cwd(),
+        'prisma/migrations/20260831171000_fence_legacy_trigger_notifications/migration.sql'
+      )
+    );
+    expect(migration).toContain('"status" IN (\'PENDING\', \'FAILED\')');
+    expect(migration).toContain('"id" NOT LIKE \'ntf:triggered:%:g%:%\'');
+    expect(migration).toContain("'SKIPPED'");
+  });
 });

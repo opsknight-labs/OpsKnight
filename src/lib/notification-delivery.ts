@@ -5,7 +5,11 @@ import {
   CircuitBreakerTimeoutError,
   CircuitBreakers,
 } from './circuit-breaker';
-import { notificationIntentEventAt, notificationIntentTriggerGeneration } from './notification-identity';
+import {
+  isLegacyTriggeredNotificationIntent,
+  notificationIntentEventAt,
+  notificationIntentTriggerGeneration,
+} from './notification-identity';
 import { acquireProviderAdmission, type ProviderAdmissionScope } from './provider-admission';
 
 export const NOTIFICATION_CHANNELS = [
@@ -144,6 +148,9 @@ function staleIntentReason(
   if (input.eventType === 'triggered') {
     if (incident.status !== 'OPEN') {
       return `Triggered notification superseded by incident state ${incident.status}`;
+    }
+    if (isLegacyTriggeredNotificationIntent(input.notificationId)) {
+      return 'Triggered notification predates immutable escalation generation';
     }
     const expectedGeneration = notificationIntentTriggerGeneration(input.notificationId);
     if (
