@@ -6,16 +6,10 @@ import {
   CircleHelp,
   RefreshCw,
   XCircle,
-  ShieldCheck,
-  Server,
-  Database,
-  Cpu,
-  Layers,
 } from 'lucide-react';
 import { assertAdmin } from '@/lib/rbac';
 import { collectAdminHealth, type HealthLevel } from '@/lib/admin-health';
 import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import {

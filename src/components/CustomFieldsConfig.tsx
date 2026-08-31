@@ -33,8 +33,6 @@ import {
   AlertTriangle,
   Loader2,
   SlidersHorizontal,
-  Sparkles,
-  CheckCircle2,
   Calendar,
   Hash,
   Link as LinkIcon,

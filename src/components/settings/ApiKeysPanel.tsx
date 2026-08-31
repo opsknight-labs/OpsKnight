@@ -27,17 +27,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { EmptyState } from './feedback/EmptyState';
 import CopyButton from './CopyButton';
 import ConfirmDialog from './ConfirmDialog';
-import {
-  Key,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  Shield,
-  Code,
-  Sparkles,
-  Terminal,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Key, CheckCircle2, XCircle, Loader2, Terminal } from 'lucide-react';
 
 type ApiKey = {
   id: string;
