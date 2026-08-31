@@ -1,5 +1,7 @@
 import { getUserPermissions } from '@/lib/rbac';
 import Link from 'next/link';
+import prisma from '@/lib/prisma';
+import { cn } from '@/lib/utils';
 import { SETTINGS_NAV_SECTIONS, SETTINGS_NAV_ITEMS } from '@/components/settings/navConfig';
 import {
   Card,
@@ -27,15 +29,16 @@ import {
   Tickets,
   type LucideIcon,
 } from 'lucide-react';
+import { SlackLogo, JiraLogo } from '@/components/common/BrandLogos';
 
-const sectionIcons: Record<string, LucideIcon> = {
+const sectionIcons: Record<string, LucideIcon | React.ComponentType<{ className?: string }>> = {
   account: User,
   workspace: Building2,
   integrations: Puzzle,
   system: Settings,
 };
 
-const itemIcons: Record<string, LucideIcon> = {
+const itemIcons: Record<string, LucideIcon | React.ComponentType<{ className?: string }>> = {
   profile: User,
   security: Shield,
   'custom-fields': SlidersHorizontal,
@@ -43,9 +46,9 @@ const itemIcons: Record<string, LucideIcon> = {
   'api-keys': KeyRound,
   'audit-logs': Activity,
   integrations: Puzzle,
-  slack: MessageSquare,
+  slack: SlackLogo,
   chatops: MessageSquare,
-  jira: Tickets,
+  jira: JiraLogo,
   'health-center': Activity,
   system: Settings,
   'notifications-admin': Bell,
@@ -53,8 +56,94 @@ const itemIcons: Record<string, LucideIcon> = {
   'notification-history': Bell,
 };
 
+type ItemLiveStatus = {
+  label: string;
+  connected: boolean;
+};
+
 export default async function SettingsOverviewPage() {
   const permissions = await getUserPermissions();
+
+  const [
+    slackIntegration,
+    jiraConfig,
+    chatOpsConfig,
+    activeApiKeysCount,
+    notificationProvidersCount,
+    statusPage,
+    customFieldsCount,
+  ] = await Promise.all([
+    prisma.slackIntegration
+      .findFirst({
+        where: { services: { none: {} }, enabled: true },
+        select: { workspaceName: true, enabled: true },
+      })
+      .catch(() => null),
+    prisma.jiraConfig
+      .findUnique({
+        where: { id: 'default' },
+        select: { enabled: true, baseUrl: true },
+      })
+      .catch(() => null),
+    prisma.chatOpsConfig
+      .findUnique({
+        where: { id: 'default' },
+        select: { enabled: true },
+      })
+      .catch(() => null),
+    prisma.apiKey
+      .count({
+        where: { revokedAt: null },
+      })
+      .catch(() => 0),
+    prisma.notificationProvider
+      .count({
+        where: { enabled: true },
+      })
+      .catch(() => 0),
+    prisma.statusPage
+      .findFirst({
+        select: { enabled: true, privacyMode: true },
+      })
+      .catch(() => null),
+    prisma.customField.count().catch(() => 0),
+  ]);
+
+  const itemStatuses: Record<string, ItemLiveStatus> = {
+    slack: slackIntegration?.enabled
+      ? {
+          label: slackIntegration.workspaceName
+            ? `Connected (${slackIntegration.workspaceName})`
+            : 'Connected',
+          connected: true,
+        }
+      : { label: 'Not Connected', connected: false },
+    jira: jiraConfig?.enabled
+      ? { label: 'Connected', connected: true }
+      : { label: 'Not Connected', connected: false },
+    chatops: chatOpsConfig?.enabled
+      ? { label: 'Active', connected: true }
+      : { label: 'Disabled', connected: false },
+    'status-page': statusPage?.enabled
+      ? {
+          label: statusPage.privacyMode === 'PUBLIC' ? 'Public' : 'Active',
+          connected: true,
+        }
+      : { label: 'Disabled', connected: false },
+    'api-keys': {
+      label: activeApiKeysCount > 0 ? `${activeApiKeysCount} Active` : '0 Active',
+      connected: activeApiKeysCount > 0,
+    },
+    'notifications-admin': {
+      label:
+        notificationProvidersCount > 0 ? `${notificationProvidersCount} Active` : 'Default Only',
+      connected: notificationProvidersCount > 0,
+    },
+    'custom-fields': {
+      label: customFieldsCount > 0 ? `${customFieldsCount} Defined` : 'None',
+      connected: customFieldsCount > 0,
+    },
+  };
 
   const canAccess = (item: {
     requiresAdmin?: boolean;
@@ -158,6 +247,7 @@ export default async function SettingsOverviewPage() {
                 <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {visibleItems.map(item => {
                     const ItemIcon = itemIcons[item.id] || Settings;
+                    const status = itemStatuses[item.id];
 
                     return (
                       <Link
@@ -170,14 +260,37 @@ export default async function SettingsOverviewPage() {
                             <div className="p-2 rounded-lg bg-muted text-muted-foreground group-hover:text-primary transition-colors">
                               <ItemIcon className="h-4 w-4" />
                             </div>
-                            {item.badge && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] font-semibold px-1.5 py-0 h-4 border-border"
-                              >
-                                {item.badge}
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              {status && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'text-[10px] font-medium px-2 py-0.5 h-5 flex items-center gap-1.5 rounded-full border',
+                                    status.connected
+                                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                      : 'border-border/60 bg-muted/40 text-muted-foreground'
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      'h-1.5 w-1.5 rounded-full shrink-0',
+                                      status.connected
+                                        ? 'bg-emerald-500 animate-pulse'
+                                        : 'bg-muted-foreground/50'
+                                    )}
+                                  />
+                                  <span className="truncate max-w-[125px]">{status.label}</span>
+                                </Badge>
+                              )}
+                              {item.badge && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] font-semibold px-1.5 py-0 h-4 border-border text-muted-foreground"
+                                >
+                                  {item.badge}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
 
                           <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">

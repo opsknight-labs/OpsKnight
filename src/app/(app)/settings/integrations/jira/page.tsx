@@ -7,6 +7,7 @@ import JiraIntegrationPage from '@/components/settings/JiraIntegrationPage';
 export default async function GlobalJiraIntegrationPage() {
   const permissions = await getUserPermissions();
   if (!permissions) redirect('/login');
+  if (!permissions.isAdmin) redirect('/settings');
 
   const config = await prisma.jiraConfig.findUnique({
     where: { id: 'default' },
