@@ -17,6 +17,22 @@ export interface WebhookPayload {
   data: unknown;
 }
 
+export type StatusPageWebhookDeliveryResult = {
+  success: boolean;
+  statusCode?: number;
+  retryAfterMs?: number;
+  error?: string;
+};
+
+function retryAfterMs(response: Response): number | undefined {
+  const value = response.headers.get('Retry-After');
+  if (!value) return undefined;
+  const seconds = Number.parseInt(value, 10);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1_000;
+  const deadline = new Date(value).getTime();
+  return Number.isFinite(deadline) ? Math.max(1_000, deadline - Date.now()) : undefined;
+}
+
 function asWebhookRecord(value: unknown): Record<string, unknown> {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -35,8 +51,9 @@ export async function deliverWebhook(
   url: string,
   secret: string,
   payload: WebhookPayload,
-  deliveryId: string = crypto.randomUUID()
-): Promise<boolean> {
+  deliveryId: string = crypto.randomUUID(),
+  options: { maxAttempts?: number } = {}
+): Promise<StatusPageWebhookDeliveryResult> {
   try {
     // SSRF Protection: Validate webhook URL before making request
     const { assertSafeOutboundUrl } = await import('./network-security');
@@ -44,7 +61,7 @@ export async function deliverWebhook(
       await assertSafeOutboundUrl(url);
     } catch {
       logger.warn('api.status_page.webhook.blocked_ssrf', { url });
-      return false;
+      return { success: false, error: 'Invalid or restricted webhook URL' };
     }
 
     const payloadString = JSON.stringify(payload);
@@ -78,7 +95,13 @@ export async function deliverWebhook(
           });
 
           if (!res.ok && (res.status >= 500 || res.status === 429)) {
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            const error = new Error(`HTTP ${res.status}: ${res.statusText}`) as Error & {
+              statusCode?: number;
+              retryAfterMs?: number;
+            };
+            error.statusCode = res.status;
+            error.retryAfterMs = retryAfterMs(res);
+            throw error;
           }
 
           return res;
@@ -87,7 +110,7 @@ export async function deliverWebhook(
         return response;
       },
       {
-        maxAttempts: 3,
+        maxAttempts: options.maxAttempts ?? 3,
         initialDelayMs: 1000,
         retryableErrors: error => {
           if (error instanceof Error) {
@@ -109,7 +132,15 @@ export async function deliverWebhook(
             ? retryResult.error.message
             : String(retryResult.error),
       });
-      return false;
+      const error = retryResult.error as
+        | (Error & { statusCode?: number; retryAfterMs?: number })
+        | undefined;
+      return {
+        success: false,
+        error: error?.message || 'Status-page webhook delivery failed',
+        statusCode: error?.statusCode,
+        retryAfterMs: error?.retryAfterMs,
+      };
     }
 
     const response = retryResult.data;
@@ -119,7 +150,7 @@ export async function deliverWebhook(
         where: { url },
         data: { lastTriggeredAt: new Date() },
       });
-      return true;
+      return { success: true, statusCode: response.status };
     }
 
     logger.warn('api.status_page.webhook.delivery_failed_status', {
@@ -128,14 +159,22 @@ export async function deliverWebhook(
       status: response.status,
       statusText: response.statusText,
     });
-    return false;
+    return {
+      success: false,
+      statusCode: response.status,
+      retryAfterMs: retryAfterMs(response),
+      error: `HTTP ${response.status}: ${response.statusText}`,
+    };
   } catch (error: unknown) {
     logger.error('api.status_page.webhook.delivery_error', {
       url,
       deliveryId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return false;
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 

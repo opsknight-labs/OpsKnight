@@ -4,6 +4,7 @@ import {
   deliverCentralNotification,
   getNextCentralNotificationAt,
   maskedNotificationRecipient,
+  processCentralNotificationQueue,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
 
@@ -17,6 +18,8 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     notification: {
       create: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
       findUnique: vi.fn(),
       updateMany: vi.fn(),
     },
@@ -32,6 +35,7 @@ vi.mock('@/lib/encryption', () => ({
 vi.mock('@/lib/email', () => ({ sendEmail: mocks.sendEmail }));
 vi.mock('@/lib/provider-admission', () => ({
   acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
+  deferProviderAdmission: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/circuit-breaker', () => ({
   CircuitBreakerError: class CircuitBreakerError extends Error {},
@@ -69,6 +73,9 @@ const input = {
 describe('central notification control plane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.notification.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
   });
 
   it('stores only encrypted payloads and masked recipients', async () => {
@@ -152,6 +159,27 @@ describe('central notification control plane', () => {
     const sql = query.strings?.join('?') ?? '';
     expect(sql).toContain('lastAttemptAt');
     expect(sql).toContain('nextEligibleAt');
+  });
+
+  it('scrubs expired security payloads in a bounded queue cleanup pass', async () => {
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      { id: 'notification_expired' },
+    ] as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+
+    await expect(processCentralNotificationQueue()).resolves.toEqual({
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+    });
+    expect(prisma.notification.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 100 })
+    );
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'SKIPPED', payloadEncrypted: null }),
+      })
+    );
   });
 
   it('never redelivers an already terminal notification', async () => {

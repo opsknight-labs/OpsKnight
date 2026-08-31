@@ -172,6 +172,7 @@ export async function retryFetch(
     // Check if response status is retryable
     if (!response.ok && isRetryableHttpError(response.status)) {
       const retryAfter = response.headers?.get ? response.headers.get('Retry-After') : null;
+      let retryAfterMs: number | undefined;
       if (response.status === 429 && retryAfter) {
         let waitMs = 0;
         const seconds = parseInt(retryAfter, 10);
@@ -185,10 +186,19 @@ export async function retryFetch(
           }
         }
         if (waitMs > 0) {
-          await sleep(Math.min(waitMs, 60000));
+          retryAfterMs = waitMs;
+          if ((retryOptions?.maxAttempts ?? DEFAULT_OPTIONS.maxAttempts) > 1) {
+            await sleep(Math.min(waitMs, 60000));
+          }
         }
       }
-      const err = new Error(`HTTP ${response.status}: ${response.statusText || 'Error'}`) as any;
+      const err = new Error(`HTTP ${response.status}: ${response.statusText || 'Error'}`) as Error & {
+        statusCode?: number;
+        retryAfterHandled?: boolean;
+        retryAfterMs?: number;
+      };
+      err.statusCode = response.status;
+      err.retryAfterMs = retryAfterMs;
       if (response.status === 429 && retryAfter) {
         err.retryAfterHandled = true;
       }

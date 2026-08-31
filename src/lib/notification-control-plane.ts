@@ -10,7 +10,11 @@ import {
 import prisma from './prisma';
 import { CircuitBreakerError, CircuitBreakers } from './circuit-breaker';
 import { decrypt, encrypt, getEncryptionKey } from './encryption';
-import { acquireProviderAdmission, type ProviderAdmissionScope } from './provider-admission';
+import {
+  acquireProviderAdmission,
+  deferProviderAdmission,
+  type ProviderAdmissionScope,
+} from './provider-admission';
 import { notificationRetryDelayMs, NOTIFICATION_RETRY_POLICY } from './notification-delivery';
 
 const MAX_ENCRYPTED_PAYLOAD_BYTES = 768 * 1024;
@@ -20,6 +24,7 @@ const MAX_ERROR_LENGTH = 1_000;
 const CLAIM_TIMEOUT_MS = 10 * 60_000;
 const SYSTEM_NOTIFICATION_BATCH_SIZE = 100;
 const SYSTEM_NOTIFICATION_CONCURRENCY = 10;
+const SECURITY_PAYLOAD_CLEANUP_BATCH_SIZE = 100;
 
 type IncidentPresentation = {
   id: string;
@@ -108,6 +113,8 @@ type DeliveryResult = {
   success: boolean;
   error?: string;
   providerMessageId?: string;
+  statusCode?: number;
+  retryAfterMs?: number;
 };
 
 function normalizedRecipient(channel: NotificationChannel, recipient: string): string {
@@ -329,8 +336,14 @@ function payloadProviderKey(payload: CentralNotificationPayload): string {
 
 async function providerAdmission(payload: CentralNotificationPayload) {
   const channel = channelForPayload(payload);
-  if (channel === 'SLACK') return { allowed: true } as const;
   return acquireProviderAdmission(channel as ProviderAdmissionScope, payloadProviderKey(payload));
+}
+
+function providerAdmissionIdentity(payload: CentralNotificationPayload) {
+  return {
+    scope: channelForPayload(payload) as ProviderAdmissionScope,
+    providerKey: payloadProviderKey(payload),
+  };
 }
 
 async function dispatchPayload(
@@ -394,7 +407,8 @@ async function dispatchPayload(
           payload.eventType,
           payload.includeInteractiveButtons ?? true,
           payload.serviceId,
-          payload.additionalMessage
+          payload.additionalMessage,
+          { maxAttempts: 1 }
         )
       );
     }
@@ -405,7 +419,8 @@ async function dispatchPayload(
           payload.eventType,
           payload.incident,
           payload.additionalMessage,
-          payload.webhookUrl
+          payload.webhookUrl,
+          { maxAttempts: 1 }
         )
       );
     }
@@ -419,17 +434,25 @@ async function dispatchPayload(
           secret: payload.secret,
           method: payload.method,
           timeout: payload.timeout,
+          maxAttempts: 1,
         })
       );
     }
     case 'STATUS_PAGE_WEBHOOK': {
       const { deliverWebhook } = await import('./status-page-webhooks');
-      const success = await CircuitBreakers.webhook(payload.url).execute(() =>
-        deliverWebhook(payload.url, payload.secret, payload.payload, payload.deliveryId)
+      const result = await CircuitBreakers.webhook(payload.url).execute(() =>
+        deliverWebhook(payload.url, payload.secret, payload.payload, payload.deliveryId, {
+          maxAttempts: 1,
+        })
       );
-      return success
+      return result.success
         ? { success: true, providerMessageId: payload.deliveryId }
-        : { success: false, error: 'Status-page webhook delivery failed' };
+        : {
+            success: false,
+            error: result.error || 'Status-page webhook delivery failed',
+            statusCode: result.statusCode,
+            retryAfterMs: result.retryAfterMs,
+          };
     }
   }
 }
@@ -441,6 +464,31 @@ function safeError(error: unknown): string {
 
 function terminalPayload(category: NotificationCategory): { payloadEncrypted: null } | object {
   return category === 'SECURITY' ? { payloadEncrypted: null } : {};
+}
+
+async function cleanupExpiredSecurityNotifications(now: Date): Promise<number> {
+  const expired = await prisma.notification.findMany({
+    where: {
+      category: 'SECURITY',
+      payloadEncrypted: { not: null },
+      expiresAt: { lte: now },
+      status: { in: ['PENDING', 'FAILED'] },
+    },
+    orderBy: { expiresAt: 'asc' },
+    take: SECURITY_PAYLOAD_CLEANUP_BATCH_SIZE,
+    select: { id: true },
+  });
+  if (expired.length === 0) return 0;
+  const result = await prisma.notification.updateMany({
+    where: { id: { in: expired.map(item => item.id) } },
+    data: {
+      status: 'SKIPPED',
+      payloadEncrypted: null,
+      lastAttemptAt: null,
+      errorMsg: 'Security notification expired before delivery.',
+    },
+  });
+  return result.count;
 }
 
 function isPermanentProviderError(message: string): boolean {
@@ -614,6 +662,14 @@ export async function deliverCentralNotification(
     }
 
     const errorMessage = safeError(result.error || 'Provider delivery failed');
+    const providerRateLimited = result.statusCode === 429;
+    const providerRetryAt = providerRateLimited
+      ? new Date(Date.now() + Math.max(result.retryAfterMs ?? 60_000, 1_000))
+      : null;
+    if (providerRetryAt) {
+      const identity = providerAdmissionIdentity(payload);
+      await deferProviderAdmission(identity.scope, identity.providerKey, providerRetryAt);
+    }
     const permanent = isPermanentProviderError(errorMessage);
     const exhausted = ordinal >= candidate.maxAttempts;
     await prisma.notification.updateMany({
@@ -623,9 +679,10 @@ export async function deliverCentralNotification(
         failedAt: new Date(),
         errorMsg: errorMessage,
         nextAttemptAt:
-          permanent || exhausted
+          providerRetryAt ??
+          (permanent || exhausted
             ? candidate.nextAttemptAt
-            : new Date(Date.now() + notificationRetryDelayMs(ordinal)),
+            : new Date(Date.now() + notificationRetryDelayMs(ordinal))),
         attempts: permanent ? candidate.maxAttempts : ordinal,
         lastAttemptAt: null,
         ...(permanent || exhausted ? terminalPayload(candidate.category) : {}),
@@ -634,7 +691,11 @@ export async function deliverCentralNotification(
     await finishAttempt({
       notificationId: candidate.id,
       ordinal,
-      outcome: permanent || exhausted ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
+      outcome: providerRateLimited
+        ? 'RATE_LIMITED'
+        : permanent || exhausted
+          ? 'PERMANENT_FAILURE'
+          : 'RETRYABLE_FAILURE',
       startedAt,
       errorMessage,
     });
@@ -674,6 +735,7 @@ export async function processCentralNotificationQueue(): Promise<{
   failed: number;
 }> {
   const now = new Date();
+  await cleanupExpiredSecurityNotifications(now);
   const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
   const candidates = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT "id"
@@ -716,6 +778,17 @@ export async function processCentralNotificationQueue(): Promise<{
 
 /** Earliest durable control-plane deadline used by the adaptive scheduler. */
 export async function getNextCentralNotificationAt(now: Date = new Date()): Promise<Date | null> {
+  const expiredSecurityNotification = await prisma.notification.findFirst({
+    where: {
+      category: 'SECURITY',
+      payloadEncrypted: { not: null },
+      expiresAt: { lte: now },
+      status: { in: ['PENDING', 'FAILED'] },
+    },
+    select: { id: true },
+  });
+  if (expiredSecurityNotification) return now;
+
   const rows = await prisma.$queryRaw<Array<{ nextEligibleAt: Date }>>(Prisma.sql`
     SELECT GREATEST(
       "scheduledAt",

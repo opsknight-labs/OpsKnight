@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 
-export type ProviderAdmissionScope = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH' | 'WEBHOOK';
+export type ProviderAdmissionScope = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH' | 'SLACK' | 'WEBHOOK';
 
 export type ProviderAdmissionResult =
   | { allowed: true }
@@ -12,6 +12,7 @@ const DEFAULT_LIMITS: Record<ProviderAdmissionScope, { limit: number; windowMs: 
   SMS: { limit: 20, windowMs: 1_000 },
   WHATSAPP: { limit: 50, windowMs: 1_000 },
   PUSH: { limit: 100, windowMs: 1_000 },
+  SLACK: { limit: 1, windowMs: 1_000 },
   WEBHOOK: { limit: 20, windowMs: 1_000 },
 };
 
@@ -53,4 +54,21 @@ export async function acquireProviderAdmission(
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
   );
+}
+
+/** Persist a provider-supplied cooldown (for example HTTP Retry-After) across replicas. */
+export async function deferProviderAdmission(
+  scope: ProviderAdmissionScope,
+  providerKey: string,
+  retryAt: Date
+): Promise<void> {
+  const config = DEFAULT_LIMITS[scope];
+  const key = bucketKey(scope, providerKey);
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO "RateLimit" ("key", "count", "expiresAt")
+    VALUES (${key}, ${config.limit}, ${retryAt})
+    ON CONFLICT ("key") DO UPDATE SET
+      "count" = GREATEST("RateLimit"."count", EXCLUDED."count"),
+      "expiresAt" = GREATEST("RateLimit"."expiresAt", EXCLUDED."expiresAt")
+  `);
 }

@@ -59,4 +59,25 @@ describe('notification control-plane architecture', () => {
     expect(personal).toMatch(/userId\s*:\s*user\.id/);
     expect(operations).toContain("user.role !== 'ADMIN' && user.role !== 'AUDITOR'");
   });
+
+  it('allows sensitive ciphertext to be removed from terminal notification rows', () => {
+    const migration = ts.sys.readFile(
+      path.join(
+        process.cwd(),
+        'prisma/migrations/20260831090000_generalize_notification_control_plane/migration.sql'
+      )
+    );
+    expect(migration).toContain('"status" IN (\'SENT\', \'DELIVERED\', \'SKIPPED\')');
+    expect(migration).toContain('"attempts" >= "maxAttempts"');
+  });
+
+  it('keeps durable attempts as the sole retry and admission owner', () => {
+    const controlPlane = ts.sys.readFile(
+      path.join(process.cwd(), 'src/lib/notification-control-plane.ts')
+    );
+    const admission = ts.sys.readFile(path.join(process.cwd(), 'src/lib/provider-admission.ts'));
+    expect(controlPlane).not.toContain("if (channel === 'SLACK') return { allowed: true }");
+    expect(controlPlane?.match(/maxAttempts: 1/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(admission).toContain("'SLACK'");
+  });
 });

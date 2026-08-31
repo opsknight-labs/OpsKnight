@@ -47,7 +47,10 @@ ALTER TABLE "Notification"
     ("recipientId" IS NOT NULL AND "recipientHash" IS NOT NULL)
   ),
   ADD CONSTRAINT "Notification_generic_payload_check" CHECK (
-    "category" = 'INCIDENT' OR "payloadEncrypted" IS NOT NULL
+    "category" = 'INCIDENT' OR
+    "payloadEncrypted" IS NOT NULL OR
+    "status" IN ('SENT', 'DELIVERED', 'SKIPPED') OR
+    ("status" = 'FAILED' AND "attempts" >= "maxAttempts")
   );
 
 CREATE UNIQUE INDEX "Notification_deliveryKey_key" ON "Notification"("deliveryKey");
