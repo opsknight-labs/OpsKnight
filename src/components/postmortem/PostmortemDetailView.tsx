@@ -5,7 +5,10 @@ import Link from 'next/link';
 import PostmortemTimeline from './PostmortemTimeline';
 import PostmortemImpactMetrics from './PostmortemImpactMetrics';
 import FiveWhysBuilder, { type FiveWhysStep } from './FiveWhysBuilder';
-import ContributingFactorsSelector, { type FactorType } from './ContributingFactorsSelector';
+import ContributingFactorsSelector, {
+  type FactorType,
+  ALL_FACTORS,
+} from './ContributingFactorsSelector';
 import DueDateBadge from '@/components/action-items/DueDateBadge';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -141,10 +144,22 @@ export default function PostmortemDetailView({
     POSTMORTEM_STATUS_CONFIG[postmortem.status as keyof typeof POSTMORTEM_STATUS_CONFIG] ||
     POSTMORTEM_STATUS_CONFIG.DRAFT;
 
-  // Infer contributing factors from incident text only when genuine keywords match
+  // Infer contributing factors from incident text only when genuine keywords or tags match
   const getInferredFactors = (): FactorType[] => {
     const factors: FactorType[] = [];
     const text = `${postmortem.rootCause || ''} ${postmortem.summary || ''}`.toLowerCase();
+
+    // Match explicit [Contributing Factors: ...] header if present
+    const match = postmortem.rootCause?.match(/\[Contributing Factors:\s*([^\]]+)\]/i);
+    if (match && match[1]) {
+      const factorNames = match[1].split(',').map(s => s.trim().toUpperCase());
+      ALL_FACTORS.forEach(f => {
+        if (factorNames.includes(f) || factorNames.includes(f.replace('_', ' '))) {
+          if (!factors.includes(f)) factors.push(f);
+        }
+      });
+    }
+
     if (
       text.includes('database') ||
       text.includes('server') ||
@@ -154,7 +169,7 @@ export default function PostmortemDetailView({
       text.includes('redis') ||
       text.includes('postgres')
     ) {
-      factors.push('INFRASTRUCTURE');
+      if (!factors.includes('INFRASTRUCTURE')) factors.push('INFRASTRUCTURE');
     }
     if (
       text.includes('bug') ||
@@ -164,7 +179,7 @@ export default function PostmortemDetailView({
       text.includes('deploy') ||
       text.includes('regression')
     ) {
-      factors.push('CODE_DEFECT');
+      if (!factors.includes('CODE_DEFECT')) factors.push('CODE_DEFECT');
     }
     if (
       text.includes('monitoring') ||
@@ -173,7 +188,7 @@ export default function PostmortemDetailView({
       text.includes('blindspot') ||
       text.includes('telemetry')
     ) {
-      factors.push('MONITORING_GAP');
+      if (!factors.includes('MONITORING_GAP')) factors.push('MONITORING_GAP');
     }
     if (
       text.includes('runbook') ||
@@ -181,7 +196,7 @@ export default function PostmortemDetailView({
       text.includes('handoff') ||
       text.includes('documentation')
     ) {
-      factors.push('PROCESS');
+      if (!factors.includes('PROCESS')) factors.push('PROCESS');
     }
     if (
       text.includes('vendor') ||
@@ -190,9 +205,27 @@ export default function PostmortemDetailView({
       text.includes('aws outage') ||
       text.includes('cloudflare')
     ) {
-      factors.push('VENDOR_DEPENDENCY');
+      if (!factors.includes('VENDOR_DEPENDENCY')) factors.push('VENDOR_DEPENDENCY');
+    }
+    if (
+      text.includes('config') ||
+      text.includes('environment variable') ||
+      text.includes('drift')
+    ) {
+      if (!factors.includes('CONFIGURATION')) factors.push('CONFIGURATION');
     }
     return factors;
+  };
+
+  // Helper to extract clean root cause narrative without embedded 5-whys or factor headers
+  const getCleanRootCauseNarrative = (): string => {
+    if (!postmortem.rootCause) return '';
+    return (
+      postmortem.rootCause
+        .split(/### 5-Whys Analysis/i)[0]
+        ?.split(/\[Contributing Factors:.*\]/i)[0]
+        ?.trim() || ''
+    );
   };
 
   // Parse structured 5-whys steps from root cause narrative if present
@@ -414,6 +447,18 @@ export default function PostmortemDetailView({
           <div className="pt-4 border-t border-slate-100">
             <FiveWhysBuilder initialSteps={parseFiveWhys()} isEditable={false} />
           </div>
+
+          {/* Root Cause Technical Narrative */}
+          {getCleanRootCauseNarrative() && (
+            <div className="pt-4 border-t border-slate-100 space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Root Cause Analysis Narrative
+              </div>
+              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                {getCleanRootCauseNarrative()}
+              </p>
+            </div>
+          )}
 
           {/* Resolution Description */}
           {postmortem.resolution && (
