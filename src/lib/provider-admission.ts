@@ -16,6 +16,23 @@ const DEFAULT_LIMITS: Record<ProviderAdmissionScope, { limit: number; windowMs: 
   WEBHOOK: { limit: 20, windowMs: 1_000 },
 };
 
+function providerLimit(scope: ProviderAdmissionScope): { limit: number; windowMs: number } {
+  switch (scope) {
+    case 'EMAIL':
+      return DEFAULT_LIMITS.EMAIL;
+    case 'SMS':
+      return DEFAULT_LIMITS.SMS;
+    case 'WHATSAPP':
+      return DEFAULT_LIMITS.WHATSAPP;
+    case 'PUSH':
+      return DEFAULT_LIMITS.PUSH;
+    case 'SLACK':
+      return DEFAULT_LIMITS.SLACK;
+    case 'WEBHOOK':
+      return DEFAULT_LIMITS.WEBHOOK;
+  }
+}
+
 function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
   return `provider:${scope.toLowerCase()}:${providerKey}`.slice(0, 240);
 }
@@ -29,7 +46,7 @@ export async function acquireProviderAdmission(
   providerKey: string,
   now: Date = new Date()
 ): Promise<ProviderAdmissionResult> {
-  const config = DEFAULT_LIMITS[scope];
+  const config = providerLimit(scope);
   const key = bucketKey(scope, providerKey);
 
   return prisma.$transaction(
@@ -62,7 +79,7 @@ export async function deferProviderAdmission(
   providerKey: string,
   retryAt: Date
 ): Promise<void> {
-  const config = DEFAULT_LIMITS[scope];
+  const config = providerLimit(scope);
   const key = bucketKey(scope, providerKey);
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "RateLimit" ("key", "count", "expiresAt")
