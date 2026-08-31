@@ -29,6 +29,13 @@ export default async function CustomFieldsPage() {
       },
     },
   })
+  const serializedCustomFields = customFields.map(field => ({
+    ...field,
+    options:
+      Array.isArray(field.options) && field.options.every(value => typeof value === 'string')
+        ? field.options
+        : null,
+  }))
 
   return (
     <div className="space-y-6">
@@ -43,7 +50,7 @@ export default async function CustomFieldsPage() {
         title="Custom Field Builder"
         description="Create, edit, and manage structured incident metadata"
       >
-        <CustomFieldsConfig customFields={customFields} />
+        <CustomFieldsConfig customFields={serializedCustomFields} />
       </SettingsSection>
     </div>
   )

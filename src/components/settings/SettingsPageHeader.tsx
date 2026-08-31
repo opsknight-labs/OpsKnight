@@ -8,6 +8,7 @@ type Props = {
   title?: string;
   description?: string;
   isAdmin?: boolean;
+  isAuditor?: boolean;
   isResponderOrAbove?: boolean;
   actions?: React.ReactNode;
   badge?: React.ReactNode;

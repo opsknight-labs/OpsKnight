@@ -1,12 +1,11 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { runSerializableTransaction } from './db-utils';
-// import { sendNotification, NotificationChannel } from './notifications'; // Unused
-import type { NotificationChannel } from './notifications';
 import { buildScheduleBlocks, getFinalScheduleBlocks } from './oncall';
 import { logger } from './logger';
 import { ESCALATION_LOCK_TIMEOUT_MS } from './config';
 import { startOfDayInTimeZone, startOfNextDayInTimeZone } from './timezone';
+import type { NotificationChannel } from './notifications';
 // import { formatDateTime } from './timezone'; // Unused
 
 export interface EscalationExecutionResult {
@@ -659,8 +658,8 @@ export async function executeEscalation(
     return { escalated: false, reason: 'No users to notify' };
   }
 
-  // Send notifications to all resolved users
-  // Use escalation step channels if specified, otherwise use user preferences
+  // Use escalation-step channels when configured, intersected with each
+  // recipient's enabled channels by sendUserNotification.
   const { sendUserNotification } = await import('./user-notifications');
   const notificationsSent = [];
   const escalationChannels: NotificationChannel[] | undefined =

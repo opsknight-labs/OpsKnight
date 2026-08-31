@@ -24,16 +24,17 @@ import {
   MessageSquare,
   KeyRound,
   SlidersHorizontal,
+  type LucideIcon,
 } from 'lucide-react';
 
-const sectionIcons: Record<string, any> = {
+const sectionIcons: Record<string, LucideIcon> = {
   account: User,
   workspace: Building2,
   integrations: Puzzle,
   system: Settings,
 };
 
-const itemIcons: Record<string, any> = {
+const itemIcons: Record<string, LucideIcon> = {
   profile: User,
   security: Shield,
   'custom-fields': SlidersHorizontal,
@@ -46,14 +47,20 @@ const itemIcons: Record<string, any> = {
   'health-center': Activity,
   system: Settings,
   'notifications-admin': Bell,
+  'notification-operations': Activity,
   'notification-history': Bell,
 };
 
 export default async function SettingsOverviewPage() {
   const permissions = await getUserPermissions();
 
-  const canAccess = (item: { requiresAdmin?: boolean; requiresResponder?: boolean }) => {
+  const canAccess = (item: {
+    requiresAdmin?: boolean;
+    requiresAdminOrAuditor?: boolean;
+    requiresResponder?: boolean;
+  }) => {
     if (item.requiresAdmin && !permissions.isAdmin) return false;
+    if (item.requiresAdminOrAuditor && !permissions.isAdmin && !permissions.isAuditor) return false;
     if (item.requiresResponder && !permissions.isResponderOrAbove) return false;
     return true;
   };

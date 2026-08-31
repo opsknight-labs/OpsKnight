@@ -79,6 +79,24 @@ enum NotificationChannel {
   WHATSAPP
 }
 
+enum NotificationCategory {
+  INCIDENT
+  SECURITY
+  STATUS_PAGE
+  SLA
+  ADMINISTRATION
+  SYSTEM
+}
+
+enum NotificationRecipientType {
+  USER
+  EMAIL
+  PHONE
+  SUBSCRIBER
+  SLACK_CHANNEL
+  WEBHOOK
+}
+
 enum InAppNotificationType {
   INCIDENT
   SCHEDULE
@@ -847,23 +865,40 @@ model OnCallShift {
 
 // Notification model for contact attempts
 model Notification {
-  id                String              @id @default(cuid())
-  incidentId        String
-  userId            String
+  id                String                    @id @default(cuid())
+  incidentId        String?
+  userId            String?
   channel           NotificationChannel
-  status            NotificationStatus  @default(PENDING)
+  status            NotificationStatus        @default(PENDING)
   message           String?
-  eventType         String              @default("triggered")
+  eventType         String                    @default("triggered")
+  category          NotificationCategory      @default(INCIDENT)
+  recipientType     NotificationRecipientType @default(USER)
+  recipientId       String?
+  recipientDisplay  String?
+  recipientHash     String?
+  templateKey       String?
+  sourceType        String?
+  sourceId          String?
+  deliveryKey       String?                   @unique
+  payloadEncrypted  String?
+  priority          Int                       @default(5)
+  scheduledAt       DateTime                  @default(now())
+  nextAttemptAt     DateTime                  @default(now())
+  lastAttemptAt     DateTime?
+  maxAttempts       Int                       @default(3)
+  expiresAt         DateTime?
   sentAt            DateTime?
   deliveredAt       DateTime?
   failedAt          DateTime?
   errorMsg          String?
-  providerMessageId String?             @unique
-  attempts          Int                 @default(0) // Retry attempt count
-  createdAt         DateTime            @default(now())
+  providerMessageId String?                   @unique
+  attempts          Int                       @default(0) // Retry attempt count
+  createdAt         DateTime                  @default(now())
 
-  incident Incident @relation(fields: [incidentId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
+  incident         Incident?                     @relation(fields: [incidentId], references: [id])
+  user             User?                         @relation(fields: [userId], references: [id])
+  deliveryAttempts NotificationDeliveryAttempt[]
 
   @@index([incidentId]) // For querying notifications by incident
   @@index([userId]) // For querying notifications by user
@@ -873,6 +908,31 @@ model Notification {
   @@index([userId, status, createdAt]) // For user's pending notification queries
   @@index([incidentId, channel], name: "idx_notification_incident_channel") // For channel fallback detection per incident
   @@index([incidentId, userId, status], name: "idx_notification_incident_user_status") // For per-incident per-user dedup checks
+  @@index([status, nextAttemptAt, priority, createdAt], name: "idx_notification_delivery_due")
+  @@index([category, createdAt], name: "idx_notification_category_created")
+  @@index([recipientHash, createdAt], name: "idx_notification_recipient_created")
+  @@index([sourceType, sourceId, createdAt], name: "idx_notification_source_created")
+  @@index([createdAt, id], name: "idx_notification_created_cursor")
+}
+
+model NotificationDeliveryAttempt {
+  id                String    @id @default(cuid())
+  notificationId    String
+  ordinal           Int
+  outcome           String
+  provider          String?
+  providerMessageId String?
+  errorCode         String?
+  errorMessage      String?
+  startedAt         DateTime  @default(now())
+  finishedAt        DateTime?
+  latencyMs         Int?
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, ordinal])
+  @@index([notificationId, startedAt])
+  @@index([outcome, startedAt])
 }
 
 model InAppNotification {

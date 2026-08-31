@@ -35,6 +35,7 @@ describeIntegration('Forgot Password Integration', () => {
   });
 
   beforeEach(async () => {
+    process.env.ENCRYPTION_KEY = '0123456789abcdef'.repeat(4);
     await resetDatabase();
     vi.clearAllMocks();
   });

@@ -82,14 +82,15 @@ export async function initiatePasswordReset(
     const resetLink = `${appUrl}/reset-password?token=${token}`;
 
     let notificationSent = false;
+    let emailIntentId: string | null = null;
 
     // Try email first
     const emailConfig = await getEmailConfig();
     if (emailConfig?.enabled) {
       try {
-        const { sendEmail } = await import('@/lib/email');
         const { getPasswordResetEmailTemplate } =
           await import('@/lib/password-reset-email-template');
+        const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
 
         const emailTemplate = getPasswordResetEmailTemplate({
           userName: user.name || 'User',
@@ -97,13 +98,30 @@ export async function initiatePasswordReset(
           expiryMinutes: 60,
         });
 
-        await sendEmail({
-          to: user.email,
-          subject: emailTemplate.subject,
-          text: emailTemplate.text,
-          html: emailTemplate.html,
+        const delivery = await enqueueCentralNotification({
+          category: 'SECURITY',
+          channel: 'EMAIL',
+          recipientType: 'USER',
+          recipientId: user.id,
+          recipientAddress: user.email,
+          userId: user.id,
+          templateKey: 'password-reset',
+          sourceType: 'USER',
+          sourceId: user.id,
+          eventKey: tokenHash,
+          displayMessage: 'Password reset instructions',
+          expiresAt: expires,
+          priority: 0,
+          payload: {
+            kind: 'EMAIL',
+            to: user.email,
+            subject: emailTemplate.subject,
+            text: emailTemplate.text,
+            html: emailTemplate.html,
+          },
         });
-        notificationSent = true;
+        emailIntentId = delivery.id;
+        notificationSent = delivery.delivered === true;
       } catch (e) {
         const err = e as Error;
         logger.warn('[PasswordReset] Email sending failed, will try SMS fallback', {
@@ -118,12 +136,35 @@ export async function initiatePasswordReset(
       const smsConfig = await getSMSConfig();
       if (smsConfig?.enabled) {
         try {
-          const { sendSMS } = await import('@/lib/sms');
-          await sendSMS({
-            to: user.phoneNumber,
-            message: `Reset your password: ${resetLink}`,
+          const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
+          const delivery = await enqueueCentralNotification({
+            category: 'SECURITY',
+            channel: 'SMS',
+            recipientType: 'USER',
+            recipientId: user.id,
+            recipientAddress: user.phoneNumber,
+            userId: user.id,
+            templateKey: 'password-reset-sms',
+            sourceType: 'USER',
+            sourceId: user.id,
+            eventKey: tokenHash,
+            displayMessage: 'Password reset instructions',
+            expiresAt: expires,
+            priority: 0,
+            payload: {
+              kind: 'SMS',
+              to: user.phoneNumber,
+              message: `Reset your password: ${resetLink}`,
+            },
           });
-          notificationSent = true;
+          notificationSent = delivery.delivered === true;
+          if (notificationSent && emailIntentId) {
+            const { cancelCentralNotification } = await import('@/lib/notification-control-plane');
+            await cancelCentralNotification(
+              emailIntentId,
+              'Superseded by successful SMS fallback.'
+            );
+          }
         } catch (_error) {
           logger.warn('[PasswordReset] SMS sending failed', {
             component: 'password-reset',

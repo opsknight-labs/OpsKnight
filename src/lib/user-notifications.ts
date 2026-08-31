@@ -254,6 +254,8 @@ export async function sendUserNotification(
   let channels = userChannels;
   if (escalationChannels && escalationChannels.length > 0) {
     const selected = escalationChannels.filter(channel => userChannels.includes(channel));
+    // Preserve the existing fallback for legacy policies whose configured
+    // channels are unavailable for this recipient.
     channels = selected.length > 0 ? selected : userChannels;
   }
 
@@ -321,7 +323,9 @@ async function previouslyEngagedResponderIds(incidentId: string): Promise<string
     },
     select: { userId: true },
   });
-  return [...new Set(rows.map(row => row.userId))];
+  return [
+    ...new Set(rows.map(row => row.userId).filter((userId): userId is string => Boolean(userId))),
+  ];
 }
 
 /** Personal lifecycle fan-out. Service integrations are deliberately separate. */

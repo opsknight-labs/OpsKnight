@@ -56,6 +56,7 @@ describeIfRealDB('Notification Flow Integration Tests (Real DB)', () => {
   });
 
   beforeEach(async () => {
+    process.env.ENCRYPTION_KEY = '0123456789abcdef'.repeat(4);
     await resetDatabase();
 
     // Create a default provider to avoid "no provider" errors if code checks it
@@ -94,17 +95,20 @@ describeIfRealDB('Notification Flow Integration Tests (Real DB)', () => {
     const incident = await createTestIncident('Test Incident', service.id);
 
     // 2. Send Service Notifications
-    // 2. Send Service Notifications
     const serviceResult = await sendServiceNotifications(incident.id, 'triggered');
     expect(serviceResult.success).toBe(true);
 
-    // Check that NO user notifications were created yet (Service notifs don't create Notification records usually,
-    // unless they are tracked there. Based on previous logic, they might be strictly external or tracked differently.
-    // The previous test asserted 0 notifications here.)
-    const beforeEscalation = await testPrisma.notification.count({
+    // Service integrations now create durable external-recipient intents, but
+    // must not create a personal user notification before escalation.
+    const beforeEscalation = await testPrisma.notification.findMany({
       where: { incidentId: incident.id },
     });
-    expect(beforeEscalation).toBe(0);
+    expect(beforeEscalation).toHaveLength(1);
+    expect(beforeEscalation[0]).toMatchObject({
+      channel: 'SLACK',
+      recipientType: 'WEBHOOK',
+      userId: null,
+    });
 
     // 3. Execute Escalation
     // This should trigger the policy step 0 -> Notify User
@@ -116,9 +120,10 @@ describeIfRealDB('Notification Flow Integration Tests (Real DB)', () => {
       where: { incidentId: incident.id },
     });
 
-    expect(notifications.length).toBeGreaterThan(0);
-    expect(notifications[0].userId).toBe(user.id);
-    expect(notifications.some(n => n.channel === 'EMAIL')).toBe(true);
+    const escalationNotification = notifications.find(
+      notification => notification.channel === 'EMAIL' && notification.userId === user.id
+    );
+    expect(escalationNotification).toBeDefined();
   });
 
   it('should handle team escalation (Real DB)', async () => {

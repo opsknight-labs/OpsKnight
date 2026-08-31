@@ -95,8 +95,9 @@ export async function sendSlackNotification(
   eventType: SlackEventType,
   incident: IncidentDetails,
   additionalMessage?: string,
-  webhookUrl?: string | null
-): Promise<{ success: boolean; error?: string }> {
+  webhookUrl?: string | null,
+  options: { maxAttempts?: number } = {}
+): Promise<{ success: boolean; error?: string; statusCode?: number; retryAfterMs?: number }> {
   const targetUrl = webhookUrl || SLACK_WEBHOOK_URL;
 
   if (!targetUrl) {
@@ -139,7 +140,7 @@ export async function sendSlackNotification(
         redirect: 'manual',
       },
       {
-        maxAttempts: 3,
+        maxAttempts: options.maxAttempts ?? 3,
         initialDelayMs: 1000,
         retryableErrors: error => {
           // Only retry on network errors or 5xx server errors
@@ -185,13 +186,18 @@ export async function sendSlackNotification(
     );
     return { success: true };
   } catch (error: unknown) {
-    const err = error as { message?: string };
+    const err = error as { message?: string; statusCode?: number; retryAfterMs?: number };
     logger.error('[Slack] Webhook error after retries', {
       component: 'slack',
       error: err.message,
       incident: incident.id,
     });
-    return { success: false, error: err.message || 'Slack webhook error' };
+    return {
+      success: false,
+      error: err.message || 'Slack webhook error',
+      statusCode: err.statusCode,
+      retryAfterMs: err.retryAfterMs,
+    };
   }
 }
 
@@ -423,15 +429,16 @@ export async function sendSlackMessageToChannel(
   eventType: SlackEventType,
   includeInteractiveButtons: boolean = true,
   serviceId?: string,
-  additionalMessage?: string
-): Promise<{ success: boolean; error?: string }> {
+  additionalMessage?: string,
+  options: { maxAttempts?: number } = {}
+): Promise<{ success: boolean; error?: string; statusCode?: number; retryAfterMs?: number }> {
   // Get bot token (from OAuth integration or env fallback)
   const botToken = await getSlackBotToken(serviceId);
 
   if (!botToken) {
     logger.warn('[Slack] No bot token configured, falling back to webhook');
     // Fallback to webhook if API token not available
-    return sendSlackNotification(eventType, incident, additionalMessage, undefined);
+    return sendSlackNotification(eventType, incident, additionalMessage, undefined, options);
   }
 
   const color = getStatusColor(eventType);
@@ -470,7 +477,7 @@ export async function sendSlackMessageToChannel(
         body: JSON.stringify(payload),
       },
       {
-        maxAttempts: 3,
+        maxAttempts: options.maxAttempts ?? 3,
         initialDelayMs: 1000,
         retryableErrors: error => {
           if (error instanceof Error) {
@@ -499,9 +506,14 @@ export async function sendSlackMessageToChannel(
     );
     return { success: true };
   } catch (error: unknown) {
-    const err = error as { message?: string };
+    const err = error as { message?: string; statusCode?: number; retryAfterMs?: number };
     logger.error('[Slack] API error', { error: err.message, channel });
-    return { success: false, error: err.message || 'Slack API error' };
+    return {
+      success: false,
+      error: err.message || 'Slack API error',
+      statusCode: err.statusCode,
+      retryAfterMs: err.retryAfterMs,
+    };
   }
 }
 

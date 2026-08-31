@@ -31,6 +31,7 @@ export default async function SettingsPage({
         <SettingsPageHeader
           currentPageId={currentPageId}
           isAdmin={permissions.isAdmin}
+          isAuditor={permissions.isAuditor}
           isResponderOrAbove={permissions.isResponderOrAbove}
         />
       )}

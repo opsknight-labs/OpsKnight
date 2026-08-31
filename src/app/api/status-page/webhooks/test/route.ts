@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
+import crypto from 'crypto';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
-import { deliverWebhook } from '@/lib/status-page-webhooks';
 import { decryptStoredSecret } from '@/lib/encryption';
+import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 
 /**
  * Test webhook endpoint
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     // Get webhook if specific webhookId provided, otherwise test all webhooks for status page
     const webhooks = webhookId
-      ? [await prisma.statusPageWebhook.findUnique({ where: { id: webhookId } })]
+      ? [await prisma.statusPageWebhook.findFirst({ where: { id: webhookId, statusPageId } })]
       : await prisma.statusPageWebhook.findMany({
           where: { statusPageId, enabled: true },
         });
@@ -65,12 +66,29 @@ export async function POST(req: NextRequest) {
           timestamp: new Date().toISOString(),
           data: testPayload,
         };
-        const ok = await deliverWebhook(
-          webhook!.url,
-          await decryptStoredSecret(webhook!.secret),
-          payload
-        );
-        if (!ok) throw new Error(`Failed delivery to ${webhook!.url}`);
+        const deliveryId = crypto.randomUUID();
+        const result = await enqueueCentralNotification({
+          category: 'STATUS_PAGE',
+          channel: 'WEBHOOK',
+          recipientType: 'WEBHOOK',
+          recipientId: webhook!.id,
+          recipientAddress: webhook!.url,
+          templateKey: 'status-page-webhook-test',
+          sourceType: 'STATUS_PAGE_WEBHOOK',
+          sourceId: webhook!.id,
+          eventKey: `manual-test:${deliveryId}`,
+          displayMessage: 'Status-page webhook test',
+          priority: 2,
+          expiresAt: new Date(Date.now() + 10 * 60_000),
+          payload: {
+            kind: 'STATUS_PAGE_WEBHOOK',
+            url: webhook!.url,
+            secret: await decryptStoredSecret(webhook!.secret),
+            payload,
+            deliveryId,
+          },
+        });
+        if (!result.delivered) throw new Error(`Failed delivery to ${webhook!.url}`);
         return { webhookId: webhook!.id, url: webhook!.url, success: true };
       })
     );
@@ -97,7 +115,7 @@ export async function POST(req: NextRequest) {
       },
       200
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('api.status_page.webhook.test_error', {
       error: error instanceof Error ? error.message : String(error),
     });

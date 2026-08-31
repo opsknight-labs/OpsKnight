@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 
 type Props = {
   isAdmin?: boolean;
+  isAuditor?: boolean;
   isResponderOrAbove?: boolean;
   variant?: 'sidebar' | 'drawer';
   onNavigate?: () => void;
@@ -50,14 +51,20 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
 
 export default function SettingsNav({
   isAdmin = false,
+  isAuditor = false,
   isResponderOrAbove = false,
   variant = 'sidebar',
   onNavigate,
 }: Props) {
   const pathname = usePathname();
 
-  const isItemDisabled = (item: { requiresAdmin?: boolean; requiresResponder?: boolean }) => {
+  const isItemDisabled = (item: {
+    requiresAdmin?: boolean;
+    requiresAdminOrAuditor?: boolean;
+    requiresResponder?: boolean;
+  }) => {
     if (item.requiresAdmin && !isAdmin) return true;
+    if (item.requiresAdminOrAuditor && !isAdmin && !isAuditor) return true;
     if (item.requiresResponder && !isResponderOrAbove) return true;
     return false;
   };

@@ -3,7 +3,7 @@ import { POST } from '@/app/api/notifications/test-push/route';
 import prisma from '@/lib/prisma';
 import { getPushConfig } from '@/lib/notification-providers';
 import { getServerSession } from 'next-auth';
-import { sendPush } from '@/lib/push';
+import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 
 vi.mock('next-auth', () => ({
   getServerSession: vi.fn(),
@@ -33,8 +33,8 @@ vi.mock('@/lib/notification-providers', () => ({
   getPushConfig: vi.fn(),
 }));
 
-vi.mock('@/lib/push', () => ({
-  sendPush: vi.fn(),
+vi.mock('@/lib/notification-control-plane', () => ({
+  enqueueCentralNotification: vi.fn(),
 }));
 
 function mockCurrentUser() {
@@ -54,6 +54,11 @@ describe('API Route - Notifications Test Push', () => {
       vapidPrivateKey: 'private-key',
     });
     vi.mocked(prisma.userDevice.count).mockResolvedValue(1);
+    vi.mocked(enqueueCentralNotification).mockResolvedValue({
+      id: 'notification_test',
+      created: true,
+      delivered: true,
+    });
   });
 
   it('returns 401 when unauthenticated', async () => {
@@ -88,7 +93,7 @@ describe('API Route - Notifications Test Push', () => {
     expect(res.status).toBe(400);
     expect(body.code).toBe('VALIDATION_FAILED');
     expect(body.retryable).toBe(false);
-    expect(sendPush).not.toHaveBeenCalled();
+    expect(enqueueCentralNotification).not.toHaveBeenCalled();
   });
 
   it('returns non-retryable validation when no web subscription exists', async () => {
@@ -102,14 +107,18 @@ describe('API Route - Notifications Test Push', () => {
     expect(res.status).toBe(400);
     expect(body.code).toBe('VALIDATION_FAILED');
     expect(body.retryable).toBe(false);
-    expect(sendPush).not.toHaveBeenCalled();
+    expect(enqueueCentralNotification).not.toHaveBeenCalled();
   });
 
   it('returns retryable provider unavailable when delivery fails but subscription remains', async () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
     mockCurrentUser();
     vi.mocked(prisma.userDevice.count).mockResolvedValue(1);
-    vi.mocked(sendPush).mockResolvedValue({ success: false, error: 'provider unavailable' });
+    vi.mocked(enqueueCentralNotification).mockResolvedValue({
+      id: 'notification_test',
+      created: true,
+      delivered: false,
+    });
 
     const res = await POST();
     const body = await res.json();
@@ -122,10 +131,12 @@ describe('API Route - Notifications Test Push', () => {
   it('returns non-retryable validation when a failed send removes the expired subscription', async () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
     mockCurrentUser();
-    vi.mocked(prisma.userDevice.count)
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(0);
-    vi.mocked(sendPush).mockResolvedValue({ success: false, error: 'subscription expired' });
+    vi.mocked(prisma.userDevice.count).mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    vi.mocked(enqueueCentralNotification).mockResolvedValue({
+      id: 'notification_test',
+      created: true,
+      delivered: false,
+    });
 
     const res = await POST();
     const body = await res.json();
@@ -138,10 +149,11 @@ describe('API Route - Notifications Test Push', () => {
   it('returns 200 when push succeeds', async () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
     mockCurrentUser();
-    vi.mocked(sendPush).mockResolvedValue({ success: true });
-
     const res = await POST();
 
     expect(res.status).toBe(200);
+    expect(enqueueCentralNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ category: 'SYSTEM', channel: 'PUSH', userId: 'user-1' })
+    );
   });
 });

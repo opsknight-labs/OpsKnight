@@ -24,6 +24,7 @@ export type WebhookOptions = {
   secret?: string; // For HMAC signature
   method?: 'POST' | 'PUT' | 'PATCH';
   timeout?: number; // Timeout in milliseconds
+  maxAttempts?: number;
 };
 
 export type WebhookResult = {
@@ -31,6 +32,7 @@ export type WebhookResult = {
   error?: string;
   statusCode?: number;
   responseBody?: string;
+  retryAfterMs?: number;
 };
 
 /**
@@ -52,6 +54,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
       secret,
       method = 'POST',
       timeout = 10000, // 10 seconds default
+      maxAttempts = 3,
     } = options;
 
     if (!url) {
@@ -109,7 +112,17 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
               });
 
               if (!response.ok && isRetryableHttpError(response.status)) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const retryAfter = response.headers.get('Retry-After');
+                const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : NaN;
+                const error = new Error(`HTTP ${response.status}: ${response.statusText}`) as Error & {
+                  statusCode?: number;
+                  retryAfterMs?: number;
+                };
+                error.statusCode = response.status;
+                if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+                  error.retryAfterMs = retryAfterSeconds * 1_000;
+                }
+                throw error;
               }
 
               return response;
@@ -121,7 +134,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
           }
         },
         {
-          maxAttempts: 3,
+          maxAttempts,
           initialDelayMs: 1000,
           retryableErrors: error => {
             if (error instanceof Error) {
@@ -189,7 +202,12 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
     }
   } catch (error: any) {
     logger.error('Webhook send error', { component: 'webhooks', error, url: options.url });
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: error.message,
+      statusCode: error.statusCode,
+      retryAfterMs: error.retryAfterMs,
+    };
   }
 }
 

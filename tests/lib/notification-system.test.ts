@@ -23,9 +23,12 @@ import {
 } from '@/lib/webhooks';
 import { sendIncidentWhatsApp } from '@/lib/whatsapp';
 import { getUserNotificationChannels, sendIncidentNotifications } from '@/lib/user-notifications';
-import * as slack from '@/lib/slack';
 import * as notificationProviders from '@/lib/notification-providers';
 import * as sms from '@/lib/sms';
+import { enqueueCentralNotification } from '@/lib/notification-control-plane';
+vi.mock('@/lib/notification-control-plane', () => ({
+  enqueueCentralNotification: vi.fn(),
+}));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
@@ -64,6 +67,11 @@ describe('Notification System Tests', () => {
     vi.mocked(prisma.notification.findMany).mockResolvedValue([] as never);
     vi.mocked(prisma.backgroundJob.findUnique).mockResolvedValue(null as never);
     vi.mocked(prisma.backgroundJob.upsert).mockResolvedValue({} as never);
+    vi.mocked(enqueueCentralNotification).mockResolvedValue({
+      id: 'notification_test',
+      created: true,
+      delivered: true,
+    });
   });
 
   describe('Service Notification Isolation', () => {
@@ -77,7 +85,7 @@ describe('Notification System Tests', () => {
         serviceNotificationChannels: ['SLACK'],
         slackWebhookUrl: 'https://hooks.slack.com/test',
         policy: null,
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: incidentId,
@@ -97,17 +105,16 @@ describe('Notification System Tests', () => {
           slackWebhookUrl: 'https://hooks.slack.com/test',
           webhookIntegrations: [],
         },
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-      vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notif-1' } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-
-      const slackSpy = vi.spyOn(slack, 'notifySlackForIncident');
-      slackSpy.mockResolvedValue({ success: true });
+      vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notif-1' } as never); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       const result = await sendServiceNotifications(incidentId, 'triggered');
 
       expect(result.success).toBe(true);
-      expect(slackSpy).toHaveBeenCalled();
+      expect(enqueueCentralNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ channel: 'SLACK', incidentId })
+      );
     });
   });
 
@@ -141,7 +148,7 @@ describe('Notification System Tests', () => {
           serviceNotificationChannels: ['SLACK'],
           team: null,
         },
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       const serviceNotifications = await import('@/lib/service-notifications');
       const serviceSpy = vi
@@ -290,13 +297,15 @@ describe('Notification System Tests', () => {
     });
 
     it('should page a single user when equal-priority layers overlap', async () => {
-      vi.mocked(prisma.onCallSchedule.findUnique).mockResolvedValue(scheduleWithLayers() as any);
+      vi.mocked(prisma.onCallSchedule.findUnique).mockResolvedValue(scheduleWithLayers() as never);
       const users = await resolveEscalationTarget('SCHEDULE', scheduleId, new Date());
       expect(users).toEqual([user1Id]);
     });
 
     it('should page the higher-priority layer when layers overlap', async () => {
-      vi.mocked(prisma.onCallSchedule.findUnique).mockResolvedValue(scheduleWithLayers(0, 10) as any);
+      vi.mocked(prisma.onCallSchedule.findUnique).mockResolvedValue(
+        scheduleWithLayers(0, 10) as never
+      );
       const users = await resolveEscalationTarget('SCHEDULE', scheduleId, new Date());
       expect(users).toEqual([user2Id]);
     });
@@ -306,10 +315,24 @@ describe('Notification System Tests', () => {
       vi.mocked(prisma.onCallSchedule.findUnique).mockResolvedValue({
         ...scheduleWithLayers(),
         overrides: [
-          { id: 'ovr-1', userId: user1Id, user: { name: 'User 1' }, start: new Date(now.getTime() - 3600_000), end: new Date(now.getTime() + 3600_000), replacesUserId: null },
-          { id: 'ovr-2', userId: user2Id, user: { name: 'User 2' }, start: new Date(now.getTime() - 3600_000), end: new Date(now.getTime() + 3600_000), replacesUserId: null },
+          {
+            id: 'ovr-1',
+            userId: user1Id,
+            user: { name: 'User 1' },
+            start: new Date(now.getTime() - 3600_000),
+            end: new Date(now.getTime() + 3600_000),
+            replacesUserId: null,
+          },
+          {
+            id: 'ovr-2',
+            userId: user2Id,
+            user: { name: 'User 2' },
+            start: new Date(now.getTime() - 3600_000),
+            end: new Date(now.getTime() + 3600_000),
+            replacesUserId: null,
+          },
         ],
-      } as any);
+      } as never);
       const users = await resolveEscalationTarget('SCHEDULE', scheduleId, now);
       expect(users).toEqual(expect.arrayContaining([user1Id, user2Id]));
     });
@@ -319,8 +342,12 @@ describe('Notification System Tests', () => {
     it('should return only team lead when notifyOnlyTeamLead is true', async () => {
       const teamLeadId = 'lead-1';
       const teamId = 'team-1';
-      vi.mocked(prisma.team.findUnique).mockResolvedValue({ id: teamId, teamLeadId, members: [{ userId: teamLeadId }] } as any);
-      vi.mocked(prisma.teamMember.findFirst).mockResolvedValue({ userId: teamLeadId } as any);
+      vi.mocked(prisma.team.findUnique).mockResolvedValue({
+        id: teamId,
+        teamLeadId,
+        members: [{ userId: teamLeadId }],
+      } as never);
+      vi.mocked(prisma.teamMember.findFirst).mockResolvedValue({ userId: teamLeadId } as never);
       const users = await resolveEscalationTarget('TEAM', teamId, new Date(), true);
       expect(users).toHaveLength(1);
       expect(users[0]).toBe(teamLeadId);
@@ -329,7 +356,11 @@ describe('Notification System Tests', () => {
     it('should return no users when team lead has team notifications disabled', async () => {
       const teamLeadId = 'lead-2';
       const teamId = 'team-2';
-      vi.mocked(prisma.team.findUnique).mockResolvedValue({ id: teamId, teamLeadId, members: [] } as any);
+      vi.mocked(prisma.team.findUnique).mockResolvedValue({
+        id: teamId,
+        teamLeadId,
+        members: [],
+      } as never);
       vi.mocked(prisma.teamMember.findFirst).mockResolvedValue(null);
       const users = await resolveEscalationTarget('TEAM', teamId, new Date(), true);
       expect(users).toHaveLength(0);
@@ -340,7 +371,11 @@ describe('Notification System Tests', () => {
       const member1Id = 'member-1';
       const member2Id = 'member-2';
       const teamId = 'team-1';
-      vi.mocked(prisma.team.findUnique).mockResolvedValue({ id: teamId, teamLeadId, members: [{ userId: teamLeadId }, { userId: member1Id }, { userId: member2Id }] } as any);
+      vi.mocked(prisma.team.findUnique).mockResolvedValue({
+        id: teamId,
+        teamLeadId,
+        members: [{ userId: teamLeadId }, { userId: member1Id }, { userId: member2Id }],
+      } as never);
       const users = await resolveEscalationTarget('TEAM', teamId, new Date(), false);
       expect(users.length).toBe(3);
       expect(users).toContain(teamLeadId);
@@ -351,16 +386,35 @@ describe('Notification System Tests', () => {
 
   describe('Slack Integration', () => {
     it('should send Slack notification via webhook', async () => {
-      const incident = { id: 'test-id', title: 'Test Incident', status: 'OPEN', urgency: 'HIGH', serviceName: 'Test Service', assigneeName: 'Test User' };
+      const incident = {
+        id: 'test-id',
+        title: 'Test Incident',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        serviceName: 'Test Service',
+        assigneeName: 'Test User',
+      };
       global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-      const result = await sendSlackNotification('triggered', incident, undefined, 'https://hooks.slack.com/test');
+      const result = await sendSlackNotification(
+        'triggered',
+        incident,
+        undefined,
+        'https://hooks.slack.com/test'
+      );
       expect(result.success).toBe(true);
       expect(global.fetch).toHaveBeenCalled();
     });
 
     it('should send Slack message to channel via API', async () => {
       global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
-      const incident = { id: 'test-id', title: 'Test Incident', status: 'OPEN', urgency: 'HIGH', serviceName: 'Test Service', assigneeName: 'Test User' };
+      const incident = {
+        id: 'test-id',
+        title: 'Test Incident',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        serviceName: 'Test Service',
+        assigneeName: 'Test User',
+      };
       vi.mocked(prisma.slackIntegration.findFirst).mockResolvedValue(null);
       const result = await sendSlackMessageToChannel('#incidents', incident, 'triggered', true);
       expect(result.success).toBe(false);
@@ -369,7 +423,18 @@ describe('Notification System Tests', () => {
 
   describe('Webhook Formatters', () => {
     it('should format Google Chat payload correctly', () => {
-      const incident = { id: 'test-id', title: 'Test Incident', description: 'Test description', status: 'OPEN', urgency: 'HIGH', service: { id: 'svc-1', name: 'Test Service' }, assignee: { id: 'user-1', name: 'Test User', email: 'test@example.com' }, createdAt: new Date(), acknowledgedAt: null, resolvedAt: null };
+      const incident = {
+        id: 'test-id',
+        title: 'Test Incident',
+        description: 'Test description',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        service: { id: 'svc-1', name: 'Test Service' },
+        assignee: { id: 'user-1', name: 'Test User', email: 'test@example.com' },
+        createdAt: new Date(),
+        acknowledgedAt: null,
+        resolvedAt: null,
+      };
       const payload = formatGoogleChatPayload(incident, 'triggered', 'https://example.com');
       expect(payload.cards).toBeDefined();
       expect(payload.cards[0].header.title).toContain('Incident Triggered');
@@ -377,7 +442,18 @@ describe('Notification System Tests', () => {
     });
 
     it('should format Microsoft Teams payload correctly', () => {
-      const incident = { id: 'test-id', title: 'Test Incident', description: 'Test description', status: 'OPEN', urgency: 'HIGH', service: { id: 'svc-1', name: 'Test Service' }, assignee: { id: 'user-1', name: 'Test User', email: 'test@example.com' }, createdAt: new Date(), acknowledgedAt: null, resolvedAt: null };
+      const incident = {
+        id: 'test-id',
+        title: 'Test Incident',
+        description: 'Test description',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        service: { id: 'svc-1', name: 'Test Service' },
+        assignee: { id: 'user-1', name: 'Test User', email: 'test@example.com' },
+        createdAt: new Date(),
+        acknowledgedAt: null,
+        resolvedAt: null,
+      };
       const payload = formatMicrosoftTeamsPayload(incident, 'triggered', 'https://example.com');
       expect(payload.type).toBe('message');
       expect(payload.attachments).toBeDefined();
@@ -385,7 +461,18 @@ describe('Notification System Tests', () => {
     });
 
     it('should format Discord payload correctly', () => {
-      const incident = { id: 'test-id', title: 'Test Incident', description: 'Test description', status: 'OPEN', urgency: 'HIGH', service: { id: 'svc-1', name: 'Test Service' }, assignee: { id: 'user-1', name: 'Test User', email: 'test@example.com' }, createdAt: new Date(), acknowledgedAt: null, resolvedAt: null };
+      const incident = {
+        id: 'test-id',
+        title: 'Test Incident',
+        description: 'Test description',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        service: { id: 'svc-1', name: 'Test Service' },
+        assignee: { id: 'user-1', name: 'Test User', email: 'test@example.com' },
+        createdAt: new Date(),
+        acknowledgedAt: null,
+        resolvedAt: null,
+      };
       const payload = formatDiscordPayload(incident, 'triggered', 'https://example.com');
       expect(payload.embeds).toBeDefined();
       expect(payload.embeds[0].title).toContain('Incident Triggered');
@@ -398,9 +485,26 @@ describe('Notification System Tests', () => {
       const userId = 'user-1';
       const incidentId = 'inc-1';
       const serviceId = 'svc-1';
-      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: userId, phoneNumber: '+1234567890', name: 'Test User' } as any);
-      vi.mocked(prisma.incident.findUnique).mockResolvedValue({ id: incidentId, title: 'Test Incident', urgency: 'HIGH', service: { id: serviceId, name: 'Test Service' }, assignee: null } as any);
-      vi.spyOn(notificationProviders, 'getWhatsAppConfig').mockResolvedValue({ enabled: true, provider: 'twilio', accountSid: 'ACtest-sid', authToken: 'test-token', whatsappNumber: '+1234567890', whatsappContentSid: 'test-content-sid' } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: userId,
+        phoneNumber: '+1234567890',
+        name: 'Test User',
+      } as never);
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        id: incidentId,
+        title: 'Test Incident',
+        urgency: 'HIGH',
+        service: { id: serviceId, name: 'Test Service' },
+        assignee: null,
+      } as never);
+      vi.spyOn(notificationProviders, 'getWhatsAppConfig').mockResolvedValue({
+        enabled: true,
+        provider: 'twilio',
+        accountSid: 'ACtest-sid',
+        authToken: 'test-token',
+        whatsappNumber: '+1234567890',
+        whatsappContentSid: 'test-content-sid',
+      } as never);
       const result = await sendIncidentWhatsApp(userId, incidentId, 'triggered');
       if (!result.success) console.error('WhatsApp Test Failed with error:', result.error);
       expect(result.success).toBe(true);
@@ -410,9 +514,18 @@ describe('Notification System Tests', () => {
   describe('Channel Priority', () => {
     it('should return channels in priority order: PUSH → SMS → WhatsApp → EMAIL', async () => {
       const userId = 'user-1';
-      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: userId, emailNotificationsEnabled: true, smsNotificationsEnabled: true, pushNotificationsEnabled: true, whatsappNotificationsEnabled: true } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: userId,
+        emailNotificationsEnabled: true,
+        smsNotificationsEnabled: true,
+        pushNotificationsEnabled: true,
+        whatsappNotificationsEnabled: true,
+      } as never);
       vi.spyOn(notificationProviders, 'isChannelAvailable').mockResolvedValue(true);
-      vi.spyOn(notificationProviders, 'getSMSConfig').mockResolvedValue({ enabled: true, provider: 'twilio' } as any);
+      vi.spyOn(notificationProviders, 'getSMSConfig').mockResolvedValue({
+        enabled: true,
+        provider: 'twilio',
+      } as never);
       const channels = await getUserNotificationChannels(userId);
       const pushIndex = channels.indexOf('PUSH');
       const smsIndex = channels.indexOf('SMS');
@@ -424,24 +537,51 @@ describe('Notification System Tests', () => {
     });
   });
 
-  describe('Escalation Step Channels', () => {
-    it('should use escalation step channels when configured', async () => {
+  describe('Escalation Recipient Routing', () => {
+    it('should execute a configured escalation step without overriding user preferences', async () => {
       const userId = 'user-1';
       const incidentId = 'inc-1';
       const serviceId = 'svc-1';
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-        id: incidentId, title: 'Test Incident', status: 'OPEN', currentEscalationStep: 0, escalationStatus: 'ESCALATING',
-        service: { id: serviceId, policy: { steps: [{ stepOrder: 0, delayMinutes: 0, targetType: 'USER', targetUserId: userId, notificationChannels: ['SMS'], targetUser: { name: 'Test User' } }] } },
-      } as any);
-      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 } as any);
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
+        id: incidentId,
+        title: 'Test Incident',
+        status: 'OPEN',
+        currentEscalationStep: 0,
+        escalationStatus: 'ESCALATING',
+        service: {
+          id: serviceId,
+          policy: {
+            steps: [
+              {
+                stepOrder: 0,
+                delayMinutes: 0,
+                targetType: 'USER',
+                targetUserId: userId,
+                notificationChannels: ['SMS'],
+                targetUser: { name: 'Test User' },
+              },
+            ],
+          },
+        },
+      } as never);
+      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 } as never);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
+      vi.mocked(prisma.incident.update).mockResolvedValue({} as never);
       const smsSpy = vi.spyOn(sms, 'sendIncidentSMS');
       smsSpy.mockResolvedValue({ success: true });
       const notificationModule = await import('@/lib/user-notifications');
-      vi.spyOn(notificationModule, 'sendUserNotification').mockResolvedValue({ success: true, channelsUsed: [] } as any);
+      const sendUserSpy = vi.spyOn(notificationModule, 'sendUserNotification').mockResolvedValue({
+        success: true,
+        channelsUsed: [],
+      } as never);
       const result = await executeEscalation(incidentId, 0);
       expect(result.escalated).toBe(true);
+      expect(sendUserSpy).toHaveBeenCalledWith(
+        incidentId,
+        userId,
+        expect.any(String),
+        ['SMS']
+      );
     });
   });
 });

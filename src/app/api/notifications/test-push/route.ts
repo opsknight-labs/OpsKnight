@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { getAuthOptions } from '@/lib/auth';
 import { AppError, isAppError } from '@/lib/errors';
@@ -5,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { getPushConfig } from '@/lib/notification-providers';
 import prisma from '@/lib/prisma';
 import { notificationProviderUnavailable } from '@/lib/provider-errors';
-import { sendPush } from '@/lib/push';
+import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getServerSession } from 'next-auth';
 
@@ -72,18 +73,35 @@ export async function POST() {
       );
     }
 
-    const result = await sendPush({
+    const result = await enqueueCentralNotification({
+      category: 'SYSTEM',
+      channel: 'PUSH',
+      recipientType: 'USER',
+      recipientId: user.id,
+      recipientAddress: user.id,
       userId: user.id,
-      title: '🔔 OpsKnight Test Push',
-      body: `Hey ${user.name || 'there'}! Your push notifications are working perfectly. ✅`,
-      data: {
-        url: '/m/notifications',
-        type: 'test',
+      templateKey: 'test-push',
+      sourceType: 'USER',
+      sourceId: user.id,
+      // Each rate-limited user action is intentionally a distinct delivery request.
+      eventKey: `manual-test:${crypto.randomUUID()}`,
+      displayMessage: 'Test push notification',
+      priority: 2,
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+      payload: {
+        kind: 'PUSH',
+        userId: user.id,
+        title: '🔔 OpsKnight Test Push',
+        body: `Hey ${user.name || 'there'}! Your push notifications are working perfectly. ✅`,
+        data: {
+          url: '/m/notifications',
+          type: 'test',
+        },
+        badge: 1,
       },
-      badge: 1,
     });
 
-    if (!result.success) {
+    if (!result.delivered) {
       const remainingDevices = await prisma.userDevice.count({
         where: { userId: user.id, platform: 'web' },
       });
