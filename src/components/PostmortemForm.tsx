@@ -36,9 +36,14 @@ import { useRouter } from 'next/navigation';
 import PostmortemTimelineBuilder from './postmortem/PostmortemTimelineBuilder';
 import PostmortemImpactInput from './postmortem/PostmortemImpactInput';
 import PostmortemActionItems from './postmortem/PostmortemActionItems';
+import FiveWhysBuilder, { type FiveWhysStep } from './postmortem/FiveWhysBuilder';
+import ContributingFactorsSelector, {
+  type FactorType,
+  ALL_FACTORS,
+} from './postmortem/ContributingFactorsSelector';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
-import { AlertCircle, AlertTriangle, Loader2, Wand2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Loader2, Wand2, Sparkles } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -81,6 +86,101 @@ type PostmortemFormProps = {
     };
   }>;
 };
+
+// Helper to extract clean root cause narrative without embedded 5-whys or factor blocks
+function extractNarrative(rawRootCause?: string | null): string {
+  if (!rawRootCause) return '';
+  return (
+    rawRootCause
+      .split(/### 5-Whys Analysis/i)[0]
+      ?.split(/\[Contributing Factors:.*\]/i)[0]
+      ?.trim() || ''
+  );
+}
+
+// Helper to parse 5-whys steps from existing root cause text
+function parseStoredFiveWhys(rawRootCause?: string | null): FiveWhysStep[] {
+  if (!rawRootCause) return [];
+  const lines = rawRootCause.split('\n').filter(l => l.trim().length > 0);
+  const whyLines = lines.filter(l => /^(why\s*#?\d*|why:|\d+\.\s*why)/i.test(l.trim()));
+
+  if (whyLines.length > 0) {
+    return whyLines.map((line, idx) => {
+      const parts = line.split(/:\s*|\s*-\s*|\s*➔\s*/);
+      return {
+        id: `why-${idx + 1}-${Date.now()}`,
+        question: parts[0]?.trim() || `Why #${idx + 1}`,
+        answer: parts.slice(1).join(': ').trim() || '',
+      };
+    });
+  }
+
+  return [];
+}
+
+// Helper to parse factor tags from existing root cause text
+function parseStoredFactors(
+  rawRootCause?: string | null,
+  rawSummary?: string | null
+): FactorType[] {
+  const factors: FactorType[] = [];
+  const combined = `${rawRootCause || ''} ${rawSummary || ''}`.toLowerCase();
+
+  // Match explicit [Contributing Factors: ...] header
+  const match = rawRootCause?.match(/\[Contributing Factors:\s*([^\]]+)\]/i);
+  if (match && match[1]) {
+    const factorNames = match[1].split(',').map(s => s.trim().toUpperCase());
+    ALL_FACTORS.forEach(f => {
+      if (factorNames.includes(f) || factorNames.includes(f.replace('_', ' '))) {
+        factors.push(f);
+      }
+    });
+  }
+
+  // Keyword inferences
+  if (
+    combined.includes('database') ||
+    combined.includes('server') ||
+    combined.includes('cpu') ||
+    combined.includes('memory') ||
+    combined.includes('network')
+  ) {
+    if (!factors.includes('INFRASTRUCTURE')) factors.push('INFRASTRUCTURE');
+  }
+  if (
+    combined.includes('bug') ||
+    combined.includes('null') ||
+    combined.includes('syntax') ||
+    combined.includes('deploy') ||
+    combined.includes('regression')
+  ) {
+    if (!factors.includes('CODE_DEFECT')) factors.push('CODE_DEFECT');
+  }
+  if (
+    combined.includes('monitoring') ||
+    combined.includes('alert') ||
+    combined.includes('metric') ||
+    combined.includes('blindspot')
+  ) {
+    if (!factors.includes('MONITORING_GAP')) factors.push('MONITORING_GAP');
+  }
+  if (
+    combined.includes('runbook') ||
+    combined.includes('procedure') ||
+    combined.includes('handoff')
+  ) {
+    if (!factors.includes('PROCESS')) factors.push('PROCESS');
+  }
+  if (
+    combined.includes('vendor') ||
+    combined.includes('third-party') ||
+    combined.includes('upstream')
+  ) {
+    if (!factors.includes('VENDOR_DEPENDENCY')) factors.push('VENDOR_DEPENDENCY');
+  }
+
+  return factors;
+}
 
 export default function PostmortemForm({
   incidentId,
@@ -130,13 +230,13 @@ export default function PostmortemForm({
       summary: initialData?.summary || '',
       status: (initialData?.status as 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') || 'DRAFT',
       isPublic: initialData?.isPublic ?? true,
-      rootCause: initialData?.rootCause || '',
+      rootCause: extractNarrative(initialData?.rootCause),
       resolution: initialData?.resolution || '',
       lessons: initialData?.lessons || '',
     },
   });
 
-  // Complex state managed separately
+  // State managed separately
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(
     parseTimeline(initialData?.timeline)
   );
@@ -148,6 +248,18 @@ export default function PostmortemForm({
       legacyIdPrefix: `postmortem-${initialData?.id ?? incidentId ?? 'draft'}`,
     })
   );
+  const [fiveWhysSteps, setFiveWhysSteps] = useState<FiveWhysStep[]>(() =>
+    parseStoredFiveWhys(initialData?.rootCause)
+  );
+  const [selectedFactors, setSelectedFactors] = useState<FactorType[]>(() =>
+    parseStoredFactors(initialData?.rootCause, initialData?.summary)
+  );
+
+  const handleToggleFactor = (factor: FactorType) => {
+    setSelectedFactors(prev =>
+      prev.includes(factor) ? prev.filter(f => f !== factor) : [...prev, factor]
+    );
+  };
 
   const onSubmit = (data: PostmortemFormValues) => {
     setGeneralError(null);
@@ -159,8 +271,28 @@ export default function PostmortemForm({
       return;
     }
 
+    // Assemble combined rootCause structure
+    const rootCauseParts: string[] = [];
+    const narrative = data.rootCause?.trim();
+    if (narrative) {
+      rootCauseParts.push(narrative);
+    }
+
+    if (selectedFactors.length > 0) {
+      rootCauseParts.push(`[Contributing Factors: ${selectedFactors.join(', ')}]`);
+    }
+
+    const validWhys = fiveWhysSteps.filter(s => s.question.trim() || s.answer.trim());
+    if (validWhys.length > 0) {
+      const whysFormatted = validWhys
+        .map((s, idx) => `Why #${idx + 1}: ${s.question.trim()} - ${s.answer.trim()}`)
+        .join('\n');
+      rootCauseParts.push(`### 5-Whys Analysis\n${whysFormatted}`);
+    }
+
     const submitData: PostmortemData = {
       ...data,
+      rootCause: rootCauseParts.join('\n\n'),
       timeline: timelineEvents,
       impact: impactMetrics,
       actionItems: actionItems,
@@ -203,6 +335,21 @@ export default function PostmortemForm({
       // Update Complex State
       if (draft.timeline) setTimelineEvents(draft.timeline);
       if (draft.impact) setImpactMetrics(draft.impact);
+
+      // Initialize an actionable starting 5-Whys step based on the incident service
+      const inc = resolvedIncidents.find(i => i.id === targetId);
+      const startingWhys: FiveWhysStep[] = [
+        {
+          id: `why-1-${Date.now()}`,
+          question: `Why did ${inc?.service.name || 'the service'} experience unexpected degradation?`,
+          answer: '',
+        },
+      ];
+      setFiveWhysSteps(startingWhys);
+
+      // Suggest initial contributing factors based on draft notes
+      const inferred = parseStoredFactors(draft.rootCause, draft.summary);
+      setSelectedFactors(inferred);
 
       toast.success('Draft generated successfully');
     } catch (err: any) {
@@ -389,45 +536,76 @@ export default function PostmortemForm({
         {/* Impact Metrics */}
         <PostmortemImpactInput metrics={impactMetrics} onChange={setImpactMetrics} />
 
-        {/* Root Cause & Resolution */}
+        {/* Root Cause Analysis & 5-Whys Studio */}
         <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">
-          <CardHeader>
-            <CardTitle className="text-xl">Analysis</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Root Cause Analysis & 5-Whys Studio
+            </CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+          <CardContent className="space-y-6">
+            {/* Contributing Factor Tagger */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <FormLabel className="text-sm font-semibold">Contributing Factors</FormLabel>
+                <span className="text-xs text-muted-foreground">
+                  Select all that contributed to this incident
+                </span>
+              </div>
+              <ContributingFactorsSelector
+                selectedFactors={selectedFactors}
+                onToggle={handleToggleFactor}
+                isEditable={true}
+              />
+            </div>
+
+            {/* 5-Whys Interactive Builder */}
+            <div className="pt-4 border-t border-slate-200/80">
+              <FiveWhysBuilder
+                initialSteps={fiveWhysSteps}
+                onChange={setFiveWhysSteps}
+                isEditable={true}
+              />
+            </div>
+
+            {/* Root Cause Narrative */}
             <FormField
               control={form.control}
               name="rootCause"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Root Cause Analysis</FormLabel>
+                <FormItem className="pt-4 border-t border-slate-200/80">
+                  <FormLabel>Technical Root Cause Narrative</FormLabel>
                   <FormControl>
                     <Textarea
-                      rows={6}
-                      placeholder="Describe the root cause in detail..."
+                      rows={5}
+                      placeholder="Explain the technical sequence, failure modes, and underlying conditions in detail..."
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>What was the underlying cause of this incident?</FormDescription>
+                  <FormDescription>
+                    Detailed technical analysis for engineering retrospectives
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            {/* Resolution */}
             <FormField
               control={form.control}
               name="resolution"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Resolution</FormLabel>
+                <FormItem className="pt-4 border-t border-slate-200/80">
+                  <FormLabel>Mitigation & Resolution Steps</FormLabel>
                   <FormControl>
                     <Textarea
                       rows={4}
-                      placeholder="Describe the steps taken to resolve the incident..."
+                      placeholder="Describe how the service was recovered and how stability was verified..."
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>How was the incident resolved?</FormDescription>
+                  <FormDescription>Actions taken to restore full service health</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -449,16 +627,16 @@ export default function PostmortemForm({
               name="lessons"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Lessons Learned</FormLabel>
+                  <FormLabel>What went well, what could be improved?</FormLabel>
                   <FormControl>
                     <Textarea
-                      rows={6}
-                      placeholder="Document key learnings and preventive measures..."
+                      rows={4}
+                      placeholder="1. What went well during the response?&#10;2. What could be improved?&#10;3. Where did we get lucky?"
                       {...field}
                     />
                   </FormControl>
                   <FormDescription>
-                    What did we learn? How can we prevent this in the future?
+                    Key takeaways and recommendations for future resilience
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -467,14 +645,16 @@ export default function PostmortemForm({
           </CardContent>
         </Card>
 
+        {/* Error Alert */}
         {generalError && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <AlertCircle className="w-4 h-4" />
             <AlertDescription>{generalError}</AlertDescription>
           </Alert>
         )}
 
-        <div className="flex gap-3 justify-end">
+        {/* Form Actions */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
           <Button
             type="button"
             variant="outline"
@@ -484,8 +664,16 @@ export default function PostmortemForm({
             Cancel
           </Button>
           <Button type="submit" disabled={isPending}>
-            {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {initialData ? 'Update' : 'Create'} Postmortem
+            {isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : initialData ? (
+              'Update Postmortem'
+            ) : (
+              'Create Postmortem'
+            )}
           </Button>
         </div>
       </form>
