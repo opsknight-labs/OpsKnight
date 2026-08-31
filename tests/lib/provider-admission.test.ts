@@ -14,7 +14,7 @@ vi.mock('@/lib/prisma', () => ({
     $transaction: mocks.transaction,
     $executeRaw: mocks.executeRaw,
     $queryRaw: mocks.queryRaw,
-    rateLimit: { deleteMany: mocks.deleteMany },
+    rateLimit: { deleteMany: mocks.deleteMany, findUnique: mocks.findUnique },
   },
 }));
 import {
@@ -26,27 +26,20 @@ import {
 describe('provider admission control', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.transaction.mockImplementation(async callback =>
-      callback({
-        rateLimit: { findUnique: mocks.findUnique, upsert: mocks.upsert, update: mocks.update },
-      })
-    );
   });
   it('opens a new distributed provider window', async () => {
-    mocks.findUnique.mockResolvedValue(null);
+    mocks.queryRaw.mockResolvedValue([{ expiresAt: new Date('2026-08-30T12:00:00.125Z') }]);
     const now = new Date('2026-08-30T12:00:00.000Z');
     await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toEqual({
       allowed: true,
     });
-    expect(mocks.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { key: 'provider:email:default' },
-        create: expect.objectContaining({ count: 1 }),
-      })
-    );
+    const query = mocks.queryRaw.mock.calls[0]?.[0] as { strings?: string[] };
+    expect(query.strings?.join('?')).toContain('ON CONFLICT ("key") DO UPDATE');
+    expect(query.strings?.join('?')).toContain('WHERE "RateLimit"."expiresAt" <=');
   });
   it('defers without consuming a provider request when the shared budget is full', async () => {
     const expiresAt = new Date('2026-08-30T12:00:01.500Z');
+    mocks.queryRaw.mockResolvedValue([]);
     mocks.findUnique.mockResolvedValue({ key: 'provider:email:default', count: 8, expiresAt });
     await expect(
       acquireProviderAdmission('EMAIL', 'default', new Date('2026-08-30T12:00:00.500Z'))
@@ -55,7 +48,7 @@ describe('provider admission control', () => {
       retryAt: new Date('2026-08-30T12:00:00.625Z'),
       reason: 'RATE_LIMITED',
     });
-    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(1);
   });
 
   it('persists provider cooldowns monotonically', async () => {

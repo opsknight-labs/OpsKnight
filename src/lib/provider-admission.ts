@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
-import { runSerializableTransaction } from './db-utils';
 
 export type ProviderAdmissionScope = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH' | 'SLACK' | 'WEBHOOK';
 
@@ -53,7 +52,9 @@ function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
 
 /**
  * Distributed provider admission control using OpsKnight's existing RateLimit table.
- * SERIALIZABLE isolation makes the budget shared across application replicas.
+ * A conditional UPSERT serializes writers for one provider bucket without holding a
+ * serializable read-then-write transaction. This is important during multi-channel
+ * fan-out, where competing first writes previously exhausted transaction retries.
  */
 export async function acquireProviderAdmission(
   scope: ProviderAdmissionScope,
@@ -64,31 +65,39 @@ export async function acquireProviderAdmission(
   const key = bucketKey(scope, providerKey);
   const intervalMs = config.windowMs / config.limit;
   const burstToleranceMs = intervalMs * Math.max(0, config.limit - 1);
+  const expiresAt = new Date(now.getTime() + intervalMs);
+  const eligibleAt = new Date(now.getTime() + burstToleranceMs);
+  const admitted = await prisma.$queryRaw<Array<{ expiresAt: Date }>>(Prisma.sql`
+    INSERT INTO "RateLimit" ("key", "count", "expiresAt")
+    VALUES (${key}, 1, ${expiresAt})
+    ON CONFLICT ("key") DO UPDATE SET
+      "count" = "RateLimit"."count" + 1,
+      "expiresAt" = GREATEST("RateLimit"."expiresAt", ${now}) + (${intervalMs} * INTERVAL '1 millisecond')
+    WHERE "RateLimit"."expiresAt" <= ${eligibleAt}
+    RETURNING "expiresAt"
+  `);
+  if (admitted.length > 0) return { allowed: true };
 
-  return runSerializableTransaction(async tx => {
-    const existing = await tx.rateLimit.findUnique({ where: { key } });
-    if (!existing) {
-      const expiresAt = new Date(now.getTime() + intervalMs);
-      await tx.rateLimit.upsert({
-        where: { key },
-        update: { count: 1, expiresAt },
-        create: { key, count: 1, expiresAt },
-      });
-      return { allowed: true } as const;
-    }
+  // A conflicting row that did not satisfy the conditional update represents a
+  // shared budget that is full. Read it after the UPSERT lock has been released
+  // to calculate a precise scheduler wake-up rather than failing the delivery.
+  const existing = await prisma.rateLimit.findUnique({ where: { key } });
+  if (existing) {
+    return {
+      allowed: false,
+      retryAt: new Date(existing.expiresAt.getTime() - burstToleranceMs),
+      reason: 'RATE_LIMITED',
+    };
+  }
 
-    const retryAt = new Date(existing.expiresAt.getTime() - burstToleranceMs);
-    if (retryAt > now) {
-      return { allowed: false, retryAt, reason: 'RATE_LIMITED' } as const;
-    }
-
-    const expiresAt = new Date(Math.max(existing.expiresAt.getTime(), now.getTime()) + intervalMs);
-    await tx.rateLimit.update({
-      where: { key },
-      data: { count: { increment: 1 }, expiresAt },
-    });
-    return { allowed: true } as const;
-  }, 5);
+  // Cleanup can delete an expired row between the conditional UPSERT and the
+  // read. A short deferral lets the worker safely retry instead of reporting a
+  // transient storage race as a provider failure.
+  return {
+    allowed: false,
+    retryAt: new Date(now.getTime() + intervalMs),
+    reason: 'RATE_LIMITED',
+  };
 }
 
 /** Persist a provider-supplied cooldown (for example HTTP Retry-After) across replicas. */
