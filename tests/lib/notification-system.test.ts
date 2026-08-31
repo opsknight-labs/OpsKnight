@@ -570,12 +570,18 @@ describe('Notification System Tests', () => {
       const smsSpy = vi.spyOn(sms, 'sendIncidentSMS');
       smsSpy.mockResolvedValue({ success: true });
       const notificationModule = await import('@/lib/user-notifications');
-      vi.spyOn(notificationModule, 'sendUserNotification').mockResolvedValue({
+      const sendUserSpy = vi.spyOn(notificationModule, 'sendUserNotification').mockResolvedValue({
         success: true,
         channelsUsed: [],
       } as any);
       const result = await executeEscalation(incidentId, 0);
       expect(result.escalated).toBe(true);
+      expect(sendUserSpy).toHaveBeenCalledWith(
+        incidentId,
+        userId,
+        expect.any(String),
+        ['SMS']
+      );
     });
   });
 });

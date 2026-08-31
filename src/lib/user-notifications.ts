@@ -176,6 +176,7 @@ export async function sendUserNotification(
   incidentId: string,
   userId: string,
   message: string,
+  escalationChannels?: NotificationChannel[],
   options: {
     createInApp?: boolean;
     eventType?: NotificationEventType;
@@ -250,10 +251,13 @@ export async function sendUserNotification(
     }
   }
 
-  // User preferences are authoritative. Each enabled and configured channel is
-  // an independent durable intent; an escalation step must never narrow this
-  // list and silently suppress a channel the recipient explicitly enabled.
   let channels = userChannels;
+  if (escalationChannels && escalationChannels.length > 0) {
+    const selected = escalationChannels.filter(channel => userChannels.includes(channel));
+    // Preserve the existing fallback for legacy policies whose configured
+    // channels are unavailable for this recipient.
+    channels = selected.length > 0 ? selected : userChannels;
+  }
 
   if (channels.length === 0) {
     return {

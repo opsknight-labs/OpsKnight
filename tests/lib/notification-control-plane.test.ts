@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCentralNotificationIntent,
   deliverCentralNotification,
+  getNextCentralNotificationAt,
   maskedNotificationRecipient,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
@@ -135,6 +136,22 @@ describe('central notification control plane', () => {
 
     expect(results.filter(result => result.claimed)).toHaveLength(1);
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'SENT', payloadEncrypted: null }),
+      })
+    );
+  });
+
+  it('uses lease expiry as the next scheduler deadline for active claims', async () => {
+    const leaseExpiry = new Date(Date.now() + 9 * 60_000);
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ nextEligibleAt: leaseExpiry }] as never);
+
+    await expect(getNextCentralNotificationAt()).resolves.toEqual(leaseExpiry);
+    const query = vi.mocked(prisma.$queryRaw).mock.calls[0]?.[0] as { strings?: string[] };
+    const sql = query.strings?.join('?') ?? '';
+    expect(sql).toContain('lastAttemptAt');
+    expect(sql).toContain('nextEligibleAt');
   });
 
   it('never redelivers an already terminal notification', async () => {

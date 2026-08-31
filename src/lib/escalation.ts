@@ -5,6 +5,7 @@ import { buildScheduleBlocks, getFinalScheduleBlocks } from './oncall';
 import { logger } from './logger';
 import { ESCALATION_LOCK_TIMEOUT_MS } from './config';
 import { startOfDayInTimeZone, startOfNextDayInTimeZone } from './timezone';
+import type { NotificationChannel } from './notifications';
 // import { formatDateTime } from './timezone'; // Unused
 
 export interface EscalationExecutionResult {
@@ -657,11 +658,12 @@ export async function executeEscalation(
     return { escalated: false, reason: 'No users to notify' };
   }
 
-  // Send notifications to all resolved users. Recipient preferences are the
-  // source of truth for channel fan-out; escalation routing chooses who, not
-  // which of their explicitly enabled channels should be suppressed.
+  // Use escalation-step channels when configured, intersected with each
+  // recipient's enabled channels by sendUserNotification.
   const { sendUserNotification } = await import('./user-notifications');
   const notificationsSent = [];
+  const escalationChannels: NotificationChannel[] | undefined =
+    step.notificationChannels.length > 0 ? step.notificationChannels : undefined;
 
   for (const userId of targetUserIds) {
     try {
@@ -678,7 +680,7 @@ export async function executeEscalation(
         return supersededEscalationResult();
       }
       const message = `[OpsKnight] Incident: ${incident.title}${currentStepIndex > 0 ? ` (Escalation Level ${currentStepIndex + 1})` : ''}`;
-      const result = await sendUserNotification(incidentId, userId, message);
+      const result = await sendUserNotification(incidentId, userId, message, escalationChannels);
       notificationsSent.push({ userId, result });
     } catch (err) {
       logger.error('Failed to send escalation notification to user', {

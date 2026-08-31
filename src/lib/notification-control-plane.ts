@@ -439,6 +439,10 @@ function safeError(error: unknown): string {
   return message.replace(/[\r\n\t]+/g, ' ').slice(0, MAX_ERROR_LENGTH);
 }
 
+function terminalPayload(category: NotificationCategory): { payloadEncrypted: null } | object {
+  return category === 'SECURITY' ? { payloadEncrypted: null } : {};
+}
+
 function isPermanentProviderError(message: string): boolean {
   return /not configured|not found|invalid|restricted|no phone|no device|no web subscription|unsupported|unknown provider/i.test(
     message
@@ -496,7 +500,11 @@ export async function deliverCentralNotification(
   if (candidate.expiresAt && candidate.expiresAt <= now) {
     await prisma.notification.updateMany({
       where: { id: candidate.id, status: { in: ['PENDING', 'FAILED'] } },
-      data: { status: 'SKIPPED', errorMsg: 'Notification expired before delivery.' },
+      data: {
+        status: 'SKIPPED',
+        errorMsg: 'Notification expired before delivery.',
+        ...terminalPayload(candidate.category),
+      },
     });
     return { success: true, claimed: true };
   }
@@ -592,6 +600,7 @@ export async function deliverCentralNotification(
           failedAt: null,
           errorMsg: null,
           providerMessageId: result.providerMessageId,
+          ...terminalPayload(candidate.category),
         },
       });
       await finishAttempt({
@@ -619,6 +628,7 @@ export async function deliverCentralNotification(
             : new Date(Date.now() + notificationRetryDelayMs(ordinal)),
         attempts: permanent ? candidate.maxAttempts : ordinal,
         lastAttemptAt: null,
+        ...(permanent || exhausted ? terminalPayload(candidate.category) : {}),
       },
     });
     await finishAttempt({
@@ -644,6 +654,7 @@ export async function deliverCentralNotification(
           : new Date(Date.now() + notificationRetryDelayMs(ordinal)),
         attempts: ordinal,
         lastAttemptAt: null,
+        ...(exhausted ? terminalPayload(candidate.category) : {}),
       },
     });
     await finishAttempt({
@@ -705,17 +716,25 @@ export async function processCentralNotificationQueue(): Promise<{
 
 /** Earliest durable control-plane deadline used by the adaptive scheduler. */
 export async function getNextCentralNotificationAt(now: Date = new Date()): Promise<Date | null> {
-  const rows = await prisma.$queryRaw<Array<{ nextAttemptAt: Date }>>(Prisma.sql`
-    SELECT "nextAttemptAt"
+  const rows = await prisma.$queryRaw<Array<{ nextEligibleAt: Date }>>(Prisma.sql`
+    SELECT GREATEST(
+      "scheduledAt",
+      "nextAttemptAt",
+      CASE
+        WHEN "status" = 'PENDING'::"NotificationStatus" AND "lastAttemptAt" IS NOT NULL
+          THEN "lastAttemptAt" + (${CLAIM_TIMEOUT_MS} * INTERVAL '1 millisecond')
+        ELSE "nextAttemptAt"
+      END
+    ) AS "nextEligibleAt"
     FROM "Notification"
     WHERE "payloadEncrypted" IS NOT NULL
       AND "attempts" < "maxAttempts"
       AND "status" IN ('PENDING'::"NotificationStatus", 'FAILED'::"NotificationStatus")
       AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
-    ORDER BY "nextAttemptAt" ASC
+    ORDER BY "nextEligibleAt" ASC
     LIMIT 1
   `);
-  return rows[0]?.nextAttemptAt ?? null;
+  return rows[0]?.nextEligibleAt ?? null;
 }
 
 export async function requeueCentralNotification(notificationId: string): Promise<boolean> {
@@ -764,6 +783,7 @@ export async function cancelCentralNotification(
       status: 'SKIPPED',
       errorMsg: reason.slice(0, MAX_ERROR_LENGTH),
       lastAttemptAt: null,
+      payloadEncrypted: null,
     },
   });
   return updated.count > 0;
