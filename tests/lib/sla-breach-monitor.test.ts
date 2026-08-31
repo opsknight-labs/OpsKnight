@@ -5,6 +5,14 @@ import {
   type BreachWarning,
 } from '@/lib/sla-breach-monitor';
 
+vi.mock('@/lib/notification-control-plane', () => ({
+  enqueueCentralNotification: vi.fn().mockResolvedValue({
+    id: 'notification_test',
+    created: true,
+    delivered: true,
+  }),
+}));
+
 // Mock prisma
 vi.mock('@/lib/prisma', () => ({
   default: {

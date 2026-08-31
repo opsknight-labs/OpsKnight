@@ -4,6 +4,9 @@ import { WebhookIntegration } from '@prisma/client';
 import { getPrioritySLATarget } from './sla-priority';
 import { escapeHtml } from './email-components';
 import { activeIncidentStatuses } from './incident-status';
+import { enqueueCentralNotification } from './notification-control-plane';
+import { formatWebhookPayloadByType } from './webhooks';
+import { getBaseUrl } from './env-validation';
 
 /**
  * SLA Breach Monitor - Proactive Breach Detection
@@ -364,124 +367,101 @@ async function notifyBreachWarning(
     service: warning.serviceName,
     message: plainText,
   });
+  const eventKey = `${warning.breachType}:${isBreached ? 'breached' : 'warning'}:${warning.targetMinutes}`;
+  const incidentPresentation = {
+    id: warning.incidentId,
+    title: warning.title,
+    status: warning.status,
+    urgency: warning.urgency,
+    serviceName: warning.serviceName,
+    assigneeName: warning.assigneeName,
+  };
 
   // 1. Send Slack notification if enabled
   if (config.notifySlack) {
-    const { sendSlackNotification, sendSlackMessageToChannel } = await import('./slack');
     const channels = warning.serviceNotificationChannels || [];
     const hasSlackEnabled = channels.length === 0 || channels.includes('SLACK');
 
     if (hasSlackEnabled) {
-      let sent = false;
-
-      // Try OAuth Channel First
-      if (warning.slackChannel) {
-        try {
-          const result = await sendSlackMessageToChannel(
-            warning.slackChannel,
-            {
-              id: warning.incidentId,
-              title: warning.title,
-              status: warning.status,
-              urgency: warning.urgency,
-              serviceName: warning.serviceName,
-              assigneeName: warning.assigneeName,
+      await enqueueCentralNotification({
+        category: 'SLA',
+        channel: 'SLACK',
+        recipientType: warning.slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
+        recipientId: warning.serviceId,
+        recipientAddress: warning.slackChannel || warning.slackWebhookUrl || 'global-slack-webhook',
+        incidentId: warning.incidentId,
+        templateKey: `sla-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
+        sourceType: 'INCIDENT_SLA',
+        sourceId: warning.incidentId,
+        eventKey,
+        displayMessage: plainText,
+        priority: isBreached ? 0 : 1,
+        payload: warning.slackChannel
+          ? {
+              kind: 'SLACK_CHANNEL',
+              channel: warning.slackChannel,
+              incident: incidentPresentation,
+              eventType: 'triggered',
+              includeInteractiveButtons: true,
+              serviceId: warning.serviceId,
+              additionalMessage: message,
+            }
+          : {
+              kind: 'SLACK_WEBHOOK',
+              incident: incidentPresentation,
+              eventType: 'triggered',
+              webhookUrl: warning.slackWebhookUrl || undefined,
+              additionalMessage: message,
             },
-            'triggered',
-            true,
-            warning.serviceId
-          );
-
-          if (result.success) {
-            sent = true;
-            logger.info('[SLA Breach Monitor] Slack notification sent via OAuth channel', {
-              warning,
-            });
-          }
-        } catch (err) {
-          logger.warn('[SLA Breach Monitor] OAuth Slack error, trying webhook fallback', { err });
-        }
-      }
-
-      // Fallback to Service Webhook
-      if (!sent && warning.slackWebhookUrl) {
-        try {
-          await sendSlackNotification(
-            'triggered',
-            {
-              id: warning.incidentId,
-              title: warning.title,
-              status: warning.status,
-              urgency: warning.urgency,
-              serviceName: warning.serviceName,
-              assigneeName: warning.assigneeName,
-            },
-            message,
-            warning.slackWebhookUrl
-          );
-          sent = true;
-          logger.info('[SLA Breach Monitor] Slack notification sent via Service Webhook', {
-            warning,
-          });
-        } catch (error) {
-          logger.error('[SLA Breach Monitor] Failed to send Slack webhook notification', { error });
-        }
-      }
-
-      // Last resort: Global webhook
-      if (!sent && !warning.slackChannel && !warning.slackWebhookUrl) {
-        try {
-          await sendSlackNotification(
-            'triggered',
-            {
-              id: warning.incidentId,
-              title: warning.title,
-              status: warning.status,
-              urgency: warning.urgency,
-              serviceName: warning.serviceName,
-              assigneeName: warning.assigneeName,
-            },
-            message
-          );
-          logger.info('[SLA Breach Monitor] Slack notification sent via Global Webhook', {
-            warning,
-          });
-        } catch (error) {
-          logger.error('[SLA Breach Monitor] Failed to send Global Slack notification', { error });
-        }
-      }
+      });
     }
   }
 
   // 2. Send Webhook notifications if enabled
   if (config.notifyWebhook && warning.serviceNotificationChannels?.includes('WEBHOOK')) {
     try {
-      const { sendIncidentWebhook } = await import('./webhooks');
       const webhooks = warning.webhookIntegrations || [];
 
       for (const webhook of webhooks) {
         try {
           const { decryptStoredSecret } = await import('./encryption');
-          const result = await sendIncidentWebhook(
-            webhook.url,
-            warning.incidentId,
-            isBreached ? 'triggered' : 'warning',
-            webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
-            webhook.type,
-            webhook.channel || undefined
-          );
-
-          if (result.success) {
-            logger.info('[SLA Breach Monitor] Webhook notification sent', {
-              webhookId: webhook.id,
-              type: webhook.type,
-            });
-          } else {
-            logger.warn('[SLA Breach Monitor] Webhook notification failed', {
-              webhookId: webhook.id,
-              error: result.error,
-            });
-          }
+          await enqueueCentralNotification({
+            category: 'SLA',
+            channel: 'WEBHOOK',
+            recipientType: 'WEBHOOK',
+            recipientId: webhook.id,
+            recipientAddress: webhook.url,
+            incidentId: warning.incidentId,
+            templateKey: `sla-webhook-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
+            sourceType: 'WEBHOOK_INTEGRATION',
+            sourceId: webhook.id,
+            eventKey,
+            displayMessage: plainText,
+            priority: isBreached ? 0 : 1,
+            payload: {
+              kind: 'WEBHOOK',
+              url: webhook.url,
+              payload: formatWebhookPayloadByType(
+                webhook.type,
+                {
+                  id: warning.incidentId,
+                  title: warning.title,
+                  status: warning.status,
+                  urgency: warning.urgency,
+                  service: { id: warning.serviceId, name: warning.serviceName },
+                  createdAt: warning.createdAt,
+                },
+                isBreached ? 'triggered' : 'warning',
+                getBaseUrl(),
+                webhook.channel || undefined
+              ),
+              secret: webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
+            },
+          });
+          logger.info('[SLA Breach Monitor] Webhook notification enqueued', {
+            webhookId: webhook.id,
+            type: webhook.type,
+          });
         } catch (error) {
           logger.error('[SLA Breach Monitor] Error sending webhook notification', {
             webhookId: webhook.id,
@@ -500,19 +480,16 @@ async function notifyBreachWarning(
       const alertEmail = config.alertEmail || process.env.SLA_ALERT_EMAIL;
 
       if (alertEmail) {
-        const { sendEmail } = await import('./email');
         const safeServiceName = escapeHtml(warning.serviceName);
         const safeTitle = escapeHtml(warning.title);
         const safeUrgency = escapeHtml(warning.urgency);
         const baseUrl = (process.env.NEXTAUTH_URL || '').replace(/\/+$/, '');
         const incidentUrl = `${baseUrl}/incidents/${encodeURIComponent(warning.incidentId)}`;
 
-        await sendEmail({
-          to: alertEmail,
-          subject: isBreached
-            ? `[SLA BREACHED] ${warning.serviceName}: ${warning.title}`
-            : `[SLA WARNING] ${warning.serviceName}: ${warning.title}`,
-          html: `
+        const subject = isBreached
+          ? `[SLA BREACHED] ${warning.serviceName}: ${warning.title}`
+          : `[SLA WARNING] ${warning.serviceName}: ${warning.title}`;
+        const html = `
                           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
                               <div style="background-color: ${isBreached ? '#fee2e2' : '#fef3c7'}; padding: 20px; text-align: center; border-bottom: 1px solid ${isBreached ? '#fecaca' : '#fde68a'};">
                                   <h1 style="color: ${isBreached ? '#991b1b' : '#92400e'}; margin: 0; font-size: 24px; font-weight: 800;">${breachEmoji} SLA ${breachTypeUpper} ${breachAction}</h1>
@@ -557,11 +534,23 @@ async function notifyBreachWarning(
                                   OpsKnight SLA Monitor • ${new Date().toUTCString()}
                               </div>
                           </div>
-                      `,
-          text: plainText,
+                      `;
+        await enqueueCentralNotification({
+          category: 'SLA',
+          channel: 'EMAIL',
+          recipientType: 'EMAIL',
+          recipientAddress: alertEmail,
+          incidentId: warning.incidentId,
+          templateKey: `sla-email-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
+          sourceType: 'INCIDENT_SLA',
+          sourceId: warning.incidentId,
+          eventKey,
+          displayMessage: plainText,
+          priority: isBreached ? 0 : 1,
+          payload: { kind: 'EMAIL', to: alertEmail, subject, html, text: plainText },
         });
 
-        logger.info('[SLA Breach Monitor] Email notification sent', { to: alertEmail });
+        logger.info('[SLA Breach Monitor] Email notification enqueued', { to: alertEmail });
       } else {
         logger.debug('[SLA Breach Monitor] Email skipped (SLA_ALERT_EMAIL not set)');
       }

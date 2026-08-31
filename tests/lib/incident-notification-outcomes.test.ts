@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   incidentFindUnique: vi.fn(),
   userFindMany: vi.fn(),
+  userFindUnique: vi.fn(),
   notificationFindMany: vi.fn(),
   createInAppNotifications: vi.fn(),
   sendNotification: vi.fn(),
@@ -13,7 +14,7 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     incident: { findUnique: mocks.incidentFindUnique },
-    user: { findMany: mocks.userFindMany },
+    user: { findMany: mocks.userFindMany, findUnique: mocks.userFindUnique },
     notification: { findMany: mocks.notificationFindMany },
   },
 }));
@@ -29,7 +30,7 @@ vi.mock('@/lib/quiet-hours', () => ({
   filterChannelsForQuietHours: mocks.filterChannelsForQuietHours,
 }));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), error: vi.fn() } }));
-import { sendIncidentNotifications } from '@/lib/user-notifications';
+import { sendIncidentNotifications, sendUserNotification } from '@/lib/user-notifications';
 const now = new Date('2026-08-30T12:00:00.000Z');
 const incident = {
   id: 'inc-1',
@@ -71,6 +72,7 @@ describe('incident notification fan-out', () => {
     vi.clearAllMocks();
     mocks.incidentFindUnique.mockResolvedValue(incident);
     mocks.userFindMany.mockResolvedValue([recipient]);
+    mocks.userFindUnique.mockResolvedValue({ ...recipient, status: 'ACTIVE' });
     mocks.notificationFindMany.mockResolvedValue([]);
     mocks.createInAppNotifications.mockResolvedValue(undefined);
     mocks.isChannelAvailable.mockResolvedValue(true);
@@ -109,6 +111,32 @@ describe('incident notification fan-out', () => {
     expect(mocks.sendNotification.mock.calls.map(call => call[2])).toEqual(
       expect.arrayContaining(['PUSH', 'SMS', 'WHATSAPP', 'EMAIL'])
     );
+  });
+  it('uses all user-enabled channels for escalation delivery', async () => {
+    mocks.incidentFindUnique.mockResolvedValue({ ...incident, status: 'OPEN', urgency: 'HIGH' });
+    mocks.userFindUnique.mockResolvedValue({
+      ...recipient,
+      status: 'ACTIVE',
+      pushNotificationsEnabled: true,
+      smsNotificationsEnabled: true,
+      whatsappNotificationsEnabled: false,
+      emailNotificationsEnabled: true,
+      phoneNumber: '+15555550100',
+    });
+    mocks.sendNotification.mockResolvedValue({
+      success: true,
+      outcome: 'DELIVERED',
+      notificationId: 'intent-1',
+    });
+
+    const result = await sendUserNotification('inc-1', 'user-1', 'Escalation alert');
+
+    expect(result).toMatchObject({ success: true, disposition: 'DELIVERED' });
+    expect(mocks.sendNotification.mock.calls.map(call => call[2])).toEqual([
+      'PUSH',
+      'SMS',
+      'EMAIL',
+    ]);
   });
   it('contains a provider outage to the persisted channel intent instead of retrying the parent', async () => {
     mocks.userFindMany.mockResolvedValue([{ ...recipient, pushNotificationsEnabled: true }]);

@@ -1,9 +1,9 @@
 /** Service notification dispatcher with target-level durable idempotency. */
 import prisma from './prisma';
-import { notifySlackForIncident, sendSlackMessageToChannel } from './slack';
-import { sendIncidentWebhook } from './webhooks';
 import { logger } from './logger';
-import { deliveryMarkerId, isDeliveryComplete, markDeliveryComplete } from './delivery-idempotency';
+import { enqueueCentralNotification } from './notification-control-plane';
+import { formatWebhookPayloadByType, generateIncidentWebhookPayload } from './webhooks';
+import { getBaseUrl } from './env-validation';
 
 export type ServiceNotificationEventType = 'triggered' | 'acknowledged' | 'resolved' | 'updated';
 
@@ -28,22 +28,15 @@ function serviceDeliveryKey(
   return `${incident.id}:${eventType}:${at.toISOString()}`;
 }
 
-async function once(
-  deliveryKey: string,
-  targetId: string,
-  deliver: () => Promise<{ success: boolean; error?: string }>
-): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
-  const markerId = deliveryMarkerId('service-notification', deliveryKey, targetId);
-  if (await isDeliveryComplete(markerId)) return { success: true, skipped: true };
-  const result = await deliver();
-  if (result.success)
-    await markDeliveryComplete({
-      markerId,
-      namespace: 'service-notification',
-      deliveryKey,
-      targetId,
-    });
-  return result;
+async function persistIntent(
+  deliver: () => Promise<void>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await deliver();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export async function sendServiceNotifications(
@@ -100,41 +93,79 @@ export async function sendServiceNotifications(
       : serviceDeliveryKey(incident, eventType);
     const serviceChannels = service.serviceNotificationChannels || [];
     const errors: string[] = [];
+    const incidentPresentation = {
+      id: incident.id,
+      title: incident.title,
+      status: incident.status,
+      urgency: incident.urgency,
+      serviceName: service.name,
+      assigneeName: incident.assignee?.name || undefined,
+    };
+    const webhookIncident = {
+      id: incident.id,
+      title: incident.title,
+      description: incident.description,
+      status: incident.status,
+      urgency: incident.urgency,
+      service: { id: service.id, name: service.name },
+      assignee: incident.assignee,
+      createdAt: incident.createdAt,
+      acknowledgedAt: incident.acknowledgedAt,
+      resolvedAt: incident.resolvedAt,
+    };
 
     if (serviceChannels.includes('SLACK')) {
       if (service.slackChannel && eventType !== 'updated') {
-        const result = await once(deliveryKey, `slack-channel:${service.id}`, async () => {
-          const response = await sendSlackMessageToChannel(
-            service.slackChannel!,
-            {
-              id: incident.id,
-              title: incident.title,
-              status: incident.status,
-              urgency: incident.urgency,
-              serviceName: service.name,
-              assigneeName: incident.assignee?.name,
+        const result = await persistIntent(async () => {
+          await enqueueCentralNotification({
+            category: 'INCIDENT',
+            channel: 'SLACK',
+            recipientType: 'SLACK_CHANNEL',
+            recipientId: service.id,
+            recipientAddress: service.slackChannel!,
+            incidentId,
+            templateKey: `service-slack-${eventType}`,
+            sourceType: 'SERVICE_INCIDENT',
+            sourceId: `${service.id}:${incidentId}`,
+            eventKey: deliveryKey,
+            displayMessage: `${eventType}: ${incident.title}`,
+            priority: incident.urgency === 'HIGH' ? 1 : 3,
+            payload: {
+              kind: 'SLACK_CHANNEL',
+              channel: service.slackChannel!,
+              incident: incidentPresentation,
+              eventType,
+              includeInteractiveButtons: true,
+              serviceId: incident.serviceId,
             },
-            eventType,
-            true,
-            incident.serviceId
-          );
-          return { success: response.success, error: response.error };
+          });
         });
         if (!result.success)
           errors.push(`Slack channel notification failed: ${result.error || 'Unknown error'}`);
       }
 
       if (service.slackWebhookUrl && eventType !== 'updated') {
-        const result = await once(deliveryKey, `slack-webhook:${service.id}`, async () => {
-          try {
-            const response = await notifySlackForIncident(incidentId, eventType);
-            return { success: response.success, error: response.error };
-          } catch (error) {
-            return {
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-            };
-          }
+        const result = await persistIntent(async () => {
+          await enqueueCentralNotification({
+            category: 'INCIDENT',
+            channel: 'SLACK',
+            recipientType: 'WEBHOOK',
+            recipientId: service.id,
+            recipientAddress: service.slackWebhookUrl!,
+            incidentId,
+            templateKey: `service-slack-webhook-${eventType}`,
+            sourceType: 'SERVICE_INCIDENT',
+            sourceId: `${service.id}:${incidentId}`,
+            eventKey: deliveryKey,
+            displayMessage: `${eventType}: ${incident.title}`,
+            priority: incident.urgency === 'HIGH' ? 1 : 3,
+            payload: {
+              kind: 'SLACK_WEBHOOK',
+              incident: incidentPresentation,
+              eventType,
+              webhookUrl: service.slackWebhookUrl!,
+            },
+          });
         });
         if (!result.success)
           errors.push(`Slack webhook notification failed: ${result.error || 'Unknown error'}`);
@@ -144,23 +175,34 @@ export async function sendServiceNotifications(
     if (serviceChannels.includes('WEBHOOK')) {
       const results = await Promise.all(
         service.webhookIntegrations.map(async webhook => {
-          const result = await once(deliveryKey, `webhook:${webhook.id}`, async () => {
-            try {
-              const { decryptStoredSecret } = await import('./encryption');
-              return await sendIncidentWebhook(
-                webhook.url,
-                incidentId,
-                eventType,
-                webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
-                webhook.type,
-                webhook.channel || undefined
-              );
-            } catch (error) {
-              return {
-                success: false,
-                error: error instanceof Error ? error.message : String(error),
-              };
-            }
+          const result = await persistIntent(async () => {
+            const { decryptStoredSecret } = await import('./encryption');
+            await enqueueCentralNotification({
+              category: 'INCIDENT',
+              channel: 'WEBHOOK',
+              recipientType: 'WEBHOOK',
+              recipientId: webhook.id,
+              recipientAddress: webhook.url,
+              incidentId,
+              templateKey: `service-webhook-${eventType}`,
+              sourceType: 'WEBHOOK_INTEGRATION',
+              sourceId: webhook.id,
+              eventKey: deliveryKey,
+              displayMessage: `${eventType}: ${incident.title}`,
+              priority: incident.urgency === 'HIGH' ? 1 : 3,
+              payload: {
+                kind: 'WEBHOOK',
+                url: webhook.url,
+                payload: formatWebhookPayloadByType(
+                  webhook.type,
+                  webhookIncident,
+                  eventType,
+                  getBaseUrl(),
+                  webhook.channel || undefined
+                ),
+                secret: webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
+              },
+            });
           });
           return { webhookId: webhook.id, ...result };
         })
@@ -171,8 +213,26 @@ export async function sendServiceNotifications(
     }
 
     if (service.webhookUrl && !serviceChannels.includes('WEBHOOK')) {
-      const result = await once(deliveryKey, `legacy-webhook:${service.id}`, () =>
-        sendIncidentWebhook(service.webhookUrl!, incidentId, eventType)
+      const result = await persistIntent(() =>
+        enqueueCentralNotification({
+          category: 'INCIDENT',
+          channel: 'WEBHOOK',
+          recipientType: 'WEBHOOK',
+          recipientId: service.id,
+          recipientAddress: service.webhookUrl!,
+          incidentId,
+          templateKey: `legacy-service-webhook-${eventType}`,
+          sourceType: 'SERVICE_INCIDENT',
+          sourceId: `${service.id}:${incidentId}`,
+          eventKey: deliveryKey,
+          displayMessage: `${eventType}: ${incident.title}`,
+          priority: incident.urgency === 'HIGH' ? 1 : 3,
+          payload: {
+            kind: 'WEBHOOK',
+            url: service.webhookUrl!,
+            payload: generateIncidentWebhookPayload(webhookIncident, eventType),
+          },
+        }).then(() => undefined)
       );
       if (!result.success) errors.push(`Legacy webhook failed: ${result.error || 'Unknown error'}`);
     }

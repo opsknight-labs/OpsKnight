@@ -1,15 +1,12 @@
 import prisma from '@/lib/prisma';
-import { sendEmail } from '@/lib/email';
 import { getStatusPageEmailConfig } from '@/lib/notification-providers';
+import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { logger } from '@/lib/logger';
 import { getBaseUrl } from '@/lib/env-validation';
 import { getStatusPageLogoUrl, getStatusPagePublicUrl } from '@/lib/status-page-url';
 import {
   buildSubscriberIncidentPresentation,
   incidentSubscriberDeliveryKey,
-  isStatusDeliveryComplete,
-  markStatusDeliveryComplete,
-  statusDeliveryMarkerId,
 } from '@/lib/status-page-delivery';
 import {
   EmailContainer,
@@ -153,40 +150,31 @@ export async function notifyStatusPageSubscribers(
         const batch = page.subscriptions.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
           batch.map(async sub => {
-            const markerId = statusDeliveryMarkerId(
-              'SUBSCRIBER_EMAIL',
-              effectiveDeliveryKey,
-              sub.id
-            );
-            if (await isStatusDeliveryComplete(markerId)) {
-              return { success: true, skipped: true };
-            }
-
-            const result = await sendEmail(
-              {
+            const intent = await enqueueCentralNotification({
+              category: 'STATUS_PAGE',
+              channel: 'EMAIL',
+              recipientType: 'SUBSCRIBER',
+              recipientId: sub.id,
+              recipientAddress: sub.email,
+              incidentId,
+              templateKey: `status-page-incident-${eventType}`,
+              sourceType: 'STATUS_PAGE_INCIDENT',
+              sourceId: `${page.id}:${incidentId}`,
+              eventKey: effectiveDeliveryKey,
+              displayMessage: subject,
+              priority: eventType === 'resolved' ? 3 : 1,
+              payload: {
+                kind: 'EMAIL',
                 to: sub.email,
                 subject,
                 html: html.replaceAll(
                   '{{unsubscribe_url}}',
                   `${appBaseUrl}/status/unsubscribe/${sub.token}`
                 ),
+                providerScope: { statusPageId: page.id },
               },
-              {
-                source: `status-page-${page.id}`,
-                ...emailConfig,
-              }
-            );
-
-            if (result.success) {
-              await markStatusDeliveryComplete({
-                markerId,
-                target: 'SUBSCRIBER_EMAIL',
-                deliveryKey: effectiveDeliveryKey,
-                targetId: sub.id,
-              });
-            }
-
-            return { success: result.success, skipped: false };
+            });
+            return { success: true, skipped: !intent.created };
           })
         );
 
@@ -542,22 +530,32 @@ export async function notifyStatusPageSubscribersAnnouncement(
     for (let i = 0; i < page.subscriptions.length; i += BATCH_SIZE) {
       const batch = page.subscriptions.slice(i, i + BATCH_SIZE);
       const results = await Promise.allSettled(
-        batch.map(sub =>
-          sendEmail(
-            {
+        batch.map(async sub => {
+          const intent = await enqueueCentralNotification({
+            category: 'STATUS_PAGE',
+            channel: 'EMAIL',
+            recipientType: 'SUBSCRIBER',
+            recipientId: sub.id,
+            recipientAddress: sub.email,
+            templateKey: 'status-page-announcement',
+            sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
+            sourceId: announcement.id,
+            eventKey: announcement.updatedAt.toISOString(),
+            displayMessage: subject,
+            priority: announcement.type === 'INCIDENT' ? 1 : 4,
+            payload: {
+              kind: 'EMAIL',
               to: sub.email,
               subject,
               html: html.replaceAll(
                 '{{unsubscribe_url}}',
                 `${appBaseUrl}/status/unsubscribe/${sub.token}`
               ),
+              providerScope: { statusPageId: page.id },
             },
-            {
-              source: `status-page-${page.id}`,
-              ...emailConfig,
-            }
-          )
-        )
+          });
+          return { success: true, skipped: !intent.created };
+        })
       );
 
       sent += results.filter(r => r.status === 'fulfilled' && r.value.success).length;

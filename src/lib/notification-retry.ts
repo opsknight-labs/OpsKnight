@@ -16,6 +16,8 @@ export async function retryFailedNotifications(): Promise<{
 }> {
   await prisma.notification.updateMany({
     where: {
+      category: 'INCIDENT',
+      payloadEncrypted: null,
       status: 'PENDING',
       createdAt: { lt: new Date(Date.now() - NOTIFICATION_RETRY_POLICY.pendingTimeoutMs) },
       attempts: { lt: NOTIFICATION_RETRY_POLICY.maxAttempts },
@@ -30,7 +32,11 @@ export async function retryFailedNotifications(): Promise<{
   const now = Date.now();
   const failedNotifications = await prisma.notification.findMany({
     where: {
+      category: 'INCIDENT',
+      payloadEncrypted: null,
       status: 'FAILED',
+      incidentId: { not: null },
+      userId: { not: null },
       OR: Array.from({ length: NOTIFICATION_RETRY_POLICY.maxAttempts }, (_, attempts) => ({
         attempts,
         failedAt: { lte: new Date(now - notificationRetryDelayMs(attempts)) },
@@ -72,6 +78,9 @@ export async function retryFailedNotifications(): Promise<{
 
           let result;
           try {
+            if (!notification.incidentId || !notification.userId) {
+              throw new Error('Incident notification target is incomplete');
+            }
             result = await dispatchNotificationAttempt({
               notificationId: notification.id,
               incidentId: notification.incidentId,
@@ -184,6 +193,8 @@ export async function getNextNotificationRetryAt(): Promise<Date | null> {
   const [pending, ...failedByAttempt] = await Promise.all([
     prisma.notification.findFirst({
       where: {
+        category: 'INCIDENT',
+        payloadEncrypted: null,
         status: 'PENDING',
         attempts: { lt: NOTIFICATION_RETRY_POLICY.maxAttempts },
       },
@@ -192,7 +203,13 @@ export async function getNextNotificationRetryAt(): Promise<Date | null> {
     }),
     ...attempts.map(attempt =>
       prisma.notification.findFirst({
-        where: { status: 'FAILED', attempts: attempt, failedAt: { not: null } },
+        where: {
+          category: 'INCIDENT',
+          payloadEncrypted: null,
+          status: 'FAILED',
+          attempts: attempt,
+          failedAt: { not: null },
+        },
         orderBy: { failedAt: 'asc' },
         select: { failedAt: true },
       })
@@ -219,10 +236,19 @@ export async function getNotificationRetryStats(): Promise<{
   failedRecent: number;
 }> {
   const [pending, failed, failedRecent] = await Promise.all([
-    prisma.notification.count({ where: { status: 'PENDING' } }),
-    prisma.notification.count({ where: { status: 'FAILED' } }),
     prisma.notification.count({
-      where: { status: 'FAILED', failedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+      where: { category: 'INCIDENT', payloadEncrypted: null, status: 'PENDING' },
+    }),
+    prisma.notification.count({
+      where: { category: 'INCIDENT', payloadEncrypted: null, status: 'FAILED' },
+    }),
+    prisma.notification.count({
+      where: {
+        category: 'INCIDENT',
+        payloadEncrypted: null,
+        status: 'FAILED',
+        failedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
     }),
   ]);
   return { pending, failed, failedRecent };

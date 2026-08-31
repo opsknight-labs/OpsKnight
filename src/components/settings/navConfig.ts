@@ -6,6 +6,7 @@ export type SettingsNavItem = {
   icon: string;
   keywords?: string[];
   requiresAdmin?: boolean;
+  requiresAdminOrAuditor?: boolean;
   requiresResponder?: boolean;
 };
 
@@ -118,6 +119,15 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         icon: 'bell',
         requiresAdmin: true,
         keywords: ['twilio', 'push', 'sms'],
+      },
+      {
+        id: 'notification-operations',
+        label: 'Notification Operations',
+        description: 'Workspace delivery health, failures, and retries',
+        href: '/settings/notifications/operations',
+        icon: 'activity',
+        requiresAdminOrAuditor: true,
+        keywords: ['delivery', 'operations', 'failures', 'retries', 'dead letter'],
       },
       {
         id: 'audit-logs',

@@ -8,13 +8,8 @@ import crypto from 'crypto';
 import { decryptStoredSecret } from './encryption';
 import { retry } from './retry';
 import { CircuitBreakers } from './circuit-breaker';
-import {
-  isStatusDeliveryComplete,
-  markStatusDeliveryComplete,
-  statusDeliveryMarkerId,
-  statusWebhookDeliveryId,
-  statusWebhookDeliveryKey,
-} from './status-page-delivery';
+import { statusWebhookDeliveryId, statusWebhookDeliveryKey } from './status-page-delivery';
+import { enqueueCentralNotification } from './notification-control-plane';
 
 export interface WebhookPayload {
   event: string;
@@ -228,33 +223,29 @@ export async function triggerStatusPageWebhooks(
       const batch = webhooks.slice(i, i + BATCH_SIZE);
       const results = await Promise.allSettled(
         batch.map(async webhook => {
-          const markerId = statusDeliveryMarkerId(
-            'STATUS_WEBHOOK',
-            effectiveDeliveryKey,
-            webhook.id
-          );
-          if (await isStatusDeliveryComplete(markerId)) {
-            return { attempted: false, success: true };
-          }
-
           const stableDeliveryId = statusWebhookDeliveryId(effectiveDeliveryKey, webhook.id);
-          const success = await deliverWebhook(
-            webhook.url,
-            await decryptStoredSecret(webhook.secret),
-            payload,
-            stableDeliveryId
-          );
+          await enqueueCentralNotification({
+            category: 'STATUS_PAGE',
+            channel: 'WEBHOOK',
+            recipientType: 'WEBHOOK',
+            recipientId: webhook.id,
+            recipientAddress: webhook.url,
+            templateKey: `status-page-webhook-${event}`,
+            sourceType: 'STATUS_PAGE_WEBHOOK',
+            sourceId: webhook.id,
+            eventKey: effectiveDeliveryKey,
+            displayMessage: `Status-page webhook: ${event}`,
+            priority: 3,
+            payload: {
+              kind: 'STATUS_PAGE_WEBHOOK',
+              url: webhook.url,
+              secret: await decryptStoredSecret(webhook.secret),
+              payload,
+              deliveryId: stableDeliveryId,
+            },
+          });
 
-          if (success) {
-            await markStatusDeliveryComplete({
-              markerId,
-              target: 'STATUS_WEBHOOK',
-              deliveryKey: effectiveDeliveryKey,
-              targetId: webhook.id,
-            });
-          }
-
-          return { attempted: true, success };
+          return { attempted: true, success: true };
         })
       );
 
@@ -262,7 +253,8 @@ export async function triggerStatusPageWebhooks(
         result => result.status === 'fulfilled' && result.value.attempted
       ).length;
       failed += results.filter(
-        result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.success)
+        result =>
+          result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.success)
       ).length;
     }
 

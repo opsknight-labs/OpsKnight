@@ -13,6 +13,7 @@ import { getServerSession } from 'next-auth';
 import type { Role } from '@prisma/client';
 
 async function sendInviteEmailIfConfigured(data: {
+  userId: string;
   email: string;
   name: string;
   inviteUrl: string;
@@ -26,24 +27,36 @@ async function sendInviteEmailIfConfigured(data: {
       return false;
     }
 
-    const { sendEmail } = await import('@/lib/email');
     const { getUserInviteEmailTemplate } = await import('@/lib/user-invite-email-template');
+    const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
     const template = getUserInviteEmailTemplate({
       userName: data.name,
       inviteUrl: data.inviteUrl,
       invitedBy: data.invitedBy,
     });
 
-    const result = await sendEmail(
-      {
+    const result = await enqueueCentralNotification({
+      category: 'ADMINISTRATION',
+      channel: 'EMAIL',
+      recipientType: 'USER',
+      recipientId: data.userId,
+      recipientAddress: data.email,
+      userId: data.userId,
+      templateKey: 'user-invitation',
+      sourceType: 'USER_INVITATION',
+      sourceId: data.userId,
+      eventKey: data.inviteUrl,
+      displayMessage: 'Workspace invitation',
+      priority: 2,
+      payload: {
+        kind: 'EMAIL',
         to: data.email,
         subject: template.subject,
         html: template.html,
         text: template.text,
       },
-      emailConfig
-    );
-    return result.success;
+    });
+    return result.delivered === true;
   } catch (error) {
     logger.warn('Failed to send invite email', {
       component: 'users-actions',
@@ -234,9 +247,7 @@ export async function addUser(
     }
 
     let inviteUrl = '';
-    let user: any = null; // Typing as any to avoid Prisma type verbosity in this snippet, or infer it.
-
-    user = await prisma.$transaction(async tx => {
+    const user = await prisma.$transaction(async tx => {
       const newUser = await tx.user.create({
         data: {
           name,
@@ -284,6 +295,7 @@ export async function addUser(
     revalidatePath('/audit');
 
     const emailSent = await sendInviteEmailIfConfigured({
+      userId: user.id,
       email,
       name,
       inviteUrl,
@@ -529,6 +541,7 @@ export async function generateInvite(
   revalidatePath('/audit');
 
   const emailSent = await sendInviteEmailIfConfigured({
+    userId: user.id,
     email: user.email,
     name: user.name || user.email,
     inviteUrl,

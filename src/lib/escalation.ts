@@ -1,8 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { runSerializableTransaction } from './db-utils';
-// import { sendNotification, NotificationChannel } from './notifications'; // Unused
-import type { NotificationChannel } from './notifications';
 import { buildScheduleBlocks, getFinalScheduleBlocks } from './oncall';
 import { logger } from './logger';
 import { ESCALATION_LOCK_TIMEOUT_MS } from './config';
@@ -659,12 +657,11 @@ export async function executeEscalation(
     return { escalated: false, reason: 'No users to notify' };
   }
 
-  // Send notifications to all resolved users
-  // Use escalation step channels if specified, otherwise use user preferences
+  // Send notifications to all resolved users. Recipient preferences are the
+  // source of truth for channel fan-out; escalation routing chooses who, not
+  // which of their explicitly enabled channels should be suppressed.
   const { sendUserNotification } = await import('./user-notifications');
   const notificationsSent = [];
-  const escalationChannels: NotificationChannel[] | undefined =
-    step.notificationChannels.length > 0 ? step.notificationChannels : undefined;
 
   for (const userId of targetUserIds) {
     try {
@@ -681,7 +678,7 @@ export async function executeEscalation(
         return supersededEscalationResult();
       }
       const message = `[OpsKnight] Incident: ${incident.title}${currentStepIndex > 0 ? ` (Escalation Level ${currentStepIndex + 1})` : ''}`;
-      const result = await sendUserNotification(incidentId, userId, message, escalationChannels);
+      const result = await sendUserNotification(incidentId, userId, message);
       notificationsSent.push({ userId, result });
     } catch (err) {
       logger.error('Failed to send escalation notification to user', {

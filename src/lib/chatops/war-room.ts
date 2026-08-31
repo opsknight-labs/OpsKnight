@@ -7,7 +7,8 @@
 
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { getSlackBotToken, sendSlackMessageToChannel } from '@/lib/slack';
+import { getSlackBotToken } from '@/lib/slack';
+import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { getBaseUrl } from '@/lib/env-validation';
 import { retryFetch } from '@/lib/retry';
 
@@ -430,21 +431,35 @@ export async function createIncidentWarRoom(
     const warRoomUrl = generateBridgeUrl(incidentId, videoBridge, customUrl);
 
     // Post Incident Command Card to the channel
-    await sendSlackMessageToChannel(
-      channelId,
-      {
-        id: incident.id,
-        title: incident.title,
-        status: incident.status,
-        urgency: incident.urgency,
-        serviceName: incident.service.name,
-        assigneeName: incident.assignee?.name,
+    await enqueueCentralNotification({
+      category: 'INCIDENT',
+      channel: 'SLACK',
+      recipientType: 'SLACK_CHANNEL',
+      recipientAddress: channelId,
+      incidentId: incident.id,
+      templateKey: 'chatops-war-room-command-card',
+      sourceType: 'INCIDENT',
+      sourceId: incident.id,
+      eventKey: `war-room:${channelId}:command-card`,
+      displayMessage: `War-room command card for ${incident.title}`,
+      priority: 1,
+      payload: {
+        kind: 'SLACK_CHANNEL',
+        channel: channelId,
+        incident: {
+          id: incident.id,
+          title: incident.title,
+          status: incident.status,
+          urgency: incident.urgency,
+          serviceName: incident.service.name,
+          assigneeName: incident.assignee?.name,
+        },
+        eventType: 'triggered',
+        includeInteractiveButtons: true,
+        serviceId: incident.serviceId,
+        additionalMessage: warRoomUrl ? `📹 Video Bridge: ${warRoomUrl}` : undefined,
       },
-      'triggered',
-      true,
-      incident.serviceId,
-      warRoomUrl ? `📹 Video Bridge: ${warRoomUrl}` : undefined
-    ).catch(err => logger.warn('[ChatOps] Failed to post command card', { error: err }));
+    }).catch(err => logger.warn('[ChatOps] Failed to queue command card', { error: err }));
 
     // Post War-Room Welcome & Feature Hints Card
     await postWarRoomWelcomeCard(channelId, incident.title, botToken).catch(err =>

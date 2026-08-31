@@ -1,6 +1,5 @@
 import prisma from './prisma';
 import { executeEscalation } from './notifications';
-import { notifySlackForIncident } from './slack';
 import { logger } from './logger';
 import type { EventSideEffectPayload, LifecycleSideEffectContext } from './event-outbox';
 import {
@@ -357,8 +356,10 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     case 'RESOLVE_SLACK':
       requireDelivery(
-        await notifySlackForIncident(payload.incidentId, 'resolved'),
-        'Slack resolve'
+        await import('./service-notifications').then(module =>
+          module.sendServiceNotifications(payload.incidentId, 'resolved')
+        ),
+        'service resolve notification'
       );
       return;
     case 'RESOLVE_WAR_ROOM_ARCHIVE':
@@ -366,8 +367,10 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     case 'ACK_SLACK':
       requireDelivery(
-        await notifySlackForIncident(payload.incidentId, 'acknowledged'),
-        'Slack acknowledge'
+        await import('./service-notifications').then(module =>
+          module.sendServiceNotifications(payload.incidentId, 'acknowledged')
+        ),
+        'service acknowledge notification'
       );
       return;
     case 'LIFECYCLE_USER_NOTIFICATION': {

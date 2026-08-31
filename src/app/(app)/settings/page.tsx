@@ -8,8 +8,6 @@ import {
   CardDescription,
   CardContent,
 } from '@/components/ui/shadcn/card';
-import { Input } from '@/components/ui/shadcn/input';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   User,
   Settings,
@@ -17,19 +15,19 @@ import {
   Building2,
   Puzzle,
   Bell,
-  Search,
   ArrowRight,
   Lock,
+  type LucideIcon,
 } from 'lucide-react';
 
-const sectionIcons: Record<string, any> = {
+const sectionIcons: Record<string, LucideIcon> = {
   account: User,
   workspace: Building2,
   integrations: Puzzle,
   advanced: Settings,
 };
 
-const itemIcons: Record<string, any> = {
+const itemIcons: Record<string, LucideIcon> = {
   profile: User,
   preferences: Settings,
   security: Shield,
@@ -43,8 +41,13 @@ import '@/styles/pages/settings.css';
 export default async function SettingsOverviewPage() {
   const permissions = await getUserPermissions();
 
-  const canAccess = (item: { requiresAdmin?: boolean; requiresResponder?: boolean }) => {
+  const canAccess = (item: {
+    requiresAdmin?: boolean;
+    requiresAdminOrAuditor?: boolean;
+    requiresResponder?: boolean;
+  }) => {
     if (item.requiresAdmin && !permissions.isAdmin) return false;
+    if (item.requiresAdminOrAuditor && !permissions.isAdmin && !permissions.isAuditor) return false;
     if (item.requiresResponder && !permissions.isResponderOrAbove) return false;
     return true;
   };

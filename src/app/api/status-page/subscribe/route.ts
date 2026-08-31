@@ -4,7 +4,6 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
-import { sendEmail } from '@/lib/email';
 import { getVerificationEmailTemplate } from '@/lib/status-page-email-templates';
 import { getBaseUrl } from '@/lib/env-validation';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -130,6 +129,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const subscription = await prisma.statusPageSubscription.findUniqueOrThrow({
+      where: { statusPageId_email: { statusPageId, email: normalizedEmail } },
+      select: { id: true },
+    });
+
     try {
       const { getStatusPageEmailConfig } = await import('@/lib/notification-providers');
       const emailConfig = await getStatusPageEmailConfig(statusPageId);
@@ -165,20 +169,35 @@ export async function POST(req: NextRequest) {
           logoUrl,
         });
 
-        await sendEmail(
-          {
+        const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
+        const delivery = await enqueueCentralNotification({
+          category: 'STATUS_PAGE',
+          channel: 'EMAIL',
+          recipientType: 'SUBSCRIBER',
+          recipientId: subscription.id,
+          recipientAddress: normalizedEmail,
+          templateKey: 'status-page-verification',
+          sourceType: 'STATUS_PAGE_SUBSCRIPTION',
+          sourceId: subscription.id,
+          eventKey: verificationToken,
+          displayMessage: `Verify subscription to ${statusPage.name}`,
+          priority: 2,
+          payload: {
+            kind: 'EMAIL',
             to: normalizedEmail,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
             text: emailTemplate.text,
+            providerScope: { statusPageId },
           },
-          emailConfig
-        );
+        });
 
-        logger.info('api.status_page.subscription.verification_email_sent', {
+        logger.info('api.status_page.subscription.verification_email_enqueued', {
           statusPageId,
           email: normalizedEmail,
           provider: emailConfig.provider,
+          notificationId: delivery.id,
+          delivered: delivery.delivered === true,
         });
       }
     } catch (emailError) {
