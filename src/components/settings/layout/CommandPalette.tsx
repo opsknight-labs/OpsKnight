@@ -53,10 +53,19 @@ export function CommandPalette() {
               <span>Security</span>
               <CommandShortcut>g s</CommandShortcut>
             </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => router.push('/settings/integrations'))}>
+            <CommandItem
+              onSelect={() => runCommand(() => router.push('/settings/integrations/slack'))}
+            >
               <Link className="mr-2 h-4 w-4" />
-              <span>Integrations</span>
-              <CommandShortcut>g i</CommandShortcut>
+              <span>Slack Integration</span>
+              <CommandShortcut>g s</CommandShortcut>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => runCommand(() => router.push('/settings/integrations/jira'))}
+            >
+              <Link className="mr-2 h-4 w-4" />
+              <span>Jira Integration</span>
+              <CommandShortcut>g j</CommandShortcut>
             </CommandItem>
             <CommandItem onSelect={() => runCommand(() => router.push('/settings/api-keys'))}>
               <Key className="mr-2 h-4 w-4" />

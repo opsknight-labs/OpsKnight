@@ -11,16 +11,19 @@ import {
   Home,
   KeyRound,
   List,
+  MessageCircle,
   Plug,
   Search,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Tickets,
   User,
   Users,
 } from 'lucide-react';
 import { SETTINGS_NAV_SECTIONS } from '@/components/settings/navConfig';
 import { cn } from '@/lib/utils';
+import { SlackLogo, JiraLogo } from '@/components/common/BrandLogos';
 
 type Props = {
   isAdmin?: boolean;
@@ -46,7 +49,10 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   'credit-card': CreditCard,
   building: Building2,
   users: Users,
-  slack: Plug,
+  slack: SlackLogo,
+  jira: JiraLogo,
+  'message-circle': MessageCircle,
+  tickets: Tickets,
 };
 
 export default function SettingsNav({

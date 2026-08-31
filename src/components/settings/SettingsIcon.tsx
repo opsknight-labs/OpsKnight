@@ -132,6 +132,29 @@ export default function SettingsIcon({ name, className = '' }: IconProps) {
         <path d="M7 16H11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     ),
+    jira: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className={className}>
+        <path
+          d="M11.53 2c0 2.4-1.97 4.35-4.4 4.35H2.73C1.22 6.35 0 7.58 0 9.08v4.4C0 15.9 1.97 17.85 4.4 17.85h4.4c1.51 0 2.73-1.22 2.73-2.72V10.73c0-2.4 1.97-4.35 4.4-4.35h4.4c1.51 0 2.73-1.22 2.73-2.73V2H11.53z"
+          fill="currentColor"
+          fillOpacity="0.6"
+        />
+        <path
+          d="M11.53 7.82c0 2.4-1.97 4.35-4.4 4.35H2.73C1.22 12.17 0 13.4 0 14.9v4.4C0 21.72 1.97 23.67 4.4 23.67h4.4c1.51 0 2.73-1.22 2.73-2.72V16.55c0-2.4 1.97-4.35 4.4-4.35h4.4c1.51 0 2.73-1.22 2.73-2.73V7.82H11.53z"
+          fill="currentColor"
+          fillOpacity="0.6"
+        />
+      </svg>
+    ),
+    chatops: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className={className}>
+        <path
+          d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+          fill="currentColor"
+          fillOpacity="0.6"
+        />
+      </svg>
+    ),
   };
 
   return icons[name] || null;

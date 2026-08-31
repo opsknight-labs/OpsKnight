@@ -7,6 +7,7 @@ import JiraIntegrationPage from '@/components/settings/JiraIntegrationPage';
 export default async function GlobalJiraIntegrationPage() {
   const permissions = await getUserPermissions();
   if (!permissions) redirect('/login');
+  if (!permissions.isAdmin) redirect('/settings');
 
   const config = await prisma.jiraConfig.findUnique({
     where: { id: 'default' },
@@ -27,11 +28,10 @@ export default async function GlobalJiraIntegrationPage() {
       <SettingsPageHeader
         title="Jira Integration"
         description="Connect Jira to turn incidents and postmortem action items into tracked engineering work."
-        backHref="/settings/integrations"
-        backLabel="Back to Integrations"
+        backHref="/settings"
+        backLabel="Back to Settings"
         breadcrumbs={[
           { label: 'Settings', href: '/settings' },
-          { label: 'Integrations', href: '/settings/integrations' },
           { label: 'Jira', href: '/settings/integrations/jira' },
         ]}
       />

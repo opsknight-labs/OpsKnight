@@ -514,7 +514,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
           `Integrations with recorded errors: ${failingIntegrations.map(item => item.name).join(', ') || 'none'}`,
           'Metrics are process-local and reset on restart; durable logs remain authoritative.',
         ],
-        action: { label: 'Integration settings', href: '/settings/integrations' },
+        action: { label: 'Inbound services', href: '/services' },
       });
     } catch {
       checks.push({
