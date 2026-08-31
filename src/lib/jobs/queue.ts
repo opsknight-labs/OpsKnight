@@ -6,6 +6,12 @@ import prisma from '../prisma';
 const MAX_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 const PROCESSING_LEASE_HEARTBEAT_MS = 60 * 1000;
 
+function isNonRetryableBackgroundJobError(error: string): boolean {
+  // Slack's free-workspace message cap and an empty responder configuration
+  // require an operator change, not five identical retries.
+  return /message_limit_exceeded|user has not enabled any notification channels/i.test(error);
+}
+
 export type JobType = 'ESCALATION' | 'NOTIFICATION' | 'AUTO_UNSNOOZE' | 'SCHEDULED_TASK' | 'STATUS_PAGE_NOTIFICATION';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 interface JobPayload { incidentId?: string; stepIndex?: number; eventType?: string; task?: string; [key:string]:unknown; }
@@ -49,7 +55,7 @@ export async function claimPendingJobs(limit:number=50,type?:JobType):Promise<an
 export async function markJobProcessing(jobId:string):Promise<void>{await prisma.backgroundJob.update({where:{id:jobId},data:{status:'PROCESSING',startedAt:new Date(),attempts:{increment:1}}});}
 export async function markJobCompleted(jobId:string):Promise<void>{await prisma.backgroundJob.update({where:{id:jobId},data:{status:'COMPLETED',completedAt:new Date()}});}
 export async function markJobFailed(jobId:string,error:string):Promise<void>{
-  const job=await prisma.backgroundJob.findUnique({where:{id:jobId}});if(!job)return;const shouldRetry=job.attempts<job.maxAttempts;
+  const job=await prisma.backgroundJob.findUnique({where:{id:jobId}});if(!job)return;const shouldRetry=job.attempts<job.maxAttempts&&!isNonRetryableBackgroundJobError(error);
   await prisma.backgroundJob.update({where:{id:jobId},data:{status:shouldRetry?'PENDING':'FAILED',failedAt:shouldRetry?null:new Date(),error:shouldRetry?null:error,scheduledAt:shouldRetry?new Date(Date.now()+Math.min(Math.pow(2,job.attempts)*30000+Math.floor(Math.random()*10000),MAX_RETRY_BACKOFF_MS)):job.scheduledAt}});
 }
 

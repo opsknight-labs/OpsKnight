@@ -37,7 +37,8 @@ describe('notification queue delivery reliability', () => {
 
     // All delivery paths share the contract's ten-second delay after attempt one,
     // followed by the restarted one-second flush timer.
-    await vi.advanceTimersByTimeAsync(11_000);
+    // The retry scheduler adds up to 20% jitter to avoid synchronized retries.
+    await vi.advanceTimersByTimeAsync(13_000);
     expect(sendNotification).toHaveBeenCalledTimes(2);
 
     await forceFlush();

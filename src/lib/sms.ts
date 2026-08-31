@@ -72,9 +72,14 @@ export function formatToE164(phone: string): string {
  * Send SMS notification
  * Uses structured logger for delivery events and warnings
  */
-export async function sendSMS(
-  options: SMSOptions
-): Promise<{ success: boolean; error?: string; messageSid?: string }> {
+export async function sendSMS(options: SMSOptions): Promise<{
+  success: boolean;
+  error?: string;
+  messageSid?: string;
+  statusCode?: number;
+  errorCode?: string;
+  retryAfterMs?: number;
+}> {
   try {
     // Get SMS configuration
     const smsConfig = await getSMSConfig();
@@ -205,6 +210,11 @@ export async function sendSMS(
         return {
           success: false,
           error: errorMessage,
+          statusCode:
+            errorInfo.status === 429 || String(errorInfo.code) === '20429' ? 429 : errorInfo.status,
+          errorCode: errorInfo.code == null ? undefined : String(errorInfo.code),
+          retryAfterMs:
+            errorInfo.status === 429 || String(errorInfo.code) === '20429' ? 60_000 : undefined,
         };
       }
     }
@@ -318,7 +328,15 @@ export async function sendSMS(
             'AWS SNS spending limit reached. Please check your AWS SNS spending quota.';
         }
 
-        return { success: false, error: errorMessage };
+        const throttled =
+          errorInfo.code === 'Throttling' || errorInfo.name === 'ThrottlingException';
+        return {
+          success: false,
+          error: errorMessage,
+          statusCode: throttled ? 429 : undefined,
+          errorCode: errorInfo.code || errorInfo.name,
+          retryAfterMs: throttled ? 60_000 : undefined,
+        };
       }
     }
 

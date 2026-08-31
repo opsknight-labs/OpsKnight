@@ -14,6 +14,7 @@ function serviceDeliveryKey(
     updatedAt: Date;
     acknowledgedAt: Date | null;
     resolvedAt: Date | null;
+    escalationGeneration?: number | null;
   },
   eventType: ServiceNotificationEventType
 ): string {
@@ -25,7 +26,9 @@ function serviceDeliveryKey(
         : eventType === 'resolved'
           ? (incident.resolvedAt ?? incident.updatedAt)
           : incident.updatedAt;
-  return `${incident.id}:${eventType}:${at.toISOString()}`;
+  const generation =
+    eventType === 'triggered' ? `:g${incident.escalationGeneration ?? 0}` : '';
+  return `${incident.id}:${eventType}:${at.toISOString()}${generation}`;
 }
 
 async function persistIntent(
@@ -42,7 +45,7 @@ async function persistIntent(
 export async function sendServiceNotifications(
   incidentId: string,
   eventType: ServiceNotificationEventType,
-  options: { eventAt?: Date } = {}
+  options: { eventAt?: Date; escalationGeneration?: number; expectedStatus?: string } = {}
 ): Promise<{ success: boolean; errors?: string[] }> {
   try {
     const incident = await prisma.incident.findUnique({
@@ -62,16 +65,21 @@ export async function sendServiceNotifications(
             ? 'RESOLVED'
             : null;
     const currentEventAt =
-      eventType === 'triggered'
-        ? incident.createdAt
-        : eventType === 'acknowledged'
-          ? incident.acknowledgedAt
-          : eventType === 'resolved'
-            ? incident.resolvedAt
-            : incident.updatedAt;
+      eventType === 'acknowledged'
+        ? incident.acknowledgedAt
+        : eventType === 'resolved'
+          ? incident.resolvedAt
+          : null;
+    const compareCommittedInstant = eventType === 'acknowledged' || eventType === 'resolved';
     if (
       (requiredStatus && incident.status !== requiredStatus) ||
-      (options.eventAt && currentEventAt?.getTime() !== options.eventAt.getTime())
+      (options.expectedStatus && incident.status !== options.expectedStatus) ||
+      (eventType === 'triggered' &&
+        options.escalationGeneration != null &&
+        incident.escalationGeneration !== options.escalationGeneration) ||
+      (compareCommittedInstant &&
+        options.eventAt &&
+        currentEventAt?.getTime() !== options.eventAt.getTime())
     ) {
       logger.info('service_notifications.stale_lifecycle_aborted', {
         incidentId,
@@ -88,9 +96,12 @@ export async function sendServiceNotifications(
       (eventType === 'resolved' && !(service.serviceNotifyOnResolved ?? true))
     )
       return { success: true };
+    const eventGeneration = options.escalationGeneration ?? incident.escalationGeneration ?? 0;
     const deliveryKey = options.eventAt
-      ? `${incident.id}:${eventType}:${options.eventAt.toISOString()}`
-      : serviceDeliveryKey(incident, eventType);
+      ? `${incident.id}:${eventType}:${options.eventAt.toISOString()}${
+          eventType === 'triggered' ? `:g${eventGeneration}` : ''
+        }`
+      : serviceDeliveryKey({ ...incident, escalationGeneration: eventGeneration }, eventType);
     const serviceChannels = service.serviceNotificationChannels || [];
     const errors: string[] = [];
     const incidentPresentation = {
@@ -100,6 +111,13 @@ export async function sendServiceNotifications(
       urgency: incident.urgency,
       serviceName: service.name,
       assigneeName: incident.assignee?.name || undefined,
+    };
+    const lifecyclePolicy = {
+      incidentId,
+      eventType,
+      expectedStatus: options.expectedStatus ?? incident.status,
+      escalationGeneration: eventGeneration,
+      serviceId: service.id,
     };
     const webhookIncident = {
       id: incident.id,
@@ -115,14 +133,16 @@ export async function sendServiceNotifications(
     };
 
     if (serviceChannels.includes('SLACK')) {
-      if (service.slackChannel && eventType !== 'updated') {
+      const slackChannel = service.slackChannel?.trim();
+      const slackWebhookUrl = service.slackWebhookUrl?.trim();
+      if (slackChannel && eventType !== 'updated') {
         const result = await persistIntent(async () => {
           await enqueueCentralNotification({
             category: 'INCIDENT',
             channel: 'SLACK',
             recipientType: 'SLACK_CHANNEL',
             recipientId: service.id,
-            recipientAddress: service.slackChannel!,
+            recipientAddress: slackChannel,
             incidentId,
             templateKey: `service-slack-${eventType}`,
             sourceType: 'SERVICE_INCIDENT',
@@ -132,11 +152,17 @@ export async function sendServiceNotifications(
             priority: incident.urgency === 'HIGH' ? 1 : 3,
             payload: {
               kind: 'SLACK_CHANNEL',
-              channel: service.slackChannel!,
+              channel: slackChannel,
               incident: incidentPresentation,
               eventType,
               includeInteractiveButtons: true,
               serviceId: incident.serviceId,
+              lifecyclePolicy: {
+                ...lifecyclePolicy,
+                targetKind: 'SERVICE_SLACK_CHANNEL',
+                targetId: service.id,
+                targetAddress: slackChannel,
+              },
             },
           });
         });
@@ -144,14 +170,14 @@ export async function sendServiceNotifications(
           errors.push(`Slack channel notification failed: ${result.error || 'Unknown error'}`);
       }
 
-      if (service.slackWebhookUrl && eventType !== 'updated') {
+      if (slackWebhookUrl && eventType !== 'updated') {
         const result = await persistIntent(async () => {
           await enqueueCentralNotification({
             category: 'INCIDENT',
             channel: 'SLACK',
             recipientType: 'WEBHOOK',
             recipientId: service.id,
-            recipientAddress: service.slackWebhookUrl!,
+            recipientAddress: slackWebhookUrl,
             incidentId,
             templateKey: `service-slack-webhook-${eventType}`,
             sourceType: 'SERVICE_INCIDENT',
@@ -163,7 +189,14 @@ export async function sendServiceNotifications(
               kind: 'SLACK_WEBHOOK',
               incident: incidentPresentation,
               eventType,
-              webhookUrl: service.slackWebhookUrl!,
+              webhookUrl: slackWebhookUrl,
+              serviceId: service.id,
+              lifecyclePolicy: {
+                ...lifecyclePolicy,
+                targetKind: 'SERVICE_SLACK_WEBHOOK',
+                targetId: service.id,
+                targetAddress: slackWebhookUrl,
+              },
             },
           });
         });
@@ -201,6 +234,12 @@ export async function sendServiceNotifications(
                   webhook.channel || undefined
                 ),
                 secret: webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
+                lifecyclePolicy: {
+                  ...lifecyclePolicy,
+                  targetKind: 'WEBHOOK_INTEGRATION',
+                  targetId: webhook.id,
+                  targetAddress: webhook.url,
+                },
               },
             });
           });
@@ -231,6 +270,12 @@ export async function sendServiceNotifications(
             kind: 'WEBHOOK',
             url: service.webhookUrl!,
             payload: generateIncidentWebhookPayload(webhookIncident, eventType),
+            lifecyclePolicy: {
+              ...lifecyclePolicy,
+              targetKind: 'LEGACY_SERVICE_WEBHOOK',
+              targetId: service.id,
+              targetAddress: service.webhookUrl!,
+            },
           },
         }).then(() => undefined)
       );

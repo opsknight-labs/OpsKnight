@@ -1,7 +1,15 @@
 import type { IncidentStatus } from '@prisma/client';
 import prisma from './prisma';
-import { CircuitBreakerError, CircuitBreakers } from './circuit-breaker';
-import { notificationEventInstant, notificationIntentEventAt } from './notification-identity';
+import {
+  CircuitBreakerError,
+  CircuitBreakerTimeoutError,
+  CircuitBreakers,
+} from './circuit-breaker';
+import {
+  isLegacyTriggeredNotificationIntent,
+  notificationIntentEventAt,
+  notificationIntentTriggerGeneration,
+} from './notification-identity';
 import { acquireProviderAdmission, type ProviderAdmissionScope } from './provider-admission';
 
 export const NOTIFICATION_CHANNELS = [
@@ -34,7 +42,8 @@ export type NotificationDeliveryOutcome =
   | 'SKIPPED'
   | 'RETRYABLE_FAILURE'
   | 'PERMANENT_FAILURE'
-  | 'CIRCUIT_OPEN';
+  | 'CIRCUIT_OPEN'
+  | 'AMBIGUOUS';
 
 export interface NotificationDeliveryResult {
   success: boolean;
@@ -96,6 +105,7 @@ interface IncidentDeliveryContext {
   currentEscalationStep?: number | null;
   nextEscalationAt?: Date | null;
   escalationStatus?: string | null;
+  escalationGeneration?: number;
   service?: { webhookUrl: string | null } | null;
 }
 export interface NotificationAttemptInput {
@@ -109,9 +119,15 @@ export interface NotificationAttemptInput {
 }
 export function notificationRetryDelayMs(
   attempts: number,
-  policy: NotificationRetryPolicy = NOTIFICATION_RETRY_POLICY
+  policy: NotificationRetryPolicy = NOTIFICATION_RETRY_POLICY,
+  random: () => number = Math.random
 ): number {
-  return Math.min(policy.initialDelayMs * 2 ** Math.max(0, attempts), policy.maximumDelayMs);
+  const baseDelay = Math.min(
+    policy.initialDelayMs * 2 ** Math.max(0, attempts),
+    policy.maximumDelayMs
+  );
+  const jittered = Math.round(baseDelay * (0.8 + Math.min(Math.max(random(), 0), 1) * 0.4));
+  return Math.min(jittered, policy.maximumDelayMs);
 }
 export function notificationEventTypeFromStatus(
   status: IncidentStatus | undefined
@@ -133,24 +149,13 @@ function staleIntentReason(
     if (incident.status !== 'OPEN') {
       return `Triggered notification superseded by incident state ${incident.status}`;
     }
+    if (isLegacyTriggeredNotificationIntent(input.notificationId)) {
+      return 'Triggered notification predates immutable escalation generation';
+    }
+    const expectedGeneration = notificationIntentTriggerGeneration(input.notificationId);
     if (
-      expectedAt &&
-      incident.id &&
-      incident.createdAt &&
-      incident.updatedAt &&
-      notificationEventInstant(
-        {
-          id: incident.id,
-          createdAt: incident.createdAt,
-          updatedAt: incident.updatedAt,
-          acknowledgedAt: incident.acknowledgedAt,
-          resolvedAt: incident.resolvedAt,
-          currentEscalationStep: incident.currentEscalationStep,
-          nextEscalationAt: incident.nextEscalationAt,
-          escalationStatus: incident.escalationStatus,
-        },
-        'triggered'
-      ).getTime() !== expectedAt
+      expectedGeneration != null &&
+      (incident.escalationGeneration ?? 0) !== expectedGeneration
     ) {
       return 'Triggered notification belongs to a superseded escalation generation';
     }
@@ -216,6 +221,7 @@ export async function dispatchNotificationAttempt(
       currentEscalationStep: true,
       nextEscalationAt: true,
       escalationStatus: true,
+      escalationGeneration: true,
       service: { select: { webhookUrl: true } },
     },
   });
@@ -316,6 +322,12 @@ export async function dispatchNotificationAttempt(
         return { success: true, outcome: 'SKIPPED', skipped: true };
     }
   } catch (error) {
+    if (error instanceof CircuitBreakerTimeoutError)
+      return {
+        success: false,
+        outcome: 'AMBIGUOUS',
+        error: `Provider outcome is ambiguous after timeout: ${error.serviceName}`,
+      };
     if (error instanceof CircuitBreakerError)
       return {
         success: false,

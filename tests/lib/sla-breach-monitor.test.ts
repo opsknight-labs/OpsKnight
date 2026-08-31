@@ -4,6 +4,7 @@ import {
   formatBreachWarning,
   type BreachWarning,
 } from '@/lib/sla-breach-monitor';
+import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 
 vi.mock('@/lib/notification-control-plane', () => ({
   enqueueCentralNotification: vi.fn().mockResolvedValue({
@@ -11,6 +12,9 @@ vi.mock('@/lib/notification-control-plane', () => ({
     created: true,
     delivered: true,
   }),
+}));
+vi.mock('@/lib/slack', () => ({
+  configuredSlackWebhookUrl: vi.fn(() => undefined),
 }));
 
 // Mock prisma
@@ -169,6 +173,77 @@ describe('sla-breach-monitor', () => {
       const result = await checkSLABreaches();
 
       expect(result.warnings).toHaveLength(0);
+    });
+
+    it('does not create an SLA Slack intent without a configured target', async () => {
+      const { default: prisma } = await import('@/lib/prisma');
+      const now = new Date('2026-01-05T12:00:00Z');
+      vi.setSystemTime(now);
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([
+        {
+          id: 'inc-1',
+          title: 'Test Incident',
+          serviceId: 'svc-1',
+          urgency: 'HIGH',
+          status: 'OPEN',
+          createdAt: new Date(now.getTime() - 12 * 60 * 1000),
+          acknowledgedAt: null,
+          dedupKey: null,
+          escalationProcessingAt: null,
+          snoozedUntil: null,
+          snoozeReason: null,
+          service: {
+            id: 'svc-1',
+            name: 'Test Service',
+            targetAckMinutes: 15,
+            targetResolveMinutes: 120,
+            slackChannel: '   ',
+            slackWebhookUrl: null,
+            serviceNotificationChannels: ['SLACK'],
+            serviceNotifyOnSlaBreach: true,
+            webhookIntegrations: [],
+          },
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
+
+      await expect(checkSLABreaches()).resolves.toMatchObject({ warningCount: 1 });
+      expect(enqueueCentralNotification).not.toHaveBeenCalled();
+    });
+
+    it('does not commit the SLA dedupe marker when intent materialization fails', async () => {
+      const { default: prisma } = await import('@/lib/prisma');
+      const now = new Date('2026-01-05T12:00:00Z');
+      vi.setSystemTime(now);
+      vi.mocked(prisma.incident.findMany).mockResolvedValue([
+        {
+          id: 'inc-1',
+          title: 'Test Incident',
+          serviceId: 'svc-1',
+          urgency: 'HIGH',
+          status: 'OPEN',
+          createdAt: new Date(now.getTime() - 12 * 60 * 1000),
+          acknowledgedAt: null,
+          dedupKey: null,
+          escalationProcessingAt: null,
+          snoozedUntil: null,
+          snoozeReason: null,
+          service: {
+            id: 'svc-1',
+            name: 'Test Service',
+            targetAckMinutes: 15,
+            targetResolveMinutes: 120,
+            slackChannel: 'C123',
+            slackWebhookUrl: null,
+            serviceNotificationChannels: ['SLACK'],
+            serviceNotifyOnSlaBreach: true,
+            webhookIntegrations: [],
+          },
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>);
+      vi.mocked(enqueueCentralNotification).mockRejectedValueOnce(new Error('database unavailable'));
+
+      await expect(checkSLABreaches()).rejects.toThrow('database unavailable');
+      expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     });
 
     it('deduplicates SLA ACK and RESOLVE breach events when already logged', async () => {

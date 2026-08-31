@@ -171,7 +171,14 @@ export async function notifyStatusPageSubscribers(
                   '{{unsubscribe_url}}',
                   `${appBaseUrl}/status/unsubscribe/${sub.token}`
                 ),
-                providerScope: { statusPageId: page.id },
+                providerScope: {
+                  statusPageId: page.id,
+                  subscriptionId: sub.id,
+                  incidentId,
+                  eventType,
+                  expectedStatus: incident.status,
+                  escalationGeneration: incident.escalationGeneration,
+                },
               },
             });
             return { success: true, skipped: !intent.created };

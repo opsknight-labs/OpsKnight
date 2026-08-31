@@ -41,6 +41,15 @@ interface CircuitBreakerState {
   halfOpenRequestInFlight?: boolean;
 }
 
+export type CircuitExecutionOptions<T> = {
+  /**
+   * Classifies a resolved provider result as an upstream outage. Caller-side
+   * validation, recipient errors, and quota responses should not open the
+   * shared provider circuit.
+   */
+  shouldCountFailure?: (result: T) => boolean;
+};
+
 const DEFAULT_CONFIG: Omit<CircuitBreakerConfig, 'name'> = {
   failureThreshold: 5,
   resetTimeout: 30000, // 30 seconds
@@ -70,7 +79,7 @@ export class CircuitBreaker {
   /**
    * Execute a function with circuit breaker protection
    */
-  async execute<T>(fn: () => Promise<T>): Promise<T> {
+  async execute<T>(fn: () => Promise<T>, options: CircuitExecutionOptions<T> = {}): Promise<T> {
     if (this.state.state === 'OPEN') {
       const now = Date.now();
       if (now - this.state.lastFailureTime >= this.config.resetTimeout) {
@@ -102,7 +111,24 @@ export class CircuitBreaker {
     try {
       // Execute with timeout
       const result = await this.executeWithTimeout(fn);
-      this.onSuccess();
+      const reportedFailure =
+        result &&
+        typeof result === 'object' &&
+        'success' in result &&
+        (result as { success?: unknown }).success === false;
+      if (reportedFailure && (options.shouldCountFailure?.(result) ?? true)) {
+        this.onFailure(
+          new Error(
+            'error' in result && typeof (result as { error?: unknown }).error === 'string'
+              ? (result as { error: string }).error
+              : `${this.config.name} provider reported failure`
+          )
+        );
+      } else if (reportedFailure) {
+        this.onNeutral();
+      } else {
+        this.onSuccess();
+      }
       return result;
     } catch (error) {
       this.onFailure(error);
@@ -116,7 +142,7 @@ export class CircuitBreaker {
   private async executeWithTimeout<T>(fn: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        reject(new Error(`Request timeout after ${this.config.timeout}ms`));
+        reject(new CircuitBreakerTimeoutError(this.config.name, this.config.timeout));
       }, this.config.timeout);
 
       fn()
@@ -147,6 +173,13 @@ export class CircuitBreaker {
     } else {
       // Reset failure count on success in CLOSED state
       this.state.failures = 0;
+    }
+  }
+
+  /** A caller/config/quota failure neither harms nor heals provider health. */
+  private onNeutral(): void {
+    if (this.state.state === 'HALF_OPEN') {
+      this.state.halfOpenRequestInFlight = false;
     }
   }
 
@@ -248,6 +281,16 @@ export class CircuitBreakerError extends Error {
     super(message);
     this.name = 'CircuitBreakerError';
     this.serviceName = serviceName;
+  }
+}
+
+/** The external mutation may still complete after the local timeout. */
+export class CircuitBreakerTimeoutError extends CircuitBreakerError {
+  readonly ambiguous = true;
+
+  constructor(serviceName: string, timeoutMs: number) {
+    super(`Request timeout after ${timeoutMs}ms`, serviceName);
+    this.name = 'CircuitBreakerTimeoutError';
   }
 }
 

@@ -18,10 +18,15 @@ describe('notification delivery contract', () => {
   });
 
   it('applies one bounded exponential retry schedule', () => {
-    expect(notificationRetryDelayMs(0)).toBe(5_000);
-    expect(notificationRetryDelayMs(1)).toBe(10_000);
-    expect(notificationRetryDelayMs(2)).toBe(20_000);
-    expect(notificationRetryDelayMs(20)).toBe(NOTIFICATION_RETRY_POLICY.maximumDelayMs);
+    const midpoint = () => 0.5;
+    expect(notificationRetryDelayMs(0, NOTIFICATION_RETRY_POLICY, midpoint)).toBe(5_000);
+    expect(notificationRetryDelayMs(1, NOTIFICATION_RETRY_POLICY, midpoint)).toBe(10_000);
+    expect(notificationRetryDelayMs(2, NOTIFICATION_RETRY_POLICY, midpoint)).toBe(20_000);
+    expect(notificationRetryDelayMs(20, NOTIFICATION_RETRY_POLICY, midpoint)).toBe(
+      NOTIFICATION_RETRY_POLICY.maximumDelayMs
+    );
+    expect(notificationRetryDelayMs(1, NOTIFICATION_RETRY_POLICY, () => 0)).toBe(8_000);
+    expect(notificationRetryDelayMs(1, NOTIFICATION_RETRY_POLICY, () => 1)).toBe(12_000);
   });
 
   it('does not mutate the shared retry policy', () => {

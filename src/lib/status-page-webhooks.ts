@@ -40,6 +40,14 @@ function asWebhookRecord(value: unknown): Record<string, unknown> {
   return { value };
 }
 
+function safeWebhookTarget(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return 'invalid-webhook-target';
+  }
+}
+
 /**
  * Deliver webhook payload to a URL.
  *
@@ -52,15 +60,15 @@ export async function deliverWebhook(
   secret: string,
   payload: WebhookPayload,
   deliveryId: string = crypto.randomUUID(),
-  options: { maxAttempts?: number } = {}
+  options: { maxAttempts?: number; webhookId?: string; circuitBreaker?: boolean } = {}
 ): Promise<StatusPageWebhookDeliveryResult> {
   try {
     // SSRF Protection: Validate webhook URL before making request
-    const { assertSafeOutboundUrl } = await import('./network-security');
+    const { assertSafeOutboundUrl, safeOutboundFetch } = await import('./network-security');
     try {
       await assertSafeOutboundUrl(url);
     } catch {
-      logger.warn('api.status_page.webhook.blocked_ssrf', { url });
+      logger.warn('api.status_page.webhook.blocked_ssrf', { target: safeWebhookTarget(url) });
       return { success: false, error: 'Invalid or restricted webhook URL' };
     }
 
@@ -71,15 +79,13 @@ export async function deliverWebhook(
       .update(`${signatureTimestamp}.${payloadString}`)
       .digest('hex');
 
-    const cb = CircuitBreakers.webhook(url);
-
     const retryResult = await retry(
       async () => {
-        const response = await cb.execute(async () => {
+        const request = async () => {
           // Revalidate on every network attempt to defend against DNS rebinding
           // and configuration changes between retries.
           await assertSafeOutboundUrl(url);
-          const res = await fetch(url, {
+          const res = await safeOutboundFetch(url, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -91,7 +97,6 @@ export async function deliverWebhook(
             },
             body: payloadString,
             signal: AbortSignal.timeout(10000), // 10 second timeout
-            redirect: 'error',
           });
 
           if (!res.ok && (res.status >= 500 || res.status === 429)) {
@@ -105,7 +110,11 @@ export async function deliverWebhook(
           }
 
           return res;
-        });
+        };
+        const response =
+          options.circuitBreaker === false
+            ? await request()
+            : await CircuitBreakers.webhook(url).execute(request);
 
         return response;
       },
@@ -125,7 +134,7 @@ export async function deliverWebhook(
 
     if (!retryResult.success || !retryResult.data) {
       logger.warn('api.status_page.webhook.delivery_failed', {
-        url,
+        target: safeWebhookTarget(url),
         deliveryId,
         error:
           retryResult.error instanceof Error
@@ -146,15 +155,17 @@ export async function deliverWebhook(
     const response = retryResult.data;
 
     if (response.ok) {
-      await prisma.statusPageWebhook.updateMany({
-        where: { url },
-        data: { lastTriggeredAt: new Date() },
-      });
+      if (options.webhookId) {
+        await prisma.statusPageWebhook.updateMany({
+          where: { id: options.webhookId },
+          data: { lastTriggeredAt: new Date() },
+        });
+      }
       return { success: true, statusCode: response.status };
     }
 
     logger.warn('api.status_page.webhook.delivery_failed_status', {
-      url,
+      target: safeWebhookTarget(url),
       deliveryId,
       status: response.status,
       statusText: response.statusText,
@@ -167,7 +178,7 @@ export async function deliverWebhook(
     };
   } catch (error: unknown) {
     logger.error('api.status_page.webhook.delivery_error', {
-      url,
+      target: safeWebhookTarget(url),
       deliveryId,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -223,7 +234,13 @@ export async function triggerStatusPageWebhooks(
   statusPageId: string,
   event: string,
   data: unknown,
-  deliveryKey?: string
+  deliveryKey?: string,
+  policy: {
+    incidentId?: string;
+    serviceId?: string;
+    expectedStatus?: string;
+    escalationGeneration?: number;
+  } = {}
 ): Promise<{ attempted: number; failed: number }> {
   try {
     const allWebhooks = await prisma.statusPageWebhook.findMany({
@@ -281,6 +298,12 @@ export async function triggerStatusPageWebhooks(
               secret: await decryptStoredSecret(webhook.secret),
               payload,
               deliveryId: stableDeliveryId,
+              webhookId: webhook.id,
+              statusPageId,
+              incidentId: policy.incidentId,
+              serviceId: policy.serviceId,
+              expectedStatus: policy.expectedStatus,
+              escalationGeneration: policy.escalationGeneration,
             },
           });
 
@@ -324,19 +347,32 @@ export async function triggerWebhooksForService(
   serviceId: string,
   event: string,
   incidentData: unknown,
-  deliveryKey?: string
+  deliveryKey?: string,
+  policy: { expectedStatus?: string; escalationGeneration?: number } = {}
 ): Promise<{ attempted: number; failed: number; skipped?: boolean }> {
   try {
     const incidentRecord = asWebhookRecord(incidentData);
+    let effectiveStatus = policy.expectedStatus;
+    let effectiveGeneration = policy.escalationGeneration;
 
     // Incident visibility is security-sensitive: load it from the database
     // instead of trusting an optional caller-supplied payload field.
     if (typeof incidentRecord.id === 'string' && incidentRecord.id) {
       const inc = await prisma.incident.findUnique({
         where: { id: incidentRecord.id },
-        select: { visibility: true },
+        select: { visibility: true, status: true, escalationGeneration: true, serviceId: true },
       });
-      if (!inc || inc.visibility !== 'PUBLIC') return { attempted: 0, failed: 0, skipped: true };
+      if (!inc || inc.visibility !== 'PUBLIC' || inc.serviceId !== serviceId)
+        return { attempted: 0, failed: 0, skipped: true };
+      if (policy.expectedStatus && inc.status !== policy.expectedStatus)
+        return { attempted: 0, failed: 0, skipped: true };
+      if (
+        policy.escalationGeneration != null &&
+        inc.escalationGeneration !== policy.escalationGeneration
+      )
+        return { attempted: 0, failed: 0, skipped: true };
+      effectiveStatus = policy.expectedStatus ?? inc.status;
+      effectiveGeneration = policy.escalationGeneration ?? inc.escalationGeneration;
     } else if (incidentRecord.visibility !== 'PUBLIC') {
       return { attempted: 0, failed: 0, skipped: true };
     }
@@ -352,7 +388,12 @@ export async function triggerWebhooksForService(
     // Trigger webhooks for all associated status pages in parallel
     const results = await Promise.allSettled(
       statusPageIds.map(statusPageId =>
-        triggerStatusPageWebhooks(statusPageId, event, incidentData, deliveryKey)
+        triggerStatusPageWebhooks(statusPageId, event, incidentData, deliveryKey, {
+          incidentId: typeof incidentRecord.id === 'string' ? incidentRecord.id : undefined,
+          serviceId,
+          expectedStatus: effectiveStatus,
+          escalationGeneration: effectiveGeneration,
+        })
       )
     );
     return results.reduce(

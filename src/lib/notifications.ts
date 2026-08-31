@@ -21,6 +21,89 @@ type IncidentWithService = Incident & {
   assignee?: { id?: string; name?: string | null; email?: string | null } | null;
   team?: { id?: string; name?: string | null } | null;
 };
+
+function personalControlPlaneEnabled(): boolean {
+  return process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL === 'true';
+}
+
+async function sendCentralIncidentNotification(input: {
+  incidentId: string;
+  userId: string;
+  channel: NotificationChannel;
+  eventType: NotificationEventType;
+  eventKey: string;
+  durableMessage: string;
+  eventAt: Date;
+  escalationGeneration?: number;
+  escalationStep?: number | null;
+}): Promise<SendNotificationResult | null> {
+  if (!['EMAIL', 'SMS', 'PUSH', 'WHATSAPP'].includes(input.channel)) return null;
+  const recipient = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { email: true, phoneNumber: true },
+  });
+  const recipientAddress =
+    input.channel === 'EMAIL'
+      ? recipient?.email
+      : input.channel === 'SMS' || input.channel === 'WHATSAPP'
+        ? recipient?.phoneNumber
+        : input.userId;
+  if (!recipientAddress) {
+    return {
+      success: true,
+      outcome: 'SKIPPED',
+      skipped: true,
+      terminal: true,
+      error: `Recipient has no ${input.channel.toLowerCase()} address`,
+    };
+  }
+  const { enqueueCentralNotification } = await import('./notification-control-plane');
+  const kind = `INCIDENT_${input.channel}` as
+    | 'INCIDENT_EMAIL'
+    | 'INCIDENT_SMS'
+    | 'INCIDENT_PUSH'
+    | 'INCIDENT_WHATSAPP';
+  const queued = await enqueueCentralNotification({
+    category: 'INCIDENT',
+    channel: input.channel,
+    recipientType: 'USER',
+    recipientId: input.userId,
+    recipientAddress,
+    userId: input.userId,
+    incidentId: input.incidentId,
+    templateKey: `incident-${input.eventType}`,
+    sourceType: 'INCIDENT',
+    sourceId: input.incidentId,
+    eventKey: input.eventKey,
+    displayMessage: 'Incident notification',
+    payload: {
+      kind,
+      userId: input.userId,
+      incidentId: input.incidentId,
+      eventType: input.eventType,
+      eventAt: input.eventAt.toISOString(),
+      escalationGeneration: input.escalationGeneration,
+      escalationStep: input.escalationStep ?? undefined,
+      durableMessage: input.durableMessage,
+    },
+  });
+  const persisted = await prisma.notification.findUnique({
+    where: { id: queued.id },
+    select: { id: true, status: true, attempts: true, errorMsg: true },
+  });
+  if (!persisted) {
+    if (queued.delivered) {
+      return { success: true, outcome: 'DELIVERED', notificationId: queued.id };
+    }
+    return {
+      success: false,
+      outcome: 'RETRYABLE_FAILURE',
+      notificationId: queued.id,
+      error: queued.error || 'Central notification intent could not be reloaded',
+    };
+  }
+  return existingIntentResult(persisted);
+}
 export type SendNotificationResult = {
   success: boolean;
   outcome: NotificationDeliveryOutcome;
@@ -93,7 +176,8 @@ export async function sendNotification(
   channel: NotificationChannel,
   message: string,
   incident?: IncidentWithService,
-  eventType: NotificationEventType = 'triggered'
+  eventType: NotificationEventType = 'triggered',
+  explicitEventKey?: string
 ): Promise<SendNotificationResult> {
   if (!NOTIFICATION_CHANNELS.includes(channel))
     return {
@@ -111,11 +195,34 @@ export async function sendNotification(
       terminal: true,
     };
   const eventAt = notificationEventInstant(identityIncident, eventType);
-  const eventKey = notificationEventKey({ incident: identityIncident, eventType, message });
-  const notificationId = notificationIntentId({ eventKey, eventType, eventAt, userId, channel });
+  const eventKey =
+    explicitEventKey ?? notificationEventKey({ incident: identityIncident, eventType, message });
+  const notificationId = notificationIntentId({
+    eventKey,
+    eventType,
+    eventAt,
+    userId,
+    channel,
+    triggerGeneration:
+      eventType === 'triggered' ? identityIncident.escalationGeneration ?? 0 : undefined,
+  });
   const durableMessage = encodeNotificationEnvelope(
     buildNotificationEnvelope(identityIncident, eventType, eventAt, message)
   );
+  if (personalControlPlaneEnabled()) {
+    const central = await sendCentralIncidentNotification({
+      incidentId,
+      userId,
+      channel,
+      eventType,
+      eventKey,
+      durableMessage,
+      eventAt,
+      escalationGeneration: identityIncident.escalationGeneration,
+      escalationStep: identityIncident.currentEscalationStep,
+    });
+    if (central) return central;
+  }
   let notification: { id: string; attempts: number; status: string; errorMsg?: string | null };
   try {
     notification = await prisma.notification.create({
@@ -219,7 +326,8 @@ export async function sendNotification(
       };
     }
     const circuitOpen = result.outcome === 'CIRCUIT_OPEN';
-    const permanentFailure = result.outcome === 'PERMANENT_FAILURE';
+    const permanentFailure =
+      result.outcome === 'PERMANENT_FAILURE' || result.outcome === 'AMBIGUOUS';
     await prisma.notification.updateMany({
       where: { id: notification.id, status: 'PENDING' },
       data: {
@@ -234,7 +342,7 @@ export async function sendNotification(
       },
     });
     return {
-      success: false,
+      success: result.outcome === 'AMBIGUOUS',
       outcome: result.outcome,
       terminal: permanentFailure,
       error: result.error || 'Notification delivery failed',

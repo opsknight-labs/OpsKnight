@@ -135,6 +135,7 @@ config:
   port: '3000'
   hostname: '0.0.0.0'
   nextTelemetryDisabled: '1'
+  notificationControlPlanePersonal: 'false'
 
 # Full DATABASE_URL override. Prefer this for managed PostgreSQL, TLS parameters,
 # PgBouncer, or credentials containing characters that require URI encoding.

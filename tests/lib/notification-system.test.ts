@@ -75,6 +75,42 @@ describe('Notification System Tests', () => {
   });
 
   describe('Service Notification Isolation', () => {
+    it('does not create a Slack intent for a whitespace-only service channel', async () => {
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        id: 'svc-1',
+        name: 'Test Service',
+        serviceNotificationChannels: ['SLACK'],
+        slackChannel: '   ',
+        slackWebhookUrl: null,
+        policy: null,
+      } as never);
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        id: 'inc-1',
+        title: 'Test Incident',
+        serviceId: 'svc-1',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        createdAt: new Date('2026-08-30T12:00:00.000Z'),
+        updatedAt: new Date('2026-08-30T12:00:00.000Z'),
+        acknowledgedAt: null,
+        resolvedAt: null,
+        assignee: null,
+        service: {
+          id: 'svc-1',
+          name: 'Test Service',
+          serviceNotificationChannels: ['SLACK'],
+          slackChannel: '   ',
+          slackWebhookUrl: null,
+          webhookIntegrations: [],
+        },
+      } as never);
+
+      await expect(sendServiceNotifications('inc-1', 'triggered')).resolves.toMatchObject({
+        success: true,
+      });
+      expect(enqueueCentralNotification).not.toHaveBeenCalled();
+    });
+
     it('should send service notifications using only service-configured channels', async () => {
       const serviceId = 'svc-1';
       const incidentId = 'inc-1';
@@ -551,6 +587,7 @@ describe('Notification System Tests', () => {
         service: {
           id: serviceId,
           policy: {
+            id: 'policy-1',
             steps: [
               {
                 stepOrder: 0,
@@ -576,12 +613,9 @@ describe('Notification System Tests', () => {
       } as never);
       const result = await executeEscalation(incidentId, 0);
       expect(result.escalated).toBe(true);
-      expect(sendUserSpy).toHaveBeenCalledWith(
-        incidentId,
-        userId,
-        expect.any(String),
-        ['SMS']
-      );
+      expect(sendUserSpy).toHaveBeenCalledWith(incidentId, userId, expect.any(String), ['SMS'], {
+        eventKey: 'ESCALATION:inc-1:policy-1:0:0',
+      });
     });
   });
 });

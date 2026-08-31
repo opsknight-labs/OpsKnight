@@ -29,6 +29,11 @@ interface SlackBlock {
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN; // Bot token for Slack API (fallback)
 
+/** Returns the configured global webhook only when it is a non-empty value. */
+export function configuredSlackWebhookUrl(): string | undefined {
+  return SLACK_WEBHOOK_URL?.trim() || undefined;
+}
+
 const STATUS_COLORS = new Map<SlackEventType, string>([
   ['triggered', '#d32f2f'], // Red for new incidents
   ['acknowledged', '#f9a825'], // Amber for acknowledged
@@ -44,6 +49,39 @@ const STATUS_EMOJI = new Map<SlackEventType, string>([
 const getStatusColor = (eventType: SlackEventType) => STATUS_COLORS.get(eventType) ?? '#757575';
 const getStatusEmoji = (eventType: SlackEventType) =>
   STATUS_EMOJI.get(eventType) ?? ':information_source:';
+
+export type SlackDeliveryResult = {
+  success: boolean;
+  error?: string;
+  errorCode?: string;
+  statusCode?: number;
+  retryAfterMs?: number;
+};
+
+function slackRetryAfterMs(response: Response): number | undefined {
+  const value = response.headers.get('Retry-After');
+  if (!value) return undefined;
+  const seconds = Number.parseInt(value, 10);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1_000;
+  const deadline = new Date(value).getTime();
+  return Number.isFinite(deadline) ? Math.max(1_000, deadline - Date.now()) : undefined;
+}
+
+function slackFailure(
+  errorCode: string,
+  response: Response
+): SlackDeliveryResult {
+  // Slack reports this workspace-wide free-plan usage cap as an API error,
+  // rather than an HTTP 429. Waiting seconds and retrying cannot clear it.
+  const rateLimited = errorCode === 'rate_limited' || response.status === 429;
+  return {
+    success: false,
+    error: errorCode,
+    errorCode,
+    statusCode: rateLimited ? 429 : response.status,
+    retryAfterMs: rateLimited ? slackRetryAfterMs(response) : undefined,
+  };
+}
 
 /**
  * Get Slack bot token for a service (from OAuth integration or env fallback)
@@ -97,8 +135,8 @@ export async function sendSlackNotification(
   additionalMessage?: string,
   webhookUrl?: string | null,
   options: { maxAttempts?: number } = {}
-): Promise<{ success: boolean; error?: string; statusCode?: number; retryAfterMs?: number }> {
-  const targetUrl = webhookUrl || SLACK_WEBHOOK_URL;
+): Promise<SlackDeliveryResult> {
+  const targetUrl = webhookUrl?.trim() || configuredSlackWebhookUrl();
 
   if (!targetUrl) {
     logger.warn(
@@ -166,7 +204,7 @@ export async function sendSlackNotification(
         error: errorText,
         incident: incident.id,
       });
-      return { success: false, error: errorText };
+      return slackFailure(errorText.trim() || `HTTP ${response.status}`, response);
     }
 
     if (!response.ok) {
@@ -178,8 +216,12 @@ export async function sendSlackNotification(
         error: errorText,
         incident: incident.id,
       });
-      return { success: false, error: errorText };
+      return slackFailure(errorText.trim() || `HTTP ${response.status}`, response);
     }
+
+    const responseText =
+      typeof response.text === 'function' ? await response.text() : 'ok';
+    if (responseText.trim() !== 'ok') return slackFailure(responseText.trim(), response);
 
     logger.info(
       `[Slack] Notification sent via ${webhookUrl ? 'Service' : 'Global'} Webhook: ${eventType} - ${incident.title}`
@@ -431,14 +473,24 @@ export async function sendSlackMessageToChannel(
   serviceId?: string,
   additionalMessage?: string,
   options: { maxAttempts?: number } = {}
-): Promise<{ success: boolean; error?: string; statusCode?: number; retryAfterMs?: number }> {
+): Promise<SlackDeliveryResult> {
+  const normalizedChannel = channel.trim();
+  if (!normalizedChannel) {
+    return { success: false, error: 'Slack channel is required', errorCode: 'CHANNEL_REQUIRED' };
+  }
   // Get bot token (from OAuth integration or env fallback)
   const botToken = await getSlackBotToken(serviceId);
 
   if (!botToken) {
-    logger.warn('[Slack] No bot token configured, falling back to webhook');
-    // Fallback to webhook if API token not available
-    return sendSlackNotification(eventType, incident, additionalMessage, undefined, options);
+    logger.warn('[Slack] No bot token configured for channel delivery', {
+      channel: normalizedChannel,
+      serviceId,
+    });
+    return {
+      success: false,
+      error: 'No Slack bot token configured for channel delivery',
+      errorCode: 'SLACK_BOT_TOKEN_MISSING',
+    };
   }
 
   const color = getStatusColor(eventType);
@@ -451,11 +503,11 @@ export async function sendSlackMessageToChannel(
 
   const payload = {
     // Use ID directly if it looks like an ID (C/G/D/U...), otherwise ensure # prefix for names
-    channel: /^[CGDU][A-Z0-9]+$/.test(channel)
-      ? channel
-      : channel.startsWith('#')
-        ? channel
-        : `#${channel}`,
+    channel: /^[CGDU][A-Z0-9]+$/.test(normalizedChannel)
+      ? normalizedChannel
+      : normalizedChannel.startsWith('#')
+        ? normalizedChannel
+        : `#${normalizedChannel}`,
     text: `[${eventType.toUpperCase()}] ${incident.title}`,
     blocks,
     attachments: [
@@ -493,21 +545,21 @@ export async function sendSlackMessageToChannel(
       }
     );
 
-    const responseData = await response.json();
+    const responseData = (await response.json()) as { ok?: boolean; error?: string };
 
     if (!response.ok || !responseData.ok) {
       const errorMsg = responseData.error || `HTTP ${response.status}`;
-      logger.error('[Slack] API call failed', { error: errorMsg, channel });
-      return { success: false, error: errorMsg };
+      logger.error('[Slack] API call failed', { error: errorMsg, channel: normalizedChannel });
+      return slackFailure(errorMsg, response);
     }
 
     logger.info(
-      `[Slack] Message sent to channel ${channel} via API: ${eventType} - ${incident.title}`
+      `[Slack] Message sent to channel ${normalizedChannel} via API: ${eventType} - ${incident.title}`
     );
     return { success: true };
   } catch (error: unknown) {
     const err = error as { message?: string; statusCode?: number; retryAfterMs?: number };
-    logger.error('[Slack] API error', { error: err.message, channel });
+    logger.error('[Slack] API error', { error: err.message, channel: normalizedChannel });
     return {
       success: false,
       error: err.message || 'Slack API error',

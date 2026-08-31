@@ -24,6 +24,7 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('@/lib/network-security', () => ({
   assertSafeOutboundUrl: vi.fn(async (value: string) => new URL(value)),
   validateWebhookUrl: vi.fn().mockResolvedValue(true),
+  safeOutboundFetch: vi.fn((value: string, init: RequestInit) => global.fetch(value, init)),
 }));
 
 // Mock logger to avoid side-effects (like fetch calls to /api/logs/ingest)
