@@ -53,6 +53,7 @@ describe('SLABreachWarningBadge', () => {
     nextEscalationAt: null,
     escalationStatus: 'IDLE',
     currentEscalationStep: 0,
+    escalationGeneration: 0,
     isMuted: false,
     impact: 'NONE',
     tags: [],
