@@ -16,64 +16,75 @@ interface SettingsPageHeaderProps {
   backLabel?: string;
   actions?: React.ReactNode;
   breadcrumbs?: Breadcrumb[];
+  badge?: React.ReactNode;
   className?: string;
 }
 
 export function SettingsPageHeader({
   title,
   description,
-  backHref,
-  backLabel = 'Back to Settings',
+  backHref = '/settings',
+  backLabel = 'Settings',
   actions,
   breadcrumbs,
+  badge,
   className,
 }: SettingsPageHeaderProps) {
   return (
-    <header className={cn('relative space-y-4 pb-6 border-b border-border', className)}>
-      {/* Back Link */}
-      {backHref && (
-        <Link
-          href={backHref}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={16} />
-          <span>{backLabel}</span>
-        </Link>
-      )}
+    <header className={cn('relative space-y-3 pb-6 border-b border-slate-200/80', className)}>
+      {/* Navigation Breadcrumb / Back link */}
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        {backHref && (
+          <Link
+            href={backHref}
+            className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>{backLabel}</span>
+          </Link>
+        )}
 
-      {/* Breadcrumbs */}
-      {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
-          {breadcrumbs.map((crumb, index) => (
-            <span key={crumb.href} className="flex items-center gap-1.5">
-              {index > 0 && <ChevronRight size={14} className="text-muted-foreground" />}
-              {index === breadcrumbs.length - 1 ? (
-                <span className="text-foreground font-medium">{crumb.label}</span>
-              ) : (
-                <Link
-                  href={crumb.href}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {crumb.label}
-                </Link>
-              )}
-            </span>
-          ))}
-        </nav>
-      )}
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <>
+            <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
+            <nav aria-label="Breadcrumb" className="flex items-center gap-1.5">
+              {breadcrumbs.map((crumb, index) => (
+                <span key={crumb.href} className="flex items-center gap-1.5">
+                  {index > 0 && <ChevronRight className="h-3.5 w-3.5 text-slate-300" />}
+                  {index === breadcrumbs.length - 1 ? (
+                    <span className="text-foreground font-semibold">{crumb.label}</span>
+                  ) : (
+                    <Link href={crumb.href} className="hover:text-foreground transition-colors">
+                      {crumb.label}
+                    </Link>
+                  )}
+                </span>
+              ))}
+            </nav>
+          </>
+        )}
+      </div>
 
-      {/* Title and Description */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-extrabold tracking-tighter">{title}</h1>
+      {/* Title, Badge, Description, and Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
+              {title}
+            </h1>
+            {badge && <div>{badge}</div>}
+          </div>
           {description && (
-            <p className="text-base text-muted-foreground max-w-2xl">{description}</p>
+            <p className="text-sm text-muted-foreground max-w-3xl leading-relaxed">{description}</p>
           )}
         </div>
 
-        {/* Actions */}
-        {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
+        {actions && (
+          <div className="flex items-center gap-2 flex-shrink-0 pt-1 sm:pt-0">{actions}</div>
+        )}
       </div>
     </header>
   );
 }
+
+export default SettingsPageHeader;
