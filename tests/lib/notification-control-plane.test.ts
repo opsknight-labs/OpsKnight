@@ -7,6 +7,8 @@ import {
   processCentralNotificationQueue,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
+import { CircuitBreakerError } from '@/lib/circuit-breaker';
+import { acquireProviderAdmission } from '@/lib/provider-admission';
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
@@ -73,6 +75,7 @@ const input = {
 describe('central notification control plane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(acquireProviderAdmission).mockResolvedValue({ allowed: true });
     vi.mocked(prisma.notification.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
@@ -159,6 +162,70 @@ describe('central notification control plane', () => {
     const sql = query.strings?.join('?') ?? '';
     expect(sql).toContain('lastAttemptAt');
     expect(sql).toContain('nextEligibleAt');
+  });
+
+  it('keeps admission deferrals pending without consuming delivery attempts', async () => {
+    const due = new Date(Date.now() - 60_000);
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'notification_deferred',
+      status: 'PENDING',
+      category: 'SECURITY',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
+    } as never);
+    const retryAt = new Date(Date.now() + 30_000);
+    vi.mocked(acquireProviderAdmission).mockResolvedValue({
+      allowed: false,
+      retryAt,
+      reason: 'RATE_LIMITED',
+    });
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+
+    await deliverCentralNotification('notification_deferred');
+
+    expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'PENDING',
+          failedAt: null,
+          lastAttemptAt: null,
+          nextAttemptAt: retryAt,
+        }),
+      })
+    );
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('does not consume retry budget when the provider circuit is already open', async () => {
+    const due = new Date(Date.now() - 60_000);
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'notification_circuit_open',
+      status: 'PENDING',
+      category: 'SECURITY',
+      attempts: 1,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
+    } as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    mocks.sendEmail.mockRejectedValue(new CircuitBreakerError('Email circuit is open', 'email'));
+
+    await deliverCentralNotification('notification_circuit_open');
+
+    expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'PENDING', attempts: 1, failedAt: null }),
+      })
+    );
+    expect(prisma.notificationDeliveryAttempt.create).not.toHaveBeenCalled();
   });
 
   it('scrubs expired security payloads in a bounded queue cleanup pass', async () => {
