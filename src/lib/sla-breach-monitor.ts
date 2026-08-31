@@ -225,23 +225,6 @@ export async function checkSLABreaches(
 
         if (!alreadyWarned) {
           recentWarningMap.add(`${incident.id}:ack:${key}`);
-          // Record the event in DB immediately to prevent repeat notification spam across cron loops
-          try {
-            if (prisma.incidentEvent?.create) {
-              await prisma.incidentEvent.create({
-                data: {
-                  incidentId: incident.id,
-                  type: isBreached ? 'ESCALATED' : 'COMMENT',
-                  message: isBreached
-                    ? `🚨 SLA ACK Breached: target was ${ackTargetMinutes} min`
-                    : `⏰ SLA ACK Warning: ${Math.max(1, Math.round(ackRemainingMs / 60000))} min remaining`,
-                },
-              });
-            }
-          } catch {
-            // Non-critical if event logging fails
-          }
-
           warnings.push({
             incidentId: incident.id,
             title: incident.title,
@@ -276,23 +259,6 @@ export async function checkSLABreaches(
 
       if (!alreadyWarned) {
         recentWarningMap.add(`${incident.id}:resolve:${key}`);
-        // Record the event in DB immediately to prevent repeat notification spam across cron loops
-        try {
-          if (prisma.incidentEvent?.create) {
-            await prisma.incidentEvent.create({
-              data: {
-                incidentId: incident.id,
-                type: isBreached ? 'ESCALATED' : 'COMMENT',
-                message: isBreached
-                  ? `🚨 SLA RESOLVE Breached: target was ${resolveTargetMinutes} min`
-                  : `⚠️ SLA RESOLVE Warning: ${Math.max(1, Math.round(resolveRemainingMs / 60000))} min remaining`,
-              },
-            });
-          }
-        } catch {
-          // Non-critical if event logging fails
-        }
-
         warnings.push({
           incidentId: incident.id,
           title: incident.title,
@@ -326,6 +292,26 @@ export async function checkSLABreaches(
     // Send notifications for each warning
     for (const warning of warnings) {
       await notifyBreachWarning(warning, config);
+      // The durable notification intent is the primary delivery record. Only
+      // mark this SLA warning as observed after its intents were materialized;
+      // otherwise a crash or enqueue failure would suppress it forever.
+      try {
+        if (prisma.incidentEvent?.create) {
+          const isBreached = warning.timeRemainingMs <= 0;
+          await prisma.incidentEvent.create({
+            data: {
+              incidentId: warning.incidentId,
+              type: isBreached ? 'ESCALATED' : 'COMMENT',
+              message: isBreached
+                ? `🚨 SLA ${warning.breachType.toUpperCase()} Breached: target was ${warning.targetMinutes} min`
+                : `${warning.breachType === 'ack' ? '⏰' : '⚠️'} SLA ${warning.breachType.toUpperCase()} Warning: ${Math.max(1, Math.round(warning.timeRemainingMs / 60000))} min remaining`,
+            },
+          });
+        }
+      } catch {
+        // Duplicate intent keys prevent a repeated cron loop from duplicating
+        // delivery if this non-critical audit marker cannot be written.
+      }
     }
   } else {
     logger.debug('[SLA Breach Monitor] No breach warnings', {
