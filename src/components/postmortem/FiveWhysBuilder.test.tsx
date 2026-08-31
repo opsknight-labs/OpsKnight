@@ -3,6 +3,14 @@ import { describe, it, expect, vi } from 'vitest';
 import FiveWhysBuilder from './FiveWhysBuilder';
 
 describe('FiveWhysBuilder', () => {
+  it('renders clean empty state in view mode when no steps exist', () => {
+    render(<FiveWhysBuilder initialSteps={[]} isEditable={false} />);
+
+    expect(
+      screen.getByText(/No 5-Whys root cause analysis recorded for this incident/i)
+    ).toBeInTheDocument();
+  });
+
   it('renders step questions and answers in view mode', () => {
     const customSteps = [
       { id: '1', question: 'Why did the API slow down?', answer: 'Database connections spiked.' },
@@ -18,9 +26,9 @@ describe('FiveWhysBuilder', () => {
 
   it('allows adding and editing steps in editable mode', () => {
     const onChange = vi.fn();
-    render(<FiveWhysBuilder isEditable={true} onChange={onChange} />);
+    render(<FiveWhysBuilder initialSteps={[]} isEditable={true} onChange={onChange} />);
 
-    const addButton = screen.getByRole('button', { name: /add why step/i });
+    const addButton = screen.getByRole('button', { name: /add first why step/i });
     expect(addButton).toBeInTheDocument();
     fireEvent.click(addButton);
 

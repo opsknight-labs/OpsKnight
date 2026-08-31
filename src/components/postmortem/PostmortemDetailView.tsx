@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import PostmortemTimeline from './PostmortemTimeline';
 import PostmortemImpactMetrics from './PostmortemImpactMetrics';
-import FiveWhysBuilder from './FiveWhysBuilder';
+import FiveWhysBuilder, { type FiveWhysStep } from './FiveWhysBuilder';
 import ContributingFactorsSelector, { type FactorType } from './ContributingFactorsSelector';
 import DueDateBadge from '@/components/action-items/DueDateBadge';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -141,16 +141,18 @@ export default function PostmortemDetailView({
     POSTMORTEM_STATUS_CONFIG[postmortem.status as keyof typeof POSTMORTEM_STATUS_CONFIG] ||
     POSTMORTEM_STATUS_CONFIG.DRAFT;
 
-  // Infer contributing factors from rootCause text
+  // Infer contributing factors from incident text only when genuine keywords match
   const getInferredFactors = (): FactorType[] => {
     const factors: FactorType[] = [];
-    const text = (postmortem.rootCause || '').toLowerCase();
+    const text = `${postmortem.rootCause || ''} ${postmortem.summary || ''}`.toLowerCase();
     if (
       text.includes('database') ||
       text.includes('server') ||
       text.includes('cpu') ||
       text.includes('memory') ||
-      text.includes('network')
+      text.includes('network') ||
+      text.includes('redis') ||
+      text.includes('postgres')
     ) {
       factors.push('INFRASTRUCTURE');
     }
@@ -159,7 +161,8 @@ export default function PostmortemDetailView({
       text.includes('null') ||
       text.includes('syntax') ||
       text.includes('release') ||
-      text.includes('deploy')
+      text.includes('deploy') ||
+      text.includes('regression')
     ) {
       factors.push('CODE_DEFECT');
     }
@@ -167,17 +170,50 @@ export default function PostmortemDetailView({
       text.includes('monitoring') ||
       text.includes('alert') ||
       text.includes('metric') ||
-      text.includes('blindspot')
+      text.includes('blindspot') ||
+      text.includes('telemetry')
     ) {
       factors.push('MONITORING_GAP');
     }
-    if (text.includes('runbook') || text.includes('procedure') || text.includes('handoff')) {
+    if (
+      text.includes('runbook') ||
+      text.includes('procedure') ||
+      text.includes('handoff') ||
+      text.includes('documentation')
+    ) {
       factors.push('PROCESS');
     }
-    if (factors.length === 0) {
-      factors.push('INFRASTRUCTURE', 'CODE_DEFECT');
+    if (
+      text.includes('vendor') ||
+      text.includes('third-party') ||
+      text.includes('upstream') ||
+      text.includes('aws outage') ||
+      text.includes('cloudflare')
+    ) {
+      factors.push('VENDOR_DEPENDENCY');
     }
     return factors;
+  };
+
+  // Parse structured 5-whys steps from root cause narrative if present
+  const parseFiveWhys = (): FiveWhysStep[] => {
+    if (!postmortem.rootCause) return [];
+
+    const lines = postmortem.rootCause.split('\n').filter(l => l.trim().length > 0);
+    const whyLines = lines.filter(l => /^(why\s*#?\d*|why:|\d+\.\s*why)/i.test(l.trim()));
+
+    if (whyLines.length > 0) {
+      return whyLines.map((line, idx) => {
+        const parts = line.split(/:\s*|\s*-\s*|\s*➔\s*/);
+        return {
+          id: `why-${idx + 1}`,
+          question: parts[0]?.trim() || `Why #${idx + 1}`,
+          answer: parts.slice(1).join(': ').trim() || '',
+        };
+      });
+    }
+
+    return [];
   };
 
   return (
@@ -376,7 +412,7 @@ export default function PostmortemDetailView({
 
           {/* 5-Whys Diagram */}
           <div className="pt-4 border-t border-slate-100">
-            <FiveWhysBuilder />
+            <FiveWhysBuilder initialSteps={parseFiveWhys()} isEditable={false} />
           </div>
 
           {/* Resolution Description */}

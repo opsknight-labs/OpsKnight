@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import { Plus, Trash2, CheckCircle2, Sparkles } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Sparkles, HelpCircle } from 'lucide-react';
 
 export type FiveWhysStep = {
   id: string;
@@ -19,33 +19,13 @@ export type FiveWhysBuilderProps = {
   className?: string;
 };
 
-const DEFAULT_STEPS: FiveWhysStep[] = [
-  {
-    id: 'why-1',
-    question: 'Why did the service fail?',
-    answer: 'The database connection pool was exhausted due to a surge in API traffic.',
-  },
-  {
-    id: 'why-2',
-    question: 'Why was the connection pool exhausted?',
-    answer: 'A newly deployed query had no index, causing connections to stay open 10x longer.',
-  },
-  {
-    id: 'why-3',
-    question: 'Why was the query deployed without an index?',
-    answer: 'The migration was omitted from the automated release pipeline.',
-  },
-];
-
 export default function FiveWhysBuilder({
-  initialSteps = DEFAULT_STEPS,
+  initialSteps = [],
   onChange,
   isEditable = false,
   className,
 }: FiveWhysBuilderProps) {
-  const [steps, setSteps] = useState<FiveWhysStep[]>(
-    initialSteps.length > 0 ? initialSteps : DEFAULT_STEPS
-  );
+  const [steps, setSteps] = useState<FiveWhysStep[]>(initialSteps);
 
   const handleUpdate = (updated: FiveWhysStep[]) => {
     setSteps(updated);
@@ -71,6 +51,45 @@ export default function FiveWhysBuilder({
     const updated = steps.map((step, idx) => (idx === index ? { ...step, [field]: value } : step));
     handleUpdate(updated);
   };
+
+  if (steps.length === 0) {
+    if (isEditable) {
+      return (
+        <div
+          className={cn(
+            'p-4 border border-dashed rounded-lg text-center space-y-3 bg-slate-50/50',
+            className
+          )}
+        >
+          <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <HelpCircle className="h-4 w-4" />
+            <span>Document the 5-Whys causal chain to uncover the root cause.</span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleAddStep}
+            className="h-8 text-xs gap-1.5 font-semibold bg-white"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Add First Why Step</span>
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={cn(
+          'p-3 rounded-lg bg-slate-50 border border-slate-200/70 text-xs text-muted-foreground italic',
+          className
+        )}
+      >
+        No 5-Whys root cause analysis recorded for this incident.
+      </div>
+    );
+  }
 
   return (
     <div className={cn('space-y-4', className)}>
