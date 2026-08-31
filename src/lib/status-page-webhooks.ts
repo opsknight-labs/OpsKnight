@@ -52,11 +52,11 @@ export async function deliverWebhook(
   secret: string,
   payload: WebhookPayload,
   deliveryId: string = crypto.randomUUID(),
-  options: { maxAttempts?: number } = {}
+  options: { maxAttempts?: number; webhookId?: string } = {}
 ): Promise<StatusPageWebhookDeliveryResult> {
   try {
     // SSRF Protection: Validate webhook URL before making request
-    const { assertSafeOutboundUrl } = await import('./network-security');
+    const { assertSafeOutboundUrl, safeOutboundFetch } = await import('./network-security');
     try {
       await assertSafeOutboundUrl(url);
     } catch {
@@ -79,7 +79,7 @@ export async function deliverWebhook(
           // Revalidate on every network attempt to defend against DNS rebinding
           // and configuration changes between retries.
           await assertSafeOutboundUrl(url);
-          const res = await fetch(url, {
+          const res = await safeOutboundFetch(url, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -91,7 +91,6 @@ export async function deliverWebhook(
             },
             body: payloadString,
             signal: AbortSignal.timeout(10000), // 10 second timeout
-            redirect: 'error',
           });
 
           if (!res.ok && (res.status >= 500 || res.status === 429)) {
@@ -146,10 +145,12 @@ export async function deliverWebhook(
     const response = retryResult.data;
 
     if (response.ok) {
-      await prisma.statusPageWebhook.updateMany({
-        where: { url },
-        data: { lastTriggeredAt: new Date() },
-      });
+      if (options.webhookId) {
+        await prisma.statusPageWebhook.updateMany({
+          where: { id: options.webhookId },
+          data: { lastTriggeredAt: new Date() },
+        });
+      }
       return { success: true, statusCode: response.status };
     }
 
@@ -281,6 +282,7 @@ export async function triggerStatusPageWebhooks(
               secret: await decryptStoredSecret(webhook.secret),
               payload,
               deliveryId: stableDeliveryId,
+              webhookId: webhook.id,
             },
           });
 

@@ -62,7 +62,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
     }
 
     // SSRF Protection: Validate URL
-    const { assertSafeOutboundUrl } = await import('./network-security');
+    const { assertSafeOutboundUrl, safeOutboundFetch } = await import('./network-security');
     try {
       await assertSafeOutboundUrl(url);
     } catch {
@@ -103,12 +103,11 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
           try {
             const cb = CircuitBreakers.webhook(url);
             const res = await cb.execute(async () => {
-              const response = await fetch(url, {
+              const response = await safeOutboundFetch(url, {
                 method,
                 headers: requestHeaders,
                 body: payloadString,
                 signal: attemptController.signal,
-                redirect: 'error',
               });
 
               if (!response.ok && isRetryableHttpError(response.status)) {

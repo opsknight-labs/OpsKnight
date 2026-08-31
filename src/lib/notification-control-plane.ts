@@ -102,6 +102,7 @@ export type CentralNotificationPayload =
       secret: string;
       payload: { event: string; timestamp: string; data: unknown };
       deliveryId: string;
+      webhookId: string;
     };
 
 type IncidentCentralPayload = Extract<
@@ -245,6 +246,7 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
         hasText(value.url) &&
         hasText(value.secret) &&
         hasText(value.deliveryId) &&
+        hasText(value.webhookId) &&
         isRecord(value.payload) &&
         hasText(value.payload.event) &&
         hasText(value.payload.timestamp)
@@ -541,6 +543,7 @@ async function dispatchPayload(
       const result = await CircuitBreakers.webhook(payload.url).execute(() =>
         deliverWebhook(payload.url, payload.secret, payload.payload, payload.deliveryId, {
           maxAttempts: 1,
+          webhookId: payload.webhookId,
         })
       );
       return result.success
@@ -565,11 +568,17 @@ function terminalPayload(_category: NotificationCategory): { payloadEncrypted: n
 }
 
 async function cleanupExpiredNotifications(now: Date): Promise<number> {
+  const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
   const expired = await prisma.notification.findMany({
     where: {
       payloadEncrypted: { not: null },
       expiresAt: { lte: now },
       status: { in: ['PENDING', 'FAILED'] },
+      OR: [
+        { status: 'FAILED' },
+        { status: 'PENDING', lastAttemptAt: null },
+        { status: 'PENDING', lastAttemptAt: { lt: staleClaimBefore } },
+      ],
     },
     orderBy: { expiresAt: 'asc' },
     take: EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE,
@@ -1144,11 +1153,17 @@ export async function processCentralNotificationQueue(): Promise<{
 
 /** Earliest durable control-plane deadline used by the adaptive scheduler. */
 export async function getNextCentralNotificationAt(now: Date = new Date()): Promise<Date | null> {
+  const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
   const expiredNotification = await prisma.notification.findFirst({
     where: {
       payloadEncrypted: { not: null },
       expiresAt: { lte: now },
       status: { in: ['PENDING', 'FAILED'] },
+      OR: [
+        { status: 'FAILED' },
+        { status: 'PENDING', lastAttemptAt: null },
+        { status: 'PENDING', lastAttemptAt: { lt: staleClaimBefore } },
+      ],
     },
     select: { id: true },
   });

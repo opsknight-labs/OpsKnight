@@ -256,7 +256,14 @@ describe('central notification control plane', () => {
       failed: 0,
     });
     expect(prisma.notification.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 100 })
+      expect.objectContaining({
+        take: 100,
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            expect.objectContaining({ status: 'PENDING', lastAttemptAt: null }),
+          ]),
+        }),
+      })
     );
     expect(prisma.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
