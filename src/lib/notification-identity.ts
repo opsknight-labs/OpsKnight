@@ -1,6 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { NotificationDeliveryChannel, NotificationEventType } from './notification-delivery';
 
+const notificationEventTypes = new Set<NotificationEventType>([
+  'triggered',
+  'acknowledged',
+  'resolved',
+  'updated',
+]);
+
 export type NotificationIdentityIncident = {
   id: string;
   createdAt: Date;
@@ -74,11 +81,9 @@ export function notificationIntentId(input: {
 }
 
 export function notificationIntentEventAt(notificationId: string): Date | null {
-  const match = /^ntf:(?:triggered|acknowledged|resolved|updated):(\d+)(?::g\d+)?:[a-f0-9]{64}$/.exec(
-    notificationId
-  );
-  if (!match) return null;
-  const millis = Number(match[1]);
+  const parsed = parseNotificationIntentId(notificationId);
+  if (!parsed) return null;
+  const millis = Number(parsed.timestamp);
   if (!Number.isSafeInteger(millis)) return null;
   const value = new Date(millis);
   return Number.isFinite(value.getTime()) ? value : null;
@@ -86,10 +91,59 @@ export function notificationIntentEventAt(notificationId: string): Date | null {
 
 /** Returns the durable trigger generation carried by newer legacy intent IDs. */
 export function notificationIntentTriggerGeneration(notificationId: string): number | null {
-  const match = /^ntf:triggered:\d+:g(\d+):[a-f0-9]{64}$/.exec(notificationId);
-  if (!match) return null;
-  const generation = Number(match[1]);
+  const parsed = parseNotificationIntentId(notificationId);
+  if (!parsed || parsed.eventType !== 'triggered' || parsed.generation === undefined) return null;
+  const generation = Number(parsed.generation);
   return Number.isSafeInteger(generation) && generation >= 0 ? generation : null;
+}
+
+function isDecimal(value: string): boolean {
+  return value.length > 0 && [...value].every(char => char >= '0' && char <= '9');
+}
+
+function isSha256Hex(value: string): boolean {
+  return (
+    value.length === 64 &&
+    [...value].every(
+      char =>
+        (char >= '0' && char <= '9') ||
+        (char >= 'a' && char <= 'f') ||
+        (char >= 'A' && char <= 'F')
+    )
+  );
+}
+
+function parseNotificationIntentId(
+  value: string
+): { eventType: NotificationEventType; timestamp: string; generation?: string } | null {
+  const parts = value.split(':');
+  const [prefix, eventType, timestamp, fourth, fifth] = parts;
+  if (
+    parts.length < 4 ||
+    parts.length > 5 ||
+    prefix !== 'ntf' ||
+    !eventType ||
+    !timestamp ||
+    !fourth ||
+    !notificationEventTypes.has(eventType as NotificationEventType) ||
+    !isDecimal(timestamp)
+  ) {
+    return null;
+  }
+  if (parts.length === 4 && isSha256Hex(fourth)) {
+    return { eventType: eventType as NotificationEventType, timestamp };
+  }
+  if (
+    parts.length === 5 &&
+    eventType === 'triggered' &&
+    fourth.startsWith('g') &&
+    isDecimal(fourth.slice(1)) &&
+    fifth &&
+    isSha256Hex(fifth)
+  ) {
+    return { eventType: 'triggered', timestamp, generation: fourth.slice(1) };
+  }
+  return null;
 }
 
 export function inAppNotificationIntentId(input: {

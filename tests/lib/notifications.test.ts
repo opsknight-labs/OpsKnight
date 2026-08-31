@@ -6,7 +6,9 @@ import { decodeNotificationEnvelope } from '@/lib/notification-payload';
 import {
   notificationEventInstant,
   notificationEventKey,
+  notificationIntentEventAt,
   notificationIntentId,
+  notificationIntentTriggerGeneration,
 } from '@/lib/notification-identity';
 
 const centralMocks = vi.hoisted(() => ({ enqueue: vi.fn() }));
@@ -88,6 +90,15 @@ describe('durable notification intents', () => {
     } as never);
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
     vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
+  });
+
+  it('parses legacy and generation-tagged triggered intent IDs without a regex', () => {
+    const digest = 'a'.repeat(64);
+    const timestamp = createdAt.getTime();
+    expect(notificationIntentEventAt(`ntf:triggered:${timestamp}:${digest}`)).toEqual(createdAt);
+    expect(notificationIntentTriggerGeneration(`ntf:triggered:${timestamp}:${digest}`)).toBeNull();
+    expect(notificationIntentTriggerGeneration(`ntf:triggered:${timestamp}:g4:${digest}`)).toBe(4);
+    expect(notificationIntentEventAt(`ntf:triggered:${timestamp}:g4:${digest}:extra`)).toBeNull();
   });
 
   it('routes personal incident delivery through the encrypted central control plane when enabled', async () => {
