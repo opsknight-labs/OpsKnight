@@ -49,7 +49,7 @@ type CustomField = {
   type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'BOOLEAN' | 'URL' | 'EMAIL';
   required: boolean;
   defaultValue?: string | null;
-  options?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  options?: string[] | null | undefined;
   order: number;
   showInList: boolean;
   _count: {

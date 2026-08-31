@@ -67,9 +67,10 @@ export default function SettingsSearch({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    setActiveIndex(displayResults.length > 0 ? 0 : -1);
-  }, [displayResults.length, query]);
+  const handleQueryChange = (val: string) => {
+    setQuery(val);
+    setActiveIndex(val.trim().length > 0 ? 0 : -1);
+  };
 
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (!displayResults.length) return;
@@ -84,11 +85,14 @@ export default function SettingsSearch({
       setActiveIndex(prev => (prev <= 0 ? displayResults.length - 1 : prev - 1));
     }
 
-    if (event.key === 'Enter' && activeIndex >= 0 && displayResults[activeIndex]) {
-      event.preventDefault();
-      router.push(displayResults[activeIndex].href);
-      setQuery('');
-      setIsFocused(false);
+    if (event.key === 'Enter') {
+      const targetItem = displayResults.find((_, idx) => idx === activeIndex) ?? displayResults[0];
+      if (targetItem) {
+        event.preventDefault();
+        router.push(targetItem.href);
+        setQuery('');
+        setIsFocused(false);
+      }
     }
 
     if (event.key === 'Escape') {
@@ -111,7 +115,7 @@ export default function SettingsSearch({
           ref={inputRef}
           type="search"
           value={query}
-          onChange={event => setQuery(event.target.value)}
+          onChange={event => handleQueryChange(event.target.value)}
           onFocus={() => setIsFocused(true)}
           onKeyDown={handleInputKeyDown}
           placeholder={placeholder}
@@ -130,7 +134,7 @@ export default function SettingsSearch({
           {query ? (
             <button
               type="button"
-              onClick={() => setQuery('')}
+              onClick={() => handleQueryChange('')}
               className="p-1 rounded-md text-muted-foreground hover:text-foreground pointer-events-auto cursor-pointer"
             >
               <X className="h-3.5 w-3.5" />
