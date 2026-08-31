@@ -291,7 +291,8 @@ export async function checkSLABreaches(
 
     // Send notifications for each warning
     for (const warning of warnings) {
-      await notifyBreachWarning(warning, config);
+      const materialized = await notifyBreachWarning(warning, config);
+      if (!materialized) continue;
       // The durable notification intent is the primary delivery record. Only
       // mark this SLA warning as observed after its intents were materialized;
       // otherwise a crash or enqueue failure would suppress it forever.
@@ -333,7 +334,8 @@ export async function checkSLABreaches(
 async function notifyBreachWarning(
   warning: BreachWarning,
   config: BreachMonitorConfig
-): Promise<void> {
+): Promise<boolean> {
+  let materialized = true;
   const isBreached = warning.timeRemainingMs <= 0;
   const remainingMinutes = Math.round(warning.timeRemainingMs / 60000);
   const breachEmoji = isBreached ? '🚨' : warning.breachType === 'ack' ? '⏰' : '⚠️';
@@ -454,6 +456,7 @@ async function notifyBreachWarning(
             type: webhook.type,
           });
         } catch (error) {
+          materialized = false;
           logger.error('[SLA Breach Monitor] Error sending webhook notification', {
             webhookId: webhook.id,
             error,
@@ -461,6 +464,7 @@ async function notifyBreachWarning(
         }
       }
     } catch (importError) {
+      materialized = false;
       logger.error('[SLA Breach Monitor] Failed to import webhooks module', { importError });
     }
   }
@@ -546,9 +550,12 @@ async function notifyBreachWarning(
         logger.debug('[SLA Breach Monitor] Email skipped (SLA_ALERT_EMAIL not set)');
       }
     } catch (error) {
+      materialized = false;
       logger.error('[SLA Breach Monitor] Failed to send email notification', { error });
     }
   }
+
+  return materialized;
 }
 
 /**
