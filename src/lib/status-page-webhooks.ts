@@ -283,6 +283,7 @@ export async function triggerStatusPageWebhooks(
               payload,
               deliveryId: stableDeliveryId,
               webhookId: webhook.id,
+              statusPageId,
             },
           });
 

@@ -104,6 +104,7 @@ export type CentralNotificationPayload =
       payload: { event: string; timestamp: string; data: unknown };
       deliveryId: string;
       webhookId: string;
+      statusPageId?: string;
     };
 
 type IncidentCentralPayload = Extract<
@@ -693,6 +694,19 @@ async function statusSubscriberDeliveryRevoked(payload: CentralNotificationPaylo
   }
 }
 
+async function statusWebhookDeliveryRevoked(payload: CentralNotificationPayload): Promise<string | null> {
+  if (payload.kind !== 'STATUS_PAGE_WEBHOOK' || !payload.statusPageId) return null;
+  try {
+    const webhook = await prisma.statusPageWebhook.findFirst({
+      where: { id: payload.webhookId, statusPageId: payload.statusPageId, enabled: true, statusPage: { enabled: true } },
+      select: { id: true },
+    });
+    return webhook ? null : 'Status-page webhook was revoked or disabled';
+  } catch {
+    return 'Status-page webhook policy could not be revalidated';
+  }
+}
+
 async function finishAttempt(input: {
   notificationId: string;
   ordinal: number;
@@ -819,7 +833,9 @@ export async function deliverCentralNotification(
   }
 
   const supersededReason =
-    (await statusSubscriberDeliveryRevoked(payload)) ?? (await incidentPayloadSuperseded(payload));
+    (await statusSubscriberDeliveryRevoked(payload)) ??
+    (await statusWebhookDeliveryRevoked(payload)) ??
+    (await incidentPayloadSuperseded(payload));
   if (supersededReason) {
     await prisma.notification.updateMany({
       where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
