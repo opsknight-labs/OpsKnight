@@ -60,7 +60,7 @@ export type CentralNotificationPayload =
       subject: string;
       html: string;
       text?: string;
-      providerScope?: { statusPageId: string };
+      providerScope?: { statusPageId: string; subscriptionId?: string; incidentId?: string };
     }
   | { kind: 'SMS'; to: string; message: string }
   | { kind: 'WHATSAPP'; to: string; message: string; from?: string }
@@ -668,6 +668,31 @@ async function incidentPayloadSuperseded(
     : 'Incident update generation was superseded';
 }
 
+async function statusSubscriberDeliveryRevoked(payload: CentralNotificationPayload): Promise<string | null> {
+  if (payload.kind !== 'EMAIL' || !payload.providerScope?.subscriptionId || !payload.providerScope.incidentId)
+    return null;
+  try {
+    const incident = await prisma.incident.findUnique({
+      where: { id: payload.providerScope.incidentId },
+      select: { visibility: true, serviceId: true },
+    });
+    if (!incident || incident.visibility !== 'PUBLIC') return 'Status-page incident is no longer public';
+    const page = await prisma.statusPage.findFirst({
+      where: {
+        id: payload.providerScope.statusPageId,
+        enabled: true,
+        showIncidents: true,
+        services: { some: { serviceId: incident.serviceId, showOnPage: true } },
+        subscriptions: { some: { id: payload.providerScope.subscriptionId, verified: true, unsubscribedAt: null } },
+      },
+      select: { id: true },
+    });
+    return page ? null : 'Status-page subscription or visibility was revoked';
+  } catch {
+    return 'Status-page delivery policy could not be revalidated';
+  }
+}
+
 async function finishAttempt(input: {
   notificationId: string;
   ordinal: number;
@@ -793,7 +818,8 @@ export async function deliverCentralNotification(
     return { success: false, claimed: true, error: errorMessage };
   }
 
-  const supersededReason = await incidentPayloadSuperseded(payload);
+  const supersededReason =
+    (await statusSubscriberDeliveryRevoked(payload)) ?? (await incidentPayloadSuperseded(payload));
   if (supersededReason) {
     await prisma.notification.updateMany({
       where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
