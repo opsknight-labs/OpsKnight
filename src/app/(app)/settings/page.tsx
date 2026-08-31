@@ -20,51 +20,33 @@ import {
   ArrowRight,
   Lock,
   Globe,
-  Sliders,
   Activity,
   MessageSquare,
   KeyRound,
   SlidersHorizontal,
-  ChevronRight,
-  ShieldAlert,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
-const iconMap: Record<string, typeof User> = {
-  user: User,
-  shield: Shield,
-  list: SlidersHorizontal,
-  globe: Globe,
-  activity: Activity,
-  settings: Settings,
-  bell: Bell,
-  plug: Puzzle,
-  slack: MessageSquare,
-  'message-circle': MessageSquare,
-  key: KeyRound,
+const sectionIcons: Record<string, any> = {
+  account: User,
+  workspace: Building2,
+  integrations: Puzzle,
+  system: Settings,
 };
 
-const pillarGradients: Record<string, { iconBg: string; iconColor: string; border: string }> = {
-  account: {
-    iconBg: 'bg-blue-50',
-    iconColor: 'text-blue-600',
-    border: 'hover:border-blue-200',
-  },
-  workspace: {
-    iconBg: 'bg-emerald-50',
-    iconColor: 'text-emerald-600',
-    border: 'hover:border-emerald-200',
-  },
-  integrations: {
-    iconBg: 'bg-purple-50',
-    iconColor: 'text-purple-600',
-    border: 'hover:border-purple-200',
-  },
-  system: {
-    iconBg: 'bg-amber-50',
-    iconColor: 'text-amber-600',
-    border: 'hover:border-amber-200',
-  },
+const itemIcons: Record<string, any> = {
+  profile: User,
+  security: Shield,
+  'custom-fields': SlidersHorizontal,
+  'status-page': Globe,
+  'api-keys': KeyRound,
+  'audit-logs': Activity,
+  integrations: Puzzle,
+  slack: MessageSquare,
+  chatops: MessageSquare,
+  'health-center': Activity,
+  system: Settings,
+  'notifications-admin': Bell,
+  'notification-history': Bell,
 };
 
 export default async function SettingsOverviewPage() {
@@ -78,119 +60,135 @@ export default async function SettingsOverviewPage() {
 
   const sectionGroups = SETTINGS_NAV_SECTIONS.filter(section => section.id !== 'overview');
   const accessibleItems = SETTINGS_NAV_ITEMS.filter(canAccess);
+  const popularLinks = accessibleItems.filter(item =>
+    ['profile', 'security', 'api-keys', 'notifications-admin', 'custom-fields'].includes(item.id)
+  );
 
   return (
-    <div className="space-y-8 pb-12">
-      {/* Hero Header */}
-      <Card className="bg-gradient-to-br from-white to-slate-50 border-slate-200 shadow-sm overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-[radial-gradient(circle,rgba(211,47,47,0.04)_0%,transparent_70%)] rounded-full translate-x-[25%] -translate-y-[25%] pointer-events-none" />
+    <div className="space-y-8 pb-12 w-full">
+      {/* Header */}
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground">
+          Manage your personal preferences, workspace configuration, alert integrations, and system
+          diagnostics in one place.
+        </p>
+      </div>
 
-        <CardContent className="p-6 md:p-8 relative z-10">
-          <div className="max-w-3xl space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                <Settings className="h-3.5 w-3.5" />
-                <span>Workspace Hub</span>
-              </span>
-              {permissions.isAdmin && (
-                <Badge
-                  variant="outline"
-                  className="text-xs bg-white text-slate-700 border-slate-200"
-                >
-                  <Shield className="h-3 w-3 mr-1 text-primary" />
-                  Administrator
-                </Badge>
-              )}
-            </div>
+      {/* Search & Quick Access Section */}
+      <Card className="border-border bg-card shadow-xs w-full">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold">Search Settings</CardTitle>
+          <CardDescription>Quickly jump to any setting, provider, or integration</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <SettingsSearch
+            items={accessibleItems}
+            placeholder="Search settings, integrations, parameters..."
+          />
 
-            <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight leading-tight">
-              Settings & Workspace Controls
-            </h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Configure personal delivery preferences, manage incident metadata, connect alert
-              integrations, and monitor platform health in one centralized hub.
-            </p>
-
-            <div className="pt-3 max-w-xl">
-              <SettingsSearch items={accessibleItems} />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Categorized Settings Pillars */}
-      <div className="space-y-6">
-        {sectionGroups.map(section => {
-          const visibleItems = section.items.filter(canAccess);
-          if (visibleItems.length === 0) return null;
-
-          const styling = pillarGradients[section.id] || {
-            iconBg: 'bg-slate-50',
-            iconColor: 'text-slate-600',
-            border: 'hover:border-slate-300',
-          };
-
-          return (
-            <div key={section.id} className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-foreground">{section.label}</h2>
-                  {section.description && (
-                    <p className="text-xs text-muted-foreground">{section.description}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-                {visibleItems.map(item => {
-                  const Icon = iconMap[item.icon] || Settings;
+          {/* Quick Access Links */}
+          {popularLinks.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Quick Access
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {popularLinks.map(item => {
+                  const Icon = itemIcons[item.id] || Settings;
 
                   return (
                     <Link
                       key={item.id}
                       href={item.href}
-                      className={cn(
-                        'group p-4 rounded-xl border border-slate-200/80 bg-white hover:shadow-md transition-all duration-200 flex flex-col justify-between',
-                        styling.border
-                      )}
+                      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background hover:bg-accent/60 hover:border-slate-300 hover:shadow-xs transition-all duration-150 group"
                     >
-                      <div>
-                        <div className="flex items-start justify-between gap-3 mb-2.5">
-                          <div
-                            className={cn(
-                              'p-2 rounded-lg transition-transform group-hover:scale-105',
-                              styling.iconBg
-                            )}
-                          >
-                            <Icon className={cn('h-4 w-4', styling.iconColor)} />
-                          </div>
-                          {item.badge && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] font-semibold px-1.5 py-0 h-4 border-slate-200 text-slate-600"
-                            >
-                              {item.badge}
-                            </Badge>
-                          )}
-                        </div>
-
-                        <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
-                          <span>{item.label}</span>
-                        </h3>
-                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">
+                      <div className="p-1.5 rounded-md bg-muted text-muted-foreground group-hover:text-foreground transition-colors shrink-0">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-xs text-foreground truncate">{item.label}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
                           {item.description}
                         </p>
                       </div>
-
-                      <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs font-medium text-slate-500 group-hover:text-primary transition-colors">
-                        <span>Manage</span>
-                        <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
-                      </div>
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" />
                     </Link>
                   );
                 })}
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Settings Categories (Dynamic multi-column layout for large screens) */}
+      <div className="space-y-6">
+        {sectionGroups.map(section => {
+          const visibleItems = section.items.filter(canAccess);
+          if (visibleItems.length === 0) return null;
+
+          const SectionIcon = sectionIcons[section.id] || Settings;
+
+          return (
+            <Card key={section.id} className="border-border bg-card shadow-xs w-full">
+              <CardHeader className="pb-4 border-b border-border/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                    <SectionIcon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold">{section.label}</CardTitle>
+                    {section.description && (
+                      <CardDescription className="text-xs">{section.description}</CardDescription>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-5">
+                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {visibleItems.map(item => {
+                    const ItemIcon = itemIcons[item.id] || Settings;
+
+                    return (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        className="group relative p-4 rounded-xl border border-border bg-background hover:bg-accent/50 hover:border-primary/30 hover:shadow-xs transition-all duration-150 flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2 mb-2.5">
+                            <div className="p-2 rounded-lg bg-muted text-muted-foreground group-hover:text-primary transition-colors">
+                              <ItemIcon className="h-4 w-4" />
+                            </div>
+                            {item.badge && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] font-semibold px-1.5 py-0 h-4 border-border"
+                              >
+                                {item.badge}
+                              </Badge>
+                            )}
+                          </div>
+
+                          <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
+                            {item.label}
+                          </h3>
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                            {item.description}
+                          </p>
+                        </div>
+
+                        <div className="pt-3 mt-3 border-t border-border/40 flex items-center justify-between text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors">
+                          <span>Configure</span>
+                          <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
