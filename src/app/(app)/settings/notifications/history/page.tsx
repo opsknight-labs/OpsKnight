@@ -1,31 +1,31 @@
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
-import SettingsPage from '@/components/settings/SettingsPage';
-import SettingsSectionCard from '@/components/settings/SettingsSectionCard';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import NotificationHistory from '@/components/settings/NotificationHistory';
 
 export default async function NotificationHistoryPage() {
-    const permissions = await getUserPermissions();
+  const permissions = await getUserPermissions();
 
-    if (!permissions) {
-        redirect('/login');
-    }
+  if (!permissions) {
+    redirect('/login');
+  }
 
-    return (
-        <SettingsPage
-            currentPageId="notification-history"
-            backHref="/settings"
-            title="Notification History"
-            description="Track delivery status and history across all notification channels."
-        >
-            <SettingsSectionCard
-                title="Delivery status"
-                description="Monitor outbound notifications and troubleshoot failures."
-            >
-                <NotificationHistory />
-            </SettingsSectionCard>
-        </SettingsPage>
-    );
+  return (
+    <div className="space-y-6">
+      <SettingsPageHeader
+        title="Notification History & Delivery Logs"
+        description="Track delivery status, dispatch timestamps, and channel response codes across all outbound notification attempts."
+        backHref="/settings"
+        backLabel="Back to Settings"
+      />
+
+      <SettingsSection
+        title="Delivery Status Stream"
+        description="Monitor outbound notifications and troubleshoot channel delivery issues."
+      >
+        <NotificationHistory />
+      </SettingsSection>
+    </div>
+  );
 }
-
-

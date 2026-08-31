@@ -1,33 +1,33 @@
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
-import SettingsPage from '@/components/settings/SettingsPage';
-import SettingsSectionCard from '@/components/settings/SettingsSectionCard';
+import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import SystemNotificationSettings from '@/components/settings/SystemNotificationSettings';
 import { getNotificationProviders } from '@/app/(app)/settings/system/actions';
 
 export default async function NotificationProviderSettingsPage() {
-    const permissions = await getUserPermissions();
+  const permissions = await getUserPermissions();
 
-    if (!permissions.isAdmin) {
-        redirect('/settings');
-    }
-    const providers = await getNotificationProviders();
+  if (!permissions.isAdmin) {
+    redirect('/settings');
+  }
+  const providers = await getNotificationProviders();
 
-    return (
-        <SettingsPage
-            currentPageId="notifications-admin"
-            backHref="/settings"
-            title="Notification Providers"
-            description="Configure email, SMS, push, and WhatsApp notification providers for your organization."
-        >
-            <SettingsSectionCard
-                title="Provider configuration"
-                description="Manage outbound providers for all delivery channels."
-            >
-                <SystemNotificationSettings providers={providers} />
-            </SettingsSectionCard>
-        </SettingsPage>
-    );
+  return (
+    <div className="space-y-6">
+      <SettingsPageHeader
+        title="Notification Providers"
+        description="Configure SMS (Twilio/SNS), Web Push (VAPID), and WhatsApp Business outbound providers for your organization."
+        backHref="/settings"
+        backLabel="Back to Settings"
+      />
+
+      <SettingsSection
+        title="Provider Configuration"
+        description="Manage outbound API credentials and test delivery for all alert channels."
+      >
+        <SystemNotificationSettings providers={providers} />
+      </SettingsSection>
+    </div>
+  );
 }
-
-

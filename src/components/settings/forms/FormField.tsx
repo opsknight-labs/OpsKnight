@@ -1,6 +1,11 @@
 'use client';
 
-import { useFormContext, Controller } from 'react-hook-form';
+import {
+  useFormContext,
+  Controller,
+  type ControllerRenderProps,
+  type FieldValues,
+} from 'react-hook-form';
 import { Label } from '@/components/ui/shadcn/label';
 import { cn } from '@/lib/utils';
 import { HelpCircle } from 'lucide-react';
@@ -12,7 +17,9 @@ interface FormFieldProps {
   description?: string;
   required?: boolean;
   tooltip?: string;
-  children: React.ReactNode | ((field: any) => React.ReactNode);
+  children:
+    | React.ReactNode
+    | ((field: ControllerRenderProps<FieldValues, string>) => React.ReactNode);
   className?: string;
 }
 
@@ -45,23 +52,18 @@ export function FormField({
               {required && <span className="text-destructive ml-1">*</span>}
             </Label>
             {tooltip && (
-              <Tooltip content={tooltip} position="top">
+              <Tooltip content={tooltip}>
                 <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
               </Tooltip>
             )}
           </div>
-
-          {description && <p className="text-sm text-muted-foreground">{description}</p>}
-
-          <div>{typeof children === 'function' ? children(field) : children}</div>
-
-          {errorMessage && (
-            <p className="text-sm text-destructive" role="alert">
-              {errorMessage}
-            </p>
-          )}
+          {description && <p className="text-xs text-muted-foreground">{description}</p>}
+          {typeof children === 'function' ? children(field) : children}
+          {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
         </div>
       )}
     />
   );
 }
+
+export default FormField;

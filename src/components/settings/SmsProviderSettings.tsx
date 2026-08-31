@@ -1,6 +1,5 @@
 'use client';
 
-import { useTransition } from 'react';
 import FormField from '@/components/ui/FormField';
 import Button from '@/components/ui/Button';
 import type { SmsProvider, SmsSettings } from '@/types/notification-types';
