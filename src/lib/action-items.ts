@@ -20,6 +20,7 @@ export type ActionItem = {
   status: ActionItemStatus;
   priority: ActionItemPriority;
   externalIssue?: ActionItemExternalIssue;
+  completedAt?: Date | string | null;
 };
 
 type ActionItemRecordLike = {
@@ -30,6 +31,7 @@ type ActionItemRecordLike = {
   dueDate: Date | string | null;
   status: ActionItemStatus;
   priority: ActionItemPriority;
+  completedAt?: Date | string | null;
   externalIssueLinks?: Array<{
     id: string;
     provider: string;
@@ -135,6 +137,10 @@ export function normalizeLegacyActionItems(
       ),
       status: toActionItemStatus(entry.status),
       priority: toActionItemPriority(entry.priority),
+      completedAt:
+        entry.completedAt instanceof Date || typeof entry.completedAt === 'string'
+          ? entry.completedAt
+          : undefined,
     };
   });
 }
@@ -150,6 +156,7 @@ export function serializeActionItemRecord(record: ActionItemRecordLike): ActionI
     dueDate: formatActionItemDueDate(record.dueDate),
     status: record.status,
     priority: record.priority,
+    completedAt: record.completedAt ?? undefined,
     externalIssue: externalIssue
       ? {
           linkId: externalIssue.id,

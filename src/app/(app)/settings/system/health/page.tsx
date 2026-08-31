@@ -10,22 +10,48 @@ import {
 import { assertAdmin } from '@/lib/rbac';
 import { collectAdminHealth, type HealthLevel } from '@/lib/admin-health';
 import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/shadcn/card';
+import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const statusConfig: Record<
   HealthLevel,
-  { label: string; badge: 'success' | 'warning' | 'danger' | 'neutral'; icon: typeof Activity }
+  { label: string; badgeClass: string; icon: typeof Activity; borderClass: string }
 > = {
-  healthy: { label: 'Healthy', badge: 'success', icon: CheckCircle2 },
-  degraded: { label: 'Needs attention', badge: 'warning', icon: AlertTriangle },
-  unhealthy: { label: 'Action required', badge: 'danger', icon: XCircle },
-  unknown: { label: 'Not reported', badge: 'neutral', icon: CircleHelp },
+  healthy: {
+    label: 'Healthy',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    borderClass: 'border-emerald-200/60',
+    icon: CheckCircle2,
+  },
+  degraded: {
+    label: 'Needs Attention',
+    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+    borderClass: 'border-amber-200/60',
+    icon: AlertTriangle,
+  },
+  unhealthy: {
+    label: 'Action Required',
+    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+    borderClass: 'border-rose-200/60',
+    icon: XCircle,
+  },
+  unknown: {
+    label: 'Not Reported',
+    badgeClass: 'bg-slate-50 text-slate-700 border-slate-200',
+    borderClass: 'border-slate-200',
+    icon: CircleHelp,
+  },
 };
 
 export default async function AdminHealthCenterPage() {
@@ -34,69 +60,145 @@ export default async function AdminHealthCenterPage() {
   const overall = statusConfig[report.overall];
   const OverallIcon = overall.icon;
 
+  const healthyCount = report.checks.filter(c => c.status === 'healthy').length;
+  const degradedCount = report.checks.filter(c => c.status === 'degraded').length;
+  const unhealthyCount = report.checks.filter(c => c.status === 'unhealthy').length;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       <SettingsPageHeader
-        title="Administrator Health Center"
-        description="One operational view of the signals OpsKnight can verify from this instance."
-        backHref="/settings/system"
-        backLabel="Back to System Settings"
+        title="System Health & Diagnostics Center"
+        description="Comprehensive operational diagnostic signals across PostgreSQL, background job workers, Redis queue, and integrations."
+        backHref="/settings"
+        backLabel="Back to Settings"
+        actions={
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/settings/system/health">
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              Re-run Diagnostics
+            </Link>
+          </Button>
+        }
       />
 
-      <Alert variant={report.overall === 'unhealthy' ? 'destructive' : 'default'}>
-        <OverallIcon className="h-4 w-4" />
-        <AlertTitle>Overall status: {overall.label}</AlertTitle>
-        <AlertDescription>
-          Generated {new Date(report.generatedAt).toLocaleString()}. Unknown is intentionally not
-          treated as healthy. Confirm external provider, cluster, database, and recovery telemetry
-          before declaring the installation healthy.
-        </AlertDescription>
-      </Alert>
+      {/* Overview Metric Summary */}
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-slate-200 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Overall Status
+            </span>
+            <OverallIcon
+              className={cn(
+                'h-4 w-4',
+                report.overall === 'healthy'
+                  ? 'text-emerald-600'
+                  : report.overall === 'degraded'
+                    ? 'text-amber-600'
+                    : 'text-rose-600'
+              )}
+            />
+          </div>
+          <div className="mt-2 text-xl font-bold text-foreground capitalize">{overall.label}</div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Verified {new Date(report.generatedAt).toLocaleTimeString()}
+          </p>
+        </Card>
 
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-muted-foreground">
-          This page exposes status and counts, never credentials, connection strings, or key
-          material.
-        </p>
-        <Button variant="outline" asChild>
-          <Link href="/settings/system/health">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Link>
-        </Button>
+        <Card className="border-slate-200 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Healthy Signals
+            </span>
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div className="mt-2 text-xl font-bold text-foreground">
+            {healthyCount} / {report.checks.length}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Operating normally</p>
+        </Card>
+
+        <Card className="border-slate-200 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Warnings
+            </span>
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+          </div>
+          <div className="mt-2 text-xl font-bold text-foreground">{degradedCount}</div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Sub-optimal latency or retries</p>
+        </Card>
+
+        <Card className="border-slate-200 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Critical Attention
+            </span>
+            <XCircle className="h-4 w-4 text-rose-600" />
+          </div>
+          <div className="mt-2 text-xl font-bold text-foreground">{unhealthyCount}</div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Requires administrator intervention
+          </p>
+        </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {/* Diagnostics Cards Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {report.checks.map(check => {
           const config = statusConfig[check.status];
           const Icon = config.icon;
+
           return (
-            <Card key={check.id} className="h-full">
-              <CardHeader className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Icon className="h-5 w-5 text-muted-foreground" />
-                    <CardTitle className="text-lg">{check.label}</CardTitle>
+            <Card
+              key={check.id}
+              className={cn(
+                'border bg-white shadow-xs hover:shadow-md transition-all duration-150 flex flex-col justify-between overflow-hidden',
+                config.borderClass
+              )}
+            >
+              <div>
+                <CardHeader className="p-4 pb-3 border-b border-slate-100">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-md bg-slate-100 text-slate-700">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <CardTitle className="text-sm font-bold text-foreground">
+                        {check.label}
+                      </CardTitle>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={cn('text-[10px] font-semibold px-2 py-0.5', config.badgeClass)}
+                    >
+                      {config.label}
+                    </Badge>
                   </div>
-                  <Badge variant={config.badge}>{config.label}</Badge>
-                </div>
-                <p className="text-sm font-medium leading-6">{check.summary}</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  {check.details.map(detail => (
-                    <li key={detail} className="flex gap-2">
-                      <span aria-hidden="true">•</span>
-                      <span className="break-words">{detail}</span>
-                    </li>
-                  ))}
-                </ul>
-                {check.action && (
-                  <Button variant="outline" size="sm" asChild>
+                  <CardDescription className="text-xs text-foreground font-medium pt-1">
+                    {check.summary}
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="p-4 space-y-3">
+                  <ul className="space-y-1.5 text-xs text-muted-foreground">
+                    {check.details.map((detail, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                        <span className="leading-relaxed break-words">{detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </div>
+
+              {check.action && (
+                <div className="p-4 pt-0">
+                  <Button variant="outline" size="sm" className="w-full text-xs h-8" asChild>
                     <Link href={check.action.href}>{check.action.label}</Link>
                   </Button>
-                )}
-              </CardContent>
+                </div>
+              )}
             </Card>
           );
         })}

@@ -6,20 +6,20 @@ order: 10
 
 # Action Items
 
-Action items turn a postmortem into owned follow-up work. Each item belongs to a postmortem and its incident, and can carry an owner, due date, priority, status, description, and Jira link.
+Action items turn a postmortem into owned follow-up work. Each item belongs to a postmortem and its incident, and can carry an owner, due date, priority, status, description, and external ticket link (Jira / GitHub).
 
 ## Action-item fields
 
-| Field       | Values or behavior                                                |
-| ----------- | ----------------------------------------------------------------- |
-| Title       | Required description of the corrective work                       |
-| Description | Optional detail or acceptance criteria                            |
-| Owner       | An active OpsKnight user, or unassigned                           |
-| Due date    | Optional date; incomplete items past this date are marked overdue |
-| Priority    | High, Medium, or Low                                              |
-| Status      | Open, In Progress, Completed, or Blocked                          |
-| Source      | Postmortem for items created in the v1.4 postmortem workflow      |
-| Jira        | Optional linked Jira issue when Jira is configured                |
+| Field         | Values or behavior                                                                   |
+| ------------- | ------------------------------------------------------------------------------------ |
+| Title         | Required description of the corrective work                                          |
+| Description   | Optional detail or acceptance criteria                                               |
+| Owner         | An active OpsKnight user, or unassigned                                              |
+| Due date      | Smart countdown badge (`Overdue`, `Due in X days`, `Due [Date]`, `Completed [Date]`) |
+| Priority      | High, Medium, or Low with color-coded badges                                         |
+| Status        | Open, In Progress, Completed, or Blocked with one-click transitions                  |
+| Source        | Postmortem for items created in the incident learning workflow                       |
+| External link | Optional linked Jira or GitHub issue with live sync state                            |
 
 ## Add action items to a postmortem
 
@@ -36,17 +36,22 @@ Use a title that describes a verifiable outcome. Put implementation detail and t
 
 Open **Action Items** from the main navigation. The page combines action items from all postmortems and shows totals for open, in-progress, completed, blocked, overdue, and high-priority work.
 
-You can switch between board and list views; filter by status, owner, or priority; open the originating postmortem and incident; and identify overdue items. The totals describe the unfiltered collection; filters change the displayed items.
+- **Board vs. List view**: Toggle between a 4-column drag-and-drop/interactive Kanban board and a compact tabular list.
+- **One-click status transitions**: Responders can move cards between columns (`Open` ➔ `In Progress` ➔ `Completed` / `Blocked`) directly from the board or list without opening the full postmortem editor.
+- **Smart Due Date Badges**:
+  - 🔴 **Overdue** (pulsing red badge with days elapsed)
+  - 🟡 **Due Soon** (amber badge for items due within 3 days)
+  - 🟢 **On Track** (calendar date)
+  - ✅ **Completed** (timestamp of completion)
+- **Centralized search and filters**: Debounced search across action item titles, postmortems, and owners; filter by Status, Owner, or Priority; export filtered views to CSV.
 
 ## Update an item
 
-Responders and administrators can manage action items. Update the owner, due date, priority, description, or status from the postmortem. Set the status to **Completed** only after the corrective work and its validation are finished.
+Responders and administrators can manage action items. Update the status instantly using the card quick-action menu or change owner, due date, priority, and description from the postmortem.
 
-## Jira workflow
+## Ticket integrations (Jira & GitHub)
 
-When the workspace Jira integration and the incident service's Jira mapping are configured, an item can create a Jira issue, link an existing issue by key, refresh the linked issue's status and assignee, or unlink it.
-
-Creating an issue requires a valid Jira project and action-item issue type on the service mapping. Linking is one-to-one: an issue already linked elsewhere cannot be linked again. See [Jira Cloud](../integrations/issue-tracking/jira).
+When the workspace Jira or GitHub integration is configured, an item can link to an external issue, display the issue key and status, and open the external issue with one click.
 
 ## Troubleshooting
 

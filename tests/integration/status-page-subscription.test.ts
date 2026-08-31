@@ -48,6 +48,7 @@ describeIfRealDB('Status Page Subscription Integration', () => {
   });
 
   beforeEach(async () => {
+    process.env.ENCRYPTION_KEY = '0123456789abcdef'.repeat(4);
     vi.clearAllMocks();
     await resetDatabase();
   });
