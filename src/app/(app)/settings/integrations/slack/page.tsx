@@ -11,6 +11,10 @@ export default async function GlobalSlackIntegrationPage() {
     redirect('/login');
   }
 
+  if (!permissions.isAdmin) {
+    redirect('/settings');
+  }
+
   // Get global Slack integration (not tied to any service)
   const globalIntegration = await prisma.slackIntegration.findFirst({
     where: {
