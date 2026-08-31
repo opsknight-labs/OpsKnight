@@ -156,6 +156,8 @@ describe('event durable side effects', () => {
     await processEventSideEffect(payload('INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION', 'NOTIFICATION'));
     expect(sendIncidentNotificationsMock).toHaveBeenCalledWith('inc-1', 'updated', [], undefined, {
       intent: 'ASSIGNED_TO_TEAM',
+      eventAt: new Date('2026-08-28T07:00:00.000Z'),
+      status: undefined,
     });
   });
 
@@ -179,7 +181,9 @@ describe('event durable side effects', () => {
     expect(triggerWebhooksForServiceMock).toHaveBeenCalledWith(
       'svc-1',
       'incident.created',
-      expect.objectContaining({ status: 'OPEN' })
+      expect.objectContaining({ status: 'OPEN' }),
+      '2026-08-28T07:00:00.000Z',
+      { expectedStatus: undefined, escalationGeneration: undefined }
     );
   });
 
@@ -234,7 +238,9 @@ describe('event durable side effects', () => {
     expect(triggerWebhooksForServiceMock).toHaveBeenCalledWith(
       'svc-1',
       'incident.acknowledged',
-      expect.objectContaining({ id: 'inc-1', status: 'ACKNOWLEDGED' })
+      expect.objectContaining({ id: 'inc-1', status: 'ACKNOWLEDGED' }),
+      '2026-08-28T07:00:00.000Z',
+      { expectedStatus: 'ACKNOWLEDGED', escalationGeneration: undefined }
     );
   });
 
@@ -279,6 +285,8 @@ describe('event durable side effects', () => {
     });
     expect(sendServiceNotificationsMock).toHaveBeenCalledWith('inc-1', 'resolved', {
       eventAt: new Date(lifecycle.transitionAt),
+      escalationGeneration: undefined,
+      expectedStatus: 'RESOLVED',
     });
   });
 
