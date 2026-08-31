@@ -45,7 +45,7 @@ function providerLimit(scope: ProviderAdmissionScope): {
   }
 }
 
-const PROVIDER_LEASE_MS = 60_000;
+const PROVIDER_LEASE_MS = 10 * 60_000;
 
 function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
   return `provider:${scope.toLowerCase()}:${providerKey}`.slice(0, 240);
@@ -62,11 +62,13 @@ export async function acquireProviderAdmission(
 ): Promise<ProviderAdmissionResult> {
   const config = providerLimit(scope);
   const key = bucketKey(scope, providerKey);
+  const intervalMs = config.windowMs / config.limit;
+  const burstToleranceMs = intervalMs * Math.max(0, config.limit - 1);
 
   return runSerializableTransaction(async tx => {
     const existing = await tx.rateLimit.findUnique({ where: { key } });
-    if (!existing || existing.expiresAt <= now) {
-      const expiresAt = new Date(now.getTime() + config.windowMs);
+    if (!existing) {
+      const expiresAt = new Date(now.getTime() + intervalMs);
       await tx.rateLimit.upsert({
         where: { key },
         update: { count: 1, expiresAt },
@@ -75,11 +77,16 @@ export async function acquireProviderAdmission(
       return { allowed: true } as const;
     }
 
-    if (existing.count >= config.limit) {
-      return { allowed: false, retryAt: existing.expiresAt, reason: 'RATE_LIMITED' } as const;
+    const retryAt = new Date(existing.expiresAt.getTime() - burstToleranceMs);
+    if (retryAt > now) {
+      return { allowed: false, retryAt, reason: 'RATE_LIMITED' } as const;
     }
 
-    await tx.rateLimit.update({ where: { key }, data: { count: { increment: 1 } } });
+    const expiresAt = new Date(Math.max(existing.expiresAt.getTime(), now.getTime()) + intervalMs);
+    await tx.rateLimit.update({
+      where: { key },
+      data: { count: { increment: 1 }, expiresAt },
+    });
     return { allowed: true } as const;
   }, 5);
 }
@@ -92,9 +99,13 @@ export async function deferProviderAdmission(
 ): Promise<void> {
   const config = providerLimit(scope);
   const key = bucketKey(scope, providerKey);
+  const intervalMs = config.windowMs / config.limit;
+  const cooldownTheoreticalArrival = new Date(
+    retryAt.getTime() + intervalMs * Math.max(0, config.limit - 1)
+  );
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "RateLimit" ("key", "count", "expiresAt")
-    VALUES (${key}, ${config.limit}, ${retryAt})
+    VALUES (${key}, ${config.limit}, ${cooldownTheoreticalArrival})
     ON CONFLICT ("key") DO UPDATE SET
       "count" = GREATEST("RateLimit"."count", EXCLUDED."count"),
       "expiresAt" = GREATEST("RateLimit"."expiresAt", EXCLUDED."expiresAt")

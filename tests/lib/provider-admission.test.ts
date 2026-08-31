@@ -46,11 +46,15 @@ describe('provider admission control', () => {
     );
   });
   it('defers without consuming a provider request when the shared budget is full', async () => {
-    const expiresAt = new Date('2026-08-30T12:00:01.000Z');
+    const expiresAt = new Date('2026-08-30T12:00:01.500Z');
     mocks.findUnique.mockResolvedValue({ key: 'provider:email:default', count: 8, expiresAt });
     await expect(
       acquireProviderAdmission('EMAIL', 'default', new Date('2026-08-30T12:00:00.500Z'))
-    ).resolves.toEqual({ allowed: false, retryAt: expiresAt, reason: 'RATE_LIMITED' });
+    ).resolves.toEqual({
+      allowed: false,
+      retryAt: new Date('2026-08-30T12:00:00.625Z'),
+      reason: 'RATE_LIMITED',
+    });
     expect(mocks.update).not.toHaveBeenCalled();
   });
 

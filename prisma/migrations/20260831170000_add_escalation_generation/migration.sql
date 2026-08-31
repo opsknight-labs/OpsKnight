@@ -1,0 +1,2 @@
+ALTER TABLE "Incident"
+ADD COLUMN "escalationGeneration" INTEGER NOT NULL DEFAULT 0;

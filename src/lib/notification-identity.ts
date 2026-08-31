@@ -10,6 +10,7 @@ export type NotificationIdentityIncident = {
   currentEscalationStep?: number | null;
   nextEscalationAt?: Date | null;
   escalationStatus?: string | null;
+  escalationGeneration?: number;
 };
 
 function hash(value: string): string {
@@ -61,9 +62,7 @@ export function notificationIntentId(input: {
   userId: string;
   channel: NotificationDeliveryChannel;
 }): string {
-  const digest = hash(
-    [input.eventKey, input.userId, input.channel].join('\u001f')
-  );
+  const digest = hash([input.eventKey, input.userId, input.channel].join('\u001f'));
   return `ntf:${input.eventType}:${input.eventAt.getTime()}:${digest}`;
 }
 
@@ -86,12 +85,8 @@ export function inAppNotificationIntentId(input: {
   entityId?: string | null;
 }): string {
   return `inapp:${hash(
-    [
-      input.eventKey,
-      input.userId,
-      input.type,
-      input.entityType ?? '',
-      input.entityId ?? '',
-    ].join('\u001f')
+    [input.eventKey, input.userId, input.type, input.entityType ?? '', input.entityId ?? ''].join(
+      '\u001f'
+    )
   )}`;
 }

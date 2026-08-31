@@ -280,6 +280,39 @@ describe('central notification control plane', () => {
     expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 
+  it('does not report provider acceptance as failure when attempt-ledger persistence aborts', async () => {
+    const due = new Date(Date.now() - 60_000);
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'notification_accepted',
+      status: 'PENDING',
+      category: 'ADMINISTRATION',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
+    } as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.$transaction).mockRejectedValueOnce(new Error('attempt ledger unavailable'));
+    mocks.sendEmail.mockResolvedValue({ success: true, providerMessageId: 'provider-accepted' });
+
+    await expect(deliverCentralNotification('notification_accepted')).resolves.toEqual({
+      success: true,
+      claimed: true,
+    });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'SENT',
+          providerMessageId: 'provider-accepted',
+          payloadEncrypted: null,
+        }),
+      })
+    );
+  });
+
   it('masks every externally-addressed channel without exposing a full address', () => {
     expect(maskedNotificationRecipient('EMAIL', 'alice@example.com')).toBe('a***@example.com');
     expect(maskedNotificationRecipient('SMS', '+1 (555) 123-9876')).toBe('***9876');

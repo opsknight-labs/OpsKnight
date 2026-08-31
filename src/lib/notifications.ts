@@ -33,6 +33,9 @@ async function sendCentralIncidentNotification(input: {
   eventType: NotificationEventType;
   eventKey: string;
   durableMessage: string;
+  eventAt: Date;
+  escalationGeneration?: number;
+  escalationStep?: number | null;
 }): Promise<SendNotificationResult | null> {
   if (!['EMAIL', 'SMS', 'PUSH', 'WHATSAPP'].includes(input.channel)) return null;
   const recipient = await prisma.user.findUnique({
@@ -78,17 +81,20 @@ async function sendCentralIncidentNotification(input: {
       userId: input.userId,
       incidentId: input.incidentId,
       eventType: input.eventType,
+      eventAt: input.eventAt.toISOString(),
+      escalationGeneration: input.escalationGeneration,
+      escalationStep: input.escalationStep ?? undefined,
       durableMessage: input.durableMessage,
     },
   });
-  if (queued.delivered) {
-    return { success: true, outcome: 'DELIVERED', notificationId: queued.id };
-  }
   const persisted = await prisma.notification.findUnique({
     where: { id: queued.id },
     select: { id: true, status: true, attempts: true, errorMsg: true },
   });
   if (!persisted) {
+    if (queued.delivered) {
+      return { success: true, outcome: 'DELIVERED', notificationId: queued.id };
+    }
     return {
       success: false,
       outcome: 'RETRYABLE_FAILURE',
@@ -203,6 +209,9 @@ export async function sendNotification(
       eventType,
       eventKey,
       durableMessage,
+      eventAt,
+      escalationGeneration: identityIncident.escalationGeneration,
+      escalationStep: identityIncident.currentEscalationStep,
     });
     if (central) return central;
   }

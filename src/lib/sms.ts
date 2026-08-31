@@ -328,7 +328,15 @@ export async function sendSMS(options: SMSOptions): Promise<{
             'AWS SNS spending limit reached. Please check your AWS SNS spending quota.';
         }
 
-        return { success: false, error: errorMessage };
+        const throttled =
+          errorInfo.code === 'Throttling' || errorInfo.name === 'ThrottlingException';
+        return {
+          success: false,
+          error: errorMessage,
+          statusCode: throttled ? 429 : undefined,
+          errorCode: errorInfo.code || errorInfo.name,
+          retryAfterMs: throttled ? 60_000 : undefined,
+        };
       }
     }
 

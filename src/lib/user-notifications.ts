@@ -204,6 +204,7 @@ export async function sendUserNotification(
         currentEscalationStep: true,
         nextEscalationAt: true,
         escalationStatus: true,
+        escalationGeneration: true,
       },
     }),
     prisma.user.findUnique({

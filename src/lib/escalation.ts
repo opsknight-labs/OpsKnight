@@ -327,6 +327,7 @@ export async function executeEscalation(
           escalationStatus: 'ESCALATING',
           nextEscalationAt: nextAt,
           currentEscalationStep: 0,
+          escalationGeneration: { increment: 1 },
           escalationProcessingAt: null,
         },
       });
@@ -664,17 +665,11 @@ export async function executeEscalation(
   const notificationsSent = [];
   const escalationChannels: NotificationChannel[] | undefined =
     step.notificationChannels.length > 0 ? step.notificationChannels : undefined;
-  const loopGeneration =
-    typeof prisma.incidentEvent?.count === 'function'
-      ? ((await prisma.incidentEvent.count({
-          where: { incidentId, message: { contains: 'Looping back to Step 1' } },
-        })) ?? 0)
-      : 0;
   const escalationEventKey = [
     'ESCALATION',
     incidentId,
     policy.id,
-    String(loopGeneration),
+    String(incident.escalationGeneration ?? 0),
     String(currentStepIndex),
   ].join(':');
 

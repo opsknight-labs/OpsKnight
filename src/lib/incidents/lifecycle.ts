@@ -388,6 +388,7 @@ function updateDataForCommand(
       data.nextEscalationAt = atDelay(now, delayMinutes);
       data.snoozedUntil = null;
       data.snoozeReason = null;
+      data.escalationGeneration = { increment: 1 };
       break;
     }
 
@@ -398,6 +399,7 @@ function updateDataForCommand(
       data.nextEscalationAt = atDelay(now, escalationDelayMinutes(incident, stepIndex));
       data.snoozedUntil = null;
       data.snoozeReason = null;
+      data.escalationGeneration = { increment: 1 };
       break;
     }
 
@@ -414,6 +416,7 @@ function updateDataForCommand(
       data.nextEscalationAt = atDelay(now, escalationDelayMinutes(incident, stepIndex));
       data.snoozedUntil = null;
       data.snoozeReason = null;
+      data.escalationGeneration = { increment: 1 };
       break;
     }
 
@@ -429,6 +432,7 @@ function updateDataForCommand(
       data.nextEscalationAt = now;
       data.snoozedUntil = null;
       data.snoozeReason = null;
+      data.escalationGeneration = { increment: 1 };
       break;
   }
 

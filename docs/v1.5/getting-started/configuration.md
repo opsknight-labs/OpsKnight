@@ -30,11 +30,11 @@ These variables must be set for OpsKnight to start correctly in any environment.
 
 ## Security & Encryption
 
-| Variable                    | Required in Production | Description                                                                                                                                                             |
-| --------------------------- | :--------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ENCRYPTION_KEYS`           |      Recommended       | Rotation keyring in `key-id:64-hex-key` entries. The first key encrypts new values; remaining keys decrypt older v3/legacy values.                                      |
-| `ENCRYPTION_KEY`            |   Yes if no keyring    | Single 32-byte hex key used for compatibility and as an optional legacy key alongside `ENCRYPTION_KEYS`. API keys are keyed hashes and are not encrypted with this key. |
-| `NOTIFICATION_IDENTITY_KEY` |      Recommended       | Stable secret used only for notification recipient identity and deduplication. Keep it unchanged during encryption-key rotation.                                        |
+| Variable                    | Required in Production | Description                                                                                                                                                                                                                    |
+| --------------------------- | :--------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ENCRYPTION_KEYS`           |      Recommended       | Rotation keyring in `key-id:64-hex-key` entries. The first key encrypts new values; remaining keys decrypt older v3/legacy values.                                                                                             |
+| `ENCRYPTION_KEY`            |   Yes if no keyring    | Single 32-byte hex key used for compatibility and as an optional legacy key alongside `ENCRYPTION_KEYS`. API keys are keyed hashes and are not encrypted with this key.                                                        |
+| `NOTIFICATION_IDENTITY_KEY` |  Independent rotation  | Stable secret used only for notification recipient identity and deduplication. Keep it unchanged during encryption-key rotation. OpsKnight falls back to `NEXTAUTH_SECRET`, then the active encryption key, for compatibility. |
 
 `NOTIFICATION_CONTROL_PLANE_PERSONAL=true` routes new personal incident deliveries through the
 encrypted durable control plane. Current Compose, Helm, and Kustomize defaults enable it. Set it

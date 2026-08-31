@@ -22,6 +22,7 @@ import {
   type ProviderAdmissionScope,
 } from './provider-admission';
 import { notificationRetryDelayMs, NOTIFICATION_RETRY_POLICY } from './notification-delivery';
+import { logger } from './logger';
 
 const MAX_ENCRYPTED_PAYLOAD_BYTES = 768 * 1024;
 const MAX_ERROR_LENGTH = 1_000;
@@ -47,6 +48,9 @@ export type CentralNotificationPayload =
       userId: string;
       incidentId: string;
       eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
+      eventAt: string;
+      escalationGeneration?: number;
+      escalationStep?: number;
       durableMessage: string;
     }
   | {
@@ -100,6 +104,11 @@ export type CentralNotificationPayload =
       deliveryId: string;
     };
 
+type IncidentCentralPayload = Extract<
+  CentralNotificationPayload,
+  { kind: 'INCIDENT_EMAIL' | 'INCIDENT_SMS' | 'INCIDENT_PUSH' | 'INCIDENT_WHATSAPP' }
+>;
+
 export type CentralNotificationInput = {
   category: NotificationCategory;
   channel: NotificationChannel;
@@ -124,6 +133,7 @@ type NotificationStore = Pick<Prisma.TransactionClient, 'notification'>;
 
 type DeliveryResult = {
   success: boolean;
+  skipped?: boolean;
   error?: string;
   providerMessageId?: string;
   statusCode?: number;
@@ -163,10 +173,16 @@ export function maskedNotificationRecipient(
 }
 
 function recipientDigest(channel: NotificationChannel, recipient: string): string {
-  const key = process.env.NOTIFICATION_IDENTITY_KEY?.trim() || getEncryptionKey();
+  const key =
+    process.env.NOTIFICATION_IDENTITY_KEY?.trim() ||
+    process.env.NEXTAUTH_SECRET?.trim() ||
+    getEncryptionKey();
   if (!key) throw new Error('Notification encryption is not configured');
+  const keyBytes = /^[a-f0-9]{64}$/i.test(key)
+    ? Buffer.from(key, 'hex')
+    : crypto.createHash('sha256').update(key).digest();
   return crypto
-    .createHmac('sha256', Buffer.from(key, 'hex'))
+    .createHmac('sha256', keyBytes)
     .update(`${channel}\u001f${normalizedRecipient(channel, recipient)}`)
     .digest('hex');
 }
@@ -208,6 +224,7 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
         hasText(value.userId) &&
         hasText(value.incidentId) &&
         hasText(value.eventType) &&
+        hasText(value.eventAt) &&
         hasText(value.durableMessage)
       );
     case 'EMAIL':
@@ -397,15 +414,18 @@ async function dispatchPayload(
     }
     case 'INCIDENT_PUSH': {
       const { sendNotificationIntentPush } = await import('./incident-push-delivery');
-      return CircuitBreakers.push().execute(() =>
-        sendNotificationIntentPush(
+      return CircuitBreakers.push().execute(async () => {
+        const result = await sendNotificationIntentPush(
           payload.userId,
           payload.incidentId,
           payload.eventType,
           payload.durableMessage,
           notificationId
-        )
-      );
+        );
+        return result.code === 'NO_DEVICE_TOKENS' || result.code === 'NO_WEB_SUBSCRIPTIONS'
+          ? { ...result, success: true, skipped: true }
+          : result;
+      });
     }
     case 'INCIDENT_WHATSAPP': {
       const { sendIncidentWhatsApp } = await import('./whatsapp');
@@ -574,6 +594,63 @@ function isPermanentProviderError(message: string): boolean {
   );
 }
 
+async function incidentPayloadSuperseded(
+  payload: CentralNotificationPayload
+): Promise<string | null> {
+  if (
+    payload.kind !== 'INCIDENT_EMAIL' &&
+    payload.kind !== 'INCIDENT_SMS' &&
+    payload.kind !== 'INCIDENT_PUSH' &&
+    payload.kind !== 'INCIDENT_WHATSAPP'
+  ) {
+    return null;
+  }
+  const incidentPayload: IncidentCentralPayload = payload;
+  const incident = await prisma.incident.findUnique({
+    where: { id: incidentPayload.incidentId },
+    select: {
+      status: true,
+      updatedAt: true,
+      acknowledgedAt: true,
+      resolvedAt: true,
+      currentEscalationStep: true,
+      escalationGeneration: true,
+    },
+  });
+  if (!incident) return 'Incident no longer exists';
+  const expectedAt = new Date(incidentPayload.eventAt).getTime();
+  if (!Number.isFinite(expectedAt)) return 'Incident notification has an invalid event instant';
+  if (incidentPayload.eventType === 'triggered') {
+    if (incident.status !== 'OPEN') return `Incident is now ${incident.status}`;
+    if (
+      incidentPayload.escalationGeneration != null &&
+      incident.escalationGeneration !== incidentPayload.escalationGeneration
+    ) {
+      return 'Escalation generation was superseded';
+    }
+    if (
+      incidentPayload.escalationStep != null &&
+      incident.currentEscalationStep !== incidentPayload.escalationStep
+    ) {
+      return 'Escalation step was superseded';
+    }
+    return null;
+  }
+  if (incidentPayload.eventType === 'acknowledged') {
+    return incident.status === 'RESOLVED' || incident.acknowledgedAt?.getTime() !== expectedAt
+      ? 'Acknowledgement generation was superseded'
+      : null;
+  }
+  if (incidentPayload.eventType === 'resolved') {
+    return incident.status !== 'RESOLVED' || incident.resolvedAt?.getTime() !== expectedAt
+      ? 'Resolution generation was superseded'
+      : null;
+  }
+  return incident.updatedAt.getTime() === expectedAt
+    ? null
+    : 'Incident update generation was superseded';
+}
+
 async function finishAttempt(input: {
   notificationId: string;
   ordinal: number;
@@ -585,20 +662,29 @@ async function finishAttempt(input: {
   errorMessage?: string;
 }) {
   const finishedAt = new Date();
-  await prisma.notificationDeliveryAttempt.create({
-    data: {
+  try {
+    await prisma.notificationDeliveryAttempt.create({
+      data: {
+        notificationId: input.notificationId,
+        ordinal: input.ordinal,
+        outcome: input.outcome,
+        provider: input.provider,
+        providerMessageId: input.providerMessageId,
+        errorCode: input.errorCode,
+        errorMessage: input.errorMessage,
+        startedAt: input.startedAt,
+        finishedAt,
+        latencyMs: Math.max(0, finishedAt.getTime() - input.startedAt.getTime()),
+      },
+    });
+  } catch (error) {
+    logger.error('notification.attempt_ledger_write_failed', {
       notificationId: input.notificationId,
       ordinal: input.ordinal,
       outcome: input.outcome,
-      provider: input.provider,
-      providerMessageId: input.providerMessageId,
-      errorCode: input.errorCode,
-      errorMessage: input.errorMessage,
-      startedAt: input.startedAt,
-      finishedAt,
-      latencyMs: Math.max(0, finishedAt.getTime() - input.startedAt.getTime()),
-    },
-  });
+      error: safeError(error),
+    });
+  }
 }
 
 export async function deliverCentralNotification(
@@ -690,6 +776,20 @@ export async function deliverCentralNotification(
     return { success: false, claimed: true, error: errorMessage };
   }
 
+  const supersededReason = await incidentPayloadSuperseded(payload);
+  if (supersededReason) {
+    await prisma.notification.updateMany({
+      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      data: {
+        status: 'SKIPPED',
+        lastAttemptAt: null,
+        errorMsg: supersededReason,
+        ...terminalPayload(candidate.category),
+      },
+    });
+    return { success: true, claimed: true };
+  }
+
   let admission;
   try {
     admission = await providerAdmission(payload);
@@ -752,10 +852,25 @@ export async function deliverCentralNotification(
   }
 
   const deliveryAttempt = candidate.attempts + 1;
-  const ordinal =
-    (await prisma.notificationDeliveryAttempt.count({
-      where: { notificationId: candidate.id },
-    })) + 1;
+  let ordinal: number;
+  try {
+    ordinal =
+      (await prisma.notificationDeliveryAttempt.count({
+        where: { notificationId: candidate.id },
+      })) + 1;
+  } catch (error) {
+    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+    const errorMessage = safeError(error);
+    await prisma.notification.updateMany({
+      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      data: {
+        lastAttemptAt: null,
+        nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
+        errorMsg: `Attempt history unavailable: ${errorMessage}`,
+      },
+    });
+    return { success: false, claimed: true, error: errorMessage };
+  }
   const attemptClaim = await prisma.notification.updateMany({
     where: {
       id: candidate.id,
@@ -765,43 +880,72 @@ export async function deliverCentralNotification(
     },
     data: { attempts: { increment: 1 } },
   });
-  if (attemptClaim.count === 0) return { success: false, claimed: false };
+  if (attemptClaim.count === 0) {
+    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+    return { success: false, claimed: false };
+  }
   const startedAt = new Date();
 
   try {
     let result: DeliveryResult;
+    let releaseConcurrencyLease = true;
     try {
       result = await dispatchPayload(payload, candidate.id);
+    } catch (dispatchError) {
+      // A timed-out mutation is still running from the provider client's point
+      // of view. Retain the distributed slot until its lease expires.
+      if (dispatchError instanceof CircuitBreakerTimeoutError) {
+        releaseConcurrencyLease = false;
+      }
+      throw dispatchError;
     } finally {
-      await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+      if (releaseConcurrencyLease) {
+        await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+      }
     }
     if (result.success) {
       const finishedAt = new Date();
-      const [committed] = await prisma.$transaction([
-        prisma.notification.updateMany({
+      const acceptedState = {
+        status: result.skipped ? ('SKIPPED' as const) : ('SENT' as const),
+        sentAt: result.skipped ? null : finishedAt,
+        failedAt: null,
+        errorMsg: null,
+        providerMessageId: result.providerMessageId,
+        ...terminalPayload(candidate.category),
+      };
+      let committed: { count: number };
+      try {
+        [committed] = await prisma.$transaction([
+          prisma.notification.updateMany({
+            where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+            data: acceptedState,
+          }),
+          prisma.notificationDeliveryAttempt.create({
+            data: {
+              notificationId: candidate.id,
+              ordinal,
+              outcome: result.skipped ? 'SKIPPED' : 'ACCEPTED',
+              provider: identity.providerKey,
+              providerMessageId: result.providerMessageId,
+              startedAt,
+              finishedAt,
+              latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
+            },
+          }),
+        ]);
+      } catch (persistenceError) {
+        // Provider acceptance is delivery truth. A telemetry-row failure must
+        // never turn it into a retry or trigger another channel fallback.
+        committed = await prisma.notification.updateMany({
           where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-          data: {
-            status: 'SENT',
-            sentAt: finishedAt,
-            failedAt: null,
-            errorMsg: null,
-            providerMessageId: result.providerMessageId,
-            ...terminalPayload(candidate.category),
-          },
-        }),
-        prisma.notificationDeliveryAttempt.create({
-          data: {
-            notificationId: candidate.id,
-            ordinal,
-            outcome: 'ACCEPTED',
-            provider: identity.providerKey,
-            providerMessageId: result.providerMessageId,
-            startedAt,
-            finishedAt,
-            latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
-          },
-        }),
-      ]);
+          data: acceptedState,
+        });
+        logger.error('notification.attempt_ledger_failed_after_provider_acceptance', {
+          notificationId: candidate.id,
+          providerMessageId: result.providerMessageId,
+          error: safeError(persistenceError),
+        });
+      }
       if (committed.count === 0) return { success: false, claimed: false };
       return { success: true, claimed: true };
     }
@@ -870,30 +1014,42 @@ export async function deliverCentralNotification(
     const errorMessage = safeError(error);
     const exhausted = deliveryAttempt >= candidate.maxAttempts;
     if (ambiguous) {
-      await prisma.$transaction(async tx => {
-        await tx.notification.updateMany({
+      const ambiguousState = {
+        status: 'FAILED' as const,
+        attempts: candidate.maxAttempts,
+        failedAt: new Date(),
+        errorMsg: `Ambiguous provider outcome: ${errorMessage}`,
+        lastAttemptAt: null,
+        ...terminalPayload(candidate.category),
+      };
+      try {
+        await prisma.$transaction(async tx => {
+          await tx.notification.updateMany({
+            where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+            data: ambiguousState,
+          });
+          await tx.notificationDeliveryAttempt.create({
+            data: {
+              notificationId: candidate.id,
+              ordinal,
+              outcome: 'AMBIGUOUS',
+              provider: identity.providerKey,
+              errorMessage,
+              startedAt,
+              finishedAt: new Date(),
+            },
+          });
+        });
+      } catch (persistenceError) {
+        await prisma.notification.updateMany({
           where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-          data: {
-            status: 'FAILED',
-            attempts: candidate.maxAttempts,
-            failedAt: new Date(),
-            errorMsg: `Ambiguous provider outcome: ${errorMessage}`,
-            lastAttemptAt: null,
-            ...terminalPayload(candidate.category),
-          },
+          data: ambiguousState,
         });
-        await tx.notificationDeliveryAttempt.create({
-          data: {
-            notificationId: candidate.id,
-            ordinal,
-            outcome: 'AMBIGUOUS',
-            provider: identity.providerKey,
-            errorMessage,
-            startedAt,
-            finishedAt: new Date(),
-          },
+        logger.error('notification.ambiguous_ledger_write_failed', {
+          notificationId: candidate.id,
+          error: safeError(persistenceError),
         });
-      });
+      }
       // Suppress synchronous channel fallback: the provider may still accept
       // the mutation after our client-side timeout.
       return { success: true, claimed: true, error: errorMessage };

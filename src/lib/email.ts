@@ -186,7 +186,11 @@ async function sendWithSingleProvider(
             retryAfterMs: response?.statusCode === 429 ? 60_000 : undefined,
           };
     } catch (error: unknown) {
-      const value = error as { code?: string; message?: string; response?: { body?: unknown } };
+      const value = error as {
+        code?: string;
+        message?: string;
+        response?: { body?: unknown; statusCode?: number; headers?: Record<string, string> };
+      };
       if (value.code === 'MODULE_NOT_FOUND')
         return { success: false, error: 'SendGrid package not installed' };
       return {
@@ -194,6 +198,9 @@ async function sendWithSingleProvider(
         error: value.response?.body
           ? JSON.stringify(value.response.body)
           : value.message || 'SendGrid API error',
+        statusCode: value.response?.statusCode,
+        errorCode: value.code,
+        retryAfterMs: value.response?.statusCode === 429 ? 60_000 : undefined,
       };
     }
   }
@@ -226,10 +233,23 @@ async function sendWithSingleProvider(
       logger.info('Email sent via Amazon SES', { messageId: result.MessageId });
       return { success: true };
     } catch (error: unknown) {
-      const value = error as { code?: string; message?: string };
+      const value = error as {
+        code?: string;
+        name?: string;
+        message?: string;
+        $metadata?: { httpStatusCode?: number };
+      };
       if (value.code === 'MODULE_NOT_FOUND')
         return { success: false, error: 'AWS SES SDK package not installed' };
-      return { success: false, error: value.message || 'SES send error' };
+      const statusCode = value.$metadata?.httpStatusCode;
+      const throttled = statusCode === 429 || /throttl/i.test(value.name || value.code || '');
+      return {
+        success: false,
+        error: value.message || 'SES send error',
+        statusCode: throttled ? 429 : statusCode,
+        errorCode: value.name || value.code,
+        retryAfterMs: throttled ? 60_000 : undefined,
+      };
     }
   }
   if (emailConfig.provider === 'smtp') {
