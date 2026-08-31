@@ -235,7 +235,12 @@ export async function triggerStatusPageWebhooks(
   event: string,
   data: unknown,
   deliveryKey?: string,
-  policy: { incidentId?: string; serviceId?: string } = {}
+  policy: {
+    incidentId?: string;
+    serviceId?: string;
+    expectedStatus?: string;
+    escalationGeneration?: number;
+  } = {}
 ): Promise<{ attempted: number; failed: number }> {
   try {
     const allWebhooks = await prisma.statusPageWebhook.findMany({
@@ -297,6 +302,8 @@ export async function triggerStatusPageWebhooks(
               statusPageId,
               incidentId: policy.incidentId,
               serviceId: policy.serviceId,
+              expectedStatus: policy.expectedStatus,
+              escalationGeneration: policy.escalationGeneration,
             },
           });
 
@@ -340,19 +347,32 @@ export async function triggerWebhooksForService(
   serviceId: string,
   event: string,
   incidentData: unknown,
-  deliveryKey?: string
+  deliveryKey?: string,
+  policy: { expectedStatus?: string; escalationGeneration?: number } = {}
 ): Promise<{ attempted: number; failed: number; skipped?: boolean }> {
   try {
     const incidentRecord = asWebhookRecord(incidentData);
+    let effectiveStatus = policy.expectedStatus;
+    let effectiveGeneration = policy.escalationGeneration;
 
     // Incident visibility is security-sensitive: load it from the database
     // instead of trusting an optional caller-supplied payload field.
     if (typeof incidentRecord.id === 'string' && incidentRecord.id) {
       const inc = await prisma.incident.findUnique({
         where: { id: incidentRecord.id },
-        select: { visibility: true },
+        select: { visibility: true, status: true, escalationGeneration: true, serviceId: true },
       });
-      if (!inc || inc.visibility !== 'PUBLIC') return { attempted: 0, failed: 0, skipped: true };
+      if (!inc || inc.visibility !== 'PUBLIC' || inc.serviceId !== serviceId)
+        return { attempted: 0, failed: 0, skipped: true };
+      if (policy.expectedStatus && inc.status !== policy.expectedStatus)
+        return { attempted: 0, failed: 0, skipped: true };
+      if (
+        policy.escalationGeneration != null &&
+        inc.escalationGeneration !== policy.escalationGeneration
+      )
+        return { attempted: 0, failed: 0, skipped: true };
+      effectiveStatus = policy.expectedStatus ?? inc.status;
+      effectiveGeneration = policy.escalationGeneration ?? inc.escalationGeneration;
     } else if (incidentRecord.visibility !== 'PUBLIC') {
       return { attempted: 0, failed: 0, skipped: true };
     }
@@ -371,6 +391,8 @@ export async function triggerWebhooksForService(
         triggerStatusPageWebhooks(statusPageId, event, incidentData, deliveryKey, {
           incidentId: typeof incidentRecord.id === 'string' ? incidentRecord.id : undefined,
           serviceId,
+          expectedStatus: effectiveStatus,
+          escalationGeneration: effectiveGeneration,
         })
       )
     );

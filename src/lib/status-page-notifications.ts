@@ -175,7 +175,9 @@ export async function notifyStatusPageSubscribers(
                   statusPageId: page.id,
                   subscriptionId: sub.id,
                   incidentId,
-                  eventType: eventType as 'triggered' | 'acknowledged' | 'resolved' | 'updated',
+                  eventType,
+                  expectedStatus: incident.status,
+                  escalationGeneration: incident.escalationGeneration,
                 },
               },
             });

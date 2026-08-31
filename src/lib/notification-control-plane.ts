@@ -43,6 +43,21 @@ type IncidentPresentation = {
   assigneeName?: string;
 };
 
+type LifecycleDeliveryPolicy = {
+  incidentId: string;
+  eventType: string;
+  expectedStatus?: string;
+  escalationGeneration?: number | null;
+  serviceId?: string;
+  targetKind?:
+    | 'SERVICE_SLACK_CHANNEL'
+    | 'SERVICE_SLACK_WEBHOOK'
+    | 'WEBHOOK_INTEGRATION'
+    | 'LEGACY_SERVICE_WEBHOOK';
+  targetId?: string;
+  targetAddress?: string;
+};
+
 export type CentralNotificationPayload =
   | {
       kind: 'INCIDENT_EMAIL' | 'INCIDENT_SMS' | 'INCIDENT_PUSH' | 'INCIDENT_WHATSAPP';
@@ -65,7 +80,9 @@ export type CentralNotificationPayload =
         statusPageId: string;
         subscriptionId?: string;
         incidentId?: string;
-        eventType?: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
+        eventType?: string;
+        expectedStatus?: string;
+        escalationGeneration?: number | null;
       };
       providerKey?: string;
     }
@@ -88,13 +105,16 @@ export type CentralNotificationPayload =
       includeInteractiveButtons?: boolean;
       serviceId?: string;
       additionalMessage?: string;
+      lifecyclePolicy?: LifecycleDeliveryPolicy;
     }
   | {
       kind: 'SLACK_WEBHOOK';
       incident: IncidentPresentation;
       eventType: 'triggered' | 'acknowledged' | 'resolved';
       webhookUrl?: string;
+      serviceId?: string;
       additionalMessage?: string;
+      lifecyclePolicy?: LifecycleDeliveryPolicy;
     }
   | {
       kind: 'WEBHOOK';
@@ -104,10 +124,7 @@ export type CentralNotificationPayload =
       secret?: string;
       method?: 'POST' | 'PUT' | 'PATCH';
       timeout?: number;
-      lifecyclePolicy?: {
-        incidentId: string;
-        eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
-      };
+      lifecyclePolicy?: LifecycleDeliveryPolicy;
     }
   | {
       kind: 'STATUS_PAGE_WEBHOOK';
@@ -119,6 +136,8 @@ export type CentralNotificationPayload =
       statusPageId?: string;
       incidentId?: string;
       serviceId?: string;
+      expectedStatus?: string;
+      escalationGeneration?: number | null;
     };
 
 type IncidentCentralPayload = Extract<
@@ -446,13 +465,45 @@ function providerAdmissionIdentity(payload: CentralNotificationPayload) {
   };
 }
 
-/** Only upstream 5xx responses poison shared provider health. */
+function providerFailureAffectsCircuit(result: DeliveryResult): boolean {
+  if (result.success || result.statusCode === 429) return false;
+  if (result.statusCode != null) return result.statusCode >= 500;
+  const code = (result.errorCode || '').toUpperCase();
+  if (
+    new Set([
+      'ECONNRESET',
+      'ECONNREFUSED',
+      'ECONNABORTED',
+      'ETIMEDOUT',
+      'ESOCKETTIMEDOUT',
+      'EAI_AGAIN',
+      'ENOTFOUND',
+      'ENETUNREACH',
+      'EHOSTUNREACH',
+      'UND_ERR_CONNECT_TIMEOUT',
+      'UND_ERR_SOCKET',
+    ]).has(code)
+  )
+    return true;
+  const message = (result.error || '').toLowerCase();
+  if (!message || isPermanentProviderError(message)) return false;
+  if (
+    /authentication|unauthori[sz]ed|forbidden|invalid api key|invalid recipient|invalid phone|insufficient balance|opted out|rate.?limit|quota|too many requests|channel_not_found|message_limit_exceeded/.test(
+      message
+    )
+  )
+    return false;
+  return /timeout|timed out|network|fetch failed|socket|connection reset|connection refused|temporar(?:y|ily) unavailable|service unavailable|econn|enotfound|eai_again/.test(
+    message
+  );
+}
+
 function executeProvider<T extends DeliveryResult>(
   breaker: CircuitBreaker,
   operation: () => Promise<T>
 ): Promise<T> {
   return breaker.execute(operation, {
-    shouldCountFailure: (result: T) => result.success === false && (result.statusCode ?? 0) >= 500,
+    shouldCountFailure: (result: T) => providerFailureAffectsCircuit(result),
   });
 }
 
@@ -773,6 +824,12 @@ function isPermanentProviderError(message: string): boolean {
   );
 }
 
+function isLifecycleEventType(
+  value: string
+): value is 'triggered' | 'acknowledged' | 'resolved' | 'updated' {
+  return value === 'triggered' || value === 'acknowledged' || value === 'resolved' || value === 'updated';
+}
+
 async function incidentPayloadSuperseded(
   payload: CentralNotificationPayload
 ): Promise<string | null> {
@@ -838,22 +895,96 @@ function lifecycleStatusRevocation(
   return null;
 }
 
+function serviceEventEnabled(
+  service: {
+    serviceNotifyOnTriggered?: boolean | null;
+    serviceNotifyOnAck?: boolean | null;
+    serviceNotifyOnResolved?: boolean | null;
+  },
+  eventType: string
+): boolean {
+  if (eventType === 'triggered') return service.serviceNotifyOnTriggered ?? true;
+  if (eventType === 'acknowledged') return service.serviceNotifyOnAck ?? true;
+  if (eventType === 'resolved') return service.serviceNotifyOnResolved ?? true;
+  return true;
+}
+
+async function serviceTargetDeliveryRevoked(
+  policy: LifecycleDeliveryPolicy | undefined
+): Promise<string | null> {
+  if (!policy?.targetKind || !policy.targetId || !policy.serviceId) return null;
+  if (policy.targetKind === 'WEBHOOK_INTEGRATION') {
+    const target = await prisma.webhookIntegration.findFirst({
+      where: {
+        id: policy.targetId,
+        serviceId: policy.serviceId,
+        enabled: true,
+        ...(policy.targetAddress ? { url: policy.targetAddress } : {}),
+        service: { serviceNotificationChannels: { has: 'WEBHOOK' } },
+      },
+      select: { id: true },
+    });
+    return target ? null : 'Webhook integration was disabled, removed, or retargeted';
+  }
+  const service = await prisma.service.findUnique({
+    where: { id: policy.serviceId },
+    select: {
+      slackChannel: true,
+      slackWebhookUrl: true,
+      webhookUrl: true,
+      serviceNotificationChannels: true,
+      serviceNotifyOnTriggered: true,
+      serviceNotifyOnAck: true,
+      serviceNotifyOnResolved: true,
+    },
+  });
+  if (!service || !serviceEventEnabled(service, policy.eventType))
+    return 'Service notification target was disabled';
+  if (policy.targetKind === 'SERVICE_SLACK_CHANNEL') {
+    return service.serviceNotificationChannels.includes('SLACK') &&
+      service.slackChannel?.trim() === policy.targetAddress
+      ? null
+      : 'Service Slack channel was disabled or retargeted';
+  }
+  if (policy.targetKind === 'SERVICE_SLACK_WEBHOOK') {
+    return service.serviceNotificationChannels.includes('SLACK') &&
+      service.slackWebhookUrl?.trim() === policy.targetAddress
+      ? null
+      : 'Service Slack webhook was disabled or retargeted';
+  }
+  return !service.serviceNotificationChannels.includes('WEBHOOK') &&
+    service.webhookUrl?.trim() === policy.targetAddress
+    ? null
+    : 'Legacy service webhook was disabled or retargeted';
+}
+
 async function lifecycleDeliveryRevoked(
   payload: CentralNotificationPayload
 ): Promise<string | null> {
   const policy =
     payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK'
-      ? { incidentId: payload.incident.id, eventType: payload.eventType }
+      ? payload.lifecyclePolicy ?? { incidentId: payload.incident.id, eventType: payload.eventType }
       : payload.kind === 'WEBHOOK'
         ? payload.lifecyclePolicy
         : null;
   if (!policy) return null;
   const incident = await prisma.incident.findUnique({
     where: { id: policy.incidentId },
-    select: { status: true },
+    select: { status: true, escalationGeneration: true },
   });
   if (!incident) return 'Incident no longer exists';
-  return lifecycleStatusRevocation(policy.eventType, incident.status);
+  if (policy.expectedStatus && incident.status !== policy.expectedStatus)
+    return `Incident lifecycle moved from ${policy.expectedStatus} to ${incident.status}`;
+  if (
+    policy.escalationGeneration != null &&
+    incident.escalationGeneration !== policy.escalationGeneration
+  )
+    return 'Incident lifecycle generation was superseded';
+  const targetRevoked = await serviceTargetDeliveryRevoked(policy);
+  if (targetRevoked) return targetRevoked;
+  return isLifecycleEventType(policy.eventType)
+    ? lifecycleStatusRevocation(policy.eventType, incident.status)
+    : null;
 }
 
 async function statusSubscriberDeliveryRevoked(
@@ -865,77 +996,85 @@ async function statusSubscriberDeliveryRevoked(
     !payload.providerScope.incidentId
   )
     return null;
-  try {
-    const incident = await prisma.incident.findUnique({
-      where: { id: payload.providerScope.incidentId },
-      select: { visibility: true, serviceId: true, status: true },
-    });
-    if (!incident || incident.visibility !== 'PUBLIC')
-      return 'Status-page incident is no longer public';
-    if (payload.providerScope.eventType) {
-      const stale = lifecycleStatusRevocation(payload.providerScope.eventType, incident.status);
-      if (stale) return stale;
-    }
-    const page = await prisma.statusPage.findFirst({
-      where: {
-        id: payload.providerScope.statusPageId,
-        enabled: true,
-        showIncidents: true,
-        services: { some: { serviceId: incident.serviceId, showOnPage: true } },
-        subscriptions: {
-          some: { id: payload.providerScope.subscriptionId, verified: true, unsubscribedAt: null },
+  const incident = await prisma.incident.findUnique({
+    where: { id: payload.providerScope.incidentId },
+    select: { visibility: true, serviceId: true, status: true, escalationGeneration: true },
+  });
+  if (!incident || incident.visibility !== 'PUBLIC')
+    return 'Status-page incident is no longer public';
+  if (
+    payload.providerScope.expectedStatus &&
+    incident.status !== payload.providerScope.expectedStatus
+  )
+    return `Status-page lifecycle moved from ${payload.providerScope.expectedStatus} to ${incident.status}`;
+  if (
+    payload.providerScope.escalationGeneration != null &&
+    incident.escalationGeneration !== payload.providerScope.escalationGeneration
+  )
+    return 'Status-page incident generation was superseded';
+  if (payload.providerScope.eventType && isLifecycleEventType(payload.providerScope.eventType)) {
+    const stale = lifecycleStatusRevocation(payload.providerScope.eventType, incident.status);
+    if (stale) return stale;
+  }
+  const page = await prisma.statusPage.findFirst({
+    where: {
+      id: payload.providerScope.statusPageId,
+      enabled: true,
+      showIncidents: true,
+      services: { some: { serviceId: incident.serviceId, showOnPage: true } },
+      subscriptions: {
+        some: {
+          id: payload.providerScope.subscriptionId,
+          email: normalizedRecipient('EMAIL', payload.to),
+          verified: true,
+          unsubscribedAt: null,
         },
       },
-      select: { id: true },
-    });
-    return page ? null : 'Status-page subscription or visibility was revoked';
-  } catch {
-    return 'Status-page delivery policy could not be revalidated';
-  }
+    },
+    select: { id: true },
+  });
+  return page ? null : 'Status-page subscription, target, or visibility was revoked';
 }
 
 async function statusWebhookDeliveryRevoked(
   payload: CentralNotificationPayload
 ): Promise<string | null> {
   if (payload.kind !== 'STATUS_PAGE_WEBHOOK' || !payload.statusPageId) return null;
-  try {
-    if (payload.incidentId) {
-      const incident = await prisma.incident.findUnique({
-        where: { id: payload.incidentId },
-        select: { visibility: true, serviceId: true, status: true },
-      });
-      if (!incident || incident.visibility !== 'PUBLIC')
-        return 'Status-page incident is no longer public';
-      if (payload.serviceId && incident.serviceId !== payload.serviceId)
-        return 'Incident service mapping changed';
-      const eventType = payload.payload.event as
-        | 'triggered'
-        | 'acknowledged'
-        | 'resolved'
-        | 'updated';
-      const stale = lifecycleStatusRevocation(eventType, incident.status);
-      if (stale) return stale;
-    }
-    const webhook = await prisma.statusPageWebhook.findFirst({
-      where: {
-        id: payload.webhookId,
-        statusPageId: payload.statusPageId,
-        enabled: true,
-        events: { array_contains: payload.payload.event },
-        statusPage: {
-          enabled: true,
-          showIncidents: payload.incidentId ? true : undefined,
-          services: payload.serviceId
-            ? { some: { serviceId: payload.serviceId, showOnPage: true } }
-            : undefined,
-        },
-      },
-      select: { id: true },
+  if (payload.incidentId) {
+    const incident = await prisma.incident.findUnique({
+      where: { id: payload.incidentId },
+      select: { visibility: true, serviceId: true, status: true, escalationGeneration: true },
     });
-    return webhook ? null : 'Status-page webhook was revoked or disabled';
-  } catch {
-    return 'Status-page webhook policy could not be revalidated';
+    if (!incident || incident.visibility !== 'PUBLIC')
+      return 'Status-page incident is no longer public';
+    if (payload.serviceId && incident.serviceId !== payload.serviceId)
+      return 'Incident service mapping changed';
+    if (payload.expectedStatus && incident.status !== payload.expectedStatus)
+      return `Status-page lifecycle moved from ${payload.expectedStatus} to ${incident.status}`;
+    if (
+      payload.escalationGeneration != null &&
+      incident.escalationGeneration !== payload.escalationGeneration
+    )
+      return 'Status-page incident generation was superseded';
   }
+  const webhook = await prisma.statusPageWebhook.findFirst({
+    where: {
+      id: payload.webhookId,
+      statusPageId: payload.statusPageId,
+      url: payload.url,
+      enabled: true,
+      events: { array_contains: payload.payload.event },
+      statusPage: {
+        enabled: true,
+        showIncidents: payload.incidentId ? true : undefined,
+        services: payload.serviceId
+          ? { some: { serviceId: payload.serviceId, showOnPage: true } }
+          : undefined,
+      },
+    },
+    select: { id: true },
+  });
+  return webhook ? null : 'Status-page webhook was revoked, disabled, or retargeted';
 }
 
 async function finishAttempt(input: {
@@ -1063,11 +1202,27 @@ export async function deliverCentralNotification(
     return { success: false, claimed: true, error: errorMessage };
   }
 
-  const supersededReason =
-    (await statusSubscriberDeliveryRevoked(payload)) ??
-    (await statusWebhookDeliveryRevoked(payload)) ??
-    (await lifecycleDeliveryRevoked(payload)) ??
-    (await incidentPayloadSuperseded(payload));
+  let supersededReason: string | null;
+  try {
+    supersededReason =
+      (await statusSubscriberDeliveryRevoked(payload)) ??
+      (await statusWebhookDeliveryRevoked(payload)) ??
+      (await lifecycleDeliveryRevoked(payload)) ??
+      (await incidentPayloadSuperseded(payload));
+  } catch (error) {
+    const errorMessage = safeError(error);
+    await prisma.notification.updateMany({
+      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      data: {
+        status: 'PENDING',
+        failedAt: null,
+        lastAttemptAt: null,
+        nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
+        errorMsg: `Delivery policy unavailable: ${errorMessage}`,
+      },
+    });
+    return { success: false, claimed: true, error: errorMessage };
+  }
   if (supersededReason) {
     await prisma.notification.updateMany({
       where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
@@ -1412,7 +1567,7 @@ export async function processCentralNotificationQueue(): Promise<{
     -- Age one priority level every five minutes. Critical work wins initially,
     -- while sustained critical traffic cannot starve older normal deliveries.
     ORDER BY GREATEST(
-      1,
+      0,
       "priority" - FLOOR(EXTRACT(EPOCH FROM (${now} - "createdAt")) / 300)
     ) ASC, "nextAttemptAt" ASC, "createdAt" ASC
     LIMIT ${SYSTEM_NOTIFICATION_BATCH_SIZE}

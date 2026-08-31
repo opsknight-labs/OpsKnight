@@ -66,6 +66,22 @@ export function escalationNotificationRoute(result: {
   return policyOwnsResponderRouting ? 'service' : 'fallback';
 }
 
+async function sideEffectSnapshotStillCurrent(payload: EventSideEffectPayload): Promise<boolean> {
+  if (payload.escalationGeneration == null && !payload.incidentStatus) return true;
+  const current = await prisma.incident.findUnique({
+    where: { id: payload.incidentId },
+    select: { escalationGeneration: true, status: true },
+  });
+  if (!current) return false;
+  if (
+    payload.escalationGeneration != null &&
+    current.escalationGeneration !== payload.escalationGeneration
+  )
+    return false;
+  if (payload.incidentStatus && current.status !== payload.incidentStatus) return false;
+  return true;
+}
+
 async function sendEventWebhook(
   payload: EventSideEffectPayload,
   eventType: 'incident.created' | 'incident.resolved'
@@ -80,23 +96,32 @@ async function sendEventWebhook(
   if (!incident) return;
   const { triggerWebhooksForService } = await import('./status-page-webhooks');
   requireWebhookDelivery(
-    await triggerWebhooksForService(incident.serviceId, eventType, {
-      id: incident.id,
-      title: incident.title,
-      description: incident.description,
-      status: eventType === 'incident.created' ? 'OPEN' : 'RESOLVED',
-      urgency: incident.urgency,
-      priority: incident.priority,
-      service: incident.service,
-      assignee: incident.assignee,
-      createdAt: incident.createdAt.toISOString(),
-      ...(eventType === 'incident.resolved'
-        ? {
-            acknowledgedAt: incident.acknowledgedAt?.toISOString() || null,
-            resolvedAt: incident.resolvedAt?.toISOString() || payload.eventOrderAt,
-          }
-        : {}),
-    }),
+    await triggerWebhooksForService(
+      incident.serviceId,
+      eventType,
+      {
+        id: incident.id,
+        title: incident.title,
+        description: incident.description,
+        status: eventType === 'incident.created' ? 'OPEN' : 'RESOLVED',
+        urgency: incident.urgency,
+        priority: incident.priority,
+        service: incident.service,
+        assignee: incident.assignee,
+        createdAt: incident.createdAt.toISOString(),
+        ...(eventType === 'incident.resolved'
+          ? {
+              acknowledgedAt: incident.acknowledgedAt?.toISOString() || null,
+              resolvedAt: incident.resolvedAt?.toISOString() || payload.eventOrderAt,
+            }
+          : {}),
+      },
+      payload.eventOrderAt,
+      {
+        expectedStatus: payload.incidentStatus,
+        escalationGeneration: payload.escalationGeneration,
+      }
+    ),
     eventType
   );
 }
@@ -115,17 +140,22 @@ async function runTriggerEscalationAndNotifications(incidentId: string): Promise
     latencyMs: performance.now() - startedAt,
   });
 }
-async function sendTriggerServiceNotification(incidentId: string): Promise<void> {
+async function sendTriggerServiceNotification(payload: EventSideEffectPayload): Promise<void> {
+  if (!(await sideEffectSnapshotStillCurrent(payload))) return;
   const { sendServiceNotifications } = await import('./service-notifications');
   requireDelivery(
-    await sendServiceNotifications(incidentId, 'triggered'),
+    await sendServiceNotifications(payload.incidentId, 'triggered', {
+      escalationGeneration: payload.escalationGeneration,
+      expectedStatus: payload.incidentStatus,
+    }),
     'trigger service notification'
   );
 }
-async function notifyCreatedIncidentStatusPage(incidentId: string): Promise<void> {
+async function notifyCreatedIncidentStatusPage(payload: EventSideEffectPayload): Promise<void> {
+  if (!(await sideEffectSnapshotStillCurrent(payload))) return;
   const { notifyStatusPageSubscribers } = await import('./status-page-notifications');
   requireDelivery(
-    await notifyStatusPageSubscribers(incidentId, 'triggered'),
+    await notifyStatusPageSubscribers(payload.incidentId, 'triggered', payload.eventOrderAt),
     'status page notification'
   );
 }
@@ -209,6 +239,7 @@ function lifecycleWebhookEvent(lifecycle: LifecycleSideEffectContext): string {
 }
 
 async function sendLifecycleWebhook(payload: EventSideEffectPayload): Promise<void> {
+  if (!(await sideEffectSnapshotStillCurrent(payload))) return;
   const lifecycle = lifecycleContext(payload);
   const incident = await prisma.incident.findUnique({
     where: { id: payload.incidentId },
@@ -224,23 +255,33 @@ async function sendLifecycleWebhook(payload: EventSideEffectPayload): Promise<vo
       ? incident.resolvedAt?.toISOString() || lifecycle.transitionAt
       : incident.resolvedAt?.toISOString() || null;
   requireWebhookDelivery(
-    await triggerWebhooksForService(incident.serviceId, lifecycleWebhookEvent(lifecycle), {
-      id: incident.id,
-      title: incident.title,
-      description: incident.description,
-      status: lifecycle.status,
-      urgency: incident.urgency,
-      priority: incident.priority,
-      service: incident.service,
-      assignee: incident.assignee,
-      createdAt: incident.createdAt.toISOString(),
-      acknowledgedAt: incident.acknowledgedAt?.toISOString() || null,
-      resolvedAt,
-    }),
+    await triggerWebhooksForService(
+      incident.serviceId,
+      lifecycleWebhookEvent(lifecycle),
+      {
+        id: incident.id,
+        title: incident.title,
+        description: incident.description,
+        status: lifecycle.status,
+        urgency: incident.urgency,
+        priority: incident.priority,
+        service: incident.service,
+        assignee: incident.assignee,
+        createdAt: incident.createdAt.toISOString(),
+        acknowledgedAt: incident.acknowledgedAt?.toISOString() || null,
+        resolvedAt,
+      },
+      payload.eventOrderAt,
+      {
+        expectedStatus: lifecycle.status,
+        escalationGeneration: payload.escalationGeneration,
+      }
+    ),
     'lifecycle webhook'
   );
 }
 async function sendIncidentUpdateWebhook(payload: EventSideEffectPayload): Promise<void> {
+  if (!(await sideEffectSnapshotStillCurrent(payload))) return;
   const incident = await prisma.incident.findUnique({
     where: { id: payload.incidentId },
     include: {
@@ -251,20 +292,29 @@ async function sendIncidentUpdateWebhook(payload: EventSideEffectPayload): Promi
   if (!incident) return;
   const { triggerWebhooksForService } = await import('./status-page-webhooks');
   requireWebhookDelivery(
-    await triggerWebhooksForService(incident.serviceId, 'incident.updated', {
-      id: incident.id,
-      title: incident.title,
-      description: incident.description,
-      status: incident.status,
-      urgency: incident.urgency,
-      priority: incident.priority,
-      visibility: incident.visibility,
-      service: incident.service,
-      assignee: incident.assignee,
-      createdAt: incident.createdAt.toISOString(),
-      acknowledgedAt: incident.acknowledgedAt?.toISOString() || null,
-      resolvedAt: incident.resolvedAt?.toISOString() || null,
-    }),
+    await triggerWebhooksForService(
+      incident.serviceId,
+      'incident.updated',
+      {
+        id: incident.id,
+        title: incident.title,
+        description: incident.description,
+        status: incident.status,
+        urgency: incident.urgency,
+        priority: incident.priority,
+        visibility: incident.visibility,
+        service: incident.service,
+        assignee: incident.assignee,
+        createdAt: incident.createdAt.toISOString(),
+        acknowledgedAt: incident.acknowledgedAt?.toISOString() || null,
+        resolvedAt: incident.resolvedAt?.toISOString() || null,
+      },
+      payload.eventOrderAt,
+      {
+        expectedStatus: payload.incidentStatus,
+        escalationGeneration: payload.escalationGeneration,
+      }
+    ),
     'incident update webhook'
   );
 }
@@ -335,10 +385,11 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       await sendEventWebhook(payload, 'incident.created');
       return;
     case 'TRIGGER_ESCALATION_NOTIFICATIONS':
+      if (!(await sideEffectSnapshotStillCurrent(payload))) return;
       await runTriggerEscalationAndNotifications(payload.incidentId);
       return;
     case 'TRIGGER_SERVICE_NOTIFICATION':
-      await sendTriggerServiceNotification(payload.incidentId);
+      await sendTriggerServiceNotification(payload);
       return;
     case 'TRIGGER_WAR_ROOM': {
       const { createIncidentWarRoom } = await import('./chatops/war-room');
@@ -346,7 +397,7 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     }
     case 'TRIGGER_STATUS_PAGE':
-      await notifyCreatedIncidentStatusPage(payload.incidentId);
+      await notifyCreatedIncidentStatusPage(payload);
       return;
     case 'TRIGGER_JIRA':
       await createJiraIssueForIncident(payload.incidentId);
@@ -374,6 +425,7 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       );
       return;
     case 'LIFECYCLE_USER_NOTIFICATION': {
+      if (!(await sideEffectSnapshotStillCurrent(payload))) return;
       const { sendIncidentNotifications } = await import('./user-notifications');
       const lifecycle = lifecycleContext(payload);
       requireDelivery(
@@ -389,59 +441,79 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     }
     case 'LIFECYCLE_SERVICE_NOTIFICATION': {
+      if (!(await sideEffectSnapshotStillCurrent(payload))) return;
       const { sendServiceNotifications } = await import('./service-notifications');
       const lifecycle = lifecycleContext(payload);
       requireDelivery(
         await sendServiceNotifications(payload.incidentId, lifecycleNotificationEvent(lifecycle), {
           eventAt: new Date(lifecycle.transitionAt),
+          escalationGeneration: payload.escalationGeneration,
+          expectedStatus: lifecycle.status,
         }),
         'lifecycle service notification'
       );
       return;
     }
     case 'LIFECYCLE_STATUS_PAGE': {
+      if (!(await sideEffectSnapshotStillCurrent(payload))) return;
       const { notifyStatusPageSubscribers } = await import('./status-page-notifications');
       requireDelivery(
         await notifyStatusPageSubscribers(
           payload.incidentId,
-          lifecycleStatusPageEvent(lifecycleContext(payload))
+          lifecycleStatusPageEvent(lifecycleContext(payload)),
+          payload.eventOrderAt
         ),
         'lifecycle status page notification'
       );
       return;
     }
     case 'INCIDENT_UPDATE_USER_NOTIFICATION': {
+      if (!(await sideEffectSnapshotStillCurrent(payload))) return;
       const { sendIncidentNotifications } = await import('./user-notifications');
       requireDelivery(
-        await sendIncidentNotifications(payload.incidentId, 'updated'),
+        await sendIncidentNotifications(payload.incidentId, 'updated', [], undefined, {
+          eventAt: new Date(payload.eventOrderAt),
+          status: payload.incidentStatus,
+        }),
         'incident update user notification'
       );
       return;
     }
     case 'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION': {
+      if (!(await sideEffectSnapshotStillCurrent(payload))) return;
       const { sendIncidentNotifications } = await import('./user-notifications');
       requireDelivery(
         await sendIncidentNotifications(payload.incidentId, 'updated', [], undefined, {
           intent: 'ASSIGNED_TO_USER',
+          eventAt: new Date(payload.eventOrderAt),
+          status: payload.incidentStatus,
         }),
         'incident assignment notification'
       );
       return;
     }
     case 'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION': {
+      if (!(await sideEffectSnapshotStillCurrent(payload))) return;
       const { sendIncidentNotifications } = await import('./user-notifications');
       requireDelivery(
         await sendIncidentNotifications(payload.incidentId, 'updated', [], undefined, {
           intent: 'ASSIGNED_TO_TEAM',
+          eventAt: new Date(payload.eventOrderAt),
+          status: payload.incidentStatus,
         }),
         'team assignment notification'
       );
       return;
     }
     case 'INCIDENT_UPDATE_SERVICE_NOTIFICATION': {
+      if (!(await sideEffectSnapshotStillCurrent(payload))) return;
       const { sendServiceNotifications } = await import('./service-notifications');
       requireDelivery(
-        await sendServiceNotifications(payload.incidentId, 'updated'),
+        await sendServiceNotifications(payload.incidentId, 'updated', {
+          eventAt: new Date(payload.eventOrderAt),
+          escalationGeneration: payload.escalationGeneration,
+          expectedStatus: payload.incidentStatus,
+        }),
         'incident update service notification'
       );
       return;
