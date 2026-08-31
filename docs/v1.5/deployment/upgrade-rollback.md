@@ -27,9 +27,10 @@ The release also writes new protected secrets using v3 authenticated encryption.
 
 Notification control-plane upgrades use a compatibility gate. Deploy the version whose legacy
 worker ignores encrypted control-plane rows to every replica before enabling
-`NOTIFICATION_CONTROL_PLANE_PERSONAL=true`. Keep a stable `NOTIFICATION_IDENTITY_KEY` across
-replicas and encryption-key rotations. During rollback, disable new personal control-plane
-producers first, allow in-flight work to drain, and only then roll back application replicas.
+`NOTIFICATION_CONTROL_PLANE_PERSONAL=true`. Recipient identity is derived from the existing
+`NEXTAUTH_SECRET`, so keep that required application secret consistent across replicas. During
+rollback, disable new personal control-plane producers first, allow in-flight work to drain, and
+only then roll back application replicas.
 
 ## Deploy
 

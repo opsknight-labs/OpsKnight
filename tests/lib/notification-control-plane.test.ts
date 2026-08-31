@@ -120,6 +120,34 @@ describe('central notification control plane', () => {
     );
   });
 
+  it('derives recipient identity from the existing session secret, not a new setting', async () => {
+    const previousSessionSecret = process.env.NEXTAUTH_SECRET;
+    const previousIdentitySecret = process.env.NOTIFICATION_IDENTITY_KEY;
+    process.env.NEXTAUTH_SECRET = 'existing-session-secret';
+    process.env.NOTIFICATION_IDENTITY_KEY = 'ignored-legacy-setting';
+    vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notification_one' } as never);
+
+    try {
+      await createCentralNotificationIntent(input);
+      const firstHash = vi.mocked(prisma.notification.create).mock.calls[0]?.[0]?.data
+        .recipientHash as string;
+      vi.clearAllMocks();
+      vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notification_two' } as never);
+
+      await createCentralNotificationIntent({ ...input, eventKey: 'reset-request-2' });
+      const secondHash = vi.mocked(prisma.notification.create).mock.calls[0]?.[0]?.data
+        .recipientHash as string;
+
+      expect(firstHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(secondHash).toBe(firstHash);
+    } finally {
+      if (previousSessionSecret === undefined) delete process.env.NEXTAUTH_SECRET;
+      else process.env.NEXTAUTH_SECRET = previousSessionSecret;
+      if (previousIdentitySecret === undefined) delete process.env.NOTIFICATION_IDENTITY_KEY;
+      else process.env.NOTIFICATION_IDENTITY_KEY = previousIdentitySecret;
+    }
+  });
+
   it('returns the durable existing intent when concurrent creation loses the unique race', async () => {
     vi.mocked(prisma.notification.create).mockRejectedValue({ code: 'P2002' });
     vi.mocked(prisma.notification.findUnique).mockResolvedValue({

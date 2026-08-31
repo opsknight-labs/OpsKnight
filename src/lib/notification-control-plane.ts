@@ -175,7 +175,6 @@ export function maskedNotificationRecipient(
 
 function recipientDigest(channel: NotificationChannel, recipient: string): string {
   const key =
-    process.env.NOTIFICATION_IDENTITY_KEY?.trim() ||
     process.env.NEXTAUTH_SECRET?.trim() ||
     getEncryptionKey();
   if (!key) throw new Error('Notification encryption is not configured');
