@@ -95,7 +95,6 @@ describeIfRealDB('Notification Flow Integration Tests (Real DB)', () => {
     const incident = await createTestIncident('Test Incident', service.id);
 
     // 2. Send Service Notifications
-    // 2. Send Service Notifications
     const serviceResult = await sendServiceNotifications(incident.id, 'triggered');
     expect(serviceResult.success).toBe(true);
 
@@ -121,9 +120,10 @@ describeIfRealDB('Notification Flow Integration Tests (Real DB)', () => {
       where: { incidentId: incident.id },
     });
 
-    expect(notifications.length).toBeGreaterThan(0);
-    expect(notifications[0].userId).toBe(user.id);
-    expect(notifications.some(n => n.channel === 'EMAIL')).toBe(true);
+    const escalationNotification = notifications.find(
+      notification => notification.channel === 'EMAIL' && notification.userId === user.id
+    );
+    expect(escalationNotification).toBeDefined();
   });
 
   it('should handle team escalation (Real DB)', async () => {
