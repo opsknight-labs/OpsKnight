@@ -180,6 +180,7 @@ export async function sendUserNotification(
   options: {
     createInApp?: boolean;
     eventType?: NotificationEventType;
+    eventKey?: string;
   } = {}
 ): Promise<{
   success: boolean;
@@ -228,12 +229,14 @@ export async function sendUserNotification(
     };
   }
 
-  const eventKey = notificationEventKey({
-    incident,
-    eventType,
-    purpose: 'DIRECT_OR_ESCALATION',
-    message,
-  });
+  const eventKey =
+    options.eventKey ??
+    notificationEventKey({
+      incident,
+      eventType,
+      purpose: 'DIRECT_OR_ESCALATION',
+      message,
+    });
 
   if (options.createInApp !== false) {
     try {
@@ -292,7 +295,8 @@ export async function sendUserNotification(
         channel,
         message,
         undefined,
-        eventType
+        eventType,
+        eventKey
       );
       if (result.outcome === 'DELIVERED') {
         logger.info(`[UserNotification] Successfully delivered via ${channel}`, {

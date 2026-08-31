@@ -5,12 +5,24 @@ const mocks = vi.hoisted(() => ({
   findUnique: vi.fn(),
   upsert: vi.fn(),
   update: vi.fn(),
+  queryRaw: vi.fn(),
+  deleteMany: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
-  default: { $transaction: mocks.transaction, $executeRaw: mocks.executeRaw },
+  default: {
+    $transaction: mocks.transaction,
+    $executeRaw: mocks.executeRaw,
+    $queryRaw: mocks.queryRaw,
+    rateLimit: { deleteMany: mocks.deleteMany },
+  },
 }));
-import { acquireProviderAdmission, deferProviderAdmission } from '@/lib/provider-admission';
+import {
+  acquireProviderAdmission,
+  acquireProviderConcurrency,
+  deferProviderAdmission,
+  releaseProviderConcurrency,
+} from '@/lib/provider-admission';
 describe('provider admission control', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -48,5 +60,17 @@ describe('provider admission control', () => {
     const query = mocks.executeRaw.mock.calls[0]?.[0] as { strings?: string[] };
     expect(query.strings?.join('?')).toContain('GREATEST');
     expect(query.strings?.join('?')).toContain('expiresAt');
+  });
+
+  it('claims and releases a distributed provider concurrency slot', async () => {
+    mocks.queryRaw.mockResolvedValue([{ key: 'provider-inflight:email:default:0' }]);
+    await expect(acquireProviderConcurrency('EMAIL', 'default')).resolves.toEqual({
+      allowed: true,
+      leaseKey: 'provider-inflight:email:default:0',
+    });
+    await releaseProviderConcurrency('provider-inflight:email:default:0');
+    expect(mocks.deleteMany).toHaveBeenCalledWith({
+      where: { key: 'provider-inflight:email:default:0' },
+    });
   });
 });

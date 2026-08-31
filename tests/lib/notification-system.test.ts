@@ -551,6 +551,7 @@ describe('Notification System Tests', () => {
         service: {
           id: serviceId,
           policy: {
+            id: 'policy-1',
             steps: [
               {
                 stepOrder: 0,
@@ -576,12 +577,9 @@ describe('Notification System Tests', () => {
       } as never);
       const result = await executeEscalation(incidentId, 0);
       expect(result.escalated).toBe(true);
-      expect(sendUserSpy).toHaveBeenCalledWith(
-        incidentId,
-        userId,
-        expect.any(String),
-        ['SMS']
-      );
+      expect(sendUserSpy).toHaveBeenCalledWith(incidentId, userId, expect.any(String), ['SMS'], {
+        eventKey: 'ESCALATION:inc-1:policy-1:0:0',
+      });
     });
   });
 });

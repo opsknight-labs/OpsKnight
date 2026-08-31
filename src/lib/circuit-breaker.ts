@@ -102,7 +102,22 @@ export class CircuitBreaker {
     try {
       // Execute with timeout
       const result = await this.executeWithTimeout(fn);
-      this.onSuccess();
+      if (
+        result &&
+        typeof result === 'object' &&
+        'success' in result &&
+        (result as { success?: unknown }).success === false
+      ) {
+        this.onFailure(
+          new Error(
+            'error' in result && typeof (result as { error?: unknown }).error === 'string'
+              ? (result as { error: string }).error
+              : `${this.config.name} provider reported failure`
+          )
+        );
+      } else {
+        this.onSuccess();
+      }
       return result;
     } catch (error) {
       this.onFailure(error);
@@ -116,7 +131,7 @@ export class CircuitBreaker {
   private async executeWithTimeout<T>(fn: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        reject(new Error(`Request timeout after ${this.config.timeout}ms`));
+        reject(new CircuitBreakerTimeoutError(this.config.name, this.config.timeout));
       }, this.config.timeout);
 
       fn()
@@ -248,6 +263,16 @@ export class CircuitBreakerError extends Error {
     super(message);
     this.name = 'CircuitBreakerError';
     this.serviceName = serviceName;
+  }
+}
+
+/** The external mutation may still complete after the local timeout. */
+export class CircuitBreakerTimeoutError extends CircuitBreakerError {
+  readonly ambiguous = true;
+
+  constructor(serviceName: string, timeoutMs: number) {
+    super(`Request timeout after ${timeoutMs}ms`, serviceName);
+    this.name = 'CircuitBreakerTimeoutError';
   }
 }
 

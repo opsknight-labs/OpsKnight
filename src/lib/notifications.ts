@@ -93,7 +93,8 @@ export async function sendNotification(
   channel: NotificationChannel,
   message: string,
   incident?: IncidentWithService,
-  eventType: NotificationEventType = 'triggered'
+  eventType: NotificationEventType = 'triggered',
+  explicitEventKey?: string
 ): Promise<SendNotificationResult> {
   if (!NOTIFICATION_CHANNELS.includes(channel))
     return {
@@ -111,7 +112,8 @@ export async function sendNotification(
       terminal: true,
     };
   const eventAt = notificationEventInstant(identityIncident, eventType);
-  const eventKey = notificationEventKey({ incident: identityIncident, eventType, message });
+  const eventKey =
+    explicitEventKey ?? notificationEventKey({ incident: identityIncident, eventType, message });
   const notificationId = notificationIntentId({ eventKey, eventType, eventAt, userId, channel });
   const durableMessage = encodeNotificationEnvelope(
     buildNotificationEnvelope(identityIncident, eventType, eventAt, message)

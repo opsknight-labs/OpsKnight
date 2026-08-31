@@ -8,7 +8,7 @@ import {
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
 import { CircuitBreakerError } from '@/lib/circuit-breaker';
-import { acquireProviderAdmission } from '@/lib/provider-admission';
+import { acquireProviderAdmission, acquireProviderConcurrency } from '@/lib/provider-admission';
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
@@ -25,8 +25,14 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       updateMany: vi.fn(),
     },
-    notificationDeliveryAttempt: { create: vi.fn() },
+    notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn() },
     $queryRaw: vi.fn(),
+    $transaction: vi.fn(async (operation: (tx: unknown) => unknown) =>
+      operation({
+        notification: { updateMany: vi.fn() },
+        notificationDeliveryAttempt: { create: vi.fn() },
+      })
+    ),
   },
 }));
 vi.mock('@/lib/encryption', () => ({
@@ -37,10 +43,13 @@ vi.mock('@/lib/encryption', () => ({
 vi.mock('@/lib/email', () => ({ sendEmail: mocks.sendEmail }));
 vi.mock('@/lib/provider-admission', () => ({
   acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
+  acquireProviderConcurrency: vi.fn().mockResolvedValue({ allowed: true, leaseKey: 'lease-1' }),
+  releaseProviderConcurrency: vi.fn().mockResolvedValue(undefined),
   deferProviderAdmission: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/circuit-breaker', () => ({
   CircuitBreakerError: class CircuitBreakerError extends Error {},
+  CircuitBreakerTimeoutError: class CircuitBreakerTimeoutError extends Error {},
   CircuitBreakers: {
     email: () => ({ execute: (operation: () => unknown) => operation() }),
     sms: () => ({ execute: (operation: () => unknown) => operation() }),
@@ -76,8 +85,13 @@ describe('central notification control plane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(acquireProviderAdmission).mockResolvedValue({ allowed: true });
+    vi.mocked(acquireProviderConcurrency).mockResolvedValue({
+      allowed: true,
+      leaseKey: 'lease-1',
+    });
     vi.mocked(prisma.notification.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.notificationDeliveryAttempt.count).mockResolvedValue(0);
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
   });
 

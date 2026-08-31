@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
+import { runSerializableTransaction } from './db-utils';
 
 export type ProviderAdmissionScope = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH' | 'SLACK' | 'WEBHOOK';
 
@@ -7,16 +8,27 @@ export type ProviderAdmissionResult =
   | { allowed: true }
   | { allowed: false; retryAt: Date; reason: 'RATE_LIMITED' };
 
-const DEFAULT_LIMITS: Record<ProviderAdmissionScope, { limit: number; windowMs: number }> = {
-  EMAIL: { limit: 8, windowMs: 1_000 },
-  SMS: { limit: 20, windowMs: 1_000 },
-  WHATSAPP: { limit: 50, windowMs: 1_000 },
-  PUSH: { limit: 100, windowMs: 1_000 },
-  SLACK: { limit: 1, windowMs: 1_000 },
-  WEBHOOK: { limit: 20, windowMs: 1_000 },
+export type ProviderConcurrencyResult =
+  | { allowed: true; leaseKey: string }
+  | { allowed: false; retryAt: Date; reason: 'MAX_IN_FLIGHT' };
+
+const DEFAULT_LIMITS: Record<
+  ProviderAdmissionScope,
+  { limit: number; windowMs: number; maxInFlight: number }
+> = {
+  EMAIL: { limit: 8, windowMs: 1_000, maxInFlight: 5 },
+  SMS: { limit: 20, windowMs: 1_000, maxInFlight: 10 },
+  WHATSAPP: { limit: 50, windowMs: 1_000, maxInFlight: 10 },
+  PUSH: { limit: 100, windowMs: 1_000, maxInFlight: 20 },
+  SLACK: { limit: 1, windowMs: 1_000, maxInFlight: 2 },
+  WEBHOOK: { limit: 20, windowMs: 1_000, maxInFlight: 10 },
 };
 
-function providerLimit(scope: ProviderAdmissionScope): { limit: number; windowMs: number } {
+function providerLimit(scope: ProviderAdmissionScope): {
+  limit: number;
+  windowMs: number;
+  maxInFlight: number;
+} {
   switch (scope) {
     case 'EMAIL':
       return DEFAULT_LIMITS.EMAIL;
@@ -32,6 +44,8 @@ function providerLimit(scope: ProviderAdmissionScope): { limit: number; windowMs
       return DEFAULT_LIMITS.WEBHOOK;
   }
 }
+
+const PROVIDER_LEASE_MS = 60_000;
 
 function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
   return `provider:${scope.toLowerCase()}:${providerKey}`.slice(0, 240);
@@ -49,28 +63,25 @@ export async function acquireProviderAdmission(
   const config = providerLimit(scope);
   const key = bucketKey(scope, providerKey);
 
-  return prisma.$transaction(
-    async tx => {
-      const existing = await tx.rateLimit.findUnique({ where: { key } });
-      if (!existing || existing.expiresAt <= now) {
-        const expiresAt = new Date(now.getTime() + config.windowMs);
-        await tx.rateLimit.upsert({
-          where: { key },
-          update: { count: 1, expiresAt },
-          create: { key, count: 1, expiresAt },
-        });
-        return { allowed: true } as const;
-      }
-
-      if (existing.count >= config.limit) {
-        return { allowed: false, retryAt: existing.expiresAt, reason: 'RATE_LIMITED' } as const;
-      }
-
-      await tx.rateLimit.update({ where: { key }, data: { count: { increment: 1 } } });
+  return runSerializableTransaction(async tx => {
+    const existing = await tx.rateLimit.findUnique({ where: { key } });
+    if (!existing || existing.expiresAt <= now) {
+      const expiresAt = new Date(now.getTime() + config.windowMs);
+      await tx.rateLimit.upsert({
+        where: { key },
+        update: { count: 1, expiresAt },
+        create: { key, count: 1, expiresAt },
+      });
       return { allowed: true } as const;
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-  );
+    }
+
+    if (existing.count >= config.limit) {
+      return { allowed: false, retryAt: existing.expiresAt, reason: 'RATE_LIMITED' } as const;
+    }
+
+    await tx.rateLimit.update({ where: { key }, data: { count: { increment: 1 } } });
+    return { allowed: true } as const;
+  }, 5);
 }
 
 /** Persist a provider-supplied cooldown (for example HTTP Retry-After) across replicas. */
@@ -88,4 +99,37 @@ export async function deferProviderAdmission(
       "count" = GREATEST("RateLimit"."count", EXCLUDED."count"),
       "expiresAt" = GREATEST("RateLimit"."expiresAt", EXCLUDED."expiresAt")
   `);
+}
+
+/** Distributed concurrency slots with expiring leases for crashed workers. */
+export async function acquireProviderConcurrency(
+  scope: ProviderAdmissionScope,
+  providerKey: string,
+  now: Date = new Date()
+): Promise<ProviderConcurrencyResult> {
+  const config = providerLimit(scope);
+  const prefix = bucketKey(scope, providerKey).replace(/^provider:/, 'provider-inflight:');
+  const expiresAt = new Date(now.getTime() + PROVIDER_LEASE_MS);
+  for (let slot = 0; slot < config.maxInFlight; slot += 1) {
+    const leaseKey = `${prefix}:${slot}`.slice(0, 240);
+    const claimed = await prisma.$queryRaw<Array<{ key: string }>>(Prisma.sql`
+      INSERT INTO "RateLimit" ("key", "count", "expiresAt")
+      VALUES (${leaseKey}, 1, ${expiresAt})
+      ON CONFLICT ("key") DO UPDATE SET
+        "count" = 1,
+        "expiresAt" = EXCLUDED."expiresAt"
+      WHERE "RateLimit"."expiresAt" <= ${now}
+      RETURNING "key"
+    `);
+    if (claimed.length > 0) return { allowed: true, leaseKey };
+  }
+  return {
+    allowed: false,
+    retryAt: new Date(now.getTime() + 1_000),
+    reason: 'MAX_IN_FLIGHT',
+  };
+}
+
+export async function releaseProviderConcurrency(leaseKey: string): Promise<void> {
+  await prisma.rateLimit.deleteMany({ where: { key: leaseKey } });
 }
