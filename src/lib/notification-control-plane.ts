@@ -53,6 +53,7 @@ export type CentralNotificationPayload =
       escalationGeneration?: number;
       escalationStep?: number;
       durableMessage: string;
+      providerKey?: string;
     }
   | {
       kind: 'EMAIL';
@@ -60,10 +61,16 @@ export type CentralNotificationPayload =
       subject: string;
       html: string;
       text?: string;
-      providerScope?: { statusPageId: string; subscriptionId?: string; incidentId?: string };
+      providerScope?: {
+        statusPageId: string;
+        subscriptionId?: string;
+        incidentId?: string;
+        eventType?: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
+      };
+      providerKey?: string;
     }
-  | { kind: 'SMS'; to: string; message: string }
-  | { kind: 'WHATSAPP'; to: string; message: string; from?: string }
+  | { kind: 'SMS'; to: string; message: string; providerKey?: string }
+  | { kind: 'WHATSAPP'; to: string; message: string; from?: string; providerKey?: string }
   | {
       kind: 'PUSH';
       userId: string;
@@ -71,6 +78,7 @@ export type CentralNotificationPayload =
       body: string;
       data?: Record<string, unknown>;
       badge?: number;
+      providerKey?: string;
     }
   | {
       kind: 'SLACK_CHANNEL';
@@ -96,6 +104,10 @@ export type CentralNotificationPayload =
       secret?: string;
       method?: 'POST' | 'PUT' | 'PATCH';
       timeout?: number;
+      lifecyclePolicy?: {
+        incidentId: string;
+        eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
+      };
     }
   | {
       kind: 'STATUS_PAGE_WEBHOOK';
@@ -105,6 +117,8 @@ export type CentralNotificationPayload =
       deliveryId: string;
       webhookId: string;
       statusPageId?: string;
+      incidentId?: string;
+      serviceId?: string;
     };
 
 type IncidentCentralPayload = Extract<
@@ -176,9 +190,7 @@ export function maskedNotificationRecipient(
 }
 
 function recipientDigest(channel: NotificationChannel, recipient: string): string {
-  const key =
-    process.env.NEXTAUTH_SECRET?.trim() ||
-    getEncryptionKey();
+  const key = process.env.NEXTAUTH_SECRET?.trim() || getEncryptionKey();
   if (!key) throw new Error('Notification encryption is not configured');
   const keyBytes = /^[a-f0-9]{64}$/i.test(key)
     ? Buffer.from(key, 'hex')
@@ -357,7 +369,52 @@ export async function enqueueCentralNotification(
   input: CentralNotificationInput,
   options: { dispatchImmediately?: boolean } = {}
 ): Promise<{ id: string; created: boolean; delivered?: boolean; error?: string }> {
-  const intent = await createCentralNotificationIntent(input);
+  let pinnedInput = input;
+  if (
+    (input.payload.kind === 'EMAIL' || input.payload.kind === 'INCIDENT_EMAIL') &&
+    !input.payload.providerKey
+  ) {
+    const emailPayload = input.payload;
+    const providerKey =
+      emailPayload.kind === 'EMAIL' && emailPayload.providerScope?.statusPageId
+        ? await import('./notification-providers')
+            .then(module =>
+              module.getStatusPageEmailConfig(emailPayload.providerScope!.statusPageId)
+            )
+            .then(config => config.provider || undefined)
+        : await import('./notification-providers')
+            .then(module => module.getAllConfiguredEmailProviders())
+            .then(
+              configs =>
+                configs.find(config => config.enabled && config.provider)?.provider || undefined
+            );
+    if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
+  } else if (
+    (input.payload.kind === 'SMS' || input.payload.kind === 'INCIDENT_SMS') &&
+    !input.payload.providerKey
+  ) {
+    const providerKey = await import('./notification-providers').then(module =>
+      module.getSMSConfig().then(config => config.provider || undefined)
+    );
+    if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
+  } else if (
+    (input.payload.kind === 'WHATSAPP' || input.payload.kind === 'INCIDENT_WHATSAPP') &&
+    !input.payload.providerKey
+  ) {
+    const providerKey = await import('./notification-providers').then(module =>
+      module.getWhatsAppConfig().then(config => config.provider || undefined)
+    );
+    if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
+  } else if (
+    (input.payload.kind === 'PUSH' || input.payload.kind === 'INCIDENT_PUSH') &&
+    !input.payload.providerKey
+  ) {
+    const providerKey = await import('./notification-providers').then(module =>
+      module.getPushConfig().then(config => config.provider || undefined)
+    );
+    if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
+  }
+  const intent = await createCentralNotificationIntent(pinnedInput);
   if (!intent.created || options.dispatchImmediately === false) return intent;
   const result = await deliverCentralNotification(intent.id);
   return { ...intent, delivered: result.success, error: result.error };
@@ -371,6 +428,7 @@ function payloadProviderKey(payload: CentralNotificationPayload): string {
       return 'invalid-webhook';
     }
   }
+  if ('providerKey' in payload && payload.providerKey) return payload.providerKey;
   // Provider budgets are account-wide. A conservative shared key prevents
   // tenant/page/channel partitions from multiplying the upstream allowance.
   return 'default';
@@ -394,8 +452,7 @@ function executeProvider<T extends DeliveryResult>(
   operation: () => Promise<T>
 ): Promise<T> {
   return breaker.execute(operation, {
-    shouldCountFailure: (result: T) =>
-      result.success === false && (result.statusCode ?? 0) >= 500,
+    shouldCountFailure: (result: T) => result.success === false && (result.statusCode ?? 0) >= 500,
   });
 }
 
@@ -406,18 +463,43 @@ async function dispatchPayload(
   switch (payload.kind) {
     case 'INCIDENT_EMAIL': {
       const { sendIncidentEmail } = await import('./email');
+      const config = payload.providerKey
+        ? await import('./notification-providers')
+            .then(module => module.getAllConfiguredEmailProviders())
+            .then(configs => configs.find(item => item.provider === payload.providerKey))
+        : undefined;
+      if (payload.providerKey && !config)
+        return {
+          success: false,
+          statusCode: 409,
+          errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+          error: `Pinned Email provider ${payload.providerKey} is unavailable`,
+        };
       return executeProvider(CircuitBreakers.email(), () =>
         sendIncidentEmail(
           payload.userId,
           payload.incidentId,
           payload.eventType,
           notificationId,
-          payload.durableMessage
+          payload.durableMessage,
+          config
         )
       );
     }
     case 'INCIDENT_SMS': {
       const { sendIncidentSMS } = await import('./sms');
+      if (payload.providerKey) {
+        const current = await import('./notification-providers').then(module =>
+          module.getSMSConfig()
+        );
+        if (current.provider !== payload.providerKey)
+          return {
+            success: false,
+            statusCode: 409,
+            errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+            error: `Pinned SMS provider ${payload.providerKey} is unavailable`,
+          };
+      }
       return executeProvider(CircuitBreakers.sms(), async () => {
         const result = await sendIncidentSMS(
           payload.userId,
@@ -431,6 +513,18 @@ async function dispatchPayload(
     }
     case 'INCIDENT_PUSH': {
       const { sendNotificationIntentPush } = await import('./incident-push-delivery');
+      if (payload.providerKey) {
+        const current = await import('./notification-providers').then(module =>
+          module.getPushConfig()
+        );
+        if (current.provider !== payload.providerKey)
+          return {
+            success: false,
+            statusCode: 409,
+            errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+            error: `Pinned Push provider ${payload.providerKey} is unavailable`,
+          };
+      }
       return executeProvider(CircuitBreakers.push(), async () => {
         const result = await sendNotificationIntentPush(
           payload.userId,
@@ -446,6 +540,18 @@ async function dispatchPayload(
     }
     case 'INCIDENT_WHATSAPP': {
       const { sendIncidentWhatsApp } = await import('./whatsapp');
+      if (payload.providerKey) {
+        const current = await import('./notification-providers').then(module =>
+          module.getWhatsAppConfig()
+        );
+        if (current.provider !== payload.providerKey)
+          return {
+            success: false,
+            statusCode: 409,
+            errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+            error: `Pinned WhatsApp provider ${payload.providerKey} is unavailable`,
+          };
+      }
       return executeProvider(CircuitBreakers.whatsapp(), async () => {
         const result = await sendIncidentWhatsApp(
           payload.userId,
@@ -463,7 +569,18 @@ async function dispatchPayload(
         ? await import('./notification-providers').then(module =>
             module.getStatusPageEmailConfig(payload.providerScope!.statusPageId)
           )
-        : undefined;
+        : payload.providerKey
+          ? await import('./notification-providers')
+              .then(module => module.getAllConfiguredEmailProviders())
+              .then(configs => configs.find(item => item.provider === payload.providerKey))
+          : undefined;
+      if (payload.providerKey && (!config || config.provider !== payload.providerKey))
+        return {
+          success: false,
+          statusCode: 409,
+          errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+          error: `Pinned Email provider ${payload.providerKey} is unavailable`,
+        };
       return executeProvider(CircuitBreakers.email(), () =>
         sendEmail(
           {
@@ -479,6 +596,18 @@ async function dispatchPayload(
     }
     case 'SMS': {
       const { sendSMS } = await import('./sms');
+      if (payload.providerKey) {
+        const current = await import('./notification-providers').then(module =>
+          module.getSMSConfig()
+        );
+        if (current.provider !== payload.providerKey)
+          return {
+            success: false,
+            statusCode: 409,
+            errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+            error: `Pinned SMS provider ${payload.providerKey} is unavailable`,
+          };
+      }
       return executeProvider(CircuitBreakers.sms(), async () => {
         const result = await sendSMS({
           to: payload.to,
@@ -490,6 +619,18 @@ async function dispatchPayload(
     }
     case 'WHATSAPP': {
       const { sendWhatsApp } = await import('./whatsapp');
+      if (payload.providerKey) {
+        const current = await import('./notification-providers').then(module =>
+          module.getWhatsAppConfig()
+        );
+        if (current.provider !== payload.providerKey)
+          return {
+            success: false,
+            statusCode: 409,
+            errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+            error: `Pinned WhatsApp provider ${payload.providerKey} is unavailable`,
+          };
+      }
       return executeProvider(CircuitBreakers.whatsapp(), async () => {
         const result = await sendWhatsApp(
           payload.to,
@@ -502,6 +643,18 @@ async function dispatchPayload(
     }
     case 'PUSH': {
       const { sendPush } = await import('./push');
+      if (payload.providerKey) {
+        const current = await import('./notification-providers').then(module =>
+          module.getPushConfig()
+        );
+        if (current.provider !== payload.providerKey)
+          return {
+            success: false,
+            statusCode: 409,
+            errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+            error: `Pinned Push provider ${payload.providerKey} is unavailable`,
+          };
+      }
       return executeProvider(CircuitBreakers.push(), () =>
         sendPush({
           userId: payload.userId,
@@ -550,6 +703,7 @@ async function dispatchPayload(
           method: payload.method,
           timeout: payload.timeout,
           maxAttempts: 1,
+          circuitBreaker: false,
         })
       );
     }
@@ -559,6 +713,7 @@ async function dispatchPayload(
         deliverWebhook(payload.url, payload.secret, payload.payload, payload.deliveryId, {
           maxAttempts: 1,
           webhookId: payload.webhookId,
+          circuitBreaker: false,
         })
       );
       return result.success
@@ -664,27 +819,72 @@ async function incidentPayloadSuperseded(
       ? 'Resolution generation was superseded'
       : null;
   }
-  return incident.updatedAt.getTime() === expectedAt
-    ? null
-    : 'Incident update generation was superseded';
+  // The durable event key identifies an update. ORM updatedAt also changes for
+  // internal bookkeeping and must never invalidate that committed event.
+  return incident.status === 'RESOLVED' ? 'Incident update was superseded by resolution' : null;
 }
 
-async function statusSubscriberDeliveryRevoked(payload: CentralNotificationPayload): Promise<string | null> {
-  if (payload.kind !== 'EMAIL' || !payload.providerScope?.subscriptionId || !payload.providerScope.incidentId)
+function lifecycleStatusRevocation(
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
+  status: string
+): string | null {
+  if (eventType === 'triggered' && status !== 'OPEN')
+    return `Triggered event was superseded by ${status}`;
+  if (eventType === 'acknowledged' && status === 'RESOLVED')
+    return 'Acknowledgement was superseded by resolution';
+  if (eventType === 'updated' && status === 'RESOLVED')
+    return 'Update was superseded by resolution';
+  if (eventType === 'resolved' && status !== 'RESOLVED') return 'Resolution is no longer current';
+  return null;
+}
+
+async function lifecycleDeliveryRevoked(
+  payload: CentralNotificationPayload
+): Promise<string | null> {
+  const policy =
+    payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK'
+      ? { incidentId: payload.incident.id, eventType: payload.eventType }
+      : payload.kind === 'WEBHOOK'
+        ? payload.lifecyclePolicy
+        : null;
+  if (!policy) return null;
+  const incident = await prisma.incident.findUnique({
+    where: { id: policy.incidentId },
+    select: { status: true },
+  });
+  if (!incident) return 'Incident no longer exists';
+  return lifecycleStatusRevocation(policy.eventType, incident.status);
+}
+
+async function statusSubscriberDeliveryRevoked(
+  payload: CentralNotificationPayload
+): Promise<string | null> {
+  if (
+    payload.kind !== 'EMAIL' ||
+    !payload.providerScope?.subscriptionId ||
+    !payload.providerScope.incidentId
+  )
     return null;
   try {
     const incident = await prisma.incident.findUnique({
       where: { id: payload.providerScope.incidentId },
-      select: { visibility: true, serviceId: true },
+      select: { visibility: true, serviceId: true, status: true },
     });
-    if (!incident || incident.visibility !== 'PUBLIC') return 'Status-page incident is no longer public';
+    if (!incident || incident.visibility !== 'PUBLIC')
+      return 'Status-page incident is no longer public';
+    if (payload.providerScope.eventType) {
+      const stale = lifecycleStatusRevocation(payload.providerScope.eventType, incident.status);
+      if (stale) return stale;
+    }
     const page = await prisma.statusPage.findFirst({
       where: {
         id: payload.providerScope.statusPageId,
         enabled: true,
         showIncidents: true,
         services: { some: { serviceId: incident.serviceId, showOnPage: true } },
-        subscriptions: { some: { id: payload.providerScope.subscriptionId, verified: true, unsubscribedAt: null } },
+        subscriptions: {
+          some: { id: payload.providerScope.subscriptionId, verified: true, unsubscribedAt: null },
+        },
       },
       select: { id: true },
     });
@@ -694,11 +894,42 @@ async function statusSubscriberDeliveryRevoked(payload: CentralNotificationPaylo
   }
 }
 
-async function statusWebhookDeliveryRevoked(payload: CentralNotificationPayload): Promise<string | null> {
+async function statusWebhookDeliveryRevoked(
+  payload: CentralNotificationPayload
+): Promise<string | null> {
   if (payload.kind !== 'STATUS_PAGE_WEBHOOK' || !payload.statusPageId) return null;
   try {
+    if (payload.incidentId) {
+      const incident = await prisma.incident.findUnique({
+        where: { id: payload.incidentId },
+        select: { visibility: true, serviceId: true, status: true },
+      });
+      if (!incident || incident.visibility !== 'PUBLIC')
+        return 'Status-page incident is no longer public';
+      if (payload.serviceId && incident.serviceId !== payload.serviceId)
+        return 'Incident service mapping changed';
+      const eventType = payload.payload.event as
+        | 'triggered'
+        | 'acknowledged'
+        | 'resolved'
+        | 'updated';
+      const stale = lifecycleStatusRevocation(eventType, incident.status);
+      if (stale) return stale;
+    }
     const webhook = await prisma.statusPageWebhook.findFirst({
-      where: { id: payload.webhookId, statusPageId: payload.statusPageId, enabled: true, statusPage: { enabled: true } },
+      where: {
+        id: payload.webhookId,
+        statusPageId: payload.statusPageId,
+        enabled: true,
+        events: { array_contains: payload.payload.event },
+        statusPage: {
+          enabled: true,
+          showIncidents: payload.incidentId ? true : undefined,
+          services: payload.serviceId
+            ? { some: { serviceId: payload.serviceId, showOnPage: true } }
+            : undefined,
+        },
+      },
       select: { id: true },
     });
     return webhook ? null : 'Status-page webhook was revoked or disabled';
@@ -835,6 +1066,7 @@ export async function deliverCentralNotification(
   const supersededReason =
     (await statusSubscriberDeliveryRevoked(payload)) ??
     (await statusWebhookDeliveryRevoked(payload)) ??
+    (await lifecycleDeliveryRevoked(payload)) ??
     (await incidentPayloadSuperseded(payload));
   if (supersededReason) {
     await prisma.notification.updateMany({
@@ -1177,7 +1409,12 @@ export async function processCentralNotificationQueue(): Promise<{
           AND ("lastAttemptAt" IS NULL OR "lastAttemptAt" < ${staleClaimBefore})
         )
       )
-    ORDER BY "priority" ASC, "nextAttemptAt" ASC, "createdAt" ASC
+    -- Age one priority level every five minutes. Critical work wins initially,
+    -- while sustained critical traffic cannot starve older normal deliveries.
+    ORDER BY GREATEST(
+      1,
+      "priority" - FLOOR(EXTRACT(EPOCH FROM (${now} - "createdAt")) / 300)
+    ) ASC, "nextAttemptAt" ASC, "createdAt" ASC
     LIMIT ${SYSTEM_NOTIFICATION_BATCH_SIZE}
   `);
 

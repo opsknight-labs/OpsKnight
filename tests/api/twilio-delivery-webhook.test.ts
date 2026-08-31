@@ -2,14 +2,16 @@ import { createHmac } from 'crypto';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { findFirst, updateMany } = vi.hoisted(() => ({
+const { findFirst, updateMany, updateAttemptMany } = vi.hoisted(() => ({
   findFirst: vi.fn(),
   updateMany: vi.fn(),
+  updateAttemptMany: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
   default: {
     notification: { findFirst, updateMany },
+    notificationDeliveryAttempt: { updateMany: updateAttemptMany },
   },
 }));
 
@@ -51,6 +53,7 @@ describe('Twilio delivery receipt webhook', () => {
       providerMessageId: 'SM123',
     });
     updateMany.mockResolvedValue({ count: 1 });
+    updateAttemptMany.mockResolvedValue({ count: 1 });
   });
 
   it('verifies the callback and records delivered messages', async () => {
@@ -71,6 +74,12 @@ describe('Twilio delivery receipt webhook', () => {
           failedAt: null,
           errorMsg: null,
         }),
+      })
+    );
+    expect(updateAttemptMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { notificationId: 'notif-1', providerMessageId: 'SM123' },
+        data: expect.objectContaining({ outcome: 'DELIVERED' }),
       })
     );
   });
@@ -106,6 +115,16 @@ describe('Twilio delivery receipt webhook', () => {
       })
     );
     expect(update?.data).not.toHaveProperty('attempts');
+    expect(updateAttemptMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          notificationId: 'notif-1',
+          providerMessageId: 'SM123',
+          outcome: { not: 'DELIVERED' },
+        },
+        data: expect.objectContaining({ outcome: 'UNDELIVERED', errorCode: '30003' }),
+      })
+    );
   });
 
   it('does not regress a delivered notification when a late failure receipt arrives', async () => {
@@ -121,6 +140,25 @@ describe('Twilio delivery receipt webhook', () => {
 
     expect(response.status).toBe(204);
     expect(updateMany).not.toHaveBeenCalled();
+    expect(updateAttemptMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ outcome: { not: 'DELIVERED' } }),
+      })
+    );
+  });
+
+  it('allows a late delivered receipt to monotonically recover a failed attempt', async () => {
+    findFirst.mockResolvedValue({ id: 'notif-1', status: 'FAILED', providerMessageId: 'SM123' });
+
+    const response = await POST(signedRequest('MessageSid=SM123&MessageStatus=delivered'));
+
+    expect(response.status).toBe(204);
+    expect(updateAttemptMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ outcome: 'DELIVERED' }) })
+    );
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'DELIVERED' }) })
+    );
   });
 
   it('ignores receipts from a superseded provider attempt', async () => {
@@ -134,5 +172,6 @@ describe('Twilio delivery receipt webhook', () => {
 
     expect(response.status).toBe(204);
     expect(updateMany).not.toHaveBeenCalled();
+    expect(updateAttemptMany).not.toHaveBeenCalled();
   });
 });

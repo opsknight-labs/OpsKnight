@@ -203,6 +203,7 @@ export async function sendServiceNotifications(
                   webhook.channel || undefined
                 ),
                 secret: webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
+                lifecyclePolicy: { incidentId, eventType },
               },
             });
           });
@@ -233,6 +234,7 @@ export async function sendServiceNotifications(
             kind: 'WEBHOOK',
             url: service.webhookUrl!,
             payload: generateIncidentWebhookPayload(webhookIncident, eventType),
+            lifecyclePolicy: { incidentId, eventType },
           },
         }).then(() => undefined)
       );

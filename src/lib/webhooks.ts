@@ -25,6 +25,7 @@ export type WebhookOptions = {
   method?: 'POST' | 'PUT' | 'PATCH';
   timeout?: number; // Timeout in milliseconds
   maxAttempts?: number;
+  circuitBreaker?: boolean;
 };
 
 export type WebhookResult = {
@@ -34,6 +35,22 @@ export type WebhookResult = {
   responseBody?: string;
   retryAfterMs?: number;
 };
+
+function parseRetryAfterMs(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.max(1_000, seconds * 1_000);
+  const deadline = Date.parse(value);
+  return Number.isFinite(deadline) ? Math.max(1_000, deadline - Date.now()) : undefined;
+}
+
+function safeWebhookTarget(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return 'invalid-webhook-target';
+  }
+}
 
 /**
  * Generate HMAC signature for webhook payload
@@ -55,6 +72,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
       method = 'POST',
       timeout = 10000, // 10 seconds default
       maxAttempts = 3,
+      circuitBreaker = true,
     } = options;
 
     if (!url) {
@@ -101,8 +119,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
           const attemptController = new AbortController();
           const attemptTimeoutId = setTimeout(() => attemptController.abort(), timeout);
           try {
-            const cb = CircuitBreakers.webhook(url);
-            const res = await cb.execute(async () => {
+            const request = async () => {
               const response = await safeOutboundFetch(url, {
                 method,
                 headers: requestHeaders,
@@ -112,20 +129,22 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
 
               if (!response.ok && isRetryableHttpError(response.status)) {
                 const retryAfter = response.headers.get('Retry-After');
-                const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : NaN;
-                const error = new Error(`HTTP ${response.status}: ${response.statusText}`) as Error & {
+                const error = new Error(
+                  `HTTP ${response.status}: ${response.statusText}`
+                ) as Error & {
                   statusCode?: number;
                   retryAfterMs?: number;
                 };
                 error.statusCode = response.status;
-                if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
-                  error.retryAfterMs = retryAfterSeconds * 1_000;
-                }
+                error.retryAfterMs = parseRetryAfterMs(retryAfter);
                 throw error;
               }
 
               return response;
-            });
+            };
+            const res = circuitBreaker
+              ? await CircuitBreakers.webhook(url).execute(request)
+              : await request();
 
             return res;
           } finally {
@@ -154,8 +173,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
 
       if (!retryResult.success || !retryResult.data) {
         logger.error('Webhook delivery failed permanently', {
-          webhookId: url,
-          url,
+          target: safeWebhookTarget(url),
           payload,
           error: retryResult.error instanceof Error ? retryResult.error.message : 'Unknown error',
           attempts,
@@ -200,7 +218,11 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
       throw fetchError;
     }
   } catch (error: any) {
-    logger.error('Webhook send error', { component: 'webhooks', error, url: options.url });
+    logger.error('Webhook send error', {
+      component: 'webhooks',
+      error: error instanceof Error ? error.message : String(error),
+      target: safeWebhookTarget(options.url),
+    });
     return {
       success: false,
       error: error.message,
@@ -821,7 +843,7 @@ export async function sendIncidentWebhook(
     if (!result.success) {
       logger.warn('Incident webhook delivery failed', {
         component: 'webhooks',
-        url: webhookUrl,
+        target: safeWebhookTarget(webhookUrl),
         incidentId,
         eventType,
         statusCode: result.statusCode,

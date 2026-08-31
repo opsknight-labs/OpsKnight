@@ -124,6 +124,8 @@ export class CircuitBreaker {
               : `${this.config.name} provider reported failure`
           )
         );
+      } else if (reportedFailure) {
+        this.onNeutral();
       } else {
         this.onSuccess();
       }
@@ -171,6 +173,13 @@ export class CircuitBreaker {
     } else {
       // Reset failure count on success in CLOSED state
       this.state.failures = 0;
+    }
+  }
+
+  /** A caller/config/quota failure neither harms nor heals provider health. */
+  private onNeutral(): void {
+    if (this.state.state === 'HALF_OPEN') {
+      this.state.halfOpenRequestInFlight = false;
     }
   }
 

@@ -28,11 +28,21 @@ export type EmailOptions = {
 
 export type EmailDeliveryResult = {
   success: boolean;
+  providerMessageId?: string;
   error?: string;
   statusCode?: number;
   errorCode?: string;
   retryAfterMs?: number;
 };
+
+function retryAfterMs(value: unknown): number | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const raw = String(value).trim();
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.max(1_000, seconds * 1_000);
+  const deadline = Date.parse(raw);
+  return Number.isFinite(deadline) ? Math.max(1_000, deadline - Date.now()) : undefined;
+}
 
 type SmtpTransporter = {
   sendMail(options: Record<string, unknown>): Promise<{ messageId?: string }>;
@@ -148,7 +158,7 @@ async function sendWithSingleProvider(
         };
       }
       logger.info('Email sent via Resend', { id: result.data?.id });
-      return { success: true };
+      return { success: true, providerMessageId: result.data?.id };
     } catch (error: unknown) {
       const value = error as { code?: string; message?: string };
       if (value.code === 'MODULE_NOT_FOUND')
@@ -177,13 +187,20 @@ async function sendWithSingleProvider(
         },
       });
       const response = result[0];
+      const responseHeaders = response?.headers as
+        | Record<string, string | string[] | undefined>
+        | undefined;
+      const messageId = responseHeaders?.['x-message-id'];
       return response && response.statusCode >= 200 && response.statusCode < 300
-        ? { success: true }
+        ? { success: true, providerMessageId: Array.isArray(messageId) ? messageId[0] : messageId }
         : {
             success: false,
             error: `SendGrid API returned status ${response?.statusCode}`,
             statusCode: response?.statusCode,
-            retryAfterMs: response?.statusCode === 429 ? 60_000 : undefined,
+            retryAfterMs:
+              response?.statusCode === 429
+                ? (retryAfterMs(responseHeaders?.['retry-after']) ?? 60_000)
+                : undefined,
           };
     } catch (error: unknown) {
       const value = error as {
@@ -200,7 +217,10 @@ async function sendWithSingleProvider(
           : value.message || 'SendGrid API error',
         statusCode: value.response?.statusCode,
         errorCode: value.code,
-        retryAfterMs: value.response?.statusCode === 429 ? 60_000 : undefined,
+        retryAfterMs:
+          value.response?.statusCode === 429
+            ? (retryAfterMs(value.response.headers?.['retry-after']) ?? 60_000)
+            : undefined,
       };
     }
   }
@@ -231,7 +251,7 @@ async function sendWithSingleProvider(
         })
       );
       logger.info('Email sent via Amazon SES', { messageId: result.MessageId });
-      return { success: true };
+      return { success: true, providerMessageId: result.MessageId };
     } catch (error: unknown) {
       const value = error as {
         code?: string;
@@ -264,7 +284,7 @@ async function sendWithSingleProvider(
         text: textContent,
       });
       logger.info('Email sent via SMTP', { messageId: info.messageId });
-      return { success: true };
+      return { success: true, providerMessageId: info.messageId };
     } catch (error: unknown) {
       const value = error as {
         code?: string;
@@ -445,8 +465,9 @@ export async function sendIncidentEmail(
   incidentId: string,
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
   notificationId?: string,
-  durableMessage?: string
-): Promise<{ success: boolean; error?: string }> {
+  durableMessage?: string,
+  providedConfig?: EmailConfig
+): Promise<EmailDeliveryResult> {
   try {
     const [user, currentIncident] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId } }),
@@ -507,13 +528,16 @@ export async function sendIncidentEmail(
       envelope?.displayMessage
     );
     const displayMessage = envelope?.displayMessage;
-    return sendEmail({
-      to: user.email,
-      subject: `[${subjectTag}] ${eventIncident.title}`,
-      html,
-      text: `${eventIncident.title}\n\nService: ${eventIncident.service.name}\nStatus: ${eventIncident.status}\nUrgency: ${eventIncident.urgency}${displayMessage ? `\n\n${displayMessage}` : ''}\n\nView: ${incidentUrl}`,
-      idempotencyKey: notificationId,
-    });
+    return sendEmail(
+      {
+        to: user.email,
+        subject: `[${subjectTag}] ${eventIncident.title}`,
+        html,
+        text: `${eventIncident.title}\n\nService: ${eventIncident.service.name}\nStatus: ${eventIncident.status}\nUrgency: ${eventIncident.urgency}${displayMessage ? `\n\n${displayMessage}` : ''}\n\nView: ${incidentUrl}`,
+        idempotencyKey: notificationId,
+      },
+      providedConfig
+    );
   } catch (error: unknown) {
     logger.error('Send incident email error', {
       component: 'email',

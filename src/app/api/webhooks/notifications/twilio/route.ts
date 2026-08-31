@@ -80,6 +80,26 @@ export async function POST(request: NextRequest) {
     const delivered = messageStatus === 'delivered' || messageStatus === 'read';
     const failed =
       messageStatus === 'failed' || messageStatus === 'undelivered' || messageStatus === 'canceled';
+    const errorCode = params.get('ErrorCode');
+    const errorText = params.get('ErrorMessage') || undefined;
+
+    if (messageSid && (delivered || failed)) {
+      await prisma.notificationDeliveryAttempt.updateMany({
+        where: {
+          notificationId: notification.id,
+          providerMessageId: messageSid,
+          ...(failed ? { outcome: { not: 'DELIVERED' } } : {}),
+        },
+        data: delivered
+          ? { outcome: 'DELIVERED', finishedAt: new Date(), errorCode: null, errorMessage: null }
+          : {
+              outcome: messageStatus === 'undelivered' ? 'UNDELIVERED' : 'FAILED',
+              finishedAt: new Date(),
+              errorCode: errorCode || undefined,
+              errorMessage: errorText,
+            },
+      });
+    }
 
     if (delivered) {
       if (notification.status !== 'DELIVERED') {
@@ -112,9 +132,7 @@ export async function POST(request: NextRequest) {
             status: 'FAILED',
             failedAt: new Date(),
             deliveredAt: null,
-            errorMsg:
-              params.get('ErrorMessage') ||
-              `Twilio delivery failed (${params.get('ErrorCode') || 'unknown'})`,
+            errorMsg: errorText || `Twilio delivery failed (${errorCode || 'unknown'})`,
           },
         });
       }
