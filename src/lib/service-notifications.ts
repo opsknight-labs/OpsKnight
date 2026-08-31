@@ -115,14 +115,16 @@ export async function sendServiceNotifications(
     };
 
     if (serviceChannels.includes('SLACK')) {
-      if (service.slackChannel && eventType !== 'updated') {
+      const slackChannel = service.slackChannel?.trim();
+      const slackWebhookUrl = service.slackWebhookUrl?.trim();
+      if (slackChannel && eventType !== 'updated') {
         const result = await persistIntent(async () => {
           await enqueueCentralNotification({
             category: 'INCIDENT',
             channel: 'SLACK',
             recipientType: 'SLACK_CHANNEL',
             recipientId: service.id,
-            recipientAddress: service.slackChannel!,
+            recipientAddress: slackChannel,
             incidentId,
             templateKey: `service-slack-${eventType}`,
             sourceType: 'SERVICE_INCIDENT',
@@ -132,7 +134,7 @@ export async function sendServiceNotifications(
             priority: incident.urgency === 'HIGH' ? 1 : 3,
             payload: {
               kind: 'SLACK_CHANNEL',
-              channel: service.slackChannel!,
+              channel: slackChannel,
               incident: incidentPresentation,
               eventType,
               includeInteractiveButtons: true,
@@ -144,14 +146,14 @@ export async function sendServiceNotifications(
           errors.push(`Slack channel notification failed: ${result.error || 'Unknown error'}`);
       }
 
-      if (service.slackWebhookUrl && eventType !== 'updated') {
+      if (slackWebhookUrl && eventType !== 'updated') {
         const result = await persistIntent(async () => {
           await enqueueCentralNotification({
             category: 'INCIDENT',
             channel: 'SLACK',
             recipientType: 'WEBHOOK',
             recipientId: service.id,
-            recipientAddress: service.slackWebhookUrl!,
+            recipientAddress: slackWebhookUrl,
             incidentId,
             templateKey: `service-slack-webhook-${eventType}`,
             sourceType: 'SERVICE_INCIDENT',
@@ -163,7 +165,7 @@ export async function sendServiceNotifications(
               kind: 'SLACK_WEBHOOK',
               incident: incidentPresentation,
               eventType,
-              webhookUrl: service.slackWebhookUrl!,
+              webhookUrl: slackWebhookUrl,
             },
           });
         });

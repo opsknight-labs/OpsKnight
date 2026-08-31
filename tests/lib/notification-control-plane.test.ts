@@ -120,6 +120,13 @@ describe('central notification control plane', () => {
     );
   });
 
+  it('rejects an empty recipient before persisting a delivery intent', async () => {
+    await expect(
+      createCentralNotificationIntent({ ...input, recipientAddress: '   ' })
+    ).rejects.toThrow('Notification recipient is required');
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+  });
+
   it('derives recipient identity from the existing session secret, not a new setting', async () => {
     const previousSessionSecret = process.env.NEXTAUTH_SECRET;
     const previousIdentitySecret = process.env.NOTIFICATION_IDENTITY_KEY;

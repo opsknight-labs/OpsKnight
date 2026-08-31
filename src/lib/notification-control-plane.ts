@@ -265,6 +265,9 @@ function assertValidInput(input: CentralNotificationInput): void {
   if (!input.templateKey.trim() || !input.sourceType.trim() || !input.sourceId.trim()) {
     throw new Error('Notification template and source identity are required');
   }
+  if (!hasText(input.recipientAddress)) {
+    throw new Error('Notification recipient is required');
+  }
   if (!input.eventKey.trim()) throw new Error('A stable notification event key is required');
   if (input.expiresAt && input.scheduledAt && input.expiresAt <= input.scheduledAt) {
     throw new Error('Notification expiry must be later than its scheduled time');

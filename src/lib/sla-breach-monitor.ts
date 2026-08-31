@@ -7,6 +7,7 @@ import { activeIncidentStatuses } from './incident-status';
 import { enqueueCentralNotification } from './notification-control-plane';
 import { formatWebhookPayloadByType } from './webhooks';
 import { getBaseUrl } from './env-validation';
+import { configuredSlackWebhookUrl } from './slack';
 
 /**
  * SLA Breach Monitor - Proactive Breach Detection
@@ -381,14 +382,18 @@ async function notifyBreachWarning(
   if (config.notifySlack) {
     const channels = warning.serviceNotificationChannels || [];
     const hasSlackEnabled = channels.length === 0 || channels.includes('SLACK');
+    const slackChannel = warning.slackChannel?.trim();
+    const slackWebhookUrl = warning.slackWebhookUrl?.trim() || configuredSlackWebhookUrl();
 
-    if (hasSlackEnabled) {
+    // Do not create a synthetic Slack recipient. A service target is preferred,
+    // with a configured global webhook as the deliberate fallback.
+    if (hasSlackEnabled && (slackChannel || slackWebhookUrl)) {
       await enqueueCentralNotification({
         category: 'SLA',
         channel: 'SLACK',
-        recipientType: warning.slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
+        recipientType: slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
         recipientId: warning.serviceId,
-        recipientAddress: warning.slackChannel || warning.slackWebhookUrl || 'global-slack-webhook',
+        recipientAddress: slackChannel || slackWebhookUrl!,
         incidentId: warning.incidentId,
         templateKey: `sla-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
         sourceType: 'INCIDENT_SLA',
@@ -396,10 +401,10 @@ async function notifyBreachWarning(
         eventKey,
         displayMessage: plainText,
         priority: isBreached ? 0 : 1,
-        payload: warning.slackChannel
+        payload: slackChannel
           ? {
               kind: 'SLACK_CHANNEL',
-              channel: warning.slackChannel,
+              channel: slackChannel,
               incident: incidentPresentation,
               eventType: 'triggered',
               includeInteractiveButtons: true,
@@ -410,7 +415,7 @@ async function notifyBreachWarning(
               kind: 'SLACK_WEBHOOK',
               incident: incidentPresentation,
               eventType: 'triggered',
-              webhookUrl: warning.slackWebhookUrl || undefined,
+              webhookUrl: slackWebhookUrl,
               additionalMessage: message,
             },
       });

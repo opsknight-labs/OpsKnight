@@ -29,6 +29,11 @@ interface SlackBlock {
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN; // Bot token for Slack API (fallback)
 
+/** Returns the configured global webhook only when it is a non-empty value. */
+export function configuredSlackWebhookUrl(): string | undefined {
+  return SLACK_WEBHOOK_URL?.trim() || undefined;
+}
+
 const STATUS_COLORS = new Map<SlackEventType, string>([
   ['triggered', '#d32f2f'], // Red for new incidents
   ['acknowledged', '#f9a825'], // Amber for acknowledged
@@ -131,7 +136,7 @@ export async function sendSlackNotification(
   webhookUrl?: string | null,
   options: { maxAttempts?: number } = {}
 ): Promise<SlackDeliveryResult> {
-  const targetUrl = webhookUrl || SLACK_WEBHOOK_URL;
+  const targetUrl = webhookUrl?.trim() || configuredSlackWebhookUrl();
 
   if (!targetUrl) {
     logger.warn(
@@ -469,6 +474,10 @@ export async function sendSlackMessageToChannel(
   additionalMessage?: string,
   options: { maxAttempts?: number } = {}
 ): Promise<SlackDeliveryResult> {
+  const normalizedChannel = channel.trim();
+  if (!normalizedChannel) {
+    return { success: false, error: 'Slack channel is required', errorCode: 'CHANNEL_REQUIRED' };
+  }
   // Get bot token (from OAuth integration or env fallback)
   const botToken = await getSlackBotToken(serviceId);
 
@@ -488,11 +497,11 @@ export async function sendSlackMessageToChannel(
 
   const payload = {
     // Use ID directly if it looks like an ID (C/G/D/U...), otherwise ensure # prefix for names
-    channel: /^[CGDU][A-Z0-9]+$/.test(channel)
-      ? channel
-      : channel.startsWith('#')
-        ? channel
-        : `#${channel}`,
+    channel: /^[CGDU][A-Z0-9]+$/.test(normalizedChannel)
+      ? normalizedChannel
+      : normalizedChannel.startsWith('#')
+        ? normalizedChannel
+        : `#${normalizedChannel}`,
     text: `[${eventType.toUpperCase()}] ${incident.title}`,
     blocks,
     attachments: [
@@ -534,17 +543,17 @@ export async function sendSlackMessageToChannel(
 
     if (!response.ok || !responseData.ok) {
       const errorMsg = responseData.error || `HTTP ${response.status}`;
-      logger.error('[Slack] API call failed', { error: errorMsg, channel });
+      logger.error('[Slack] API call failed', { error: errorMsg, channel: normalizedChannel });
       return slackFailure(errorMsg, response);
     }
 
     logger.info(
-      `[Slack] Message sent to channel ${channel} via API: ${eventType} - ${incident.title}`
+      `[Slack] Message sent to channel ${normalizedChannel} via API: ${eventType} - ${incident.title}`
     );
     return { success: true };
   } catch (error: unknown) {
     const err = error as { message?: string; statusCode?: number; retryAfterMs?: number };
-    logger.error('[Slack] API error', { error: err.message, channel });
+    logger.error('[Slack] API error', { error: err.message, channel: normalizedChannel });
     return {
       success: false,
       error: err.message || 'Slack API error',
