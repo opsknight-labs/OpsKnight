@@ -23,9 +23,9 @@ export default async function NotificationHistoryPage() {
           href: '/settings/notifications',
           current: 'History',
         }}
-        tag="Outbound Audit Trail"
+        tag="Your Account Activity"
         title="Delivery History & Logs"
-        subtitle="Comprehensive audit trail of all outbound paging alerts, transactional emails, push notifications, and messaging dispatches."
+        subtitle="Personal audit trail of outbound alerts, emails, and push notifications sent to you — not workspace-wide. Scoped to your account only."
         icon={
           <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
             <History className="h-7 w-7" />

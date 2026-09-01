@@ -389,8 +389,8 @@ export default function NotificationHistory() {
                 Delivery Audit Stream
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                Real-time chronological log of outbound alerts with full latency breakdown and
-                payload status.
+                Showing notification history for your account only — not workspace-wide. Includes
+                all channels sent to your registered contacts.
               </CardDescription>
             </div>
 
