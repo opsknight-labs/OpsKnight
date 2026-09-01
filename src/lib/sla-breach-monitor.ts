@@ -302,7 +302,7 @@ export async function checkSLABreaches(
           await prisma.incidentEvent.create({
             data: {
               incidentId: warning.incidentId,
-              type: isBreached ? 'ESCALATED' : 'COMMENT',
+              type: isBreached ? 'SLA_BREACHED' : 'SLA_WARNING',
               message: isBreached
                 ? `🚨 SLA ${warning.breachType.toUpperCase()} Breached: target was ${warning.targetMinutes} min`
                 : `${warning.breachType === 'ack' ? '⏰' : '⚠️'} SLA ${warning.breachType.toUpperCase()} Warning: ${Math.max(1, Math.round(warning.timeRemainingMs / 60000))} min remaining`,

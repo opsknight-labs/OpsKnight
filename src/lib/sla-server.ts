@@ -22,6 +22,7 @@ import { incidentEventSqlPredicate, incidentEventWhereFor } from './incident-eve
 import { mergeHybridMetrics } from './sla-hybrid-merge';
 import { getActiveOnCallShifts, getWindowOnCallShifts } from './oncall-shifts';
 import { createTimeContractContext, resolveReportingWindow } from './time-retention-contract';
+import { intervalDurationMs, intervalGaps, type TimeInterval } from './metrics/domain/interval';
 
 // UUID validation regex - prevents SQL injection in dynamic CASE statements
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -79,6 +80,15 @@ function buildIncidentFilterSql(filters: SLAMetricsFilter, tableAlias: string = 
     predicates.push(
       Prisma.sql`${Prisma.raw(`${prefix}"urgency"`)} = ${filters.urgency}::"IncidentUrgency"`
     );
+  }
+
+  if (filters.priority) {
+    const priorities = Array.isArray(filters.priority) ? filters.priority : [filters.priority];
+    if (priorities.length > 0) {
+      predicates.push(
+        Prisma.sql`${Prisma.raw(`${prefix}"priority"`)} = ANY(${priorities}::text[])`
+      );
+    }
   }
 
   if (filters.status === 'ACTIVE') {
@@ -2088,32 +2098,27 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     : recentIncidents.filter(i => isIncidentAfterHours(i.createdAt, tenantBusinessHoursTz)).length;
   const afterHoursRate = currentStats.count ? (afterHoursCount / currentStats.count) * 100 : 0;
 
-  // Coverage day counter.
-  // - Uses ms-arithmetic increments instead of `setDate(+1)` to be DST-safe
-  //   (setDate over a DST transition lands on the same calendar day).
-  // - Bucket keys are built in `tenantBusinessHoursTz` so two operators
-  //   in different server TZs (or running on hosts with different local
-  //   TZs) compute the same coverage day set.
-  const coverageDays = new Set<string>();
-  let onCallHoursMs = 0;
-  for (const shift of futureShifts) {
-    const shiftStart = shift.start < now ? now : shift.start;
-    const shiftEnd = shift.end > coverageWindowEnd ? coverageWindowEnd : shift.end;
-    if (shiftEnd > shiftStart) {
-      onCallHoursMs += shiftEnd.getTime() - shiftStart.getTime();
-      let cursorMs = shiftStart.getTime();
-      const endMs = shiftEnd.getTime();
-      // Sample twice per day and add the exact endpoint. A 24-hour UTC step
-      // can skip the local end date for short overnight shifts and around DST.
-      while (cursorMs < endMs) {
-        coverageDays.add(toDateKeyInTimeZone(new Date(cursorMs), tenantBusinessHoursTz));
-        cursorMs += 12 * 60 * 60 * 1000;
-      }
-      coverageDays.add(toDateKeyInTimeZone(shiftEnd, tenantBusinessHoursTz));
-    }
-  }
-  const coveragePercent = Math.min(100, (coverageDays.size / coverageWindowDays) * 100);
-  const coverageGapDays = Math.max(0, coverageWindowDays - coverageDays.size);
+  const coverageWindow: TimeInterval = { start: now, end: coverageWindowEnd };
+  const coverageIntervals = futureShifts.map(shift => ({ start: shift.start, end: shift.end }));
+  const onCallHoursMs = intervalDurationMs(
+    coverageIntervals.map(interval => ({
+      start: interval.start < now ? now : interval.start,
+      end: interval.end > coverageWindowEnd ? coverageWindowEnd : interval.end,
+    }))
+  );
+  const coverageWindowMs = coverageWindowEnd.getTime() - now.getTime();
+  const coveragePercent = coverageWindowMs > 0 ? (onCallHoursMs / coverageWindowMs) * 100 : 0;
+  const coverageGaps = intervalGaps(coverageWindow, coverageIntervals);
+  const uncoveredDurationMs = intervalDurationMs(coverageGaps);
+  const longestCoverageGap = coverageGaps.reduce<TimeInterval | null>(
+    (longest, gap) =>
+      !longest ||
+      gap.end.getTime() - gap.start.getTime() > longest.end.getTime() - longest.start.getTime()
+        ? gap
+        : longest,
+    null
+  );
+  const coverageGapDays = uncoveredDurationMs / (24 * 60 * 60 * 1000);
 
   // Rates - use DB aggregation for large datasets
   const escalatedIds = new Set(escalationEvents.map(e => e.incidentId));
@@ -2423,6 +2428,15 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     coveragePercent: Math.round(coveragePercent * 100) / 100,
     coverageGapDays,
     onCallHoursMs,
+    uncoveredOnCallMs: uncoveredDurationMs,
+    maxCoverageGapMs: longestCoverageGap
+      ? longestCoverageGap.end.getTime() - longestCoverageGap.start.getTime()
+      : 0,
+    nextCoverageGapStart: coverageGaps[0]?.start ?? null,
+    nextCoverageGapMs: coverageGaps[0]
+      ? coverageGaps[0].end.getTime() - coverageGaps[0].start.getTime()
+      : 0,
+    coverageGapCount: coverageGaps.length,
     onCallUsersCount,
     activeOverrides,
 

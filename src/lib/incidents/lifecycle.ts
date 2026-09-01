@@ -62,6 +62,7 @@ type IncidentLifecycleSnapshot = {
   currentEscalationStep: number | null;
   snoozedUntil: Date | null;
   snoozeReason: string | null;
+  escalationGeneration: number;
   service: {
     policy: {
       steps: Array<{ delayMinutes: number }>;
@@ -452,6 +453,7 @@ async function loadSnapshot(
       currentEscalationStep: true,
       snoozedUntil: true,
       snoozeReason: true,
+      escalationGeneration: true,
       service: {
         select: {
           policy: {
@@ -537,6 +539,35 @@ export async function applyIncidentLifecycleCommand(
       events: { create: lifecycleEvent },
     },
   });
+
+  if (input.command === 'SNOOZE' || input.command === 'SUPPRESS') {
+    const activePause = await tx.incidentSlaPause.findFirst({
+      where: { incidentId: input.incidentId, endedAt: null },
+      select: { id: true },
+    });
+    if (!activePause) {
+      await tx.incidentSlaPause.create({
+        data: {
+          incidentId: input.incidentId,
+          reason: input.snoozeReason?.trim() || input.command.toLowerCase(),
+          startedAt: now,
+          lifecycleGeneration: incident.escalationGeneration,
+          actorId: input.actor?.id ?? null,
+        },
+      });
+    }
+  } else if (
+    input.command === 'UNSNOOZE' ||
+    input.command === 'UNSUPPRESS' ||
+    input.command === 'ACKNOWLEDGE' ||
+    input.command === 'RESOLVE' ||
+    input.command === 'REOPEN'
+  ) {
+    await tx.incidentSlaPause.updateMany({
+      where: { incidentId: input.incidentId, endedAt: null },
+      data: { endedAt: now },
+    });
+  }
 
   if (input.command === 'RESOLVE' && resolutionNote && input.actor?.id) {
     await tx.incidentNote.create({

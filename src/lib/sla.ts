@@ -75,6 +75,11 @@ export type SLAMetrics = {
   coveragePercent: number;
   coverageGapDays: number;
   onCallHoursMs: number;
+  uncoveredOnCallMs?: number;
+  maxCoverageGapMs?: number;
+  nextCoverageGapStart?: Date | null;
+  nextCoverageGapMs?: number;
+  coverageGapCount?: number;
   onCallUsersCount: number;
   activeOverrides: number;
 

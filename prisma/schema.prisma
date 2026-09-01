@@ -143,6 +143,8 @@ enum EscalationTargetType {
 enum IncidentEventType {
   ACKNOWLEDGED
   ESCALATED
+  SLA_WARNING
+  SLA_BREACHED
   REOPENED
   AUTO_RESOLVED
   MANUAL_RESOLVED
@@ -187,7 +189,7 @@ model User {
   emailVerified                DateTime?
   // Session revocation marker: increment to force-logout all JWT sessions
   tokenVersion                 Int        @default(0)
-  invitationGeneration        Int        @default(0)
+  invitationGeneration         Int        @default(0)
   role                         Role       @default(USER)
   status                       UserStatus @default(INVITED)
   passwordHash                 String?
@@ -555,6 +557,7 @@ model Incident {
   actionItemRecords       ActionItem[]
   externalIssueLinks      ExternalIssueLink[]
   pinnedMessages          SlackPinnedMessage[]
+  slaPauses               IncidentSlaPause[]
 
   @@index([dedupKey]) // Index for fast deduplication lookups
   @@index([serviceId, dedupKey, status]) // For service-scoped deduplication checks
@@ -586,6 +589,23 @@ model Incident {
   @@index([serviceId, updatedAt], name: "idx_incident_service_updated_at") // Per-service realtime updates
   // Dashboard filtering by priority (SLA dashboards, widgets, exports)
   @@index([priority, status], name: "idx_incident_priority_status")
+}
+
+model IncidentSlaPause {
+  id                  String    @id @default(cuid())
+  incidentId          String
+  reason              String?
+  startedAt           DateTime
+  endedAt             DateTime?
+  lifecycleGeneration Int       @default(0)
+  actorId             String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, startedAt])
+  @@index([incidentId, endedAt])
 }
 
 model Tag {
