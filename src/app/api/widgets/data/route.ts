@@ -1,13 +1,11 @@
-import { getServerSession } from 'next-auth';
 import { NextRequest } from 'next/server';
-import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { getWidgetData } from '@/lib/widget-data-provider';
-import prisma from '@/lib/prisma';
 import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
 import { dashboardMetricsScope } from '@/lib/authorization-filters';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import { getCurrentUser } from '@/lib/rbac';
 
 /**
  * Unified Widget Data API
@@ -15,31 +13,9 @@ import type { AuthorizationActor } from '@/lib/authorization-policy';
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return jsonError('Unauthorized', 401);
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: {
-        id: true,
-        role: true,
-        status: true,
-        teamMemberships: { select: { teamId: true } },
-      },
-    });
-
-    if (!user || user.status !== 'ACTIVE') {
-      return jsonError('Unauthorized', 401);
-    }
-
-    const actor: AuthorizationActor = {
-      id: user.id,
-      role: user.role,
-      status: user.status,
-      teamIds: user.teamMemberships.map(membership => membership.teamId),
-    };
+    const user = await getCurrentUser();
+    const actor = await resolveUserActor(user.id);
+    if (!actor) return jsonError('Unauthorized', 401);
     const metricsScope = dashboardMetricsScope(actor);
 
     const searchParams = new URL(req.url).searchParams;
@@ -75,6 +51,8 @@ export async function GET(req: NextRequest) {
       Expires: '0',
     });
   } catch (error) {
+    const unauthorized = error instanceof Error && error.message.includes('Unauthorized');
+    if (unauthorized) return jsonError('Unauthorized', 401);
     logger.error('api.widgets.data.error', {
       error: error instanceof Error ? error.message : String(error),
     });
