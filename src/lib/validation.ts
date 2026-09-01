@@ -187,6 +187,15 @@ export const CustomFieldCreateSchema = z.object({
   showInList: z.boolean().optional(),
 });
 
+export const CustomFieldUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  required: z.boolean().optional(),
+  defaultValue: z.string().optional().nullable(),
+  options: z.unknown().optional().nullable(),
+  showInList: z.boolean().optional(),
+  order: z.number().int().optional(),
+});
+
 export const IncidentCustomFieldSchema = z.object({
   customFieldId: z.string().min(1),
   value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional().nullable(),
