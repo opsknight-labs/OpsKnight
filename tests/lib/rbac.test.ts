@@ -283,7 +283,7 @@ describe('RBAC Functions', () => {
 
     it('should deny an auditor even when they belong to the service team', async () => {
       vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockAuditor.email } });
-      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockAuditor as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockAuditor as never);
 
       await expect(assertCanModifyService(serviceId)).rejects.toThrow('Unauthorized');
       expect(prisma.service.findUnique).not.toHaveBeenCalled();
@@ -291,11 +291,11 @@ describe('RBAC Functions', () => {
 
     it('should allow a responder who belongs to the service team', async () => {
       vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockResponder.email } });
-      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockResponder as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockResponder as never);
       vi.mocked(prisma.service.findUnique).mockResolvedValue({
         id: serviceId,
         team: { members: [{ userId: mockResponder.id }] },
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never);
 
       expect(await assertCanModifyService(serviceId)).toEqual(mockResponder);
     });

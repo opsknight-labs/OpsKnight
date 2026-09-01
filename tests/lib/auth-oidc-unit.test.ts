@@ -136,7 +136,7 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'ACTIVE',
     });
-    (prisma.oidcLinkingApproval.findFirst as any).mockResolvedValue({ id: 'approval-record' });
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'approval-record' } as never);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
 
     const user = { email: 'user@example.com', name: 'User', id: 'oidc-sub' };
@@ -169,7 +169,7 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'ACTIVE',
     });
-    (prisma.oidcLinkingApproval.findFirst as any).mockResolvedValue({ id: 'approval-record' });
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'approval-record' } as never);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
 
     const result = await signIn({
@@ -193,7 +193,7 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'DISABLED',
     });
-    (prisma.oidcLinkingApproval.findFirst as any).mockResolvedValue({ id: 'historical-approval' });
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'historical-approval' } as never);
 
     const result = await signIn({
       user: { email: 'disabled@example.com', name: 'Disabled', id: 'oidc-sub' },
