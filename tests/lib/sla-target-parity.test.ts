@@ -40,8 +40,25 @@ describe('canonical SLA target and pause clock', () => {
       fallbackMinutes: 15,
     });
     expect(sql.strings.join(' ')).toContain('UPPER');
-    expect(sql.values).toEqual(expect.arrayContaining(['P1', 5 * 60_000, 'service-a']));
-    expect(sql.values).not.toContain("'service-a'");
+    expect(sql.strings.join(' ')).toContain('REGEXP_REPLACE');
+    expect(sql.values).toEqual(expect.arrayContaining(['P1', 5 * 60_000]));
+    expect(sql.strings.join(' ')).toContain('FROM "Service"');
+    expect(sql.values).not.toContain('service-a');
+  });
+
+  it('does not subtract a pause that starts after the evaluated event', () => {
+    expect(
+      effectiveElapsedMs({
+        startedAt: new Date('2026-01-01T00:00:00.000Z'),
+        evaluationAt: new Date('2026-01-01T00:05:00.000Z'),
+        pauses: [
+          {
+            startedAt: new Date('2026-01-01T00:10:00.000Z'),
+            endedAt: new Date('2026-01-01T00:20:00.000Z'),
+          },
+        ],
+      })
+    ).toBe(5 * 60_000);
   });
 
   it('keeps interval history and materialized clock equivalent', () => {

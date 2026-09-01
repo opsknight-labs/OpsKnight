@@ -7,20 +7,21 @@ function qualified(alias: string | undefined, name: string) {
   return Prisma.raw(`${alias ? `"${alias}".` : ''}"${name}"`);
 }
 
-/** PostgreSQL equivalent of effectiveMaterializedElapsedMs using [start,end) intervals. */
+/** PostgreSQL equivalent of effectiveElapsedMs using clipped durable [start,end) pause rows. */
 export function slaEffectiveElapsedSql(evaluationAt: Prisma.Sql, alias?: string) {
   const createdAt = qualified(alias, 'createdAt');
-  const pausedMs = qualified(alias, 'slaPausedMs');
-  const pauseStartedAt = qualified(alias, 'slaPauseStartedAt');
+  const incidentId = qualified(alias, 'id');
   return Prisma.sql`GREATEST(0,
     EXTRACT(EPOCH FROM (${evaluationAt} - ${createdAt})) * 1000
-    - COALESCE(${pausedMs}, 0)
-    - CASE
-        WHEN ${pauseStartedAt} IS NOT NULL AND ${pauseStartedAt} < ${evaluationAt}
-        THEN GREATEST(0, EXTRACT(EPOCH FROM (
-          ${evaluationAt} - GREATEST(${pauseStartedAt}, ${createdAt})
-        )) * 1000)
-        ELSE 0
-      END
+    - COALESCE((
+      SELECT SUM(GREATEST(0, EXTRACT(EPOCH FROM (
+        LEAST(COALESCE(p."endedAt", ${evaluationAt}), ${evaluationAt})
+        - GREATEST(p."startedAt", ${createdAt})
+      )) * 1000))
+      FROM "IncidentSlaPause" p
+      WHERE p."incidentId" = ${incidentId}
+        AND p."startedAt" < ${evaluationAt}
+        AND COALESCE(p."endedAt", ${evaluationAt}) > ${createdAt}
+    ), 0)
   )`;
 }

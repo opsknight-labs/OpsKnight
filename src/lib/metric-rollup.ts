@@ -9,7 +9,7 @@ import {
 import { incidentEventWhereFor } from './incident-event-classifier';
 import { acquireAdvisoryLock, LOCK_KEYS } from './db-locks';
 import { resolveSlaTarget } from './metrics/domain/sla-target';
-import { effectiveMaterializedElapsedMs } from './metrics/domain/sla-clock';
+import { effectiveElapsedMs } from './metrics/domain/sla-clock';
 
 /**
  * Metric Rollup Service
@@ -151,6 +151,7 @@ export async function generateDailyRollup(
             updatedAt: true,
             slaPausedMs: true,
             slaPauseStartedAt: true,
+            slaPauses: { select: { startedAt: true, endedAt: true } },
             serviceId: true,
             service: {
               select: {
@@ -293,11 +294,10 @@ export async function generateDailyRollup(
             },
           });
           const elapsedAt = (evaluationAt: Date) =>
-            effectiveMaterializedElapsedMs({
+            effectiveElapsedMs({
               startedAt: incident.createdAt,
               evaluationAt,
-              pausedMs: incident.slaPausedMs,
-              pauseStartedAt: incident.slaPauseStartedAt,
+              pauses: incident.slaPauses,
             });
 
           // MTTA calculation

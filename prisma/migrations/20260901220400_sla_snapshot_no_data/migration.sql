@@ -5,3 +5,4 @@ ALTER TABLE "SLASnapshot"
 
 -- Existing snapshots did not preserve denominators. Keep their score for
 -- compatibility but mark evaluated counts unknown (zero) until regenerated.
+UPDATE "SLASnapshot" SET "complianceScore" = NULL;

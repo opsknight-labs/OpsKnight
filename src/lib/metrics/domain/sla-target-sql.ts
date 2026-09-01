@@ -3,10 +3,6 @@ import { MINUTE_MS, PRIORITY_SLA_TARGETS } from './sla-target';
 
 type ServiceTarget = { ackMinutes: number; resolveMinutes: number };
 
-function minutesFor(target: ServiceTarget, kind: 'ackMinutes' | 'resolveMinutes') {
-  return kind === 'ackMinutes' ? target.ackMinutes : target.resolveMinutes;
-}
-
 function priorityMinutes(
   target: (typeof PRIORITY_SLA_TARGETS)[number],
   kind: 'ackMinutes' | 'resolveMinutes'
@@ -22,17 +18,19 @@ function column(alias: string | undefined, name: 'priority' | 'serviceId') {
 }
 
 function serviceTargetExpression(
-  serviceTargetMap: ReadonlyMap<string, ServiceTarget>,
+  _serviceTargetMap: ReadonlyMap<string, ServiceTarget>,
   kind: 'ackMinutes' | 'resolveMinutes',
   fallbackMinutes: number,
   alias?: string
 ) {
-  const cases = [...serviceTargetMap.entries()].map(
-    ([serviceId, target]) =>
-      Prisma.sql`WHEN ${column(alias, 'serviceId')} = ${serviceId} THEN ${minutesFor(target, kind) * MINUTE_MS}`
+  const serviceColumn = Prisma.raw(
+    kind === 'ackMinutes' ? '"targetAckMinutes"' : '"targetResolveMinutes"'
   );
-  if (cases.length === 0) return Prisma.sql`${fallbackMinutes * MINUTE_MS}`;
-  return Prisma.sql`CASE ${Prisma.join(cases, ' ')} ELSE ${fallbackMinutes * MINUTE_MS} END`;
+  return Prisma.sql`COALESCE((
+    SELECT s.${serviceColumn} * ${MINUTE_MS}
+    FROM "Service" s
+    WHERE s."id" = ${column(alias, 'serviceId')}
+  ), ${fallbackMinutes * MINUTE_MS})`;
 }
 
 /** SQL equivalent of resolveSlaTarget priority > service > global precedence. */
@@ -44,7 +42,7 @@ export function slaTargetSql(input: {
 }) {
   const priorityCases = PRIORITY_SLA_TARGETS.map(
     target =>
-      Prisma.sql`WHEN UPPER(${column(input.alias, 'priority')}) = ${target.priority}
+      Prisma.sql`WHEN CONCAT('P', REGEXP_REPLACE(UPPER(${column(input.alias, 'priority')}), '^P', '')) = ${target.priority}
       THEN ${priorityMinutes(target, input.kind) * MINUTE_MS}`
   );
   return Prisma.sql`CASE

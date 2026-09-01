@@ -30,6 +30,9 @@ export function compileIncidentMetricFilter(
   filter: IncidentMetricFilter,
   tableAlias = ''
 ): { prisma: Prisma.IncidentWhereInput; sql: Prisma.Sql; identity: MetricFilterIdentity } {
+  if (tableAlias && !/^[a-z][a-z0-9_]*$/i.test(tableAlias)) {
+    throw new Error('Invalid SQL alias');
+  }
   const services = values(filter.serviceId);
   const teams = values(filter.teamId);
   const priorities = values(filter.priority);

@@ -27,7 +27,7 @@ import { compileIncidentMetricFilter, type IncidentMetricFilter } from './metric
 import { METRIC_ACCUMULATOR } from './metrics/domain/accumulator';
 import { resolveSlaTarget } from './metrics/domain/sla-target';
 import { slaTargetSql } from './metrics/domain/sla-target-sql';
-import { effectiveMaterializedElapsedMs } from './metrics/domain/sla-clock';
+import { effectiveElapsedMs } from './metrics/domain/sla-clock';
 import { slaEffectiveElapsedSql } from './metrics/domain/sla-clock-sql';
 
 /**
@@ -999,6 +999,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     resolvedAt: true,
     slaPausedMs: true,
     slaPauseStartedAt: true,
+    slaPauses: { select: { startedAt: true, endedAt: true } },
     service: {
       select: {
         id: true,
@@ -1426,11 +1427,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     for (const incident of recentIncidents) {
       const ackAt = ackMap.get(incident.id);
       if (ackAt && incident.createdAt) {
-        const ackTimeMs = effectiveMaterializedElapsedMs({
+        const ackTimeMs = effectiveElapsedMs({
           startedAt: incident.createdAt,
           evaluationAt: ackAt,
-          pausedMs: incident.slaPausedMs,
-          pauseStartedAt: incident.slaPauseStartedAt,
+          pauses: incident.slaPauses,
         });
         if (ackTimeMs >= 0) {
           // Validate: ack can't be before creation
@@ -1441,11 +1441,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       if (incident.status === 'RESOLVED') {
         const resolvedAt = incident.resolvedAt || incident.updatedAt;
         if (resolvedAt && incident.createdAt) {
-          const resolveTimeMs = effectiveMaterializedElapsedMs({
+          const resolveTimeMs = effectiveElapsedMs({
             startedAt: incident.createdAt,
             evaluationAt: resolvedAt,
-            pausedMs: incident.slaPausedMs,
-            pauseStartedAt: incident.slaPauseStartedAt,
+            pauses: incident.slaPauses,
           });
           if (resolveTimeMs >= 0) {
             // Validate: resolve can't be before creation
@@ -1684,11 +1683,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         },
       });
       const elapsedAt = (evaluationAt: Date) =>
-        effectiveMaterializedElapsedMs({
+        effectiveElapsedMs({
           startedAt: incident.createdAt,
           evaluationAt,
-          pausedMs: incident.slaPausedMs,
-          pauseStartedAt: incident.slaPauseStartedAt,
+          pauses: incident.slaPauses,
         });
 
       // ACK SLA
@@ -1886,11 +1884,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       },
     });
     const elapsedAt = (evaluationAt: Date) =>
-      effectiveMaterializedElapsedMs({
+      effectiveElapsedMs({
         startedAt: incident.createdAt,
         evaluationAt,
-        pausedMs: incident.slaPausedMs,
-        pauseStartedAt: incident.slaPauseStartedAt,
+        pauses: incident.slaPauses,
       });
 
     const ackAt = ackMap.get(incident.id);
@@ -2470,6 +2467,7 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
       status: true,
       slaPausedMs: true,
       slaPauseStartedAt: true,
+      slaPauses: { select: { startedAt: true, endedAt: true } },
     },
   });
 
@@ -2486,11 +2484,10 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
 
   for (const incident of incidents) {
     const elapsedAt = (at: Date) =>
-      effectiveMaterializedElapsedMs({
+      effectiveElapsedMs({
         startedAt: incident.createdAt,
         evaluationAt: at,
-        pausedMs: incident.slaPausedMs,
-        pauseStartedAt: incident.slaPauseStartedAt,
+        pauses: incident.slaPauses,
       });
     // ACK evaluation
     if (targetAckTime) {
@@ -2567,7 +2564,7 @@ export async function checkIncidentSLA(incidentId: string): Promise<IncidentSLAR
   const { default: prisma } = await import('./prisma');
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
-    include: { service: true },
+    include: { service: true, slaPauses: { select: { startedAt: true, endedAt: true } } },
   });
 
   if (!incident) throw new Error('Incident not found');
@@ -2581,11 +2578,10 @@ export async function checkIncidentSLA(incidentId: string): Promise<IncidentSLAR
     },
   });
   const elapsedAt = (evaluationAt: Date) =>
-    effectiveMaterializedElapsedMs({
+    effectiveElapsedMs({
       startedAt: incident.createdAt,
       evaluationAt,
-      pausedMs: incident.slaPausedMs,
-      pauseStartedAt: incident.slaPauseStartedAt,
+      pauses: incident.slaPauses,
     });
   const elapsedMs = elapsedAt(now);
 

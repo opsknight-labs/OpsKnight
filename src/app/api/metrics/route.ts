@@ -112,7 +112,14 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       activeUsers: users.status === 'fulfilled' ? users.value : null,
       collectedAt: Date.now(),
     };
-    metricsCache = { value, expiresAt: Date.now() + 10_000 };
+    const degraded =
+      value.jobStats === null ||
+      value.jobTypeStats === null ||
+      value.incidentCount === null ||
+      value.activeUsers === null;
+    // A JS timeout cannot cancel every Prisma operation. Back off degraded
+    // collectors so repeated scrapes cannot create an unbounded query storm.
+    metricsCache = { value, expiresAt: Date.now() + (degraded ? 60_000 : 10_000) };
     return value;
   })().finally(() => {
     metricsInflight = null;
