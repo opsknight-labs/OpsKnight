@@ -807,8 +807,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               // durable server-side signal that an administrator provisioned this email address.
               if (existing && !isInvitedUser) {
                 const [inviteRecord, bootstrapRecord] = await Promise.all([
-                  prisma.userToken.findFirst({
-                    where: { identifier: email, type: 'INVITE' },
+                  prisma.oidcLinkingApproval.findFirst({
+                    where: { userId: existing.id, revokedAt: null },
                     select: { id: true },
                   }),
                   prisma.auditLog.findFirst({
@@ -1038,10 +1038,17 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             }
 
             if (Object.keys(updateData).length > 0) {
-              await prisma.user.update({
-                where: { id: targetUser.id },
-                data: updateData,
-              });
+              if (updateData.role && updateData.role !== targetUser.role) {
+                const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
+                const mappedRole = updateData.role;
+                delete updateData.role;
+                await updateUserSecurityState(targetUser.id, { role: mappedRole }, updateData);
+              } else {
+                await prisma.user.update({
+                  where: { id: targetUser.id },
+                  data: updateData,
+                });
+              }
               logger.info('[Auth] Updated user from OIDC data', {
                 component: 'auth:signIn',
                 userId: targetUser.id,

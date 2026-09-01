@@ -5,6 +5,8 @@ import { MobileAvatar, MobileEmptyState } from '@/components/mobile/MobileUtils'
 import { MobileSearchWithParams } from '@/components/mobile/MobileSearchParams';
 import { getDefaultAvatar } from '@/lib/avatar';
 import MobileCard from '@/components/mobile/MobileCard';
+import { assertAdmin } from '@/lib/rbac';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +16,11 @@ export default async function MobileUsersPage({
   searchParams: Promise<{ q?: string }>;
 }): Promise<JSX.Element> {
   const params = await searchParams;
+  try {
+    await assertAdmin();
+  } catch {
+    redirect('/m');
+  }
   const query = params.q || '';
 
   const users = await prisma.user.findMany({

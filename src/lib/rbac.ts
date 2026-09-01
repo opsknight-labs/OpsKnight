@@ -43,11 +43,11 @@ function appError(
 
 export async function getCurrentUser() {
   const session = await getServerSession(await getAuthOptions());
-  if (!session?.user?.email) {
+  if (!session?.user?.id && !session?.user?.email) {
     throw appError('AUTHENTICATION_REQUIRED', 'Unauthorized');
   }
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: session.user.id ? { id: session.user.id } : { email: session.user.email! },
     select: {
       id: true,
       role: true,
@@ -56,6 +56,16 @@ export async function getCurrentUser() {
       timeZone: true,
       status: true,
       tokenVersion: true,
+      invitationGeneration: true,
+      gender: true,
+      department: true,
+      jobTitle: true,
+      avatarUrl: true,
+      phoneNumber: true,
+      emailNotificationsEnabled: true,
+      smsNotificationsEnabled: true,
+      pushNotificationsEnabled: true,
+      whatsappNotificationsEnabled: true,
     },
   });
   if (!user) {
@@ -99,6 +109,12 @@ export async function assertCapability(capability: Capability, message?: string)
 export async function assertAdminOrTeamOwner(teamId: string) {
   const user = await getCurrentUser();
   if (user.role === 'ADMIN') return user;
+  if (user.role === 'AUDITOR') {
+    throw appError('AUTHORIZATION_DENIED', 'Read-only users cannot administer teams.', {
+      teamId,
+      userId: user.id,
+    });
+  }
 
   const membership = await prisma.teamMember.findFirst({
     where: { teamId, userId: user.id, role: 'OWNER' },
@@ -126,9 +142,13 @@ export async function assertCanViewTeam(teamId: string) {
     select: { id: true },
   });
   if (team) return getCurrentUser();
-  throw appError('AUTHORIZATION_DENIED', 'Unauthorized. You do not have permission to view this team.', {
-    teamId,
-  });
+  throw appError(
+    'AUTHORIZATION_DENIED',
+    'Unauthorized. You do not have permission to view this team.',
+    {
+      teamId,
+    }
+  );
 }
 
 export async function assertResponderOrAbove() {
@@ -145,7 +165,7 @@ export async function assertAuditorOrAdmin() {
   );
 }
 
-export async function assertNotSelf(currentUserId: string, targetUserId: string, action: string) {
+export function assertNotSelf(currentUserId: string, targetUserId: string, action: string) {
   if (currentUserId === targetUserId) {
     throw appError('AUTHORIZATION_DENIED', `You cannot ${action} your own account.`, {
       currentUserId,
@@ -395,6 +415,14 @@ async function assertIncidentPolicy(
 export async function assertCanModifyService(serviceId: string) {
   const user = await getCurrentUser();
   if (user.role === 'ADMIN') return user;
+
+  if (!hasCapability(user.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE)) {
+    throw appError(
+      'SERVICE_ACCESS_DENIED',
+      'Unauthorized. You do not have permission to modify this service.',
+      { serviceId, userId: user.id }
+    );
+  }
 
   const service = await prisma.service.findUnique({
     where: { id: serviceId },
