@@ -251,24 +251,67 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
       }
     : undefined;
 
+  const categories = [
+    {
+      title: 'SMS & Cellular Telephony',
+      description:
+        'Outbound urgent SMS text dispatch for high-priority incidents and on-call paging.',
+      keys: ['twilio'],
+    },
+    {
+      title: 'WhatsApp Business Messaging',
+      description:
+        'Interactive WhatsApp alert templates and conversational responder acknowledgments.',
+      keys: ['whatsapp'],
+    },
+    {
+      title: 'Transactional Email Gateways',
+      description:
+        'Primary and fallback SMTP/API providers for rich HTML incident summaries, postmortems, and invites.',
+      keys: ['resend', 'sendgrid', 'ses', 'smtp'],
+    },
+    {
+      title: 'Native Browser Push (PWA)',
+      description:
+        'Real-time desktop and mobile browser push notifications with encrypted VAPID keys.',
+      keys: ['web-push'],
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      {providerConfigs.map(providerConfig => {
-        const existing =
-          providerConfig.key === 'whatsapp'
-            ? whatsappProvider
-            : providerMap.get(providerConfig.key);
-        const isExpanded = expandedProvider === providerConfig.key;
+    <div className="space-y-8">
+      {categories.map(category => {
+        const matchingConfigs = providerConfigs.filter(cfg => category.keys.includes(cfg.key));
+        if (matchingConfigs.length === 0) return null;
 
         return (
-          <ProviderCard
-            key={providerConfig.key}
-            providerConfig={providerConfig}
-            existing={existing}
-            isExpanded={isExpanded}
-            onToggle={() => setExpandedProvider(isExpanded ? null : providerConfig.key)}
-            twilioProvider={providerConfig.key === 'whatsapp' ? twilioProvider : undefined}
-          />
+          <div key={category.title} className="space-y-3">
+            <div>
+              <h3 className="text-sm font-bold text-foreground tracking-tight">{category.title}</h3>
+              <p className="text-xs text-muted-foreground">{category.description}</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {matchingConfigs.map(providerConfig => {
+                const existing =
+                  providerConfig.key === 'whatsapp'
+                    ? whatsappProvider
+                    : providerMap.get(providerConfig.key);
+                const isExpanded = expandedProvider === providerConfig.key;
+
+                return (
+                  <ProviderCard
+                    key={providerConfig.key}
+                    providerConfig={providerConfig}
+                    existing={existing}
+                    isExpanded={isExpanded}
+                    onToggle={() => setExpandedProvider(isExpanded ? null : providerConfig.key)}
+                    twilioProvider={providerConfig.key === 'whatsapp' ? twilioProvider : undefined}
+                  />
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </div>

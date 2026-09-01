@@ -18,8 +18,25 @@ import { Switch } from '@/components/ui/shadcn/switch';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
-import { ChevronDown, ChevronUp, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Eye,
+  EyeOff,
+  Key,
+  ShieldCheck,
+  Mail,
+  MessageSquare,
+  Phone,
+  Bell,
+  Sparkles,
+  Save,
+} from 'lucide-react';
 import type { ProviderRecord, ProviderConfigSchema, SaveStatus } from '@/types/notification-types';
+import { notify as toast } from '@/lib/toast';
 
 interface ProviderCardProps {
   providerConfig: ProviderConfigSchema;
@@ -27,6 +44,23 @@ interface ProviderCardProps {
   isExpanded: boolean;
   onToggle: () => void;
   twilioProvider?: ProviderRecord;
+}
+
+function getProviderIcon(key: string) {
+  switch (key) {
+    case 'twilio':
+      return <Phone className="h-4 w-4 text-blue-500" />;
+    case 'whatsapp':
+      return <MessageSquare className="h-4 w-4 text-emerald-500" />;
+    case 'web-push':
+      return <Bell className="h-4 w-4 text-indigo-500" />;
+    case 'resend':
+    case 'sendgrid':
+    case 'ses':
+    case 'smtp':
+    default:
+      return <Mail className="h-4 w-4 text-amber-500" />;
+  }
 }
 
 export default function ProviderCard({
@@ -51,6 +85,7 @@ export default function ProviderCard({
   const [config, setConfig] = useState<Record<string, unknown>>(
     (existing?.config as Record<string, unknown>) || {}
   );
+  const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +185,7 @@ export default function ProviderCard({
 
     // Check if provider is configured before enabling
     if (newEnabled && !hasRequiredConfig) {
-      alert(
+      toast.error(
         'Please configure this provider first before enabling it. Click "Configure" to add required settings.'
       );
       return;
@@ -198,7 +233,7 @@ export default function ProviderCard({
       setTimeout(() => window.location.reload(), 500);
     } catch (err) {
       setEnabled(!newEnabled);
-      alert(
+      toast.error(
         `Failed to ${newEnabled ? 'enable' : 'disable'} provider: ${err instanceof Error ? err.message : 'Unknown error'}`
       );
     }
@@ -248,40 +283,74 @@ export default function ProviderCard({
     }
   };
 
+  const isConfigured = hasRequiredConfig;
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="space-y-1 flex-1">
-            <div className="flex items-center gap-3">
-              <CardTitle className="text-lg">{providerConfig.name}</CardTitle>
-              <Badge
-                variant={enabled ? 'default' : 'secondary'}
-                className={enabled ? 'bg-green-600' : ''}
-              >
-                {enabled ? 'Enabled' : 'Disabled'}
-              </Badge>
+    <Card className="border-border/80 shadow-xs bg-card overflow-hidden">
+      <CardHeader className="p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0 mt-0.5">
+              {getProviderIcon(providerConfig.key)}
             </div>
-            <CardDescription>{providerConfig.description}</CardDescription>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <CardTitle className="text-base font-bold text-foreground">
+                  {providerConfig.name}
+                </CardTitle>
+                {enabled ? (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1.5"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Active & Routing
+                  </Badge>
+                ) : isConfigured ? (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80"
+                  >
+                    Configured (Standby)
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                  >
+                    Setup Required
+                  </Badge>
+                )}
+              </div>
+              <CardDescription className="text-xs">{providerConfig.description}</CardDescription>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-3 self-end sm:self-auto">
+            <div className="flex items-center gap-2 bg-muted/30 px-2.5 py-1 rounded-lg border border-border/50">
+              <span className="text-xs font-medium text-muted-foreground">
+                {enabled ? 'Active' : 'Disabled'}
+              </span>
               <Switch
                 checked={enabled}
                 onCheckedChange={handleToggleEnabled}
                 disabled={isSaving || (!enabled && !hasRequiredConfig)}
               />
-              <span className="text-sm text-muted-foreground">{enabled ? 'On' : 'Off'}</span>
             </div>
-            <Button variant="outline" size="sm" onClick={onToggle}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onToggle}
+              className="text-xs font-semibold h-8 gap-1.5 border-border/80 hover:bg-accent"
+            >
               {isExpanded ? (
                 <>
-                  <ChevronUp className="h-4 w-4 mr-1" />
+                  <ChevronUp className="h-3.5 w-3.5" />
                   Collapse
                 </>
               ) : (
                 <>
-                  <ChevronDown className="h-4 w-4 mr-1" />
+                  <ChevronDown className="h-3.5 w-3.5" />
                   Configure
                 </>
               )}
@@ -291,9 +360,9 @@ export default function ProviderCard({
       </CardHeader>
 
       {isExpanded && (
-        <CardContent>
-          <form onSubmit={handleSave} className="space-y-6">
-            <div className="flex items-center space-x-2">
+        <CardContent className="p-4 sm:p-5 pt-0 sm:pt-0 border-t border-border/60 mt-2">
+          <form onSubmit={handleSave} className="space-y-5 pt-4">
+            <div className="flex items-center space-x-2 bg-muted/20 p-3 rounded-xl border border-border/50">
               <Checkbox
                 checked={enabled}
                 onCheckedChange={checked => setEnabled(!!checked)}
@@ -301,20 +370,23 @@ export default function ProviderCard({
               />
               <Label
                 htmlFor={`enable-${providerConfig.key}`}
-                className="text-sm font-medium cursor-pointer"
+                className="text-xs font-semibold cursor-pointer text-foreground"
               >
-                Enable {providerConfig.name}
+                Enable {providerConfig.name} for outbound alert dispatch
               </Label>
             </div>
 
             {isWebPush && (
-              <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+              <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-foreground">VAPID keys</p>
-                    <p className="text-xs text-muted-foreground">
-                      Generate or rotate the key pair for web push. Rotations keep existing devices
-                      working by retaining previous keys.
+                    <div className="flex items-center gap-2">
+                      <Key className="h-4 w-4 text-primary" />
+                      <p className="text-xs font-bold text-foreground">VAPID Cryptographic Keys</p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Generate or rotate the Web Push application server keys. Existing registered
+                      devices continue to receive alerts after rotation.
                     </p>
                   </div>
                   <Button
@@ -323,37 +395,44 @@ export default function ProviderCard({
                     size="sm"
                     onClick={handleGenerateVapid}
                     disabled={isGenerating}
-                    className="gap-2"
+                    className="gap-2 text-xs font-semibold shrink-0"
                   >
-                    {isGenerating && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {hasVapidKeys ? 'Rotate keys' : 'Generate keys'}
+                    {isGenerating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    )}
+                    {hasVapidKeys ? 'Rotate Keys' : 'Generate Keys'}
                   </Button>
                 </div>
                 {hasVapidKeys && (
-                  <div className="text-xs text-muted-foreground">
-                    Legacy keys retained: {legacyKeyCount}
+                  <div className="text-[11px] text-muted-foreground font-mono">
+                    Legacy active key versions retained: {legacyKeyCount}
                   </div>
                 )}
                 {generateNotice && (
-                  <Alert className="bg-green-50 border-green-200">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-700">{generateNotice}</AlertDescription>
+                  <Alert className="bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <AlertDescription className="text-xs">{generateNotice}</AlertDescription>
                   </Alert>
                 )}
                 {generateError && (
-                  <Alert variant="destructive">
+                  <Alert variant="destructive" className="py-2">
                     <XCircle className="h-4 w-4" />
-                    <AlertDescription>{generateError}</AlertDescription>
+                    <AlertDescription className="text-xs">{generateError}</AlertDescription>
                   </Alert>
                 )}
               </div>
             )}
 
-            {enabled && (
-              <div className="space-y-4 border-t pt-4">
-                {providerConfig.fields.map(field => (
-                  <div key={field.name} className="space-y-2">
-                    <Label htmlFor={field.name}>
+            <div className="space-y-4">
+              {providerConfig.fields.map(field => {
+                const isPasswordField = field.type === 'password';
+                const isVisible = showSecrets[field.name];
+
+                return (
+                  <div key={field.name} className="space-y-1.5">
+                    <Label htmlFor={field.name} className="text-xs font-semibold text-foreground">
                       {field.label}
                       {field.required && <span className="text-destructive ml-1">*</span>}
                     </Label>
@@ -364,11 +443,11 @@ export default function ProviderCard({
                         onChange={e => setConfig({ ...config, [field.name]: e.target.value })}
                         placeholder={field.placeholder}
                         required={field.required && enabled}
-                        rows={4}
-                        className="font-mono text-sm"
+                        rows={3}
+                        className="font-mono text-xs"
                       />
                     ) : field.type === 'checkbox' ? (
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 pt-1">
                         <Checkbox
                           id={field.name}
                           checked={(config[field.name] as boolean) || false}
@@ -376,45 +455,74 @@ export default function ProviderCard({
                             setConfig({ ...config, [field.name]: !!checked })
                           }
                         />
-                        <Label htmlFor={field.name} className="font-normal cursor-pointer">
+                        <Label
+                          htmlFor={field.name}
+                          className="text-xs font-normal cursor-pointer text-muted-foreground"
+                        >
                           {field.label}
                         </Label>
                       </div>
                     ) : (
-                      <Input
-                        id={field.name}
-                        type={field.type}
-                        value={(config[field.name] as string) || ''}
-                        onChange={e => setConfig({ ...config, [field.name]: e.target.value })}
-                        placeholder={field.placeholder}
-                        required={field.required && enabled}
-                        className={field.type === 'password' ? 'font-mono' : ''}
-                      />
+                      <div className="relative">
+                        <Input
+                          id={field.name}
+                          type={isPasswordField && isVisible ? 'text' : field.type}
+                          value={(config[field.name] as string) || ''}
+                          onChange={e => setConfig({ ...config, [field.name]: e.target.value })}
+                          placeholder={field.placeholder}
+                          required={field.required && enabled}
+                          className={`text-xs ${isPasswordField ? 'font-mono pr-9' : ''}`}
+                        />
+                        {isPasswordField && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowSecrets(prev => ({ ...prev, [field.name]: !prev[field.name] }))
+                            }
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          >
+                            {isVisible ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
 
-            <div className="flex items-center justify-between border-t pt-4">
-              <div className="flex-1">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/60 pt-4">
+              <div className="flex-1 w-full">
                 {saveStatus === 'success' && (
-                  <Alert className="bg-green-50 border-green-200">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-700">
-                      Saved successfully
+                  <Alert className="bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <AlertDescription className="text-xs font-medium">
+                      Configuration updated successfully
                     </AlertDescription>
                   </Alert>
                 )}
                 {saveStatus === 'error' && error && (
-                  <Alert variant="destructive">
+                  <Alert variant="destructive" className="py-2">
                     <XCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
+                    <AlertDescription className="text-xs">{error}</AlertDescription>
                   </Alert>
                 )}
               </div>
-              <Button type="submit" disabled={isSaving} className="ml-4">
-                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button
+                type="submit"
+                disabled={isSaving}
+                size="sm"
+                className="w-full sm:w-auto text-xs font-semibold gap-1.5"
+              >
+                {isSaving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
                 {isSaving ? 'Saving...' : 'Save Configuration'}
               </Button>
             </div>
@@ -423,10 +531,17 @@ export default function ProviderCard({
       )}
 
       {existing && !isExpanded && (
-        <CardContent className="pt-0">
-          <p className="text-xs text-muted-foreground">
-            Last updated: {formatDateTime(existing.updatedAt, userTimeZone, { format: 'datetime' })}
-          </p>
+        <CardContent className="px-4 sm:px-5 pb-4 pt-0">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40 pt-2.5">
+            <span className="flex items-center gap-1">
+              <ShieldCheck className="h-3 w-3 text-emerald-500" />
+              Encrypted credentials stored securely
+            </span>
+            <span>
+              Last modified:{' '}
+              {formatDateTime(existing.updatedAt, userTimeZone, { format: 'datetime' })}
+            </span>
+          </div>
         </CardContent>
       )}
     </Card>
