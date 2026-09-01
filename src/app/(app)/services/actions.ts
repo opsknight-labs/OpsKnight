@@ -1,7 +1,6 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { NotificationChannel } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
@@ -10,17 +9,9 @@ import { logAudit } from '@/lib/audit';
 import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
+import { parseServiceNotificationChannels } from '@/lib/service-notification-settings';
 
 const JIRA_AUTO_CREATE_URGENCIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
-const SERVICE_NOTIFICATION_CHANNELS = new Set<NotificationChannel>([
-  'SLACK',
-  'WEBHOOK',
-  'EMAIL',
-  'SMS',
-  'PUSH',
-  'WHATSAPP',
-]);
-
 function serviceSettingsRedirect(serviceId: string) {
   return `/services/${serviceId}?tab=settings&saved=1`;
 }
@@ -159,12 +150,7 @@ export async function updateService(serviceId: string, formData: FormData) {
 
 export async function updateServiceNotificationSettings(serviceId: string, formData: FormData) {
   const currentUser = await assertCanModifyService(serviceId);
-  const channels = formData
-    .getAll('serviceNotificationChannels')
-    .map(value => String(value))
-    .filter((value): value is NotificationChannel =>
-      SERVICE_NOTIFICATION_CHANNELS.has(value as NotificationChannel)
-    );
+  const channels = parseServiceNotificationChannels(formData);
   const slackChannel = formData.has('slackChannel')
     ? String(formData.get('slackChannel') ?? '').trim() || null
     : undefined;
