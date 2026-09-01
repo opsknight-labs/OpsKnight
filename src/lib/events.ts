@@ -434,6 +434,13 @@ export async function processEvent(
       });
 
       if (!isFlapping) {
+        // Escalation state and its first due job commit with the incident, so
+        // an OPEN incident with a policy is never left with nothing scheduled.
+        const { initializeEscalationExecution } = await import('./escalation/repository');
+        await initializeEscalationExecution(tx, {
+          incidentId: newIncident.id,
+          serviceId,
+        });
         await enqueueEventSideEffects(tx, 'triggered', newIncident.id);
       }
 

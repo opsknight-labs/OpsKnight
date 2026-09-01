@@ -18,6 +18,7 @@ import { logger } from '../logger';
 import type { EscalationAssignment } from './assignee-selection';
 import type { EscalationPlan } from './planner';
 import {
+  escalationDueAt,
   escalationLifecycleGate,
   type EscalationLifecycleGate,
   type EscalationStatus,
@@ -403,6 +404,70 @@ export async function commitEscalationPlan(input: {
 
     return { committed: true, gate, appliedStatus: nextState.status, nextJobId: nextJob };
   });
+}
+
+/**
+ * Arms an incident's escalation execution for its policy's first step.
+ *
+ * Called inside the incident-creation transaction so an OPEN incident with a
+ * policy can never commit without recoverable escalation state. Before this,
+ * the first step existed only as an outbox side effect: lose that row and the
+ * incident sat OPEN with `escalationStatus = null` and nothing due.
+ *
+ * Returns `initialized: false` when the service has no policy to run.
+ */
+export async function initializeEscalationExecution(
+  tx: Prisma.TransactionClient,
+  input: { incidentId: string; serviceId: string; now?: Date }
+): Promise<{ initialized: boolean; dueAt: Date | null }> {
+  const service = await tx.service.findUnique({
+    where: { id: input.serviceId },
+    select: {
+      policy: {
+        select: {
+          steps: { orderBy: { stepOrder: 'asc' }, take: 1, select: { delayMinutes: true } },
+        },
+      },
+    },
+  });
+
+  const firstStep = service?.policy?.steps[0];
+  if (!firstStep) return { initialized: false, dueAt: null };
+
+  const dueAt = escalationDueAt(input.now ?? new Date(), firstStep.delayMinutes);
+  const incident = await tx.incident.update({
+    where: { id: input.incidentId },
+    data: {
+      escalationStatus: 'ESCALATING',
+      currentEscalationStep: 0,
+      nextEscalationAt: dueAt,
+      escalationProcessingAt: null,
+    },
+    select: { escalationGeneration: true },
+  });
+
+  await createEscalationJob(tx, {
+    incidentId: input.incidentId,
+    generation: incident.escalationGeneration ?? 0,
+    stepIndex: 0,
+    scheduledAt: dueAt,
+  });
+
+  return { initialized: true, dueAt };
+}
+
+/**
+ * Recreates the due job for an execution whose state says work is owed but
+ * whose job row is gone. Used only by reconciliation; it does not advance the
+ * cursor, so a duplicate job is harmless — the claim CAS admits one worker.
+ */
+export async function recreateDueEscalationJob(input: {
+  incidentId: string;
+  generation: number;
+  stepIndex: number;
+  scheduledAt: Date;
+}): Promise<string> {
+  return runSerializableTransaction(tx => createEscalationJob(tx, input));
 }
 
 /**

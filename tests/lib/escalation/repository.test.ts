@@ -21,7 +21,11 @@ vi.mock('@/lib/db-utils', () => ({
 }));
 
 import prisma from '@/lib/prisma';
-import { claimEscalationStep, commitEscalationPlan } from '@/lib/escalation/repository';
+import {
+  claimEscalationStep,
+  commitEscalationPlan,
+  initializeEscalationExecution,
+} from '@/lib/escalation/repository';
 import type { EscalationPlan } from '@/lib/escalation/planner';
 
 const TOKEN = new Date('2026-05-01T10:00:00.000Z');
@@ -348,6 +352,90 @@ describe('commitEscalationPlan', () => {
 
     expect(result).toMatchObject({ committed: true, appliedStatus: 'FAILED', nextJobId: null });
     expect(writes).not.toContain('job');
+  });
+});
+
+describe('initializeEscalationExecution', () => {
+  function txWithPolicy(firstStepDelayMinutes: number | null) {
+    return {
+      service: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValue(
+            firstStepDelayMinutes === null
+              ? { policy: null }
+              : { policy: { steps: [{ delayMinutes: firstStepDelayMinutes }] } }
+          ),
+      },
+      incident: {
+        update: mocks.txIncidentUpdate.mockResolvedValue({ escalationGeneration: 2 }),
+      },
+      backgroundJob: {
+        create: mocks.txBackgroundJobCreate.mockResolvedValue({ id: 'job-first' }),
+      },
+    };
+  }
+
+  it('arms step 0 and its due job inside the caller transaction', async () => {
+    const tx = txWithPolicy(5);
+
+    const result = await initializeEscalationExecution(tx as never, {
+      incidentId: 'inc-1',
+      serviceId: 'svc-1',
+      now: TOKEN,
+    });
+
+    expect(result).toEqual({ initialized: true, dueAt: new Date('2026-05-01T10:05:00.000Z') });
+    expect(mocks.txIncidentUpdate).toHaveBeenCalledWith({
+      where: { id: 'inc-1' },
+      data: {
+        escalationStatus: 'ESCALATING',
+        currentEscalationStep: 0,
+        nextEscalationAt: new Date('2026-05-01T10:05:00.000Z'),
+        escalationProcessingAt: null,
+      },
+      select: { escalationGeneration: true },
+    });
+    expect(mocks.txBackgroundJobCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'ESCALATION',
+          scheduledAt: new Date('2026-05-01T10:05:00.000Z'),
+          payload: {
+            incidentId: 'inc-1',
+            stepIndex: 0,
+            generation: 2,
+            logicalKey: 'ESCALATION:inc-1:2:0',
+          },
+        }),
+      })
+    );
+  });
+
+  it('makes a zero-delay first step due immediately', async () => {
+    const tx = txWithPolicy(0);
+
+    const result = await initializeEscalationExecution(tx as never, {
+      incidentId: 'inc-1',
+      serviceId: 'svc-1',
+      now: TOKEN,
+    });
+
+    expect(result).toEqual({ initialized: true, dueAt: TOKEN });
+  });
+
+  it('writes nothing when the service has no policy', async () => {
+    const tx = txWithPolicy(null);
+
+    const result = await initializeEscalationExecution(tx as never, {
+      incidentId: 'inc-1',
+      serviceId: 'svc-1',
+      now: TOKEN,
+    });
+
+    expect(result).toEqual({ initialized: false, dueAt: null });
+    expect(mocks.txIncidentUpdate).not.toHaveBeenCalled();
+    expect(mocks.txBackgroundJobCreate).not.toHaveBeenCalled();
   });
 });
 

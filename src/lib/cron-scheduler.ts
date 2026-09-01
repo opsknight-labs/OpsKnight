@@ -364,9 +364,15 @@ async function runOnce() {
     const jobResult = await processPendingJobs(100, 15);
     const escalationResult = await processPendingEscalations();
 
+    // Repair escalations whose durable state and queued work disagree before
+    // reporting, so a lost job row cannot sit undetected until the next tick.
+    const { reconcileEscalations } = await import('./escalation/recovery');
+    const reconciliation = await reconcileEscalations();
+
     logger.info('[Cron] Critical tasks processed', {
       escalations: { processed: escalationResult.processed, total: escalationResult.total },
       jobs: { processed: jobResult.processed, failed: jobResult.failed, total: jobResult.total },
+      escalationRecovery: reconciliation,
     });
 
     // Group 2: Secondary tasks (can run in parallel)

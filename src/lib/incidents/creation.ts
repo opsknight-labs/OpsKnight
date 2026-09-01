@@ -6,6 +6,7 @@ import { AppError } from '@/lib/errors';
 import { validateCustomFieldValue } from '@/lib/custom-fields';
 import { IncidentCreateSchema } from '@/lib/validation';
 import { enqueueIncidentCreationSideEffects } from '@/lib/event-outbox';
+import { initializeEscalationExecution } from '@/lib/escalation/repository';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 
 export const INCIDENT_CREATION_OUTCOMES = ['CREATED', 'MERGED', 'REOPENED'] as const;
@@ -347,6 +348,14 @@ export async function applyIncidentCreation(
         : {}),
     },
     select: { id: true },
+  });
+
+  // Escalation state and its first due job commit with the incident, so an
+  // OPEN incident with a policy is never left with nothing scheduled.
+  await initializeEscalationExecution(tx, {
+    incidentId: incident.id,
+    serviceId: input.serviceId,
+    now,
   });
 
   await enqueueIncidentCreationSideEffects(tx, {

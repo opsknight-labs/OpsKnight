@@ -233,6 +233,7 @@ async function enqueueReopenEscalation(
       escalationStatus: true,
       currentEscalationStep: true,
       nextEscalationAt: true,
+      escalationGeneration: true,
     },
   });
   if (
@@ -259,6 +260,9 @@ async function enqueueReopenEscalation(
       payload: {
         incidentId: input.incidentId,
         stepIndex: incident.currentEscalationStep ?? 0,
+        // REOPEN opened a new generation; the job must name it so a worker can
+        // verify it before paging, and so reconciliation can judge it stale.
+        generation: incident.escalationGeneration,
         lifecycleTransitionAt: input.transitionAt.toISOString(),
       },
     },
