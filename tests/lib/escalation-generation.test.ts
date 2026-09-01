@@ -56,6 +56,7 @@ function incidentAtStart() {
     assigneeId: null,
     currentEscalationStep: 0,
     escalationStatus: 'ESCALATING',
+    escalationGeneration: 0,
     nextEscalationAt: OLD_DUE_AT,
     service: {
       policy: {
@@ -144,6 +145,43 @@ describe('escalation lifecycle generation fencing', () => {
     // Only the pre-notification assignment transaction ran. The stale worker
     // never reached its final lifecycle mutation transaction.
     expect(mocks.runSerializableTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a job from a superseded generation before paging anyone', async () => {
+    // The incident is on generation 3; this job was created for generation 2.
+    vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
+      ...incidentAtStart(),
+      escalationGeneration: 3,
+    } as never);
+
+    const result = await executeEscalation('inc-generation', 0, { generation: 2 });
+
+    expect(result).toEqual({
+      outcome: 'SUPERSEDED',
+      escalated: false,
+      reason: 'Escalation superseded by lifecycle transition',
+    });
+    // Nothing was claimed, nobody was paged, no state was touched.
+    expect(prisma.incident.updateMany).not.toHaveBeenCalled();
+    expect(mocks.sendUserNotification).not.toHaveBeenCalled();
+    expect(mocks.runSerializableTransaction).not.toHaveBeenCalled();
+  });
+
+  it('runs a job whose generation still matches the incident', async () => {
+    vi.mocked(prisma.incident.findUnique)
+      .mockResolvedValueOnce({ ...incidentAtStart(), escalationGeneration: 3 } as never)
+      .mockResolvedValueOnce({
+        status: 'OPEN',
+        escalationStatus: 'ESCALATING',
+        escalationProcessingAt: NOW,
+        escalationGeneration: 3,
+      } as never);
+    vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    const result = await executeEscalation('inc-generation', 0, { generation: 3 });
+
+    expect(result).toMatchObject({ escalated: true, stepIndex: 0 });
+    expect(mocks.sendUserNotification).toHaveBeenCalledTimes(1);
   });
 
   it('continues normally while the worker still owns its claim token', async () => {

@@ -66,7 +66,8 @@ export async function processJob(job:any):Promise<boolean>{
     switch(job.type){
       case'ESCALATION':{
         const {executeEscalation}=await import('../escalation');const {escalationJobIsSettled}=await import('../escalation/types');
-        const result=await executeEscalation(job.payload.incidentId,job.payload.stepIndex);
+        const generation=typeof job.payload.generation==='number'?job.payload.generation:undefined;
+        const result=await executeEscalation(job.payload.incidentId,job.payload.stepIndex,{generation});
         // The engine's typed outcome is authoritative. Only a retryable
         // infrastructure failure leaves escalation state unadvanced.
         if(escalationJobIsSettled(result.outcome)){await markJobCompleted(job.id);return true;}

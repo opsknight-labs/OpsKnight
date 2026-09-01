@@ -360,8 +360,14 @@ describe('executeEscalation', () => {
       },
     } as any);
 
-    // Lock acquisition fails
+    // Lock acquisition fails, and the incident is still a live escalation, so
+    // this is a competing worker rather than a superseded generation.
     vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 0 } as any);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
+      status: 'OPEN',
+      escalationStatus: 'ESCALATING',
+      escalationGeneration: 0,
+    } as any);
 
     const result = await executeEscalation('inc-1');
 

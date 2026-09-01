@@ -46,6 +46,7 @@ type IncidentStateRow = {
   escalationStatus: string | null;
   escalationProcessingAt: Date | null;
   currentEscalationStep: number | null;
+  escalationGeneration: number | null;
 };
 
 const INCIDENT_STATE_SELECT = {
@@ -55,6 +56,7 @@ const INCIDENT_STATE_SELECT = {
   escalationStatus: true,
   escalationProcessingAt: true,
   currentEscalationStep: true,
+  escalationGeneration: true,
 } as const;
 
 /**
@@ -107,18 +109,32 @@ async function createEscalationJob(
   return job.id;
 }
 
+export type EscalationClaim =
+  | { claimed: true; token: EscalationWorkerToken }
+  /** Another live worker holds this generation + step. */
+  | { claimed: false; reason: 'HELD' }
+  /** A newer lifecycle generation, or a terminal state, invalidated this work. */
+  | { claimed: false; reason: 'SUPERSEDED' };
+
 /**
  * Atomically takes ownership of one generation + step for this worker.
  *
- * Returns the claim token, or null when another worker already holds the step,
- * the incident is no longer OPEN, or its cursor has moved on.
+ * The compare-and-set covers the lifecycle generation as well as the step
+ * cursor and the lease, so a job created for generation N can never claim an
+ * incident that has since moved to generation N+1 — the point being that this
+ * happens *before* any responder page is dispatched, not after.
  */
 export async function claimEscalationStep(input: {
   incidentId: string;
   stepIndex: number;
+  /**
+   * The generation this work belongs to. Omitted only for legacy job payloads
+   * written before generations were carried, which cannot be verified.
+   */
+  expectedGeneration?: number;
   now: Date;
   lockTimeoutMs: number;
-}): Promise<EscalationWorkerToken | null> {
+}): Promise<EscalationClaim> {
   const lockCutoff = new Date(input.now.getTime() - input.lockTimeoutMs);
   // Step 0 may still be uninitialised (null cursor and null status) because an
   // incident that escalates immediately has never been through a step yet.
@@ -135,6 +151,9 @@ export async function claimEscalationStep(input: {
     where: {
       id: input.incidentId,
       status: 'OPEN',
+      ...(input.expectedGeneration === undefined
+        ? {}
+        : { escalationGeneration: input.expectedGeneration }),
       AND: [
         stepMatch,
         statusMatch,
@@ -150,7 +169,50 @@ export async function claimEscalationStep(input: {
     },
   });
 
-  return claim.count > 0 ? input.now : null;
+  if (claim.count > 0) return { claimed: true, token: input.now };
+
+  // The CAS covers several conditions at once. Re-read to tell "someone else is
+  // working on it" apart from "this work no longer belongs to any generation",
+  // because the two lead to different job outcomes.
+  const current = await prisma.incident.findUnique({
+    where: { id: input.incidentId },
+    select: { status: true, escalationStatus: true, escalationGeneration: true },
+  });
+
+  const superseded =
+    !current ||
+    current.status !== 'OPEN' ||
+    current.escalationStatus === 'COMPLETED' ||
+    current.escalationStatus === 'PAUSED' ||
+    current.escalationStatus === 'FAILED' ||
+    (input.expectedGeneration !== undefined &&
+      current.escalationGeneration !== input.expectedGeneration);
+
+  return { claimed: false, reason: superseded ? 'SUPERSEDED' : 'HELD' };
+}
+
+/**
+ * Cancels PENDING escalation jobs that belong to a generation the incident has
+ * moved past. Their payload identifies the generation they were created for;
+ * a job with no generation is left alone, since it cannot be judged stale.
+ */
+export async function cancelSupersededEscalationJobs(input: {
+  incidentId: string;
+  currentGeneration: number;
+  store?: { backgroundJob: Prisma.TransactionClient['backgroundJob'] };
+}): Promise<number> {
+  const store = input.store ?? prisma;
+  const result = await store.backgroundJob.updateMany({
+    where: {
+      type: 'ESCALATION',
+      status: 'PENDING',
+      payload: { path: ['incidentId'], equals: input.incidentId },
+      NOT: { payload: { path: ['generation'], equals: input.currentGeneration } },
+      AND: [{ NOT: { payload: { path: ['generation'], equals: Prisma.DbNull } } }],
+    },
+    data: { status: 'CANCELLED', error: 'Superseded by a newer escalation generation' },
+  });
+  return result.count;
 }
 
 /**
@@ -215,15 +277,28 @@ export async function applyPlannedAssignment(input: {
  */
 export async function escalationGenerationStillOwned(
   incidentId: string,
-  workerToken: EscalationWorkerToken
+  workerToken: EscalationWorkerToken,
+  expectedGeneration?: number
 ): Promise<boolean> {
   const current = await prisma.incident.findUnique({
     where: { id: incidentId },
-    select: { status: true, escalationStatus: true, escalationProcessingAt: true },
+    select: {
+      status: true,
+      escalationStatus: true,
+      escalationProcessingAt: true,
+      escalationGeneration: true,
+    },
   });
   if (!current) return false;
   if (current.status !== 'OPEN') return false;
   if (current.escalationStatus === 'COMPLETED') return false;
+  if (
+    expectedGeneration !== undefined &&
+    typeof current.escalationGeneration === 'number' &&
+    current.escalationGeneration !== expectedGeneration
+  ) {
+    return false;
+  }
   return !escalationWorkerInvalidated(current.escalationProcessingAt, workerToken);
 }
 
@@ -251,6 +326,14 @@ export async function commitEscalationPlan(input: {
     if (
       !current ||
       escalationWorkerInvalidated(current.escalationProcessingAt, input.workerToken)
+    ) {
+      return { committed: false };
+    }
+
+    // A generation that moved on belongs to a different escalation run.
+    if (
+      typeof current.escalationGeneration === 'number' &&
+      current.escalationGeneration !== input.generation
     ) {
       return { committed: false };
     }

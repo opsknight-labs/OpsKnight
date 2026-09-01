@@ -12,6 +12,7 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     incident: { findUnique: vi.fn(), updateMany: vi.fn() },
+    backgroundJob: { updateMany: vi.fn() },
   },
 }));
 
@@ -25,7 +26,11 @@ import type { EscalationPlan } from '@/lib/escalation/planner';
 
 const TOKEN = new Date('2026-05-01T10:00:00.000Z');
 
-type ClaimWhere = { status: string; AND: Array<Record<string, unknown>> };
+type ClaimWhere = {
+  status: string;
+  escalationGeneration?: number;
+  AND: Array<Record<string, unknown>>;
+};
 
 /** The `where` clause of the claim CAS, as issued. */
 function claimArgs(): { where: ClaimWhere } {
@@ -357,20 +362,94 @@ describe('claimEscalationStep', () => {
         now: TOKEN,
         lockTimeoutMs: 60_000,
       })
-    ).resolves.toEqual(TOKEN);
+    ).resolves.toEqual({ claimed: true, token: TOKEN });
   });
 
-  it('returns null when another worker already holds the step', async () => {
+  it('reports a live competing worker as held, not superseded', async () => {
     vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 0 } as never);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      status: 'OPEN',
+      escalationStatus: 'ESCALATING',
+      escalationGeneration: 4,
+    } as never);
 
     await expect(
       claimEscalationStep({
         incidentId: 'inc-1',
         stepIndex: 2,
+        expectedGeneration: 4,
         now: TOKEN,
         lockTimeoutMs: 60_000,
       })
-    ).resolves.toBeNull();
+    ).resolves.toEqual({ claimed: false, reason: 'HELD' });
+  });
+
+  it('reports a moved-on generation as superseded', async () => {
+    vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 0 } as never);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      status: 'OPEN',
+      escalationStatus: 'ESCALATING',
+      escalationGeneration: 5,
+    } as never);
+
+    await expect(
+      claimEscalationStep({
+        incidentId: 'inc-1',
+        stepIndex: 2,
+        expectedGeneration: 4,
+        now: TOKEN,
+        lockTimeoutMs: 60_000,
+      })
+    ).resolves.toEqual({ claimed: false, reason: 'SUPERSEDED' });
+  });
+
+  it.each(['ACKNOWLEDGED', 'RESOLVED', 'SNOOZED'] as const)(
+    'reports a %s incident as superseded',
+    async status => {
+      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 0 } as never);
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        status,
+        escalationStatus: 'PAUSED',
+        escalationGeneration: 4,
+      } as never);
+
+      await expect(
+        claimEscalationStep({
+          incidentId: 'inc-1',
+          stepIndex: 2,
+          expectedGeneration: 4,
+          now: TOKEN,
+          lockTimeoutMs: 60_000,
+        })
+      ).resolves.toEqual({ claimed: false, reason: 'SUPERSEDED' });
+    }
+  );
+
+  it('fences the claim on the lifecycle generation', async () => {
+    vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 } as never);
+
+    await claimEscalationStep({
+      incidentId: 'inc-1',
+      stepIndex: 2,
+      expectedGeneration: 7,
+      now: TOKEN,
+      lockTimeoutMs: 60_000,
+    });
+
+    expect(claimArgs().where.escalationGeneration).toBe(7);
+  });
+
+  it('omits the generation fence for an unverifiable legacy job', async () => {
+    vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 } as never);
+
+    await claimEscalationStep({
+      incidentId: 'inc-1',
+      stepIndex: 2,
+      now: TOKEN,
+      lockTimeoutMs: 60_000,
+    });
+
+    expect(claimArgs().where).not.toHaveProperty('escalationGeneration');
   });
 
   it('only claims an OPEN incident whose cursor matches, and respects the lease timeout', async () => {

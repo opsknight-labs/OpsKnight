@@ -84,6 +84,7 @@ async function dispatchStepNotifications(input: {
   channels: NotificationChannel[] | undefined;
   recipients: readonly string[];
   workerToken: EscalationWorkerToken;
+  generation: number;
 }): Promise<{ superseded: boolean; notifications: unknown[] }> {
   const { sendUserNotification } = await import('../user-notifications');
   const notifications: unknown[] = [];
@@ -92,7 +93,9 @@ async function dispatchStepNotifications(input: {
   }`;
 
   for (const userId of input.recipients) {
-    if (!(await escalationGenerationStillOwned(input.incidentId, input.workerToken))) {
+    if (
+      !(await escalationGenerationStillOwned(input.incidentId, input.workerToken, input.generation))
+    ) {
       return { superseded: true, notifications };
     }
     try {
@@ -127,9 +130,21 @@ async function dispatchStepNotifications(input: {
  * The planner decides every transition and the repository commits it in a
  * single transaction, so no branch in here writes escalation state of its own.
  */
+export interface ExecuteEscalationOptions {
+  /**
+   * The lifecycle generation this work was created for, from the job payload.
+   * When present it is verified before anything is claimed or paged, so a job
+   * left over from a superseded generation self-cancels. Legacy jobs written
+   * before generations were carried omit it and cannot be verified; they are
+   * allowed through so a rolling deploy does not drop in-flight escalations.
+   */
+  generation?: number;
+}
+
 export async function executeEscalation(
   incidentId: string,
-  stepIndex?: number
+  stepIndex?: number,
+  options: ExecuteEscalationOptions = {}
 ): Promise<EscalationExecutionResult> {
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
@@ -171,6 +186,18 @@ export async function executeEscalation(
   }
 
   const generation = incident.escalationGeneration ?? 0;
+
+  if (options.generation !== undefined && options.generation !== generation) {
+    // Refuse before resolving a target or paging anyone: this job belongs to an
+    // escalation run the incident has already moved past.
+    logger.info('escalation.execution.superseded', {
+      incidentId,
+      jobGeneration: options.generation,
+      currentGeneration: generation,
+    });
+    return supersededEscalationResult();
+  }
+
   const currentStepIndex = stepIndex ?? incident.currentEscalationStep ?? 0;
 
   if (escalationPolicyExhausted(currentStepIndex, policySteps.length)) {
@@ -222,20 +249,24 @@ export async function executeEscalation(
     // The step is due; fall through and execute it.
   }
 
-  const workerToken = await claimEscalationStep({
+  const claim = await claimEscalationStep({
     incidentId,
     stepIndex: currentStepIndex,
+    expectedGeneration: options.generation ?? generation,
     now,
     lockTimeoutMs: ESCALATION_LOCK_TIMEOUT_MS,
   });
 
-  if (!workerToken) {
-    return {
-      outcome: 'ALREADY_CLAIMED',
-      escalated: false,
-      reason: 'Escalation already in progress',
-    };
+  if (!claim.claimed) {
+    return claim.reason === 'SUPERSEDED'
+      ? supersededEscalationResult()
+      : {
+          outcome: 'ALREADY_CLAIMED',
+          escalated: false,
+          reason: 'Escalation already in progress',
+        };
   }
+  const workerToken = claim.token;
 
   const targetId = stepTargetId(step);
   let resolution: EscalationTargetResolution = {
@@ -321,6 +352,7 @@ export async function executeEscalation(
       channels: step.notificationChannels.length > 0 ? step.notificationChannels : undefined,
       recipients,
       workerToken,
+      generation,
     });
     if (dispatch.superseded) return supersededEscalationResult();
     notifications = dispatch.notifications;
