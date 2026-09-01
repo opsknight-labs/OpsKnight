@@ -9,10 +9,6 @@ import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { Input } from '@/components/ui/shadcn/input';
-import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
-import { notify as toast } from '@/lib/toast';
-import { Bell, Check } from 'lucide-react';
 
 type Props = {
   emailEnabled: boolean;
@@ -21,52 +17,6 @@ type Props = {
   whatsappEnabled: boolean;
   phoneNumber: string | null;
 };
-
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  return Uint8Array.from(rawData, char => char.charCodeAt(0));
-}
-
-async function registerDevicePushSubscription() {
-  if (
-    typeof window === 'undefined' ||
-    !('serviceWorker' in navigator) ||
-    !('PushManager' in window)
-  ) {
-    return;
-  }
-  try {
-    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    await navigator.serviceWorker.ready;
-
-    const keyRes = await fetch('/api/system/vapid-public-key');
-    if (!keyRes.ok) return;
-    const { key: vapidKey } = await keyRes.json();
-    if (!vapidKey) return;
-
-    let applicationServerKey: Uint8Array;
-    try {
-      applicationServerKey = urlBase64ToUint8Array(String(vapidKey));
-    } catch {
-      return;
-    }
-
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey as unknown as BufferSource,
-    });
-
-    await fetch('/api/user/push-subscription', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(subscription),
-    });
-  } catch (err) {
-    console.debug('Push subscription sync skipped:', err);
-  }
-}
 
 export default function NotificationPreferencesForm({
   emailEnabled,
@@ -82,36 +32,8 @@ export default function NotificationPreferencesForm({
   const [pushChecked, setPushChecked] = useState(pushEnabled);
   const [whatsappChecked, setWhatsappChecked] = useState(whatsappEnabled);
   const [phone, setPhone] = useState(initialPhoneNumber || '');
-  const [pushPermissionStatus, setPushPermissionStatus] = useState<
-    'granted' | 'denied' | 'default' | 'unsupported'
-  >(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      return Notification.permission;
-    }
-    return 'default';
-  });
 
-  const requestPushPermission = async () => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      try {
-        const permission = await Notification.requestPermission();
-        setPushPermissionStatus(permission);
-        if (permission === 'granted') {
-          setPushChecked(true);
-          await registerDevicePushSubscription();
-          toast.success('Push notifications enabled for this device!');
-        } else if (permission === 'denied') {
-          toast.error(
-            'Push notifications are blocked in your system or browser settings. Please allow notifications in device settings.'
-          );
-        }
-      } catch (_err) {
-        toast.error('Failed to request notification permission');
-      }
-    }
-  };
-
-  // Autosave notification channels
+  // Autosave notification channels directly to user account
   const handleAutoSave = useCallback(
     async (data: {
       email: boolean;
@@ -177,7 +99,7 @@ export default function NotificationPreferencesForm({
   return (
     <SettingsSection
       title="Notification Channels"
-      description="Configure how you receive incident alerts and team updates"
+      description="Configure how you receive incident alerts and team updates across your devices"
       action={<SaveIndicator status={saveStatus} error={saveError} />}
       footer={
         <p className="text-xs text-muted-foreground">
@@ -201,50 +123,9 @@ export default function NotificationPreferencesForm({
 
         <SettingsRow
           label="Push Notifications"
-          description="Real-time incident alerts and paging delivered directly to your devices (Desktop & Mobile)"
+          description="Receive real-time incident alerts and paging on your registered devices"
         >
-          <div className="flex items-center gap-3">
-            <Switch
-              checked={pushChecked}
-              onCheckedChange={checked => {
-                if (checked && pushPermissionStatus !== 'granted') {
-                  requestPushPermission();
-                } else {
-                  setPushChecked(checked);
-                  if (checked && pushPermissionStatus === 'granted') {
-                    registerDevicePushSubscription();
-                  }
-                }
-              }}
-            />
-            {pushPermissionStatus === 'granted' ? (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="text-emerald-600 dark:text-emerald-400 border-emerald-400/30 text-[10px] gap-1"
-              >
-                <Check className="h-2.5 w-2.5" /> Active
-              </Badge>
-            ) : pushPermissionStatus === 'denied' ? (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="text-destructive border-destructive/30 text-[10px]"
-              >
-                Blocked in Settings
-              </Badge>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={requestPushPermission}
-                className="text-xs h-7 gap-1.5 font-medium"
-              >
-                <Bell className="h-3 w-3" /> Enable on this device
-              </Button>
-            )}
-          </div>
+          <Switch checked={pushChecked} onCheckedChange={setPushChecked} />
         </SettingsRow>
 
         <SettingsRow
