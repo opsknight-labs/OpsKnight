@@ -5,6 +5,7 @@ import ProfileForm from '@/components/settings/ProfileForm';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
+import ProfileDetailTabs from '@/components/settings/ProfileDetailTabs';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import UserAvatar from '@/components/UserAvatar';
@@ -12,6 +13,12 @@ import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { Mail, Briefcase, Building2, Clock, RefreshCw, Users, Calendar, Flame } from 'lucide-react';
+
+export const revalidate = 0;
+
+type ProfileSettingsPageProps = {
+  searchParams?: Promise<{ tab?: string }>;
+};
 
 function formatLocalTimeInTz(timeZone: string): string {
   try {
@@ -27,11 +34,14 @@ function formatLocalTimeInTz(timeZone: string): string {
   }
 }
 
-export default async function ProfileSettingsPage() {
+export default async function ProfileSettingsPage({ searchParams }: ProfileSettingsPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const defaultTab = resolvedSearchParams?.tab || 'profile';
+
   const session = await getServerSession(await getAuthOptions());
   const email = session?.user?.email ?? null;
 
-  // Fetch user data with operational counts for hero stats
+  // Fetch full user profile along with team memberships, schedules, and policies
   const user = email
     ? await prisma.user.findUnique({
         where: { email },
@@ -56,11 +66,38 @@ export default async function ProfileSettingsPage() {
           quietHoursStartMinutes: true,
           quietHoursEndMinutes: true,
           quietHoursWeekendAllDay: true,
-          // Operational counts for hero stats
+          teamMemberships: {
+            include: {
+              team: {
+                select: { id: true, name: true, description: true },
+              },
+            },
+            orderBy: { team: { name: 'asc' } },
+          },
+          teamsLed: {
+            select: { id: true, name: true },
+          },
+          layerAssignments: {
+            include: {
+              layer: {
+                include: {
+                  schedule: {
+                    select: { id: true, name: true, timeZone: true },
+                  },
+                },
+              },
+            },
+          },
+          escalationRules: {
+            include: {
+              policy: {
+                select: { id: true, name: true, description: true },
+              },
+            },
+            orderBy: { stepOrder: 'asc' },
+          },
           _count: {
             select: {
-              teamMemberships: true,
-              layerAssignments: true,
               assignedIncidents: true,
             },
           },
@@ -80,9 +117,20 @@ export default async function ProfileSettingsPage() {
 
   const localTimeStr = formatLocalTimeInTz(timeZone);
 
+  const totalTeams = user?.teamMemberships?.length ?? 0;
+  const totalSchedules = user?.layerAssignments?.length ?? 0;
+  const totalIncidents = user?._count?.assignedIncidents ?? 0;
+
+  const activeChannelsCount = [
+    user?.emailNotificationsEnabled ?? false,
+    (user?.smsNotificationsEnabled ?? false) && !!user?.phoneNumber,
+    (user?.whatsappNotificationsEnabled ?? false) && !!user?.phoneNumber,
+    user?.pushNotificationsEnabled ?? false,
+  ].filter(Boolean).length;
+
   return (
     <div className="space-y-6">
-      {/* Centralized Hero Banner — Same pattern as /users/[id] */}
+      {/* Centralized Hero Header — Same pattern as /users/[id] and /teams/[id] */}
       <DetailHeroBanner
         breadcrumb={{
           label: 'Settings',
@@ -174,75 +222,88 @@ export default async function ProfileSettingsPage() {
         stats={[
           {
             label: 'Teams',
-            value: user?._count?.teamMemberships ?? 0,
+            value: totalTeams,
             icon: <Users className="h-3.5 w-3.5" />,
           },
           {
             label: 'On-Call',
-            value: user?._count?.layerAssignments ?? 0,
+            value: totalSchedules,
             icon: <Calendar className="h-3.5 w-3.5" />,
           },
           {
             label: 'Incidents',
-            value: user?._count?.assignedIncidents ?? 0,
+            value: totalIncidents,
             icon: <Flame className="h-3.5 w-3.5" />,
           },
         ]}
       />
 
-      {/* Profile Photo + Personal Information + Account Details */}
-      <ProfileForm
-        name={name}
-        email={email}
-        role={role}
-        memberSince={memberSince}
-        department={user?.department}
-        jobTitle={user?.jobTitle}
-        avatarUrl={user?.avatarUrl}
-        lastOidcSync={lastOidcSync}
-        gender={user?.gender}
-      />
-
-      {/* Timezone Preferences */}
-      <SettingsSection
-        title="Timezone"
-        description="Your primary timezone for incident timestamps, on-call schedules, and analytics"
-      >
-        <div className="py-2">
-          <PreferencesForm timeZone={user?.timeZone ?? 'UTC'} />
-        </div>
-      </SettingsSection>
-
-      {/* Notification Channels */}
-      <NotificationPreferencesForm
-        emailEnabled={user?.emailNotificationsEnabled ?? false}
-        smsEnabled={user?.smsNotificationsEnabled ?? false}
-        pushEnabled={user?.pushNotificationsEnabled ?? false}
-        whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
-        phoneNumber={user?.phoneNumber ?? null}
-      />
-
-      {/* Quiet Hours */}
-      <SettingsSection
-        title="Quiet Hours"
-        description="Silence non-critical alerts during your resting schedule"
-        footer={
-          <p className="text-xs text-muted-foreground flex items-center gap-2">
-            <Flame className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-            Critical and P1 incidents always bypass quiet hours to ensure safety.
-          </p>
-        }
-      >
-        <div className="py-2">
-          <QuietHoursForm
-            enabled={user?.quietHoursEnabled ?? false}
-            startMinutes={user?.quietHoursStartMinutes ?? 18 * 60}
-            endMinutes={user?.quietHoursEndMinutes ?? 8 * 60}
-            weekendAllDay={user?.quietHoursWeekendAllDay ?? true}
-            timeZone={timeZone}
+      {/* Centralized Tabbed Workspace — Instant 0ms Smooth Switching */}
+      <ProfileDetailTabs
+        defaultTab={defaultTab}
+        activeChannelsCount={activeChannelsCount}
+        teams={user?.teamMemberships ?? []}
+        teamsLed={user?.teamsLed ?? []}
+        layerAssignments={user?.layerAssignments ?? []}
+        escalationRules={user?.escalationRules ?? []}
+        profileContent={
+          <ProfileForm
+            name={name}
+            email={email}
+            role={role}
+            memberSince={memberSince}
+            department={user?.department}
+            jobTitle={user?.jobTitle}
+            avatarUrl={user?.avatarUrl}
+            lastOidcSync={lastOidcSync}
+            gender={user?.gender}
           />
-        </div>
-      </SettingsSection>
+        }
+        notificationsContent={
+          <NotificationPreferencesForm
+            emailEnabled={user?.emailNotificationsEnabled ?? false}
+            smsEnabled={user?.smsNotificationsEnabled ?? false}
+            pushEnabled={user?.pushNotificationsEnabled ?? false}
+            whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
+            phoneNumber={user?.phoneNumber ?? null}
+          />
+        }
+        scheduleContent={
+          <>
+            {/* Timezone Preferences */}
+            <SettingsSection
+              title="Timezone"
+              description="Your primary timezone for incident timestamps, on-call schedules, and analytics"
+            >
+              <div className="py-2">
+                <PreferencesForm timeZone={user?.timeZone ?? 'UTC'} />
+              </div>
+            </SettingsSection>
+
+            {/* Quiet Hours */}
+            <SettingsSection
+              title="Quiet Hours"
+              description="Silence non-critical alerts during your resting schedule"
+              footer={
+                <p className="text-xs text-muted-foreground flex items-center gap-2">
+                  <Flame className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  Critical and P1 incidents always bypass quiet hours to ensure safety.
+                </p>
+              }
+            >
+              <div className="py-2">
+                <QuietHoursForm
+                  enabled={user?.quietHoursEnabled ?? false}
+                  startMinutes={user?.quietHoursStartMinutes ?? 18 * 60}
+                  endMinutes={user?.quietHoursEndMinutes ?? 8 * 60}
+                  weekendAllDay={user?.quietHoursWeekendAllDay ?? true}
+                  timeZone={timeZone}
+                />
+              </div>
+            </SettingsSection>
+          </>
+        }
+      />
     </div>
   );
 }
