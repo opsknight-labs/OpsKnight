@@ -1,25 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 
 const dashboardVisibilities = new Set(['PRIVATE', 'TEAM', 'PUBLIC']);
 
 export const dynamic = 'force-dynamic';
 
+async function getDashboardActor() {
+  const user = await getCurrentUser();
+  const memberships = await prisma.teamMember.findMany({
+    where: { userId: user.id },
+    select: { teamId: true },
+  });
+  return { user, teamIds: memberships.map(membership => membership.teamId) };
+}
+
 /**
  * Single Dashboard API - GET, PUT, DELETE operations
  */
 
-// GET: Fetch single dashboard with widgets
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, teamIds } = await getDashboardActor();
 
     const dashboard = await prisma.dashboard.findUnique({
       where: { id },
@@ -34,19 +38,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Dashboard not found' }, { status: 404 });
     }
 
-    // Check access permissions
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, teamMemberships: { select: { teamId: true } } },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
     const isOwner = dashboard.userId === user.id;
-    const isTeamMember =
-      dashboard.teamId && user.teamMemberships.some(m => m.teamId === dashboard.teamId);
+    const isTeamMember = Boolean(dashboard.teamId && teamIds.includes(dashboard.teamId));
     const isPublicOrTemplate = dashboard.visibility === 'PUBLIC' || dashboard.isTemplate;
 
     if (!isOwner && !isTeamMember && !isPublicOrTemplate) {
@@ -63,6 +56,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
     });
   } catch (error) {
+    const unauthorized = error instanceof Error && error.message.includes('Unauthorized');
+    if (unauthorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     logger.error('api.dashboard.get.error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -70,25 +65,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-// PUT: Update dashboard
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, teamIds: teamIdList } = await getDashboardActor();
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, teamMemberships: { select: { teamId: true } } },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    // Check ownership
     const existing = await prisma.dashboard.findUnique({
       where: { id },
       select: { userId: true, visibility: true, teamId: true },
@@ -112,7 +93,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!dashboardVisibilities.has(effectiveVisibility)) {
       return NextResponse.json({ error: 'Invalid dashboard visibility' }, { status: 400 });
     }
-    const teamIds = new Set(user.teamMemberships.map(membership => membership.teamId));
+    const teamIds = new Set(teamIdList);
     if (effectiveVisibility === 'TEAM') {
       if (typeof effectiveTeamId !== 'string' || !teamIds.has(effectiveTeamId)) {
         return NextResponse.json({ error: 'Team dashboard access denied' }, { status: 403 });
@@ -121,14 +102,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Only team dashboards can specify a team' }, { status: 400 });
     }
 
-    // Transaction: Update dashboard and replace widgets
     const dashboard = await prisma.$transaction(async tx => {
-      // Delete existing widgets if new widgets provided
       if (widgets && Array.isArray(widgets)) {
         await tx.dashboardWidget.deleteMany({ where: { dashboardId: id } });
       }
 
-      // Update dashboard
       return tx.dashboard.update({
         where: { id },
         data: {
@@ -160,6 +138,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true, dashboard });
   } catch (error) {
+    const unauthorized = error instanceof Error && error.message.includes('Unauthorized');
+    if (unauthorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     logger.error('api.dashboard.put.error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -167,28 +147,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-// DELETE: Delete dashboard
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const user = await getCurrentUser();
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    // Check ownership
     const existing = await prisma.dashboard.findUnique({
       where: { id },
       select: { userId: true, isTemplate: true },
@@ -213,6 +179,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Dashboard deleted' });
   } catch (error) {
+    const unauthorized = error instanceof Error && error.message.includes('Unauthorized');
+    if (unauthorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     logger.error('api.dashboard.delete.error', {
       error: error instanceof Error ? error.message : String(error),
     });
