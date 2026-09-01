@@ -120,12 +120,13 @@ async function recreateMissingDueJobs(
   for (const incident of due) {
     if (queued.has(incident.id)) continue;
     try {
-      await recreateDueEscalationJob({
+      const jobId = await recreateDueEscalationJob({
         incidentId: incident.id,
         generation: incident.escalationGeneration ?? 0,
         stepIndex: incident.currentEscalationStep ?? 0,
         scheduledAt: incident.nextEscalationAt ?? now,
       });
+      if (!jobId) continue;
       report.dueJobsRecreated += 1;
       logger.warn('escalation.recovery.job_recreated', {
         incidentId: incident.id,

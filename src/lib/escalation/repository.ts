@@ -99,6 +99,17 @@ async function createEscalationJob(
   tx: Prisma.TransactionClient,
   input: { incidentId: string; generation: number; stepIndex: number; scheduledAt: Date }
 ): Promise<string> {
+  const logicalKey = escalationJobKey(input.incidentId, input.generation, input.stepIndex);
+  const existing = await tx.backgroundJob.findFirst({
+    where: {
+      type: 'ESCALATION',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      payload: { path: ['logicalKey'], equals: logicalKey },
+    },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
   const job = await tx.backgroundJob.create({
     data: {
       type: 'ESCALATION',
@@ -109,7 +120,7 @@ async function createEscalationJob(
         incidentId: input.incidentId,
         stepIndex: input.stepIndex,
         generation: input.generation,
-        logicalKey: escalationJobKey(input.incidentId, input.generation, input.stepIndex),
+        logicalKey,
       },
     },
     select: { id: true },
@@ -466,16 +477,27 @@ export async function initializeEscalationExecution(
   if (!firstStep) return { initialized: false, dueAt: null };
 
   const dueAt = escalationDueAt(input.now ?? new Date(), firstStep.delayMinutes);
-  const incident = await tx.incident.update({
-    where: { id: input.incidentId },
+  const initialized = await tx.incident.updateMany({
+    where: {
+      id: input.incidentId,
+      serviceId: input.serviceId,
+      status: 'OPEN',
+      escalationStatus: null,
+    },
     data: {
       escalationStatus: 'ESCALATING',
       currentEscalationStep: 0,
       nextEscalationAt: dueAt,
       escalationProcessingAt: null,
     },
+  });
+  if (initialized.count === 0) return { initialized: false, dueAt: null };
+
+  const incident = await tx.incident.findUnique({
+    where: { id: input.incidentId },
     select: { escalationGeneration: true },
   });
+  if (!incident) return { initialized: false, dueAt: null };
 
   await createEscalationJob(tx, {
     incidentId: input.incidentId,
@@ -497,8 +519,31 @@ export async function recreateDueEscalationJob(input: {
   generation: number;
   stepIndex: number;
   scheduledAt: Date;
-}): Promise<string> {
-  return runSerializableTransaction(tx => createEscalationJob(tx, input));
+}): Promise<string | null> {
+  return runSerializableTransaction(async tx => {
+    const current = await tx.incident.findUnique({
+      where: { id: input.incidentId },
+      select: {
+        status: true,
+        escalationStatus: true,
+        escalationGeneration: true,
+        currentEscalationStep: true,
+        nextEscalationAt: true,
+      },
+    });
+    if (
+      !current ||
+      current.status !== 'OPEN' ||
+      current.escalationStatus !== 'ESCALATING' ||
+      (current.escalationGeneration ?? 0) !== input.generation ||
+      (current.currentEscalationStep ?? 0) !== input.stepIndex ||
+      !current.nextEscalationAt ||
+      current.nextEscalationAt.getTime() > input.scheduledAt.getTime()
+    ) {
+      return null;
+    }
+    return createEscalationJob(tx, input);
+  });
 }
 
 /**
@@ -511,10 +556,29 @@ export async function scheduleDelayedEscalationStep(input: {
   stepIndex: number;
   delayMinutes: number;
   dueAt: Date;
-}): Promise<void> {
-  await runSerializableTransaction(async tx => {
-    await tx.incident.update({
-      where: { id: input.incidentId },
+}): Promise<boolean> {
+  return runSerializableTransaction(async tx => {
+    const stepMatch =
+      input.stepIndex === 0
+        ? { OR: [{ currentEscalationStep: null }, { currentEscalationStep: 0 }] }
+        : { currentEscalationStep: input.stepIndex };
+    const statusMatch =
+      input.stepIndex === 0
+        ? { OR: [{ escalationStatus: null }, { escalationStatus: 'ESCALATING' }] }
+        : { escalationStatus: 'ESCALATING' };
+
+    // This CAS is both a lifecycle fence and a dedupe boundary. If another
+    // worker armed the delay, or ACK/resolve/reopen changed the generation
+    // after our read, no timeline event or duplicate job may be written.
+    const armed = await tx.incident.updateMany({
+      where: {
+        id: input.incidentId,
+        status: 'OPEN',
+        escalationGeneration: input.generation,
+        escalationProcessingAt: null,
+        nextEscalationAt: null,
+        AND: [stepMatch, statusMatch],
+      },
       data: {
         escalationStatus: 'ESCALATING',
         currentEscalationStep: input.stepIndex,
@@ -522,6 +586,7 @@ export async function scheduleDelayedEscalationStep(input: {
         escalationProcessingAt: null,
       },
     });
+    if (armed.count === 0) return false;
 
     await tx.incidentEvent.create({
       data: {
@@ -536,6 +601,7 @@ export async function scheduleDelayedEscalationStep(input: {
       stepIndex: input.stepIndex,
       scheduledAt: input.dueAt,
     });
+    return true;
   });
 }
 
@@ -546,12 +612,23 @@ export async function scheduleDelayedEscalationStep(input: {
  */
 export async function finalizeEscalationExecution(input: {
   incidentId: string;
+  expectedGeneration: number;
+  expectedStep: number;
   status: EscalationStatus | null;
   timelineMessage?: string;
-}): Promise<void> {
-  await runSerializableTransaction(async tx => {
-    await tx.incident.update({
-      where: { id: input.incidentId },
+}): Promise<boolean> {
+  return runSerializableTransaction(async tx => {
+    const stepMatch =
+      input.expectedStep === 0
+        ? { OR: [{ currentEscalationStep: null }, { currentEscalationStep: 0 }] }
+        : { currentEscalationStep: input.expectedStep };
+    const finalized = await tx.incident.updateMany({
+      where: {
+        id: input.incidentId,
+        status: 'OPEN',
+        escalationGeneration: input.expectedGeneration,
+        ...stepMatch,
+      },
       data: {
         escalationStatus: input.status,
         nextEscalationAt: null,
@@ -559,6 +636,7 @@ export async function finalizeEscalationExecution(input: {
         escalationProcessingAt: null,
       },
     });
+    if (finalized.count === 0) return false;
 
     if (input.timelineMessage) {
       await tx.incidentEvent.create({
@@ -569,5 +647,6 @@ export async function finalizeEscalationExecution(input: {
         },
       });
     }
+    return true;
   });
 }

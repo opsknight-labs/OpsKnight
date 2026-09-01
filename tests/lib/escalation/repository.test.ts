@@ -4,7 +4,9 @@ const mocks = vi.hoisted(() => ({
   runSerializableTransaction: vi.fn(),
   txIncidentFindUnique: vi.fn(),
   txIncidentUpdate: vi.fn(),
+  txIncidentUpdateMany: vi.fn(),
   txIncidentEventCreate: vi.fn(),
+  txBackgroundJobFindFirst: vi.fn(),
   txBackgroundJobCreate: vi.fn(),
 }));
 
@@ -24,7 +26,9 @@ import prisma from '@/lib/prisma';
 import {
   claimEscalationStep,
   commitEscalationPlan,
+  finalizeEscalationExecution,
   initializeEscalationExecution,
+  scheduleDelayedEscalationStep,
 } from '@/lib/escalation/repository';
 import type { EscalationPlan } from '@/lib/escalation/planner';
 
@@ -75,6 +79,7 @@ function transactionDouble(failOn?: 'incident' | 'event' | 'job') {
     callback({
       incident: {
         findUnique: mocks.txIncidentFindUnique,
+        updateMany: mocks.txIncidentUpdateMany,
         update: mocks.txIncidentUpdate.mockImplementation(async (args: unknown) => {
           if (failOn === 'incident') throw new Error('incident write failed');
           writes.push('incident');
@@ -89,6 +94,7 @@ function transactionDouble(failOn?: 'incident' | 'event' | 'job') {
         }),
       },
       backgroundJob: {
+        findFirst: mocks.txBackgroundJobFindFirst,
         create: mocks.txBackgroundJobCreate.mockImplementation(async () => {
           if (failOn === 'job') throw new Error('job insert failed');
           writes.push('job');
@@ -103,6 +109,111 @@ function transactionDouble(failOn?: 'incident' | 'event' | 'job') {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.txIncidentFindUnique.mockResolvedValue(incidentRow());
+  mocks.txIncidentUpdateMany.mockResolvedValue({ count: 1 });
+  mocks.txBackgroundJobFindFirst.mockResolvedValue(null);
+});
+
+describe('generation-fenced state transitions', () => {
+  it('arms a delayed step and job only while the lifecycle generation is still current', async () => {
+    transactionDouble();
+
+    await expect(
+      scheduleDelayedEscalationStep({
+        incidentId: 'inc-1',
+        generation: 4,
+        stepIndex: 0,
+        delayMinutes: 10,
+        dueAt: DUE_AT,
+      })
+    ).resolves.toBe(true);
+
+    expect(mocks.txIncidentUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'inc-1',
+        status: 'OPEN',
+        escalationGeneration: 4,
+        escalationProcessingAt: null,
+        nextEscalationAt: null,
+        AND: [
+          { OR: [{ currentEscalationStep: null }, { currentEscalationStep: 0 }] },
+          { OR: [{ escalationStatus: null }, { escalationStatus: 'ESCALATING' }] },
+        ],
+      },
+      data: {
+        escalationStatus: 'ESCALATING',
+        currentEscalationStep: 0,
+        nextEscalationAt: DUE_AT,
+        escalationProcessingAt: null,
+      },
+    });
+    expect(mocks.txIncidentEventCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.txBackgroundJobCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not schedule delayed work after acknowledgment or generation rollover', async () => {
+    transactionDouble();
+    mocks.txIncidentUpdateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      scheduleDelayedEscalationStep({
+        incidentId: 'inc-1',
+        generation: 4,
+        stepIndex: 0,
+        delayMinutes: 10,
+        dueAt: DUE_AT,
+      })
+    ).resolves.toBe(false);
+
+    expect(mocks.txIncidentEventCreate).not.toHaveBeenCalled();
+    expect(mocks.txBackgroundJobCreate).not.toHaveBeenCalled();
+  });
+
+  it('finalizes only the generation and cursor the caller observed', async () => {
+    transactionDouble();
+
+    await expect(
+      finalizeEscalationExecution({
+        incidentId: 'inc-1',
+        expectedGeneration: 4,
+        expectedStep: 2,
+        status: 'COMPLETED',
+        timelineMessage: 'Policy exhausted',
+      })
+    ).resolves.toBe(true);
+
+    expect(mocks.txIncidentUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'inc-1',
+        status: 'OPEN',
+        escalationGeneration: 4,
+        currentEscalationStep: 2,
+      },
+      data: {
+        escalationStatus: 'COMPLETED',
+        nextEscalationAt: null,
+        currentEscalationStep: null,
+        escalationProcessingAt: null,
+      },
+    });
+    expect(mocks.txIncidentEventCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not finalize or narrate a superseded lifecycle generation', async () => {
+    transactionDouble();
+    mocks.txIncidentUpdateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      finalizeEscalationExecution({
+        incidentId: 'inc-1',
+        expectedGeneration: 4,
+        expectedStep: 2,
+        status: 'COMPLETED',
+        timelineMessage: 'Policy exhausted',
+      })
+    ).resolves.toBe(false);
+
+    expect(mocks.txIncidentEventCreate).not.toHaveBeenCalled();
+  });
 });
 
 describe('commitEscalationPlan', () => {
@@ -374,9 +485,11 @@ describe('initializeEscalationExecution', () => {
           ),
       },
       incident: {
-        update: mocks.txIncidentUpdate.mockResolvedValue({ escalationGeneration: 2 }),
+        updateMany: mocks.txIncidentUpdateMany.mockResolvedValue({ count: 1 }),
+        findUnique: mocks.txIncidentFindUnique.mockResolvedValue({ escalationGeneration: 2 }),
       },
       backgroundJob: {
+        findFirst: mocks.txBackgroundJobFindFirst.mockResolvedValue(null),
         create: mocks.txBackgroundJobCreate.mockResolvedValue({ id: 'job-first' }),
       },
     };
@@ -392,15 +505,19 @@ describe('initializeEscalationExecution', () => {
     });
 
     expect(result).toEqual({ initialized: true, dueAt: new Date('2026-05-01T10:05:00.000Z') });
-    expect(mocks.txIncidentUpdate).toHaveBeenCalledWith({
-      where: { id: 'inc-1' },
+    expect(mocks.txIncidentUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'inc-1',
+        serviceId: 'svc-1',
+        status: 'OPEN',
+        escalationStatus: null,
+      },
       data: {
         escalationStatus: 'ESCALATING',
         currentEscalationStep: 0,
         nextEscalationAt: new Date('2026-05-01T10:05:00.000Z'),
         escalationProcessingAt: null,
       },
-      select: { escalationGeneration: true },
     });
     expect(mocks.txBackgroundJobCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -428,6 +545,43 @@ describe('initializeEscalationExecution', () => {
     });
 
     expect(result).toEqual({ initialized: true, dueAt: TOKEN });
+  });
+
+  it('does not re-arm a stale recovery candidate after its lifecycle changed', async () => {
+    const tx = txWithPolicy(5);
+    mocks.txIncidentUpdateMany.mockResolvedValue({ count: 0 });
+
+    const result = await initializeEscalationExecution(tx as never, {
+      incidentId: 'inc-1',
+      serviceId: 'svc-1',
+      now: TOKEN,
+    });
+
+    expect(result).toEqual({ initialized: false, dueAt: null });
+    expect(mocks.txIncidentFindUnique).not.toHaveBeenCalled();
+    expect(mocks.txBackgroundJobCreate).not.toHaveBeenCalled();
+  });
+
+  it('reuses an active job with the same logical escalation identity', async () => {
+    const tx = txWithPolicy(5);
+    mocks.txBackgroundJobFindFirst.mockResolvedValue({ id: 'job-existing' });
+
+    const result = await initializeEscalationExecution(tx as never, {
+      incidentId: 'inc-1',
+      serviceId: 'svc-1',
+      now: TOKEN,
+    });
+
+    expect(result.initialized).toBe(true);
+    expect(mocks.txBackgroundJobFindFirst).toHaveBeenCalledWith({
+      where: {
+        type: 'ESCALATION',
+        status: { in: ['PENDING', 'PROCESSING'] },
+        payload: { path: ['logicalKey'], equals: 'ESCALATION:inc-1:2:0' },
+      },
+      select: { id: true },
+    });
+    expect(mocks.txBackgroundJobCreate).not.toHaveBeenCalled();
   });
 
   it('writes nothing when the service has no policy', async () => {

@@ -48,6 +48,7 @@ vi.mock('@/lib/user-notifications', () => ({
 // Mock db-utils. The escalation repository commits through this, so the
 // transaction client's writes are what these tests observe.
 const txIncidentUpdate = vi.fn();
+const txIncidentUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
 // `executeEscalation` claims at the frozen system time used by these tests, so
 // the reloaded lease must carry that same token or every commit reads as
 // superseded.
@@ -63,10 +64,14 @@ vi.mock('@/lib/db-utils', () => ({
           escalationProcessingAt: new Date('2026-01-01T12:00:00.000Z'),
           currentEscalationStep: 0,
         }),
+        updateMany: txIncidentUpdateMany,
         update: txIncidentUpdate,
       },
       incidentEvent: { create: vi.fn() },
-      backgroundJob: { create: vi.fn().mockResolvedValue({ id: 'job-next' }) },
+      backgroundJob: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: 'job-next' }),
+      },
     });
   }),
 }));
@@ -82,7 +87,7 @@ describe('resolveEscalationTarget', () => {
         id: 'user-123',
         name: 'Primary',
         status: 'ACTIVE',
-      } as any);
+      } as never);
 
       const result = await resolveEscalationTarget('USER', 'user-123');
       expect(result).toEqual(['user-123']);
@@ -93,7 +98,7 @@ describe('resolveEscalationTarget', () => {
         id: 'user-123',
         name: 'Primary',
         status,
-      } as any);
+      } as never);
 
       expect(await resolveEscalationTarget('USER', 'user-123')).toEqual([]);
     });
@@ -254,6 +259,7 @@ describe('executeEscalation', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T12:00:00.000Z'));
     vi.clearAllMocks();
+    vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 } as never);
   });
 
   afterEach(() => {
@@ -270,7 +276,7 @@ describe('executeEscalation', () => {
       escalated: false,
       reason: 'Incident not found',
     });
-    expect(prisma.incident.update).not.toHaveBeenCalled();
+    expect(prisma.incident.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns early when no escalation policy configured', async () => {
@@ -328,8 +334,13 @@ describe('executeEscalation', () => {
       reason: 'All escalation steps exhausted',
     });
     // Terminal state is committed by the repository, inside a transaction.
-    expect(txIncidentUpdate).toHaveBeenCalledWith({
-      where: { id: 'inc-1' },
+    expect(txIncidentUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'inc-1',
+        status: 'OPEN',
+        escalationGeneration: 0,
+        currentEscalationStep: 1,
+      },
       data: {
         escalationStatus: 'COMPLETED',
         nextEscalationAt: null,
@@ -358,7 +369,7 @@ describe('executeEscalation', () => {
           ],
         },
       },
-    } as any);
+    } as never);
 
     // Lock acquisition fails, and the incident is still a live escalation, so
     // this is a competing worker rather than a superseded generation.
@@ -367,7 +378,7 @@ describe('executeEscalation', () => {
       status: 'OPEN',
       escalationStatus: 'ESCALATING',
       escalationGeneration: 0,
-    } as any);
+    } as never);
 
     const result = await executeEscalation('inc-1');
 
@@ -496,7 +507,14 @@ describe('processPendingEscalations', () => {
   });
 
   it('handles retryable errors gracefully', async () => {
-    const incidents = [{ id: 'inc-1', currentEscalationStep: 0, escalationStatus: 'ESCALATING' }];
+    const incidents = [
+      {
+        id: 'inc-1',
+        currentEscalationStep: 0,
+        escalationStatus: 'ESCALATING',
+        escalationGeneration: 7,
+      },
+    ];
 
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
@@ -507,6 +525,15 @@ describe('processPendingEscalations', () => {
     expect(result.errors).toHaveLength(1);
     // Error should be recorded
     expect(result.errors![0]).toContain('Serialization failure');
+    expect(prisma.incident.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'inc-1',
+        status: 'OPEN',
+        escalationGeneration: 7,
+        currentEscalationStep: 0,
+      },
+      data: { escalationProcessingAt: null },
+    });
   });
 
   it('uses provided step index from incident', async () => {

@@ -127,18 +127,24 @@ export async function executeEscalation(
 
   const policy = incident.service.policy;
   const policySteps = (policy?.steps ?? []) as unknown as PolicyStepRow[];
+  const generation = incident.escalationGeneration ?? 0;
+  const currentStepIndex = stepIndex ?? incident.currentEscalationStep ?? 0;
 
   if (policySteps.length === 0) {
     // A service with no policy carries no escalation state.
-    await finalizeEscalationExecution({ incidentId, status: null });
+    const finalized = await finalizeEscalationExecution({
+      incidentId,
+      expectedGeneration: generation,
+      expectedStep: currentStepIndex,
+      status: null,
+    });
+    if (!finalized) return supersededEscalationResult();
     return { outcome: 'NO_POLICY', escalated: false, reason: 'No escalation policy configured' };
   }
 
   if (incident.escalationStatus === 'COMPLETED') {
     return { outcome: 'COMPLETED', escalated: false, reason: 'Escalation already completed' };
   }
-
-  const generation = incident.escalationGeneration ?? 0;
 
   if (options.generation !== undefined && options.generation !== generation) {
     // Refuse before resolving a target or paging anyone: this job belongs to an
@@ -151,21 +157,28 @@ export async function executeEscalation(
     return supersededEscalationResult();
   }
 
-  const currentStepIndex = stepIndex ?? incident.currentEscalationStep ?? 0;
-
   if (escalationPolicyExhausted(currentStepIndex, policySteps.length)) {
     // Policies do not repeat: running out of steps completes the execution.
-    await finalizeEscalationExecution({
+    const finalized = await finalizeEscalationExecution({
       incidentId,
+      expectedGeneration: generation,
+      expectedStep: currentStepIndex,
       status: 'COMPLETED',
       timelineMessage: `Escalation policy exhausted: all ${policySteps.length} step(s) completed without acknowledgment.`,
     });
+    if (!finalized) return supersededEscalationResult();
     return { outcome: 'COMPLETED', escalated: false, reason: 'All escalation steps exhausted' };
   }
 
   const step = policySteps.at(currentStepIndex);
   if (!step) {
-    await finalizeEscalationExecution({ incidentId, status: 'COMPLETED' });
+    const finalized = await finalizeEscalationExecution({
+      incidentId,
+      expectedGeneration: generation,
+      expectedStep: currentStepIndex,
+      status: 'COMPLETED',
+    });
+    if (!finalized) return supersededEscalationResult();
     return { outcome: 'STEP_MISSING', escalated: false, reason: 'Escalation step not found' };
   }
 
@@ -176,13 +189,14 @@ export async function executeEscalation(
     if (!incident.nextEscalationAt) {
       // First sighting of a delayed step: arm the state and its due job together.
       const dueAt = escalationDueAt(now, stepDelayMinutes);
-      await scheduleDelayedEscalationStep({
+      const scheduled = await scheduleDelayedEscalationStep({
         incidentId,
         generation,
         stepIndex: currentStepIndex,
         delayMinutes: stepDelayMinutes,
         dueAt,
       });
+      if (!scheduled) return supersededEscalationResult();
       return {
         outcome: 'STEP_SCHEDULED',
         escalated: false,
@@ -221,170 +235,178 @@ export async function executeEscalation(
   }
   const workerToken = claim.token;
 
-  const targetId = stepTargetId(step);
-  let resolution: EscalationTargetResolution = {
-    outcome: 'INVALID_TARGET',
-    reason: `${step.targetType} step has no target ID configured`,
-  };
+  try {
+    const targetId = stepTargetId(step);
+    let resolution: EscalationTargetResolution = {
+      outcome: 'INVALID_TARGET',
+      reason: `${step.targetType} step has no target ID configured`,
+    };
 
-  if (targetId) {
-    try {
-      resolution = await resolveEscalationTargetDetailed({
-        targetType: step.targetType,
-        targetId,
-        at: now,
-        notifyOnlyTeamLead: step.notifyOnlyTeamLead || false,
-      });
-    } catch (error) {
-      if (!(error instanceof EscalationInfrastructureError)) throw error;
-      // Escalation state was not advanced. Release the lease so the retry is
-      // not blocked, and let the caller classify this as a retryable failure.
-      await releaseEscalationClaim(incidentId, workerToken);
-      logger.error('escalation.target.resolution_failed', {
-        incidentId,
-        stepIndex: currentStepIndex,
-        targetType: step.targetType,
-        targetId,
-        error: error.cause instanceof Error ? error.cause.message : String(error.cause ?? ''),
-      });
-      throw error;
-    }
-  }
-
-  const plan: EscalationPlan = planEscalationStep({
-    incidentId,
-    generation,
-    stepIndex: currentStepIndex,
-    stepCount: policySteps.length,
-    targetType: step.targetType,
-    targetId,
-    resolution,
-    // A hand-assigned owner stays in the first page's audience.
-    extraRecipients:
-      currentStepIndex === 0 && incident.assigneeId ? [incident.assigneeId] : undefined,
-    stepDelayMinutes,
-    nextStepDelayMinutes: policySteps.at(currentStepIndex + 1)?.delayMinutes ?? null,
-    now,
-  });
-
-  const targetName = resolution.outcome === 'INVALID_TARGET' ? 'Unknown' : resolution.targetName;
-  const recipients = plan.notificationRecipients;
-
-  if (recipients.length === 0) {
-    logger.warn(
-      plan.outcome === 'INVALID_TARGET' ? 'escalation.target.invalid' : 'escalation.target.empty',
-      {
-        incidentId,
-        stepIndex: currentStepIndex,
-        targetType: step.targetType,
-        targetId,
-        targetName,
-        outcome: plan.outcome,
+    if (targetId) {
+      try {
+        resolution = await resolveEscalationTargetDetailed({
+          targetType: step.targetType,
+          targetId,
+          at: now,
+          notifyOnlyTeamLead: step.notifyOnlyTeamLead || false,
+        });
+      } catch (error) {
+        if (!(error instanceof EscalationInfrastructureError)) throw error;
+        // Escalation state was not advanced. Release the lease so the retry is
+        // not blocked, and let the caller classify this as a retryable failure.
+        await releaseEscalationClaim(incidentId, workerToken);
+        logger.error('escalation.target.resolution_failed', {
+          incidentId,
+          stepIndex: currentStepIndex,
+          targetType: step.targetType,
+          targetId,
+          error: error.cause instanceof Error ? error.cause.message : String(error.cause ?? ''),
+        });
+        throw error;
       }
-    );
-  } else if (
-    !(await applyPlannedAssignment({ incidentId, workerToken, assignment: plan.assignment }))
-  ) {
-    // Ownership is taken before paging so the page and the boards agree.
-    return supersededEscalationResult();
-  }
+    }
 
-  // Resolve the pages before the transaction: recipient preferences, quiet
-  // hours, and provider configuration are all reads, and none of them belong
-  // inside the transaction that commits escalation state.
-  const eventKey = [
-    'ESCALATION',
-    incidentId,
-    policy!.id,
-    String(generation),
-    String(currentStepIndex),
-  ].join(':');
-
-  let notificationPlan: EscalationNotificationPlan | undefined;
-  if (recipients.length > 0) {
-    notificationPlan = await planEscalationNotificationIntents({
-      incident,
-      recipients,
-      stepChannels: step.notificationChannels.length > 0 ? step.notificationChannels : undefined,
-      eventKey,
-      displayMessage: `[OpsKnight] Incident: ${incident.title}${
-        currentStepIndex > 0 ? ` (Escalation Level ${currentStepIndex + 1})` : ''
-      }`,
+    const plan: EscalationPlan = planEscalationStep({
+      incidentId,
       generation,
       stepIndex: currentStepIndex,
-    });
-  }
-
-  const commit = await commitEscalationPlan({
-    incidentId,
-    generation,
-    expectedStep: currentStepIndex,
-    workerToken,
-    plan,
-    notifications: notificationPlan,
-  });
-
-  if (!commit.committed) return supersededEscalationResult();
-
-  // The step is durable from here. Delivery is best effort: whatever a provider
-  // rejects stays a persisted intent for the notification retry path, so an
-  // outage delays a page rather than losing it.
-  const notifications = notificationPlan
-    ? await deliverEscalationNotificationIntents(notificationPlan)
-    : [];
-
-  logger.info('escalation.plan.committed', {
-    incidentId,
-    generation,
-    stepIndex: currentStepIndex,
-    targetType: step.targetType,
-    targetId,
-    recipientCount: recipients.length,
-    intentsCreated: commit.intentsCreated,
-    unreachableRecipients: notificationPlan?.unreachableUserIds.length ?? 0,
-    outcome: plan.outcome,
-    lifecycleGate: commit.gate,
-    appliedStatus: commit.appliedStatus,
-    nextStepIndex: plan.nextJob?.stepIndex ?? null,
-  });
-
-  if (plan.outcome === 'STEP_EXECUTED') {
-    return {
-      outcome: 'STEP_EXECUTED',
-      escalated: true,
-      targetName,
+      stepCount: policySteps.length,
       targetType: step.targetType,
-      targetCount: recipients.length,
-      stepIndex: currentStepIndex,
-      notifications,
-      nextStepScheduled: plan.nextJob !== null,
-      ...(plan.nextState.nextEscalationAt
-        ? { nextEscalationAt: plan.nextState.nextEscalationAt }
-        : {}),
-    };
-  }
+      targetId,
+      resolution,
+      // A hand-assigned owner stays in the first page's audience.
+      extraRecipients:
+        currentStepIndex === 0 && incident.assigneeId ? [incident.assigneeId] : undefined,
+      stepDelayMinutes,
+      nextStepDelayMinutes: policySteps.at(currentStepIndex + 1)?.delayMinutes ?? null,
+      now,
+    });
 
-  if (plan.outcome === 'STEP_SCHEDULED') {
+    const targetName = resolution.outcome === 'INVALID_TARGET' ? 'Unknown' : resolution.targetName;
+    const recipients = plan.notificationRecipients;
+
+    if (recipients.length === 0) {
+      logger.warn(
+        plan.outcome === 'INVALID_TARGET' ? 'escalation.target.invalid' : 'escalation.target.empty',
+        {
+          incidentId,
+          stepIndex: currentStepIndex,
+          targetType: step.targetType,
+          targetId,
+          targetName,
+          outcome: plan.outcome,
+        }
+      );
+    } else if (
+      !(await applyPlannedAssignment({ incidentId, workerToken, assignment: plan.assignment }))
+    ) {
+      // Ownership is taken before paging so the page and the boards agree.
+      return supersededEscalationResult();
+    }
+
+    // Resolve the pages before the transaction: recipient preferences, quiet
+    // hours, and provider configuration are all reads, and none of them belong
+    // inside the transaction that commits escalation state.
+    const eventKey = [
+      'ESCALATION',
+      incidentId,
+      policy!.id,
+      String(generation),
+      String(currentStepIndex),
+    ].join(':');
+
+    let notificationPlan: EscalationNotificationPlan | undefined;
+    if (recipients.length > 0) {
+      notificationPlan = await planEscalationNotificationIntents({
+        incident,
+        recipients,
+        stepChannels: step.notificationChannels.length > 0 ? step.notificationChannels : undefined,
+        eventKey,
+        displayMessage: `[OpsKnight] Incident: ${incident.title}${
+          currentStepIndex > 0 ? ` (Escalation Level ${currentStepIndex + 1})` : ''
+        }`,
+        generation,
+        stepIndex: currentStepIndex,
+      });
+    }
+
+    const commit = await commitEscalationPlan({
+      incidentId,
+      generation,
+      expectedStep: currentStepIndex,
+      workerToken,
+      plan,
+      notifications: notificationPlan,
+    });
+
+    if (!commit.committed) return supersededEscalationResult();
+
+    // The step is durable from here. Delivery is best effort: whatever a provider
+    // rejects stays a persisted intent for the notification retry path, so an
+    // outage delays a page rather than losing it.
+    const notifications = notificationPlan
+      ? await deliverEscalationNotificationIntents(notificationPlan)
+      : [];
+
+    logger.info('escalation.plan.committed', {
+      incidentId,
+      generation,
+      stepIndex: currentStepIndex,
+      targetType: step.targetType,
+      targetId,
+      recipientCount: recipients.length,
+      intentsCreated: commit.intentsCreated,
+      unreachableRecipients: notificationPlan?.unreachableUserIds.length ?? 0,
+      outcome: plan.outcome,
+      lifecycleGate: commit.gate,
+      appliedStatus: commit.appliedStatus,
+      nextStepIndex: plan.nextJob?.stepIndex ?? null,
+    });
+
+    if (plan.outcome === 'STEP_EXECUTED') {
+      return {
+        outcome: 'STEP_EXECUTED',
+        escalated: true,
+        targetName,
+        targetType: step.targetType,
+        targetCount: recipients.length,
+        stepIndex: currentStepIndex,
+        notifications,
+        nextStepScheduled: plan.nextJob !== null,
+        ...(plan.nextState.nextEscalationAt
+          ? { nextEscalationAt: plan.nextState.nextEscalationAt }
+          : {}),
+      };
+    }
+
+    if (plan.outcome === 'STEP_SCHEDULED') {
+      return {
+        outcome: 'STEP_SCHEDULED',
+        escalated: false,
+        reason: 'Escalation scheduled',
+        stepIndex: currentStepIndex,
+        nextStepScheduled: true,
+      };
+    }
+
     return {
-      outcome: 'STEP_SCHEDULED',
+      outcome: plan.outcome,
       escalated: false,
-      reason: 'Escalation scheduled',
+      reason:
+        plan.outcome === 'INVALID_TARGET'
+          ? resolution.outcome === 'INVALID_TARGET'
+            ? resolution.reason
+            : 'Invalid target configuration'
+          : 'No users to notify',
       stepIndex: currentStepIndex,
-      nextStepScheduled: true,
     };
+  } catch (error) {
+    // Any failure before the plan commits must make the step immediately
+    // reclaimable. The token fence makes this a no-op after a successful
+    // commit or when a newer worker/lifecycle transition already owns state.
+    await releaseEscalationClaim(incidentId, workerToken);
+    throw error;
   }
-
-  return {
-    outcome: plan.outcome,
-    escalated: false,
-    reason:
-      plan.outcome === 'INVALID_TARGET'
-        ? resolution.outcome === 'INVALID_TARGET'
-          ? resolution.reason
-          : 'Invalid target configuration'
-        : 'No users to notify',
-    stepIndex: currentStepIndex,
-  };
 }
 
 /**
@@ -418,6 +440,7 @@ export async function processPendingEscalations(
       select: {
         id: true,
         currentEscalationStep: true,
+        escalationGeneration: true,
       },
       take: limit,
       orderBy: {
@@ -433,21 +456,22 @@ export async function processPendingEscalations(
       // here would make the executor reject its own fresh lock and strand the
       // orphaned escalation until every lock timeout.
       const stepIndex = incident.currentEscalationStep ?? 0;
-      const result = await executor(incident.id, stepIndex);
-      return { incident, result };
+      try {
+        const result = await executor(incident.id, stepIndex);
+        return { incident, result } as const;
+      } catch (error) {
+        return { incident, error } as const;
+      }
     });
 
-    const settledResults = await Promise.allSettled(escalationPromises);
+    const settledResults = await Promise.all(escalationPromises);
 
     for (const settledResult of settledResults) {
-      if (settledResult.status === 'rejected') {
-        errors.push(settledResult.reason?.message || 'Unknown error');
-        continue;
-      }
-
-      const { incident, result } = settledResult.value;
+      const { incident } = settledResult;
 
       try {
+        if ('error' in settledResult) throw settledResult.error;
+        const { result } = settledResult;
         if (result.escalated) {
           processed++;
         } else {
@@ -456,8 +480,13 @@ export async function processPendingEscalations(
           // the worker. Do not overwrite either authoritative state here.
           if (escalationStateIsAuthoritative(result.outcome)) continue;
 
-          await prisma.incident.update({
-            where: { id: incident.id },
+          await prisma.incident.updateMany({
+            where: {
+              id: incident.id,
+              status: 'OPEN',
+              escalationGeneration: incident.escalationGeneration ?? 0,
+              currentEscalationStep: incident.currentEscalationStep,
+            },
             data: {
               escalationStatus: 'ESCALATING',
               nextEscalationAt: new Date(Date.now() + 30000),
@@ -478,8 +507,13 @@ export async function processPendingEscalations(
 
         try {
           if (!isRetryable) {
-            await prisma.incident.update({
-              where: { id: incident.id },
+            const parked = await prisma.incident.updateMany({
+              where: {
+                id: incident.id,
+                status: 'OPEN',
+                escalationGeneration: incident.escalationGeneration ?? 0,
+                currentEscalationStep: incident.currentEscalationStep,
+              },
               data: {
                 escalationStatus: 'FAILED',
                 nextEscalationAt: null,
@@ -487,17 +521,24 @@ export async function processPendingEscalations(
               },
             });
 
-            await prisma.incidentEvent
-              .create({
-                data: {
-                  incidentId: incident.id,
-                  message: `Escalation processing failed (FATAL): ${errorMessage}`,
-                },
-              })
-              .catch(() => {});
+            if (parked.count > 0) {
+              await prisma.incidentEvent
+                .create({
+                  data: {
+                    incidentId: incident.id,
+                    message: `Escalation processing failed (FATAL): ${errorMessage}`,
+                  },
+                })
+                .catch(() => {});
+            }
           } else {
-            await prisma.incident.update({
-              where: { id: incident.id },
+            await prisma.incident.updateMany({
+              where: {
+                id: incident.id,
+                status: 'OPEN',
+                escalationGeneration: incident.escalationGeneration ?? 0,
+                currentEscalationStep: incident.currentEscalationStep,
+              },
               data: { escalationProcessingAt: null },
             });
             logger.warn('Escalation failed with retryable error, releasing lock', {

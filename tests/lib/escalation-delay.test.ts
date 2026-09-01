@@ -2,8 +2,10 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   txIncidentUpdate: vi.fn(),
+  txIncidentUpdateMany: vi.fn(),
   txIncidentEventCreate: vi.fn(),
   txBackgroundJobCreate: vi.fn(),
+  txBackgroundJobFindFirst: vi.fn(),
   runSerializableTransaction: vi.fn(),
 }));
 
@@ -66,9 +68,13 @@ describe('executeEscalation delay handling', () => {
 
     mocks.runSerializableTransaction.mockImplementation(async callback =>
       callback({
-        incident: { update: mocks.txIncidentUpdate },
+        incident: {
+          update: mocks.txIncidentUpdate,
+          updateMany: mocks.txIncidentUpdateMany.mockResolvedValue({ count: 1 }),
+        },
         incidentEvent: { create: mocks.txIncidentEventCreate },
         backgroundJob: {
+          findFirst: mocks.txBackgroundJobFindFirst.mockResolvedValue(null),
           create: mocks.txBackgroundJobCreate.mockResolvedValue({ id: 'job-next' }),
         },
       })
@@ -100,8 +106,18 @@ describe('executeEscalation delay handling', () => {
     // State, timeline, and the due job all land in the same transaction, so a
     // crash cannot leave a due step with nothing scheduled to run it.
     expect(mocks.runSerializableTransaction).toHaveBeenCalledTimes(1);
-    expect(mocks.txIncidentUpdate).toHaveBeenCalledWith({
-      where: { id: 'inc-1' },
+    expect(mocks.txIncidentUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'inc-1',
+        status: 'OPEN',
+        escalationGeneration: 3,
+        escalationProcessingAt: null,
+        nextEscalationAt: null,
+        AND: [
+          { OR: [{ currentEscalationStep: null }, { currentEscalationStep: 0 }] },
+          { OR: [{ escalationStatus: null }, { escalationStatus: 'ESCALATING' }] },
+        ],
+      },
       data: {
         escalationStatus: 'ESCALATING',
         currentEscalationStep: 0,

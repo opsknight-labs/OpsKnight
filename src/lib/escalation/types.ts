@@ -108,7 +108,28 @@ export function escalationPolicyOwnsResponderRouting(outcome: EscalationOutcome)
 
 /** Classifies a thrown engine error into a retryable or terminal outcome. */
 export function escalationOutcomeForError(error: unknown): EscalationOutcome {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'retryable' in error &&
+    error.retryable === true
+  ) {
+    return 'RETRYABLE_FAILURE';
+  }
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+  if (
+    code === 'P2034' ||
+    code === 'P2028' ||
+    code === 'P2002' ||
+    ['P1001', 'P1002', 'P1008', 'P1017'].includes(code)
+  ) {
+    return 'RETRYABLE_FAILURE';
+  }
   const message = error instanceof Error ? error.message : String(error ?? '');
-  const retryable = /Serialization|deadlock|Connection|ECONNRESET|ETIMEDOUT|timeout/i.test(message);
+  const retryable =
+    /Serialization|deadlock|write conflict|Connection|ECONNRESET|ECONNREFUSED|ETIMEDOUT|timeout/i.test(
+      message
+    );
   return retryable ? 'RETRYABLE_FAILURE' : 'TERMINAL_FAILURE';
 }

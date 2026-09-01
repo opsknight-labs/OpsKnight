@@ -185,14 +185,17 @@ describeIfRealDB('Database Resilience Integration Tests', { timeout: 30000 }, ()
         executeEscalation(incident.id, 0),
       ]);
 
-      // One should succeed, one should fail due to "claim" mechanism
-      const successCount = [res1, res2].filter(r => r.escalated).length;
-      const failCount = [res1, res2].filter(
-        r => !r.escalated && r.reason === 'Escalation already in progress'
-      ).length;
+      // Exactly one worker owns the step. The loser's outcome depends on whether
+      // the winner had already committed when the loser re-read: a live
+      // escalation reads as ALREADY_CLAIMED, a finished one as SUPERSEDED.
+      // Both are authoritative and settle the job; what matters is that the
+      // loser neither escalated nor paged anyone.
+      const escalated = [res1, res2].filter(r => r.escalated);
+      const rejected = [res1, res2].filter(r => !r.escalated);
 
-      expect(successCount).toBe(1);
-      expect(failCount).toBe(1);
+      expect(escalated).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(['ALREADY_CLAIMED', 'SUPERSEDED']).toContain(rejected[0].outcome);
 
       // Wait for DB to settle
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -239,17 +242,33 @@ describeIfRealDB('Database Resilience Integration Tests', { timeout: 30000 }, ()
       // Execute - it should advance state and queue step 1 without recursive execution.
       const result = await executeEscalation(incident.id, 0);
 
-      expect(result).toEqual({ escalated: false, reason: 'Escalation scheduled' });
+      expect(result).toEqual({
+        outcome: 'STEP_SCHEDULED',
+        escalated: false,
+        reason: 'Escalation scheduled',
+        stepIndex: 0,
+        nextStepScheduled: true,
+      });
 
       const updatedIncident = await testPrisma.incident.findUnique({ where: { id: incident.id } });
       expect(updatedIncident?.currentEscalationStep).toBe(1);
       expect(updatedIncident?.escalationStatus).toBe('ESCALATING');
+      // The skipped tier stays discoverable by state alone, so a lost job row
+      // is recoverable by the reconciliation scanner.
+      expect(updatedIncident?.nextEscalationAt).not.toBeNull();
+      expect(updatedIncident?.escalationProcessingAt).toBeNull();
 
       const queuedStep = await testPrisma.backgroundJob.findFirst({
         where: { type: 'ESCALATION', status: 'PENDING' },
         orderBy: { createdAt: 'desc' },
       });
-      expect(queuedStep?.payload).toMatchObject({ incidentId: incident.id, stepIndex: 1 });
+      // The job names the generation it belongs to, so a worker can verify it
+      // before paging anyone.
+      expect(queuedStep?.payload).toMatchObject({
+        incidentId: incident.id,
+        stepIndex: 1,
+        generation: updatedIncident?.escalationGeneration ?? 0,
+      });
 
       // Wait for DB to settle
       await new Promise(resolve => setTimeout(resolve, 1000));
