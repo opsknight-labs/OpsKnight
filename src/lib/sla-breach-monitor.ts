@@ -369,7 +369,7 @@ async function notifyBreachWarning(
   // 1. Send Slack notification if enabled
   if (config.notifySlack) {
     const channels = warning.serviceNotificationChannels || [];
-    const hasSlackEnabled = channels.length === 0 || channels.includes('SLACK');
+    const hasSlackEnabled = channels.includes('SLACK');
     const slackChannel = warning.slackChannel?.trim();
     const slackWebhookUrl = warning.slackWebhookUrl?.trim() || configuredSlackWebhookUrl();
 
