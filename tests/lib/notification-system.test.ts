@@ -39,7 +39,13 @@ vi.mock('@/lib/prisma', () => ({
       update: vi.fn(),
       findMany: vi.fn(),
     },
-    notification: { create: vi.fn(), findMany: vi.fn() },
+    notification: {
+      create: vi.fn(),
+      createMany: vi.fn(),
+      updateMany: vi.fn(),
+      findMany: vi.fn(),
+    },
+    inAppNotification: { createMany: vi.fn(), findMany: vi.fn() },
     backgroundJob: { findUnique: vi.fn(), upsert: vi.fn() },
     user: {
       findUnique: vi.fn(),
@@ -578,16 +584,29 @@ describe('Notification System Tests', () => {
   });
 
   describe('Escalation Recipient Routing', () => {
-    it('should execute a configured escalation step without overriding user preferences', async () => {
+    it('restricts a step to its configured channels without overriding user preferences', async () => {
       const userId = 'user-1';
       const incidentId = 'inc-1';
       const serviceId = 'svc-1';
+      // The commit re-reads the incident through the transaction client, and the
+      // lease it finds must be the token the claim wrote at this instant.
+      const claimedAt = new Date('2026-01-02T00:00:00.000Z');
+      vi.useFakeTimers();
+      vi.setSystemTime(claimedAt);
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: incidentId,
         title: 'Test Incident',
         status: 'OPEN',
+        urgency: 'HIGH',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        assignee: null,
+        team: null,
         currentEscalationStep: 0,
         escalationStatus: 'ESCALATING',
+        escalationGeneration: 0,
+        escalationProcessingAt: claimedAt,
+        assigneeId: null,
+        teamId: null,
         service: {
           id: serviceId,
           policy: {
@@ -598,6 +617,7 @@ describe('Notification System Tests', () => {
                 delayMinutes: 0,
                 targetType: 'USER',
                 targetUserId: userId,
+                // The step asks for SMS only.
                 notificationChannels: ['SMS'],
                 targetUser: { name: 'Test User' },
               },
@@ -605,27 +625,41 @@ describe('Notification System Tests', () => {
           },
         },
       } as never);
-      // Only ACTIVE users are eligible escalation targets.
+      // The recipient has SMS and EMAIL enabled; only the intersection is paged.
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: userId,
         name: 'Test User',
         status: 'ACTIVE',
+        email: 'responder@example.com',
+        phoneNumber: '+15550100',
+        timeZone: 'UTC',
+        quietHoursEnabled: false,
+        emailNotificationsEnabled: true,
+        smsNotificationsEnabled: true,
+        pushNotificationsEnabled: false,
+        whatsappNotificationsEnabled: false,
+      } as never);
+      vi.spyOn(notificationProviders, 'isChannelAvailable').mockResolvedValue(true);
+      vi.spyOn(notificationProviders, 'getWhatsAppConfig').mockResolvedValue({
+        enabled: false,
       } as never);
       vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 } as never);
       vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
       vi.mocked(prisma.incident.update).mockResolvedValue({} as never);
-      const smsSpy = vi.spyOn(sms, 'sendIncidentSMS');
-      smsSpy.mockResolvedValue({ success: true });
-      const notificationModule = await import('@/lib/user-notifications');
-      const sendUserSpy = vi.spyOn(notificationModule, 'sendUserNotification').mockResolvedValue({
-        success: true,
-        channelsUsed: [],
-      } as never);
+      vi.mocked(prisma.notification.createMany).mockResolvedValue({ count: 1 } as never);
+      vi.mocked(prisma.inAppNotification.createMany).mockResolvedValue({ count: 1 } as never);
+      vi.spyOn(sms, 'sendIncidentSMS').mockResolvedValue({ success: true });
+
       const result = await executeEscalation(incidentId, 0);
+
       expect(result.escalated).toBe(true);
-      expect(sendUserSpy).toHaveBeenCalledWith(incidentId, userId, expect.any(String), ['SMS'], {
-        eventKey: 'ESCALATION:inc-1:policy-1:0:0',
-      });
+      const intents = vi.mocked(prisma.notification.createMany).mock.calls[0][0] as never as {
+        data: Array<{ userId: string; channel: string; eventType: string }>;
+      };
+      expect(intents.data).toEqual([
+        expect.objectContaining({ userId, channel: 'SMS', eventType: 'triggered' }),
+      ]);
+      vi.useRealTimers();
     });
   });
 });

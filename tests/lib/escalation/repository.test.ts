@@ -122,6 +122,7 @@ describe('commitEscalationPlan', () => {
       gate: 'ACTIVE',
       appliedStatus: 'ESCALATING',
       nextJobId: 'job-next',
+      intentsCreated: 0,
     });
     // One transaction, and the follow-up job is inside it.
     expect(mocks.runSerializableTransaction).toHaveBeenCalledTimes(1);
@@ -350,7 +351,12 @@ describe('commitEscalationPlan', () => {
       }),
     });
 
-    expect(result).toMatchObject({ committed: true, appliedStatus: 'FAILED', nextJobId: null });
+    expect(result).toMatchObject({
+      committed: true,
+      appliedStatus: 'FAILED',
+      nextJobId: null,
+      intentsCreated: 0,
+    });
     expect(writes).not.toContain('job');
   });
 });

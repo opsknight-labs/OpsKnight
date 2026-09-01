@@ -15,14 +15,17 @@ import {
 import { planEscalationStep, type EscalationPlan } from './planner';
 import { escalationDueAt, escalationPolicyExhausted } from './state';
 import {
+  deliverEscalationNotificationIntents,
+  planEscalationNotificationIntents,
+  type EscalationNotificationPlan,
+} from './notification-intents';
+import {
   applyPlannedAssignment,
   claimEscalationStep,
   commitEscalationPlan,
-  escalationGenerationStillOwned,
   finalizeEscalationExecution,
   releaseEscalationClaim,
   scheduleDelayedEscalationStep,
-  type EscalationWorkerToken,
 } from './repository';
 
 export * from './types';
@@ -69,60 +72,6 @@ function stepTargetId(step: PolicyStepRow): string | null {
 }
 
 /**
- * Dispatches this step's responder pages, re-checking generation ownership
- * before each one so a lifecycle transition stops the fan-out immediately.
- *
- * Individual delivery failures are recorded and do not block the step's state
- * from committing: whether a provider accepted a message is the notification
- * control plane's problem, not a reason to lose escalation progress.
- */
-async function dispatchStepNotifications(input: {
-  incidentId: string;
-  incidentTitle: string;
-  stepIndex: number;
-  eventKey: string;
-  channels: NotificationChannel[] | undefined;
-  recipients: readonly string[];
-  workerToken: EscalationWorkerToken;
-  generation: number;
-}): Promise<{ superseded: boolean; notifications: unknown[] }> {
-  const { sendUserNotification } = await import('../user-notifications');
-  const notifications: unknown[] = [];
-  const message = `[OpsKnight] Incident: ${input.incidentTitle}${
-    input.stepIndex > 0 ? ` (Escalation Level ${input.stepIndex + 1})` : ''
-  }`;
-
-  for (const userId of input.recipients) {
-    if (
-      !(await escalationGenerationStillOwned(input.incidentId, input.workerToken, input.generation))
-    ) {
-      return { superseded: true, notifications };
-    }
-    try {
-      const result = await sendUserNotification(input.incidentId, userId, message, input.channels, {
-        eventKey: input.eventKey,
-      });
-      notifications.push({ userId, result });
-    } catch (error) {
-      logger.error('Failed to send escalation notification to user', {
-        incidentId: input.incidentId,
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      notifications.push({
-        userId,
-        result: {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown notification failure',
-        },
-      });
-    }
-  }
-
-  return { superseded: false, notifications };
-}
-
-/**
  * Executes one escalation step for an incident:
  *
  *   load -> guard -> claim -> resolve -> plan -> page -> commit
@@ -149,6 +98,10 @@ export async function executeEscalation(
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
     include: {
+      // assignee/team feed the durable notification envelope; loading them here
+      // keeps a step to one incident read.
+      assignee: true,
+      team: true,
       service: {
         include: {
           policy: {
@@ -336,26 +289,30 @@ export async function executeEscalation(
     return supersededEscalationResult();
   }
 
-  let notifications: unknown[] = [];
+  // Resolve the pages before the transaction: recipient preferences, quiet
+  // hours, and provider configuration are all reads, and none of them belong
+  // inside the transaction that commits escalation state.
+  const eventKey = [
+    'ESCALATION',
+    incidentId,
+    policy!.id,
+    String(generation),
+    String(currentStepIndex),
+  ].join(':');
+
+  let notificationPlan: EscalationNotificationPlan | undefined;
   if (recipients.length > 0) {
-    const dispatch = await dispatchStepNotifications({
-      incidentId,
-      incidentTitle: incident.title,
-      stepIndex: currentStepIndex,
-      eventKey: [
-        'ESCALATION',
-        incidentId,
-        policy!.id,
-        String(generation),
-        String(currentStepIndex),
-      ].join(':'),
-      channels: step.notificationChannels.length > 0 ? step.notificationChannels : undefined,
+    notificationPlan = await planEscalationNotificationIntents({
+      incident,
       recipients,
-      workerToken,
+      stepChannels: step.notificationChannels.length > 0 ? step.notificationChannels : undefined,
+      eventKey,
+      displayMessage: `[OpsKnight] Incident: ${incident.title}${
+        currentStepIndex > 0 ? ` (Escalation Level ${currentStepIndex + 1})` : ''
+      }`,
       generation,
+      stepIndex: currentStepIndex,
     });
-    if (dispatch.superseded) return supersededEscalationResult();
-    notifications = dispatch.notifications;
   }
 
   const commit = await commitEscalationPlan({
@@ -364,9 +321,17 @@ export async function executeEscalation(
     expectedStep: currentStepIndex,
     workerToken,
     plan,
+    notifications: notificationPlan,
   });
 
   if (!commit.committed) return supersededEscalationResult();
+
+  // The step is durable from here. Delivery is best effort: whatever a provider
+  // rejects stays a persisted intent for the notification retry path, so an
+  // outage delays a page rather than losing it.
+  const notifications = notificationPlan
+    ? await deliverEscalationNotificationIntents(notificationPlan)
+    : [];
 
   logger.info('escalation.plan.committed', {
     incidentId,
@@ -375,6 +340,8 @@ export async function executeEscalation(
     targetType: step.targetType,
     targetId,
     recipientCount: recipients.length,
+    intentsCreated: commit.intentsCreated,
+    unreachableRecipients: notificationPlan?.unreachableUserIds.length ?? 0,
     outcome: plan.outcome,
     lifecycleGate: commit.gate,
     appliedStatus: commit.appliedStatus,

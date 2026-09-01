@@ -18,6 +18,10 @@ import { logger } from '../logger';
 import type { EscalationAssignment } from './assignee-selection';
 import type { EscalationPlan } from './planner';
 import {
+  materializeEscalationNotificationIntents,
+  type EscalationNotificationPlan,
+} from './notification-intents';
+import {
   escalationDueAt,
   escalationLifecycleGate,
   type EscalationLifecycleGate,
@@ -37,6 +41,8 @@ export type EscalationCommitResult =
       gate: EscalationLifecycleGate;
       appliedStatus: EscalationStatus;
       nextJobId: string | null;
+      /** Responder pages durably persisted by this commit. */
+      intentsCreated: number;
     }
   | { committed: false };
 
@@ -317,6 +323,12 @@ export async function commitEscalationPlan(input: {
   expectedStep: number;
   workerToken: EscalationWorkerToken;
   plan: EscalationPlan;
+  /**
+   * The step's responder pages, resolved but not yet persisted. They are
+   * written inside this transaction, so a step cannot report itself executed
+   * while a responder it meant to page exists nowhere durable.
+   */
+  notifications?: EscalationNotificationPlan;
 }): Promise<EscalationCommitResult> {
   return runSerializableTransaction<EscalationCommitResult>(async tx => {
     const current = (await tx.incident.findUnique({
@@ -390,6 +402,13 @@ export async function commitEscalationPlan(input: {
       }
     }
 
+    // Pages are materialized before the state advances. If this throws, the
+    // whole step rolls back rather than advancing past an unrecorded page.
+    const intents =
+      gate === 'ACTIVE' && input.notifications
+        ? await materializeEscalationNotificationIntents(tx, input.notifications)
+        : { created: 0 };
+
     await tx.incident.update({ where: { id: input.incidentId }, data: updateData });
 
     const nextJob =
@@ -402,7 +421,13 @@ export async function commitEscalationPlan(input: {
           })
         : null;
 
-    return { committed: true, gate, appliedStatus: nextState.status, nextJobId: nextJob };
+    return {
+      committed: true,
+      gate,
+      appliedStatus: nextState.status,
+      nextJobId: nextJob,
+      intentsCreated: intents.created,
+    };
   });
 }
 

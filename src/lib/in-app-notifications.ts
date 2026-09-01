@@ -1,5 +1,12 @@
+import type { Prisma } from '@prisma/client';
 import prisma from './prisma';
 import { inAppNotificationIntentId } from './notification-identity';
+
+/** Anything that can write in-app rows: the client, or a transaction client. */
+type InAppNotificationStore = {
+  inAppNotification: Pick<Prisma.TransactionClient['inAppNotification'], 'createMany'> &
+    Partial<Pick<Prisma.TransactionClient['inAppNotification'], 'findMany'>>;
+};
 
 type InAppNotificationInput = {
   userIds: string[];
@@ -14,21 +21,28 @@ type InAppNotificationInput = {
   dedupeWindowMs?: number;
 };
 
-export async function createInAppNotifications({
-  userIds,
-  type,
-  title,
-  message,
-  entityType,
-  entityId,
-  dedupeKey,
-  dedupeWindowMs,
-}: InAppNotificationInput) {
+export async function createInAppNotifications(
+  {
+    userIds,
+    type,
+    title,
+    message,
+    entityType,
+    entityId,
+    dedupeKey,
+    dedupeWindowMs,
+  }: InAppNotificationInput,
+  /**
+   * Pass the caller's transaction client to make these rows commit with it.
+   * Deterministic ids keep the write idempotent either way.
+   */
+  store: InAppNotificationStore = prisma
+) {
   const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
   if (uniqueUserIds.length === 0) return;
 
   if (dedupeKey) {
-    await prisma.inAppNotification.createMany({
+    await store.inAppNotification.createMany({
       data: uniqueUserIds.map(userId => ({
         id: inAppNotificationIntentId({
           eventKey: dedupeKey,
@@ -50,8 +64,8 @@ export async function createInAppNotifications({
   }
 
   const existing =
-    dedupeWindowMs && typeof prisma.inAppNotification?.findMany === 'function'
-      ? await prisma.inAppNotification.findMany({
+    dedupeWindowMs && typeof store.inAppNotification?.findMany === 'function'
+      ? await store.inAppNotification.findMany({
           where: {
             userId: { in: uniqueUserIds },
             type,
@@ -68,7 +82,7 @@ export async function createInAppNotifications({
   const recipients = uniqueUserIds.filter(userId => !existingUserIds.has(userId));
   if (recipients.length === 0) return;
 
-  await prisma.inAppNotification.createMany({
+  await store.inAppNotification.createMany({
     data: recipients.map(userId => ({
       userId,
       type,
