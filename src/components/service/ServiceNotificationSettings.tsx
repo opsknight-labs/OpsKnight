@@ -275,6 +275,12 @@ export default function ServiceNotificationSettings({
 
   return (
     <form action={saveNotificationSettings} className="space-y-6">
+      {/* Submit an explicit snapshot so an empty selection cannot be confused with a missing field. */}
+      <input
+        type="hidden"
+        name="serviceNotificationChannelsJson"
+        value={JSON.stringify(channels)}
+      />
       {/* Hidden input for validation */}
       <input
         ref={selectRef}
@@ -339,16 +345,6 @@ export default function ServiceNotificationSettings({
                   >
                     {channel}
                   </Label>
-
-                  {/* Hidden input for form submission */}
-                  <input
-                    type="checkbox"
-                    name="serviceNotificationChannels"
-                    value={channel}
-                    checked={checked}
-                    readOnly
-                    className="hidden"
-                  />
                 </div>
               );
             })}

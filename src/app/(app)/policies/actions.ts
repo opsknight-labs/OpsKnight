@@ -1,6 +1,7 @@
 'use server';
 
 import {
+  ESCALATION_STEP_CHANNELS_SUBMITTED,
   escalationTargetExists,
   firstEscalationStepIssue,
   validateEscalationStep,
@@ -340,13 +341,23 @@ export async function updatePolicyStep(
   // A partial edit keeps the step's current target type and id, so the merged
   // step is validated as a whole rather than field by field.
   const targetType = formData.get('targetType') ?? existing.targetType;
+
+  // Channels need an explicit marker rather than the usual `?? existing`
+  // fallback, because an absent multi-value field and a deliberately emptied
+  // one are both `[]`. Without the marker, editing only a step's delay would
+  // clear its channel restriction and silently widen the step to every channel
+  // the recipient has enabled.
+  const channelsSubmitted = formData.get(ESCALATION_STEP_CHANNELS_SUBMITTED) === 'true';
+
   const validation = validateEscalationStep({
     targetType,
     targetUserId: formData.get('targetUserId') ?? existing.targetUserId,
     targetTeamId: formData.get('targetTeamId') ?? existing.targetTeamId,
     targetScheduleId: formData.get('targetScheduleId') ?? existing.targetScheduleId,
     delayMinutes: formData.get('delayMinutes'),
-    notificationChannels: formData.getAll('notificationChannels'),
+    notificationChannels: channelsSubmitted
+      ? formData.getAll('notificationChannels')
+      : existing.notificationChannels,
     notifyOnlyTeamLead: formData.get('notifyOnlyTeamLead') === 'true',
   });
   if (!validation.valid) {
