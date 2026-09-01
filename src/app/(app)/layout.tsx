@@ -21,9 +21,12 @@ import { UserAvatarProvider } from '@/contexts/UserAvatarContext';
 import { logger } from '@/lib/logger';
 import SessionTimeoutWarning from '@/components/auth/SessionTimeoutWarning';
 import { activeIncidentStatuses } from '@/lib/incident-status';
-import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { IncidentCreationModalProvider } from '@/contexts/IncidentCreationModalContext';
 import CreateIncidentModal from '@/components/incident/CreateIncidentModal';
+import { getCurrentUser } from '@/lib/rbac';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -31,28 +34,15 @@ const isNextRedirectError = (error: unknown) => {
   return typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT');
 };
 
-// Force all app routes to be dynamic - prevents static generation during build
-// This is necessary because the app requires database access via middleware/auth
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // Keep the lightweight session lookup only for setup/offline routing. Protected identity,
+  // role, status and tokenVersion are resolved through getCurrentUser below.
   const session = await getServerSession(await getAuthOptions());
 
-  logger.warn('[App Layout Debug] Session State:', {
-    component: 'layout',
-    hasSession: !!session,
-    hasUser: !!session?.user,
-    email: session?.user?.email,
-  });
-
-  if (!session?.user?.email) {
-    logger.warn('[App Layout] No session or email found', {
-      component: 'layout',
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      email: session?.user?.email,
-    });
+  if (!session?.user?.id && !session?.user?.email) {
     let userCount = 0;
     let userCountError: unknown = null;
     try {
@@ -72,114 +62,71 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         />
       );
     }
-    if (userCount === 0) {
-      redirect('/setup');
-    }
-    // Force re-login with error flag to bypass middleware redirect loop
+    if (userCount === 0) redirect('/setup');
     redirect('/login?error=SessionExpired');
-  } else {
-    logger.info('[App Layout] Session valid', { email: session.user.email });
   }
 
-  // Verify user still exists in database (handle DB resets)
   let dbUser;
   let dbError: unknown = null;
   try {
-    dbUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: {
-        id: true,
-        role: true,
-        name: true,
-        email: true,
-        timeZone: true,
-        avatarUrl: true,
-        gender: true,
-      },
-    });
+    dbUser = await getCurrentUser();
   } catch (error) {
     dbError = error;
-    // Database connection error - allow app to load with session data
-    // This prevents complete app failure when DB is temporarily unavailable
-    if (!isNextRedirectError(error)) {
-      logger.error('[App Layout] Database connection error', { component: 'layout', error });
-    }
-    dbUser = null;
   }
 
-  if (dbError) {
-    return (
-      <DatabaseOffline
-        errorMessage={dbError instanceof Error ? dbError.message : String(dbError)}
-      />
-    );
-  }
-
-  if (!dbError && !dbUser) {
-    // Check if system is uninitialized
+  if (dbError || !dbUser) {
+    let databaseReachable = true;
     let userCount = 0;
-    let verifyUserCountError: unknown = null;
     try {
       userCount = await prisma.user.count();
     } catch (error) {
+      databaseReachable = false;
       if (!isNextRedirectError(error)) {
-        logger.error('[App Layout] Failed to verify user count', { component: 'layout', error });
-        verifyUserCountError = error;
+        logger.error('[App Layout] Database connection error', { component: 'layout', error });
       }
-    }
-    if (verifyUserCountError) {
       return (
-        <DatabaseOffline
-          errorMessage={
-            verifyUserCountError instanceof Error
-              ? verifyUserCountError.message
-              : String(verifyUserCountError)
-          }
-        />
+        <DatabaseOffline errorMessage={error instanceof Error ? error.message : String(error)} />
       );
     }
-    if (userCount === 0) {
-      redirect('/setup');
-    }
-    // Rare condition: User deleted or DB reset but others exist
-    // Force signout to clear stale session
+
+    if (databaseReachable && userCount === 0) redirect('/setup');
     redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
   }
 
-  // Fetch latest user data from database to ensure name is always current
-  // This ensures name changes reflect immediately in the topbar
-  const userName = dbUser?.name || session?.user?.name || null;
-  const userEmail = session?.user?.email ?? null;
-  const userRole = dbUser?.role || (session?.user as any)?.role || null; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const userAvatar = dbUser?.avatarUrl || null;
-  const userGender = dbUser?.gender || null;
-  const userId = dbUser?.id || 'user';
-
-  const canCreate = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
+  const userName = dbUser.name || null;
+  const userEmail = dbUser.email;
+  const userRole = dbUser.role;
+  const userAvatar = dbUser.avatarUrl || null;
+  const userGender = dbUser.gender || null;
+  const userId = dbUser.id;
+  const canCreate = hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
 
   let criticalOpenCount = 0;
   let mediumOpenCount = 0;
   let lowOpenCount = 0;
 
   try {
-    const openUrgencyCounts = await prisma.incident.groupBy({
-      by: ['urgency'],
-      where: {
-        status: { in: activeIncidentStatuses() },
-      },
-      _count: { _all: true },
-    });
+    const actor = await resolveUserActor(dbUser.id);
+    if (actor) {
+      const openUrgencyCounts = await prisma.incident.groupBy({
+        by: ['urgency'],
+        where: {
+          status: { in: activeIncidentStatuses() },
+          ...incidentReadWhere(actor),
+        },
+        _count: { _all: true },
+      });
 
-    for (const entry of openUrgencyCounts) {
-      if (entry.urgency === 'HIGH') criticalOpenCount = entry._count._all;
-      else if (entry.urgency === 'MEDIUM') mediumOpenCount = entry._count._all;
-      else if (entry.urgency === 'LOW') lowOpenCount = entry._count._all;
+      for (const entry of openUrgencyCounts) {
+        if (entry.urgency === 'HIGH') criticalOpenCount = entry._count._all;
+        else if (entry.urgency === 'MEDIUM') mediumOpenCount = entry._count._all;
+        else if (entry.urgency === 'LOW') lowOpenCount = entry._count._all;
+      }
     }
   } catch (error) {
     logger.error('[App Layout] Failed to load incident counts', { component: 'layout', error });
   }
 
-  // Status Logic
   let statusTone: 'ok' | 'warning' | 'danger' = 'ok';
   let statusLabel = 'Green Corridor';
   let statusDetail = 'All systems fully operational';
@@ -193,12 +140,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     statusLabel = 'Yellow Alert';
     statusDetail = `${mediumOpenCount} warning signs detected`;
   } else if (lowOpenCount > 0) {
-    statusTone = 'ok'; // Keep green for low, but maybe detailed
+    statusTone = 'ok';
     statusLabel = 'Systems Normal';
     statusDetail = `${lowOpenCount} low urgency items`;
   }
 
-  const userTimeZone = dbUser?.timeZone || 'UTC';
+  const userTimeZone = dbUser.timeZone || 'UTC';
 
   return (
     <AppErrorBoundary>
