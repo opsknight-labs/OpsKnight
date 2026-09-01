@@ -23,7 +23,7 @@ The implementation uses a central capability registry in `src/lib/authorization.
 
 `src/lib/authorization-policy.ts` is the shared decision contract. Callers provide a normalized actor, an action, and—when required—a resource. It returns an allow/deny decision with global or resource scope and a stable denial reason.
 
-Browser sessions and API keys use the same role capabilities and resource rules for reading, creating, acknowledging, annotating, and managing incidents. `authorization-actors.ts` resolves the user's current database role, status, and team memberships; API-key actors additionally carry key scopes. A key is allowed only when both its scope and its owner's current permission allow the action. Disabled, invited, missing, or downgraded owners fail closed.
+Browser sessions and API keys use the same role capabilities and resource rules for reading, creating, acknowledging, annotating, escalating, and managing incidents. `authorization-actors.ts` resolves the user's current database role, status, and team memberships; API-key actors additionally carry key scopes. A key is allowed only when both its scope and its owner's current permission allow the action. Disabled, invited, missing, or downgraded owners fail closed.
 
 Collection endpoints use filters generated from the same policy contract. Incident filters include assignee, watcher, public service-team, and public assigned-team access while preventing team membership alone from exposing private incidents. Avoid introducing route-local role comparisons or independent Prisma authorization filters.
 
@@ -33,12 +33,21 @@ The central v1.5 checks allow a regular `USER` to:
 
 - create incidents for services owned by teams they belong to;
 - acknowledge and add notes to incidents available through their assignment or team scope;
+- manually escalate an incident available through their assignment, team scope, or watch;
 - view an incident when assigned to it or a member of the service's owning team;
 - modify a service when a member of its owning team;
 - view a schedule when assigned to a layer or referenced by an override;
 - read scoped service/team metrics only for teams they belong to.
 
 Responders and Admins bypass those central resource checks for global operational access. Auditors bypass read scope only and cannot mutate operational resources. An unscoped metrics request from a regular User is denied.
+
+### Manual escalation
+
+Manual escalation is its own capability (`incident.escalate.scoped`) rather than a side effect of being signed in, because it pages other responders. It is checked against the specific incident using the same resource rules as acknowledgement: assignee, assigned team, the service's owning team, watcher, and visibility. Responders and Admins hold it globally through `operations.manage`.
+
+Every surface goes through one command, so a browser session, the mobile UI, an API key, and a Slack interaction are all subject to the same check and all produce the same audit record (`incident.escalation.requested`) naming the actor and the surface. A refusal does not reveal whether the incident exists.
+
+Background escalation workers are internal trusted actors and do not pass through this check. They can only act on escalation state the engine itself created, and a client cannot supply an escalation generation.
 
 ## Team roles
 
@@ -59,6 +68,7 @@ Application Admins and Responders can create/edit teams and add Members. Only ap
 | View System Logs                                              | Application Admin                                            |
 | View audit evidence organization-wide                         | Auditor or Application Admin                                 |
 | Create/manage incidents globally                              | Responder or Admin                                           |
+| Manually escalate an incident                                 | Assignment, team, or watch relationship; or Responder/Admin  |
 | Create/edit services, schedules, policies, and teams globally | Responder or Admin                                           |
 | Delete a team or perform protected destructive governance     | Application Admin                                            |
 | Assign elevated team roles                                    | Application Admin or that team's Owner                       |

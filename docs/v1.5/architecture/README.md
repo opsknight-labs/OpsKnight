@@ -27,7 +27,8 @@ Start with these two guides:
 
 - A successful incident transaction and an external notification delivery are separate outcomes.
 - PostgreSQL-backed jobs survive application restarts; the bounded immediate notification queue is per process.
-- Scheduler ownership is coordinated through PostgreSQL and requires at least one instance with internal cron enabled.
+- Scheduler ownership is coordinated through PostgreSQL and requires at least one instance with internal cron enabled for maintenance work.
+- Escalation and the recovery of committed responder pages do not depend on scheduler ownership; both run on every replica that runs the durable job worker, and both claim work with a compare-and-set so duplicates cannot deliver twice.
 - Incident timeline events are not a substitute for a comprehensive immutable compliance ledger.
 - The PWA caches selected data and queues selected actions; it is not a complete offline application.
 
