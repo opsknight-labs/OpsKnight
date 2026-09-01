@@ -7,6 +7,7 @@ import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { getCurrentUser } from '@/lib/rbac';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,15 +18,13 @@ type PageProps = {
 export default async function MobileUserDetailPage({ params }: PageProps) {
   const { id } = await params;
   const viewer = await getCurrentUser();
-  if (viewer.role !== 'ADMIN' && viewer.id !== id) notFound();
+  if (!hasCapability(viewer.role, CAPABILITIES.ADMIN_MANAGE) && viewer.id !== id) notFound();
 
   const user = await prisma.user.findUnique({
     where: { id },
     include: {
       teamMemberships: {
-        include: {
-          team: { select: { id: true, name: true } },
-        },
+        include: { team: { select: { id: true, name: true } } },
       },
       assignedIncidents: {
         where: { status: { in: activeIncidentStatuses() } },
@@ -40,20 +39,15 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
         },
       },
       _count: {
-        select: {
-          assignedIncidents: { where: { status: { in: activeIncidentStatuses() } } },
-        },
+        select: { assignedIncidents: { where: { status: { in: activeIncidentStatuses() } } } },
       },
     },
   });
 
-  if (!user) {
-    notFound();
-  }
+  if (!user) notFound();
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-24">
-      {/* Back Button */}
       <Link
         href="/m/users"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
@@ -62,7 +56,6 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
         Back to Users
       </Link>
 
-      {/* User Header */}
       <MobileCard padding="lg" className="flex items-center gap-4">
         <MobileAvatar
           name={user.name || user.email}
@@ -97,7 +90,6 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
         </div>
       </MobileCard>
 
-      {/* Teams Section */}
       <div className="flex flex-col gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">
           Teams ({user.teamMemberships.length})
@@ -129,7 +121,6 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Active Incidents Section */}
       <div className="flex flex-col gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Active Incidents ({user._count.assignedIncidents})
