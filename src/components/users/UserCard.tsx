@@ -56,6 +56,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { UserDependencyReport } from '@/lib/users/dependencies';
 
 type Team = {
   id: string;
@@ -88,6 +89,7 @@ type UserCardProps = {
   onActivate?: () => void;
   onDeactivate?: () => void;
   onDelete?: () => void;
+  onGetDependencies?: () => Promise<{ report?: UserDependencyReport; error?: string }>;
   onGenerateInvite?: () => void;
   onUpdateRole?: (role: string) => void;
   onAddToTeam?: (teamId: string) => void;
@@ -110,6 +112,7 @@ export function UserCard({
   onActivate,
   onDeactivate,
   onDelete,
+  onGetDependencies,
   onGenerateInvite: _onGenerateInvite,
   onUpdateRole,
   onAddToTeam,
@@ -117,6 +120,9 @@ export function UserCard({
   const router = useRouter();
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [dependencyReport, setDependencyReport] = useState<UserDependencyReport | null>(null);
+  const [dependencyError, setDependencyError] = useState<string | null>(null);
+  const [loadingDependencies, setLoadingDependencies] = useState(false);
 
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
@@ -193,6 +199,16 @@ export function UserCard({
   const handleDelete = () => {
     setShowDeleteDialog(false);
     onDelete?.();
+  };
+
+  const inspectDependencies = async () => {
+    setShowDeleteDialog(true);
+    setLoadingDependencies(true);
+    setDependencyError(null);
+    const result = await onGetDependencies?.();
+    setDependencyReport(result?.report ?? null);
+    setDependencyError(result?.error ?? null);
+    setLoadingDependencies(false);
   };
 
   const availableTeams = teams.filter(
@@ -434,7 +450,7 @@ export function UserCard({
 
                 {onDelete && (
                   <DropdownMenuItem
-                    onClick={() => setShowDeleteDialog(true)}
+                    onClick={() => void inspectDependencies()}
                     className="text-red-600 focus:text-red-700 focus:bg-red-50"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
@@ -482,13 +498,100 @@ export function UserCard({
               <span className="text-red-600 font-semibold">This action cannot be undone.</span>
               <br />
               <br />
-              Are you sure you want to permanently delete <strong>{user.name}</strong>? All their
-              data, including activity history and assignments, will be removed.
+              Permanently removes <strong>{user.name}</strong>&apos;s account and personal
+              credentials. Historical incident, notification, note, and audit records retained for
+              operational evidence will remain. Active assignments and owned resources must be
+              transferred first.
             </AlertDialogDescription>
+            {loadingDependencies && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Inspecting dependencies…
+              </div>
+            )}
+            {dependencyError && <p className="text-sm text-red-600">{dependencyError}</p>}
+            {dependencyReport &&
+              Object.entries(dependencyReport).some(([, entries]) => entries.length > 0) && (
+                <div className="max-h-56 overflow-auto rounded border p-3 text-sm space-y-2">
+                  <p className="font-semibold">Resolve these dependencies before deletion:</p>
+                  {dependencyReport.teams.map(item => (
+                    <Link
+                      key={item.membershipId}
+                      href={`/teams/${item.teamId}`}
+                      className="block text-primary hover:underline"
+                    >
+                      Team: {item.teamName} ({item.role})
+                    </Link>
+                  ))}
+                  {dependencyReport.escalationPolicies.map(item => (
+                    <Link
+                      key={item.stepId}
+                      href={`/policies/${item.policyId}`}
+                      className="block text-primary hover:underline"
+                    >
+                      Escalation: {item.policyName} → Step {item.stepOrder + 1}
+                    </Link>
+                  ))}
+                  {dependencyReport.scheduleLayers.map(item => (
+                    <Link
+                      key={item.assignmentId}
+                      href={`/schedules/${item.scheduleId}`}
+                      className="block text-primary hover:underline"
+                    >
+                      Schedule: {item.scheduleName} → {item.layerName}
+                    </Link>
+                  ))}
+                  {dependencyReport.incidents.map(item => (
+                    <Link
+                      key={item.incidentId}
+                      href={`/incidents/${item.incidentId}`}
+                      className="block text-primary hover:underline"
+                    >
+                      Incident: {item.title} ({item.serviceName})
+                    </Link>
+                  ))}
+                  {dependencyReport.actionItems.map(item => (
+                    <Link
+                      key={item.actionItemId}
+                      href={`/incidents/${item.incidentId}`}
+                      className="block text-primary hover:underline"
+                    >
+                      Action item: {item.title}
+                    </Link>
+                  ))}
+                  {dependencyReport.dashboards.map(item => (
+                    <Link
+                      key={item.dashboardId}
+                      href={`/reports/executive/${item.dashboardId}`}
+                      className="block text-primary hover:underline"
+                    >
+                      Dashboard: {item.name} ({item.visibility})
+                    </Link>
+                  ))}
+                  {dependencyReport.overrides.map(item => (
+                    <p key={item.overrideId}>
+                      Override: {item.scheduleName} ({item.relation})
+                    </p>
+                  ))}
+                  {dependencyReport.shifts.map(item => (
+                    <p key={item.shiftId}>Shift: {item.scheduleName}</p>
+                  ))}
+                </div>
+              )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={
+                loadingDependencies ||
+                Boolean(dependencyError) ||
+                Boolean(
+                  dependencyReport &&
+                  Object.values(dependencyReport).some(entries => entries.length > 0)
+                )
+              }
+              className="bg-red-600 hover:bg-red-700"
+            >
               Delete Permanently
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -182,7 +182,7 @@ export async function escalationTargetExists(
   targetId: string
 ): Promise<boolean> {
   if (targetType === 'USER') {
-    return (await tx.user.count({ where: { id: targetId } })) > 0;
+    return (await tx.user.count({ where: { id: targetId, status: 'ACTIVE' } })) > 0;
   }
   if (targetType === 'TEAM') {
     return (await tx.team.count({ where: { id: targetId } })) > 0;

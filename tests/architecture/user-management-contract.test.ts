@@ -60,4 +60,26 @@ describe('user management security contract', () => {
     expect(invariant).toContain("status: 'ACTIVE'");
     expect(invariant).toContain("isolationLevel: 'Serializable'");
   });
+
+  it('declares a lifecycle disposition for every direct User relation', () => {
+    const schema = readFileSync('prisma/schema.prisma', 'utf8');
+    const policy = readFileSync('src/lib/users/reference-policy.ts', 'utf8');
+    const userModel = schema.slice(
+      schema.indexOf('model User {'),
+      schema.indexOf('model UserAvatar')
+    );
+    const scalarTypes = new Set(['String', 'Int', 'Boolean', 'DateTime', 'Json', 'Bytes']);
+    const relationLines = userModel
+      .split('\n')
+      .filter(line => /^\s{2}[a-zA-Z]\w+\s+/.test(line))
+      .map(line => line.trim().split(/\s+/))
+      .filter(parts => parts.length >= 2)
+      .filter(parts => !scalarTypes.has(parts[1].replace(/[?\[\]]/g, '')))
+      .filter(parts => !['Role', 'UserStatus'].includes(parts[1].replace(/[?\[\]]/g, '')))
+      .map(parts => parts[0]);
+
+    for (const relation of relationLines) {
+      expect(policy, `Missing UserReferencePolicy for ${relation}`).toContain(`${relation}:`);
+    }
+  });
 });

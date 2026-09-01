@@ -34,7 +34,7 @@ type Tx = {
     create: ReturnType<typeof vi.fn>;
   };
   user: {
-    findUnique: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
   };
 };
 
@@ -48,7 +48,7 @@ function createTx(): Tx {
       create: vi.fn().mockResolvedValue({}),
     },
     user: {
-      findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
   };
 }
@@ -84,7 +84,7 @@ describe('REST incident patch transaction', () => {
         urgency: 'HIGH',
         assigneeId: 'user-2',
       });
-    tx.user.findUnique.mockResolvedValue({ name: 'Responder Two' });
+    tx.user.findFirst.mockResolvedValue({ id: 'user-2', name: 'Responder Two' });
     mocks.applyIncidentLifecycleTargetStatus.mockResolvedValue({
       incidentId: 'inc-1',
       command: 'ACKNOWLEDGE',
@@ -255,7 +255,7 @@ describe('REST incident patch transaction', () => {
     expect(result.changed).toBe(false);
     expect(tx.incident.update).not.toHaveBeenCalled();
     expect(tx.incidentEvent.create).not.toHaveBeenCalled();
-    expect(tx.user.findUnique).not.toHaveBeenCalled();
+    expect(tx.user.findFirst).not.toHaveBeenCalled();
   });
 
   it('fails the atomic patch when a requested assignee does not exist', async () => {
@@ -265,7 +265,7 @@ describe('REST incident patch transaction', () => {
       urgency: 'LOW',
       assigneeId: null,
     });
-    tx.user.findUnique.mockResolvedValue(null);
+    tx.user.findFirst.mockResolvedValue(null);
     mocks.applyIncidentLifecycleTargetStatus.mockResolvedValue({
       incidentId: 'inc-3',
       command: 'ACKNOWLEDGE',

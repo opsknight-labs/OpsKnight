@@ -8,6 +8,7 @@ import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { logger } from '@/lib/logger';
 import { assertTeamNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
+import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
 type TeamFormState = {
   error?: string | null;
@@ -222,13 +223,15 @@ export async function addTeamMember(teamId: string, formData: FormData) {
   if (!userId) return;
   if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) return { error: 'Invalid team role.' };
 
-  await prisma.teamMember.create({
-    data: {
-      teamId,
-      userId,
-      role: role as 'OWNER' | 'ADMIN' | 'MEMBER',
+  await prisma.$transaction(
+    async tx => {
+      await requireOperationalUser(tx, userId);
+      await tx.teamMember.create({
+        data: { teamId, userId, role: role as 'OWNER' | 'ADMIN' | 'MEMBER' },
+      });
     },
-  });
+    { isolationLevel: 'Serializable' }
+  );
 
   const actorId = currentUser.id;
   await logAudit({

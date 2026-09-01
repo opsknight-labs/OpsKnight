@@ -8,6 +8,7 @@ import {
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
 import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
+import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
 export type RestIncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 export type RestIncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -70,11 +71,10 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
 
         let assigneeName: string | null = null;
         if (assigneeChanged && input.assigneeId) {
-          const assignee = await tx.user.findUnique({
-            where: { id: input.assigneeId },
-            select: { name: true },
-          });
-          if (!assignee) {
+          let assignee;
+          try {
+            assignee = await requireOperationalUser(tx, input.assigneeId);
+          } catch {
             throw new AppError({
               code: 'RESOURCE_NOT_FOUND',
               userMessage: 'Assignee not found.',

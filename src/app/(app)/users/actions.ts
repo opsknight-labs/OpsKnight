@@ -7,12 +7,16 @@ import { randomBytes, createHash } from 'crypto';
 import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf, getCurrentUser } from '@/lib/rbac';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
-import { revokeUserSessions } from '@/lib/auth';
 import { isAppRole } from '@/lib/authorization';
 import type { Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
-import { dependencySummary, discoverUserDependencies } from '@/lib/users/dependencies';
+import {
+  dependencySummary,
+  discoverUserDependencies,
+  type UserDependencyReport,
+} from '@/lib/users/dependencies';
 import { bulkUpdateUserSecurityState, updateUserSecurityState } from '@/lib/users/admin-invariants';
+import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
 async function sendInviteEmailIfConfigured(data: {
   userId: string;
@@ -170,6 +174,19 @@ export type UserFormState = {
   inviteUrl?: string | null;
   emailSent?: boolean;
 };
+
+export async function getUserDependencyReport(
+  userId: string
+): Promise<{ report?: UserDependencyReport; error?: string }> {
+  try {
+    await assertAdmin();
+    return { report: await discoverUserDependencies(userId) };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to inspect user dependencies.',
+    };
+  }
+}
 
 async function createInviteToken(userId: string, email: string) {
   const token = randomBytes(32).toString('base64url');
@@ -389,13 +406,15 @@ export async function addUserToTeam(userId: string, formData: FormData) {
 
   if (existing) return;
 
-  await prisma.teamMember.create({
-    data: {
-      userId,
-      teamId,
-      role: (role as 'OWNER' | 'ADMIN' | 'MEMBER') || 'MEMBER',
+  await prisma.$transaction(
+    async tx => {
+      await requireOperationalUser(tx, userId);
+      await tx.teamMember.create({
+        data: { userId, teamId, role: role as 'OWNER' | 'ADMIN' | 'MEMBER' },
+      });
     },
-  });
+    { isolationLevel: 'Serializable' }
+  );
 
   await logAudit({
     action: 'team.member.added',
@@ -438,12 +457,6 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  const dependencies = dependencySummary(await discoverUserDependencies(userId));
-  if (dependencies.length > 0) {
-    return {
-      error: `Transfer operational responsibilities before planned deactivation (${dependencies.join(', ')}).`,
-    };
-  }
   await updateUserSecurityState(
     userId,
     { status: 'DISABLED' },
@@ -462,6 +475,11 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     }),
+    prisma.oidcLinkingApproval.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+    prisma.userDevice.deleteMany({ where: { userId } }),
   ]);
   await logAudit({
     action: 'user.deactivated',
@@ -673,14 +691,6 @@ export async function bulkUpdateUsers(
       };
     }
 
-    for (const userId of userIds) {
-      const dependencies = dependencySummary(await discoverUserDependencies(userId));
-      if (dependencies.length > 0) {
-        return {
-          error: `Transfer dependencies for ${userId} before bulk deactivation (${dependencies.join(', ')}).`,
-        };
-      }
-    }
     await bulkUpdateUserSecurityState(
       userIds,
       { status: 'DISABLED' },
@@ -698,6 +708,11 @@ export async function bulkUpdateUsers(
       where: { userId: { in: userIds }, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    await prisma.oidcLinkingApproval.updateMany({
+      where: { userId: { in: userIds }, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await prisma.userDevice.deleteMany({ where: { userId: { in: userIds } } });
 
     await logAudit({
       action: 'user.deactivated.bulk',
