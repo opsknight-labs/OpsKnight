@@ -1,10 +1,8 @@
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { assertAdmin } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
-import { AppError, isAppError } from '@/lib/errors';
+import { isAppError } from '@/lib/errors';
 import { prismaToAppError } from '@/lib/prisma-errors';
 import { logger } from '@/lib/logger';
 
@@ -12,13 +10,8 @@ import { logger } from '@/lib/logger';
  * Delete Custom Field
  * DELETE /api/settings/custom-fields/[id]
  */
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session) {
-      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
-    }
-
     await assertAdmin();
     const { id } = await params;
 
