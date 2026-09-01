@@ -139,8 +139,20 @@ async function runOnce(): Promise<void> {
     const notifications = await runCriticalNotificationCycle();
 
     const result = await processPendingJobs(workerConfig.batchSize, workerConfig.concurrency);
-    lastSuccessAt = new Date();
-    lastError = null;
+    const laneErrors = [...escalation.errors, ...notifications.errors];
+    if (escalation.jobsFailed > 0) {
+      laneErrors.push(`${escalation.jobsFailed} escalation job(s) failed`);
+    }
+    if (notifications.centralFailed > 0) {
+      laneErrors.push(`${notifications.centralFailed} central notification(s) failed`);
+    }
+    if (laneErrors.length === 0) {
+      lastSuccessAt = new Date();
+      lastError = null;
+    } else {
+      lastError = laneErrors.join('; ');
+      logger.warn('[JobWorker] Critical lane degraded', { errors: laneErrors });
+    }
 
     logger.debug('[JobWorker] Batch processed', {
       processed: result.processed,
