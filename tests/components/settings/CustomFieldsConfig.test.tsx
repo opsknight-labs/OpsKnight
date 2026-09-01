@@ -90,9 +90,10 @@ describe('CustomFieldsConfig Component', () => {
   it('renders quick template recommendations when fields are few', () => {
     render(<CustomFieldsConfig customFields={mockFields} />);
 
-    expect(screen.getByText('Recommended Field Templates')).toBeDefined();
-    expect(screen.getByText('Root Cause Category')).toBeDefined();
-    expect(screen.getByText('Affected Cloud Region')).toBeDefined();
+    expect(screen.getByText('Recommended Enterprise Metadata Standards')).toBeDefined();
+    expect(screen.getByText('Customer Blast Radius')).toBeDefined();
+    expect(screen.getByText('Root Cause Fault Domain')).toBeDefined();
+    expect(screen.getByText('Data Privacy & Security Impact')).toBeDefined();
   });
 
   it('opens add custom field modal dialog when clicking add button', () => {

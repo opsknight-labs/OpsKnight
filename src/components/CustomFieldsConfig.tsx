@@ -136,45 +136,69 @@ const QUICK_TEMPLATES: Array<{
   description: string;
 }> = [
   {
-    name: 'Customer Impact Tier',
-    key: 'customer_tier',
+    name: 'Customer Blast Radius',
+    key: 'customer_blast_radius',
     type: 'SELECT',
     required: true,
-    defaultValue: 'Tier 1 - Mission Critical',
-    options: 'Tier 1 - Mission Critical, Tier 2 - High Value, Tier 3 - Standard, Internal Only',
+    defaultValue: 'Multi-Tenant Enterprise',
+    options:
+      'Global (All Customers), Multi-Tenant Enterprise, Single Isolated Tenant, Internal Employees Only, No External Impact',
     showInList: true,
-    description: 'Track customer SLA severity and business priority',
+    description: 'Quantifies customer-facing footprint for executive escalation & status page',
   },
   {
-    name: 'Root Cause Category',
-    key: 'root_cause_category',
+    name: 'Root Cause Fault Domain',
+    key: 'fault_domain',
     type: 'SELECT',
     required: false,
-    defaultValue: '',
+    defaultValue: 'Code & Release Regression',
     options:
-      'Software Bug, Hardware Failure, Network / DNS, Database / Cache, Human Error, Third-Party Provider',
+      'Code & Release Regression, Database / Storage Degradation, Cloud Infrastructure & K8s, Network / DNS / CDN, Third-Party Vendor / SaaS, Security Anomaly',
     showInList: true,
-    description: 'Categorize postmortem and incident origins',
+    description: 'Standardized taxonomy for MTTR analytics, quarterly reviews, and postmortems',
   },
   {
-    name: 'Jira Issue Key',
-    key: 'jira_issue_key',
+    name: 'Data Privacy & Security Impact',
+    key: 'data_privacy_impact',
+    type: 'SELECT',
+    required: false,
+    defaultValue: 'No Data Exposed (Operational Only)',
+    options:
+      'No Data Exposed (Operational Only), PII / Customer Confidential Exposed, Authentication / Token Compromise, Financial / Billing Records, Under Active Security Investigation',
+    showInList: true,
+    description: 'Identifies GDPR / SOC2 / HIPAA compliance risk and mandatory legal disclosure',
+  },
+  {
+    name: 'Estimated Revenue Exposure',
+    key: 'revenue_impact_tier',
+    type: 'SELECT',
+    required: false,
+    defaultValue: 'Tier 0 - Negligible (< $500)',
+    options:
+      'Tier 0 - Negligible (< $500), Tier 1 - Minor ($500 - $5k/hr), Tier 2 - Major ($5k - $50k/hr), Tier 3 - Critical (> $50k/hr Direct Loss)',
+    showInList: true,
+    description: 'Estimated financial exposure for leadership and post-incident accounting',
+  },
+  {
+    name: 'Upstream SaaS / Vendor Outage',
+    key: 'upstream_vendor_outage',
     type: 'TEXT',
     required: false,
     defaultValue: '',
     options: '',
-    showInList: true,
-    description: 'Link remediation ticket (e.g. PROJ-1042)',
+    showInList: false,
+    description: 'Tag third-party provider causing degradation (e.g., Cloudflare, Stripe, AWS)',
   },
   {
-    name: 'Affected Cloud Region',
-    key: 'affected_region',
+    name: 'Target Infrastructure Layer',
+    key: 'infrastructure_layer',
     type: 'SELECT',
     required: false,
-    defaultValue: 'us-east-1',
-    options: 'us-east-1, us-west-2, eu-central-1, eu-west-1, ap-southeast-1',
+    defaultValue: 'Kubernetes Core Services',
+    options:
+      'Edge / Gateway / CDN, Kubernetes Core Services, Database & Cache Tier, Async Queue / Job Workers, Data Pipeline / ETL, Internal Control Plane',
     showInList: false,
-    description: 'Geographic region or cluster experiencing the fault',
+    description: 'Pinpoints the exact architectural stack layer where the fault originated',
   },
 ];
 
@@ -426,19 +450,21 @@ export default function CustomFieldsConfig({
       </div>
 
       {/* Quick Starter Templates Banner (When few or no fields exist) */}
-      {initialFields.length <= 4 && (
+      {initialFields.length <= 6 && (
         <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-primary/5 shadow-xs">
           <CardHeader className="pb-3 pt-4 px-4 sm:px-5">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              <CardTitle className="text-sm font-semibold">Recommended Field Templates</CardTitle>
+              <CardTitle className="text-sm font-semibold">
+                Recommended Enterprise Metadata Standards
+              </CardTitle>
             </div>
             <CardDescription className="text-xs">
-              Quickly bootstrap common enterprise metadata standards with 1-click presets.
+              Quickly bootstrap proven SRE & ITIL taxonomy standards with 1-click presets.
             </CardDescription>
           </CardHeader>
           <CardContent className="pb-4 px-4 sm:px-5">
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {QUICK_TEMPLATES.map(tpl => {
                 const isAlreadyAdded = activeTemplateKeys.has(tpl.key);
                 return (
