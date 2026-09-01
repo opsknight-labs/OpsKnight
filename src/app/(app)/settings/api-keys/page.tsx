@@ -1,28 +1,19 @@
 import prisma from '@/lib/prisma';
-import { getAuthOptions } from '@/lib/auth';
-import { getServerSession } from 'next-auth';
 import ApiKeysPanel from '@/components/settings/ApiKeysPanel';
 import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { getCurrentUser } from '@/lib/rbac';
 
 export default async function ApiKeysSettingsPage() {
-  const session = await getServerSession(await getAuthOptions());
-  const email = session?.user?.email ?? null;
-  const user = email
-    ? await prisma.user.findUnique({
-        where: { email },
-        select: { id: true, timeZone: true, role: true },
-      })
-    : null;
-  const timeZone = getUserTimeZone(user ?? undefined);
-  const keys = user
-    ? await prisma.apiKey.findMany({
-        where: user.role === 'ADMIN' ? undefined : { userId: user.id },
-        include: { user: { select: { email: true } } },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
+  const user = await getCurrentUser();
+  const timeZone = getUserTimeZone(user);
+  const canManageAllKeys = hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE);
+  const keys = await prisma.apiKey.findMany({
+    where: canManageAllKeys ? undefined : { userId: user.id },
+    include: { user: { select: { email: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
 
   return (
     <div className="space-y-6">
@@ -52,7 +43,7 @@ export default async function ApiKeysSettingsPage() {
             : null,
           expired: !!key.expiresAt && key.expiresAt <= new Date(),
         }))}
-        canCreateWriteKeys={user ? hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE) : false}
+        canCreateWriteKeys={hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE)}
       />
     </div>
   );
