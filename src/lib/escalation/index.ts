@@ -1,18 +1,29 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import { runSerializableTransaction } from '../db-utils';
-import { buildScheduleBlocks, getFinalScheduleBlocks } from '../oncall';
 import { logger } from '../logger';
 import { ESCALATION_LOCK_TIMEOUT_MS } from '../config';
-import { startOfDayInTimeZone, startOfNextDayInTimeZone } from '../timezone';
 import type { NotificationChannel } from '../notifications';
 import {
   escalationOutcomeForError,
   escalationStateIsAuthoritative,
   type EscalationExecutionResult,
 } from './types';
+import {
+  EscalationInfrastructureError,
+  resolveEscalationTargetDetailed,
+  type EscalationTargetResolution,
+} from './target-resolution';
+import { selectEscalationAssignment, type EscalationAssignment } from './assignee-selection';
 
 export * from './types';
+export {
+  EscalationInfrastructureError,
+  resolveEscalationTarget,
+  resolveEscalationTargetDetailed,
+  type EscalationTargetResolution,
+} from './target-resolution';
+export { selectEscalationAssignment, type EscalationAssignment } from './assignee-selection';
 
 function escalationWorkerInvalidated(
   currentLock: Date | null | undefined,
@@ -25,219 +36,20 @@ function escalationWorkerInvalidated(
   return currentLock instanceof Date && currentLock.getTime() !== workerToken.getTime();
 }
 
+function assignmentUpdateData(assignment: EscalationAssignment): Prisma.IncidentUpdateInput {
+  // assigneeId and teamId are mutually exclusive at the database level, so
+  // every assignment write must explicitly clear the other side.
+  return assignment.type === 'TEAM'
+    ? { team: { connect: { id: assignment.teamId } }, assignee: { disconnect: true } }
+    : { assignee: { connect: { id: assignment.userId } }, team: { disconnect: true } };
+}
+
 function supersededEscalationResult(): EscalationExecutionResult {
   return {
     outcome: 'SUPERSEDED',
     escalated: false,
     reason: 'Escalation superseded by lifecycle transition',
   } as const;
-}
-
-/**
- * Get all active on-call users for a schedule at a given time
- * Returns array of all users who are on-call across all active layers
- */
-async function getOnCallUsersForSchedule(scheduleId: string, atTime: Date): Promise<string[]> {
-  const schedule = await prisma.onCallSchedule.findUnique({
-    where: { id: scheduleId },
-    select: {
-      timeZone: true,
-      layers: {
-        include: {
-          users: {
-            include: { user: true },
-            orderBy: { position: 'asc' },
-          },
-        },
-      },
-      overrides: {
-        where: {
-          start: { lte: atTime },
-          end: { gt: atTime },
-          user: { status: 'ACTIVE' },
-        },
-        include: {
-          user: true,
-        },
-      },
-    },
-  });
-
-  if (!schedule || (schedule.layers.length === 0 && schedule.overrides.length === 0)) {
-    return [];
-  }
-
-  // Build schedule blocks to find who's on-call
-  const windowStart = startOfDayInTimeZone(atTime, schedule.timeZone);
-  const windowEnd = startOfNextDayInTimeZone(atTime, schedule.timeZone);
-
-  const layerPriority = new Map<string, number>(
-    schedule.layers.map(layer => [
-      layer.id,
-      (layer as { priority?: number }).priority ?? 100 - ((layer as { order?: number }).order ?? 0),
-    ])
-  );
-  const blocks = buildScheduleBlocks(
-    schedule.layers.map(layer => {
-      const rotHours =
-        (layer as { rotationLengthHours?: number }).rotationLengthHours ??
-        ((layer as { shiftDuration?: number }).shiftDuration
-          ? (layer as { shiftDuration?: number }).shiftDuration! / 60
-          : (layer as { rotationType?: string }).rotationType === 'WEEKLY'
-            ? 168
-            : 24);
-
-      return {
-        id: layer.id,
-        name: layer.name,
-        start: layer.start,
-        end: (layer as { end?: Date | null }).end ?? null,
-        rotationLengthHours: rotHours,
-        shiftLengthHours: (layer as { shiftLengthHours?: number }).shiftLengthHours ?? rotHours,
-        restrictions: layer.restrictions as any,
-        priority:
-          (layer as { priority?: number }).priority ??
-          100 - ((layer as { order?: number }).order ?? 0),
-        users: layer.users
-          .filter(u => u.user.status === 'ACTIVE')
-          .map((u, index) => ({
-            userId: u.userId,
-            position: (u as { position?: number }).position ?? index,
-            user: {
-              name: u.user?.name || '',
-              avatarUrl: u.user?.avatarUrl,
-              gender: u.user?.gender,
-            },
-          })),
-      };
-    }),
-    schedule.overrides.map(o => ({
-      id: o.id,
-      userId: o.userId,
-      replacesUserId: o.replacesUserId,
-      start: o.start,
-      end: o.end,
-      user: {
-        name: o.user.name || '',
-        avatarUrl: o.user.avatarUrl,
-        gender: o.user.gender,
-      },
-    })),
-    windowStart,
-    windowEnd,
-    schedule.timeZone
-  );
-
-  const finalBlocks = getFinalScheduleBlocks(blocks, layerPriority);
-
-  // Find blocks active at atTime
-  const activeBlocks = finalBlocks.filter(
-    b => b.start.getTime() <= atTime.getTime() && b.end.getTime() > atTime.getTime()
-  );
-
-  const userIds = new Set<string>();
-  for (const block of activeBlocks) {
-    if (block.userId) {
-      userIds.add(block.userId);
-    }
-  }
-
-  if (userIds.size > 0) {
-    return Array.from(userIds);
-  }
-
-  // If no active block was found (e.g. coverage gap in schedule), return empty array
-  // so escalation logic cleanly advances to the next step or policy tier rather than
-  // blasting every user in the entire schedule roster.
-  return [];
-}
-
-/**
- * Get all users in a team
- * If notifyOnlyTeamLead is true, returns only the team lead
- *
- * OPTIMIZED: Single query instead of 2-3 separate queries
- */
-async function getTeamUsers(
-  teamId: string,
-  notifyOnlyTeamLead: boolean = false
-): Promise<string[]> {
-  // Single optimized query that gets team + lead + members in one roundtrip
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: {
-      teamLeadId: true,
-      members: {
-        where: {
-          receiveTeamNotifications: true,
-        },
-        select: {
-          userId: true,
-          user: { select: { status: true } },
-        },
-      },
-    },
-  });
-
-  if (!team) return [];
-
-  const activeMembers = team.members.filter(m =>
-    (m as { user?: { status?: string } | null }).user
-      ? (m as { user?: { status?: string } | null }).user?.status !== 'DISABLED'
-      : true
-  );
-
-  if (notifyOnlyTeamLead) {
-    // Check if team lead exists and has notifications enabled
-    if (team.teamLeadId) {
-      const leadHasNotifications = activeMembers.some(m => m.userId === team.teamLeadId);
-      if (leadHasNotifications) {
-        return [team.teamLeadId];
-      }
-    }
-    return [];
-  }
-
-  return activeMembers.map(m => m.userId);
-}
-
-/**
- * Resolve escalation target to a list of user IDs
- * Supports: User (direct), Team (all members or only lead), Schedule (all active on-call users)
- */
-export async function resolveEscalationTarget(
-  targetType: 'USER' | 'TEAM' | 'SCHEDULE',
-  targetId: string,
-  atTime: Date = new Date(),
-  notifyOnlyTeamLead: boolean = false
-): Promise<string[]> {
-  switch (targetType) {
-    case 'USER': {
-      if (prisma.user?.findUnique) {
-        try {
-          const user = await prisma.user.findUnique({
-            where: { id: targetId },
-            select: { id: true, status: true },
-          });
-          if (!user || user.status === 'DISABLED') {
-            return [];
-          }
-        } catch {
-          return [];
-        }
-      }
-      return [targetId];
-    }
-
-    case 'TEAM':
-      return await getTeamUsers(targetId, notifyOnlyTeamLead);
-
-    case 'SCHEDULE':
-      return await getOnCallUsersForSchedule(targetId, atTime);
-
-    default:
-      return [];
-  }
 }
 
 /**
@@ -458,7 +270,11 @@ export async function executeEscalation(
   });
 
   if (claim.count === 0) {
-    return { outcome: 'ALREADY_CLAIMED', escalated: false, reason: 'Escalation already in progress' };
+    return {
+      outcome: 'ALREADY_CLAIMED',
+      escalated: false,
+      reason: 'Escalation already in progress',
+    };
   }
 
   // The claim timestamp is also the lifecycle-generation token. Any real
@@ -539,19 +355,56 @@ export async function executeEscalation(
     return { outcome: 'INVALID_TARGET', escalated: false, reason: 'Invalid target configuration' };
   }
 
-  // Resolve to user IDs using resolveEscalationTarget
-  const notifyOnlyTeamLead = step.notifyOnlyTeamLead || false;
-  const targetUserIds = await resolveEscalationTarget(
-    step.targetType,
-    targetId,
-    new Date(),
-    notifyOnlyTeamLead
-  );
+  // One central contract resolves the audience. An unusable target and an
+  // uncovered one are distinguishable; a database failure throws instead of
+  // masquerading as "nobody is on call".
+  let resolution: EscalationTargetResolution;
+  try {
+    resolution = await resolveEscalationTargetDetailed({
+      targetType: step.targetType,
+      targetId,
+      at: new Date(),
+      notifyOnlyTeamLead: step.notifyOnlyTeamLead || false,
+    });
+  } catch (error) {
+    if (!(error instanceof EscalationInfrastructureError)) throw error;
+    // Release the claim so the retry is not blocked until the lock times out.
+    try {
+      await prisma.incident.updateMany({
+        where: { id: incidentId },
+        data: { escalationProcessingAt: null },
+      });
+    } catch {
+      // The lock timeout is the backstop if even this write cannot land.
+    }
+    logger.error('escalation.target.resolution_failed', {
+      incidentId,
+      stepIndex: currentStepIndex,
+      targetType: step.targetType,
+      targetId,
+      error: error.cause instanceof Error ? error.cause.message : String(error.cause ?? ''),
+    });
+    throw error;
+  }
+
+  if (resolution.outcome !== 'INVALID_TARGET') {
+    targetName = resolution.targetName;
+  }
+  const targetUserIds = resolution.outcome === 'RESOLVED' ? [...resolution.userIds] : [];
 
   const manualAssigneeId = incident.assigneeId;
   if (currentStepIndex === 0 && manualAssigneeId && !targetUserIds.includes(manualAssigneeId)) {
     targetUserIds.push(manualAssigneeId);
   }
+
+  const assignment = selectEscalationAssignment({
+    incidentId,
+    generation: incident.escalationGeneration ?? 0,
+    stepIndex: currentStepIndex,
+    targetType: step.targetType,
+    targetId,
+    userIds: targetUserIds,
+  });
 
   // Assign the incident immediately when the escalation step runs (before notifications),
   // but only while this worker still owns the generation it atomically claimed.
@@ -572,24 +425,10 @@ export async function executeEscalation(
       return true;
     }
 
-    if (step.targetType === 'TEAM' && targetId) {
+    if (assignment) {
       await tx.incident.update({
         where: { id: incidentId },
-        data: {
-          team: { connect: { id: targetId } },
-          assignee: { disconnect: true },
-        },
-      });
-      return true;
-    }
-
-    if (targetUserIds.length > 0) {
-      await tx.incident.update({
-        where: { id: incidentId },
-        data: {
-          assignee: { connect: { id: targetUserIds[0] } },
-          team: { disconnect: true },
-        },
+        data: assignmentUpdateData(assignment),
       });
     }
 
@@ -601,13 +440,19 @@ export async function executeEscalation(
   }
 
   if (targetUserIds.length === 0) {
-    const errorMessage = `Escalation step ${currentStepIndex + 1} (${step.targetType}: ${targetName}) resolved to no users.`;
-    logger.warn('Escalation target resolved to no users', {
+    // An unusable target and an uncovered one both stop this step, but they are
+    // different operator problems and must not share one timeline message.
+    const invalidTarget = resolution.outcome === 'INVALID_TARGET' ? resolution : null;
+    const errorMessage = invalidTarget
+      ? `Escalation step ${currentStepIndex + 1} (${step.targetType}) has an unusable target: ${invalidTarget.reason}.`
+      : `Escalation step ${currentStepIndex + 1} (${step.targetType}: ${targetName}) resolved to no users.`;
+    logger.warn(invalidTarget ? 'escalation.target.invalid' : 'escalation.target.empty', {
       incidentId,
       stepIndex: currentStepIndex,
       targetType: step.targetType,
       targetId,
       targetName,
+      reason: invalidTarget?.reason,
     });
 
     const isLastStep = currentStepIndex >= policySteps.length - 1;
@@ -619,7 +464,9 @@ export async function executeEscalation(
           message:
             errorMessage +
             (isLastStep
-              ? ' Escalation failed: no reachable responders.'
+              ? invalidTarget
+                ? ' Escalation failed: target is unavailable.'
+                : ' Escalation failed: no reachable responders.'
               : ' Skipping to next step.'),
         },
       });
@@ -652,7 +499,9 @@ export async function executeEscalation(
       await scheduleEscalation(incidentId, currentStepIndex + 1, 0);
       return { outcome: 'STEP_SCHEDULED', escalated: false, reason: 'Escalation scheduled' };
     }
-    return { outcome: 'NO_ELIGIBLE_RESPONDERS', escalated: false, reason: 'No users to notify' };
+    return invalidTarget
+      ? { outcome: 'INVALID_TARGET', escalated: false, reason: invalidTarget.reason }
+      : { outcome: 'NO_ELIGIBLE_RESPONDERS', escalated: false, reason: 'No users to notify' };
   }
 
   // Use escalation-step channels when configured, intersected with each
@@ -779,27 +628,10 @@ export async function executeEscalation(
       escalationProcessingAt: null,
     };
 
-    // Assign based on target type
-    // Only assign if the incident doesn't already have an assignee or team
-    if (!currentIncident.assigneeId && !currentIncident.teamId && targetUserIds.length > 0) {
-      if (step.targetType === 'TEAM' && targetId) {
-        // Assign to team
-        updateData.team = { connect: { id: targetId } };
-        // Clear any user assignment
-        updateData.assignee = { disconnect: true };
-      } else {
-        // Assign to first user (for USER or SCHEDULE target types)
-        const selectedIndex =
-          step.targetType === 'SCHEDULE'
-            ? Array.from(`${incidentId}:${currentStepIndex}`).reduce(
-                (sum, char) => sum + char.charCodeAt(0),
-                0
-              ) % targetUserIds.length
-            : 0;
-        updateData.assignee = { connect: { id: targetUserIds[selectedIndex] } };
-        // Clear any team assignment
-        updateData.team = { disconnect: true };
-      }
+    // Ownership comes from the one selector, so this step cannot hand the
+    // incident to a different responder than it did before dispatching pages.
+    if (!currentIncident.assigneeId && !currentIncident.teamId && assignment) {
+      Object.assign(updateData, assignmentUpdateData(assignment));
     }
 
     await tx.incident.update({

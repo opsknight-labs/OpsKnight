@@ -381,7 +381,7 @@ describe('Notification System Tests', () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValue({
         id: teamId,
         teamLeadId,
-        members: [{ userId: teamLeadId }],
+        members: [{ userId: teamLeadId, user: { status: 'ACTIVE' } }],
       } as never);
       vi.mocked(prisma.teamMember.findFirst).mockResolvedValue({ userId: teamLeadId } as never);
       const users = await resolveEscalationTarget('TEAM', teamId, new Date(), true);
@@ -410,7 +410,11 @@ describe('Notification System Tests', () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValue({
         id: teamId,
         teamLeadId,
-        members: [{ userId: teamLeadId }, { userId: member1Id }, { userId: member2Id }],
+        members: [
+          { userId: teamLeadId, user: { status: 'ACTIVE' } },
+          { userId: member1Id, user: { status: 'ACTIVE' } },
+          { userId: member2Id, user: { status: 'ACTIVE' } },
+        ],
       } as never);
       const users = await resolveEscalationTarget('TEAM', teamId, new Date(), false);
       expect(users.length).toBe(3);
@@ -600,6 +604,12 @@ describe('Notification System Tests', () => {
             ],
           },
         },
+      } as never);
+      // Only ACTIVE users are eligible escalation targets.
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: userId,
+        name: 'Test User',
+        status: 'ACTIVE',
       } as never);
       vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 } as never);
       vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);

@@ -24,6 +24,9 @@ vi.mock('@/lib/prisma', () => ({
       create: vi.fn(),
       count: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
     team: {
       findUnique: vi.fn(),
     },
@@ -101,6 +104,11 @@ describe('escalation lifecycle generation fencing', () => {
         },
       })
     );
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'user-1',
+      name: 'Primary responder',
+      status: 'ACTIVE',
+    } as never);
     mocks.sendUserNotification.mockResolvedValue({ success: true });
     mocks.scheduleEscalation.mockResolvedValue('job-next');
   });

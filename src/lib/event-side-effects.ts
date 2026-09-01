@@ -2,10 +2,7 @@ import prisma from './prisma';
 import { executeEscalation } from './notifications';
 import { logger } from './logger';
 import type { EventSideEffectPayload, LifecycleSideEffectContext } from './event-outbox';
-import {
-  escalationPolicyOwnsResponderRouting,
-  type EscalationOutcome,
-} from './escalation/types';
+import { escalationPolicyOwnsResponderRouting, type EscalationOutcome } from './escalation/types';
 import {
   isRetryableNotificationOutcome,
   type NotificationDeliveryOutcome,

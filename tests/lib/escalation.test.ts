@@ -25,6 +25,9 @@ vi.mock('@/lib/prisma', () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
     incidentEvent: {
       create: vi.fn(),
     },
@@ -68,26 +71,64 @@ describe('resolveEscalationTarget', () => {
   });
 
   describe('USER target type', () => {
-    it('returns the user ID directly', async () => {
+    it('returns an active user', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        id: 'user-123',
+        name: 'Primary',
+        status: 'ACTIVE',
+      } as any);
+
       const result = await resolveEscalationTarget('USER', 'user-123');
       expect(result).toEqual(['user-123']);
+    });
+
+    it.each(['INVITED', 'DISABLED'])('never pages a %s user', async status => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        id: 'user-123',
+        name: 'Primary',
+        status,
+      } as any);
+
+      expect(await resolveEscalationTarget('USER', 'user-123')).toEqual([]);
+    });
+
+    it('never pages a deleted user', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(null);
+
+      expect(await resolveEscalationTarget('USER', 'user-123')).toEqual([]);
+    });
+
+    it('surfaces a database failure instead of reporting an empty audience', async () => {
+      vi.mocked(prisma.user.findUnique).mockRejectedValueOnce(new Error('connection reset'));
+
+      await expect(resolveEscalationTarget('USER', 'user-123')).rejects.toThrow(
+        'Failed to resolve escalation user target'
+      );
     });
   });
 
   describe('TEAM target type', () => {
     it('returns all team members with notifications enabled', async () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValueOnce({
-        id: 'team-1',
+        name: 'Payments',
         teamLeadId: 'lead-1',
-        members: [{ userId: 'user-1' }, { userId: 'user-2' }, { userId: 'lead-1' }],
+        members: [
+          { userId: 'user-1', user: { status: 'ACTIVE' } },
+          { userId: 'user-2', user: { status: 'ACTIVE' } },
+          { userId: 'lead-1', user: { status: 'ACTIVE' } },
+          { userId: 'invited-1', user: { status: 'INVITED' } },
+          { userId: 'disabled-1', user: { status: 'DISABLED' } },
+        ],
       } as any);
 
       const result = await resolveEscalationTarget('TEAM', 'team-1');
 
-      expect(result).toEqual(['user-1', 'user-2', 'lead-1']);
+      // Deterministically ordered, and only active responders.
+      expect(result).toEqual(['lead-1', 'user-1', 'user-2']);
       expect(prisma.team.findUnique).toHaveBeenCalledWith({
         where: { id: 'team-1' },
         select: {
+          name: true,
           teamLeadId: true,
           members: {
             where: { receiveTeamNotifications: true },
@@ -102,9 +143,12 @@ describe('resolveEscalationTarget', () => {
 
     it('returns only team lead when notifyOnlyTeamLead is true', async () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValueOnce({
-        id: 'team-1',
+        name: 'Payments',
         teamLeadId: 'lead-1',
-        members: [{ userId: 'user-1' }, { userId: 'lead-1' }],
+        members: [
+          { userId: 'user-1', user: { status: 'ACTIVE' } },
+          { userId: 'lead-1', user: { status: 'ACTIVE' } },
+        ],
       } as any);
 
       const result = await resolveEscalationTarget('TEAM', 'team-1', new Date(), true);
@@ -122,9 +166,10 @@ describe('resolveEscalationTarget', () => {
 
     it('returns empty array when team lead only but lead not in members', async () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValueOnce({
-        id: 'team-1',
+        name: 'Payments',
         teamLeadId: 'lead-1',
-        members: [{ userId: 'user-1' }], // Lead not in members with notifications
+        // Lead is not a member that receives team notifications.
+        members: [{ userId: 'user-1', user: { status: 'ACTIVE' } }],
       } as any);
 
       const result = await resolveEscalationTarget('TEAM', 'team-1', new Date(), true);
