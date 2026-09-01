@@ -20,6 +20,10 @@ const PROTECTED_FIELDS = new Set([
 const ALLOWED_FIELDS_BY_FILE = new Map<string, ReadonlySet<string>>([
   ['src/lib/incidents/lifecycle.ts', PROTECTED_FIELDS],
   [
+    'src/lib/escalation/repository.ts',
+    new Set(['escalationStatus', 'currentEscalationStep', 'nextEscalationAt']),
+  ],
+  [
     'src/lib/escalation/index.ts',
     new Set(['escalationStatus', 'currentEscalationStep', 'nextEscalationAt']),
   ],

@@ -1,6 +1,4 @@
-import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
-import { runSerializableTransaction } from '../db-utils';
 import { logger } from '../logger';
 import { ESCALATION_LOCK_TIMEOUT_MS } from '../config';
 import type { NotificationChannel } from '../notifications';
@@ -14,9 +12,21 @@ import {
   resolveEscalationTargetDetailed,
   type EscalationTargetResolution,
 } from './target-resolution';
-import { selectEscalationAssignment, type EscalationAssignment } from './assignee-selection';
+import { planEscalationStep, type EscalationPlan } from './planner';
+import { escalationDueAt, escalationPolicyExhausted } from './state';
+import {
+  applyPlannedAssignment,
+  claimEscalationStep,
+  commitEscalationPlan,
+  escalationGenerationStillOwned,
+  finalizeEscalationExecution,
+  releaseEscalationClaim,
+  scheduleDelayedEscalationStep,
+  type EscalationWorkerToken,
+} from './repository';
 
 export * from './types';
+export * from './state';
 export {
   EscalationInfrastructureError,
   resolveEscalationTarget,
@@ -24,43 +34,103 @@ export {
   type EscalationTargetResolution,
 } from './target-resolution';
 export { selectEscalationAssignment, type EscalationAssignment } from './assignee-selection';
+export { planEscalationStep, type EscalationPlan } from './planner';
 
-function escalationWorkerInvalidated(
-  currentLock: Date | null | undefined,
-  workerToken: Date
-): boolean {
-  // Production selects always include this field. `undefined` is tolerated for
-  // partial test doubles and older adapters; a persisted NULL explicitly means
-  // a lifecycle transition invalidated the worker generation.
-  if (currentLock === null) return true;
-  return currentLock instanceof Date && currentLock.getTime() !== workerToken.getTime();
-}
-
-function assignmentUpdateData(assignment: EscalationAssignment): Prisma.IncidentUpdateInput {
-  // assigneeId and teamId are mutually exclusive at the database level, so
-  // every assignment write must explicitly clear the other side.
-  return assignment.type === 'TEAM'
-    ? { team: { connect: { id: assignment.teamId } }, assignee: { disconnect: true } }
-    : { assignee: { connect: { id: assignment.userId } }, team: { disconnect: true } };
-}
+type PolicyStepRow = {
+  delayMinutes: number;
+  targetType: 'USER' | 'TEAM' | 'SCHEDULE';
+  targetUserId: string | null;
+  targetTeamId: string | null;
+  targetScheduleId: string | null;
+  notifyOnlyTeamLead: boolean;
+  notificationChannels: NotificationChannel[];
+};
 
 function supersededEscalationResult(): EscalationExecutionResult {
   return {
     outcome: 'SUPERSEDED',
     escalated: false,
     reason: 'Escalation superseded by lifecycle transition',
-  } as const;
+  };
+}
+
+/** The target ID a step points at, or null when its configuration is unusable. */
+function stepTargetId(step: PolicyStepRow): string | null {
+  switch (step.targetType) {
+    case 'USER':
+      return step.targetUserId || null;
+    case 'TEAM':
+      return step.targetTeamId || null;
+    case 'SCHEDULE':
+      return step.targetScheduleId || null;
+    default:
+      return null;
+  }
 }
 
 /**
- * Execute escalation policy for an incident.
- * Handles multiple steps with delays and different target types.
+ * Dispatches this step's responder pages, re-checking generation ownership
+ * before each one so a lifecycle transition stops the fan-out immediately.
+ *
+ * Individual delivery failures are recorded and do not block the step's state
+ * from committing: whether a provider accepted a message is the notification
+ * control plane's problem, not a reason to lose escalation progress.
+ */
+async function dispatchStepNotifications(input: {
+  incidentId: string;
+  incidentTitle: string;
+  stepIndex: number;
+  eventKey: string;
+  channels: NotificationChannel[] | undefined;
+  recipients: readonly string[];
+  workerToken: EscalationWorkerToken;
+}): Promise<{ superseded: boolean; notifications: unknown[] }> {
+  const { sendUserNotification } = await import('../user-notifications');
+  const notifications: unknown[] = [];
+  const message = `[OpsKnight] Incident: ${input.incidentTitle}${
+    input.stepIndex > 0 ? ` (Escalation Level ${input.stepIndex + 1})` : ''
+  }`;
+
+  for (const userId of input.recipients) {
+    if (!(await escalationGenerationStillOwned(input.incidentId, input.workerToken))) {
+      return { superseded: true, notifications };
+    }
+    try {
+      const result = await sendUserNotification(input.incidentId, userId, message, input.channels, {
+        eventKey: input.eventKey,
+      });
+      notifications.push({ userId, result });
+    } catch (error) {
+      logger.error('Failed to send escalation notification to user', {
+        incidentId: input.incidentId,
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      notifications.push({
+        userId,
+        result: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown notification failure',
+        },
+      });
+    }
+  }
+
+  return { superseded: false, notifications };
+}
+
+/**
+ * Executes one escalation step for an incident:
+ *
+ *   load -> guard -> claim -> resolve -> plan -> page -> commit
+ *
+ * The planner decides every transition and the repository commits it in a
+ * single transaction, so no branch in here writes escalation state of its own.
  */
 export async function executeEscalation(
   incidentId: string,
   stepIndex?: number
 ): Promise<EscalationExecutionResult> {
-  const lockTimeoutMs = ESCALATION_LOCK_TIMEOUT_MS;
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
     include: {
@@ -87,189 +157,79 @@ export async function executeEscalation(
     return { outcome: 'NO_INCIDENT', escalated: false, reason: 'Incident not found' };
   }
 
-  if (!incident.service.policy?.steps?.length) {
-    // Clear escalation status if no policy
-    await prisma.incident.update({
-      where: { id: incidentId },
-      data: {
-        escalationStatus: null,
-        nextEscalationAt: null,
-        currentEscalationStep: null,
-        escalationProcessingAt: null,
-      },
-    });
+  const policy = incident.service.policy;
+  const policySteps = (policy?.steps ?? []) as unknown as PolicyStepRow[];
+
+  if (policySteps.length === 0) {
+    // A service with no policy carries no escalation state.
+    await finalizeEscalationExecution({ incidentId, status: null });
     return { outcome: 'NO_POLICY', escalated: false, reason: 'No escalation policy configured' };
   }
 
-  // Check if escalation is already completed - prevent re-triggering
   if (incident.escalationStatus === 'COMPLETED') {
     return { outcome: 'COMPLETED', escalated: false, reason: 'Escalation already completed' };
   }
 
-  const policy = incident.service.policy;
-  const policySteps = policy.steps;
-
-  // Use provided stepIndex, or currentEscalationStep from DB, or default to 0
+  const generation = incident.escalationGeneration ?? 0;
   const currentStepIndex = stepIndex ?? incident.currentEscalationStep ?? 0;
 
-  if (currentStepIndex >= policySteps.length) {
-    // Check how many times this escalation has looped
-    const loopEventsCount =
-      typeof prisma.incidentEvent?.count === 'function'
-        ? await prisma.incidentEvent.count({
-            where: {
-              incidentId,
-              message: { contains: 'Looping back to Step 1' },
-            },
-          })
-        : 0;
-
-    const MAX_LOOPS = 2; // Allow up to 2 retry cycles
-    if (loopEventsCount < MAX_LOOPS && incident.status === 'OPEN' && !incident.acknowledgedAt) {
-      const cooldownMinutes = 15;
-      const nextAt = new Date(Date.now() + cooldownMinutes * 60 * 1000);
-      await prisma.incident.update({
-        where: { id: incidentId },
-        data: {
-          escalationStatus: 'ESCALATING',
-          nextEscalationAt: nextAt,
-          currentEscalationStep: 0,
-          escalationGeneration: { increment: 1 },
-          escalationProcessingAt: null,
-        },
-      });
-
-      if (typeof prisma.incidentEvent?.create === 'function') {
-        await prisma.incidentEvent.create({
-          data: {
-            incidentId,
-            type: 'ESCALATED',
-            message: `Escalation policy completed all ${policySteps.length} step(s). Looping back to Step 1 in ${cooldownMinutes} minutes (Cycle ${loopEventsCount + 1}/${MAX_LOOPS}).`,
-          },
-        });
-      }
-
-      return {
-        outcome: 'STEP_SCHEDULED',
-        escalated: true,
-        reason: `Looping back to Step 1 after cooldown (Cycle ${loopEventsCount + 1})`,
-        nextEscalationAt: nextAt,
-      };
-    }
-
-    // Mark escalation as completed
-    await prisma.incident.update({
-      where: { id: incidentId },
-      data: {
-        escalationStatus: 'COMPLETED',
-        nextEscalationAt: null,
-        currentEscalationStep: null,
-        escalationProcessingAt: null,
-      },
+  if (escalationPolicyExhausted(currentStepIndex, policySteps.length)) {
+    // Policies do not repeat: running out of steps completes the execution.
+    await finalizeEscalationExecution({
+      incidentId,
+      status: 'COMPLETED',
+      timelineMessage: `Escalation policy exhausted: all ${policySteps.length} step(s) completed without acknowledgment.`,
     });
-
-    try {
-      if (typeof prisma.incidentEvent?.create === 'function') {
-        await prisma.incidentEvent.create({
-          data: {
-            incidentId,
-            type: 'ESCALATED',
-            message: `Escalation policy exhausted: all ${policySteps.length} step(s) completed without acknowledgment.`,
-          },
-        });
-      }
-    } catch (_) {}
-
     return { outcome: 'COMPLETED', escalated: false, reason: 'All escalation steps exhausted' };
   }
 
-  const now = new Date();
-  const step = policySteps.find((_, index) => index === currentStepIndex);
+  const step = policySteps.at(currentStepIndex);
   if (!step) {
-    await prisma.incident.update({
-      where: { id: incidentId },
-      data: {
-        escalationStatus: 'COMPLETED',
-        nextEscalationAt: null,
-        currentEscalationStep: null,
-        escalationProcessingAt: null,
-      },
-    });
+    await finalizeEscalationExecution({ incidentId, status: 'COMPLETED' });
     return { outcome: 'STEP_MISSING', escalated: false, reason: 'Escalation step not found' };
   }
 
-  const stepDelayMs = (step.delayMinutes || 0) * 60 * 1000;
-  if (stepDelayMs > 0) {
-    const scheduledAt = incident.nextEscalationAt;
-    if (!scheduledAt) {
-      const nextRunAt = new Date(now.getTime() + stepDelayMs);
-      await prisma.incident.update({
-        where: { id: incidentId },
-        data: {
-          escalationStatus: 'ESCALATING',
-          currentEscalationStep: currentStepIndex,
-          nextEscalationAt: nextRunAt,
-          escalationProcessingAt: null,
-        },
+  const now = new Date();
+  const stepDelayMinutes = step.delayMinutes || 0;
+
+  if (stepDelayMinutes > 0) {
+    if (!incident.nextEscalationAt) {
+      // First sighting of a delayed step: arm the state and its due job together.
+      const dueAt = escalationDueAt(now, stepDelayMinutes);
+      await scheduleDelayedEscalationStep({
+        incidentId,
+        generation,
+        stepIndex: currentStepIndex,
+        delayMinutes: stepDelayMinutes,
+        dueAt,
       });
-
-      await prisma.incidentEvent.create({
-        data: {
-          incidentId,
-          message: `Escalation scheduled for [[scheduledAt=${nextRunAt.toISOString()}]] (${step.delayMinutes} minute delay)`,
-        },
-      });
-
-      try {
-        const { scheduleEscalation } = await import('../jobs/queue');
-        await scheduleEscalation(incidentId, currentStepIndex, stepDelayMs);
-      } catch (error) {
-        logger.error('Failed to schedule initial escalation job', {
-          incidentId,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-
-      return { outcome: 'STEP_SCHEDULED', escalated: false, reason: 'Escalation scheduled' };
+      return {
+        outcome: 'STEP_SCHEDULED',
+        escalated: false,
+        reason: 'Escalation scheduled',
+        nextEscalationAt: dueAt,
+      };
     }
 
-    if (scheduledAt.getTime() > now.getTime()) {
-      return { outcome: 'STEP_SCHEDULED', escalated: false, reason: 'Escalation scheduled' };
+    if (incident.nextEscalationAt.getTime() > now.getTime()) {
+      return {
+        outcome: 'STEP_SCHEDULED',
+        escalated: false,
+        reason: 'Escalation scheduled',
+        nextEscalationAt: incident.nextEscalationAt,
+      };
     }
-
-    // scheduledAt is due; continue to execute without rescheduling.
+    // The step is due; fall through and execute it.
   }
 
-  const lockCutoff = new Date(now.getTime() - lockTimeoutMs);
-  const stepMatch =
-    currentStepIndex === 0
-      ? { OR: [{ currentEscalationStep: null }, { currentEscalationStep: 0 }] }
-      : { currentEscalationStep: currentStepIndex };
-  const statusMatch =
-    currentStepIndex === 0
-      ? { OR: [{ escalationStatus: null }, { escalationStatus: 'ESCALATING' }] }
-      : { escalationStatus: 'ESCALATING' };
-
-  const claim = await prisma.incident.updateMany({
-    where: {
-      id: incidentId,
-      status: 'OPEN',
-      AND: [
-        stepMatch,
-        statusMatch,
-        {
-          OR: [{ escalationProcessingAt: null }, { escalationProcessingAt: { lt: lockCutoff } }],
-        },
-      ],
-    },
-    data: {
-      escalationStatus: 'ESCALATING',
-      currentEscalationStep: currentStepIndex,
-      escalationProcessingAt: now,
-    },
+  const workerToken = await claimEscalationStep({
+    incidentId,
+    stepIndex: currentStepIndex,
+    now,
+    lockTimeoutMs: ESCALATION_LOCK_TIMEOUT_MS,
   });
 
-  if (claim.count === 0) {
+  if (!workerToken) {
     return {
       outcome: 'ALREADY_CLAIMED',
       escalated: false,
@@ -277,433 +237,154 @@ export async function executeEscalation(
     };
   }
 
-  // The claim timestamp is also the lifecycle-generation token. Any real
-  // lifecycle transition clears escalationProcessingAt; a timed-out reclaim
-  // replaces it. Either event makes this worker stale before it can continue.
-  const workerToken = now;
+  const targetId = stepTargetId(step);
+  let resolution: EscalationTargetResolution = {
+    outcome: 'INVALID_TARGET',
+    reason: `${step.targetType} step has no target ID configured`,
+  };
 
-  // Resolve target based on target type
-  let targetId: string | null = null;
-  let targetName: string = 'Unknown';
-
-  switch (step.targetType) {
-    case 'USER':
-      targetId = step.targetUserId || null;
-      targetName = step.targetUser?.name || 'Unknown User';
-      break;
-    case 'TEAM':
-      targetId = step.targetTeamId || null;
-      targetName = step.targetTeam?.name || 'Unknown Team';
-      break;
-    case 'SCHEDULE':
-      targetId = step.targetScheduleId || null;
-      targetName = step.targetSchedule?.name || 'Unknown Schedule';
-      break;
-  }
-
-  if (!targetId) {
-    const errorMessage = `Escalation step ${currentStepIndex + 1} has invalid target configuration (${step.targetType} with no target ID).`;
-    logger.error('Escalation step has invalid target', {
-      incidentId,
-      stepIndex: currentStepIndex,
-      targetType: step.targetType,
-      targetUserId: step.targetUserId,
-      targetTeamId: step.targetTeamId,
-      targetScheduleId: step.targetScheduleId,
-    });
-
-    const isLastStep = currentStepIndex >= policySteps.length - 1;
-
-    await runSerializableTransaction(async tx => {
-      await tx.incidentEvent.create({
-        data: {
-          incidentId,
-          message:
-            errorMessage +
-            (isLastStep ? ' Escalation failed: target is unavailable.' : ' Skipping to next step.'),
-        },
-      });
-
-      if (isLastStep) {
-        await tx.incident.update({
-          where: { id: incidentId },
-          data: {
-            escalationStatus: 'FAILED',
-            nextEscalationAt: null,
-            escalationProcessingAt: null,
-            currentEscalationStep: null,
-          },
-        });
-      } else {
-        await tx.incident.update({
-          where: { id: incidentId },
-          data: {
-            currentEscalationStep: currentStepIndex + 1,
-            nextEscalationAt: null,
-            escalationProcessingAt: null,
-          },
-        });
-      }
-    });
-
-    // Try next step
-    if (!isLastStep) {
-      const { scheduleEscalation } = await import('../jobs/queue');
-      await scheduleEscalation(incidentId, currentStepIndex + 1, 0);
-      return { outcome: 'STEP_SCHEDULED', escalated: false, reason: 'Escalation scheduled' };
-    }
-    return { outcome: 'INVALID_TARGET', escalated: false, reason: 'Invalid target configuration' };
-  }
-
-  // One central contract resolves the audience. An unusable target and an
-  // uncovered one are distinguishable; a database failure throws instead of
-  // masquerading as "nobody is on call".
-  let resolution: EscalationTargetResolution;
-  try {
-    resolution = await resolveEscalationTargetDetailed({
-      targetType: step.targetType,
-      targetId,
-      at: new Date(),
-      notifyOnlyTeamLead: step.notifyOnlyTeamLead || false,
-    });
-  } catch (error) {
-    if (!(error instanceof EscalationInfrastructureError)) throw error;
-    // Release the claim so the retry is not blocked until the lock times out.
+  if (targetId) {
     try {
-      await prisma.incident.updateMany({
-        where: { id: incidentId },
-        data: { escalationProcessingAt: null },
+      resolution = await resolveEscalationTargetDetailed({
+        targetType: step.targetType,
+        targetId,
+        at: now,
+        notifyOnlyTeamLead: step.notifyOnlyTeamLead || false,
       });
-    } catch {
-      // The lock timeout is the backstop if even this write cannot land.
+    } catch (error) {
+      if (!(error instanceof EscalationInfrastructureError)) throw error;
+      // Escalation state was not advanced. Release the lease so the retry is
+      // not blocked, and let the caller classify this as a retryable failure.
+      await releaseEscalationClaim(incidentId, workerToken);
+      logger.error('escalation.target.resolution_failed', {
+        incidentId,
+        stepIndex: currentStepIndex,
+        targetType: step.targetType,
+        targetId,
+        error: error.cause instanceof Error ? error.cause.message : String(error.cause ?? ''),
+      });
+      throw error;
     }
-    logger.error('escalation.target.resolution_failed', {
-      incidentId,
-      stepIndex: currentStepIndex,
-      targetType: step.targetType,
-      targetId,
-      error: error.cause instanceof Error ? error.cause.message : String(error.cause ?? ''),
-    });
-    throw error;
   }
 
-  if (resolution.outcome !== 'INVALID_TARGET') {
-    targetName = resolution.targetName;
-  }
-  const targetUserIds = resolution.outcome === 'RESOLVED' ? [...resolution.userIds] : [];
-
-  const manualAssigneeId = incident.assigneeId;
-  if (currentStepIndex === 0 && manualAssigneeId && !targetUserIds.includes(manualAssigneeId)) {
-    targetUserIds.push(manualAssigneeId);
-  }
-
-  const assignment = selectEscalationAssignment({
+  const plan: EscalationPlan = planEscalationStep({
     incidentId,
-    generation: incident.escalationGeneration ?? 0,
+    generation,
+    stepIndex: currentStepIndex,
+    stepCount: policySteps.length,
+    targetType: step.targetType,
+    targetId,
+    resolution,
+    // A hand-assigned owner stays in the first page's audience.
+    extraRecipients:
+      currentStepIndex === 0 && incident.assigneeId ? [incident.assigneeId] : undefined,
+    stepDelayMinutes,
+    nextStepDelayMinutes: policySteps.at(currentStepIndex + 1)?.delayMinutes ?? null,
+    now,
+  });
+
+  const targetName = resolution.outcome === 'INVALID_TARGET' ? 'Unknown' : resolution.targetName;
+  const recipients = plan.notificationRecipients;
+
+  if (recipients.length === 0) {
+    logger.warn(
+      plan.outcome === 'INVALID_TARGET' ? 'escalation.target.invalid' : 'escalation.target.empty',
+      {
+        incidentId,
+        stepIndex: currentStepIndex,
+        targetType: step.targetType,
+        targetId,
+        targetName,
+        outcome: plan.outcome,
+      }
+    );
+  } else if (
+    !(await applyPlannedAssignment({ incidentId, workerToken, assignment: plan.assignment }))
+  ) {
+    // Ownership is taken before paging so the page and the boards agree.
+    return supersededEscalationResult();
+  }
+
+  let notifications: unknown[] = [];
+  if (recipients.length > 0) {
+    const dispatch = await dispatchStepNotifications({
+      incidentId,
+      incidentTitle: incident.title,
+      stepIndex: currentStepIndex,
+      eventKey: [
+        'ESCALATION',
+        incidentId,
+        policy!.id,
+        String(generation),
+        String(currentStepIndex),
+      ].join(':'),
+      channels: step.notificationChannels.length > 0 ? step.notificationChannels : undefined,
+      recipients,
+      workerToken,
+    });
+    if (dispatch.superseded) return supersededEscalationResult();
+    notifications = dispatch.notifications;
+  }
+
+  const commit = await commitEscalationPlan({
+    incidentId,
+    generation,
+    expectedStep: currentStepIndex,
+    workerToken,
+    plan,
+  });
+
+  if (!commit.committed) return supersededEscalationResult();
+
+  logger.info('escalation.plan.committed', {
+    incidentId,
+    generation,
     stepIndex: currentStepIndex,
     targetType: step.targetType,
     targetId,
-    userIds: targetUserIds,
+    recipientCount: recipients.length,
+    outcome: plan.outcome,
+    lifecycleGate: commit.gate,
+    appliedStatus: commit.appliedStatus,
+    nextStepIndex: plan.nextJob?.stepIndex ?? null,
   });
 
-  // Assign the incident immediately when the escalation step runs (before notifications),
-  // but only while this worker still owns the generation it atomically claimed.
-  const assignmentGenerationIsCurrent = await runSerializableTransaction(async tx => {
-    const currentIncident = await tx.incident.findUnique({
-      where: { id: incidentId },
-      select: { assigneeId: true, teamId: true, escalationProcessingAt: true },
-    });
-
-    if (
-      !currentIncident ||
-      escalationWorkerInvalidated(currentIncident.escalationProcessingAt, workerToken)
-    ) {
-      return false;
-    }
-
-    if (currentIncident.assigneeId || currentIncident.teamId) {
-      return true;
-    }
-
-    if (assignment) {
-      await tx.incident.update({
-        where: { id: incidentId },
-        data: assignmentUpdateData(assignment),
-      });
-    }
-
-    return true;
-  });
-
-  if (!assignmentGenerationIsCurrent) {
-    return supersededEscalationResult();
-  }
-
-  if (targetUserIds.length === 0) {
-    // An unusable target and an uncovered one both stop this step, but they are
-    // different operator problems and must not share one timeline message.
-    const invalidTarget = resolution.outcome === 'INVALID_TARGET' ? resolution : null;
-    const errorMessage = invalidTarget
-      ? `Escalation step ${currentStepIndex + 1} (${step.targetType}) has an unusable target: ${invalidTarget.reason}.`
-      : `Escalation step ${currentStepIndex + 1} (${step.targetType}: ${targetName}) resolved to no users.`;
-    logger.warn(invalidTarget ? 'escalation.target.invalid' : 'escalation.target.empty', {
-      incidentId,
-      stepIndex: currentStepIndex,
-      targetType: step.targetType,
-      targetId,
+  if (plan.outcome === 'STEP_EXECUTED') {
+    return {
+      outcome: 'STEP_EXECUTED',
+      escalated: true,
       targetName,
-      reason: invalidTarget?.reason,
-    });
-
-    const isLastStep = currentStepIndex >= policySteps.length - 1;
-
-    await runSerializableTransaction(async tx => {
-      await tx.incidentEvent.create({
-        data: {
-          incidentId,
-          message:
-            errorMessage +
-            (isLastStep
-              ? invalidTarget
-                ? ' Escalation failed: target is unavailable.'
-                : ' Escalation failed: no reachable responders.'
-              : ' Skipping to next step.'),
-        },
-      });
-
-      if (isLastStep) {
-        await tx.incident.update({
-          where: { id: incidentId },
-          data: {
-            escalationStatus: 'FAILED',
-            nextEscalationAt: null,
-            escalationProcessingAt: null,
-            currentEscalationStep: null,
-          },
-        });
-      } else {
-        await tx.incident.update({
-          where: { id: incidentId },
-          data: {
-            currentEscalationStep: currentStepIndex + 1,
-            nextEscalationAt: null,
-            escalationProcessingAt: null,
-          },
-        });
-      }
-    });
-
-    // Try next step
-    if (!isLastStep) {
-      const { scheduleEscalation } = await import('../jobs/queue');
-      await scheduleEscalation(incidentId, currentStepIndex + 1, 0);
-      return { outcome: 'STEP_SCHEDULED', escalated: false, reason: 'Escalation scheduled' };
-    }
-    return invalidTarget
-      ? { outcome: 'INVALID_TARGET', escalated: false, reason: invalidTarget.reason }
-      : { outcome: 'NO_ELIGIBLE_RESPONDERS', escalated: false, reason: 'No users to notify' };
-  }
-
-  // Use escalation-step channels when configured, intersected with each
-  // recipient's enabled channels by sendUserNotification.
-  const { sendUserNotification } = await import('../user-notifications');
-  const notificationsSent = [];
-  const escalationChannels: NotificationChannel[] | undefined =
-    step.notificationChannels.length > 0 ? step.notificationChannels : undefined;
-  const escalationEventKey = [
-    'ESCALATION',
-    incidentId,
-    policy.id,
-    String(incident.escalationGeneration ?? 0),
-    String(currentStepIndex),
-  ].join(':');
-
-  for (const userId of targetUserIds) {
-    try {
-      const latestState = await prisma.incident.findUnique({
-        where: { id: incidentId },
-        select: { status: true, escalationStatus: true, escalationProcessingAt: true },
-      });
-      if (
-        !latestState ||
-        !['OPEN'].includes(latestState.status) ||
-        latestState.escalationStatus === 'COMPLETED' ||
-        escalationWorkerInvalidated(latestState.escalationProcessingAt, workerToken)
-      ) {
-        return supersededEscalationResult();
-      }
-      const message = `[OpsKnight] Incident: ${incident.title}${currentStepIndex > 0 ? ` (Escalation Level ${currentStepIndex + 1})` : ''}`;
-      const result = await sendUserNotification(incidentId, userId, message, escalationChannels, {
-        eventKey: escalationEventKey,
-      });
-      notificationsSent.push({ userId, result });
-    } catch (err) {
-      logger.error('Failed to send escalation notification to user', {
-        incidentId,
-        userId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      notificationsSent.push({
-        userId,
-        result: {
-          success: false,
-          error: err instanceof Error ? err.message : 'Unknown notification failure',
-        },
-      });
-    }
-  }
-
-  // Create event message
-  const targetDescription =
-    step.targetType === 'USER'
-      ? targetName
-      : `${step.targetType}: ${targetName} (${targetUserIds.length} user${targetUserIds.length !== 1 ? 's' : ''})`;
-
-  // Determine next escalation step and schedule it
-  const nextStepIndex = currentStepIndex + 1;
-  const nextStep =
-    nextStepIndex < policySteps.length
-      ? (policySteps.find((_, index) => index === nextStepIndex) ?? null)
-      : null;
-  let nextEscalationAt: Date | null = null;
-  let escalationStatus: string = nextStep ? 'ESCALATING' : 'COMPLETED';
-  let nextStepMessage: string | null = null;
-
-  if (nextStep) {
-    const delayMs = nextStep.delayMinutes * 60 * 1000;
-    nextEscalationAt = new Date(Date.now() + delayMs);
-    escalationStatus = 'ESCALATING';
-    nextStepMessage = `Next escalation step scheduled for [[scheduledAt=${nextEscalationAt.toISOString()}]] (${nextStep.delayMinutes} minute delay)`;
-  }
-
-  let shouldScheduleNextJob = Boolean(nextStep && nextEscalationAt);
-
-  const finalGenerationIsCurrent = await runSerializableTransaction(async tx => {
-    // Check current state from database to avoid race conditions
-    const currentIncident = await tx.incident.findUnique({
-      where: { id: incidentId },
-      select: {
-        assigneeId: true,
-        teamId: true,
-        status: true,
-        escalationStatus: true,
-        escalationProcessingAt: true,
-      },
-    });
-
-    if (
-      !currentIncident ||
-      escalationWorkerInvalidated(currentIncident.escalationProcessingAt, workerToken)
-    ) {
-      shouldScheduleNextJob = false;
-      return false;
-    }
-
-    // Race condition guard: If the incident was acknowledged, resolved, snoozed, or suppressed while notifications
-    // were being dispatched, do NOT schedule further escalation steps or overwrite to ESCALATING.
-    const isStopped =
-      currentIncident.status === 'ACKNOWLEDGED' ||
-      currentIncident.status === 'RESOLVED' ||
-      currentIncident.escalationStatus === 'COMPLETED';
-
-    const isPaused =
-      currentIncident.status === 'SNOOZED' ||
-      currentIncident.status === 'SUPPRESSED' ||
-      currentIncident.escalationStatus === 'PAUSED';
-
-    const finalEscalationStatus = isStopped ? 'COMPLETED' : isPaused ? 'PAUSED' : escalationStatus;
-
-    const finalNextEscalationAt = isStopped || isPaused ? null : nextEscalationAt;
-    const finalStep =
-      isStopped || isPaused || nextStepIndex >= policySteps.length ? null : nextStepIndex;
-
-    if (finalEscalationStatus !== 'ESCALATING' || !finalNextEscalationAt) {
-      shouldScheduleNextJob = false;
-    }
-
-    const updateData: Prisma.IncidentUpdateInput = {
-      currentEscalationStep: finalStep,
-      nextEscalationAt: finalNextEscalationAt,
-      escalationStatus: finalEscalationStatus,
-      escalationProcessingAt: null,
+      targetType: step.targetType,
+      targetCount: recipients.length,
+      stepIndex: currentStepIndex,
+      notifications,
+      nextStepScheduled: plan.nextJob !== null,
+      ...(plan.nextState.nextEscalationAt
+        ? { nextEscalationAt: plan.nextState.nextEscalationAt }
+        : {}),
     };
-
-    // Ownership comes from the one selector, so this step cannot hand the
-    // incident to a different responder than it did before dispatching pages.
-    if (!currentIncident.assigneeId && !currentIncident.teamId && assignment) {
-      Object.assign(updateData, assignmentUpdateData(assignment));
-    }
-
-    await tx.incident.update({
-      where: { id: incidentId },
-      data: updateData,
-    });
-
-    if (!isStopped && !isPaused) {
-      await tx.incidentEvent.create({
-        data: {
-          incidentId,
-          type: 'ESCALATED',
-          message: `Escalated to ${targetDescription} (Level ${currentStepIndex + 1}${step.delayMinutes > 0 ? `, after ${step.delayMinutes} minute delay` : ''})`,
-        },
-      });
-    }
-
-    if (nextStepMessage && !isStopped && !isPaused) {
-      await tx.incidentEvent.create({
-        data: {
-          incidentId,
-          type: 'ESCALATED',
-          message: nextStepMessage,
-        },
-      });
-    }
-
-    return true;
-  });
-
-  if (!finalGenerationIsCurrent) {
-    return supersededEscalationResult();
   }
 
-  // Schedule next escalation step using PostgreSQL job queue
-  if (shouldScheduleNextJob && nextStep && nextEscalationAt) {
-    const delayMs = (nextStep.delayMinutes || 0) * 60 * 1000;
-    if (delayMs === 0) {
-      const { scheduleEscalation } = await import('../jobs/queue');
-      await scheduleEscalation(incidentId, nextStepIndex, 0);
-      return {
-        outcome: 'STEP_EXECUTED',
-        escalated: true,
-        targetName,
-        targetType: step.targetType,
-        targetCount: targetUserIds.length,
-        stepIndex: currentStepIndex,
-        notifications: notificationsSent,
-        nextStepScheduled: true,
-      };
-    }
-    try {
-      const { scheduleEscalation } = await import('../jobs/queue');
-      await scheduleEscalation(incidentId, nextStepIndex, delayMs);
-    } catch (error) {
-      logger.error('Failed to schedule escalation job', {
-        incidentId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      // Continue anyway - internal worker will pick it up via nextEscalationAt
-    }
+  if (plan.outcome === 'STEP_SCHEDULED') {
+    return {
+      outcome: 'STEP_SCHEDULED',
+      escalated: false,
+      reason: 'Escalation scheduled',
+      stepIndex: currentStepIndex,
+      nextStepScheduled: true,
+    };
   }
 
   return {
-    outcome: 'STEP_EXECUTED',
-    escalated: true,
-    targetName,
-    targetType: step.targetType,
-    targetCount: targetUserIds.length,
+    outcome: plan.outcome,
+    escalated: false,
+    reason:
+      plan.outcome === 'INVALID_TARGET'
+        ? resolution.outcome === 'INVALID_TARGET'
+          ? resolution.reason
+          : 'Invalid target configuration'
+        : 'No users to notify',
     stepIndex: currentStepIndex,
-    notifications: notificationsSent,
-    nextStepScheduled: nextStepIndex < policySteps.length,
   };
 }
 

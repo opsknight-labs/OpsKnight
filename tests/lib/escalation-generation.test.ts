@@ -6,8 +6,8 @@ const OLD_DUE_AT = new Date('2026-08-28T13:29:00.000Z');
 const mocks = vi.hoisted(() => ({
   runSerializableTransaction: vi.fn(),
   sendUserNotification: vi.fn(),
-  scheduleEscalation: vi.fn(),
   txIncidentUpdate: vi.fn(),
+  txBackgroundJobCreate: vi.fn(),
   txIncidentEventCreate: vi.fn(),
 }));
 
@@ -42,10 +42,6 @@ vi.mock('@/lib/db-utils', () => ({
 
 vi.mock('@/lib/user-notifications', () => ({
   sendUserNotification: mocks.sendUserNotification,
-}));
-
-vi.mock('@/lib/jobs/queue', () => ({
-  scheduleEscalation: mocks.scheduleEscalation,
 }));
 
 import prisma from '@/lib/prisma';
@@ -93,14 +89,20 @@ describe('escalation lifecycle generation fencing', () => {
       callback({
         incident: {
           findUnique: vi.fn().mockResolvedValue({
+            status: 'OPEN',
             assigneeId: null,
             teamId: null,
+            escalationStatus: 'ESCALATING',
             escalationProcessingAt: NOW,
+            currentEscalationStep: 0,
           }),
           update: mocks.txIncidentUpdate,
         },
         incidentEvent: {
           create: mocks.txIncidentEventCreate,
+        },
+        backgroundJob: {
+          create: mocks.txBackgroundJobCreate.mockResolvedValue({ id: 'job-next' }),
         },
       })
     );
@@ -110,7 +112,6 @@ describe('escalation lifecycle generation fencing', () => {
       status: 'ACTIVE',
     } as never);
     mocks.sendUserNotification.mockResolvedValue({ success: true });
-    mocks.scheduleEscalation.mockResolvedValue('job-next');
   });
 
   afterEach(() => {
@@ -138,7 +139,8 @@ describe('escalation lifecycle generation fencing', () => {
       reason: 'Escalation superseded by lifecycle transition',
     });
     expect(mocks.sendUserNotification).not.toHaveBeenCalled();
-    expect(mocks.scheduleEscalation).not.toHaveBeenCalled();
+    // No follow-up work is created for a superseded generation.
+    expect(mocks.txBackgroundJobCreate).not.toHaveBeenCalled();
     // Only the pre-notification assignment transaction ran. The stale worker
     // never reached its final lifecycle mutation transaction.
     expect(mocks.runSerializableTransaction).toHaveBeenCalledTimes(1);

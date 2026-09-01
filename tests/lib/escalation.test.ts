@@ -45,22 +45,28 @@ vi.mock('@/lib/user-notifications', () => ({
   sendUserNotification: vi.fn().mockResolvedValue({ success: true }),
 }));
 
-// Mock job queue
-vi.mock('@/lib/jobs/queue', () => ({
-  scheduleEscalation: vi.fn().mockResolvedValue('job-1'),
-}));
-
-// Mock db-utils
+// Mock db-utils. The escalation repository commits through this, so the
+// transaction client's writes are what these tests observe.
+const txIncidentUpdate = vi.fn();
+// `executeEscalation` claims at the frozen system time used by these tests, so
+// the reloaded lease must carry that same token or every commit reads as
+// superseded.
 vi.mock('@/lib/db-utils', () => ({
   runSerializableTransaction: vi.fn(async fn => {
     return fn({
       incident: {
-        findUnique: vi.fn().mockResolvedValue({ assigneeId: null, teamId: null }),
-        update: vi.fn(),
+        findUnique: vi.fn().mockResolvedValue({
+          status: 'OPEN',
+          assigneeId: null,
+          teamId: null,
+          escalationStatus: 'ESCALATING',
+          escalationProcessingAt: new Date('2026-01-01T12:00:00.000Z'),
+          currentEscalationStep: 0,
+        }),
+        update: txIncidentUpdate,
       },
-      incidentEvent: {
-        create: vi.fn(),
-      },
+      incidentEvent: { create: vi.fn() },
+      backgroundJob: { create: vi.fn().mockResolvedValue({ id: 'job-next' }) },
     });
   }),
 }));
@@ -321,7 +327,8 @@ describe('executeEscalation', () => {
       escalated: false,
       reason: 'All escalation steps exhausted',
     });
-    expect(prisma.incident.update).toHaveBeenCalledWith({
+    // Terminal state is committed by the repository, inside a transaction.
+    expect(txIncidentUpdate).toHaveBeenCalledWith({
       where: { id: 'inc-1' },
       data: {
         escalationStatus: 'COMPLETED',
@@ -394,7 +401,8 @@ describe('executeEscalation', () => {
     expect(result).toEqual({
       outcome: 'INVALID_TARGET',
       escalated: false,
-      reason: 'Invalid target configuration',
+      reason: 'USER step has no target ID configured',
+      stepIndex: 0,
     });
   });
 });

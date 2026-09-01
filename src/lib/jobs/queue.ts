@@ -19,7 +19,6 @@ interface JobPayload { incidentId?: string; stepIndex?: number; eventType?: stri
 export async function scheduleJob(type:JobType,scheduledAt:Date,payload:JobPayload,maxAttempts:number=3):Promise<string>{
   const job=await prisma.backgroundJob.create({data:{type,status:'PENDING',scheduledAt,payload:payload as Prisma.InputJsonObject,maxAttempts}});return job.id;
 }
-export async function scheduleEscalation(incidentId:string,stepIndex:number,delayMs:number):Promise<string>{return scheduleJob('ESCALATION',new Date(Date.now()+delayMs),{incidentId,stepIndex});}
 export async function scheduleStatusPageNotification(incidentId:string,eventType:string):Promise<string>{return scheduleJob('STATUS_PAGE_NOTIFICATION',new Date(),{incidentId,eventType},5);}
 export async function scheduleAutoUnsnooze(incidentId:string,snoozedUntil:Date):Promise<string>{return scheduleJob('AUTO_UNSNOOZE',snoozedUntil,{incidentId});}
 export async function getPendingJobs(limit:number=50):Promise<unknown[]>{return prisma.backgroundJob.findMany({where:{status:'PENDING',scheduledAt:{lte:new Date()}},orderBy:{scheduledAt:'asc'},take:limit});}

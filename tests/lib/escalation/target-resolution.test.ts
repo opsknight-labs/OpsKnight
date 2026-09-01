@@ -260,7 +260,9 @@ describe('SCHEDULE targets', () => {
       at: AT,
     });
 
-    const query = vi.mocked(prisma.onCallSchedule.findUnique).mock.calls[0][0] as any;
+    const query = vi.mocked(prisma.onCallSchedule.findUnique).mock.calls[0][0] as unknown as {
+      select: { overrides: { where: Record<string, unknown> } };
+    };
     expect(query.select.overrides.where).toEqual({
       start: { lte: AT },
       end: { gt: AT },
