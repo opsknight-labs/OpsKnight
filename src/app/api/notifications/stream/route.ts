@@ -1,42 +1,32 @@
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
+import { getCurrentUser } from '@/lib/rbac';
+import { resolveStreamAuthorization } from '@/lib/realtime-stream-authorization';
 
 /**
- * Server-Sent Events endpoint for real-time notification updates
+ * Server-Sent Events endpoint for real-time notification updates.
+ * The stream periodically revalidates account status and tokenVersion so a
+ * deactivation/session revocation takes effect without waiting for disconnect.
  */
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(await getAuthOptions());
-  if (!session?.user?.email) {
+  let user;
+  try {
+    user = await getCurrentUser();
+  } catch {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true, timeZone: true, status: true },
-  });
-
-  if (!user) {
-    return new Response('User not found', { status: 404 });
-  }
-
-  if (user.status === 'DISABLED') {
-    return new Response('Forbidden', { status: 403 });
-  }
-
-  const userTimeZone = getUserTimeZone(user ?? undefined);
+  const expectedTokenVersion = user.tokenVersion ?? 0;
+  const userTimeZone = getUserTimeZone(user);
 
   let cleanup: () => void = () => {};
 
-  // Create a readable stream for SSE
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
       let isClosed = false;
-
       let pollInterval: NodeJS.Timeout | null = null;
       let isPolling = false;
 
@@ -49,11 +39,10 @@ export async function GET(req: NextRequest) {
         try {
           controller.close();
         } catch (_error) {
-          // Controller already closed, ignore
+          // Controller already closed.
         }
       };
 
-      // Send initial connection message
       const send = (data: string) => {
         if (!isClosed) {
           try {
@@ -70,7 +59,6 @@ export async function GET(req: NextRequest) {
 
       send(JSON.stringify({ type: 'connected', message: 'Notification stream connected' }));
 
-      // Poll for new notifications every 5 seconds (reduced from 2s to save DB)
       let lastCheck = new Date();
       let lastCheckId = '';
       let pollCount = 0;
@@ -80,8 +68,15 @@ export async function GET(req: NextRequest) {
         isPolling = true;
         pollCount++;
         try {
-          // Optimized query: purely time-based, uses index [userId, createdAt]
-          // We check for ANY new notification regardless of read status to notify the user
+          if (pollCount % 12 === 0) {
+            const authorization = await resolveStreamAuthorization(user.id, expectedTokenVersion);
+            if (!authorization) {
+              send(JSON.stringify({ type: 'authorization_revoked' }));
+              cleanup();
+              return;
+            }
+          }
+
           const newNotifications = await prisma.inAppNotification.findMany({
             where: {
               userId: user.id,
@@ -141,17 +136,12 @@ export async function GET(req: NextRequest) {
               })
             );
 
-            // Update last check time
             const lastNotification = newNotifications[newNotifications.length - 1];
             lastCheck = lastNotification.createdAt;
             lastCheckId = lastNotification.id;
             shouldUpdateUnreadCount = true;
           }
 
-          // Optimized Unread Count:
-          // Only check unread count if:
-          // 1. We found new notifications (count definitely changed)
-          // 2. OR: Every 5th poll (every 25s) to catch up on "mark as read" from other tabs/devices
           if (shouldUpdateUnreadCount || pollCount % 5 === 0) {
             const unreadCount = await prisma.inAppNotification.count({
               where: {
@@ -185,7 +175,6 @@ export async function GET(req: NextRequest) {
         }
       }, 5000);
 
-      // Cleanup on client disconnect
       req.signal.addEventListener('abort', () => {
         cleanup();
       });
