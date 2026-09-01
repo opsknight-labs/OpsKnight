@@ -36,11 +36,12 @@ describe('Bootstrap Admin - Last Admin Protection', () => {
     // Mock scenario: 1 active admin, 1 disabled admin
     const activeAdminCount = 1;
     const isAdmin = true;
-    const _isDisabled = true;
+    const isActive = false;
 
-    // Disabled admins don't count, so should prevent deletion
-    const canDelete = isAdmin && activeAdminCount > 1;
-    expect(canDelete).toBe(false);
+    // Removing a disabled admin does not change the active-admin set.
+    const removesActiveAdmin = isAdmin && isActive;
+    const canDelete = !removesActiveAdmin || activeAdminCount > 1;
+    expect(canDelete).toBe(true);
   });
 });
 
@@ -99,4 +100,3 @@ describe('Bootstrap Admin - Complete Flow', () => {
     expect(canDeleteLast).toBe(false);
   });
 });
-

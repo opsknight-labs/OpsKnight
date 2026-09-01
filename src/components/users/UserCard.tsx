@@ -448,7 +448,7 @@ export function UserCard({
 
                 <DropdownMenuSeparator />
 
-                {onDelete && (
+                {onDelete && user.status === 'DISABLED' && (
                   <DropdownMenuItem
                     onClick={() => void inspectDependencies()}
                     className="text-red-600 focus:text-red-700 focus:bg-red-50"
@@ -583,6 +583,7 @@ export function UserCard({
             <AlertDialogAction
               onClick={handleDelete}
               disabled={
+                user.status !== 'DISABLED' ||
                 loadingDependencies ||
                 Boolean(dependencyError) ||
                 Boolean(

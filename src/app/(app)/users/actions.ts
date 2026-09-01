@@ -103,11 +103,12 @@ async function assertUserIsNotSoleOwner(userId: string) {
 async function assertNotLastAdmin(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { role: true },
+    select: { role: true, status: true },
   });
 
-  // Only check if the user being deleted is an admin
-  if (user?.role !== 'ADMIN') return;
+  // A mutation can only remove an active administrator from the active-admin set
+  // when the target currently belongs to that set. Disabled/invited admins do not.
+  if (user?.role !== 'ADMIN' || user.status !== 'ACTIVE') return;
 
   const adminCount = await prisma.user.count({
     where: {
