@@ -254,9 +254,9 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
 
   const categories = [
     {
-      title: 'SMS & Telephony',
+      title: 'SMS Messaging',
       description:
-        'Outbound urgent SMS text dispatch for high-priority incidents and on-call paging via Twilio.',
+        'Outbound SMS text message dispatch for high-priority incidents and on-call paging via Twilio.',
       keys: ['twilio'],
     },
     {
