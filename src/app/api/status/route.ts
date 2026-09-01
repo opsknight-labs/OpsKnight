@@ -1,13 +1,12 @@
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { serializeRecentIncidents } from '@/lib/sla';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { getReportingWindowForDays } from '@/lib/retention-policy';
+import { getCurrentUser } from '@/lib/rbac';
 import {
   publicStatusVisibility,
   serializePublicStatusApiIncident,
@@ -83,16 +82,15 @@ export async function GET(req: NextRequest) {
       return jsonError(authResult.error || 'Unauthorized', authResult.status || 401);
     }
 
-    // Check if authentication is required
     if (statusPage.requireAuth) {
-      const session = await getServerSession(await getAuthOptions());
-      if (!session) {
+      try {
+        await getCurrentUser();
+      } catch {
         return jsonError('Authentication required', 401);
       }
     }
 
     const visibility = publicStatusVisibility(statusPage);
-
     const serviceIds = statusPage.services.filter(sp => sp.showOnPage).map(sp => sp.serviceId);
 
     if (serviceIds.length === 0) {
@@ -139,7 +137,6 @@ export async function GET(req: NextRequest) {
     const { calculateSLAMetrics, calculateMultiServiceUptime, getExternalStatusLabel } =
       await import('@/lib/sla-server');
 
-    // Optimized: Single call to get metrics and incidents for all services in scope
     const metrics = await calculateSLAMetrics({
       serviceId: serviceIds,
       includeIncidents: true,
@@ -148,7 +145,6 @@ export async function GET(req: NextRequest) {
     });
 
     const recentIncidents = metrics.recentIncidents || [];
-
     const serviceStatusMap = new Map<string, string>();
     const serviceActiveCountMap = new Map<string, number>();
 
