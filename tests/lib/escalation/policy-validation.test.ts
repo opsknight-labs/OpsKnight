@@ -165,7 +165,9 @@ describe('escalationTargetExists', () => {
 
       const owning =
         targetType === 'USER' ? tx.user : targetType === 'TEAM' ? tx.team : tx.onCallSchedule;
-      expect(owning.count).toHaveBeenCalledWith({ where: { id: 'target-1' } });
+      expect(owning.count).toHaveBeenCalledWith({
+        where: targetType === 'USER' ? { id: 'target-1', status: 'ACTIVE' } : { id: 'target-1' },
+      });
       const others = [tx.user, tx.team, tx.onCallSchedule].filter(model => model !== owning);
       for (const model of others) expect(model.count).not.toHaveBeenCalled();
     }

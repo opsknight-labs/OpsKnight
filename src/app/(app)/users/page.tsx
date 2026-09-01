@@ -11,6 +11,7 @@ import {
   deactivateUser,
   deleteUser,
   generateInvite,
+  getUserDependencyReport,
   reactivateUser,
   updateUserRole,
 } from './actions';
@@ -308,6 +309,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                 reactivateUser={reactivateUser}
                 deleteUser={deleteUser}
                 generateInvite={generateInvite as any}
+                getUserDependencyReport={getUserDependencyReport}
               />
 
               {/* Pagination */}

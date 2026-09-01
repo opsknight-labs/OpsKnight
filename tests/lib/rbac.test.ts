@@ -193,12 +193,12 @@ describe('RBAC Functions', () => {
   });
 
   describe('assertNotSelf', () => {
-    it('should pass if IDs are different', async () => {
-      await expect(assertNotSelf('u1', 'u2', 'delete')).resolves.not.toThrow();
+    it('should pass if IDs are different', () => {
+      expect(() => assertNotSelf('u1', 'u2', 'delete')).not.toThrow();
     });
 
-    it('should throw if IDs are the same', async () => {
-      await expect(assertNotSelf('u1', 'u1', 'delete')).rejects.toThrow(
+    it('should throw synchronously if IDs are the same', () => {
+      expect(() => assertNotSelf('u1', 'u1', 'delete')).toThrow(
         'You cannot delete your own account.'
       );
     });
@@ -269,7 +269,7 @@ describe('RBAC Functions', () => {
       await expect(assertCanModifyIncident(incidentId)).rejects.toThrow('Unauthorized');
     });
 
-    it('should allow team member to modify service', async () => {
+    it('should deny a regular team member permission to modify service configuration', async () => {
       vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockUser.email } });
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       vi.mocked(prisma.service.findUnique).mockResolvedValue({
@@ -277,7 +277,27 @@ describe('RBAC Functions', () => {
         team: { members: [{ userId: mockUser.id }] },
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-      expect(await assertCanModifyService(serviceId)).toEqual(mockUser);
+      await expect(assertCanModifyService(serviceId)).rejects.toThrow('Unauthorized');
+      expect(prisma.service.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('should deny an auditor even when they belong to the service team', async () => {
+      vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockAuditor.email } });
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockAuditor as never);
+
+      await expect(assertCanModifyService(serviceId)).rejects.toThrow('Unauthorized');
+      expect(prisma.service.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('should allow a responder who belongs to the service team', async () => {
+      vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockResponder.email } });
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(mockResponder as never);
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        id: serviceId,
+        team: { members: [{ userId: mockResponder.id }] },
+      } as never);
+
+      expect(await assertCanModifyService(serviceId)).toEqual(mockResponder);
     });
 
     it('should allow ADMIN to create incident for any service', async () => {

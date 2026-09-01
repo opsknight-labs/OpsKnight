@@ -187,6 +187,7 @@ model User {
   emailVerified                DateTime?
   // Session revocation marker: increment to force-logout all JWT sessions
   tokenVersion                 Int        @default(0)
+  invitationGeneration        Int        @default(0)
   role                         Role       @default(USER)
   status                       UserStatus @default(INVITED)
   passwordHash                 String?
@@ -236,9 +237,11 @@ model User {
   jiraConfigsUpdated  JiraConfig[]           @relation("JiraConfigUpdater")
   oidcConfigs         OidcConfig[]
   oidcIdentities      OidcIdentity[]
+  oidcLinkingApproval OidcLinkingApproval?
   avatar              UserAvatar?
   dashboards          Dashboard[]
   assignedActionItems ActionItem[]
+  tokens              UserToken[]
 
   @@index([email]) // CRITICAL: Performance index for email lookups (fixes 2-4s queries)
   @@index([role, status]) // For filtering users by role and status
@@ -899,7 +902,7 @@ model Notification {
   createdAt         DateTime                  @default(now())
 
   incident         Incident?                     @relation(fields: [incidentId], references: [id])
-  user             User?                         @relation(fields: [userId], references: [id])
+  user             User?                         @relation(fields: [userId], references: [id], onDelete: SetNull)
   deliveryAttempts NotificationDeliveryAttempt[]
 
   @@index([incidentId]) // For querying notifications by incident
@@ -1006,14 +1009,35 @@ model UserToken {
   id         String        @id @default(cuid())
   type       UserTokenType
   identifier String // typically the user's email (lowercased)
+  userId     String?
+  generation Int           @default(0)
   tokenHash  String        @unique
   expiresAt  DateTime
   usedAt     DateTime?
+  revokedAt  DateTime?
   createdAt  DateTime      @default(now())
   metadata   Json?
 
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@index([identifier, type])
+  @@index([userId, type, generation])
   @@index([expiresAt])
+}
+
+model OidcLinkingApproval {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  approvedById String?
+  approvedAt   DateTime  @default(now())
+  revokedAt    DateTime?
+  generation   Int       @default(1)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([approvedById])
 }
 
 model ApiKey {

@@ -6,6 +6,7 @@ import { getDefaultAvatar } from '@/lib/avatar';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import { getCurrentUser } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,8 @@ type PageProps = {
 
 export default async function MobileUserDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const viewer = await getCurrentUser();
+  if (viewer.role !== 'ADMIN' && viewer.id !== id) notFound();
 
   const user = await prisma.user.findUnique({
     where: { id },

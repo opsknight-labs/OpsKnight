@@ -13,10 +13,9 @@ const PROTECTED_FIELDS = new Set([
   'nextEscalationAt',
 ]);
 
-// The lifecycle engine owns all lifecycle-sensitive mutations. The escalation
-// runner is the only narrower exception: it advances escalation cursor/timing
-// while an incident remains OPEN, but it may not change lifecycle status,
-// acknowledgement/resolution timestamps, or snooze state.
+// The lifecycle engine owns all lifecycle-sensitive mutations. Escalation
+// persistence is restricted to its repository modules; orchestration in
+// escalation/index.ts is intentionally not an approved writer.
 const ALLOWED_FIELDS_BY_FILE = new Map<string, ReadonlySet<string>>([
   ['src/lib/incidents/lifecycle.ts', PROTECTED_FIELDS],
   [
@@ -24,7 +23,7 @@ const ALLOWED_FIELDS_BY_FILE = new Map<string, ReadonlySet<string>>([
     new Set(['escalationStatus', 'currentEscalationStep', 'nextEscalationAt']),
   ],
   [
-    'src/lib/escalation/index.ts',
+    'src/lib/escalation/fallback-repository.ts',
     new Set(['escalationStatus', 'currentEscalationStep', 'nextEscalationAt']),
   ],
 ]);
@@ -164,8 +163,6 @@ describe('incident lifecycle mutation architecture', () => {
           const mutation = incidentMutation(node);
           if (mutation) {
             const data = resolveObjectLiteral(mutation.data, source);
-            // If a production caller hides update data behind a shape this guard
-            // cannot inspect, fail closed unless that file is an approved owner.
             if (!data && allowed.size === 0) {
               violations.push(
                 `${relativePath}:${lineOf(source, node)} uses opaque incident.${mutation.method} data; lifecycle ownership cannot be verified`

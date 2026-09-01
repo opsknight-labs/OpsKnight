@@ -45,6 +45,7 @@ export async function setPassword(formData: FormData) {
       tokenHash,
       type: 'INVITE',
       usedAt: null,
+      revokedAt: null,
     },
   });
 
@@ -61,8 +62,8 @@ export async function setPassword(formData: FormData) {
     redirect('/set-password?error=expired');
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: record.identifier },
+  const user = await prisma.user.findFirst({
+    where: record.userId ? { id: record.userId } : { email: record.identifier },
   });
 
   if (!user) {
@@ -77,26 +78,32 @@ export async function setPassword(formData: FormData) {
     redirect('/set-password?error=invalid');
   }
 
-  // Security: Prevent using an invite link if the user is already active.
-  // They should use "Forgot Password" instead.
-  if (user.status === 'ACTIVE' && user.passwordHash) {
+  // Invitations are valid only for accounts still awaiting onboarding. Disabled and active
+  // accounts require an explicit administrator action or password recovery respectively.
+  if (user.status !== 'INVITED') {
     await logAudit({
       action: 'INVITE_FAILED',
       entityType: 'USER',
       entityId: user.id,
       actorId: null,
-      details: { ip, reason: 'ALREADY_ACTIVE' },
+      details: { ip, reason: user.status === 'DISABLED' ? 'USER_DISABLED' : 'ALREADY_ACTIVE' },
     });
     await simulateWork(startTime);
-    redirect('/login?error=already_active');
+    redirect(
+      user.status === 'DISABLED' ? '/set-password?error=disabled' : '/login?error=already_active'
+    );
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
 
   try {
     await prisma.$transaction(async tx => {
-      await tx.user.update({
-        where: { id: user.id },
+      const activated = await tx.user.updateMany({
+        where: {
+          id: user.id,
+          status: 'INVITED',
+          ...(record.userId ? { invitationGeneration: record.generation } : {}),
+        },
         data: {
           passwordHash,
           status: 'ACTIVE',
@@ -105,28 +112,41 @@ export async function setPassword(formData: FormData) {
           deactivatedAt: null,
         },
       });
+      if (activated.count !== 1) throw new Error('INVITE_USER_STATE_CHANGED');
 
       // Atomically claim THIS token. Concurrent submissions cannot both win.
       const claimed = await tx.userToken.updateMany({
-        where: { tokenHash, type: 'INVITE', usedAt: null, expiresAt: { gt: new Date() } },
+        where: {
+          tokenHash,
+          type: 'INVITE',
+          usedAt: null,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
         data: { usedAt: new Date() },
       });
       if (claimed.count !== 1) throw new Error('INVITE_TOKEN_ALREADY_USED');
 
       // Security: Invalidate ALL other INVITE tokens for this user to prevent reuse of old links
-      await tx.userToken.deleteMany({
+      await tx.userToken.updateMany({
         where: {
-          identifier: user.email,
+          OR: [{ userId: user.id }, { identifier: user.email }],
           type: 'INVITE',
           NOT: { tokenHash }, // Don't delete the one we just marked used (for audit history), or just delete them all? Keeping history is better.
           // Actually, we just marked it used.
           // Let's delete *other* unused invite tokens.
           usedAt: null,
+          revokedAt: null,
         },
+        data: { revokedAt: new Date() },
       });
     });
   } catch (error) {
-    if (error instanceof Error && error.message === 'INVITE_TOKEN_ALREADY_USED') {
+    if (
+      error instanceof Error &&
+      (error.message === 'INVITE_TOKEN_ALREADY_USED' ||
+        error.message === 'INVITE_USER_STATE_CHANGED')
+    ) {
       await simulateWork(startTime);
       redirect('/set-password?error=expired');
     }

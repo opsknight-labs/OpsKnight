@@ -17,8 +17,11 @@ describe('public boundary contract', () => {
 
   it('revokes a removed member’s existing sessions in the same transaction', () => {
     const actions = readFileSync('src/app/(app)/teams/actions.ts', 'utf8');
+    const command = readFileSync('src/lib/teams/membership-commands.ts', 'utf8');
 
-    expect(actions).toContain('data: { tokenVersion: { increment: 1 } }');
+    expect(actions).toContain('removeTeamMembership(memberId)');
+    expect(command).toContain('data: { tokenVersion: { increment: 1 } }');
+    expect(command).toContain("isolationLevel: 'Serializable'");
   });
 
   it('uses the shared visibility policy for rendered and API status outputs', () => {

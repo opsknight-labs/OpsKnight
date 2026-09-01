@@ -139,7 +139,27 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
 
   // Transform auditLogs.details to match UserDetailProfile type
   const transformedUser = {
-    ...user,
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    avatarUrl: user.avatarUrl,
+    gender: user.gender,
+    department: user.department,
+    jobTitle: user.jobTitle,
+    phoneNumber: user.phoneNumber,
+    timeZone: user.timeZone,
+    emailNotificationsEnabled: user.emailNotificationsEnabled,
+    smsNotificationsEnabled: user.smsNotificationsEnabled,
+    pushNotificationsEnabled: user.pushNotificationsEnabled,
+    whatsappNotificationsEnabled: user.whatsappNotificationsEnabled,
+    createdAt: user.createdAt,
+    teamMemberships: user.teamMemberships,
+    teamsLed: user.teamsLed,
+    layerAssignments: user.layerAssignments,
+    escalationRules: user.escalationRules,
+    assignedIncidents: user.assignedIncidents,
     auditLogs: user.auditLogs.map(log => ({
       ...log,
       details:

@@ -24,8 +24,9 @@ vi.mock('@/lib/prisma', () => {
       create: vi.fn(),
       update: vi.fn(),
     },
-    userToken: {
+    oidcLinkingApproval: {
       findFirst: vi.fn(),
+      updateMany: vi.fn(),
     },
     oidcIdentity: {
       findUnique: vi.fn(),
@@ -38,7 +39,9 @@ vi.mock('@/lib/prisma', () => {
     auditLog: {
       findFirst: vi.fn(),
     },
+    $transaction: vi.fn(),
   };
+  mockPrisma.$transaction.mockImplementation(async callback => callback(mockPrisma));
   return { default: mockPrisma };
 });
 
@@ -57,7 +60,8 @@ describe('Auth JWT + OIDC (unit)', () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.user.create).mockResolvedValue({ id: 'u1' } as never);
     vi.mocked(prisma.user.update).mockResolvedValue({} as never);
-    vi.mocked(prisma.userToken.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.oidcLinkingApproval.updateMany).mockResolvedValue({ count: 1 } as never);
     vi.mocked(prisma.auditLog.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.oidcIdentity.create).mockResolvedValue({ id: 'id1' } as never);
@@ -118,8 +122,8 @@ describe('Auth JWT + OIDC (unit)', () => {
     });
 
     expect(result).toBe(false);
-    expect(prisma.userToken.findFirst).toHaveBeenCalledWith({
-      where: { identifier: 'user@example.com', type: 'INVITE' },
+    expect(prisma.oidcLinkingApproval.findFirst).toHaveBeenCalledWith({
+      where: { userId: 'u1', revokedAt: null },
       select: { id: true },
     });
     expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
@@ -136,7 +140,7 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'ACTIVE',
     });
-    (prisma.userToken.findFirst as any).mockResolvedValue({ id: 'invite-token-record' });
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'approval-record' } as never);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
 
     const user = { email: 'user@example.com', name: 'User', id: 'oidc-sub' };
@@ -155,6 +159,10 @@ describe('Auth JWT + OIDC (unit)', () => {
         userId: 'u1',
       },
     });
+    expect(prisma.oidcLinkingApproval.updateMany).toHaveBeenCalledWith({
+      where: { id: 'approval-record', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
     expect(user.id).toBe('u1');
   });
 
@@ -169,7 +177,7 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'ACTIVE',
     });
-    (prisma.userToken.findFirst as any).mockResolvedValue({ id: 'invite-token-record' });
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'approval-record' } as never);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
 
     const result = await signIn({
@@ -193,7 +201,7 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'DISABLED',
     });
-    (prisma.userToken.findFirst as any).mockResolvedValue({ id: 'historical-invite' });
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'historical-approval' } as never);
 
     const result = await signIn({
       user: { email: 'disabled@example.com', name: 'Disabled', id: 'oidc-sub' },
@@ -202,7 +210,7 @@ describe('Auth JWT + OIDC (unit)', () => {
     });
 
     expect(result).toBe(false);
-    expect(prisma.userToken.findFirst).not.toHaveBeenCalled();
+    expect(prisma.oidcLinkingApproval.findFirst).not.toHaveBeenCalled();
     expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
     expect(prisma.user.update).not.toHaveBeenCalled();
   });

@@ -32,6 +32,9 @@ export const LOCK_KEYS = {
    * divergence samples.
    */
   DRIFT_DETECTION: BigInt(9141002),
+
+  /** Serializes all mutations that can remove the final ACTIVE administrator. */
+  USER_ADMIN_INVARIANT: BigInt(9141003),
 } as const;
 
 /**

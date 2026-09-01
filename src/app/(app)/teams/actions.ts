@@ -7,25 +7,15 @@ import { assertAdminOrResponder, assertAdmin, assertAdminOrTeamOwner } from '@/l
 import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { logger } from '@/lib/logger';
 import { assertTeamNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
+import { removeTeamMembership } from '@/lib/teams/membership-commands';
+import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import { runSerializableTransaction } from '@/lib/db-utils';
+import type { TeamRole } from '@prisma/client';
 
 type TeamFormState = {
   error?: string | null;
   success?: boolean;
 };
-
-async function ensureTeamHasOwner(teamId: string, excludeMemberId?: string) {
-  const ownerCount = await prisma.teamMember.count({
-    where: {
-      teamId,
-      role: 'OWNER',
-      ...(excludeMemberId ? { NOT: { id: excludeMemberId } } : {}),
-    },
-  });
-
-  if (ownerCount === 0) {
-    throw new Error('Each team must have at least one owner.');
-  }
-}
 
 export async function createTeam(
   _prevState: TeamFormState,
@@ -216,18 +206,23 @@ export async function addTeamMember(teamId: string, formData: FormData) {
     };
   }
   const userId = formData.get('userId') as string;
-  const role = (formData.get('role') as string) || 'MEMBER';
+  const requestedRole = (formData.get('role') as string) || 'MEMBER';
 
   if (!userId) return;
-  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) return { error: 'Invalid team role.' };
+  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(requestedRole)) {
+    return { error: 'Invalid team role.' };
+  }
+  const role = requestedRole as TeamRole;
 
-  await prisma.teamMember.create({
-    data: {
-      teamId,
-      userId,
-      role: role as 'OWNER' | 'ADMIN' | 'MEMBER',
+  await prisma.$transaction(
+    async tx => {
+      await requireOperationalUser(tx, userId);
+      await tx.teamMember.create({
+        data: { teamId, userId, role: role as 'OWNER' | 'ADMIN' | 'MEMBER' },
+      });
     },
-  });
+    { isolationLevel: 'Serializable' }
+  );
 
   const actorId = currentUser.id;
   await logAudit({
@@ -263,17 +258,7 @@ export async function updateTeamMemberRole(
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
   let currentUser;
-  try {
-    currentUser = await assertAdminOrResponder();
-  } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Unauthorized. Admin or Responder access required.',
-    };
-  }
-  const role = (formData.get('role') as string) || 'MEMBER';
+  const requestedRole = (formData.get('role') as string) || 'MEMBER';
 
   const member = await prisma.teamMember.findUnique({
     where: { id: memberId },
@@ -291,22 +276,42 @@ export async function updateTeamMemberRole(
     };
   }
 
-  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) return { error: 'Invalid team role.' };
-
-  if (member.role === 'OWNER' && role !== 'OWNER') {
-    try {
-      await ensureTeamHasOwner(member.teamId, member.id);
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Cannot change role of last owner.',
-      };
-    }
+  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(requestedRole)) {
+    return { error: 'Invalid team role.' };
   }
+  const role = requestedRole as TeamRole;
 
-  await prisma.teamMember.update({
-    where: { id: memberId },
-    data: { role: role as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
-  });
+  try {
+    await runSerializableTransaction(async tx => {
+      const currentMember = await tx.teamMember.findUnique({ where: { id: memberId } });
+      if (!currentMember || currentMember.teamId !== member.teamId) {
+        throw new Error('Member not found.');
+      }
+      if (currentMember.role === 'OWNER' && role !== 'OWNER') {
+        const otherActiveOwners = await tx.teamMember.count({
+          where: {
+            teamId: currentMember.teamId,
+            role: 'OWNER',
+            NOT: { id: currentMember.id },
+            user: { status: 'ACTIVE' },
+          },
+        });
+        if (otherActiveOwners === 0) {
+          throw new Error('Each team must retain at least one active owner.');
+        }
+      }
+      await tx.teamMember.update({
+        where: { id: memberId },
+        data: { role },
+      });
+      await tx.user.update({
+        where: { id: currentMember.userId },
+        data: { tokenVersion: { increment: 1 } },
+      });
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update member role.' };
+  }
 
   const actorId = currentUser.id;
   await logAudit({
@@ -408,33 +413,11 @@ export async function removeTeamMember(memberId: string): Promise<{ error?: stri
     };
   }
 
-  if (member.role === 'OWNER') {
-    try {
-      await ensureTeamHasOwner(member.teamId, member.id);
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Cannot remove last owner.' };
-    }
+  try {
+    await removeTeamMembership(memberId);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to remove team member.' };
   }
-
-  await prisma.$transaction(async tx => {
-    await tx.teamMember.delete({
-      where: { id: memberId },
-    });
-
-    // Team membership is part of the authorization scope. Revoke existing
-    // sessions so regular requests and long-lived streams cannot retain the
-    // removed team's access.
-    await tx.user.update({
-      where: { id: member.userId },
-      data: { tokenVersion: { increment: 1 } },
-    });
-
-    // Clear teamLeadId if the removed member was the team lead
-    await tx.team.updateMany({
-      where: { id: member.teamId, teamLeadId: member.userId },
-      data: { teamLeadId: null },
-    });
-  });
 
   const actorId = currentUser.id;
   await logAudit({
@@ -541,7 +524,10 @@ export async function assignServicesToTeam(teamId: string, serviceIds: string[])
   if (services.length !== new Set(serviceIds).size) {
     return { error: 'One or more services could not be found.' };
   }
-  if (currentUser.role !== 'ADMIN' && services.some(service => service.teamId !== null && service.teamId !== teamId)) {
+  if (
+    currentUser.role !== 'ADMIN' &&
+    services.some(service => service.teamId !== null && service.teamId !== teamId)
+  ) {
     return { error: 'Only administrators can move a service between teams.' };
   }
 

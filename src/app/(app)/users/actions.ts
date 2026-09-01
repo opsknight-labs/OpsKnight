@@ -4,13 +4,19 @@ import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
 import { randomBytes, createHash } from 'crypto';
-import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf } from '@/lib/rbac';
+import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf, getCurrentUser } from '@/lib/rbac';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
-import { revokeUserSessions, getAuthOptions } from '@/lib/auth';
 import { isAppRole } from '@/lib/authorization';
-import { getServerSession } from 'next-auth';
-import type { Role } from '@prisma/client';
+import type { Prisma, Role } from '@prisma/client';
+import { removeTeamMembership } from '@/lib/teams/membership-commands';
+import {
+  dependencySummary,
+  discoverUserDependencies,
+  type UserDependencyReport,
+} from '@/lib/users/dependencies';
+import { bulkUpdateUserSecurityState, updateUserSecurityState } from '@/lib/users/admin-invariants';
+import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
 async function sendInviteEmailIfConfigured(data: {
   userId: string;
@@ -97,16 +103,17 @@ async function assertUserIsNotSoleOwner(userId: string) {
 async function assertNotLastAdmin(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { role: true },
+    select: { role: true, status: true },
   });
 
-  // Only check if the user being deleted is an admin
-  if (user?.role !== 'ADMIN') return;
+  // A mutation can only remove an active administrator from the active-admin set
+  // when the target currently belongs to that set. Disabled/invited admins do not.
+  if (user?.role !== 'ADMIN' || user.status !== 'ACTIVE') return;
 
   const adminCount = await prisma.user.count({
     where: {
       role: 'ADMIN',
-      status: { not: 'DISABLED' },
+      status: 'ACTIVE',
     },
   });
 
@@ -120,7 +127,7 @@ async function assertBatchLeavesActiveAdmin(userIds: string[]) {
     where: {
       id: { in: userIds },
       role: 'ADMIN',
-      status: { not: 'DISABLED' },
+      status: 'ACTIVE',
     },
   });
 
@@ -129,7 +136,7 @@ async function assertBatchLeavesActiveAdmin(userIds: string[]) {
   const totalActiveAdmins = await prisma.user.count({
     where: {
       role: 'ADMIN',
-      status: { not: 'DISABLED' },
+      status: 'ACTIVE',
     },
   });
 
@@ -142,20 +149,21 @@ async function deleteUserInternal(userId: string) {
   await assertUserIsNotSoleOwner(userId);
   await assertNotLastAdmin(userId);
 
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+  if (!user) throw new Error('User not found.');
+  if (user.status !== 'DISABLED') {
+    throw new Error('Deactivate the user before permanent deletion.');
+  }
+  const dependencies = dependencySummary(await discoverUserDependencies(userId));
+  if (dependencies.length > 0) {
+    throw new Error(
+      `Resolve or transfer user dependencies before deletion (${dependencies.join(', ')}).`
+    );
+  }
+
   await prisma.$transaction([
-    prisma.incident.updateMany({
-      where: { assigneeId: userId },
-      data: { assigneeId: null },
-    }),
-    prisma.teamMember.deleteMany({ where: { userId } }),
-    prisma.onCallLayerUser.deleteMany({ where: { userId } }),
-    prisma.onCallOverride.deleteMany({ where: { OR: [{ userId }, { replacesUserId: userId }] } }),
-    prisma.onCallShift.deleteMany({ where: { userId } }),
-    prisma.escalationRule.deleteMany({ where: { targetUserId: userId } }),
     // Preserve incident notes for audit trail — nullify userId so notes survive user deletion
     prisma.incidentNote.updateMany({ where: { userId }, data: { userId: null } }),
-    // Notifications are delivery receipts and less useful without the user
-    prisma.notification.deleteMany({ where: { userId } }),
     prisma.incidentWatcher.deleteMany({ where: { userId } }),
     prisma.user.delete({ where: { id: userId } }),
   ]);
@@ -168,24 +176,46 @@ export type UserFormState = {
   emailSent?: boolean;
 };
 
-async function createInviteToken(email: string) {
+export async function getUserDependencyReport(
+  userId: string
+): Promise<{ report?: UserDependencyReport; error?: string }> {
+  try {
+    await assertAdmin();
+    return { report: await discoverUserDependencies(userId) };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unable to inspect user dependencies.',
+    };
+  }
+}
+
+async function createInviteToken(userId: string, email: string) {
   const token = randomBytes(32).toString('base64url');
   const tokenHash = createHash('sha256').update(token).digest('hex');
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   const identifier = email.toLowerCase();
 
-  await prisma.userToken.deleteMany({
-    where: { identifier, type: 'INVITE', usedAt: null },
-  });
-
-  await prisma.userToken.create({
-    data: {
-      identifier,
-      type: 'INVITE',
-      tokenHash,
-      expiresAt: expires,
-    },
+  await prisma.$transaction(async tx => {
+    const rotated = await tx.user.update({
+      where: { id: userId, status: 'INVITED' },
+      data: { invitedAt: new Date(), invitationGeneration: { increment: 1 } },
+      select: { invitationGeneration: true },
+    });
+    await tx.userToken.updateMany({
+      where: { userId, type: 'INVITE', usedAt: null, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await tx.userToken.create({
+      data: {
+        identifier,
+        userId,
+        generation: rotated.invitationGeneration,
+        type: 'INVITE',
+        tokenHash,
+        expiresAt: expires,
+      },
+    });
   });
 
   const baseUrl = getBaseUrl();
@@ -235,7 +265,7 @@ export async function addUser(
     const { checkRateLimit } = await import('@/lib/password-reset');
     // Limit admin creating users
     if (admin) {
-      await checkRateLimit(admin.email, realIp, 'ADMIN_ADD_USER');
+      await checkRateLimit(email, realIp, 'user.invited');
     }
 
     if (existing?.status === 'DISABLED') {
@@ -255,6 +285,7 @@ export async function addUser(
           role,
           status: 'INVITED',
           invitedAt: new Date(),
+          invitationGeneration: 1,
         },
       });
 
@@ -271,6 +302,8 @@ export async function addUser(
       await tx.userToken.create({
         data: {
           identifier,
+          userId: newUser.id,
+          generation: newUser.invitationGeneration,
           type: 'INVITE',
           tokenHash,
           expiresAt: expires,
@@ -289,6 +322,7 @@ export async function addUser(
       entityId: user.id,
       actorId: admin?.id || null,
       details: { email, role: role || 'USER' },
+      targetEmail: email,
     });
 
     revalidatePath('/users');
@@ -335,11 +369,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
     }
   }
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: { role },
-  });
-  await revokeUserSessions(userId);
+  await updateUserSecurityState(userId, { role }, { tokenVersion: { increment: 1 } });
 
   await logAudit({
     action: 'user.role.updated',
@@ -377,13 +407,15 @@ export async function addUserToTeam(userId: string, formData: FormData) {
 
   if (existing) return;
 
-  await prisma.teamMember.create({
-    data: {
-      userId,
-      teamId,
-      role: (role as 'OWNER' | 'ADMIN' | 'MEMBER') || 'MEMBER',
+  await prisma.$transaction(
+    async tx => {
+      await requireOperationalUser(tx, userId);
+      await tx.teamMember.create({
+        data: { userId, teamId, role: role as 'OWNER' | 'ADMIN' | 'MEMBER' },
+      });
     },
-  });
+    { isolationLevel: 'Serializable' }
+  );
 
   await logAudit({
     action: 'team.member.added',
@@ -400,9 +432,7 @@ export async function addUserToTeam(userId: string, formData: FormData) {
 
 export async function removeUserFromTeam(memberId: string) {
   const currentUser = await assertAdmin();
-  const member = await prisma.teamMember.delete({
-    where: { id: memberId },
-  });
+  const member = await removeTeamMembership(memberId);
 
   await logAudit({
     action: 'team.member.removed',
@@ -428,23 +458,31 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      status: 'DISABLED',
+  await updateUserSecurityState(
+    userId,
+    { status: 'DISABLED' },
+    {
       deactivatedAt: new Date(),
+      tokenVersion: { increment: 1 },
+      invitationGeneration: { increment: 1 },
     },
-  });
-  if (typeof prisma.onCallOverride?.deleteMany === 'function') {
-    await prisma.onCallOverride.deleteMany({
-      where: {
-        userId,
-        end: { gte: new Date() },
-      },
-    });
-  }
-  await revokeUserSessions(userId);
-
+    async tx => {
+      const revokedAt = new Date();
+      await tx.userToken.updateMany({
+        where: { userId, usedAt: null, revokedAt: null },
+        data: { revokedAt },
+      });
+      await tx.apiKey.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt },
+      });
+      await tx.oidcLinkingApproval.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt },
+      });
+      await tx.userDevice.deleteMany({ where: { userId } });
+    }
+  );
   await logAudit({
     action: 'user.deactivated',
     entityType: 'USER',
@@ -465,11 +503,19 @@ export async function reactivateUser(userId: string, _formData?: FormData) {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { status: true, passwordHash: true },
+  });
+  if (!target) return { error: 'User not found.' };
+  if (target.status !== 'DISABLED') return { error: 'Only disabled users can be reactivated.' };
+
   await prisma.user.update({
     where: { id: userId },
     data: {
-      status: 'ACTIVE',
+      status: target.passwordHash ? 'ACTIVE' : 'INVITED',
       deactivatedAt: null,
+      tokenVersion: { increment: 1 },
     },
   });
 
@@ -500,34 +546,26 @@ export async function generateInvite(
     where: { id: userId },
   });
 
-  // Rate Limit (Admin Abuse Protection)
-  const { headers } = await import('next/headers');
-  const headerList = await headers();
-  const realIp = headerList.get('x-forwarded-for') || headerList.get('x-real-ip') || 'unknown';
-
-  const { checkRateLimit } = await import('@/lib/password-reset');
-  // Limit resend invites
-  if (admin) {
-    await checkRateLimit(admin.email, realIp, 'ADMIN_RESEND_INVITE');
-  }
-
   if (!user) {
     return { error: 'User not found.' };
   }
 
-  if (user.status === 'DISABLED') {
-    return { error: 'User is disabled. Reactivate before inviting.' };
+  if (user.status !== 'INVITED') {
+    return {
+      error:
+        user.status === 'DISABLED'
+          ? 'User is disabled. Reactivate before inviting.'
+          : 'Active users must use password recovery instead of an invitation.',
+    };
   }
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      status: 'INVITED',
-      invitedAt: new Date(),
-    },
-  });
+  const { headers } = await import('next/headers');
+  const headerList = await headers();
+  const realIp = headerList.get('x-forwarded-for') || headerList.get('x-real-ip') || 'unknown';
+  const { checkRateLimit } = await import('@/lib/password-reset');
+  await checkRateLimit(user.email, realIp, 'user.invite.resent');
 
-  const inviteUrl = await createInviteToken(user.email);
+  const inviteUrl = await createInviteToken(user.id, user.email);
 
   await logAudit({
     action: 'user.invite.resent',
@@ -535,6 +573,7 @@ export async function generateInvite(
     entityId: user.id,
     actorId: admin?.id || null,
     details: { email: user.email },
+    targetEmail: user.email,
   });
 
   revalidatePath('/users');
@@ -654,24 +693,31 @@ export async function bulkUpdateUsers(
       };
     }
 
-    await prisma.user.updateMany({
-      where: { id: { in: userIds } },
-      data: {
-        status: 'DISABLED',
+    await bulkUpdateUserSecurityState(
+      userIds,
+      { status: 'DISABLED' },
+      {
         deactivatedAt: new Date(),
+        tokenVersion: { increment: 1 },
+        invitationGeneration: { increment: 1 },
       },
-    });
-
-    if (typeof prisma.onCallOverride?.deleteMany === 'function') {
-      await prisma.onCallOverride.deleteMany({
-        where: {
-          userId: { in: userIds },
-          end: { gte: new Date() },
-        },
-      });
-    }
-
-    await Promise.all(userIds.map(id => revokeUserSessions(id)));
+      async tx => {
+        const revokedAt = new Date();
+        await tx.userToken.updateMany({
+          where: { userId: { in: userIds }, usedAt: null, revokedAt: null },
+          data: { revokedAt },
+        });
+        await tx.apiKey.updateMany({
+          where: { userId: { in: userIds }, revokedAt: null },
+          data: { revokedAt },
+        });
+        await tx.oidcLinkingApproval.updateMany({
+          where: { userId: { in: userIds }, revokedAt: null },
+          data: { revokedAt },
+        });
+        await tx.userDevice.deleteMany({ where: { userId: { in: userIds } } });
+      }
+    );
 
     await logAudit({
       action: 'user.deactivated.bulk',
@@ -760,12 +806,7 @@ export async function bulkUpdateUsers(
       }
     }
 
-    await prisma.user.updateMany({
-      where: { id: { in: userIds } },
-      data: { role },
-    });
-
-    await Promise.all(userIds.map(id => revokeUserSessions(id)));
+    await bulkUpdateUserSecurityState(userIds, { role }, { tokenVersion: { increment: 1 } });
 
     await logAudit({
       action: 'user.role.updated.bulk',
@@ -786,18 +827,11 @@ export async function updateUserProfile(
   userId: string,
   formData: FormData
 ): Promise<{ error?: string; success?: boolean } | undefined> {
-  const session = await getServerSession(await getAuthOptions());
-  if (!session?.user?.email) {
+  let currentUser;
+  try {
+    currentUser = await getCurrentUser();
+  } catch {
     return { error: 'Unauthorized. Please log in.' };
-  }
-
-  const currentUser = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true, role: true },
-  });
-
-  if (!currentUser) {
-    return { error: 'User session not found.' };
   }
 
   const isSelf = currentUser.id === userId;
@@ -814,16 +848,19 @@ export async function updateUserProfile(
   const jobTitle = formData.get('jobTitle') as string | null;
   const timeZone = formData.get('timeZone') as string | null;
   const phoneNumber = formData.get('phoneNumber') as string | null;
-  const emailNotificationsEnabled = formData.get('emailNotificationsEnabled') === 'true';
-  const smsNotificationsEnabled = formData.get('smsNotificationsEnabled') === 'true';
-  const pushNotificationsEnabled = formData.get('pushNotificationsEnabled') === 'true';
-  const whatsappNotificationsEnabled = formData.get('whatsappNotificationsEnabled') === 'true';
 
   if (!name || name.trim().length === 0) {
     return { error: 'Name is required.' };
   }
   if (!email || !email.includes('@')) {
     return { error: 'Valid email is required.' };
+  }
+  if (timeZone) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timeZone.trim() }).format();
+    } catch {
+      return { error: 'Select a valid time zone.' };
+    }
   }
 
   // Check email uniqueness if email is changed
@@ -836,9 +873,14 @@ export async function updateUserProfile(
     return { error: 'User not found.' };
   }
 
-  if (email.toLowerCase() !== existingUser.email.toLowerCase()) {
+  const normalizedEmail = email.toLowerCase().trim();
+  const emailChanged = normalizedEmail !== existingUser.email.toLowerCase();
+  if (emailChanged) {
+    if (!isAdmin) {
+      return { error: 'Email changes require administrator verification.' };
+    }
     const emailConflict = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: normalizedEmail },
     });
     if (emailConflict) {
       return { error: 'A user with this email address already exists.' };
@@ -852,11 +894,11 @@ export async function updateUserProfile(
       return { error: 'Only administrators can change user roles.' };
     }
     if (isAdmin) {
-      if (existingUser.role === 'ADMIN' && role !== 'ADMIN') {
+      if (role !== existingUser.role) {
         try {
-          await assertNotLastAdmin(userId);
+          assertNotSelf(currentUser.id, userId, 'change the role of');
         } catch (err) {
-          return { error: err instanceof Error ? err.message : 'Cannot demote the last admin.' };
+          return { error: err instanceof Error ? err.message : 'You cannot change your own role.' };
         }
       }
       targetRole = role as Role;
@@ -864,26 +906,46 @@ export async function updateUserProfile(
   }
 
   try {
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        name: name.trim(),
-        email: email.toLowerCase().trim(),
-        role: targetRole,
-        department: department?.trim() || null,
-        jobTitle: jobTitle?.trim() || null,
-        timeZone: timeZone?.trim() || 'UTC',
-        phoneNumber: phoneNumber?.trim() || null,
-        emailNotificationsEnabled,
-        smsNotificationsEnabled,
-        pushNotificationsEnabled,
-        whatsappNotificationsEnabled,
-      },
-    });
-
-    if (targetRole !== existingUser.role) {
-      await revokeUserSessions(userId);
-    }
+    const roleChanged = targetRole !== existingUser.role;
+    const profileData: Prisma.UserUpdateInput = {
+      name: name.trim(),
+      email: normalizedEmail,
+      department: department?.trim() || null,
+      jobTitle: jobTitle?.trim() || null,
+      timeZone: timeZone?.trim() || 'UTC',
+      phoneNumber: phoneNumber?.trim() || null,
+      ...(formData.has('emailNotificationsEnabled')
+        ? { emailNotificationsEnabled: formData.get('emailNotificationsEnabled') === 'true' }
+        : {}),
+      ...(formData.has('smsNotificationsEnabled')
+        ? { smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'true' }
+        : {}),
+      ...(formData.has('pushNotificationsEnabled')
+        ? { pushNotificationsEnabled: formData.get('pushNotificationsEnabled') === 'true' }
+        : {}),
+      ...(formData.has('whatsappNotificationsEnabled')
+        ? {
+            whatsappNotificationsEnabled: formData.get('whatsappNotificationsEnabled') === 'true',
+          }
+        : {}),
+      ...(roleChanged || emailChanged ? { tokenVersion: { increment: 1 } } : {}),
+      ...(emailChanged ? { invitationGeneration: { increment: 1 } } : {}),
+    };
+    const revokeInviteTokens = async (tx: Prisma.TransactionClient) => {
+      if (emailChanged) {
+        await tx.userToken.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+    };
+    const updated = roleChanged
+      ? await updateUserSecurityState(userId, { role: targetRole }, profileData, revokeInviteTokens)
+      : await prisma.$transaction(async tx => {
+          const result = await tx.user.update({ where: { id: userId }, data: profileData });
+          await revokeInviteTokens(tx);
+          return result;
+        });
 
     await logAudit({
       action: 'user.updated',
