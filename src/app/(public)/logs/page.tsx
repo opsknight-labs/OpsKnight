@@ -1,13 +1,13 @@
 import LogsClient from './LogsClient';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { assertAdmin } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PublicLogsPage() {
-  const session = await getServerSession(await getAuthOptions());
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  try {
+    await assertAdmin();
+  } catch {
     redirect('/');
   }
 
