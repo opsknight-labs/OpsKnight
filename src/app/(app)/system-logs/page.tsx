@@ -1,6 +1,5 @@
 import { getLogBuffer } from '@/lib/logger';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { assertAdmin } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -15,15 +14,10 @@ export default async function SystemLogsPage({
   searchParams: Promise<{ level?: string; search?: string; component?: string }>;
 }) {
   const params = await searchParams;
-  const session = await getServerSession(await getAuthOptions());
 
-  if (!session?.user?.email) {
-    redirect('/login');
-  }
-
-  // Only admins can view logs
-  const user = session.user as { email: string; role?: string };
-  if (user.role !== 'ADMIN') {
+  try {
+    await assertAdmin();
+  } catch {
     redirect('/');
   }
 
