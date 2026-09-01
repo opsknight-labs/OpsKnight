@@ -1,5 +1,3 @@
-import 'server-only';
-
 export type MetricScope = 'instance' | 'cluster_snapshot' | 'counter';
 export type MetricKind = 'counter' | 'gauge' | 'histogram';
 export type MetricDefinition = {
