@@ -61,11 +61,23 @@ export function extractInitials(nameOrIdentifier: string | null | undefined): st
  * Uses local in-process @dicebear/collection 'initials' in SVG format.
  * Ensures the seed is always the actual user initials (e.g. "SA" for "System Admin")
  * so the rendered SVG matches fallback initials everywhere across the app.
+ *
+ * Supports both 2-argument signature (nameOrIdentifier, colorSeed) and
+ * 3-argument legacy signature (gender, nameOrIdentifier, colorSeed).
  */
 export const getDefaultAvatar = (
-  nameOrIdentifier?: string | null,
-  colorSeed?: string | null
+  arg1?: string | null,
+  arg2?: string | null,
+  arg3?: string | null
 ): string => {
+  let nameOrIdentifier = arg1;
+  let colorSeed = arg2;
+
+  if (arg3 !== undefined) {
+    nameOrIdentifier = arg2;
+    colorSeed = arg3;
+  }
+
   const initials = extractInitials(nameOrIdentifier) || 'U';
   const bgSeed = colorSeed || nameOrIdentifier || 'user';
   const bg = getDeterministicColor(bgSeed);
