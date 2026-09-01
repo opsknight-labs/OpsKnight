@@ -393,6 +393,7 @@ export async function processEvent(
 
       // Initial OPEN/SUPPRESSED state is creation policy, not a transition of an
       // existing incident, so it intentionally remains in the ingestion path.
+      const incidentCreatedAt = new Date();
       const newIncident = await tx.incident.create({
         data: {
           title: sanitizedTitle,
@@ -401,7 +402,20 @@ export async function processEvent(
           urgency,
           dedupKey: dedup_key,
           serviceId,
-          ...(isFlapping ? { escalationStatus: 'COMPLETED', nextEscalationAt: null } : {}),
+          createdAt: incidentCreatedAt,
+          ...(isFlapping
+            ? {
+                escalationStatus: 'COMPLETED',
+                nextEscalationAt: null,
+                slaPauseStartedAt: incidentCreatedAt,
+                slaPauses: {
+                  create: {
+                    reason: 'flapping-suppression',
+                    startedAt: incidentCreatedAt,
+                  },
+                },
+              }
+            : {}),
         },
       });
 

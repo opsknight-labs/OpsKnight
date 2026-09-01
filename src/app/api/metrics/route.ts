@@ -24,16 +24,23 @@ let metricsInflight: Promise<MetricsSnapshot> | null = null;
 let metricsCacheHits = 0;
 let metricsCacheMisses = 0;
 const DB_COLLECTOR_TIMEOUT_MS = 2_000;
+const collectorInflight = new Map<string, Promise<unknown>>();
 
 export async function collectWithTimeout<T>(
   name: string,
   timeoutMs: number,
   collect: () => Promise<T>
 ): Promise<T> {
+  if (collectorInflight.has(name)) {
+    throw new Error(`Metrics collector still running: ${name}`);
+  }
+  const operation = collect();
+  collectorInflight.set(name, operation);
+  void operation.finally(() => collectorInflight.delete(name)).catch(() => undefined);
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      collect(),
+      operation,
       new Promise<T>((_, reject) => {
         timeout = setTimeout(
           () => reject(new Error(`Metrics collector timed out: ${name}`)),

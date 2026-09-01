@@ -1541,9 +1541,10 @@ model SLASnapshot {
   totalIncidents        Int
   metAckTime            Int // Count of incidents meeting ack SLA
   metResolveTime        Int // Count of incidents meeting resolve SLA
-  evaluatedAckCount     Int    @default(0)
-  evaluatedResolveCount Int    @default(0)
+  evaluatedAckCount     Int     @default(0)
+  evaluatedResolveCount Int     @default(0)
   complianceScore       Float? // null when no SLA sample was evaluated
+  denominatorUnknown    Boolean @default(false) // legacy snapshot awaiting canonical regeneration
 
   slaDefinition SLADefinition @relation(fields: [slaDefinitionId], references: [id])
 

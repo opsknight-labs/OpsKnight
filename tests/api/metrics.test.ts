@@ -42,8 +42,12 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
   });
 
   it('bounds a hung collector without waiting for its database promise', async () => {
-    await expect(collectWithTimeout('hung', 5, () => new Promise<never>(() => {}))).rejects.toThrow(
+    const hung = new Promise<never>(() => {});
+    await expect(collectWithTimeout('hung', 5, () => hung)).rejects.toThrow(
       'Metrics collector timed out: hung'
+    );
+    await expect(collectWithTimeout('hung', 5, () => hung)).rejects.toThrow(
+      'Metrics collector still running: hung'
     );
   });
 

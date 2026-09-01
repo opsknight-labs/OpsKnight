@@ -2545,6 +2545,7 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
       metResolveTime: metResolve,
       evaluatedAckCount: totalAckEvaluated,
       evaluatedResolveCount: totalResolveEvaluated,
+      denominatorUnknown: false,
       complianceScore: score,
     },
     update: {
@@ -2553,6 +2554,7 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
       metResolveTime: metResolve,
       evaluatedAckCount: totalAckEvaluated,
       evaluatedResolveCount: totalResolveEvaluated,
+      denominatorUnknown: false,
       complianceScore: score,
     },
   });

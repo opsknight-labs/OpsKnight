@@ -8,6 +8,7 @@ import { enqueueCentralNotification } from './notification-control-plane';
 import { formatWebhookPayloadByType } from './webhooks';
 import { getBaseUrl } from './env-validation';
 import { configuredSlackWebhookUrl } from './slack';
+import { effectiveElapsedMs } from './metrics/domain/sla-clock';
 
 /**
  * SLA Breach Monitor - Proactive Breach Detection
@@ -86,6 +87,7 @@ export async function checkSLABreaches(
       status: true,
       createdAt: true,
       acknowledgedAt: true,
+      slaPauses: { select: { startedAt: true, endedAt: true } },
       service: {
         select: {
           id: true,
@@ -115,28 +117,6 @@ export async function checkSLABreaches(
   });
 
   const incidentIds = incidents.map(i => i.id);
-
-  // Batch pre-fetch all snooze events to eliminate N+1 database queries
-  const allSnoozeEvents =
-    incidentIds.length > 0 && prisma.incidentEvent?.findMany
-      ? await prisma.incidentEvent.findMany({
-          where: {
-            incidentId: { in: incidentIds },
-            message: {
-              contains: 'snooz',
-              mode: 'insensitive',
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        })
-      : [];
-
-  const snoozeMap = new Map<string, typeof allSnoozeEvents>();
-  for (const ev of allSnoozeEvents) {
-    const list = snoozeMap.get(ev.incidentId) || [];
-    list.push(ev);
-    snoozeMap.set(ev.incidentId, list);
-  }
 
   const maxThreshold = Math.max(ackWarningThreshold, resolveWarningThreshold) + 30000;
   const recentWarningEvents =
@@ -175,24 +155,11 @@ export async function checkSLABreaches(
   }
 
   for (const incident of incidents) {
-    // Calculate total time spent in SNOOZED state to deduct from elapsedMs
-    let snoozedMs = 0;
-    let currentSnoozeStart: Date | null = null;
-    const incidentEvents = snoozeMap.get(incident.id) || [];
-    for (const ev of incidentEvents) {
-      const msg = ev.message.toLowerCase();
-      if (msg.includes('snoozed') && !msg.includes('unsnoozed') && !currentSnoozeStart) {
-        currentSnoozeStart = ev.createdAt;
-      } else if (msg.includes('unsnoozed') && currentSnoozeStart) {
-        snoozedMs += ev.createdAt.getTime() - currentSnoozeStart.getTime();
-        currentSnoozeStart = null;
-      }
-    }
-    if (currentSnoozeStart) {
-      snoozedMs += now.getTime() - currentSnoozeStart.getTime();
-    }
-
-    const elapsedMs = Math.max(0, now.getTime() - incident.createdAt.getTime() - snoozedMs);
+    const elapsedMs = effectiveElapsedMs({
+      startedAt: incident.createdAt,
+      evaluationAt: now,
+      pauses: incident.slaPauses,
+    });
 
     // Resolve priority SLA targets (e.g. P1 = 5m ack / 60m resolve)
     const targets = getPrioritySLATarget(incident.priority, incident.service);

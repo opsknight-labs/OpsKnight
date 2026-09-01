@@ -39,7 +39,7 @@ export async function processSLASnapshots() {
         },
       });
 
-      if (!existing) {
+      if (!existing || existing.denominatorUnknown) {
         // 3. Generate Snapshot if missing
         await generateDailySnapshot(def.id, startOfYesterday);
         processedCount++;
