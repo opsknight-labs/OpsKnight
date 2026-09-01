@@ -210,7 +210,9 @@ export default function QuietHoursTimeline({
 
         <div className="flex items-center gap-1.5 text-muted-foreground sm:justify-end">
           <ShieldAlert className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-          <span className="text-[11px]">P1 alerts always bypass quiet hours</span>
+          <span className="text-[11px]">
+            High & Medium (P1/P2) alerts always bypass quiet hours
+          </span>
         </div>
       </div>
     </div>

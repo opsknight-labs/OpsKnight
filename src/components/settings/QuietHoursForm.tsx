@@ -95,7 +95,7 @@ export default function QuietHoursForm({
 
       <SettingsRow
         label="Enable Quiet Hours"
-        description="Silence non-critical alerts during specified hours"
+        description="Silence low-urgency alerts (SMS, Push, WhatsApp) during specified hours"
       >
         <Switch checked={enabledChecked} onCheckedChange={setEnabledChecked} />
       </SettingsRow>
