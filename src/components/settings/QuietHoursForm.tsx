@@ -1,19 +1,13 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateQuietHoursPreferences } from '@/app/(app)/settings/quiet-hours-actions';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { Input } from '@/components/ui/shadcn/input';
-import { Button } from '@/components/ui/shadcn/button';
-import { Loader2, Save } from 'lucide-react';
-import { notify as toast } from '@/lib/toast';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
-
-type State = {
-  error?: string | null;
-  success?: boolean;
-};
+import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
+import { useAutosave } from '@/lib/hooks/use-autosave';
 
 type Props = {
   enabled: boolean;
@@ -35,38 +29,64 @@ export default function QuietHoursForm({
   startMinutes,
   endMinutes,
   weekendAllDay,
-  timeZone,
+  timeZone: _timeZone,
 }: Props) {
-  const [state, formAction, isPending] = useActionState<State, FormData>(
-    updateQuietHoursPreferences,
-    { error: null, success: false }
-  );
+  const router = useRouter();
 
   const [enabledChecked, setEnabledChecked] = useState(enabled);
   const [weekendChecked, setWeekendChecked] = useState(weekendAllDay);
   const [startTime, setStartTime] = useState(minutesToTime(startMinutes));
   const [endTime, setEndTime] = useState(minutesToTime(endMinutes));
-  const router = useRouter();
 
-  useEffect(() => {
-    if (state?.success) {
-      toast.success('Quiet hours saved successfully');
-      const timer = setTimeout(() => router.refresh(), 500);
-      return () => clearTimeout(timer);
-    }
-    if (state?.error) {
-      toast.error(state.error);
-    }
-  }, [state, router]);
+  // Autosave quiet hours
+  const handleAutoSave = useCallback(
+    async (data: { enabled: boolean; start: string; end: string; weekend: boolean }) => {
+      const formData = new FormData();
+      formData.append('quietHoursEnabled', data.enabled ? 'on' : 'off');
+      formData.append('quietHoursStart', data.start);
+      formData.append('quietHoursEnd', data.end);
+      formData.append('quietHoursWeekendAllDay', data.weekend ? 'on' : 'off');
+
+      const result = await updateQuietHoursPreferences({ error: null, success: false }, formData);
+
+      if (result.success) {
+        router.refresh();
+        return { success: true };
+      } else {
+        return {
+          success: false,
+          error: result.error || 'Failed to save quiet hours',
+        };
+      }
+    },
+    [router]
+  );
+
+  const currentSettings = {
+    enabled: enabledChecked,
+    start: startTime,
+    end: endTime,
+    weekend: weekendChecked,
+  };
+
+  const { status: saveStatus, error: saveError } = useAutosave({
+    data: currentSettings,
+    onSave: handleAutoSave,
+    delay: 500,
+    enabled: true,
+  });
 
   return (
-    <form action={formAction}>
+    <div>
+      <div className="flex justify-end pb-2">
+        <SaveIndicator status={saveStatus} error={saveError} />
+      </div>
+
       <SettingsRow
         label="Enable Quiet Hours"
         description="Silence non-critical alerts during specified hours"
       >
         <Switch checked={enabledChecked} onCheckedChange={setEnabledChecked} />
-        <input type="hidden" name="quietHoursEnabled" value={enabledChecked ? 'on' : 'off'} />
       </SettingsRow>
 
       {enabledChecked && (
@@ -74,7 +94,6 @@ export default function QuietHoursForm({
           <SettingsRow label="Start Time" description="When quiet hours begin">
             <Input
               type="time"
-              name="quietHoursStart"
               value={startTime}
               onChange={e => setStartTime(e.target.value)}
               className="max-w-[160px]"
@@ -84,7 +103,6 @@ export default function QuietHoursForm({
           <SettingsRow label="End Time" description="When quiet hours end">
             <Input
               type="time"
-              name="quietHoursEnd"
               value={endTime}
               onChange={e => setEndTime(e.target.value)}
               className="max-w-[160px]"
@@ -96,30 +114,9 @@ export default function QuietHoursForm({
             description="Extend quiet hours to all day on weekends"
           >
             <Switch checked={weekendChecked} onCheckedChange={setWeekendChecked} />
-            <input
-              type="hidden"
-              name="quietHoursWeekendAllDay"
-              value={weekendChecked ? 'on' : 'off'}
-            />
           </SettingsRow>
         </>
       )}
-
-      <div className="flex justify-end py-4">
-        <Button type="submit" disabled={isPending} size="sm">
-          {isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              Save Schedule
-            </>
-          )}
-        </Button>
-      </div>
-    </form>
+    </div>
   );
 }

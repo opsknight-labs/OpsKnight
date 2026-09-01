@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useRef, useTransition } from 'react';
+import { useState, useRef, useTransition, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
+import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
+import { useAutosave } from '@/lib/hooks/use-autosave';
 import { Input } from '@/components/ui/shadcn/input';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/shadcn/avatar';
@@ -17,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
-import { FormField, FormItem, FormControl, FormMessage } from '@/components/ui/shadcn/form';
+import { FormField, FormItem, FormControl } from '@/components/ui/shadcn/form';
 import { Camera, Upload, Loader2, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 import { updateProfile } from '@/app/(app)/settings/actions';
@@ -64,7 +66,6 @@ export default function ProfileForm({
   const { update } = useSession();
   const { updateCurrentUser } = useAvatarUpdater();
   const [isUploading, startTransition] = useTransition();
-  const [isSaving, setIsSaving] = useState(false);
   const [currentGender, setCurrentGender] = useState<string | null | undefined>(gender);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,7 +86,43 @@ export default function ProfileForm({
     mode: 'onChange',
   });
 
-  const isDirty = form.formState.isDirty;
+  const watchedData = form.watch();
+
+  // Autosave handler for Personal Information
+  const handleAutoSave = useCallback(
+    async (data: ProfileFormData) => {
+      if (!data.name || data.name.trim().length < 2) {
+        return { success: false, error: 'Name must be at least 2 characters' };
+      }
+
+      const formData = new FormData();
+      formData.append('name', data.name.trim());
+      formData.append('gender', data.gender || '');
+      if (data.department) formData.append('department', data.department.trim());
+      if (data.jobTitle) formData.append('jobTitle', data.jobTitle.trim());
+
+      const result = await updateProfile({ error: null, success: false }, formData);
+
+      if (result.success) {
+        await update({ force: true });
+        router.refresh();
+        return { success: true };
+      } else {
+        return {
+          success: false,
+          error: result.error || 'Failed to auto-save profile',
+        };
+      }
+    },
+    [update, router]
+  );
+
+  const { status: saveStatus, error: saveError } = useAutosave({
+    data: watchedData,
+    onSave: handleAutoSave,
+    delay: 600,
+    enabled: form.formState.isValid && form.formState.isDirty,
+  });
 
   const handleAvatarSelect = async (selectedAvatarUrl: string) => {
     startTransition(async () => {
@@ -95,7 +132,7 @@ export default function ProfileForm({
       const result = await updateProfile({ error: null, success: false }, formData);
 
       if (result.success) {
-        toast.success('Avatar updated successfully');
+        toast.success('Avatar updated');
         setAvatarPreview(selectedAvatarUrl);
         updateCurrentUser(selectedAvatarUrl, currentGender);
         await update({ force: true });
@@ -127,7 +164,7 @@ export default function ProfileForm({
         const result = await updateProfile({ error: null, success: false }, formData);
 
         if (result.success) {
-          toast.success('Profile photo uploaded');
+          toast.success('Profile photo updated');
           await update({ force: true });
           router.refresh();
         } else {
@@ -140,32 +177,6 @@ export default function ProfileForm({
         }
       });
     }
-  };
-
-  const handleManualSave = async (data: ProfileFormData) => {
-    setIsSaving(true);
-    const formData = new FormData();
-    formData.append('name', data.name);
-    formData.append('gender', data.gender || '');
-    if (data.department) formData.append('department', data.department);
-    if (data.jobTitle) formData.append('jobTitle', data.jobTitle);
-
-    const result = await updateProfile({ error: null, success: false }, formData);
-
-    if (result.success) {
-      toast.success('Profile updated successfully');
-      form.reset(data);
-      await update({ force: true });
-      router.refresh();
-    } else {
-      toast.error(result.error || 'Failed to update profile');
-    }
-
-    setIsSaving(false);
-    return {
-      success: result.success ?? false,
-      error: result.error ?? undefined,
-    };
   };
 
   const getInitials = (nameInput: string) => {
@@ -182,7 +193,7 @@ export default function ProfileForm({
       {/* Card 1: Profile Photo */}
       <SettingsSection
         title="Profile Photo"
-        description="Choose a preset persona avatar or upload your own high-resolution image"
+        description="Choose a preset avatar or upload your own photo"
         footer={
           <p className="text-xs text-muted-foreground">
             Supported formats: PNG, JPEG, WebP, GIF. Maximum size: 2MB.
@@ -280,39 +291,21 @@ export default function ProfileForm({
         </div>
       </SettingsSection>
 
-      {/* Card 2: Personal Information */}
+      {/* Card 2: Personal Information (Autosaved) */}
       <FormProvider {...form}>
-        <form onSubmit={form.handleSubmit(handleManualSave)}>
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+          }}
+        >
           <SettingsSection
             title="Personal Information"
             description="Manage your personal details and organizational identity."
+            action={<SaveIndicator status={saveStatus} error={saveError} />}
             footer={
-              <div className="flex items-center justify-between w-full">
-                <p className="text-xs text-muted-foreground">
-                  {isDirty ? (
-                    <span className="text-amber-600 dark:text-amber-400 font-medium">
-                      ● You have unsaved changes
-                    </span>
-                  ) : (
-                    'All changes saved'
-                  )}
-                </p>
-
-                <Button
-                  type="submit"
-                  disabled={isSaving || isUploading || !isDirty}
-                  className="gap-2"
-                >
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>Save Changes</>
-                  )}
-                </Button>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Auto-saved · Changes apply immediately across the workspace
+              </p>
             }
           >
             <div className="divide-y text-sm">
@@ -348,19 +341,18 @@ export default function ProfileForm({
                         value={field.value || undefined}
                       >
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select gender identity" />
+                          <SelectTrigger id="gender">
+                            <SelectValue placeholder="Select gender..." />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="prefer-not-to-say">Prefer not to say</SelectItem>
+                          <SelectItem value="neutral">Prefer not to say</SelectItem>
                           <SelectItem value="male">Male</SelectItem>
                           <SelectItem value="female">Female</SelectItem>
                           <SelectItem value="non-binary">Non-binary</SelectItem>
                           <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                       </Select>
-                      <FormMessage />
                     </FormItem>
                   )}
                 />
@@ -368,22 +360,26 @@ export default function ProfileForm({
 
               <SettingsRow
                 label="Department"
-                description="Your organizational department"
+                description="Your organizational unit or squad"
                 htmlFor="department"
               >
                 <Input
                   id="department"
                   {...form.register('department')}
-                  placeholder="e.g. Infrastructure"
+                  placeholder="e.g. Infrastructure, Security, Platform"
                   className="w-full max-w-md"
                 />
               </SettingsRow>
 
-              <SettingsRow label="Job Title" description="Your role or position" htmlFor="jobTitle">
+              <SettingsRow
+                label="Job Title"
+                description="Your professional role in the organization"
+                htmlFor="jobTitle"
+              >
                 <Input
                   id="jobTitle"
                   {...form.register('jobTitle')}
-                  placeholder="e.g. Lead Site Reliability Engineer"
+                  placeholder="e.g. Senior Site Reliability Engineer"
                   className="w-full max-w-md"
                 />
               </SettingsRow>
@@ -392,34 +388,67 @@ export default function ProfileForm({
         </form>
       </FormProvider>
 
-      {/* Card 3: Account Details */}
-      <SettingsSection title="Account Details" description="Managed by your organization">
+      {/* Card 3: Account Details (Read-Only) */}
+      <SettingsSection
+        title="Account Details"
+        description="Core account metadata and authentication credentials"
+        footer={
+          <p className="text-xs text-muted-foreground">
+            Contact your workspace administrator to update organizational permissions or SSO
+            mappings.
+          </p>
+        }
+      >
         <div className="divide-y text-sm">
-          <SettingsRow label="Email">
-            <span className="font-mono text-sm">{email || 'Not set'}</span>
+          <SettingsRow
+            label="Email Address"
+            description="Your primary contact and login identifier"
+          >
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm font-medium text-foreground">{email}</span>
+            </div>
           </SettingsRow>
 
-          <SettingsRow label="Role">
-            <Badge variant="outline" className="font-bold text-xs">
+          <SettingsRow label="Account Role" description="Your permissions level in this workspace">
+            <Badge
+              variant="outline"
+              size="xs"
+              className="bg-primary/10 text-primary border-primary/20 uppercase font-bold text-[10px] tracking-wider"
+            >
               {role}
             </Badge>
           </SettingsRow>
 
-          <SettingsRow label="Authentication">
+          <SettingsRow
+            label="Authentication"
+            description="Identity provider and authentication method"
+          >
             {lastOidcSync ? (
-              <Badge variant="secondary" className="gap-1">
-                SSO{' '}
-                <span className="font-normal text-muted-foreground ml-1">
-                  Synced {lastOidcSync}
+              <div className="flex flex-col gap-1">
+                <Badge
+                  variant="outline"
+                  size="xs"
+                  className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-400/30 font-medium text-[10px] w-fit"
+                >
+                  SSO Synced
+                </Badge>
+                <span className="text-[11px] text-muted-foreground">
+                  Last synced: {lastOidcSync}
                 </span>
-              </Badge>
+              </div>
             ) : (
-              <Badge variant="secondary">Direct Account</Badge>
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-muted text-muted-foreground border-border text-[10px] w-fit"
+              >
+                Direct Password Account
+              </Badge>
             )}
           </SettingsRow>
 
-          <SettingsRow label="Member Since">
-            <span className="text-sm">{memberSince}</span>
+          <SettingsRow label="Member Since" description="Date when your account was provisioned">
+            <span className="text-sm text-muted-foreground">{memberSince}</span>
           </SettingsRow>
         </div>
       </SettingsSection>
