@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { assertResponderOrAbove } from '@/lib/rbac';
 import { buildCsv, type CsvColumn } from '@/lib/csv';
 import {
@@ -14,27 +12,21 @@ import ExcelJS from 'exceljs';
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(await getAuthOptions());
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  let user;
   try {
-    await assertResponderOrAbove();
+    user = await assertResponderOrAbove();
   } catch (_error) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
   const { searchParams, origin } = new URL(req.url);
 
-  // Validate and sanitize input parameters to prevent abuse
   const VALID_FORMATS = ['csv', 'xlsx'];
   const VALID_URGENCIES = ['all', 'HIGH', 'MEDIUM', 'LOW'];
   const VALID_PRIORITIES = ['all', 'P1', 'P2', 'P3', 'P4', 'P5'];
 
   const filterParam = searchParams.get('filter') || 'all';
   const filter = normalizeIncidentFilter(filterParam);
-
-  // Limit search string length to prevent abuse
   const search = (searchParams.get('search') || '').slice(0, 200);
 
   const priorityParam = searchParams.get('priority') || 'all';
@@ -60,7 +52,7 @@ export async function GET(req: NextRequest) {
     search,
     priority,
     urgency,
-    assigneeId: (session.user as { id?: string }).id,
+    assigneeId: user.id,
     assignee,
     serviceId,
     status,
@@ -71,21 +63,16 @@ export async function GET(req: NextRequest) {
 
   if (teamId !== 'all') {
     if (teamId === 'mine') {
-      const userId = (session.user as { id?: string }).id;
-      if (userId) {
-        const memberships = await prisma.teamMember.findMany({
-          where: { userId },
-          select: { teamId: true },
-        });
-        where.teamId = { in: memberships.map(m => m.teamId) };
-      }
+      const memberships = await prisma.teamMember.findMany({
+        where: { userId: user.id },
+        select: { teamId: true },
+      });
+      where.teamId = { in: memberships.map(m => m.teamId) };
     } else {
       where.teamId = teamId;
     }
   }
 
-  // Limit export to 10,000 incidents to prevent memory exhaustion
-  // For larger exports, use pagination or streaming
   const MAX_EXPORT_LIMIT = 10000;
   const incidents = await prisma.incident.findMany({
     where,
@@ -125,7 +112,6 @@ export async function GET(req: NextRequest) {
     LOW: { label: 'Low', color: '#059669' },
   };
 
-  // Convert to CSV
   const rows = incidents.map(incident => ({
     id: incident.id,
     incidentUrl: `${origin}/incidents/${incident.id}`,
@@ -230,25 +216,22 @@ export async function GET(req: NextRequest) {
     const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     const filename = `incidents-${new Date().toISOString().split('T')[0]}.xlsx`;
-    const response = new NextResponse(buffer, {
+    return new NextResponse(buffer, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Cache-Control': 'no-store',
       },
     });
-    return response;
   }
 
   const csv = buildCsv(rows, columns);
-
   const csvFilename = `incidents-${new Date().toISOString().split('T')[0]}.csv`;
-  const response = new NextResponse(csv, {
+  return new NextResponse(csv, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="${csvFilename}"`,
       'Cache-Control': 'no-store',
     },
   });
-  return response;
 }
