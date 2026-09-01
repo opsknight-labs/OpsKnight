@@ -40,7 +40,11 @@ type UserAvatarContextType = {
       name?: string | null;
     }>
   ) => void;
-  updateCurrentUser: (avatarUrl: string | null, gender?: string | null) => void;
+  updateCurrentUser: (
+    avatarUrl: string | null,
+    gender?: string | null,
+    name?: string | null
+  ) => void;
 };
 
 const UserAvatarContext = createContext<UserAvatarContextType | undefined>(undefined);
@@ -157,9 +161,11 @@ export function UserAvatarProvider({
 
       // Use cached gender if available, otherwise use provided gender
       const effectiveGender = cached?.gender ?? gender;
+      // Use cached name if available, otherwise use provided fallback
+      const effectiveName = cached?.name || _fallbackName || 'User';
 
-      // Generate default avatar using consistent userId seed
-      return getDefaultAvatar(effectiveGender, userId || 'user');
+      // Generate default avatar using consistent name for initials and userId for color
+      return getDefaultAvatar(effectiveGender, effectiveName, userId || 'user');
     },
     [avatarCache]
   );
@@ -222,9 +228,9 @@ export function UserAvatarProvider({
     [evictLRU, currentUserId]
   );
 
-  // Update current user's avatar and optionally gender
+  // Update current user's avatar and optionally gender/name
   const updateCurrentUser = useCallback(
-    (avatarUrl: string | null, gender?: string | null) => {
+    (avatarUrl: string | null, gender?: string | null, name?: string | null) => {
       if (!currentUserId) return;
 
       setAvatarCache(prev => {
@@ -232,8 +238,8 @@ export function UserAvatarProvider({
         const existing = newCache.get(currentUserId);
         newCache.set(currentUserId, {
           avatarUrl: avatarUrl,
-          gender: gender ?? existing?.gender ?? null,
-          name: existing?.name ?? null,
+          gender: gender !== undefined ? gender : (existing?.gender ?? null),
+          name: name !== undefined ? name : (existing?.name ?? null),
           lastAccessed: Date.now(),
         });
         return newCache;
@@ -272,11 +278,15 @@ export function useUserAvatarContextSafe() {
     return {
       currentUserId: null,
       getAvatar: (userId: string, gender?: string | null, fallbackName?: string | null) =>
-        getDefaultAvatar(gender, userId || fallbackName || 'user'),
+        getDefaultAvatar(gender, fallbackName || userId || 'User', userId),
       updateAvatar: () => {},
       invalidateAvatar: () => {},
       preloadAvatars: () => {},
-      updateCurrentUser: () => {},
+      updateCurrentUser: (
+        _avatarUrl: string | null,
+        _gender?: string | null,
+        _name?: string | null
+      ) => {},
     };
   }
   return context;
