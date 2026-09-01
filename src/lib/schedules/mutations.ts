@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
+import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -28,23 +29,6 @@ function overrideConflictError(details: Record<string, unknown>) {
     action: 'Choose a non-overlapping period or remove the existing override first.',
     details,
   });
-}
-
-async function requireActiveResponder(
-  tx: TransactionClient,
-  userId: string,
-  field: string
-): Promise<{ id: string; name: string }> {
-  const user = await tx.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, status: true },
-  });
-
-  if (!user || user.status !== 'ACTIVE') {
-    throw responderNotActiveError(userId, field);
-  }
-
-  return { id: user.id, name: user.name };
 }
 
 async function normalizeLayerPositions(
@@ -89,7 +73,9 @@ export async function addScheduleLayerUser(layerId: string, userId: string) {
         });
       }
 
-      const responder = await requireActiveResponder(tx, userId, 'userId');
+      const responder = await requireOperationalUser(tx, userId, () =>
+        responderNotActiveError(userId, 'userId')
+      );
       const existingAssignment = await tx.onCallLayerUser.findFirst({
         where: {
           userId,
@@ -278,9 +264,13 @@ export async function createScheduleOverrideMutation(input: CreateScheduleOverri
         });
       }
 
-      await requireActiveResponder(tx, input.userId, 'userId');
+      await requireOperationalUser(tx, input.userId, () =>
+        responderNotActiveError(input.userId, 'userId')
+      );
       if (input.replacesUserId) {
-        await requireActiveResponder(tx, input.replacesUserId, 'replacesUserId');
+        await requireOperationalUser(tx, input.replacesUserId, () =>
+          responderNotActiveError(input.replacesUserId!, 'replacesUserId')
+        );
         const assignment = await tx.onCallLayerUser.findFirst({
           where: {
             userId: input.replacesUserId,
