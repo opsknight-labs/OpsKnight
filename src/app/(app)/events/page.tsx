@@ -1,8 +1,6 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { getUserTimeZone } from '@/lib/timezone';
 import { Button } from '@/components/ui/shadcn/button';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
@@ -22,23 +20,16 @@ type EventLogsPageProps = {
 };
 
 export default async function EventLogsPage({ searchParams }: EventLogsPageProps) {
-  await assertAdmin();
+  const user = await assertAdmin();
   const params = await searchParams;
   const page = Math.max(1, Number.parseInt(params?.page || '1', 10) || 1);
   const pageSize = 50;
   const search = params?.search?.trim().slice(0, 200) || undefined;
   const service = params?.service?.trim().slice(0, 200) || undefined;
-  const session = await getServerSession(await getAuthOptions());
-  const email = session?.user?.email ?? null;
-  const user = email
-    ? await prisma.user.findUnique({ where: { email }, select: { timeZone: true } })
-    : null;
-  const userTimeZone = getUserTimeZone(user ?? undefined);
+  const userTimeZone = getUserTimeZone(user);
 
   const filters: Prisma.IncidentEventWhereInput[] = [];
-  if (service) {
-    filters.push({ incident: { service: { name: service } } });
-  }
+  if (service) filters.push({ incident: { service: { name: service } } });
   if (search) {
     filters.push({
       OR: [
@@ -75,7 +66,6 @@ export default async function EventLogsPage({ searchParams }: EventLogsPageProps
   const uniqueServices = new Set(events.map(e => e.incident.service.name)).size;
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header */}
       <DetailHeroBanner
         tag="Audit & Telemetry"
         title="Event Logs"
