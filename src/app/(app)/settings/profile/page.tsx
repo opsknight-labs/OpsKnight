@@ -198,7 +198,6 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
             jobTitle={user?.jobTitle}
             avatarUrl={user?.avatarUrl}
             lastOidcSync={lastOidcSync}
-            gender={user?.gender}
           />
         }
         notificationsContent={

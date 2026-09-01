@@ -13,7 +13,7 @@ import {
   getWhatsAppConfig,
 } from '@/lib/notification-providers';
 import { logger } from '@/lib/logger';
-import { getDefaultAvatar, isDefaultAvatar } from '@/lib/avatar';
+import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import {
   API_SCOPES,
@@ -98,12 +98,12 @@ export async function updateProfile(
       }
     }
 
-    const removeAvatar = formData.get('removeAvatar') === 'true';
+    const removeAvatar =
+      formData.get('removeAvatar') === 'true' || formData.get('resetAvatar') === 'true';
 
     // Prepare update data
     const data: Partial<{
       name: string;
-      gender: string | null;
       department: string | null;
       jobTitle: string | null;
       avatarUrl: string | null;
@@ -123,14 +123,6 @@ export async function updateProfile(
       data.jobTitle = (formData.get('jobTitle') as string | null)?.trim() || null;
     }
 
-    // Handle Gender & Smart Avatar Logic
-    let newGender = user.gender;
-    if (formData.has('gender')) {
-      const g = (formData.get('gender') as string | null)?.trim() || null;
-      data.gender = g;
-      newGender = g;
-    }
-
     // Handle direct avatarUrl (from avatar picker)
     const directAvatarUrl = (formData.get('avatarUrl') as string | null)?.trim();
     const isValidDirectUrl = (url: string) => {
@@ -147,26 +139,15 @@ export async function updateProfile(
     const currentName = data.name || user.name || 'User';
 
     if (removeAvatar) {
-      // User explicitly requested removal - clean up DB binary and set to default based on gender
+      // User explicitly requested removal - clean up DB binary and set to default initials
       await prisma.userAvatar.deleteMany({ where: { userId: user.id } });
-      data.avatarUrl = getDefaultAvatar(newGender, currentName, user.id);
+      data.avatarUrl = getDefaultAvatar(currentName, user.id);
     } else if (directAvatarUrl && isValidDirectUrl(directAvatarUrl)) {
       // User selected an avatar from the picker
       data.avatarUrl = directAvatarUrl;
     } else if (avatarUrl !== undefined) {
       // User uploaded a NEW file
       data.avatarUrl = avatarUrl;
-    } else if (data.gender !== undefined) {
-      // Gender changed, but no new file uploaded.
-      // Check if we should update the avatar to match the new gender.
-      const isCurrentDefault = isDefaultAvatar(user.avatarUrl);
-
-      if (isCurrentDefault) {
-        const newDefault = getDefaultAvatar(newGender, currentName, user.id);
-        if (newDefault !== user.avatarUrl) {
-          data.avatarUrl = newDefault;
-        }
-      }
     }
 
     // If no data to update, return early

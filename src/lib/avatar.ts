@@ -21,7 +21,7 @@ export function getDeterministicColor(seed: string): string {
     hash |= 0;
   }
   const index = Math.abs(hash) % MODERN_AVATAR_PALETTE.length;
-  return MODERN_AVATAR_PALETTE[index];
+  return MODERN_AVATAR_PALETTE.at(index) ?? '6366f1';
 }
 
 /**
@@ -63,7 +63,6 @@ export function extractInitials(nameOrIdentifier: string | null | undefined): st
  * so the rendered SVG matches fallback initials everywhere across the app.
  */
 export const getDefaultAvatar = (
-  gender?: string | null,
   nameOrIdentifier?: string | null,
   colorSeed?: string | null
 ): string => {
@@ -76,8 +75,7 @@ export const getDefaultAvatar = (
 
 /**
  * Checks if an avatar URL is one of our default system-generated ones.
- * Returns true for default system avatars (initials, shapes, personas, lorelei, legacy big-smile, legacy bottts).
- * Custom chosen presets from AvatarPicker and uploaded avatars are NOT flagged as default.
+ * Returns true for default system avatars.
  */
 export const isDefaultAvatar = (url: string | null | undefined): boolean => {
   if (!url) return true;
@@ -89,7 +87,6 @@ export const isDefaultAvatar = (url: string | null | undefined): boolean => {
         url.includes('style=shapes') ||
         url.includes('style=personas') ||
         url.includes('style=lorelei') ||
-        url.includes('style=big-smile') ||
         url.includes('style=bottts')) &&
       (url.includes('radius=0') || url.includes('radius=50'));
     return isSystemDefault;
@@ -105,7 +102,6 @@ export const isDefaultAvatar = (url: string | null | undefined): boolean => {
         pathname.includes('shapes') ||
         pathname.includes('personas') ||
         pathname.includes('lorelei') ||
-        pathname.includes('big-smile') ||
         pathname.includes('bottts')
       );
     }

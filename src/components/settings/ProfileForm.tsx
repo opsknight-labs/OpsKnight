@@ -11,14 +11,6 @@ import { useAutosave } from '@/lib/hooks/use-autosave';
 import { Input } from '@/components/ui/shadcn/input';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/shadcn/select';
-import { FormField, FormItem, FormControl } from '@/components/ui/shadcn/form';
 import { AvatarPicker } from '@/components/settings/AvatarPicker';
 import { useAvatarUpdater } from '@/hooks/useUserAvatar';
 import { isDefaultAvatar } from '@/lib/avatar';
@@ -26,7 +18,7 @@ import { z } from 'zod';
 import { updateProfile } from '@/app/(app)/settings/actions';
 import { useRouter } from 'next/navigation';
 import { notify as toast } from '@/lib/toast';
-import { RefreshCw, Upload, RotateCcw, Loader2 } from 'lucide-react';
+import { Upload, RotateCcw, Loader2 } from 'lucide-react';
 
 type Props = {
   name: string;
@@ -37,12 +29,10 @@ type Props = {
   jobTitle?: string | null;
   avatarUrl?: string | null;
   lastOidcSync?: string | null;
-  gender?: string | null;
 };
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  gender: z.string().optional(),
   department: z.string().optional(),
   jobTitle: z.string().optional(),
 });
@@ -58,7 +48,6 @@ export default function ProfileForm({
   jobTitle,
   avatarUrl,
   lastOidcSync,
-  gender,
 }: Props) {
   const router = useRouter();
   const { update } = useSession();
@@ -69,7 +58,6 @@ export default function ProfileForm({
 
   const defaultValues: ProfileFormData = {
     name,
-    gender: gender ?? undefined,
     department: department ?? undefined,
     jobTitle: jobTitle ?? undefined,
   };
@@ -94,7 +82,6 @@ export default function ProfileForm({
 
       const formData = new FormData();
       formData.append('name', data.name.trim());
-      formData.append('gender', data.gender || '');
       if (data.department) formData.append('department', data.department.trim());
       if (data.jobTitle) formData.append('jobTitle', data.jobTitle.trim());
 
@@ -131,7 +118,7 @@ export default function ProfileForm({
       if (result.success) {
         toast.success('Avatar updated');
         setCurrentAvatarUrl(selectedAvatarUrl);
-        updateCurrentUser(selectedAvatarUrl, form.getValues('gender'));
+        updateCurrentUser(selectedAvatarUrl);
         await update({ force: true });
         router.refresh();
       } else {
@@ -167,7 +154,7 @@ export default function ProfileForm({
 
         if (result.success) {
           toast.success('Profile photo updated');
-          updateCurrentUser(previewUrl, form.getValues('gender'));
+          updateCurrentUser(previewUrl);
           await update({ force: true });
           router.refresh();
         } else {
@@ -179,24 +166,39 @@ export default function ProfileForm({
     reader.readAsDataURL(file);
   };
 
-  const handleResetToDefault = () => {
+  const handleResetToDefault = async () => {
     startTransition(async () => {
       const formData = new FormData();
-      formData.append('removeAvatar', 'true');
+      formData.append('resetAvatar', 'true');
+
       const result = await updateProfile({ error: null, success: false }, formData);
+
       if (result.success) {
-        toast.success('Custom photo reset to default');
+        toast.success('Avatar reset to default initials');
         setCurrentAvatarUrl(null);
-        updateCurrentUser(null, form.getValues('gender'));
+        updateCurrentUser(null);
         await update({ force: true });
         router.refresh();
       } else {
-        toast.error(result.error || 'Failed to reset photo');
+        toast.error(result.error || 'Failed to reset avatar');
       }
     });
   };
 
   const hasCustomAvatar = currentAvatarUrl && !isDefaultAvatar(currentAvatarUrl);
+
+  const getRoleBadgeVariant = (roleName: string) => {
+    switch (roleName) {
+      case 'ADMIN':
+        return 'destructive';
+      case 'RESPONDER':
+        return 'default';
+      case 'VIEWER':
+        return 'secondary';
+      default:
+        return 'outline';
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -285,37 +287,6 @@ export default function ProfileForm({
                 />
               </SettingsRow>
 
-              <SettingsRow label="Gender" htmlFor="gender">
-                <FormField
-                  control={form.control}
-                  name="gender"
-                  render={({ field }) => (
-                    <FormItem className="w-full max-w-md">
-                      <Select
-                        onValueChange={value => {
-                          field.onChange(value);
-                        }}
-                        defaultValue={field.value || undefined}
-                        value={field.value || undefined}
-                      >
-                        <FormControl>
-                          <SelectTrigger id="gender">
-                            <SelectValue placeholder="Select gender..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="neutral">Prefer not to say</SelectItem>
-                          <SelectItem value="male">Male</SelectItem>
-                          <SelectItem value="female">Female</SelectItem>
-                          <SelectItem value="non-binary">Non-binary</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-              </SettingsRow>
-
               <SettingsRow
                 label="Department"
                 description="Your organizational unit or squad"
@@ -349,18 +320,18 @@ export default function ProfileForm({
       {/* Card 2: Account Details (Read-Only) */}
       <SettingsSection
         title="Account Details"
-        description="Managed and provisioned by your workspace organization."
+        description="Core security and authentication parameters managed by your workspace."
       >
         <div className="divide-y text-sm">
           <SettingsRow
             label="Email Address"
-            description="Primary identifier used for account access and communications"
+            description="Used for critical incident communications and access"
           >
             <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-foreground">
-                {email || 'No email configured'}
+              <span className="font-mono text-xs bg-muted px-2.5 py-1 rounded-md border border-border">
+                {email || 'No email attached'}
               </span>
-              <Badge variant="outline" size="xs" className="text-muted-foreground">
+              <Badge variant="outline" className="text-[10px] text-muted-foreground">
                 Verified
               </Badge>
             </div>
@@ -368,37 +339,46 @@ export default function ProfileForm({
 
           <SettingsRow
             label="Workspace Role"
-            description="Defines your access permissions across services and policies"
+            description="Your access level and permissions across the platform"
           >
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="font-semibold uppercase tracking-wider text-xs">
+              <Badge variant={getRoleBadgeVariant(role)} className="font-medium text-xs">
                 {role}
               </Badge>
             </div>
           </SettingsRow>
 
           <SettingsRow
-            label="Authentication Method"
-            description="Identity provider used to secure and sign into your account"
+            label="Authentication"
+            description="Identity provider and session management"
           >
-            <div className="flex items-center gap-2">
-              {lastOidcSync ? (
+            {lastOidcSync ? (
+              <div className="flex items-center gap-2">
                 <Badge
                   variant="outline"
-                  className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1 text-xs"
+                  className="text-xs bg-primary/5 text-primary border-primary/20"
                 >
-                  <RefreshCw className="h-3 w-3" /> SSO / OIDC Managed
+                  SSO Linked
                 </Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground text-xs">
-                  Direct Password Account
-                </Badge>
-              )}
-            </div>
+                <span className="text-xs text-muted-foreground">
+                  Synced {new Date(lastOidcSync).toLocaleDateString()}
+                </span>
+              </div>
+            ) : (
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                Direct Account
+              </Badge>
+            )}
           </SettingsRow>
 
-          <SettingsRow label="Member Since" description="Timestamp of initial account provisioning">
-            <span className="text-sm text-muted-foreground">{memberSince}</span>
+          <SettingsRow label="Member Since" description="Account provisioning timestamp">
+            <span className="text-sm text-muted-foreground font-mono">
+              {new Date(memberSince).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </span>
           </SettingsRow>
         </div>
       </SettingsSection>
