@@ -22,6 +22,10 @@ import {
   ArrowUpRight,
   Crown,
   Layers,
+  ShieldCheck,
+  Flame,
+  Activity,
+  CheckCircle2,
 } from 'lucide-react';
 
 export type ProfileDetailTab = 'profile' | 'notifications' | 'schedule' | 'teams';
@@ -65,6 +69,18 @@ type EscalationRule = {
   };
 };
 
+export type UserSLAMetricsSummary = {
+  mtta?: number | null;
+  mttr?: number | null;
+  mttaP50?: number | null;
+  mttrP50?: number | null;
+  resolveCompliance?: number | null;
+  ackCompliance?: number | null;
+  activeIncidents?: number;
+  resolvedIncidents?: number;
+  totalIncidents?: number;
+};
+
 type ProfileDetailTabsProps = {
   defaultTab?: string;
   profileContent: ReactNode;
@@ -75,7 +91,17 @@ type ProfileDetailTabsProps = {
   layerAssignments: LayerAssignment[];
   escalationRules: EscalationRule[];
   activeChannelsCount?: number;
+  slaMetrics?: UserSLAMetricsSummary | null;
 };
+
+function formatMinutes(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined || minutes === 0) return '0m';
+  if (minutes < 1) return `${Math.round(minutes * 60)}s`;
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMins = Math.round(minutes % 60);
+  return `${hours}h ${remainingMins}m`;
+}
 
 export default function ProfileDetailTabs({
   defaultTab = 'profile',
@@ -87,11 +113,14 @@ export default function ProfileDetailTabs({
   layerAssignments,
   escalationRules,
   activeChannelsCount,
+  slaMetrics,
 }: ProfileDetailTabsProps) {
   const ledTeamIds = new Set(teamsLed.map(t => t.id));
   const totalTeams = teams.length;
   const totalSchedules = layerAssignments.length;
   const totalTeamsAndSchedules = totalTeams + totalSchedules;
+
+  const complianceVal = slaMetrics?.resolveCompliance ?? slaMetrics?.ackCompliance ?? 100;
 
   const tabItems = [
     {
@@ -140,6 +169,77 @@ export default function ProfileDetailTabs({
 
       {/* Tab 4: Teams & On-Call Rotations */}
       <DetailTabContent value="teams" className="space-y-6">
+        {/* SLA & Response Performance Card (Centralized via sla-server) */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  <span>SLA & Response Performance</span>
+                </CardTitle>
+                <CardDescription>
+                  Your incident response and resolution metrics computed across your operational
+                  history
+                </CardDescription>
+              </div>
+              <Badge
+                variant="outline"
+                className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-semibold"
+              >
+                {complianceVal.toFixed(1)}% Compliance
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+              <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-primary/70" />
+                  MTTA (Acknowledge)
+                </p>
+                <p className="text-lg font-bold font-mono text-foreground">
+                  {formatMinutes(slaMetrics?.mttaP50)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">Median response time</p>
+              </div>
+
+              <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                  <Flame className="h-3.5 w-3.5 text-primary/70" />
+                  MTTR (Resolution)
+                </p>
+                <p className="text-lg font-bold font-mono text-foreground">
+                  {formatMinutes(slaMetrics?.mttr ?? slaMetrics?.mttrP50)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">Mean resolution time</p>
+              </div>
+
+              <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                  <Activity className="h-3.5 w-3.5 text-primary/70" />
+                  Active Incidents
+                </p>
+                <p className="text-lg font-bold font-mono text-foreground">
+                  {slaMetrics?.activeIncidents ?? 0}
+                </p>
+                <p className="text-[11px] text-muted-foreground">Assigned in progress</p>
+              </div>
+
+              <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  Total Resolved
+                </p>
+                <p className="text-lg font-bold font-mono text-foreground">
+                  {slaMetrics?.resolvedIncidents ?? 0}
+                </p>
+                <p className="text-[11px] text-muted-foreground">Resolved incidents</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Team Memberships Card */}
         <Card>
           <CardHeader className="pb-3">
@@ -159,51 +259,47 @@ export default function ProfileDetailTabs({
           <CardContent>
             {teams.length === 0 ? (
               <EmptyState
-                icon={<Users className="h-8 w-8 text-muted-foreground/60" />}
+                icon={<Users className="h-6 w-6 text-muted-foreground" />}
                 title="No team memberships"
-                description="You are not currently assigned to any team in this organization."
+                description="You haven't been added to any team yet. Team leads can invite you to collaborative response squads."
+                variant="card"
               />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {teams.map(membership => {
-                  const isLead = ledTeamIds.has(membership.team.id);
+                {teams.map(m => {
+                  const isLead = ledTeamIds.has(m.team.id);
                   return (
                     <Link
-                      key={membership.id}
-                      href={`/teams/${membership.team.id}`}
+                      key={m.id}
+                      href={`/teams/${m.team.id}`}
                       className="group flex flex-col justify-between rounded-lg border border-border bg-card p-4 transition-all duration-150 hover:bg-muted/30 hover:border-primary/40 hover:shadow-xs"
                     >
                       <div>
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                            {membership.team.name}
+                            {m.team.name}
                           </h4>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {isLead && (
-                              <Badge
-                                variant="outline"
-                                size="xs"
-                                className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-400/30 gap-1 text-[10px]"
-                              >
-                                <Crown className="h-2.5 w-2.5" /> Lead
-                              </Badge>
-                            )}
+                          {isLead ? (
                             <Badge
                               variant="outline"
                               size="xs"
-                              className="uppercase text-[9px] font-bold"
+                              className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] gap-1 shrink-0"
                             >
-                              {membership.role}
+                              <Crown className="h-2.5 w-2.5" /> Lead
                             </Badge>
-                          </div>
+                          ) : (
+                            <Badge variant="secondary" size="xs" className="text-[10px] shrink-0">
+                              {m.role}
+                            </Badge>
+                          )}
                         </div>
-                        {membership.team.description && (
-                          <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                            {membership.team.description}
+                        {m.team.description && (
+                          <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">
+                            {m.team.description}
                           </p>
                         )}
                       </div>
-                      <div className="mt-3 flex items-center justify-end text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors">
+                      <div className="mt-4 flex items-center justify-end text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors">
                         <span className="flex items-center gap-1">
                           View Team <ArrowUpRight className="h-3.5 w-3.5" />
                         </span>
@@ -216,28 +312,31 @@ export default function ProfileDetailTabs({
           </CardContent>
         </Card>
 
-        {/* Active On-Call Schedule Rotations */}
+        {/* On-Call Schedules Card */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-primary" />
-                  <span>On-Call Schedule Rotations</span>
+                  <span>On-Call Rotations</span>
                 </CardTitle>
-                <CardDescription>Active rotation layers and shifts you are part of</CardDescription>
+                <CardDescription>
+                  Schedules and rotation layers where you are currently assigned
+                </CardDescription>
               </div>
               <Badge variant="outline" className="text-xs">
-                {layerAssignments.length} {layerAssignments.length === 1 ? 'Schedule' : 'Schedules'}
+                {layerAssignments.length} {layerAssignments.length === 1 ? 'Rotation' : 'Rotations'}
               </Badge>
             </div>
           </CardHeader>
           <CardContent>
             {layerAssignments.length === 0 ? (
               <EmptyState
-                icon={<Calendar className="h-8 w-8 text-muted-foreground/60" />}
-                title="No on-call schedules"
-                description="You are not currently assigned to any active on-call rotation layers."
+                icon={<Calendar className="h-6 w-6 text-muted-foreground" />}
+                title="No on-call rotations"
+                description="You are not assigned to any on-call rotation layers currently."
+                variant="card"
               />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

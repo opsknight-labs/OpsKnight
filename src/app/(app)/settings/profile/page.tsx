@@ -9,7 +9,8 @@ import ProfileDetailTabs from '@/components/settings/ProfileDetailTabs';
 import ProfileHeroBanner from '@/components/settings/ProfileHeroBanner';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
-import { Users, Calendar, Flame } from 'lucide-react';
+import { calculateSLAMetrics } from '@/lib/sla-server';
+import { Users, Calendar, Flame, ShieldCheck } from 'lucide-react';
 
 export const revalidate = 0;
 
@@ -114,6 +115,14 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
 
   const localTimeStr = formatLocalTimeInTz(timeZone);
 
+  // Centralized SLA Metrics Calculation for Current User
+  const slaMetrics = user?.id
+    ? await calculateSLAMetrics({
+        assigneeId: user.id,
+        userTimeZone: timeZone,
+      })
+    : null;
+
   const totalTeams = user?.teamMemberships?.length ?? 0;
   const totalSchedules = user?.layerAssignments?.length ?? 0;
   const totalIncidents = user?._count?.assignedIncidents ?? 0;
@@ -159,6 +168,14 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
             value: totalIncidents,
             icon: <Flame className="h-3.5 w-3.5" />,
           },
+          {
+            label: 'SLA',
+            value:
+              slaMetrics && totalIncidents > 0
+                ? `${(slaMetrics.resolveCompliance ?? slaMetrics.ackCompliance ?? 100).toFixed(0)}%`
+                : '100%',
+            icon: <ShieldCheck className="h-3.5 w-3.5" />,
+          },
         ]}
       />
 
@@ -170,6 +187,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         teamsLed={user?.teamsLed ?? []}
         layerAssignments={user?.layerAssignments ?? []}
         escalationRules={user?.escalationRules ?? []}
+        slaMetrics={slaMetrics}
         profileContent={
           <ProfileForm
             name={name}
