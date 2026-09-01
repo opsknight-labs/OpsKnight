@@ -14,26 +14,20 @@ import {
   serializeMetrics,
 } from '@/lib/integrations/metrics';
 import { getRateLimitStatus } from '@/lib/integrations/rate-limiter';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
-import { assertCanViewService } from '@/lib/rbac';
+import { assertCanViewService, getCurrentUser } from '@/lib/rbac';
 
 export async function GET(req: NextRequest) {
   try {
-    // Optional auth check - allow unauthenticated for basic health
-    const authOptions = await getAuthOptions();
-    const session = await getServerSession(authOptions);
-
     const { searchParams } = new URL(req.url);
     const integrationId = searchParams.get('integrationId');
 
-    // If checking specific integration, require auth
     if (integrationId) {
-      if (!session?.user) {
+      try {
+        await getCurrentUser();
+      } catch {
         return jsonError('Unauthorized', 401);
       }
 
-      // Verify integration exists
       const integration = await prisma.integration.findUnique({
         where: { id: integrationId },
         include: {
@@ -77,7 +71,6 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Global health check
     const summary = getMetricsSummary();
 
     return jsonOk({
@@ -100,9 +93,9 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const authOptions = await getAuthOptions();
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    try {
+      await getCurrentUser();
+    } catch {
       return jsonError('Unauthorized', 401);
     }
 
@@ -113,7 +106,6 @@ export async function POST(req: NextRequest) {
       return jsonError('integrationId is required', 400);
     }
 
-    // Verify integration exists
     const integration = await prisma.integration.findUnique({
       where: { id: integrationId },
       select: {
@@ -134,7 +126,6 @@ export async function POST(req: NextRequest) {
       return jsonError('Forbidden', 403);
     }
 
-    // Parse test payload
     let body: unknown;
     try {
       body = await req.json();
@@ -142,7 +133,6 @@ export async function POST(req: NextRequest) {
       return jsonError('Invalid JSON in request body', 400);
     }
 
-    // Validate payload structure based on type
     const { IntegrationSchemas, validatePayload } = await import('@/lib/integrations/schemas');
 
     const schemaKey = integration.type as keyof typeof IntegrationSchemas;
@@ -160,7 +150,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Use any to avoid complex type inference issues
     const validation = validatePayload(schema as any, body); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     if (!validation.success) {
@@ -174,7 +163,7 @@ export async function POST(req: NextRequest) {
           errors: validation.errors,
         },
         200
-      ); // Return 200 since this is a validation check, not an error
+      );
     }
 
     return jsonOk({
