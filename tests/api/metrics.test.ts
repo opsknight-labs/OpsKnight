@@ -14,6 +14,7 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
+    $queryRaw: vi.fn(),
     backgroundJob: {
       groupBy: vi.fn(),
     },
@@ -32,6 +33,7 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMetricsCache();
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
     process.env = { ...originalEnv };
   });
 

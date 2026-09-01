@@ -1,0 +1,17 @@
+groups:
+  - name: opsknight.critical-path
+    rules:
+      - alert: OpsKnightMetricsCollectorsFailing
+        expr: opsknight_metrics_collection_errors > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: OpsKnight metrics collectors are persistently failing
+      - alert: OpsKnightDurableJobsStale
+        expr: opsknight:jobs_oldest_pending_age_seconds > 60 and opsknight:jobs_pending > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: OpsKnight durable work is not being dispatched promptly

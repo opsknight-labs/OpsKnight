@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { APP_VERSION } from '@/lib/version';
+import { getJobWorkerStatus } from '@/lib/job-worker';
+import { getOpsKnightProcessRole, getRuntimeResponsibilities } from '@/lib/runtime-role';
 
 import v8 from 'v8';
 
@@ -17,10 +19,16 @@ export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get('mode') || 'liveness';
   const checks: Record<
     string,
-    { status: 'healthy' | 'unhealthy'; latency?: number; error?: string }
+    {
+      status: 'healthy' | 'unhealthy' | 'disabled';
+      latency?: number;
+      error?: string;
+      expected?: boolean;
+    }
   > = {};
 
   if (mode === 'readiness') {
+    const responsibilities = getRuntimeResponsibilities(getOpsKnightProcessRole());
     // Check database connection with timeout
     try {
       const dbStartTime = Date.now();
@@ -47,27 +55,45 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Check background scheduler state
-    try {
-      const schedulerStartTime = Date.now();
-      const [schedulerState] = await prisma.$queryRaw<
-        Array<{ heartbeatDead: boolean; lastRunAt: Date | null }>
-      >`
-        SELECT
-          "lastRunAt",
-          COALESCE("lockedAt", "lastRunAt") < NOW() - INTERVAL '15 minutes' AS "heartbeatDead"
+    const schedulerExpected =
+      responsibilities.startScheduler && process.env.ENABLE_INTERNAL_CRON !== 'false';
+    if (!schedulerExpected) {
+      checks.scheduler = { status: 'disabled', expected: false };
+    } else
+      try {
+        const schedulerStartTime = Date.now();
+        const maximumCadenceSeconds = Math.max(
+          30,
+          Number(process.env.SCHEDULER_HEALTH_MAX_INTERVAL_SECONDS ?? 120)
+        );
+        const [schedulerState] = await prisma.$queryRaw<
+          Array<{ secondsSinceSuccess: number | null }>
+        >`
+        SELECT EXTRACT(EPOCH FROM (NOW() - "lastSuccessAt"))::double precision AS "secondsSinceSuccess"
         FROM "cron_scheduler_state"
         WHERE "id" = 'singleton'
         LIMIT 1
       `;
-      if (schedulerState) {
+        const stale =
+          !schedulerState ||
+          schedulerState.secondsSinceSuccess === null ||
+          schedulerState.secondsSinceSuccess > maximumCadenceSeconds * 5;
         checks.scheduler = {
-          status: schedulerState.heartbeatDead ? 'unhealthy' : 'healthy',
+          status: stale ? 'unhealthy' : 'healthy',
           latency: Date.now() - schedulerStartTime,
-          ...(schedulerState.heartbeatDead ? { error: 'Scheduler heartbeat is stale' } : {}),
+          ...(stale ? { error: 'Scheduler state is missing or stale' } : {}),
         };
+      } catch (_) {
+        checks.scheduler = { status: 'unhealthy', error: 'Scheduler state query failed' };
       }
-    } catch (_) {}
+
+    if (responsibilities.startJobWorker) {
+      const worker = getJobWorkerStatus();
+      checks.worker = {
+        status: worker.running ? 'healthy' : 'unhealthy',
+        ...(worker.running ? {} : { error: 'Required local worker is not running' }),
+      };
+    }
   }
 
   // Check memory usage (evaluated against V8 max heap limit)
@@ -99,9 +125,13 @@ export async function GET(request: NextRequest) {
     readinessChecks.length === 0
       ? true
       : readinessChecks.every(check => check.status === 'healthy');
+  const allReady = readinessChecks.every(
+    check => check.status === 'healthy' || check.status === 'disabled'
+  );
   const anyUnhealthy = readinessChecks.some(check => check.status === 'unhealthy');
 
-  const overallStatus = allHealthy ? 'healthy' : anyUnhealthy ? 'unhealthy' : 'degraded';
+  const overallStatus =
+    allReady || allHealthy ? 'healthy' : anyUnhealthy ? 'unhealthy' : 'degraded';
 
   const response = {
     status: overallStatus,
