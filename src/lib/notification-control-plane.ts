@@ -384,6 +384,41 @@ export async function createCentralNotificationIntent(
   }
 }
 
+/**
+ * Resolves the provider each channel would currently deliver through.
+ *
+ * Callers that persist intents inside their own transaction need this *before*
+ * the transaction opens: provider configuration lives in the database, and
+ * reading it from inside a serializable transaction that is about to commit
+ * escalation state only widens the window for a conflict.
+ */
+export async function pinNotificationProviderKeys(
+  channels: readonly NotificationChannel[]
+): Promise<Map<NotificationChannel, string | undefined>> {
+  const wanted = new Set(channels);
+  const providers = await import('./notification-providers');
+  const pinned = new Map<NotificationChannel, string | undefined>();
+
+  if (wanted.has('EMAIL')) {
+    const configs = await providers.getAllConfiguredEmailProviders();
+    pinned.set(
+      'EMAIL',
+      configs.find(config => config.enabled && config.provider)?.provider ?? undefined
+    );
+  }
+  if (wanted.has('SMS')) {
+    pinned.set('SMS', (await providers.getSMSConfig()).provider || undefined);
+  }
+  if (wanted.has('WHATSAPP')) {
+    pinned.set('WHATSAPP', (await providers.getWhatsAppConfig()).provider || undefined);
+  }
+  if (wanted.has('PUSH')) {
+    pinned.set('PUSH', (await providers.getPushConfig()).provider || undefined);
+  }
+
+  return pinned;
+}
+
 export async function enqueueCentralNotification(
   input: CentralNotificationInput,
   options: { dispatchImmediately?: boolean } = {}

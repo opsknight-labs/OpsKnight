@@ -25,6 +25,9 @@ vi.mock('@/lib/prisma', () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
     incidentEvent: {
       create: vi.fn(),
     },
@@ -42,21 +45,32 @@ vi.mock('@/lib/user-notifications', () => ({
   sendUserNotification: vi.fn().mockResolvedValue({ success: true }),
 }));
 
-// Mock job queue
-vi.mock('@/lib/jobs/queue', () => ({
-  scheduleEscalation: vi.fn().mockResolvedValue('job-1'),
-}));
-
-// Mock db-utils
+// Mock db-utils. The escalation repository commits through this, so the
+// transaction client's writes are what these tests observe.
+const txIncidentUpdate = vi.fn();
+const txIncidentUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+// `executeEscalation` claims at the frozen system time used by these tests, so
+// the reloaded lease must carry that same token or every commit reads as
+// superseded.
 vi.mock('@/lib/db-utils', () => ({
   runSerializableTransaction: vi.fn(async fn => {
     return fn({
       incident: {
-        findUnique: vi.fn().mockResolvedValue({ assigneeId: null, teamId: null }),
-        update: vi.fn(),
+        findUnique: vi.fn().mockResolvedValue({
+          status: 'OPEN',
+          assigneeId: null,
+          teamId: null,
+          escalationStatus: 'ESCALATING',
+          escalationProcessingAt: new Date('2026-01-01T12:00:00.000Z'),
+          currentEscalationStep: 0,
+        }),
+        updateMany: txIncidentUpdateMany,
+        update: txIncidentUpdate,
       },
-      incidentEvent: {
-        create: vi.fn(),
+      incidentEvent: { create: vi.fn() },
+      backgroundJob: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: 'job-next' }),
       },
     });
   }),
@@ -68,26 +82,64 @@ describe('resolveEscalationTarget', () => {
   });
 
   describe('USER target type', () => {
-    it('returns the user ID directly', async () => {
+    it('returns an active user', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        id: 'user-123',
+        name: 'Primary',
+        status: 'ACTIVE',
+      } as never);
+
       const result = await resolveEscalationTarget('USER', 'user-123');
       expect(result).toEqual(['user-123']);
+    });
+
+    it.each(['INVITED', 'DISABLED'])('never pages a %s user', async status => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        id: 'user-123',
+        name: 'Primary',
+        status,
+      } as never);
+
+      expect(await resolveEscalationTarget('USER', 'user-123')).toEqual([]);
+    });
+
+    it('never pages a deleted user', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(null);
+
+      expect(await resolveEscalationTarget('USER', 'user-123')).toEqual([]);
+    });
+
+    it('surfaces a database failure instead of reporting an empty audience', async () => {
+      vi.mocked(prisma.user.findUnique).mockRejectedValueOnce(new Error('connection reset'));
+
+      await expect(resolveEscalationTarget('USER', 'user-123')).rejects.toThrow(
+        'Failed to resolve escalation user target'
+      );
     });
   });
 
   describe('TEAM target type', () => {
     it('returns all team members with notifications enabled', async () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValueOnce({
-        id: 'team-1',
+        name: 'Payments',
         teamLeadId: 'lead-1',
-        members: [{ userId: 'user-1' }, { userId: 'user-2' }, { userId: 'lead-1' }],
+        members: [
+          { userId: 'user-1', user: { status: 'ACTIVE' } },
+          { userId: 'user-2', user: { status: 'ACTIVE' } },
+          { userId: 'lead-1', user: { status: 'ACTIVE' } },
+          { userId: 'invited-1', user: { status: 'INVITED' } },
+          { userId: 'disabled-1', user: { status: 'DISABLED' } },
+        ],
       } as any);
 
       const result = await resolveEscalationTarget('TEAM', 'team-1');
 
-      expect(result).toEqual(['user-1', 'user-2', 'lead-1']);
+      // Deterministically ordered, and only active responders.
+      expect(result).toEqual(['lead-1', 'user-1', 'user-2']);
       expect(prisma.team.findUnique).toHaveBeenCalledWith({
         where: { id: 'team-1' },
         select: {
+          name: true,
           teamLeadId: true,
           members: {
             where: { receiveTeamNotifications: true },
@@ -102,9 +154,12 @@ describe('resolveEscalationTarget', () => {
 
     it('returns only team lead when notifyOnlyTeamLead is true', async () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValueOnce({
-        id: 'team-1',
+        name: 'Payments',
         teamLeadId: 'lead-1',
-        members: [{ userId: 'user-1' }, { userId: 'lead-1' }],
+        members: [
+          { userId: 'user-1', user: { status: 'ACTIVE' } },
+          { userId: 'lead-1', user: { status: 'ACTIVE' } },
+        ],
       } as any);
 
       const result = await resolveEscalationTarget('TEAM', 'team-1', new Date(), true);
@@ -122,9 +177,10 @@ describe('resolveEscalationTarget', () => {
 
     it('returns empty array when team lead only but lead not in members', async () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValueOnce({
-        id: 'team-1',
+        name: 'Payments',
         teamLeadId: 'lead-1',
-        members: [{ userId: 'user-1' }], // Lead not in members with notifications
+        // Lead is not a member that receives team notifications.
+        members: [{ userId: 'user-1', user: { status: 'ACTIVE' } }],
       } as any);
 
       const result = await resolveEscalationTarget('TEAM', 'team-1', new Date(), true);
@@ -203,6 +259,7 @@ describe('executeEscalation', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T12:00:00.000Z'));
     vi.clearAllMocks();
+    vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 } as never);
   });
 
   afterEach(() => {
@@ -215,10 +272,11 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('nonexistent');
 
     expect(result).toEqual({
+      outcome: 'NO_INCIDENT',
       escalated: false,
       reason: 'Incident not found',
     });
-    expect(prisma.incident.update).not.toHaveBeenCalled();
+    expect(prisma.incident.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns early when no escalation policy configured', async () => {
@@ -230,6 +288,7 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'NO_POLICY',
       escalated: false,
       reason: 'No escalation policy configured',
     });
@@ -249,6 +308,7 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'COMPLETED',
       escalated: false,
       reason: 'Escalation already completed',
     });
@@ -269,11 +329,18 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'COMPLETED',
       escalated: false,
       reason: 'All escalation steps exhausted',
     });
-    expect(prisma.incident.update).toHaveBeenCalledWith({
-      where: { id: 'inc-1' },
+    // Terminal state is committed by the repository, inside a transaction.
+    expect(txIncidentUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'inc-1',
+        status: 'OPEN',
+        escalationGeneration: 0,
+        currentEscalationStep: 1,
+      },
       data: {
         escalationStatus: 'COMPLETED',
         nextEscalationAt: null,
@@ -302,14 +369,21 @@ describe('executeEscalation', () => {
           ],
         },
       },
-    } as any);
+    } as never);
 
-    // Lock acquisition fails
+    // Lock acquisition fails, and the incident is still a live escalation, so
+    // this is a competing worker rather than a superseded generation.
     vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 0 } as any);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
+      status: 'OPEN',
+      escalationStatus: 'ESCALATING',
+      escalationGeneration: 0,
+    } as never);
 
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'ALREADY_CLAIMED',
       escalated: false,
       reason: 'Escalation already in progress',
     });
@@ -342,8 +416,10 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'INVALID_TARGET',
       escalated: false,
-      reason: 'Invalid target configuration',
+      reason: 'USER step has no target ID configured',
+      stepIndex: 0,
     });
   });
 });
@@ -380,7 +456,7 @@ describe('processPendingEscalations', () => {
 
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
-    const executor = vi.fn().mockResolvedValue({ escalated: true });
+    const executor = vi.fn().mockResolvedValue({ outcome: 'STEP_EXECUTED', escalated: true });
 
     const result = await processPendingEscalations(executor);
 
@@ -400,7 +476,7 @@ describe('processPendingEscalations', () => {
     const executor = vi
       .fn()
       .mockRejectedValueOnce(new Error('Network error'))
-      .mockResolvedValueOnce({ escalated: true });
+      .mockResolvedValueOnce({ outcome: 'STEP_EXECUTED', escalated: true });
 
     const result = await processPendingEscalations(executor);
 
@@ -416,6 +492,7 @@ describe('processPendingEscalations', () => {
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
     const executor = vi.fn().mockResolvedValue({
+      outcome: 'COMPLETED',
       escalated: false,
       reason: 'already completed',
     });
@@ -425,12 +502,19 @@ describe('processPendingEscalations', () => {
     expect(result.processed).toBe(0);
     expect(result.total).toBe(1);
     expect(result.errors).toBeUndefined();
-    // Should not call update for benign reasons
+    // Should not call update for an authoritative terminal outcome
     expect(prisma.incident.update).not.toHaveBeenCalled();
   });
 
   it('handles retryable errors gracefully', async () => {
-    const incidents = [{ id: 'inc-1', currentEscalationStep: 0, escalationStatus: 'ESCALATING' }];
+    const incidents = [
+      {
+        id: 'inc-1',
+        currentEscalationStep: 0,
+        escalationStatus: 'ESCALATING',
+        escalationGeneration: 7,
+      },
+    ];
 
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
@@ -441,6 +525,15 @@ describe('processPendingEscalations', () => {
     expect(result.errors).toHaveLength(1);
     // Error should be recorded
     expect(result.errors![0]).toContain('Serialization failure');
+    expect(prisma.incident.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'inc-1',
+        status: 'OPEN',
+        escalationGeneration: 7,
+        currentEscalationStep: 0,
+      },
+      data: { escalationProcessingAt: null },
+    });
   });
 
   it('uses provided step index from incident', async () => {
@@ -448,7 +541,7 @@ describe('processPendingEscalations', () => {
 
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
-    const executor = vi.fn().mockResolvedValue({ escalated: true });
+    const executor = vi.fn().mockResolvedValue({ outcome: 'STEP_EXECUTED', escalated: true });
 
     await processPendingEscalations(executor);
 
@@ -462,7 +555,7 @@ describe('processPendingEscalations', () => {
 
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
-    const executor = vi.fn().mockResolvedValue({ escalated: true });
+    const executor = vi.fn().mockResolvedValue({ outcome: 'STEP_EXECUTED', escalated: true });
 
     await processPendingEscalations(executor);
 

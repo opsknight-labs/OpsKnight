@@ -14,6 +14,7 @@ function createTx() {
       createMany: vi.fn().mockResolvedValue({ count: 0 }),
       create: vi.fn().mockResolvedValue({ id: 'job-1' }),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
   };
 }
@@ -87,6 +88,7 @@ describe('unified lifecycle delivery matrix', () => {
       escalationStatus: 'ESCALATING',
       currentEscalationStep: 0,
       nextEscalationAt,
+      escalationGeneration: 4,
     });
     await enqueueLifecycleSideEffects(txClient(tx), {
       incidentId: 'inc-reopen',
@@ -101,10 +103,88 @@ describe('unified lifecycle delivery matrix', () => {
     );
     expect(tx.backgroundJob.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ type: 'ESCALATION', scheduledAt: nextEscalationAt }),
+        data: expect.objectContaining({
+          type: 'ESCALATION',
+          scheduledAt: nextEscalationAt,
+          // The job names the run it belongs to, so a worker can verify it.
+          payload: expect.objectContaining({
+            generation: 4,
+            stepIndex: 0,
+            logicalKey: 'ESCALATION:inc-reopen:4:0',
+          }),
+        }),
       })
     );
   });
+
+  it.each(['UNACKNOWLEDGE', 'UNSNOOZE', 'UNSUPPRESS'] as const)(
+    '%s arms its resumed escalation job in the same transaction',
+    async command => {
+      const tx = createTx();
+      const nextEscalationAt = new Date('2026-08-30T13:20:00.000Z');
+      tx.incident.findUnique.mockResolvedValue({
+        status: 'OPEN',
+        escalationStatus: 'ESCALATING',
+        // A resume continues from the cursor the pause preserved.
+        currentEscalationStep: 2,
+        nextEscalationAt,
+        escalationGeneration: 7,
+      });
+
+      await enqueueLifecycleSideEffects(txClient(tx), {
+        incidentId: 'inc-resume',
+        command,
+        source: 'WEB',
+        previousStatus: command === 'UNACKNOWLEDGE' ? 'ACKNOWLEDGED' : 'SNOOZED',
+        status: 'OPEN',
+        transitionAt: DB_NOW,
+      });
+
+      // Previously only REOPEN did this; the other three left the due state for
+      // a scanner to discover.
+      expect(tx.backgroundJob.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'CANCELLED' }) })
+      );
+      expect(tx.backgroundJob.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'ESCALATION',
+            scheduledAt: nextEscalationAt,
+            payload: expect.objectContaining({ generation: 7, stepIndex: 2 }),
+          }),
+        })
+      );
+    }
+  );
+
+  it.each(['ACKNOWLEDGE', 'RESOLVE', 'SNOOZE', 'SUPPRESS'] as const)(
+    '%s arms no escalation job',
+    async command => {
+      const tx = createTx();
+      tx.incident.findUnique.mockResolvedValue({
+        status: command === 'SNOOZE' ? 'SNOOZED' : 'ACKNOWLEDGED',
+        escalationStatus: command === 'SNOOZE' ? 'PAUSED' : 'COMPLETED',
+        currentEscalationStep: 1,
+        nextEscalationAt: null,
+        escalationGeneration: 3,
+      });
+
+      await enqueueLifecycleSideEffects(txClient(tx), {
+        incidentId: 'inc-stop',
+        command,
+        source: 'WEB',
+        previousStatus: 'OPEN',
+        status: command === 'SNOOZE' ? 'SNOOZED' : 'ACKNOWLEDGED',
+        transitionAt: DB_NOW,
+        ...(command === 'SNOOZE' ? { snoozedUntil: new Date('2026-08-30T14:00:00.000Z') } : {}),
+      });
+
+      const escalationJobs = tx.backgroundJob.create.mock.calls.filter(
+        ([args]) => (args as { data: { type: string } }).data.type === 'ESCALATION'
+      );
+      expect(escalationJobs).toHaveLength(0);
+    }
+  );
 });
 
 it('keeps personal delivery independent from a blocked service-integration lane', async () => {

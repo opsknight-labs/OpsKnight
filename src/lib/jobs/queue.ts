@@ -19,7 +19,6 @@ interface JobPayload { incidentId?: string; stepIndex?: number; eventType?: stri
 export async function scheduleJob(type:JobType,scheduledAt:Date,payload:JobPayload,maxAttempts:number=3):Promise<string>{
   const job=await prisma.backgroundJob.create({data:{type,status:'PENDING',scheduledAt,payload:payload as Prisma.InputJsonObject,maxAttempts}});return job.id;
 }
-export async function scheduleEscalation(incidentId:string,stepIndex:number,delayMs:number):Promise<string>{return scheduleJob('ESCALATION',new Date(Date.now()+delayMs),{incidentId,stepIndex});}
 export async function scheduleStatusPageNotification(incidentId:string,eventType:string):Promise<string>{return scheduleJob('STATUS_PAGE_NOTIFICATION',new Date(),{incidentId,eventType},5);}
 export async function scheduleAutoUnsnooze(incidentId:string,snoozedUntil:Date):Promise<string>{return scheduleJob('AUTO_UNSNOOZE',snoozedUntil,{incidentId});}
 export async function getPendingJobs(limit:number=50):Promise<unknown[]>{return prisma.backgroundJob.findMany({where:{status:'PENDING',scheduledAt:{lte:new Date()}},orderBy:{scheduledAt:'asc'},take:limit});}
@@ -66,9 +65,13 @@ export async function processJob(job:any):Promise<boolean>{
     leaseHeartbeat=setInterval(()=>{void prisma.backgroundJob.updateMany({where:{id:job.id,status:'PROCESSING'},data:{startedAt:new Date()}}).catch(error=>logger.warn('jobs.processing_lease_heartbeat_failed',{jobId:job.id,error:error instanceof Error?error.message:String(error)}));},PROCESSING_LEASE_HEARTBEAT_MS);
     switch(job.type){
       case'ESCALATION':{
-        const {executeEscalation}=await import('../escalation');const result=await executeEscalation(job.payload.incidentId,job.payload.stepIndex);const reason=(result.reason||'').toLowerCase();
-        const complete=result.escalated||reason.includes('completed')||reason.includes('exhausted')||reason.includes('already in progress')||reason.includes('scheduled')||reason.includes('no escalation policy')||reason.includes('no users to notify')||reason.includes('invalid target')||reason.includes('superseded');
-        if(complete){await markJobCompleted(job.id);return true;}await markJobFailed(job.id,result.reason||'Escalation failed');return false;
+        const {executeEscalation}=await import('../escalation');const {escalationJobIsSettled}=await import('../escalation/types');
+        const generation=typeof job.payload.generation==='number'?job.payload.generation:undefined;
+        const result=await executeEscalation(job.payload.incidentId,job.payload.stepIndex,{generation});
+        // The engine's typed outcome is authoritative. Only a retryable
+        // infrastructure failure leaves escalation state unadvanced.
+        if(escalationJobIsSettled(result.outcome)){await markJobCompleted(job.id);return true;}
+        await markJobFailed(job.id,result.reason||`Escalation failed (${result.outcome})`);return false;
       }
       case'NOTIFICATION':
         await prisma.backgroundJob.update({where:{id:job.id},data:{status:'CANCELLED',completedAt:new Date(),error:'Superseded by durable per-channel notification intents'}});return true;

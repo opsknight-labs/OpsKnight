@@ -4,6 +4,19 @@ vi.mock('@/lib/jobs/queue', () => ({
   processPendingJobs: vi.fn(),
 }));
 
+// The critical lanes have their own tests. Here they are stubbed so this file
+// tests only the worker loop's pacing and shutdown, without reaching a database.
+vi.mock('@/lib/escalation/worker', () => ({
+  runCriticalEscalationCycle: vi.fn(),
+  criticalEscalationCycleWasBusy: vi.fn(() => false),
+  consumeEscalationWakeRequest: vi.fn(() => false),
+}));
+
+vi.mock('@/lib/notification-recovery', () => ({
+  runCriticalNotificationCycle: vi.fn(),
+  criticalNotificationCycleWasBusy: vi.fn(() => false),
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     debug: vi.fn(),
@@ -14,6 +27,15 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { processPendingJobs } from '@/lib/jobs/queue';
+import {
+  consumeEscalationWakeRequest,
+  criticalEscalationCycleWasBusy,
+  runCriticalEscalationCycle,
+} from '@/lib/escalation/worker';
+import {
+  criticalNotificationCycleWasBusy,
+  runCriticalNotificationCycle,
+} from '@/lib/notification-recovery';
 import {
   getJobWorkerConfig,
   getJobWorkerStatus,
@@ -32,6 +54,26 @@ describe('dedicated job worker', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     vi.mocked(processPendingJobs).mockResolvedValue({ processed: 0, failed: 0, total: 0 });
+    vi.mocked(runCriticalEscalationCycle).mockResolvedValue({
+      jobsClaimed: 0,
+      jobsProcessed: 0,
+      jobsFailed: 0,
+      fallbackProcessed: 0,
+      reconciled: false,
+      repairs: 0,
+    });
+    vi.mocked(runCriticalNotificationCycle).mockResolvedValue({
+      centralProcessed: 0,
+      centralSucceeded: 0,
+      centralFailed: 0,
+      legacyRetried: 0,
+      legacySucceeded: 0,
+      scannedCentral: false,
+      scannedLegacy: false,
+    });
+    vi.mocked(criticalEscalationCycleWasBusy).mockReturnValue(false);
+    vi.mocked(criticalNotificationCycleWasBusy).mockReturnValue(false);
+    vi.mocked(consumeEscalationWakeRequest).mockReturnValue(false);
 
     delete process.env.OPSKNIGHT_WORKER_BATCH_SIZE;
     delete process.env.OPSKNIGHT_WORKER_CONCURRENCY;
@@ -77,6 +119,57 @@ describe('dedicated job worker', () => {
     expect(getJobWorkerStatus().running).toBe(true);
   });
 
+  it('runs both critical lanes on every replica, ahead of the general queue', async () => {
+    const order: string[] = [];
+    vi.mocked(runCriticalEscalationCycle).mockImplementation(async () => {
+      order.push('escalation');
+      return {
+        jobsClaimed: 0,
+        jobsProcessed: 0,
+        jobsFailed: 0,
+        fallbackProcessed: 0,
+        reconciled: false,
+        repairs: 0,
+      };
+    });
+    vi.mocked(runCriticalNotificationCycle).mockImplementation(async () => {
+      order.push('notifications');
+      return {
+        centralProcessed: 0,
+        centralSucceeded: 0,
+        centralFailed: 0,
+        legacyRetried: 0,
+        legacySucceeded: 0,
+        scannedCentral: false,
+        scannedLegacy: false,
+      };
+    });
+    vi.mocked(processPendingJobs).mockImplementation(async () => {
+      order.push('queue');
+      return { processed: 0, failed: 0, total: 0 };
+    });
+
+    startJobWorker();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Paging work never queues behind lower-consequence jobs, and neither lane
+    // depends on the maintenance scheduler's lease.
+    expect(order).toEqual(['escalation', 'notifications', 'queue']);
+  });
+
+  it('polls again promptly when only a critical lane found work', async () => {
+    vi.mocked(criticalNotificationCycleWasBusy).mockReturnValue(true);
+
+    startJobWorker();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(processPendingJobs).toHaveBeenCalledTimes(1);
+
+    // The busy interval, not the idle one: a recovered page should not wait a
+    // full idle poll for the next cycle.
+    await vi.advanceTimersByTimeAsync(100);
+    expect(processPendingJobs).toHaveBeenCalledTimes(2);
+  });
+
   it('does not overlap queue batches within a worker process', async () => {
     let finishFirst!: (value: WorkerResult) => void;
     vi.mocked(processPendingJobs).mockImplementationOnce(
@@ -88,16 +181,15 @@ describe('dedicated job worker', () => {
 
     startJobWorker();
 
-    // Run the zero-delay timer synchronously so the worker enters its first
-    // unresolved batch without making the test wait for that batch to finish.
-    vi.advanceTimersByTime(0);
-    await Promise.resolve();
+    // Let the worker reach its first unresolved batch. The critical lanes run
+    // ahead of the queue, so this has to flush their microtasks too; it still
+    // does not wait for the batch itself, which stays pending.
+    await vi.advanceTimersByTimeAsync(0);
     expect(processPendingJobs).toHaveBeenCalledTimes(1);
 
     // A long clock advance must not start another batch while the first promise
     // is still in flight.
-    vi.advanceTimersByTime(5000);
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(5000);
     expect(processPendingJobs).toHaveBeenCalledTimes(1);
 
     finishFirst({ processed: 0, failed: 0, total: 0 });
@@ -115,8 +207,7 @@ describe('dedicated job worker', () => {
     );
 
     startJobWorker();
-    vi.advanceTimersByTime(0);
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
     expect(processPendingJobs).toHaveBeenCalledTimes(1);
 
     let shutdownCompleted = false;

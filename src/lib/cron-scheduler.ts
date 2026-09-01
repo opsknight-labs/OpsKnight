@@ -364,9 +364,16 @@ async function runOnce() {
     const jobResult = await processPendingJobs(100, 15);
     const escalationResult = await processPendingEscalations();
 
+    // Reconciliation also runs here so a deployment with no job-worker process
+    // (OPSKNIGHT_PROCESS_ROLE=scheduler) still repairs escalations. Every repair
+    // is idempotent, so both callers running is harmless.
+    const { reconcileEscalations } = await import('./escalation/recovery');
+    const reconciliation = await reconcileEscalations();
+
     logger.info('[Cron] Critical tasks processed', {
       escalations: { processed: escalationResult.processed, total: escalationResult.total },
       jobs: { processed: jobResult.processed, failed: jobResult.failed, total: jobResult.total },
+      escalationRecovery: reconciliation,
     });
 
     // Group 2: Secondary tasks (can run in parallel)
@@ -380,6 +387,9 @@ async function runOnce() {
       handoffResult,
       reminderCount,
     ] = await Promise.all([
+      // Also on the per-replica critical notification lane. Kept here so a
+      // scheduler-only deployment with no job-worker process still recovers;
+      // both paths claim before delivering, so running both is safe.
       retryFailedNotifications(),
       processCentralNotificationQueue(),
       processAutoUnsnoozeInternal(),

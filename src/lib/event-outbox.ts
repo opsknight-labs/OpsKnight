@@ -221,47 +221,20 @@ async function enqueueSideEffects(
   });
 }
 
-async function enqueueReopenEscalation(
+async function enqueueEscalationResume(
   tx: Prisma.TransactionClient,
   input: LifecycleOutboxInput
 ): Promise<void> {
-  if (input.command !== 'REOPEN') return;
-  const incident = await tx.incident.findUnique({
-    where: { id: input.incidentId },
-    select: {
-      status: true,
-      escalationStatus: true,
-      currentEscalationStep: true,
-      nextEscalationAt: true,
-    },
-  });
-  if (
-    !incident ||
-    incident.status !== 'OPEN' ||
-    incident.escalationStatus !== 'ESCALATING' ||
-    !incident.nextEscalationAt
-  )
-    return;
-  await tx.backgroundJob.updateMany({
-    where: {
-      type: 'ESCALATION',
-      status: 'PENDING',
-      payload: { path: ['incidentId'], equals: input.incidentId },
-    },
-    data: { status: 'CANCELLED', error: 'Superseded by incident reopen' },
-  });
-  await tx.backgroundJob.create({
-    data: {
-      type: 'ESCALATION',
-      status: 'PENDING',
-      scheduledAt: incident.nextEscalationAt,
-      maxAttempts: 3,
-      payload: {
-        incidentId: input.incidentId,
-        stepIndex: incident.currentEscalationStep ?? 0,
-        lifecycleTransitionAt: input.transitionAt.toISOString(),
-      },
-    },
+  // One contract for every command that opens a new escalation run, so a
+  // resumed page runs when it is due instead of waiting for a scanner to
+  // notice. The escalation domain owns which step is now due.
+  const { isEscalationResumeCommand, resumeEscalationExecution } =
+    await import('./escalation/repository');
+  if (!isEscalationResumeCommand(input.command)) return;
+
+  await resumeEscalationExecution(tx, {
+    incidentId: input.incidentId,
+    reason: `Superseded by incident ${input.command.toLowerCase()}`,
   });
 }
 
@@ -305,7 +278,7 @@ export async function enqueueLifecycleSideEffects(
     snoozedUntil: input.snoozedUntil?.toISOString() ?? null,
   };
   await enqueueSideEffects(tx, input.incidentId, getLifecycleSideEffects(input), lifecycle);
-  await enqueueReopenEscalation(tx, input);
+  await enqueueEscalationResume(tx, input);
   if (input.command === 'SNOOZE' && input.snoozedUntil)
     await tx.backgroundJob.create({
       data: {

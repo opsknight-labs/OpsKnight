@@ -17,6 +17,7 @@ export const CAPABILITIES = {
   INCIDENT_CREATE_ALL: 'incident.create.all',
   INCIDENT_CREATE_SCOPED: 'incident.create.scoped',
   INCIDENT_ACKNOWLEDGE_SCOPED: 'incident.acknowledge.scoped',
+  INCIDENT_ESCALATE_SCOPED: 'incident.escalate.scoped',
   INCIDENT_NOTE_SCOPED: 'incident.note.scoped',
   INCIDENT_READ_ALL: 'incident.read.all',
   INCIDENT_READ_SCOPED: 'incident.read.scoped',
@@ -80,6 +81,10 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.INCIDENT_CREATE_SCOPED,
   CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED,
+  // Escalating an incident you are responsible for is the same tier of
+  // authority as acknowledging it: it pages other responders, it does not
+  // change the incident's lifecycle state.
+  CAPABILITIES.INCIDENT_ESCALATE_SCOPED,
   CAPABILITIES.INCIDENT_NOTE_SCOPED,
   CAPABILITIES.INCIDENT_READ_SCOPED,
   CAPABILITIES.SERVICE_READ_SCOPED,

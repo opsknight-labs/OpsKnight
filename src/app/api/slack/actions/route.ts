@@ -139,13 +139,10 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         });
       }
 
-      // Two variants of every message: `responseMessage` goes to Slack and keeps
-      // the <@ID> mention; `timelineMessage` is plain text for non-lifecycle
-      // actions. Lifecycle actions write their timeline entry and durable
-      // external side effects atomically in the centralized lifecycle engine.
+      // `responseMessage` goes back to Slack and keeps the <@ID> mention. Every
+      // action below writes its own timeline entry atomically with its domain
+      // command, so this route never writes one itself.
       let responseMessage = '';
-      let timelineMessage = '';
-      let lifecycleRecordedTimeline = false;
 
       if (actionType === 'ack') {
         let result;
@@ -172,7 +169,6 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         }
 
         responseMessage = `👀 Incident acknowledged by <@${slackUserId || 'responder'}>`;
-        lifecycleRecordedTimeline = true;
       } else if (actionType === 'resolve') {
         let result;
         try {
@@ -198,7 +194,6 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         }
 
         responseMessage = `✅ Incident resolved by <@${slackUserId || 'responder'}>`;
-        lifecycleRecordedTimeline = true;
       } else if (actionType === 'assign_me') {
         if (slackUserId) {
           try {
@@ -259,7 +254,6 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             responseMessage = assignmentChanged
               ? `🙋 Incident assigned to *${targetUser.name}* (<@${slackUserId}>)`
               : `ℹ️ Incident is already assigned to *${targetUser.name}* (<@${slackUserId}>)`;
-            lifecycleRecordedTimeline = true;
           } catch (err) {
             logger.warn('[Slack] Assign to Me failed', { error: err, incidentId });
             return NextResponse.json({
@@ -307,27 +301,42 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
         }
 
         responseMessage = `💤 Incident snoozed for ${snoozeMinutes}m by <@${slackUserId || 'responder'}>`;
-        lifecycleRecordedTimeline = true;
       } else if (actionType === 'escalate' || actionType === 'escalate_incident') {
-        const { executeEscalation } = await import('@/lib/escalation');
-        await executeEscalation(incidentId);
+        // A linked-and-active Slack account is not authorization on its own:
+        // escalation pages other responders, so it goes through the same
+        // incident-scoped check as any other transport.
+        const { requestIncidentEscalation } = await import('@/lib/escalation/authorization');
+        let escalation;
+        try {
+          escalation = await requestIncidentEscalation({
+            incidentId,
+            actor: { userId: actorUser.id, name: actorName },
+            source: 'SLACK',
+          });
+        } catch (error) {
+          logger.warn('[Slack Actions] Escalation rejected', {
+            incidentId,
+            userId: actorUser.id,
+            error,
+          });
+          return NextResponse.json({
+            response_type: 'ephemeral',
+            text: '🚫 You do not have permission to escalate this incident.',
+          });
+        }
+
+        if (!escalation.requested) {
+          return NextResponse.json({
+            response_type: 'ephemeral',
+            text: 'ℹ️ This incident is no longer open, so there is nothing to escalate.',
+          });
+        }
+
+        // The escalation command already recorded the request in the timeline
+        // and the audit log.
         responseMessage = `⚡ Incident escalated by <@${slackUserId || 'responder'}>`;
-        timelineMessage = `Escalated via Slack button by ${actorName}`;
       } else {
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
-      }
-
-      // Non-lifecycle actions still own their timeline entry here. Lifecycle
-      // actions already wrote it atomically with the state transition.
-      if (!lifecycleRecordedTimeline && timelineMessage) {
-        await prisma.incidentEvent
-          .create({
-            data: {
-              incidentId,
-              message: timelineMessage,
-            },
-          })
-          .catch(() => {});
       }
 
       return NextResponse.json({

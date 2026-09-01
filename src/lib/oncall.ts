@@ -16,7 +16,7 @@ export type LayerRestrictions = {
   endHour?: number; // 0-23
 };
 
-type LayerInput = {
+export type LayerInput = {
   id: string;
   name: string;
   start: Date;
@@ -28,7 +28,7 @@ type LayerInput = {
   users: LayerUser[];
 };
 
-type OverrideInput = {
+export type OverrideInput = {
   id: string;
   userId: string;
   user: { name: string; avatarUrl?: string | null; gender?: string | null };

@@ -20,7 +20,10 @@ describe('processPendingEscalations', () => {
       [] as unknown as Awaited<ReturnType<typeof prisma.incident.findMany>>
     );
 
-    const result = await processPendingEscalations(async () => ({ escalated: true }));
+    const result = await processPendingEscalations(async () => ({
+      outcome: 'STEP_EXECUTED' as const,
+      escalated: true,
+    }));
 
     expect(result).toEqual({
       processed: 0,
@@ -53,8 +56,8 @@ describe('processPendingEscalations', () => {
 
     const executor = vi
       .fn()
-      .mockResolvedValueOnce({ escalated: true })
-      .mockResolvedValueOnce({ escalated: false, reason: 'completed' });
+      .mockResolvedValueOnce({ outcome: 'STEP_EXECUTED', escalated: true })
+      .mockResolvedValueOnce({ outcome: 'COMPLETED', escalated: false, reason: 'completed' });
 
     const result = await processPendingEscalations(executor);
 
@@ -63,7 +66,7 @@ describe('processPendingEscalations', () => {
     expect(executor).toHaveBeenNthCalledWith(2, 'inc-2', 2);
     expect(prisma.incident.updateMany).not.toHaveBeenCalled();
     // Terminal states are persisted by executeEscalation itself. The pending
-    // processor must not reinterpret a terminal reason and overwrite that state.
+    // processor must not reinterpret a terminal outcome and overwrite that state.
     expect(prisma.incident.update).not.toHaveBeenCalled();
     expect(result.processed).toBe(1);
     expect(result.total).toBe(2);
