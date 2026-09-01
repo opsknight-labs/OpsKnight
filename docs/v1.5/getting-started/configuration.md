@@ -30,20 +30,10 @@ These variables must be set for OpsKnight to start correctly in any environment.
 
 ## Security & Encryption
 
-| Variable                    | Required in Production | Description                                                                                                                                                                                                                    |
-| --------------------------- | :--------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ENCRYPTION_KEYS`           |      Recommended       | Rotation keyring in `key-id:64-hex-key` entries. The first key encrypts new values; remaining keys decrypt older v3/legacy values.                                                                                             |
-| `ENCRYPTION_KEY`            |   Yes if no keyring    | Single 32-byte hex key used for compatibility and as an optional legacy key alongside `ENCRYPTION_KEYS`. API keys are keyed hashes and are not encrypted with this key.                                                        |
-
-The notification control plane derives recipient identities from the existing `NEXTAUTH_SECRET`.
-It uses the active encryption key only for compatibility if no session secret is available. No
-separate notification-identity secret is required. Keep `NEXTAUTH_SECRET` stable in production,
-as required for session continuity.
-
-`NOTIFICATION_CONTROL_PLANE_PERSONAL=true` routes new personal incident deliveries through the
-encrypted durable control plane. Compose, Helm, and Kustomize leave it disabled by default for a
-staged rollout; enable it after every worker has been upgraded. Set it back to `false` only while
-legacy compatibility rows are being drained during a rollback.
+| Variable          | Required in Production | Description                                                                                                                                                             |
+| ----------------- | :--------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ENCRYPTION_KEYS` |      Recommended       | Rotation keyring in `key-id:64-hex-key` entries. The first key encrypts new values; remaining keys decrypt older v3/legacy values.                                      |
+| `ENCRYPTION_KEY`  |   Yes if no keyring    | Single 32-byte hex key used for compatibility and as an optional legacy key alongside `ENCRYPTION_KEYS`. API keys are keyed hashes and are not encrypted with this key. |
 
 ### Generating the Encryption Key
 

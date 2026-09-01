@@ -220,16 +220,8 @@ export async function sendIncidentWhatsApp(
 export async function sendWhatsApp(
   to: string,
   message: string,
-  from?: string,
-  notificationId?: string
-): Promise<{
-  success: boolean;
-  error?: string;
-  messageSid?: string;
-  statusCode?: number;
-  errorCode?: string;
-  retryAfterMs?: number;
-}> {
+  from?: string
+): Promise<{ success: boolean; error?: string; messageSid?: string }> {
   try {
     const whatsappConfig = await getWhatsAppConfig();
     if (!whatsappConfig.enabled || whatsappConfig.provider !== 'twilio') {
@@ -272,30 +264,15 @@ export async function sendWhatsApp(
       from: whatsappFrom,
       to: whatsappTo,
       body: message,
-      ...(notificationId
-        ? {
-            statusCallback: `${getBaseUrl()}/api/webhooks/notifications/twilio?notificationId=${encodeURIComponent(notificationId)}`,
-          }
-        : {}),
     });
 
     return { success: true, messageSid: messageResult.sid };
   } catch (error: unknown) {
-    const err: Error & { status?: number; code?: string | number } =
-      error && typeof error === 'object'
-        ? (error as Error & { status?: number; code?: string | number })
-        : new Error(String(error));
+    const err = error instanceof Error ? error : new Error(String(error));
     logger.error('WhatsApp send error', {
       to,
       error: err.message,
     });
-    const rateLimited = err.status === 429 || String(err.code) === '20429';
-    return {
-      success: false,
-      error: err.message,
-      statusCode: rateLimited ? 429 : err.status,
-      errorCode: err.code == null ? undefined : String(err.code),
-      retryAfterMs: rateLimited ? 60_000 : undefined,
-    };
+    return { success: false, error: err.message };
   }
 }

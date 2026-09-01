@@ -53,9 +53,6 @@ export interface EventSideEffectPayload {
   lane: EventSideEffectLane;
   incidentId: string;
   eventOrderAt: string;
-  /** Incident generation/status captured in the same transaction as the outbox row. */
-  escalationGeneration?: number;
-  incidentStatus?: IncidentStatus;
   lifecycle?: LifecycleSideEffectContext;
 }
 export interface LifecycleOutboxInput {
@@ -182,13 +179,7 @@ async function enqueueSideEffects(
   lifecycle?: LifecycleSideEffectContext
 ): Promise<void> {
   if (effects.length === 0) return;
-  const [eventOrderAt, incidentSnapshot] = await Promise.all([
-    databaseClock(tx),
-    tx.incident.findUnique({
-      where: { id: incidentId },
-      select: { escalationGeneration: true, status: true },
-    }),
-  ]);
+  const eventOrderAt = await databaseClock(tx);
   const eventOrderAtIso = eventOrderAt.toISOString();
   await tx.backgroundJob.createMany({
     data: effects.map(effect => ({
@@ -202,8 +193,6 @@ async function enqueueSideEffects(
         lane: getEventSideEffectLane(effect),
         incidentId,
         eventOrderAt: eventOrderAtIso,
-        escalationGeneration: incidentSnapshot?.escalationGeneration ?? 0,
-        ...(incidentSnapshot?.status ? { incidentStatus: incidentSnapshot.status } : {}),
         ...(lifecycle
           ? {
               lifecycle: {

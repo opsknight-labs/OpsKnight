@@ -9,8 +9,6 @@ import {
   type NotificationEventType,
 } from './notification-delivery';
 
-const LEGACY_RETRY_MIDPOINT = () => 0.5;
-
 export async function retryFailedNotifications(): Promise<{
   retried: number;
   succeeded: number;
@@ -19,7 +17,6 @@ export async function retryFailedNotifications(): Promise<{
   await prisma.notification.updateMany({
     where: {
       category: 'INCIDENT',
-      deliveryKey: null,
       payloadEncrypted: null,
       status: 'PENDING',
       createdAt: { lt: new Date(Date.now() - NOTIFICATION_RETRY_POLICY.pendingTimeoutMs) },
@@ -36,19 +33,13 @@ export async function retryFailedNotifications(): Promise<{
   const failedNotifications = await prisma.notification.findMany({
     where: {
       category: 'INCIDENT',
-      deliveryKey: null,
       payloadEncrypted: null,
       status: 'FAILED',
       incidentId: { not: null },
       userId: { not: null },
       OR: Array.from({ length: NOTIFICATION_RETRY_POLICY.maxAttempts }, (_, attempts) => ({
         attempts,
-        failedAt: {
-          lte: new Date(
-            now -
-              notificationRetryDelayMs(attempts, NOTIFICATION_RETRY_POLICY, LEGACY_RETRY_MIDPOINT)
-          ),
-        },
+        failedAt: { lte: new Date(now - notificationRetryDelayMs(attempts)) },
       })),
     },
     take: 100,
@@ -148,8 +139,7 @@ export async function retryFailedNotifications(): Promise<{
           }
 
           const circuitOpen = result.outcome === 'CIRCUIT_OPEN';
-          const permanentFailure =
-            result.outcome === 'PERMANENT_FAILURE' || result.outcome === 'AMBIGUOUS';
+          const permanentFailure = result.outcome === 'PERMANENT_FAILURE';
           await prisma.notification.updateMany({
             where: { id: notification.id, status: 'PENDING' },
             data: {
@@ -217,7 +207,6 @@ export async function getNextNotificationRetryAt(): Promise<Date | null> {
           category: 'INCIDENT',
           payloadEncrypted: null,
           status: 'FAILED',
-          deliveryKey: null,
           attempts: attempt,
           failedAt: { not: null },
         },
@@ -233,8 +222,7 @@ export async function getNextNotificationRetryAt(): Promise<Date | null> {
       : null,
     ...failedByAttempt.map((notification, attempt) =>
       notification?.failedAt
-        ? notification.failedAt.getTime() +
-          notificationRetryDelayMs(attempt, NOTIFICATION_RETRY_POLICY, LEGACY_RETRY_MIDPOINT)
+        ? notification.failedAt.getTime() + notificationRetryDelayMs(attempt)
         : null
     ),
   ].filter((value): value is number => value !== null);

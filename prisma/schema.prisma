@@ -523,7 +523,6 @@ model Incident {
   nextEscalationAt       DateTime? // When to execute next escalation step
   escalationStatus       String? // ESCALATING, COMPLETED, PAUSED
   escalationProcessingAt DateTime? // When escalation processing was claimed
-  escalationGeneration   Int                @default(0) // Stable logical run identity; increments on restart/loop
   acknowledgedAt         DateTime? // When incident was acknowledged (for SLA tracking)
   resolvedAt             DateTime? // When incident was resolved (for SLA tracking)
   snoozedUntil           DateTime? // When to auto-unsnooze (for time-based snoozing)

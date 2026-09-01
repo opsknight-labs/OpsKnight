@@ -190,7 +190,6 @@ describe('incident lifecycle command engine', () => {
           resolvedAt: null,
           currentEscalationStep: 0,
           escalationStatus: 'ESCALATING',
-          escalationGeneration: { increment: 1 },
           nextEscalationAt: new Date('2026-08-27T12:05:00.000Z'),
         }),
       })
@@ -226,7 +225,6 @@ describe('incident lifecycle command engine', () => {
           status: 'OPEN',
           acknowledgedAt: null,
           escalationStatus: 'ESCALATING',
-          escalationGeneration: { increment: 1 },
           nextEscalationAt: new Date('2026-08-27T12:20:00.000Z'),
         }),
       })
@@ -255,7 +253,6 @@ describe('incident lifecycle command engine', () => {
         data: expect.objectContaining({
           status: 'OPEN',
           escalationStatus: 'ESCALATING',
-          escalationGeneration: { increment: 1 },
           nextEscalationAt: new Date('2026-08-27T12:10:00.000Z'),
           snoozedUntil: null,
           snoozeReason: null,
@@ -281,7 +278,6 @@ describe('incident lifecycle command engine', () => {
         data: expect.objectContaining({
           status: 'OPEN',
           escalationStatus: 'ESCALATING',
-          escalationGeneration: { increment: 1 },
           nextEscalationAt: NOW,
         }),
       })

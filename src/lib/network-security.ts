@@ -1,22 +1,5 @@
 import { logger } from '@/lib/logger';
 import dns from 'dns';
-import { Agent } from 'undici';
-
-const safeOutboundDispatcher = new Agent({
-  connect: {
-    lookup(hostname, options, callback) {
-      dns.lookup(hostname, { ...options, all: true, verbatim: true }, (error, addresses) => {
-        if (error) return callback(error, '', 4);
-        const results = Array.isArray(addresses) ? addresses : [addresses];
-        if (results.length === 0 || results.some(result => isPrivateIp(result.address))) {
-          return callback(new Error('URL resolves to a restricted network address'), '', 4);
-        }
-        const selected = results[0];
-        callback(null, selected.address, selected.family);
-      });
-    },
-  },
-});
 
 /**
  * Validates a webhook URL to prevent SSRF attacks.
@@ -83,10 +66,7 @@ export function isPrivateIp(ip: string): boolean {
     // Unspecified address.
     if (lowerIp === '::') return true;
     // Documentation and multicast ranges.
-    if (
-      (firstHextet === 0x2001 && ipv6Parts[1] === 0x0db8) ||
-      (firstHextet & 0xff00) === 0xff00
-    ) {
+    if ((firstHextet === 0x2001 && ipv6Parts[1] === 0x0db8) || (firstHextet & 0xff00) === 0xff00) {
       return true;
     }
     return false;
@@ -175,18 +155,4 @@ export async function assertSafeOutboundUrl(
     throw new Error('URL resolves to a restricted network address');
   }
   return url;
-}
-
-/** Fetch through a resolver that validates the addresses used by the socket. */
-export async function safeOutboundFetch(
-  urlString: string,
-  init: RequestInit = {}
-): Promise<Response> {
-  const url = await assertSafeOutboundUrl(urlString);
-  return fetch(url, {
-    ...init,
-    redirect: 'error',
-    // Node fetch supports Undici's dispatcher extension at runtime.
-    dispatcher: safeOutboundDispatcher,
-  } as RequestInit);
 }

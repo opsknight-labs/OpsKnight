@@ -60,7 +60,6 @@ function incidentAtStart() {
     nextEscalationAt: OLD_DUE_AT,
     service: {
       policy: {
-        id: 'policy-generation',
         steps: [
           {
             delayMinutes: 0,
@@ -153,13 +152,6 @@ describe('escalation lifecycle generation fencing', () => {
       targetCount: 1,
     });
     expect(mocks.sendUserNotification).toHaveBeenCalledTimes(1);
-    expect(mocks.sendUserNotification).toHaveBeenCalledWith(
-      'inc-generation',
-      'user-1',
-      expect.any(String),
-      undefined,
-      { eventKey: 'ESCALATION:inc-generation:policy-generation:0:0' }
-    );
     expect(mocks.runSerializableTransaction).toHaveBeenCalledTimes(2);
   });
 });

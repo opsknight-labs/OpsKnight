@@ -180,7 +180,6 @@ export async function sendUserNotification(
   options: {
     createInApp?: boolean;
     eventType?: NotificationEventType;
-    eventKey?: string;
   } = {}
 ): Promise<{
   success: boolean;
@@ -204,7 +203,6 @@ export async function sendUserNotification(
         currentEscalationStep: true,
         nextEscalationAt: true,
         escalationStatus: true,
-        escalationGeneration: true,
       },
     }),
     prisma.user.findUnique({
@@ -230,14 +228,12 @@ export async function sendUserNotification(
     };
   }
 
-  const eventKey =
-    options.eventKey ??
-    notificationEventKey({
-      incident,
-      eventType,
-      purpose: 'DIRECT_OR_ESCALATION',
-      message,
-    });
+  const eventKey = notificationEventKey({
+    incident,
+    eventType,
+    purpose: 'DIRECT_OR_ESCALATION',
+    message,
+  });
 
   if (options.createInApp !== false) {
     try {
@@ -296,8 +292,7 @@ export async function sendUserNotification(
         channel,
         message,
         undefined,
-        eventType,
-        eventKey
+        eventType
       );
       if (result.outcome === 'DELIVERED') {
         logger.info(`[UserNotification] Successfully delivered via ${channel}`, {

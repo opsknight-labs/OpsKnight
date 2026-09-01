@@ -7,7 +7,6 @@ import { activeIncidentStatuses } from './incident-status';
 import { enqueueCentralNotification } from './notification-control-plane';
 import { formatWebhookPayloadByType } from './webhooks';
 import { getBaseUrl } from './env-validation';
-import { configuredSlackWebhookUrl } from './slack';
 
 /**
  * SLA Breach Monitor - Proactive Breach Detection
@@ -225,6 +224,23 @@ export async function checkSLABreaches(
 
         if (!alreadyWarned) {
           recentWarningMap.add(`${incident.id}:ack:${key}`);
+          // Record the event in DB immediately to prevent repeat notification spam across cron loops
+          try {
+            if (prisma.incidentEvent?.create) {
+              await prisma.incidentEvent.create({
+                data: {
+                  incidentId: incident.id,
+                  type: isBreached ? 'ESCALATED' : 'COMMENT',
+                  message: isBreached
+                    ? `🚨 SLA ACK Breached: target was ${ackTargetMinutes} min`
+                    : `⏰ SLA ACK Warning: ${Math.max(1, Math.round(ackRemainingMs / 60000))} min remaining`,
+                },
+              });
+            }
+          } catch {
+            // Non-critical if event logging fails
+          }
+
           warnings.push({
             incidentId: incident.id,
             title: incident.title,
@@ -259,6 +275,23 @@ export async function checkSLABreaches(
 
       if (!alreadyWarned) {
         recentWarningMap.add(`${incident.id}:resolve:${key}`);
+        // Record the event in DB immediately to prevent repeat notification spam across cron loops
+        try {
+          if (prisma.incidentEvent?.create) {
+            await prisma.incidentEvent.create({
+              data: {
+                incidentId: incident.id,
+                type: isBreached ? 'ESCALATED' : 'COMMENT',
+                message: isBreached
+                  ? `🚨 SLA RESOLVE Breached: target was ${resolveTargetMinutes} min`
+                  : `⚠️ SLA RESOLVE Warning: ${Math.max(1, Math.round(resolveRemainingMs / 60000))} min remaining`,
+              },
+            });
+          }
+        } catch {
+          // Non-critical if event logging fails
+        }
+
         warnings.push({
           incidentId: incident.id,
           title: incident.title,
@@ -291,28 +324,7 @@ export async function checkSLABreaches(
 
     // Send notifications for each warning
     for (const warning of warnings) {
-      const materialized = await notifyBreachWarning(warning, config);
-      if (!materialized) continue;
-      // The durable notification intent is the primary delivery record. Only
-      // mark this SLA warning as observed after its intents were materialized;
-      // otherwise a crash or enqueue failure would suppress it forever.
-      try {
-        if (prisma.incidentEvent?.create) {
-          const isBreached = warning.timeRemainingMs <= 0;
-          await prisma.incidentEvent.create({
-            data: {
-              incidentId: warning.incidentId,
-              type: isBreached ? 'ESCALATED' : 'COMMENT',
-              message: isBreached
-                ? `🚨 SLA ${warning.breachType.toUpperCase()} Breached: target was ${warning.targetMinutes} min`
-                : `${warning.breachType === 'ack' ? '⏰' : '⚠️'} SLA ${warning.breachType.toUpperCase()} Warning: ${Math.max(1, Math.round(warning.timeRemainingMs / 60000))} min remaining`,
-            },
-          });
-        }
-      } catch {
-        // Duplicate intent keys prevent a repeated cron loop from duplicating
-        // delivery if this non-critical audit marker cannot be written.
-      }
+      await notifyBreachWarning(warning, config);
     }
   } else {
     logger.debug('[SLA Breach Monitor] No breach warnings', {
@@ -334,8 +346,7 @@ export async function checkSLABreaches(
 async function notifyBreachWarning(
   warning: BreachWarning,
   config: BreachMonitorConfig
-): Promise<boolean> {
-  let materialized = true;
+): Promise<void> {
   const isBreached = warning.timeRemainingMs <= 0;
   const remainingMinutes = Math.round(warning.timeRemainingMs / 60000);
   const breachEmoji = isBreached ? '🚨' : warning.breachType === 'ack' ? '⏰' : '⚠️';
@@ -370,18 +381,14 @@ async function notifyBreachWarning(
   if (config.notifySlack) {
     const channels = warning.serviceNotificationChannels || [];
     const hasSlackEnabled = channels.length === 0 || channels.includes('SLACK');
-    const slackChannel = warning.slackChannel?.trim();
-    const slackWebhookUrl = warning.slackWebhookUrl?.trim() || configuredSlackWebhookUrl();
 
-    // Do not create a synthetic Slack recipient. A service target is preferred,
-    // with a configured global webhook as the deliberate fallback.
-    if (hasSlackEnabled && (slackChannel || slackWebhookUrl)) {
+    if (hasSlackEnabled) {
       await enqueueCentralNotification({
         category: 'SLA',
         channel: 'SLACK',
-        recipientType: slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
+        recipientType: warning.slackChannel ? 'SLACK_CHANNEL' : 'WEBHOOK',
         recipientId: warning.serviceId,
-        recipientAddress: slackChannel || slackWebhookUrl!,
+        recipientAddress: warning.slackChannel || warning.slackWebhookUrl || 'global-slack-webhook',
         incidentId: warning.incidentId,
         templateKey: `sla-${warning.breachType}-${isBreached ? 'breached' : 'warning'}`,
         sourceType: 'INCIDENT_SLA',
@@ -389,10 +396,10 @@ async function notifyBreachWarning(
         eventKey,
         displayMessage: plainText,
         priority: isBreached ? 0 : 1,
-        payload: slackChannel
+        payload: warning.slackChannel
           ? {
               kind: 'SLACK_CHANNEL',
-              channel: slackChannel,
+              channel: warning.slackChannel,
               incident: incidentPresentation,
               eventType: 'triggered',
               includeInteractiveButtons: true,
@@ -403,7 +410,7 @@ async function notifyBreachWarning(
               kind: 'SLACK_WEBHOOK',
               incident: incidentPresentation,
               eventType: 'triggered',
-              webhookUrl: slackWebhookUrl,
+              webhookUrl: warning.slackWebhookUrl || undefined,
               additionalMessage: message,
             },
       });
@@ -456,7 +463,6 @@ async function notifyBreachWarning(
             type: webhook.type,
           });
         } catch (error) {
-          materialized = false;
           logger.error('[SLA Breach Monitor] Error sending webhook notification', {
             webhookId: webhook.id,
             error,
@@ -464,7 +470,6 @@ async function notifyBreachWarning(
         }
       }
     } catch (importError) {
-      materialized = false;
       logger.error('[SLA Breach Monitor] Failed to import webhooks module', { importError });
     }
   }
@@ -550,12 +555,9 @@ async function notifyBreachWarning(
         logger.debug('[SLA Breach Monitor] Email skipped (SLA_ALERT_EMAIL not set)');
       }
     } catch (error) {
-      materialized = false;
       logger.error('[SLA Breach Monitor] Failed to send email notification', { error });
     }
   }
-
-  return materialized;
 }
 
 /**

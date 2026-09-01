@@ -7,27 +7,16 @@ export type ProviderAdmissionResult =
   | { allowed: true }
   | { allowed: false; retryAt: Date; reason: 'RATE_LIMITED' };
 
-export type ProviderConcurrencyResult =
-  | { allowed: true; leaseKey: string }
-  | { allowed: false; retryAt: Date; reason: 'MAX_IN_FLIGHT' };
-
-const DEFAULT_LIMITS: Record<
-  ProviderAdmissionScope,
-  { limit: number; windowMs: number; maxInFlight: number }
-> = {
-  EMAIL: { limit: 8, windowMs: 1_000, maxInFlight: 5 },
-  SMS: { limit: 20, windowMs: 1_000, maxInFlight: 10 },
-  WHATSAPP: { limit: 50, windowMs: 1_000, maxInFlight: 10 },
-  PUSH: { limit: 100, windowMs: 1_000, maxInFlight: 20 },
-  SLACK: { limit: 1, windowMs: 1_000, maxInFlight: 2 },
-  WEBHOOK: { limit: 20, windowMs: 1_000, maxInFlight: 10 },
+const DEFAULT_LIMITS: Record<ProviderAdmissionScope, { limit: number; windowMs: number }> = {
+  EMAIL: { limit: 8, windowMs: 1_000 },
+  SMS: { limit: 20, windowMs: 1_000 },
+  WHATSAPP: { limit: 50, windowMs: 1_000 },
+  PUSH: { limit: 100, windowMs: 1_000 },
+  SLACK: { limit: 1, windowMs: 1_000 },
+  WEBHOOK: { limit: 20, windowMs: 1_000 },
 };
 
-function providerLimit(scope: ProviderAdmissionScope): {
-  limit: number;
-  windowMs: number;
-  maxInFlight: number;
-} {
+function providerLimit(scope: ProviderAdmissionScope): { limit: number; windowMs: number } {
   switch (scope) {
     case 'EMAIL':
       return DEFAULT_LIMITS.EMAIL;
@@ -44,17 +33,13 @@ function providerLimit(scope: ProviderAdmissionScope): {
   }
 }
 
-const PROVIDER_LEASE_MS = 10 * 60_000;
-
 function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
   return `provider:${scope.toLowerCase()}:${providerKey}`.slice(0, 240);
 }
 
 /**
  * Distributed provider admission control using OpsKnight's existing RateLimit table.
- * A conditional UPSERT serializes writers for one provider bucket without holding a
- * serializable read-then-write transaction. This is important during multi-channel
- * fan-out, where competing first writes previously exhausted transaction retries.
+ * SERIALIZABLE isolation makes the budget shared across application replicas.
  */
 export async function acquireProviderAdmission(
   scope: ProviderAdmissionScope,
@@ -63,41 +48,29 @@ export async function acquireProviderAdmission(
 ): Promise<ProviderAdmissionResult> {
   const config = providerLimit(scope);
   const key = bucketKey(scope, providerKey);
-  const intervalMs = config.windowMs / config.limit;
-  const burstToleranceMs = intervalMs * Math.max(0, config.limit - 1);
-  const expiresAt = new Date(now.getTime() + intervalMs);
-  const eligibleAt = new Date(now.getTime() + burstToleranceMs);
-  const admitted = await prisma.$queryRaw<Array<{ expiresAt: Date }>>(Prisma.sql`
-    INSERT INTO "RateLimit" ("key", "count", "expiresAt")
-    VALUES (${key}, 1, ${expiresAt})
-    ON CONFLICT ("key") DO UPDATE SET
-      "count" = "RateLimit"."count" + 1,
-      "expiresAt" = GREATEST("RateLimit"."expiresAt", ${now}) + (${intervalMs} * INTERVAL '1 millisecond')
-    WHERE "RateLimit"."expiresAt" <= ${eligibleAt}
-    RETURNING "expiresAt"
-  `);
-  if (admitted.length > 0) return { allowed: true };
 
-  // A conflicting row that did not satisfy the conditional update represents a
-  // shared budget that is full. Read it after the UPSERT lock has been released
-  // to calculate a precise scheduler wake-up rather than failing the delivery.
-  const existing = await prisma.rateLimit.findUnique({ where: { key } });
-  if (existing) {
-    return {
-      allowed: false,
-      retryAt: new Date(existing.expiresAt.getTime() - burstToleranceMs),
-      reason: 'RATE_LIMITED',
-    };
-  }
+  return prisma.$transaction(
+    async tx => {
+      const existing = await tx.rateLimit.findUnique({ where: { key } });
+      if (!existing || existing.expiresAt <= now) {
+        const expiresAt = new Date(now.getTime() + config.windowMs);
+        await tx.rateLimit.upsert({
+          where: { key },
+          update: { count: 1, expiresAt },
+          create: { key, count: 1, expiresAt },
+        });
+        return { allowed: true } as const;
+      }
 
-  // Cleanup can delete an expired row between the conditional UPSERT and the
-  // read. A short deferral lets the worker safely retry instead of reporting a
-  // transient storage race as a provider failure.
-  return {
-    allowed: false,
-    retryAt: new Date(now.getTime() + intervalMs),
-    reason: 'RATE_LIMITED',
-  };
+      if (existing.count >= config.limit) {
+        return { allowed: false, retryAt: existing.expiresAt, reason: 'RATE_LIMITED' } as const;
+      }
+
+      await tx.rateLimit.update({ where: { key }, data: { count: { increment: 1 } } });
+      return { allowed: true } as const;
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+  );
 }
 
 /** Persist a provider-supplied cooldown (for example HTTP Retry-After) across replicas. */
@@ -108,48 +81,11 @@ export async function deferProviderAdmission(
 ): Promise<void> {
   const config = providerLimit(scope);
   const key = bucketKey(scope, providerKey);
-  const intervalMs = config.windowMs / config.limit;
-  const cooldownTheoreticalArrival = new Date(
-    retryAt.getTime() + intervalMs * Math.max(0, config.limit - 1)
-  );
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "RateLimit" ("key", "count", "expiresAt")
-    VALUES (${key}, ${config.limit}, ${cooldownTheoreticalArrival})
+    VALUES (${key}, ${config.limit}, ${retryAt})
     ON CONFLICT ("key") DO UPDATE SET
       "count" = GREATEST("RateLimit"."count", EXCLUDED."count"),
       "expiresAt" = GREATEST("RateLimit"."expiresAt", EXCLUDED."expiresAt")
   `);
-}
-
-/** Distributed concurrency slots with expiring leases for crashed workers. */
-export async function acquireProviderConcurrency(
-  scope: ProviderAdmissionScope,
-  providerKey: string,
-  now: Date = new Date()
-): Promise<ProviderConcurrencyResult> {
-  const config = providerLimit(scope);
-  const prefix = bucketKey(scope, providerKey).replace(/^provider:/, 'provider-inflight:');
-  const expiresAt = new Date(now.getTime() + PROVIDER_LEASE_MS);
-  for (let slot = 0; slot < config.maxInFlight; slot += 1) {
-    const leaseKey = `${prefix}:${slot}`.slice(0, 240);
-    const claimed = await prisma.$queryRaw<Array<{ key: string }>>(Prisma.sql`
-      INSERT INTO "RateLimit" ("key", "count", "expiresAt")
-      VALUES (${leaseKey}, 1, ${expiresAt})
-      ON CONFLICT ("key") DO UPDATE SET
-        "count" = 1,
-        "expiresAt" = EXCLUDED."expiresAt"
-      WHERE "RateLimit"."expiresAt" <= ${now}
-      RETURNING "key"
-    `);
-    if (claimed.length > 0) return { allowed: true, leaseKey };
-  }
-  return {
-    allowed: false,
-    retryAt: new Date(now.getTime() + 1_000),
-    reason: 'MAX_IN_FLIGHT',
-  };
-}
-
-export async function releaseProviderConcurrency(leaseKey: string): Promise<void> {
-  await prisma.rateLimit.deleteMany({ where: { key: leaseKey } });
 }

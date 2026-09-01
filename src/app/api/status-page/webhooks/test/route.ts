@@ -86,7 +86,6 @@ export async function POST(req: NextRequest) {
             secret: await decryptStoredSecret(webhook!.secret),
             payload,
             deliveryId,
-            webhookId: webhook!.id,
           },
         });
         if (!result.delivered) throw new Error(`Failed delivery to ${webhook!.url}`);

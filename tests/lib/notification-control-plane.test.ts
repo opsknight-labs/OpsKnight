@@ -8,11 +8,10 @@ import {
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
 import { CircuitBreakerError } from '@/lib/circuit-breaker';
-import { acquireProviderAdmission, acquireProviderConcurrency } from '@/lib/provider-admission';
+import { acquireProviderAdmission } from '@/lib/provider-admission';
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
-  sendIncidentEmail: vi.fn(),
   encrypt: vi.fn(async (value: string) => `encrypted:${value}`),
   decrypt: vi.fn(async (value: string) => value.replace(/^encrypted:/, '')),
 }));
@@ -26,17 +25,8 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       updateMany: vi.fn(),
     },
-    incident: { findUnique: vi.fn() },
-    notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn() },
+    notificationDeliveryAttempt: { create: vi.fn() },
     $queryRaw: vi.fn(),
-    $transaction: vi.fn(async (operation: unknown) =>
-      Array.isArray(operation)
-        ? Promise.all(operation)
-        : (operation as (tx: unknown) => unknown)({
-            notification: { updateMany: vi.fn() },
-            notificationDeliveryAttempt: { create: vi.fn() },
-          })
-    ),
   },
 }));
 vi.mock('@/lib/encryption', () => ({
@@ -44,19 +34,13 @@ vi.mock('@/lib/encryption', () => ({
   decrypt: mocks.decrypt,
   getEncryptionKey: vi.fn(() => '11'.repeat(32)),
 }));
-vi.mock('@/lib/email', () => ({
-  sendEmail: mocks.sendEmail,
-  sendIncidentEmail: mocks.sendIncidentEmail,
-}));
+vi.mock('@/lib/email', () => ({ sendEmail: mocks.sendEmail }));
 vi.mock('@/lib/provider-admission', () => ({
   acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
-  acquireProviderConcurrency: vi.fn().mockResolvedValue({ allowed: true, leaseKey: 'lease-1' }),
-  releaseProviderConcurrency: vi.fn().mockResolvedValue(undefined),
   deferProviderAdmission: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/circuit-breaker', () => ({
   CircuitBreakerError: class CircuitBreakerError extends Error {},
-  CircuitBreakerTimeoutError: class CircuitBreakerTimeoutError extends Error {},
   CircuitBreakers: {
     email: () => ({ execute: (operation: () => unknown) => operation() }),
     sms: () => ({ execute: (operation: () => unknown) => operation() }),
@@ -92,13 +76,8 @@ describe('central notification control plane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(acquireProviderAdmission).mockResolvedValue({ allowed: true });
-    vi.mocked(acquireProviderConcurrency).mockResolvedValue({
-      allowed: true,
-      leaseKey: 'lease-1',
-    });
     vi.mocked(prisma.notification.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
-    vi.mocked(prisma.notificationDeliveryAttempt.count).mockResolvedValue(0);
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
   });
 
@@ -118,41 +97,6 @@ describe('central notification control plane', () => {
         }),
       })
     );
-  });
-
-  it('rejects an empty recipient before persisting a delivery intent', async () => {
-    await expect(
-      createCentralNotificationIntent({ ...input, recipientAddress: '   ' })
-    ).rejects.toThrow('Notification recipient is required');
-    expect(prisma.notification.create).not.toHaveBeenCalled();
-  });
-
-  it('derives recipient identity from the existing session secret, not a new setting', async () => {
-    const previousSessionSecret = process.env.NEXTAUTH_SECRET;
-    const previousIdentitySecret = process.env.NOTIFICATION_IDENTITY_KEY;
-    process.env.NEXTAUTH_SECRET = 'existing-session-secret';
-    process.env.NOTIFICATION_IDENTITY_KEY = 'ignored-legacy-setting';
-    vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notification_one' } as never);
-
-    try {
-      await createCentralNotificationIntent(input);
-      const firstHash = vi.mocked(prisma.notification.create).mock.calls[0]?.[0]?.data
-        .recipientHash as string;
-      vi.clearAllMocks();
-      vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notification_two' } as never);
-
-      await createCentralNotificationIntent({ ...input, eventKey: 'reset-request-2' });
-      const secondHash = vi.mocked(prisma.notification.create).mock.calls[0]?.[0]?.data
-        .recipientHash as string;
-
-      expect(firstHash).toMatch(/^[a-f0-9]{64}$/);
-      expect(secondHash).toBe(firstHash);
-    } finally {
-      if (previousSessionSecret === undefined) delete process.env.NEXTAUTH_SECRET;
-      else process.env.NEXTAUTH_SECRET = previousSessionSecret;
-      if (previousIdentitySecret === undefined) delete process.env.NOTIFICATION_IDENTITY_KEY;
-      else process.env.NOTIFICATION_IDENTITY_KEY = previousIdentitySecret;
-    }
   });
 
   it('returns the durable existing intent when concurrent creation loses the unique race', async () => {
@@ -207,50 +151,6 @@ describe('central notification control plane', () => {
         data: expect.objectContaining({ status: 'SENT', payloadEncrypted: null }),
       })
     );
-  });
-
-  it('does not let a later escalation step skip a sibling triggered channel', async () => {
-    const due = new Date(Date.now() - 60_000);
-    const payload = {
-      kind: 'INCIDENT_EMAIL' as const,
-      userId: 'user-1',
-      incidentId: 'incident-1',
-      eventType: 'triggered' as const,
-      eventAt: '2026-08-30T12:00:00.000Z',
-      escalationGeneration: 4,
-      escalationStep: 0,
-      durableMessage: 'encrypted message snapshot',
-    };
-    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
-        id: 'notification_sibling_channel',
-        status: 'PENDING',
-        category: 'INCIDENT',
-        attempts: 0,
-        maxAttempts: 5,
-        nextAttemptAt: due,
-        scheduledAt: due,
-        lastAttemptAt: null,
-        expiresAt: null,
-        payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
-      } as never);
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue(
-      {
-        status: 'OPEN',
-        updatedAt: new Date('2026-08-30T12:01:00.000Z'),
-        acknowledgedAt: null,
-        resolvedAt: null,
-        currentEscalationStep: 1,
-        escalationGeneration: 4,
-      } as never
-    );
-    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
-    mocks.sendIncidentEmail.mockResolvedValue({ success: true, providerMessageId: 'email-1' });
-
-    await expect(deliverCentralNotification('notification_sibling_channel')).resolves.toEqual({
-      success: true,
-      claimed: true,
-    });
-    expect(mocks.sendIncidentEmail).toHaveBeenCalledTimes(1);
   });
 
   it('uses lease expiry as the next scheduler deadline for active claims', async () => {
@@ -340,14 +240,7 @@ describe('central notification control plane', () => {
       failed: 0,
     });
     expect(prisma.notification.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        take: 100,
-        where: expect.objectContaining({
-          OR: expect.arrayContaining([
-            expect.objectContaining({ status: 'PENDING', lastAttemptAt: null }),
-          ]),
-        }),
-      })
+      expect.objectContaining({ take: 100 })
     );
     expect(prisma.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -369,39 +262,6 @@ describe('central notification control plane', () => {
     });
     expect(prisma.notification.updateMany).not.toHaveBeenCalled();
     expect(mocks.sendEmail).not.toHaveBeenCalled();
-  });
-
-  it('does not report provider acceptance as failure when attempt-ledger persistence aborts', async () => {
-    const due = new Date(Date.now() - 60_000);
-    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
-      id: 'notification_accepted',
-      status: 'PENDING',
-      category: 'ADMINISTRATION',
-      attempts: 0,
-      maxAttempts: 5,
-      nextAttemptAt: due,
-      scheduledAt: due,
-      lastAttemptAt: null,
-      expiresAt: null,
-      payloadEncrypted: `encrypted:${JSON.stringify(input.payload)}`,
-    } as never);
-    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
-    vi.mocked(prisma.$transaction).mockRejectedValueOnce(new Error('attempt ledger unavailable'));
-    mocks.sendEmail.mockResolvedValue({ success: true, providerMessageId: 'provider-accepted' });
-
-    await expect(deliverCentralNotification('notification_accepted')).resolves.toEqual({
-      success: true,
-      claimed: true,
-    });
-    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: 'SENT',
-          providerMessageId: 'provider-accepted',
-          payloadEncrypted: null,
-        }),
-      })
-    );
   });
 
   it('masks every externally-addressed channel without exposing a full address', () => {

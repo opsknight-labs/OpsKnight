@@ -6,13 +6,8 @@ import { decodeNotificationEnvelope } from '@/lib/notification-payload';
 import {
   notificationEventInstant,
   notificationEventKey,
-  notificationIntentEventAt,
   notificationIntentId,
-  notificationIntentTriggerGeneration,
-  isLegacyTriggeredNotificationIntent,
 } from '@/lib/notification-identity';
-
-const centralMocks = vi.hoisted(() => ({ enqueue: vi.fn() }));
 
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
@@ -31,9 +26,6 @@ vi.mock('@/lib/webhooks', () => ({ sendIncidentWebhook: vi.fn() }));
 vi.mock('@/lib/incident-push-delivery', () => ({ sendNotificationIntentPush: vi.fn() }));
 vi.mock('@/lib/provider-admission', () => ({
   acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
-}));
-vi.mock('@/lib/notification-control-plane', () => ({
-  enqueueCentralNotification: centralMocks.enqueue,
 }));
 
 const createdAt = new Date('2026-08-30T12:00:00.000Z');
@@ -71,8 +63,6 @@ function intentIdFor(
     eventAt,
     userId: 'user-1',
     channel: 'EMAIL',
-    triggerGeneration:
-      eventType === 'triggered' ? incidentValue.escalationGeneration ?? 0 : undefined,
   });
 }
 
@@ -82,7 +72,6 @@ function pendingIntent(id: string) {
 
 describe('durable notification intents', () => {
   beforeEach(() => {
-    process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL = 'false';
     vi.clearAllMocks();
     vi.mocked(prisma.incident.findUnique).mockResolvedValue(incident as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
@@ -91,48 +80,6 @@ describe('durable notification intents', () => {
     } as never);
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
     vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
-  });
-
-  it('parses legacy and generation-tagged triggered intent IDs without a regex', () => {
-    const digest = 'a'.repeat(64);
-    const timestamp = createdAt.getTime();
-    expect(notificationIntentEventAt(`ntf:triggered:${timestamp}:${digest}`)).toEqual(createdAt);
-    expect(notificationIntentTriggerGeneration(`ntf:triggered:${timestamp}:${digest}`)).toBeNull();
-    expect(notificationIntentTriggerGeneration(`ntf:triggered:${timestamp}:g4:${digest}`)).toBe(4);
-    expect(isLegacyTriggeredNotificationIntent(`ntf:triggered:${timestamp}:${digest}`)).toBe(true);
-    expect(isLegacyTriggeredNotificationIntent(`ntf:triggered:${timestamp}:g4:${digest}`)).toBe(false);
-    expect(notificationIntentEventAt(`ntf:triggered:${timestamp}:g4:${digest}:extra`)).toBeNull();
-  });
-
-  it('routes personal incident delivery through the encrypted central control plane when enabled', async () => {
-    process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL = 'true';
-    centralMocks.enqueue.mockResolvedValue({
-      id: 'notification-central',
-      created: true,
-      delivered: true,
-    });
-
-    await expect(
-      sendNotification('inc-1', 'user-1', 'EMAIL', '[Payments] Database latency')
-    ).resolves.toMatchObject({
-      success: true,
-      outcome: 'DELIVERED',
-      notificationId: 'notification-central',
-    });
-    expect(centralMocks.enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({
-        category: 'INCIDENT',
-        channel: 'EMAIL',
-        recipientAddress: 'r@example.com',
-        displayMessage: 'Incident notification',
-        payload: expect.objectContaining({
-          kind: 'INCIDENT_EMAIL',
-          incidentId: 'inc-1',
-          userId: 'user-1',
-        }),
-      })
-    );
-    expect(prisma.notification.create).not.toHaveBeenCalled();
   });
 
   it('creates one deterministic EMAIL intent and renders from its immutable payload', async () => {
@@ -291,7 +238,7 @@ describe('durable notification intents', () => {
     expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
   });
 
-  it('delivers every triggered channel when only escalation bookkeeping advances', async () => {
+  it('fences a failed trigger intent after escalation advances', async () => {
     const firstStepAt = new Date('2026-08-30T12:02:00.000Z');
     const firstStep = {
       ...incident,
@@ -299,7 +246,6 @@ describe('durable notification intents', () => {
       currentEscalationStep: 0,
       nextEscalationAt: firstStepAt,
       escalationStatus: 'ESCALATING',
-      escalationGeneration: 4,
     };
     const notificationId = intentIdFor('Escalation Level 1', 'triggered', firstStep);
     vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(notificationId));
@@ -308,7 +254,6 @@ describe('durable notification intents', () => {
       currentEscalationStep: 1,
       nextEscalationAt: new Date('2026-08-30T12:07:00.000Z'),
     } as never);
-    vi.mocked(emailModule.sendIncidentEmail).mockResolvedValue({ success: true });
 
     const result = await sendNotification(
       'inc-1',
@@ -319,7 +264,7 @@ describe('durable notification intents', () => {
       'triggered'
     );
 
-    expect(result).toMatchObject({ success: true, outcome: 'DELIVERED' });
-    expect(emailModule.sendIncidentEmail).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ success: true, outcome: 'SKIPPED', skipped: true });
+    expect(emailModule.sendIncidentEmail).not.toHaveBeenCalled();
   });
 });

@@ -327,7 +327,6 @@ export async function executeEscalation(
           escalationStatus: 'ESCALATING',
           nextEscalationAt: nextAt,
           currentEscalationStep: 0,
-          escalationGeneration: { increment: 1 },
           escalationProcessingAt: null,
         },
       });
@@ -665,13 +664,6 @@ export async function executeEscalation(
   const notificationsSent = [];
   const escalationChannels: NotificationChannel[] | undefined =
     step.notificationChannels.length > 0 ? step.notificationChannels : undefined;
-  const escalationEventKey = [
-    'ESCALATION',
-    incidentId,
-    policy.id,
-    String(incident.escalationGeneration ?? 0),
-    String(currentStepIndex),
-  ].join(':');
 
   for (const userId of targetUserIds) {
     try {
@@ -688,9 +680,7 @@ export async function executeEscalation(
         return supersededEscalationResult();
       }
       const message = `[OpsKnight] Incident: ${incident.title}${currentStepIndex > 0 ? ` (Escalation Level ${currentStepIndex + 1})` : ''}`;
-      const result = await sendUserNotification(incidentId, userId, message, escalationChannels, {
-        eventKey: escalationEventKey,
-      });
+      const result = await sendUserNotification(incidentId, userId, message, escalationChannels);
       notificationsSent.push({ userId, result });
     } catch (err) {
       logger.error('Failed to send escalation notification to user', {
