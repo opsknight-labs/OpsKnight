@@ -11,6 +11,7 @@ export const AUTHORIZATION_ACTIONS = {
   INCIDENT_READ: 'incident.read',
   INCIDENT_CREATE: 'incident.create',
   INCIDENT_ACKNOWLEDGE: 'incident.acknowledge',
+  INCIDENT_ESCALATE: 'incident.escalate',
   INCIDENT_NOTE: 'incident.note',
   INCIDENT_MANAGE: 'incident.manage',
   EVENT_CREATE: 'event.create',
@@ -49,6 +50,7 @@ type AuthorizationResourceByAction = {
   [AUTHORIZATION_ACTIONS.INCIDENT_READ]: IncidentResource;
   [AUTHORIZATION_ACTIONS.INCIDENT_CREATE]: ServiceResource;
   [AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE]: IncidentResource;
+  [AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE]: IncidentResource;
   [AUTHORIZATION_ACTIONS.INCIDENT_NOTE]: IncidentResource;
   [AUTHORIZATION_ACTIONS.INCIDENT_MANAGE]: IncidentResource;
   [AUTHORIZATION_ACTIONS.EVENT_CREATE]: ServiceResource;
@@ -106,6 +108,14 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     {
       global: CAPABILITIES.OPERATIONS_MANAGE,
       scoped: CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED,
+      apiScope: API_SCOPES.INCIDENTS_WRITE,
+    },
+  ],
+  [
+    AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE,
+    {
+      global: CAPABILITIES.OPERATIONS_MANAGE,
+      scoped: CAPABILITIES.INCIDENT_ESCALATE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
