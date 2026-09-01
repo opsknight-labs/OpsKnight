@@ -53,7 +53,7 @@ describe('SystemNotificationSettings Component', () => {
   it('renders all categorized notification gateway sections', () => {
     render(<SystemNotificationSettings providers={mockProviders} />);
 
-    expect(screen.getByText('SMS & Cellular Telephony')).toBeDefined();
+    expect(screen.getByText('SMS & Telephony')).toBeDefined();
     expect(screen.getByText('WhatsApp Business Messaging')).toBeDefined();
     expect(screen.getByText('Transactional Email Gateways')).toBeDefined();
     expect(screen.getByText('Native Browser Push (PWA)')).toBeDefined();

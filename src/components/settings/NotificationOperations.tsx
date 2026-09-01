@@ -589,7 +589,7 @@ export default function NotificationOperations({ canRetry }: Props) {
                           )}
                         </TableCell>
 
-                        <TableCell className="py-3">
+                        <TableCell className="py-2.5">
                           <div className="flex items-center gap-1.5">
                             {getChannelIcon(row.channel)}
                             <span className="text-xs font-bold text-foreground">{row.channel}</span>
@@ -603,21 +603,22 @@ export default function NotificationOperations({ canRetry }: Props) {
                           </div>
                           {row.errorMsg && (
                             <div
-                              className="mt-1 max-w-xs text-[11px] text-rose-600 dark:text-rose-400 bg-rose-500/5 px-2 py-0.5 rounded border border-rose-500/20"
+                              className="mt-1 max-w-xs truncate text-[11px] text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 flex items-center gap-1"
                               title={row.errorMsg}
                             >
-                              {row.errorMsg}
+                              <AlertTriangle className="h-3 w-3 shrink-0 text-rose-500" />
+                              <span className="truncate">{row.errorMsg}</span>
                             </div>
                           )}
                         </TableCell>
 
-                        <TableCell className="font-mono text-xs py-3">
-                          <span className="bg-muted/50 text-foreground px-2 py-0.5 rounded-md border border-border/50 text-[11px]">
+                        <TableCell className="font-mono text-xs py-2.5 whitespace-nowrap">
+                          <span className="bg-muted/50 text-foreground px-2 py-0.5 rounded-md border border-border/50 text-[11px] inline-block">
                             {row.recipientDisplay || 'Encrypted Recipient'}
                           </span>
                         </TableCell>
 
-                        <TableCell className="py-3">
+                        <TableCell className="py-2.5">
                           {row.incident ? (
                             <Link
                               href={`/incidents/${row.incident.id}`}
@@ -636,7 +637,7 @@ export default function NotificationOperations({ canRetry }: Props) {
                           </div>
                         </TableCell>
 
-                        <TableCell className="py-3">
+                        <TableCell className="py-2.5">
                           <div className="text-xs font-mono tabular-nums font-semibold text-foreground">
                             {row.attempts} / {row.maxAttempts}
                           </div>
@@ -647,7 +648,7 @@ export default function NotificationOperations({ canRetry }: Props) {
                           )}
                         </TableCell>
 
-                        <TableCell className="whitespace-nowrap text-xs py-3 text-muted-foreground">
+                        <TableCell className="whitespace-nowrap text-xs py-2.5 text-muted-foreground">
                           <div>{formatTimestamp(row.createdAt)}</div>
                           {row.status === 'PENDING' && (
                             <div className="text-[10px] text-amber-600 dark:text-amber-400">
@@ -657,7 +658,7 @@ export default function NotificationOperations({ canRetry }: Props) {
                         </TableCell>
 
                         {canRetry && (
-                          <TableCell className="text-right py-3">
+                          <TableCell className="text-right py-2.5">
                             {row.status === 'FAILED' && (
                               <Button
                                 variant="outline"

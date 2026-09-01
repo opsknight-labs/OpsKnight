@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import SystemNotificationSettings from '@/components/settings/SystemNotificationSettings';
 import { getNotificationProviders } from '@/app/(app)/settings/system/actions';
-import { BellRing, Activity, Radio } from 'lucide-react';
+import { ShieldCheck, Activity, Radio, RadioTower, Mail, BellRing } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -34,6 +34,7 @@ export default async function NotificationProviderSettingsPage() {
 
   return (
     <div className="space-y-6">
+      {/* 1. Simple Grey Shaded Hero Banner */}
       <DetailHeroBanner
         breadcrumb={{
           label: 'Settings',
@@ -42,15 +43,25 @@ export default async function NotificationProviderSettingsPage() {
         }}
         tag="Alerting & Outbound Delivery"
         title="Notification Providers"
-        subtitle="Configure SMS (Twilio/SNS), Email (Resend/SendGrid/SES/SMTP), Web Push (VAPID), and WhatsApp Business outbound delivery gateways."
-        icon={<BellRing className="h-6 w-6 text-primary" />}
+        subtitle="Configure SMS (Twilio), Email (Resend/SendGrid/SES/SMTP), Web Push (VAPID), and WhatsApp Business outbound gateways."
+        icon={
+          <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
+            <BellRing className="h-7 w-7" />
+          </div>
+        }
         badges={
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs font-semibold">
+            <Badge
+              variant="outline"
+              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20 text-[10px] font-bold uppercase tracking-wider"
+            >
               Enterprise Alerting
             </Badge>
-            <Badge variant="secondary" className="text-xs font-semibold">
-              {activeChannelsCount} Active Channel{activeChannelsCount === 1 ? '' : 's'}
+            <Badge
+              variant="outline"
+              className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-semibold"
+            >
+              {activeChannelsCount} Active Channels
             </Badge>
           </div>
         }
@@ -60,10 +71,10 @@ export default async function NotificationProviderSettingsPage() {
               variant="outline"
               size="sm"
               asChild
-              className="gap-2 border-border/80 bg-background/80 shadow-xs backdrop-blur-xs hover:bg-accent/80 text-xs font-semibold"
+              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
             >
               <Link href="/settings/notifications/operations">
-                <Activity className="h-3.5 w-3.5 text-primary" />
+                <Activity className="h-3.5 w-3.5" />
                 Delivery Operations
               </Link>
             </Button>
@@ -71,10 +82,10 @@ export default async function NotificationProviderSettingsPage() {
               variant="outline"
               size="sm"
               asChild
-              className="gap-2 border-border/80 bg-background/80 shadow-xs backdrop-blur-xs hover:bg-accent/80 text-xs font-semibold"
+              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
             >
               <Link href="/settings/notifications/history">
-                <Radio className="h-3.5 w-3.5 text-muted-foreground" />
+                <Radio className="h-3.5 w-3.5" />
                 Delivery History
               </Link>
             </Button>
@@ -84,26 +95,31 @@ export default async function NotificationProviderSettingsPage() {
           {
             label: 'Active Gateways',
             value: `${activeProvidersCount + (isWhatsappActive ? 1 : 0)}`,
-            subtext: 'Providers routing live traffic',
+            icon: <RadioTower className="h-3.5 w-3.5" />,
+            subtext: 'Routing live alerts',
           },
           {
-            label: 'Active Channels',
+            label: 'Coverage',
             value: `${activeChannelsCount} / 4`,
-            subtext: 'SMS, WhatsApp, Email, Push',
+            icon: <BellRing className="h-3.5 w-3.5" />,
+            subtext: 'Channels active',
           },
           {
-            label: 'Email Gateway',
+            label: 'Primary Email',
             value: activeEmailProvider ? activeEmailProvider.provider.toUpperCase() : 'None',
-            subtext: activeEmailProvider ? 'Outbound primary sender' : 'Configure Resend/SES/SMTP',
+            icon: <Mail className="h-3.5 w-3.5" />,
+            subtext: activeEmailProvider ? 'Outbound sender' : 'Unconfigured',
           },
           {
-            label: 'Credential Vault',
-            value: 'AES-GCM-256',
-            subtext: 'Encrypted hardware storage',
+            label: 'Vault Storage',
+            value: 'AES-256',
+            icon: <ShieldCheck className="h-3.5 w-3.5" />,
+            subtext: 'Encrypted hardware',
           },
         ]}
       />
 
+      {/* 2. Categorized Provider Gateway Cards */}
       <SystemNotificationSettings providers={providers} />
     </div>
   );

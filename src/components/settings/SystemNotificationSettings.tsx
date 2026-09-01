@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import ProviderCard from '@/components/settings/ProviderCard';
+import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import type { ProviderRecord, ProviderConfigSchema } from '@/types/notification-types';
 
 interface SystemNotificationSettingsProps {
@@ -253,45 +254,44 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
 
   const categories = [
     {
-      title: 'SMS & Cellular Telephony',
+      title: 'SMS & Telephony',
       description:
-        'Outbound urgent SMS text dispatch for high-priority incidents and on-call paging.',
+        'Outbound urgent SMS text dispatch for high-priority incidents and on-call paging via Twilio.',
       keys: ['twilio'],
     },
     {
       title: 'WhatsApp Business Messaging',
       description:
-        'Interactive WhatsApp alert templates and conversational responder acknowledgments.',
+        'Interactive WhatsApp alert templates and conversational responder acknowledgments via Twilio Business API.',
       keys: ['whatsapp'],
     },
     {
       title: 'Transactional Email Gateways',
       description:
-        'Primary and fallback SMTP/API providers for rich HTML incident summaries, postmortems, and invites.',
+        'Primary and fallback SMTP/API providers for rich HTML incident alerts, postmortems, and team invites.',
       keys: ['resend', 'sendgrid', 'ses', 'smtp'],
     },
     {
       title: 'Native Browser Push (PWA)',
       description:
-        'Real-time desktop and mobile browser push notifications with encrypted VAPID keys.',
+        'Encrypted Web Push notifications (VAPID) for real-time mobile and desktop browser alerts.',
       keys: ['web-push'],
     },
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {categories.map(category => {
         const matchingConfigs = providerConfigs.filter(cfg => category.keys.includes(cfg.key));
         if (matchingConfigs.length === 0) return null;
 
         return (
-          <div key={category.title} className="space-y-3">
-            <div>
-              <h3 className="text-sm font-bold text-foreground tracking-tight">{category.title}</h3>
-              <p className="text-xs text-muted-foreground">{category.description}</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
+          <SettingsSection
+            key={category.title}
+            title={category.title}
+            description={category.description}
+          >
+            <div className="py-4 grid grid-cols-1 gap-3.5">
               {matchingConfigs.map(providerConfig => {
                 const existing =
                   providerConfig.key === 'whatsapp'
@@ -311,7 +311,7 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
                 );
               })}
             </div>
-          </div>
+          </SettingsSection>
         );
       })}
     </div>
