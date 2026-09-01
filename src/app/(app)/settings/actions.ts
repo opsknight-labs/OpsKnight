@@ -325,6 +325,92 @@ export async function updateNotificationPreferences(
   }
 }
 
+export async function sendTestNotification(
+  channel: 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await getCurrentUser();
+
+    if (channel === 'EMAIL') {
+      if (!user.email) return { success: false, error: 'No email address configured.' };
+      const { sendEmail } = await import('@/lib/email');
+      const res = await sendEmail({
+        to: user.email,
+        subject: '🔔 OpsKnight: Test Email Alert',
+        html: `<p>Hello ${user.name || 'there'},</p><p>This is a test notification confirming that your OpsKnight email alert channel is properly configured and active.</p><p><small>Sent at: ${new Date().toUTCString()}</small></p>`,
+        text: `Hello ${user.name || 'there'},\n\nThis is a test notification confirming that your OpsKnight email alert channel is properly configured and active.\n\nSent at: ${new Date().toUTCString()}`,
+      });
+      if (!res.success) {
+        return { success: false, error: res.error || 'Failed to send test email.' };
+      }
+      return { success: true };
+    }
+
+    if (channel === 'SMS') {
+      if (!user.phoneNumber) {
+        return {
+          success: false,
+          error: 'Please enter and save a valid phone number in E.164 format first.',
+        };
+      }
+      const { sendSMS } = await import('@/lib/sms');
+      const res = await sendSMS({
+        to: user.phoneNumber,
+        message:
+          '🔔 OpsKnight Test Alert: Your SMS channel is active and receiving incident notifications.',
+      });
+      if (!res.success) {
+        return { success: false, error: res.error || 'Failed to send test SMS.' };
+      }
+      return { success: true };
+    }
+
+    if (channel === 'WHATSAPP') {
+      if (!user.phoneNumber) {
+        return {
+          success: false,
+          error: 'Please enter and save a valid WhatsApp phone number in E.164 format first.',
+        };
+      }
+      const { sendWhatsApp } = await import('@/lib/whatsapp');
+      const res = await sendWhatsApp(
+        user.phoneNumber,
+        '🔔 OpsKnight Test Alert: Your WhatsApp notification channel is active and receiving incident alerts.'
+      );
+      if (!res.success) {
+        return { success: false, error: res.error || 'Failed to send test WhatsApp message.' };
+      }
+      return { success: true };
+    }
+
+    if (channel === 'PUSH') {
+      const { getPushConfig } = await import('@/lib/notification-providers');
+      const { sendPush } = await import('@/lib/push');
+      const pushConfig = await getPushConfig();
+      if (!pushConfig.enabled) {
+        return { success: false, error: 'Push notifications are not enabled on the server.' };
+      }
+      const res = await sendPush({
+        userId: user.id,
+        title: '🔔 OpsKnight Test Alert',
+        body: `Hello ${user.name || 'there'}! Your push notification channel is active.`,
+        data: { url: '/settings/profile?tab=notifications', type: 'test' },
+      });
+      if (!res.success) {
+        return { success: false, error: res.error || 'Failed to send push notification.' };
+      }
+      return { success: true };
+    }
+
+    return { success: false, error: 'Invalid notification channel.' };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send test notification.',
+    };
+  }
+}
+
 export async function updatePassword(
   _prevState: ActionState,
   formData: FormData

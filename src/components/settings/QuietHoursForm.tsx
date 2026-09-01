@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateQuietHoursPreferences } from '@/app/(app)/settings/quiet-hours-actions';
 import { Switch } from '@/components/ui/shadcn/switch';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import { useAutosave } from '@/lib/hooks/use-autosave';
+import QuietHoursTimeline from '@/components/settings/QuietHoursTimeline';
 
 type Props = {
   enabled: boolean;
@@ -24,12 +25,18 @@ function minutesToTime(minutes: number): string {
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 }
 
+function timeToMinutes(timeStr: string): number {
+  if (!timeStr || !timeStr.includes(':')) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return ((h || 0) * 60 + (m || 0)) % 1440;
+}
+
 export default function QuietHoursForm({
   enabled,
   startMinutes,
   endMinutes,
   weekendAllDay,
-  timeZone: _timeZone,
+  timeZone,
 }: Props) {
   const router = useRouter();
 
@@ -37,6 +44,10 @@ export default function QuietHoursForm({
   const [weekendChecked, setWeekendChecked] = useState(weekendAllDay);
   const [startTime, setStartTime] = useState(minutesToTime(startMinutes));
   const [endTime, setEndTime] = useState(minutesToTime(endMinutes));
+
+  // Derive dynamic minutes for real-time visual timeline feedback
+  const dynamicStartMinutes = useMemo(() => timeToMinutes(startTime), [startTime]);
+  const dynamicEndMinutes = useMemo(() => timeToMinutes(endTime), [endTime]);
 
   // Autosave quiet hours
   const handleAutoSave = useCallback(
@@ -115,6 +126,15 @@ export default function QuietHoursForm({
           >
             <Switch checked={weekendChecked} onCheckedChange={setWeekendChecked} />
           </SettingsRow>
+
+          {/* Visual 24-Hour Timeline */}
+          <QuietHoursTimeline
+            startMinutes={dynamicStartMinutes}
+            endMinutes={dynamicEndMinutes}
+            enabled={enabledChecked}
+            weekendAllDay={weekendChecked}
+            timeZone={timeZone}
+          />
         </>
       )}
     </div>
