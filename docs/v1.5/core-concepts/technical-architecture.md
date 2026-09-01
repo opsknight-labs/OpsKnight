@@ -57,7 +57,16 @@ The scheduler:
 - runs rollups and retention cleanup; and
 - cleans expired API rate-limit and token records.
 
-Run the scheduler in at least one healthy application instance. If every instance sets `ENABLE_INTERNAL_CRON=false`, requests still work, but scheduled escalations, retries, unsnoozes, SLA checks, and cleanup do not advance.
+### Critical work runs on every replica
+
+Escalation and the recovery of already-committed responder pages do not depend on scheduler ownership. Every instance that runs the durable job worker also runs two critical lanes, ahead of general job processing:
+
+- an escalation lane that claims only escalation jobs, then periodically re-derives due work from incident state and repairs escalations whose state and queued work disagree; and
+- a notification lane that picks up committed notification intents the delivering process never sent, and sweeps the legacy retry path.
+
+Both lanes are safe on every replica because both claim work with a compare-and-set before acting, so two instances cannot deliver the same page.
+
+Run the scheduler in at least one healthy application instance for maintenance work. If every instance sets `ENABLE_INTERNAL_CRON=false`, escalation and notification recovery still advance through the job worker, but unsnoozes, SLA checks, rollups, and cleanup do not. If a deployment instead runs only the scheduler role and no job worker, the scheduler continues to perform escalation and notification recovery itself.
 
 ## Inbound event flow
 
@@ -91,7 +100,11 @@ OpsKnight has two different queueing paths. Their operational properties are dif
 
 ### PostgreSQL-backed background jobs
 
-The `BackgroundJob` table stores escalation, notification, automatic-unsnooze, and scheduled-task jobs. Workers claim due jobs with PostgreSQL row locking and `SKIP LOCKED`, so concurrent scheduler loops do not normally process the same row. A job left in `PROCESSING` for ten minutes can be reclaimed. Failed jobs use bounded attempts and exponential backoff.
+The `BackgroundJob` table stores escalation, notification, automatic-unsnooze, and scheduled-task jobs. Workers claim due jobs with PostgreSQL row locking and `SKIP LOCKED`, so concurrent loops do not normally process the same row. A job left in `PROCESSING` for ten minutes can be reclaimed. Failed jobs use bounded attempts and exponential backoff.
+
+Escalation jobs are claimed in their own batch, before other job types. A backlog of webhook or status-page work therefore cannot delay a page behind it.
+
+An escalation job names the incident, the step, and the escalation generation it was created for. A worker verifies that generation before it resolves a target or pages anyone, so a job left over from a superseded run cancels itself instead of paging. Incident escalation state is the source of truth: if a job row is lost, reconciliation recreates it from the state that says work is owed.
 
 This path survives an application restart because job state is stored in PostgreSQL. A database outage stops claims and progress until connectivity returns.
 
@@ -99,13 +112,19 @@ This path survives an application restart because job state is stored in Postgre
 
 Immediate notification delivery can pass through a bounded, per-process memory queue. It batches work, applies channel limits, and suppresses recent duplicates. It is not shared between replicas and is lost if that process exits before delivery is recorded.
 
-Failed notification records in PostgreSQL can be selected by the scheduler for retry, but operators must not treat the in-memory handoff or post-commit follow-up promises as a zero-data-loss message broker. Use notification history, system logs, provider telemetry, and synthetic incident tests to verify delivery.
+Failed notification records in PostgreSQL are selected for retry by the notification lane on every job-worker replica, and by the scheduler. Operators must still not treat the in-memory handoff or post-commit follow-up promises as a zero-data-loss message broker. Use notification history, system logs, provider telemetry, and synthetic incident tests to verify delivery.
 
 ## Incident and escalation processing
 
 An incident can be `OPEN`, `ACKNOWLEDGED`, `SNOOZED`, `SUPPRESSED`, or `RESOLVED`. Escalation progress is related state, not a separate incident status.
 
-For a triggering event, the application resolves the service's escalation policy and targets. Schedule targets are evaluated using layers, rotations, restrictions, and active overrides. Due steps create notification work for the resolved users or teams. Acknowledging or resolving the incident prevents later steps from continuing when the scheduler next evaluates the escalation.
+For a triggering event, the application resolves the service's escalation policy and targets. Schedule targets are evaluated using layers, rotations, restrictions, and active overrides. Only active user accounts are eligible; a database failure while resolving a target is retried rather than being treated as "no responders available".
+
+A step's outcome is committed in one transaction: the assignment, the durable notification intents, the timeline entries, the next escalation state, and the job that will run the next step. Either all of them land or none do, so escalation cannot advance past a page that was never recorded, and cannot advance to a step that has nothing scheduled to run it. Provider delivery happens after that transaction commits and cannot affect whether it committed.
+
+Acknowledging, resolving, snoozing, or suppressing the incident invalidates the escalation run a worker is holding. A worker that already resolved its audience re-checks before each page and again before committing, so it stops rather than completing a superseded step.
+
+Escalation state is armed inside the transaction that creates the incident. An open incident whose service has a policy therefore always has a due step recorded, independent of any follow-up side effect.
 
 Because provider delivery is external, a successful incident transaction does not prove that email, SMS, push, Slack, or a webhook reached its destination. Delivery state and provider responses are the relevant evidence.
 
@@ -161,6 +180,9 @@ Contributors can verify this behavior in these source areas:
 
 - `src/instrumentation.ts` — runtime initialization.
 - `src/lib/cron-scheduler.ts` — scheduler ownership and periodic work.
+- `src/lib/escalation/` — escalation state machine, planner, transactional commit, recovery, and the critical escalation lane.
+- `src/lib/notification-recovery.ts` — per-replica recovery of committed notification intents.
+- `src/lib/job-worker.ts` — per-replica durable job worker and critical lanes.
 - `src/lib/jobs/queue.ts` — PostgreSQL-backed background jobs.
 - `src/lib/events.ts` — event correlation and incident transaction.
 - `src/lib/notification-queue.ts` — process-local batching queue.
