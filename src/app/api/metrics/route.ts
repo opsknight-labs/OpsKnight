@@ -1,6 +1,5 @@
 import prisma from '@/lib/prisma';
-import { getAuthOptions } from '@/lib/auth';
-import { getServerSession } from 'next-auth';
+import { assertAdmin } from '@/lib/rbac';
 import { withRequestContext } from '@/lib/logger';
 import { timingSafeEqual } from 'crypto';
 import { activeIncidentStatuses } from '@/lib/incident-status';
@@ -58,20 +57,18 @@ function escapeLabel(value: string) {
 }
 
 async function getMetrics(req: Request) {
-  // Allow Prometheus scraping via Bearer token OR admin session
+  // Allow Prometheus scraping via Bearer token OR a freshly resolved active admin session.
   const authHeader = req.headers.get('authorization');
   const prometheusToken = process.env.PROMETHEUS_SCRAPE_TOKEN;
 
-  if (prometheusToken && tokensMatch(authHeader, prometheusToken)) {
-    // Prometheus scraper — allow through
-  } else {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user || session.user.role !== 'ADMIN') {
+  if (!(prometheusToken && tokensMatch(authHeader, prometheusToken))) {
+    try {
+      await assertAdmin();
+    } catch {
       return new Response('Unauthorized', { status: 401 });
     }
   }
 
-  // Collect metrics
   const snapshot = await collectMetricsCached();
 
   const lines: string[] = [
