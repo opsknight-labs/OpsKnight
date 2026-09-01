@@ -1,19 +1,12 @@
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { calculateSLAMetrics, calculateMultiServiceUptime } from '@/lib/sla-server';
 import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
+import { getCurrentUser } from '@/lib/rbac';
 
-/**
- * Restricts the visible SLA-definition set to ones whose service belongs to
- * a team the user is a member of. ADMIN/RESPONDER see everything (including
- * org-wide definitions with `serviceId = null`); regular USERs only see
- * service-scoped definitions whose owning team they're in.
- */
 async function getDefinitionWhereForUser(userId: string, role: string) {
   if (isAppRole(role) && hasCapability(role, CAPABILITIES.METRICS_READ_ALL)) {
     return { activeTo: null } as const;
@@ -24,7 +17,6 @@ async function getDefinitionWhereForUser(userId: string, role: string) {
   });
   const teamIds = memberships.map(m => m.teamId);
   if (teamIds.length === 0) {
-    // No team membership — no scoped definitions visible.
     return { activeTo: null, id: { in: [] as string[] } };
   }
   return {
@@ -33,33 +25,12 @@ async function getDefinitionWhereForUser(userId: string, role: string) {
   } as const;
 }
 
-/**
- * SLA Compliance API
- *
- * Returns live compliance stats for all active SLA definitions.
- *
- * GET /api/sla/compliance
- */
-
 export const dynamic = 'force-dynamic';
 
 export async function GET(_request: NextRequest) {
-  const session = await getServerSession(await getAuthOptions());
-  if (!session?.user?.email) {
-    return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
-  }
-
   try {
-    // Resolve current user role to scope the visible SLA-definition set.
-    const sessionUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, role: true },
-    });
-    if (!sessionUser) {
-      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
-    }
-
-    const whereClause = await getDefinitionWhereForUser(sessionUser.id, sessionUser.role);
+    const user = await getCurrentUser();
+    const whereClause = await getDefinitionWhereForUser(user.id, user.role);
 
     const definitions = await prisma.sLADefinition.findMany({
       where: whereClause,
@@ -69,11 +40,9 @@ export async function GET(_request: NextRequest) {
       orderBy: { activeFrom: 'desc' },
     });
 
-    // Calculate compliance for each definition
     const complianceData = await Promise.all(
       definitions.map(async def => {
         try {
-          // Calculate window in days
           let windowDays = 30;
           switch (def.window) {
             case '7d':
@@ -83,8 +52,6 @@ export async function GET(_request: NextRequest) {
               windowDays = 30;
               break;
             case '90d':
-              windowDays = 90;
-              break;
             case 'quarterly':
               windowDays = 90;
               break;
@@ -93,14 +60,12 @@ export async function GET(_request: NextRequest) {
               break;
           }
 
-          // Get SLA metrics for this service
           const metrics = await calculateSLAMetrics({
             serviceId: def.serviceId || undefined,
             priority: (def as any).priority || undefined,
             windowDays,
           });
 
-          // Calculate current value based on metric type
           let currentValue: number | null = null;
           let previousUptime: number | null = null;
           let breached = false;
@@ -124,8 +89,6 @@ export async function GET(_request: NextRequest) {
                   startDate
                 );
                 previousUptime = previousMap[def.serviceId] ?? null;
-              } else {
-                currentValue = null;
               }
               if (currentValue !== null) {
                 currentValue = Math.max(0, Math.min(100, currentValue));
@@ -133,13 +96,10 @@ export async function GET(_request: NextRequest) {
               }
               break;
             case 'MTTA':
-              // MTTA in minutes - lower is better
               currentValue = metrics.mttd;
-              // For MTTA, target is max minutes allowed
               breached = currentValue !== null && currentValue > def.target;
               break;
             case 'MTTR':
-              // MTTR in minutes - lower is better
               currentValue = metrics.mttr;
               breached = currentValue !== null && currentValue > def.target;
               break;
@@ -149,7 +109,6 @@ export async function GET(_request: NextRequest) {
               break;
           }
 
-          // Calculate trend (compare to previous period)
           let trend: 'up' | 'down' | 'stable' = 'stable';
           if (def.metricType === 'UPTIME' || def.metricType === 'AVAILABILITY') {
             if (currentValue !== null && previousUptime !== null) {
@@ -157,7 +116,6 @@ export async function GET(_request: NextRequest) {
               else if (currentValue < previousUptime) trend = 'down';
             }
           } else if (metrics.previousPeriod.available !== false && def.metricType === 'MTTA') {
-            // For MTTA, lower is better
             const prev = metrics.previousPeriod.mtta;
             const curr = currentValue;
             if (prev !== null && curr !== null) {
@@ -165,7 +123,6 @@ export async function GET(_request: NextRequest) {
               else if (curr > prev) trend = 'down';
             }
           } else if (metrics.previousPeriod.available !== false) {
-            // For time-based metrics (MTTR), lower is better
             if (metrics.previousPeriod.mttr !== null && metrics.mttr !== null) {
               if (metrics.mttr < metrics.previousPeriod.mttr) trend = 'up';
               else if (metrics.mttr > metrics.previousPeriod.mttr) trend = 'down';
@@ -214,7 +171,6 @@ export async function GET(_request: NextRequest) {
       })
     );
 
-    // Calculate overall stats
     const totalDefinitions = complianceData.length;
     const availableDefinitions = complianceData.filter(c => c.dataState === 'available');
     const breachedCount = availableDefinitions.filter(c => c.breached === true).length;
@@ -245,6 +201,7 @@ export async function GET(_request: NextRequest) {
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
+    if (error instanceof AppError) return jsonError(error);
     logger.error('SLA compliance calculation error', { error });
     return jsonError(new AppError({ code: 'INTERNAL_ERROR', cause: error }));
   }
