@@ -1,10 +1,8 @@
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { getCachedWidgetData } from '@/lib/widget-data-cache';
-import prisma from '@/lib/prisma';
 import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
 import { dashboardMetricsScope } from '@/lib/authorization-filters';
+import { getCurrentUser } from '@/lib/rbac';
 import {
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
@@ -12,28 +10,15 @@ import {
 } from '@/lib/realtime-stream-authorization';
 
 /**
- * Server-Sent Events (SSE) Stream for Real-time Widget Updates
- * Pushes updates every 10 seconds or on demand
+ * Server-Sent Events (SSE) Stream for Real-time Widget Updates.
+ * Revalidates role/status/tokenVersion/team scope for long-lived connections.
  */
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return new Response('Unauthorized', { status: 401 });
-    }
-
-    const sessionUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!sessionUser) {
-      return new Response('Unauthorized', { status: 401 });
-    }
-
-    const expectedTokenVersion = session.user.tokenVersion ?? 0;
+    const currentUser = await getCurrentUser();
+    const expectedTokenVersion = currentUser.tokenVersion ?? 0;
     const initialAuthorization = await resolveStreamAuthorization(
-      sessionUser.id,
+      currentUser.id,
       expectedTokenVersion
     );
     if (!initialAuthorization) return new Response('Unauthorized', { status: 401 });
@@ -66,7 +51,7 @@ export async function GET(request: Request) {
     };
     const buildWidgetFilters = () => ({
       ...baseWidgetFilters,
-       ...dashboardMetricsScope(actor),
+      ...dashboardMetricsScope(actor),
     });
     let widgetFilters = buildWidgetFilters();
 
@@ -88,18 +73,13 @@ export async function GET(request: Request) {
           try {
             controller.close();
           } catch (_error) {
-            // Already closed
+            // Already closed.
           }
-           logger.info('sse.widgets.stream_closed', { userId: actor.id });
+          logger.info('sse.widgets.stream_closed', { userId: actor.id });
         };
 
-        // Send initial data immediately
         try {
-          const initialData = await getCachedWidgetData(
-             actor.id,
-             actor.role,
-            widgetFilters
-          );
+          const initialData = await getCachedWidgetData(actor.id, actor.role, widgetFilters);
           if (!isClosed) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(initialData)}\n\n`));
           }
@@ -109,7 +89,6 @@ export async function GET(request: Request) {
           });
         }
 
-        // Set up interval for periodic updates
         intervalId = setInterval(async () => {
           if (isClosed || isUpdating) return;
           isUpdating = true;
@@ -118,13 +97,10 @@ export async function GET(request: Request) {
             if (authorizationCounter >= 6) {
               authorizationCounter = 0;
               const nextAuthorization = await resolveStreamAuthorization(
-                 actor.id,
+                actor.id,
                 expectedTokenVersion
               );
-              if (
-                !nextAuthorization ||
-                 !hasSameStreamAuthorizationScope(actor, nextAuthorization)
-              ) {
+              if (!nextAuthorization || !hasSameStreamAuthorizationScope(actor, nextAuthorization)) {
                 if (!isClosed) {
                   controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify({ type: 'authorization_revoked' })}\n\n`)
@@ -133,15 +109,11 @@ export async function GET(request: Request) {
                 cleanup();
                 return;
               }
-               actor = nextAuthorization;
+              actor = nextAuthorization;
               widgetFilters = buildWidgetFilters();
             }
 
-            const data = await getCachedWidgetData(
-               actor.id,
-               actor.role,
-              widgetFilters
-            );
+            const data = await getCachedWidgetData(actor.id, actor.role, widgetFilters);
             if (!isClosed) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
             }
@@ -153,9 +125,8 @@ export async function GET(request: Request) {
           } finally {
             isUpdating = false;
           }
-        }, 10000); // Update every 10 seconds
+        }, 10000);
 
-        // Cleanup on disconnect
         request.signal.addEventListener('abort', () => {
           cleanup();
         });
@@ -170,10 +141,12 @@ export async function GET(request: Request) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no', // Disable nginx buffering
+        'X-Accel-Buffering': 'no',
       },
     });
   } catch (error) {
+    const unauthorized = error instanceof Error && error.message.includes('Unauthorized');
+    if (unauthorized) return new Response('Unauthorized', { status: 401 });
     logger.error('api.widgets.stream.error', {
       error: error instanceof Error ? error.message : String(error),
     });
