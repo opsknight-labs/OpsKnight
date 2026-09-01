@@ -8,7 +8,6 @@ import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import { Input } from '@/components/ui/shadcn/input';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/shadcn/avatar';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -19,7 +18,19 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { FormField, FormItem, FormControl, FormMessage } from '@/components/ui/shadcn/form';
-import { Lock, RefreshCw, Info, Camera, Upload, Loader2, Trash2, Save } from 'lucide-react';
+import {
+  Lock,
+  RefreshCw,
+  Camera,
+  Upload,
+  Loader2,
+  Trash2,
+  Save,
+  CheckCircle2,
+  ShieldCheck,
+  Mail,
+  Calendar,
+} from 'lucide-react';
 import { z } from 'zod';
 import { updateProfile } from '@/app/(app)/settings/actions';
 import { useRouter } from 'next/navigation';
@@ -69,7 +80,6 @@ export default function ProfileForm({
   const [currentGender, setCurrentGender] = useState<string | null | undefined>(gender);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Use local state for preview - show default avatar if no custom avatar
   const [avatarPreview, setAvatarPreview] = useState<string | null>(
     avatarUrl || getDefaultAvatar(gender, name)
   );
@@ -87,7 +97,8 @@ export default function ProfileForm({
     mode: 'onChange',
   });
 
-  // Handle avatar selection from picker
+  const isDirty = form.formState.isDirty;
+
   const handleAvatarSelect = async (selectedAvatarUrl: string) => {
     startTransition(async () => {
       const formData = new FormData();
@@ -96,11 +107,9 @@ export default function ProfileForm({
       const result = await updateProfile({ error: null, success: false }, formData);
 
       if (result.success) {
-        toast.success('Avatar updated');
+        toast.success('Avatar updated successfully');
         setAvatarPreview(selectedAvatarUrl);
-        // Update avatar context for immediate sync across all components
         updateCurrentUser(selectedAvatarUrl, currentGender);
-        // Force session update by passing dummy data to verify trigger="update"
         await update({ force: true });
         router.refresh();
       } else {
@@ -109,7 +118,6 @@ export default function ProfileForm({
     });
   };
 
-  // Handle immediate avatar upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -118,29 +126,24 @@ export default function ProfileForm({
         return;
       }
 
-      // Optimistic preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
 
-      // Immediate Upload
       startTransition(async () => {
         const formData = new FormData();
         formData.append('avatar', file);
 
-        // We don't need to send other fields, the server action handles partial updates now
         const result = await updateProfile({ error: null, success: false }, formData);
 
         if (result.success) {
-          toast.success('Profile photo updated');
-          // Force session update
+          toast.success('Profile photo uploaded');
           await update({ force: true });
           router.refresh();
         } else {
           toast.error(result.error || 'Failed to upload photo');
-          // Revert preview on failure - show original or default
           setAvatarPreview(
             avatarUrl && !isDefaultAvatar(avatarUrl)
               ? avatarUrl
@@ -155,7 +158,6 @@ export default function ProfileForm({
     setIsSaving(true);
     const formData = new FormData();
     formData.append('name', data.name);
-    // Always send gender field (even if empty) to allow clearing it
     formData.append('gender', data.gender || '');
     if (data.department) formData.append('department', data.department);
     if (data.jobTitle) formData.append('jobTitle', data.jobTitle);
@@ -164,7 +166,7 @@ export default function ProfileForm({
 
     if (result.success) {
       toast.success('Profile updated successfully');
-      // Force session update
+      form.reset(data);
       await update({ force: true });
       router.refresh();
     } else {
@@ -178,7 +180,6 @@ export default function ProfileForm({
     };
   };
 
-  // Get initials from name for fallback
   const getInitials = (nameInput: string) => {
     return (nameInput || 'User')
       .split(' ')
@@ -190,142 +191,176 @@ export default function ProfileForm({
 
   return (
     <div className="space-y-6">
-      {/* Avatar Section - Independent of Autosave Form */}
-      <div className="flex flex-col items-center justify-center py-6 gap-4 border-b pb-8">
-        <div
-          className="relative group cursor-pointer"
-          onClick={() => !isUploading && fileInputRef.current?.click()}
-        >
-          <Avatar
-            className={cn(
-              'h-32 w-32 border-4 border-background shadow-xl ring-2 ring-border/50 transition-all group-hover:ring-primary/50',
-              isUploading && 'opacity-70'
-            )}
+      {/* Avatar & Photo Customizer Card */}
+      <SettingsSection
+        title="Profile Photo"
+        description="Choose a preset persona avatar or upload your own high-resolution image"
+      >
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 py-4">
+          <div
+            className="relative group cursor-pointer shrink-0"
+            onClick={() => !isUploading && fileInputRef.current?.click()}
           >
-            <AvatarImage
-              src={avatarPreview || getDefaultAvatar(currentGender, email || 'user')}
-              alt={name}
-              className="object-cover"
-            />
-            <AvatarFallback className="text-3xl font-bold bg-gradient-to-br from-primary/10 via-primary/5 to-background text-primary">
-              {getInitials(name)}
-            </AvatarFallback>
-          </Avatar>
-
-          <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px]">
-            {isUploading ? (
-              <Loader2 className="h-8 w-8 text-white animate-spin" />
-            ) : (
-              <Camera className="h-8 w-8 text-white drop-shadow-md" />
-            )}
-          </div>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/*"
-            className="hidden"
-            disabled={isUploading}
-          />
-        </div>
-
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex gap-2">
-            <AvatarPicker
-              currentAvatarUrl={avatarPreview}
-              onSelect={handleAvatarSelect}
-              userName={name}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="gap-2"
+            <Avatar
+              className={cn(
+                'h-24 w-24 border-2 border-background shadow-md ring-2 ring-primary/20 transition-all group-hover:ring-primary/60',
+                isUploading && 'opacity-70'
+              )}
             >
-              <Upload className="h-3.5 w-3.5" />
-              Upload Photo
-            </Button>
-            {avatarPreview && !isDefaultAvatar(avatarPreview) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  startTransition(async () => {
-                    const formData = new FormData();
-                    formData.append('removeAvatar', 'true');
-                    const result = await updateProfile({ error: null, success: false }, formData);
-                    if (result.success) {
-                      toast.success('Profile photo removed');
-                      // Set preview to gender-based default avatar
-                      const defaultAvatar = getDefaultAvatar(currentGender, email || 'user');
-                      setAvatarPreview(defaultAvatar);
-                      // Update avatar context for immediate sync across all components
-                      updateCurrentUser(null, currentGender);
-                      // Force session update
-                      await update({ force: true });
-                      router.refresh();
-                    } else {
-                      toast.error(result.error || 'Failed to remove photo');
-                    }
-                  });
-                }}
-                disabled={isUploading}
-                className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Remove
-              </Button>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground text-center">
-            Choose from preset avatars or upload your own (JPG, GIF, PNG. Max 2MB)
-          </p>
-        </div>
-      </div>
+              <AvatarImage
+                src={avatarPreview || getDefaultAvatar(currentGender, email || 'user')}
+                alt={name}
+                className="object-cover"
+              />
+              <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
+                {getInitials(name)}
+              </AvatarFallback>
+            </Avatar>
 
-      {/* Editable Section with Manual Save */}
+            <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px]">
+              {isUploading ? (
+                <Loader2 className="h-6 w-6 text-white animate-spin" />
+              ) : (
+                <Camera className="h-6 w-6 text-white drop-shadow-md" />
+              )}
+            </div>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="hidden"
+              disabled={isUploading}
+            />
+          </div>
+
+          <div className="flex flex-col items-center sm:items-start gap-3 flex-1 text-center sm:text-left">
+            <div>
+              <h4 className="text-sm font-semibold">{name || 'Your Name'}</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                PNG, JPG, or SVG up to 2MB. Square dimensions recommended.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+              <AvatarPicker
+                currentAvatarUrl={avatarPreview}
+                onSelect={handleAvatarSelect}
+                userName={name}
+              />
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="gap-1.5 h-8 text-xs font-medium"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Upload Custom Photo
+              </Button>
+
+              {avatarPreview && !isDefaultAvatar(avatarPreview) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    startTransition(async () => {
+                      const formData = new FormData();
+                      formData.append('removeAvatar', 'true');
+                      const result = await updateProfile({ error: null, success: false }, formData);
+                      if (result.success) {
+                        toast.success('Custom photo removed');
+                        const defaultAvatar = getDefaultAvatar(currentGender, email || 'user');
+                        setAvatarPreview(defaultAvatar);
+                        updateCurrentUser(null, currentGender);
+                        await update({ force: true });
+                        router.refresh();
+                      } else {
+                        toast.error(result.error || 'Failed to remove photo');
+                      }
+                    });
+                  }}
+                  disabled={isUploading}
+                  className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Reset to Default
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </SettingsSection>
+
+      {/* Editable Personal Details */}
       <FormProvider {...form}>
-        <form
-          onSubmit={form.handleSubmit(async data => {
-            await handleManualSave(data);
-          })}
-        >
+        <form onSubmit={form.handleSubmit(handleManualSave)}>
           <SettingsSection
-            title="Account Details"
-            description="Manage your public profile and workspace preferences"
+            title="Personal Details"
+            description="Manage your display name, role identity, and workspace department"
+            footer={
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {isDirty ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">
+                      ● You have unsaved changes
+                    </span>
+                  ) : (
+                    'All changes saved'
+                  )}
+                </p>
+
+                <Button
+                  type="submit"
+                  disabled={isSaving || isUploading || !isDirty}
+                  className="gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            }
           >
             <div className="divide-y text-sm">
               <SettingsRow
                 label="Display Name"
-                description="Your public name in the workspace"
+                description="The name visible across incidents, on-call schedules, and audit trails"
                 required
                 htmlFor="name"
               >
                 <Input
                   id="name"
                   {...form.register('name')}
-                  placeholder="Enter your display name"
-                  className="w-full"
+                  placeholder="e.g. Dushyant Rahangdale"
+                  className="w-full max-w-md"
                 />
               </SettingsRow>
 
               <SettingsRow
-                label="Gender"
-                description="Your gender identity (optional)"
+                label="Gender Identity"
+                description="Helps OpsKnight tailor your default avatar persona"
                 htmlFor="gender"
               >
                 <FormField
                   control={form.control}
                   name="gender"
                   render={({ field }) => (
-                    <FormItem className="w-full">
+                    <FormItem className="w-full max-w-md">
                       <Select
                         onValueChange={value => {
                           field.onChange(value);
                           setCurrentGender(value);
-                          // Update avatar preview if currently showing a default avatar
                           if (isDefaultAvatar(avatarPreview)) {
                             setAvatarPreview(getDefaultAvatar(value, email || 'user'));
                           }
@@ -335,7 +370,7 @@ export default function ProfileForm({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select gender" />
+                            <SelectValue placeholder="Select gender identity" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -354,97 +389,84 @@ export default function ProfileForm({
 
               <SettingsRow
                 label="Job Title"
-                description="Your professional role"
+                description="Your operational or engineering role"
                 htmlFor="jobTitle"
               >
-                <div className="w-full space-y-1">
+                <div className="w-full max-w-md space-y-1">
                   <Input
                     id="jobTitle"
                     {...form.register('jobTitle')}
-                    placeholder="e.g. Senior Site Reliability Engineer"
+                    placeholder="e.g. Lead Site Reliability Engineer"
                     className="w-full"
                   />
                   {lastOidcSync && (
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <RefreshCw className="h-3 w-3" /> Synced from SSO
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <RefreshCw className="h-3 w-3 text-primary" /> Synced automatically via SSO
                     </p>
                   )}
                 </div>
               </SettingsRow>
 
               <SettingsRow
-                label="Department"
-                description="Your team or division"
+                label="Department / Team"
+                description="Your primary organizational division"
                 htmlFor="department"
               >
                 <Input
                   id="department"
                   {...form.register('department')}
-                  placeholder="e.g. Platform Engineering"
-                  className="w-full"
+                  placeholder="e.g. Infrastructure Platform"
+                  className="w-full max-w-md"
                 />
               </SettingsRow>
-
-              <SettingsRow label="Email Address" description="Managed by your identity provider">
-                <div className="relative w-full">
-                  <Input
-                    value={email ?? 'Not available'}
-                    readOnly
-                    disabled
-                    className="pr-10 bg-muted/50 font-mono text-xs"
-                  />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                </div>
-              </SettingsRow>
-
-              <SettingsRow label="Role" description="Determines your permission level">
-                <div className="relative w-full">
-                  <Input value={role} readOnly disabled className="pr-10 bg-muted/50" />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                </div>
-              </SettingsRow>
-
-              <SettingsRow label="Member Since" description="Join date">
-                <div className="relative w-full">
-                  <Input value={memberSince} readOnly disabled className="pr-10 bg-muted/50" />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                </div>
-              </SettingsRow>
-            </div>
-
-            {/* Save Button */}
-            <div className="flex justify-end pt-6 border-t">
-              <Button type="submit" disabled={isSaving || isUploading} className="gap-2">
-                {isSaving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
             </div>
           </SettingsSection>
         </form>
       </FormProvider>
 
-      {/* Info Note */}
-      <Alert className="bg-muted/30 border-none">
-        <Info className="h-4 w-4 text-muted-foreground" />
-        <AlertDescription className="text-xs text-muted-foreground">
-          Contact your administrator to update locked fields.
-        </AlertDescription>
-      </Alert>
+      {/* Clean Read-Only Identity & SSO Card */}
+      <SettingsSection
+        title="Workspace Identity & Security"
+        description="Immutable credentials and identity properties managed by your administrator"
+      >
+        <div className="grid gap-4 py-4 sm:grid-cols-3">
+          <div className="rounded-lg border bg-card/60 p-3.5 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <Mail className="h-3.5 w-3.5 text-primary" />
+              <span>Email Address</span>
+            </div>
+            <p className="text-sm font-medium text-foreground truncate">{email || 'Not set'}</p>
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Lock className="h-3 w-3" /> Managed by Identity Provider
+            </div>
+          </div>
+
+          <div className="rounded-lg border bg-card/60 p-3.5 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+              <span>Workspace Role</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="font-bold text-xs">
+                {role}
+              </Badge>
+              <span className="text-xs text-muted-foreground capitalize">Access Level</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Admin-managed permissions</p>
+          </div>
+
+          <div className="rounded-lg border bg-card/60 p-3.5 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <Calendar className="h-3.5 w-3.5 text-primary" />
+              <span>Member Since</span>
+            </div>
+            <p className="text-sm font-medium text-foreground">{memberSince}</p>
+            <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-3 w-3" /> Active Account
+            </div>
+          </div>
+        </div>
+      </SettingsSection>
     </div>
   );
 }

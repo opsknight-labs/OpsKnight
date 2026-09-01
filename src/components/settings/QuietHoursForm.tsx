@@ -7,7 +7,10 @@ import { Switch } from '@/components/ui/shadcn/switch';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
-import { Clock3, Info, Moon, ShieldCheck } from 'lucide-react';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { Clock3, Info, Moon, ShieldCheck, Sun, Loader2, Save } from 'lucide-react';
+import { notify as toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 
 type State = {
   error?: string | null;
@@ -48,34 +51,58 @@ export default function QuietHoursForm({
 
   useEffect(() => {
     if (state?.success) {
+      toast.success('Quiet hours saved successfully');
       const timer = setTimeout(() => router.refresh(), 500);
       return () => clearTimeout(timer);
     }
-  }, [state?.success, router]);
+    if (state?.error) {
+      toast.error(state.error);
+    }
+  }, [state, router]);
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="space-y-6">
       <input type="hidden" name="quietHoursEnabled" value={enabledChecked ? 'on' : 'off'} />
-      <input
-        type="hidden"
-        name="quietHoursWeekendAllDay"
-        value={weekendChecked ? 'on' : 'off'}
-      />
+      <input type="hidden" name="quietHoursWeekendAllDay" value={weekendChecked ? 'on' : 'off'} />
       <input type="hidden" name="quietHoursStart" value={startTime} />
       <input type="hidden" name="quietHoursEnd" value={endTime} />
 
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        {/* Switch Header */}
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div className="flex min-w-0 gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <div className="flex min-w-0 gap-3.5">
+            <div
+              className={cn(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors',
+                enabledChecked ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+              )}
+            >
               <Moon className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="quiet-hours-switch" className="text-base font-semibold">
-                Quiet Hours
-              </Label>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Pause disruptive LOW-urgency alerts on your personal schedule.
+              <div className="flex items-center gap-2">
+                <Label
+                  htmlFor="quiet-hours-switch"
+                  className="text-base font-semibold cursor-pointer"
+                >
+                  Personal Quiet Hours
+                </Label>
+                {enabledChecked ? (
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]"
+                  >
+                    Active
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                    Off
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Pause non-critical and LOW-urgency notification disruptions during your resting
+                schedule.
               </p>
             </div>
           </div>
@@ -86,96 +113,110 @@ export default function QuietHoursForm({
               checked={enabledChecked}
               onCheckedChange={setEnabledChecked}
             />
-            <Label htmlFor="quiet-hours-switch" className="min-w-14 text-sm font-medium">
-              {enabledChecked ? 'Enabled' : 'Disabled'}
-            </Label>
           </div>
         </div>
 
-        <div className="flex items-start gap-2 border-t bg-muted/20 px-4 py-3 text-xs leading-relaxed text-muted-foreground sm:px-5">
+        {/* Explainability Banner */}
+        <div className="flex items-start gap-2.5 border-t bg-muted/30 px-4 py-3 text-xs leading-relaxed text-muted-foreground sm:px-5">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <p>
-            <span className="font-medium text-foreground">How it works:</span> Your start-to-end
-            window applies every day. Turn on all-day weekends to extend quiet hours through all of
-            Saturday and Sunday. When it is off, the regular time window still applies on weekends.
+            <strong className="text-foreground font-medium">Failsafe Alerting Rule:</strong> High
+            and Critical urgency incidents, active on-call escalations, and SLA breach warnings will{' '}
+            <strong className="text-foreground font-medium">always bypass quiet hours</strong> to
+            protect your systems.
           </p>
         </div>
 
         {enabledChecked && (
-          <div className="space-y-5 border-t bg-muted/20 p-4 sm:p-5">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(16rem,1.35fr)]">
-              <div className="space-y-2 rounded-lg border bg-background p-4">
-                <div className="flex items-center gap-2">
-                  <Clock3 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <Label htmlFor="quiet-hours-start">Starts at</Label>
+          <div className="space-y-5 border-t bg-card p-4 sm:p-5">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Start Time */}
+              <div className="space-y-2 rounded-xl border bg-muted/20 p-4">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <Moon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                  <Label htmlFor="quiet-hours-start" className="cursor-pointer">
+                    Starts at (Sleep)
+                  </Label>
                 </div>
                 <Input
                   id="quiet-hours-start"
                   type="time"
                   value={startTime}
                   onChange={event => setStartTime(event.target.value)}
-                  className="w-full"
+                  className="w-full bg-background font-mono text-sm"
                 />
               </div>
-              <div className="space-y-2 rounded-lg border bg-background p-4">
-                <div className="flex items-center gap-2">
-                  <Clock3 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <Label htmlFor="quiet-hours-end">Ends at</Label>
+
+              {/* End Time */}
+              <div className="space-y-2 rounded-xl border bg-muted/20 p-4">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <Sun className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+                  <Label htmlFor="quiet-hours-end" className="cursor-pointer">
+                    Ends at (Wakeup)
+                  </Label>
                 </div>
                 <Input
                   id="quiet-hours-end"
                   type="time"
                   value={endTime}
                   onChange={event => setEndTime(event.target.value)}
-                  className="w-full"
+                  className="w-full bg-background font-mono text-sm"
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-4 rounded-lg border bg-background p-4">
-                <div>
-                  <Label htmlFor="quiet-hours-weekend" className="text-sm">
-                    Quiet all day on weekends
-                  </Label>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Otherwise, the regular time window applies.
-                  </p>
+              {/* Weekend Toggle */}
+              <div className="flex flex-col justify-between rounded-xl border bg-muted/20 p-4 sm:col-span-2 lg:col-span-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label
+                      htmlFor="quiet-hours-weekend"
+                      className="text-xs font-semibold cursor-pointer"
+                    >
+                      All-Day Quiet on Weekends
+                    </Label>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      Silences LOW alerts all through Saturday and Sunday.
+                    </p>
+                  </div>
+                  <Switch
+                    id="quiet-hours-weekend"
+                    checked={weekendChecked}
+                    onCheckedChange={setWeekendChecked}
+                  />
                 </div>
-                <Switch
-                  id="quiet-hours-weekend"
-                  checked={weekendChecked}
-                  onCheckedChange={setWeekendChecked}
-                />
               </div>
             </div>
 
-            <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
-              <p className="flex items-start gap-2 rounded-lg bg-background/70 p-3">
-                <Clock3 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            {/* Visual Schedule Pills */}
+            <div className="grid gap-3 text-xs text-muted-foreground sm:grid-cols-2">
+              <div className="flex items-center gap-2 rounded-lg bg-muted/40 p-3">
+                <Clock3 className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                 <span>
-                  Scheduled in <span className="font-medium text-foreground">{timeZone}</span>, the
-                  timezone configured above.
+                  Evaluated in <strong className="text-foreground font-mono">{timeZone}</strong>
                 </span>
-              </p>
-              <p className="flex items-start gap-2 rounded-lg bg-background/70 p-3">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>MEDIUM/HIGH urgency, email, and in-app notifications always continue.</span>
-              </p>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-muted/40 p-3">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+                <span>Critical alerts will always override quiet hours</span>
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {(state?.error || state?.success) && (
-        <div
-          className={`p-3 rounded-lg text-sm ${state?.error ? 'bg-destructive/10 text-destructive' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}`}
-        >
-          {state?.error ? state.error : 'Quiet-hours preferences saved successfully'}
-        </div>
-      )}
-
       <div className="flex justify-end">
-        <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
-          {isPending ? 'Saving...' : 'Save Quiet Hours'}
+        <Button type="submit" disabled={isPending} className="gap-2 w-full sm:w-auto">
+          {isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving Quiet Hours...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              Save Quiet Hours Schedule
+            </>
+          )}
         </Button>
       </div>
     </form>

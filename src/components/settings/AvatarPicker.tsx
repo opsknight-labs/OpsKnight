@@ -32,18 +32,18 @@ const STATIC_AVATARS = [
   { id: 'custom-15', src: '/avatars/avatar-15.png', label: 'Agent Lime' },
 ];
 
-// Executive Monograms (Initial Monograms with SRE brand palettes)
-const INITIALS_PRESETS = [
-  { id: 'ini-1', style: 'initials', seed: 'OP', bg: '6366f1', label: 'Ops' },
-  { id: 'ini-2', style: 'initials', seed: 'SR', bg: '3b82f6', label: 'SRE' },
-  { id: 'ini-3', style: 'initials', seed: 'DO', bg: '8b5cf6', label: 'DevOps' },
-  { id: 'ini-4', style: 'initials', seed: 'TL', bg: '0d9488', label: 'Tech Lead' },
-  { id: 'ini-5', style: 'initials', seed: 'SE', bg: '0284c7', label: 'Security' },
-  { id: 'ini-6', style: 'initials', seed: 'EM', bg: '10b981', label: 'Engineering' },
-  { id: 'ini-7', style: 'initials', seed: 'AR', bg: 'f59e0b', label: 'Architect' },
-  { id: 'ini-8', style: 'initials', seed: 'AD', bg: '64748b', label: 'Admin' },
-  { id: 'ini-9', style: 'initials', seed: 'OC', bg: 'ec4899', label: 'On-Call' },
-  { id: 'ini-10', style: 'initials', seed: 'PR', bg: '4f46e5', label: 'Primary' },
+// Personalized Initials Palettes (Using user's actual name initials with vibrant SRE colorways)
+const INITIALS_PALETTES = [
+  { id: 'user-ini-indigo', bg: '6366f1', label: 'Indigo' },
+  { id: 'user-ini-blue', bg: '3b82f6', label: 'Ocean Blue' },
+  { id: 'user-ini-purple', bg: '8b5cf6', label: 'Royal Purple' },
+  { id: 'user-ini-teal', bg: '0d9488', label: 'Deep Teal' },
+  { id: 'user-ini-sky', bg: '0284c7', label: 'Sky Azure' },
+  { id: 'user-ini-emerald', bg: '10b981', label: 'Emerald Mint' },
+  { id: 'user-ini-amber', bg: 'f59e0b', label: 'Warm Amber' },
+  { id: 'user-ini-slate', bg: '475569', label: 'Titanium Slate' },
+  { id: 'user-ini-pink', bg: 'ec4899', label: 'Vibrant Rose' },
+  { id: 'user-ini-dark', bg: '1e1b4b', label: 'Midnight Blue' },
 ];
 
 // Abstract Geometric Badges (Shapes)
@@ -211,17 +211,31 @@ export function AvatarPicker({ currentAvatarUrl, onSelect, userName }: AvatarPic
             </div>
           </div>
 
-          {/* Executive Monograms */}
+          {/* Personalized User Name Initials */}
           <div className="space-y-3 pt-2">
-            <h4 className="text-sm font-medium text-foreground">Executive Monograms</h4>
+            <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+              <span>Personalized Initials</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-normal">
+                {getInitials(userName)}
+              </span>
+            </h4>
             <div className="grid grid-cols-5 gap-3">
-              {INITIALS_PRESETS.map(avatar => {
-                const isSelected = isDiceBearSelected(avatar);
-                const url = getDiceBearUrl(avatar.style, avatar.seed, avatar.bg);
+              {INITIALS_PALETTES.map(palette => {
+                const userInitials = getInitials(userName);
+                const url = getDiceBearUrl('initials', userInitials, palette.bg);
+                const isSelected =
+                  selectedId === palette.id ||
+                  (currentAvatarUrl?.includes('style=initials') &&
+                    currentAvatarUrl?.includes(`backgroundColor=${palette.bg}`));
+
                 return (
                   <button
-                    key={avatar.id}
-                    onClick={() => handleDiceBearSelect(avatar)}
+                    key={palette.id}
+                    onClick={() => {
+                      setSelectedId(palette.id);
+                      onSelect(url);
+                      setOpen(false);
+                    }}
                     className="group relative flex flex-col items-center gap-1.5"
                   >
                     <div
@@ -233,9 +247,9 @@ export function AvatarPicker({ currentAvatarUrl, onSelect, userName }: AvatarPic
                       )}
                     >
                       <Avatar className="h-14 w-14">
-                        <AvatarImage src={url} alt={avatar.label} className="object-cover" />
+                        <AvatarImage src={url} alt={palette.label} className="object-cover" />
                         <AvatarFallback className="text-xs font-semibold bg-muted">
-                          {getInitials(userName)}
+                          {userInitials}
                         </AvatarFallback>
                       </Avatar>
                       {isSelected && (
@@ -245,7 +259,7 @@ export function AvatarPicker({ currentAvatarUrl, onSelect, userName }: AvatarPic
                       )}
                     </div>
                     <span className="text-[10px] text-muted-foreground truncate max-w-full">
-                      {avatar.label}
+                      {palette.label}
                     </span>
                   </button>
                 );
