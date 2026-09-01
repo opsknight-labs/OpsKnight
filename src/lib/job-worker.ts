@@ -1,5 +1,10 @@
 import { processPendingJobs } from './jobs/queue';
 import { logger } from './logger';
+import {
+  consumeEscalationWakeRequest,
+  criticalEscalationCycleWasBusy,
+  runCriticalEscalationCycle,
+} from './escalation/worker';
 
 const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_CONCURRENCY = 15;
@@ -116,6 +121,14 @@ async function runOnce(): Promise<void> {
   const startedAt = Date.now();
 
   try {
+    // Escalation first, in its own claim batch. A page must never queue behind
+    // a backlog of webhooks or status-page notifications, and this lane owns
+    // escalation's recovery so it does not depend on the scheduler lease.
+    const escalation = await runCriticalEscalationCycle({
+      batchSize: Math.min(workerConfig.batchSize, 50),
+      concurrency: Math.min(workerConfig.concurrency, 10),
+    });
+
     const result = await processPendingJobs(workerConfig.batchSize, workerConfig.concurrency);
     lastSuccessAt = new Date();
     lastError = null;
@@ -124,11 +137,15 @@ async function runOnce(): Promise<void> {
       processed: result.processed,
       failed: result.failed,
       claimed: result.total,
+      escalation,
       durationMs: Date.now() - startedAt,
     });
 
-    const delay =
-      result.total > 0 ? workerConfig.busyPollMs : withIdleJitter(workerConfig.idlePollMs);
+    const busy =
+      result.total > 0 ||
+      criticalEscalationCycleWasBusy(escalation) ||
+      consumeEscalationWakeRequest();
+    const delay = busy ? workerConfig.busyPollMs : withIdleJitter(workerConfig.idlePollMs);
     scheduleNextRun(delay);
   } catch (error) {
     lastError = error instanceof Error ? error.message : String(error);

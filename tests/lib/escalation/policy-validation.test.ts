@@ -152,24 +152,24 @@ describe('escalationStepOrdersAreContiguous', () => {
 });
 
 describe('escalationTargetExists', () => {
-  it.each([
-    ['USER', 'user'],
-    ['TEAM', 'team'],
-    ['SCHEDULE', 'onCallSchedule'],
-  ])('checks the %s table', async (targetType, model) => {
-    const count = vi.fn().mockResolvedValue(1);
-    const tx = {
-      user: { count: vi.fn().mockResolvedValue(0) },
-      team: { count: vi.fn().mockResolvedValue(0) },
-      onCallSchedule: { count: vi.fn().mockResolvedValue(0) },
-    } as unknown as Record<string, { count: typeof count }>;
-    tx[model].count = count;
+  it.each(['USER', 'TEAM', 'SCHEDULE'] as const)(
+    'checks only the table that owns a %s target',
+    async targetType => {
+      const tx = {
+        user: { count: vi.fn().mockResolvedValue(targetType === 'USER' ? 1 : 0) },
+        team: { count: vi.fn().mockResolvedValue(targetType === 'TEAM' ? 1 : 0) },
+        onCallSchedule: { count: vi.fn().mockResolvedValue(targetType === 'SCHEDULE' ? 1 : 0) },
+      };
 
-    await expect(
-      escalationTargetExists(tx as never, targetType as never, 'target-1')
-    ).resolves.toBe(true);
-    expect(count).toHaveBeenCalledWith({ where: { id: 'target-1' } });
-  });
+      await expect(escalationTargetExists(tx as never, targetType, 'target-1')).resolves.toBe(true);
+
+      const owning =
+        targetType === 'USER' ? tx.user : targetType === 'TEAM' ? tx.team : tx.onCallSchedule;
+      expect(owning.count).toHaveBeenCalledWith({ where: { id: 'target-1' } });
+      const others = [tx.user, tx.team, tx.onCallSchedule].filter(model => model !== owning);
+      for (const model of others) expect(model.count).not.toHaveBeenCalled();
+    }
+  );
 
   it('reports a missing target', async () => {
     const tx = { user: { count: vi.fn().mockResolvedValue(0) } };

@@ -364,8 +364,9 @@ async function runOnce() {
     const jobResult = await processPendingJobs(100, 15);
     const escalationResult = await processPendingEscalations();
 
-    // Repair escalations whose durable state and queued work disagree before
-    // reporting, so a lost job row cannot sit undetected until the next tick.
+    // Reconciliation also runs here so a deployment with no job-worker process
+    // (OPSKNIGHT_PROCESS_ROLE=scheduler) still repairs escalations. Every repair
+    // is idempotent, so both callers running is harmless.
     const { reconcileEscalations } = await import('./escalation/recovery');
     const reconciliation = await reconcileEscalations();
 

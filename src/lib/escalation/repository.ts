@@ -21,6 +21,7 @@ import {
   materializeEscalationNotificationIntents,
   type EscalationNotificationPlan,
 } from './notification-intents';
+import { notifyEscalationWorkPending } from './worker';
 import {
   escalationDueAt,
   escalationLifecycleGate,
@@ -420,6 +421,11 @@ export async function commitEscalationPlan(input: {
             scheduledAt: input.plan.nextJob.scheduledAt,
           })
         : null;
+
+    // A next step that is already due should not wait out an idle poll.
+    if (nextJob && input.plan.nextJob && input.plan.nextJob.scheduledAt.getTime() <= Date.now()) {
+      notifyEscalationWorkPending();
+    }
 
     return {
       committed: true,
