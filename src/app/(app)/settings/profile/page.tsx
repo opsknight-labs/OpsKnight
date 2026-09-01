@@ -5,39 +5,33 @@ import ProfileForm from '@/components/settings/ProfileForm';
 import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
-import DetailHeroBanner, { type DetailStatItem } from '@/components/ui/DetailHeroBanner';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/shadcn/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { getDefaultAvatar } from '@/lib/avatar';
-import {
-  User,
-  Bell,
-  Clock,
-  Shield,
-  Moon,
-  Calendar,
-  Sparkles,
-  CheckCircle2,
-  RefreshCw,
-} from 'lucide-react';
+import { Mail, Briefcase, Building2, Clock, RefreshCw, Users, Calendar, Flame } from 'lucide-react';
 
-function minutesToTime(minutes: number): string {
-  const safeMinutes = Number.isInteger(minutes) && minutes >= 0 && minutes < 1440 ? minutes : 0;
-  const hours = Math.floor(safeMinutes / 60);
-  const mins = safeMinutes % 60;
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const displayHours = hours % 12 || 12;
-  return `${displayHours}:${String(mins).padStart(2, '0')} ${ampm}`;
+function formatLocalTimeInTz(timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone || 'UTC',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true,
+      timeZoneName: 'short',
+    }).format(new Date());
+  } catch {
+    return 'UTC';
+  }
 }
 
 export default async function ProfileSettingsPage() {
   const session = await getServerSession(await getAuthOptions());
   const email = session?.user?.email ?? null;
 
-  // Fetch user data from database
+  // Fetch user data with operational counts for hero stats
   const user = email
     ? await prisma.user.findUnique({
         where: { email },
@@ -45,6 +39,7 @@ export default async function ProfileSettingsPage() {
           id: true,
           name: true,
           role: true,
+          status: true,
           createdAt: true,
           timeZone: true,
           department: true,
@@ -61,6 +56,14 @@ export default async function ProfileSettingsPage() {
           quietHoursStartMinutes: true,
           quietHoursEndMinutes: true,
           quietHoursWeekendAllDay: true,
+          // Operational counts for hero stats
+          _count: {
+            select: {
+              teamMemberships: true,
+              layerAssignments: true,
+              assignedIncidents: true,
+            },
+          },
         },
       })
     : null;
@@ -75,60 +78,11 @@ export default async function ProfileSettingsPage() {
     ? formatDateTime(user.lastOidcSync, timeZone, { format: 'datetime' })
     : null;
 
-  const activeChannelsCount = [
-    user?.emailNotificationsEnabled ?? false,
-    (user?.smsNotificationsEnabled ?? false) && !!user?.phoneNumber,
-    (user?.whatsappNotificationsEnabled ?? false) && !!user?.phoneNumber,
-    user?.pushNotificationsEnabled ?? false,
-  ].filter(Boolean).length;
-
-  const quietHoursLabel = user?.quietHoursEnabled
-    ? `${minutesToTime(user.quietHoursStartMinutes ?? 18 * 60)} - ${minutesToTime(user.quietHoursEndMinutes ?? 8 * 60)}`
-    : 'Disabled';
-
-  const initials = (name || 'User')
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-
-  const heroStats: DetailStatItem[] = [
-    {
-      label: 'Role',
-      value: role,
-      icon: <Shield className="h-3.5 w-3.5 text-primary-foreground/80" />,
-      subtext: 'Permissions Level',
-    },
-    {
-      label: 'Timezone',
-      value: timeZone.split('/')[1]?.replace(/_/g, ' ') || timeZone,
-      icon: <Clock className="h-3.5 w-3.5 text-primary-foreground/80" />,
-      subtext: timeZone,
-    },
-    {
-      label: 'Channels',
-      value: `${activeChannelsCount} / 4`,
-      icon: <Bell className="h-3.5 w-3.5 text-primary-foreground/80" />,
-      subtext: 'Alert Delivery',
-    },
-    {
-      label: 'Quiet Hours',
-      value: user?.quietHoursEnabled ? 'Active' : 'Off',
-      icon: <Moon className="h-3.5 w-3.5 text-primary-foreground/80" />,
-      subtext: quietHoursLabel,
-    },
-    {
-      label: 'Member Since',
-      value: memberSince,
-      icon: <Calendar className="h-3.5 w-3.5 text-primary-foreground/80" />,
-      subtext: 'Workspace Access',
-    },
-  ];
+  const localTimeStr = formatLocalTimeInTz(timeZone);
 
   return (
     <div className="space-y-6">
-      {/* Centralized Glassmorphic Hero Banner */}
+      {/* Centralized Hero Banner — Same pattern as /users/[id] */}
       <DetailHeroBanner
         breadcrumb={{
           label: 'Settings',
@@ -137,12 +91,16 @@ export default async function ProfileSettingsPage() {
         }}
         tag="Personal Account"
         title={name}
-        subtitle={
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-mono">{email}</span>
-            {user?.jobTitle && <span>· {user.jobTitle}</span>}
-            {user?.department && <span>· {user.department}</span>}
-          </div>
+        icon={
+          <UserAvatar
+            userId={user?.id || 'unknown'}
+            name={name}
+            avatarUrl={user?.avatarUrl || getDefaultAvatar(user?.gender, email || 'user')}
+            gender={user?.gender}
+            size="xl"
+            showOnlineStatus={user?.status === 'ACTIVE'}
+            className="shrink-0 ring-2 ring-primary-foreground/20 rounded-full"
+          />
         }
         badges={
           <>
@@ -171,96 +129,120 @@ export default async function ProfileSettingsPage() {
                 Direct Account
               </Badge>
             )}
+
+            {user?.status === 'ACTIVE' && (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="bg-emerald-500/20 text-emerald-100 border-emerald-400/30 font-medium text-[10px]"
+              >
+                Active
+              </Badge>
+            )}
           </>
         }
-        icon={
-          <Avatar className="h-16 w-16 border-2 border-primary-foreground/30 shadow-md ring-2 ring-primary-foreground/20 rounded-full">
-            <AvatarImage
-              src={user?.avatarUrl || getDefaultAvatar(user?.gender, email || 'user')}
-              alt={name}
-              className="object-cover"
-            />
-            <AvatarFallback className="text-xl font-bold bg-primary-foreground/20 text-primary-foreground">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+        subtitle={
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <a
+              href={`mailto:${email}`}
+              className="flex items-center gap-1.5 font-mono hover:text-white hover:underline transition-colors"
+            >
+              <Mail className="h-3.5 w-3.5 opacity-80" />
+              <span>{email}</span>
+            </a>
+
+            {user?.jobTitle && (
+              <span className="flex items-center gap-1.5">
+                <Briefcase className="h-3.5 w-3.5 opacity-80" />
+                <span>{user.jobTitle}</span>
+              </span>
+            )}
+
+            {user?.department && (
+              <span className="flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5 opacity-80" />
+                <span>{user.department}</span>
+              </span>
+            )}
+
+            <span className="flex items-center gap-1.5 bg-primary-foreground/10 px-2 py-0.5 rounded border border-primary-foreground/15">
+              <Clock className="h-3 w-3 opacity-80" />
+              <span>{localTimeStr}</span>
+            </span>
+          </div>
         }
-        stats={heroStats}
-        statsPlacement="bottom"
+        stats={[
+          {
+            label: 'Teams',
+            value: user?._count?.teamMemberships ?? 0,
+            icon: <Users className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'On-Call',
+            value: user?._count?.layerAssignments ?? 0,
+            icon: <Calendar className="h-3.5 w-3.5" />,
+          },
+          {
+            label: 'Incidents',
+            value: user?._count?.assignedIncidents ?? 0,
+            icon: <Flame className="h-3.5 w-3.5" />,
+          },
+        ]}
       />
 
-      {/* Tabbed Profile Navigation */}
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 max-w-lg h-11 p-1 bg-muted/60">
-          <TabsTrigger value="profile" className="gap-2 text-xs font-semibold py-2">
-            <User className="h-3.5 w-3.5" />
-            Profile & Identity
-          </TabsTrigger>
+      {/* Profile Photo + Personal Information + Account Details */}
+      <ProfileForm
+        name={name}
+        email={email}
+        role={role}
+        memberSince={memberSince}
+        department={user?.department}
+        jobTitle={user?.jobTitle}
+        avatarUrl={user?.avatarUrl}
+        lastOidcSync={lastOidcSync}
+        gender={user?.gender}
+      />
 
-          <TabsTrigger value="notifications" className="gap-2 text-xs font-semibold py-2">
-            <Bell className="h-3.5 w-3.5" />
-            Notification Channels
-          </TabsTrigger>
+      {/* Timezone Preferences */}
+      <SettingsSection
+        title="Timezone"
+        description="Your primary timezone for incident timestamps, on-call schedules, and analytics"
+      >
+        <div className="py-2">
+          <PreferencesForm timeZone={user?.timeZone ?? 'UTC'} />
+        </div>
+      </SettingsSection>
 
-          <TabsTrigger value="schedule" className="gap-2 text-xs font-semibold py-2">
-            <Moon className="h-3.5 w-3.5" />
-            Timezone & Quiet Hours
-          </TabsTrigger>
-        </TabsList>
+      {/* Notification Channels */}
+      <NotificationPreferencesForm
+        emailEnabled={user?.emailNotificationsEnabled ?? false}
+        smsEnabled={user?.smsNotificationsEnabled ?? false}
+        pushEnabled={user?.pushNotificationsEnabled ?? false}
+        whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
+        phoneNumber={user?.phoneNumber ?? null}
+      />
 
-        {/* Tab 1: Profile Details */}
-        <TabsContent value="profile" className="space-y-6">
-          <ProfileForm
-            name={name}
-            email={email}
-            role={role}
-            memberSince={memberSince}
-            department={user?.department}
-            jobTitle={user?.jobTitle}
-            avatarUrl={user?.avatarUrl}
-            lastOidcSync={lastOidcSync}
-            gender={user?.gender}
+      {/* Quiet Hours */}
+      <SettingsSection
+        title="Quiet Hours"
+        description="Silence non-critical alerts during your resting schedule"
+        footer={
+          <p className="text-xs text-muted-foreground flex items-center gap-2">
+            <Flame className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            Critical and P1 incidents always bypass quiet hours to ensure safety.
+          </p>
+        }
+      >
+        <div className="py-2">
+          <QuietHoursForm
+            enabled={user?.quietHoursEnabled ?? false}
+            startMinutes={user?.quietHoursStartMinutes ?? 18 * 60}
+            endMinutes={user?.quietHoursEndMinutes ?? 8 * 60}
+            weekendAllDay={user?.quietHoursWeekendAllDay ?? true}
+            timeZone={timeZone}
           />
-        </TabsContent>
-
-        {/* Tab 2: Notification Preferences */}
-        <TabsContent value="notifications" className="space-y-6">
-          <NotificationPreferencesForm
-            emailEnabled={user?.emailNotificationsEnabled ?? false}
-            smsEnabled={user?.smsNotificationsEnabled ?? false}
-            pushEnabled={user?.pushNotificationsEnabled ?? false}
-            whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
-            phoneNumber={user?.phoneNumber ?? null}
-          />
-        </TabsContent>
-
-        {/* Tab 3: Timezone & Quiet Hours */}
-        <TabsContent value="schedule" className="space-y-6">
-          <SettingsSection
-            title="Timezone Preferences"
-            description="Configure your primary timezone for incident timestamps, schedules, and analytics"
-          >
-            <div className="py-2">
-              <PreferencesForm timeZone={user?.timeZone ?? 'UTC'} />
-            </div>
-          </SettingsSection>
-
-          <SettingsSection
-            title="Personal Quiet Hours"
-            description="Silence non-critical alerts during your resting schedule"
-          >
-            <div className="py-2">
-              <QuietHoursForm
-                enabled={user?.quietHoursEnabled ?? false}
-                startMinutes={user?.quietHoursStartMinutes ?? 18 * 60}
-                endMinutes={user?.quietHoursEndMinutes ?? 8 * 60}
-                weekendAllDay={user?.quietHoursWeekendAllDay ?? true}
-                timeZone={timeZone}
-              />
-            </div>
-          </SettingsSection>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </SettingsSection>
     </div>
   );
 }

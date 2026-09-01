@@ -18,19 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { FormField, FormItem, FormControl, FormMessage } from '@/components/ui/shadcn/form';
-import {
-  Lock,
-  RefreshCw,
-  Camera,
-  Upload,
-  Loader2,
-  Trash2,
-  Save,
-  CheckCircle2,
-  ShieldCheck,
-  Mail,
-  Calendar,
-} from 'lucide-react';
+import { Camera, Upload, Loader2, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 import { updateProfile } from '@/app/(app)/settings/actions';
 import { useRouter } from 'next/navigation';
@@ -191,10 +179,15 @@ export default function ProfileForm({
 
   return (
     <div className="space-y-6">
-      {/* Avatar & Photo Customizer Card */}
+      {/* Card 1: Profile Photo */}
       <SettingsSection
         title="Profile Photo"
         description="Choose a preset persona avatar or upload your own high-resolution image"
+        footer={
+          <p className="text-xs text-muted-foreground">
+            Supported formats: PNG, JPEG, WebP, GIF. Maximum size: 2MB.
+          </p>
+        }
       >
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 py-4">
           <div
@@ -236,14 +229,7 @@ export default function ProfileForm({
           </div>
 
           <div className="flex flex-col items-center sm:items-start gap-3 flex-1 text-center sm:text-left">
-            <div>
-              <h4 className="text-sm font-semibold">{name || 'Your Name'}</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                PNG, JPG, or SVG up to 2MB. Square dimensions recommended.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center sm:justify-start gap-2">
               <AvatarPicker
                 currentAvatarUrl={avatarPreview}
                 onSelect={handleAvatarSelect}
@@ -258,7 +244,7 @@ export default function ProfileForm({
                 className="gap-1.5 h-8 text-xs font-medium"
               >
                 <Upload className="h-3.5 w-3.5" />
-                Upload Custom Photo
+                Upload Photo
               </Button>
 
               {avatarPreview && !isDefaultAvatar(avatarPreview) && (
@@ -294,14 +280,14 @@ export default function ProfileForm({
         </div>
       </SettingsSection>
 
-      {/* Editable Personal Details */}
+      {/* Card 2: Personal Information */}
       <FormProvider {...form}>
         <form onSubmit={form.handleSubmit(handleManualSave)}>
           <SettingsSection
-            title="Personal Details"
-            description="Manage your display name, role identity, and workspace department"
+            title="Personal Information"
+            description="Manage your personal details and organizational identity."
             footer={
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between w-full">
                 <p className="text-xs text-muted-foreground">
                   {isDirty ? (
                     <span className="text-amber-600 dark:text-amber-400 font-medium">
@@ -323,10 +309,7 @@ export default function ProfileForm({
                       Saving...
                     </>
                   ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      Save Changes
-                    </>
+                    <>Save Changes</>
                   )}
                 </Button>
               </div>
@@ -334,8 +317,8 @@ export default function ProfileForm({
           >
             <div className="divide-y text-sm">
               <SettingsRow
-                label="Display Name"
-                description="The name visible across incidents, on-call schedules, and audit trails"
+                label="Full Name"
+                description="Your display name across incidents, schedules, and dashboards"
                 required
                 htmlFor="name"
               >
@@ -347,11 +330,7 @@ export default function ProfileForm({
                 />
               </SettingsRow>
 
-              <SettingsRow
-                label="Gender Identity"
-                description="Helps OpsKnight tailor your default avatar persona"
-                htmlFor="gender"
-              >
+              <SettingsRow label="Gender" htmlFor="gender">
                 <FormField
                   control={form.control}
                   name="gender"
@@ -374,10 +353,10 @@ export default function ProfileForm({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
+                          <SelectItem value="prefer-not-to-say">Prefer not to say</SelectItem>
                           <SelectItem value="male">Male</SelectItem>
                           <SelectItem value="female">Female</SelectItem>
                           <SelectItem value="non-binary">Non-binary</SelectItem>
-                          <SelectItem value="prefer-not-to-say">Prefer not to say</SelectItem>
                           <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                       </Select>
@@ -388,34 +367,23 @@ export default function ProfileForm({
               </SettingsRow>
 
               <SettingsRow
-                label="Job Title"
-                description="Your operational or engineering role"
-                htmlFor="jobTitle"
-              >
-                <div className="w-full max-w-md space-y-1">
-                  <Input
-                    id="jobTitle"
-                    {...form.register('jobTitle')}
-                    placeholder="e.g. Lead Site Reliability Engineer"
-                    className="w-full"
-                  />
-                  {lastOidcSync && (
-                    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                      <RefreshCw className="h-3 w-3 text-primary" /> Synced automatically via SSO
-                    </p>
-                  )}
-                </div>
-              </SettingsRow>
-
-              <SettingsRow
-                label="Department / Team"
-                description="Your primary organizational division"
+                label="Department"
+                description="Your organizational department"
                 htmlFor="department"
               >
                 <Input
                   id="department"
                   {...form.register('department')}
-                  placeholder="e.g. Infrastructure Platform"
+                  placeholder="e.g. Infrastructure"
+                  className="w-full max-w-md"
+                />
+              </SettingsRow>
+
+              <SettingsRow label="Job Title" description="Your role or position" htmlFor="jobTitle">
+                <Input
+                  id="jobTitle"
+                  {...form.register('jobTitle')}
+                  placeholder="e.g. Lead Site Reliability Engineer"
                   className="w-full max-w-md"
                 />
               </SettingsRow>
@@ -424,47 +392,35 @@ export default function ProfileForm({
         </form>
       </FormProvider>
 
-      {/* Clean Read-Only Identity & SSO Card */}
-      <SettingsSection
-        title="Workspace Identity & Security"
-        description="Immutable credentials and identity properties managed by your administrator"
-      >
-        <div className="grid gap-4 py-4 sm:grid-cols-3">
-          <div className="rounded-lg border bg-card/60 p-3.5 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <Mail className="h-3.5 w-3.5 text-primary" />
-              <span>Email Address</span>
-            </div>
-            <p className="text-sm font-medium text-foreground truncate">{email || 'Not set'}</p>
-            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Lock className="h-3 w-3" /> Managed by Identity Provider
-            </div>
-          </div>
+      {/* Card 3: Account Details */}
+      <SettingsSection title="Account Details" description="Managed by your organization">
+        <div className="divide-y text-sm">
+          <SettingsRow label="Email">
+            <span className="font-mono text-sm">{email || 'Not set'}</span>
+          </SettingsRow>
 
-          <div className="rounded-lg border bg-card/60 p-3.5 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-              <span>Workspace Role</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="font-bold text-xs">
-                {role}
+          <SettingsRow label="Role">
+            <Badge variant="outline" className="font-bold text-xs">
+              {role}
+            </Badge>
+          </SettingsRow>
+
+          <SettingsRow label="Authentication">
+            {lastOidcSync ? (
+              <Badge variant="secondary" className="gap-1">
+                SSO{' '}
+                <span className="font-normal text-muted-foreground ml-1">
+                  Synced {lastOidcSync}
+                </span>
               </Badge>
-              <span className="text-xs text-muted-foreground capitalize">Access Level</span>
-            </div>
-            <p className="text-[11px] text-muted-foreground">Admin-managed permissions</p>
-          </div>
+            ) : (
+              <Badge variant="secondary">Direct Account</Badge>
+            )}
+          </SettingsRow>
 
-          <div className="rounded-lg border bg-card/60 p-3.5 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <Calendar className="h-3.5 w-3.5 text-primary" />
-              <span>Member Since</span>
-            </div>
-            <p className="text-sm font-medium text-foreground">{memberSince}</p>
-            <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="h-3 w-3" /> Active Account
-            </div>
-          </div>
+          <SettingsRow label="Member Since">
+            <span className="text-sm">{memberSince}</span>
+          </SettingsRow>
         </div>
       </SettingsSection>
     </div>

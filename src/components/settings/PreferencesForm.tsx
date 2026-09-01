@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import { AutosaveForm } from '@/components/settings/forms/AutosaveForm';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import TimeZoneSelect from '@/components/TimeZoneSelect';
-import { Clock, Globe2 } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { z } from 'zod';
 import { updatePreferences } from '@/app/(app)/settings/actions';
 import { useRouter } from 'next/navigation';
+import { Controller } from 'react-hook-form';
 import { notify as toast } from '@/lib/toast';
 
 type Props = {
@@ -41,7 +42,7 @@ export default function PreferencesForm({ timeZone }: Props) {
           hour12: true,
         });
         setCurrentTimeStr(formatter.format(now));
-      } catch (e) {
+      } catch (_e) {
         setCurrentTimeStr('');
       }
     };
@@ -86,31 +87,40 @@ export default function PreferencesForm({ timeZone }: Props) {
       delay={500}
     >
       {form => (
-        <div className="divide-y">
+        <div className="flex flex-col gap-0">
           <SettingsRow
-            label="Preferred Timezone"
-            description="All incident timestamps, on-call schedules, and SLA charts will render in this timezone"
+            label="Timezone"
+            description="Select your primary timezone"
+            tooltip="Used for incident timestamps, on-call schedules, and quiet hours"
             htmlFor="timeZone"
           >
-            <div className="space-y-3 max-w-md">
-              <TimeZoneSelect
+            <div className="w-full sm:max-w-md">
+              <Controller
+                control={form.control}
                 name="timeZone"
-                defaultValue={form.watch('timeZone')}
-                onChange={value => {
-                  form.setValue('timeZone', value);
-                  setSelectedTimeZone(value);
-                }}
+                render={({ field }) => (
+                  <TimeZoneSelect
+                    name={field.name}
+                    defaultValue={field.value}
+                    onChange={value => {
+                      field.onChange(value);
+                      setSelectedTimeZone(value);
+                    }}
+                  />
+                )}
               />
+            </div>
+          </SettingsRow>
 
-              {currentTimeStr && (
-                <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5 text-primary shrink-0" />
-                  <span>
-                    Current Local Time:{' '}
-                    <strong className="text-foreground font-mono">{currentTimeStr}</strong>
-                  </span>
-                </div>
-              )}
+          <SettingsRow
+            label="Current Local Time"
+            description="Live clock in your selected timezone"
+          >
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-mono text-foreground">
+                {currentTimeStr || 'Loading...'}
+              </span>
             </div>
           </SettingsRow>
         </div>
