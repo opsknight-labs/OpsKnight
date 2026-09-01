@@ -222,20 +222,23 @@ async function main() {
     },
   });
 
-  const seededUsers: Array<{ id: string; name: string; email: string }> = [admin];
+  const seededUsers: Array<{ id: string; name: string; email: string; status: string }> = [
+    { id: admin.id, name: admin.name, email: admin.email, status: admin.status },
+  ];
 
   for (let i = 0; i < seedConfig.teams * seedConfig.usersPerTeam; i++) {
     const firstName = randomPick(firstNames);
     const lastName = randomPick(lastNames);
     const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${randomInt(99)}@example.com`;
+    const isInvited = i % 9 === 0 && i !== 0;
 
     const user = await prisma.user.create({
       data: {
         name: `${firstName} ${lastName}`,
         email,
         role: i % 5 === 0 ? 'RESPONDER' : 'USER',
-        status: i % 9 === 0 ? 'INVITED' : 'ACTIVE',
-        passwordHash: i % 9 === 0 ? null : passwordHash,
+        status: isInvited ? 'INVITED' : 'ACTIVE',
+        passwordHash: isInvited ? null : passwordHash,
         timeZone: i % 2 === 0 ? 'UTC' : 'America/New_York',
         emailNotificationsEnabled: i % 2 === 0,
         smsNotificationsEnabled: i % 4 === 0,
@@ -247,7 +250,7 @@ async function main() {
       },
     });
 
-    seededUsers.push({ id: user.id, name: user.name, email: user.email });
+    seededUsers.push({ id: user.id, name: user.name, email: user.email, status: user.status });
   }
 
   function encryptWithKey(text: string, keyHex: string) {
@@ -647,6 +650,10 @@ async function main() {
         ? clampToNow(minutesFrom(acknowledgedAt ?? createdAt, resolveDelay))
         : null;
 
+    const activeUsers = seededUsers.filter(u => u.status === 'ACTIVE');
+    const assignedUser = activeUsers[(i % (activeUsers.length - 1)) + 1] ?? admin;
+    const isUserAssigned = i % 3 === 0;
+
     const incident = await prisma.incident.create({
       data: {
         title: `${service.name}: ${scenario.title}`,
@@ -655,8 +662,8 @@ async function main() {
         urgency,
         priority: urgency === 'HIGH' ? 'P1' : urgency === 'MEDIUM' ? 'P2' : 'P3',
         serviceId: service.id,
-        teamId: service.teamId,
-        assigneeId: i % 3 === 0 ? (seededUsers[1]?.id ?? admin.id) : null,
+        teamId: isUserAssigned ? null : service.teamId,
+        assigneeId: isUserAssigned ? assignedUser.id : null,
         dedupKey: `seed-${service.id}-${i}`,
         createdAt,
         updatedAt: resolvedAt ?? acknowledgedAt ?? createdAt,
@@ -695,7 +702,7 @@ async function main() {
     await prisma.incidentNote.create({
       data: {
         incidentId: incident.id,
-        userId: seededUsers[2]?.id ?? admin.id,
+        userId: activeUsers[2]?.id ?? admin.id,
         content: 'Investigating root cause and mitigations.',
         createdAt: minutesFrom(createdAt, 15),
       },
@@ -704,7 +711,7 @@ async function main() {
     await prisma.incidentWatcher.create({
       data: {
         incidentId: incident.id,
-        userId: seededUsers[3]?.id ?? admin.id,
+        userId: activeUsers[3]?.id ?? admin.id,
         role: 'STAKEHOLDER',
       },
     });
@@ -735,7 +742,7 @@ async function main() {
     await prisma.notification.create({
       data: {
         incidentId: incident.id,
-        userId: seededUsers[4]?.id ?? admin.id,
+        userId: activeUsers[4]?.id ?? admin.id,
         channel: randomPick(notificationChannels),
         status: resolvedAt ? 'DELIVERED' : 'SENT',
         message: `Incident update for ${service.name}`,

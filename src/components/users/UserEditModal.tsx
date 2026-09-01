@@ -312,7 +312,7 @@ export default function UserEditModal({
                   disabled={isPending}
                 />
                 <label htmlFor="notif-push" className="cursor-pointer text-xs">
-                  Browser Push
+                  Push Notifications
                 </label>
               </div>
               <div className="flex items-center space-x-2">

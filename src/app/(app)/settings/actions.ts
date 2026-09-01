@@ -13,7 +13,7 @@ import {
   getWhatsAppConfig,
 } from '@/lib/notification-providers';
 import { logger } from '@/lib/logger';
-import { getDefaultAvatar, isDefaultAvatar } from '@/lib/avatar';
+import { getDefaultAvatar } from '@/lib/avatar';
 import { logAudit } from '@/lib/audit';
 import {
   API_SCOPES,
@@ -98,12 +98,12 @@ export async function updateProfile(
       }
     }
 
-    const removeAvatar = formData.get('removeAvatar') === 'true';
+    const removeAvatar =
+      formData.get('removeAvatar') === 'true' || formData.get('resetAvatar') === 'true';
 
     // Prepare update data
     const data: Partial<{
       name: string;
-      gender: string | null;
       department: string | null;
       jobTitle: string | null;
       avatarUrl: string | null;
@@ -123,14 +123,6 @@ export async function updateProfile(
       data.jobTitle = (formData.get('jobTitle') as string | null)?.trim() || null;
     }
 
-    // Handle Gender & Smart Avatar Logic
-    let newGender = user.gender;
-    if (formData.has('gender')) {
-      const g = (formData.get('gender') as string | null)?.trim() || null;
-      data.gender = g;
-      newGender = g;
-    }
-
     // Handle direct avatarUrl (from avatar picker)
     const directAvatarUrl = (formData.get('avatarUrl') as string | null)?.trim();
     const isValidDirectUrl = (url: string) => {
@@ -144,27 +136,18 @@ export async function updateProfile(
     };
 
     // Avatar Logic
+    const currentName = data.name || user.name || 'User';
+
     if (removeAvatar) {
-      // User explicitly requested removal - clean up DB binary and set to default based on gender
+      // User explicitly requested removal - clean up DB binary and set to default initials
       await prisma.userAvatar.deleteMany({ where: { userId: user.id } });
-      data.avatarUrl = getDefaultAvatar(newGender, user.id);
+      data.avatarUrl = getDefaultAvatar(currentName, user.id);
     } else if (directAvatarUrl && isValidDirectUrl(directAvatarUrl)) {
       // User selected an avatar from the picker
       data.avatarUrl = directAvatarUrl;
     } else if (avatarUrl !== undefined) {
       // User uploaded a NEW file
       data.avatarUrl = avatarUrl;
-    } else if (data.gender !== undefined) {
-      // Gender changed, but no new file uploaded.
-      // Check if we should update the avatar to match the new gender.
-      const isCurrentDefault = isDefaultAvatar(user.avatarUrl);
-
-      if (isCurrentDefault) {
-        const newDefault = getDefaultAvatar(newGender, user.id);
-        if (newDefault !== user.avatarUrl) {
-          data.avatarUrl = newDefault;
-        }
-      }
     }
 
     // If no data to update, return early
@@ -306,6 +289,142 @@ export async function updateNotificationPreferences(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unable to update notification preferences.',
+    };
+  }
+}
+
+export async function sendTestNotification(
+  channel: 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await getCurrentUser();
+    const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
+    const crypto = await import('crypto');
+
+    if (channel === 'EMAIL') {
+      if (!user.email) return { success: false, error: 'No email address configured.' };
+      await enqueueCentralNotification({
+        category: 'SYSTEM',
+        channel: 'EMAIL',
+        recipientType: 'USER',
+        recipientId: user.id,
+        recipientAddress: user.email,
+        userId: user.id,
+        templateKey: 'test-email',
+        sourceType: 'USER',
+        sourceId: user.id,
+        eventKey: `manual-test-email:${crypto.randomUUID()}`,
+        displayMessage: 'Test email notification',
+        priority: 2,
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+        payload: {
+          kind: 'EMAIL',
+          to: user.email,
+          subject: '🔔 OpsKnight: Test Email Alert',
+          html: `<p>Hello ${user.name || 'there'},</p><p>This is a test notification confirming that your OpsKnight email alert channel is properly configured and active.</p><p><small>Sent at: ${new Date().toUTCString()}</small></p>`,
+          text: `Hello ${user.name || 'there'},\n\nThis is a test notification confirming that your OpsKnight email alert channel is properly configured and active.\n\nSent at: ${new Date().toUTCString()}`,
+        },
+      });
+      return { success: true };
+    }
+
+    if (channel === 'SMS') {
+      if (!user.phoneNumber) {
+        return {
+          success: false,
+          error: 'Please enter and save a valid phone number in E.164 format first.',
+        };
+      }
+      await enqueueCentralNotification({
+        category: 'SYSTEM',
+        channel: 'SMS',
+        recipientType: 'USER',
+        recipientId: user.id,
+        recipientAddress: user.phoneNumber,
+        userId: user.id,
+        templateKey: 'test-sms',
+        sourceType: 'USER',
+        sourceId: user.id,
+        eventKey: `manual-test-sms:${crypto.randomUUID()}`,
+        displayMessage: 'Test SMS notification',
+        priority: 2,
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+        payload: {
+          kind: 'SMS',
+          to: user.phoneNumber,
+          message:
+            '🔔 OpsKnight Test Alert: Your SMS channel is active and receiving incident notifications.',
+        },
+      });
+      return { success: true };
+    }
+
+    if (channel === 'WHATSAPP') {
+      if (!user.phoneNumber) {
+        return {
+          success: false,
+          error: 'Please enter and save a valid WhatsApp phone number in E.164 format first.',
+        };
+      }
+      await enqueueCentralNotification({
+        category: 'SYSTEM',
+        channel: 'WHATSAPP',
+        recipientType: 'USER',
+        recipientId: user.id,
+        recipientAddress: user.phoneNumber,
+        userId: user.id,
+        templateKey: 'test-whatsapp',
+        sourceType: 'USER',
+        sourceId: user.id,
+        eventKey: `manual-test-whatsapp:${crypto.randomUUID()}`,
+        displayMessage: 'Test WhatsApp notification',
+        priority: 2,
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+        payload: {
+          kind: 'WHATSAPP',
+          to: user.phoneNumber,
+          message:
+            '🔔 OpsKnight Test Alert: Your WhatsApp notification channel is active and receiving incident alerts.',
+        },
+      });
+      return { success: true };
+    }
+
+    if (channel === 'PUSH') {
+      const pushConfig = await getPushConfig();
+      if (!pushConfig.enabled) {
+        return { success: false, error: 'Push notifications are not enabled on the server.' };
+      }
+      await enqueueCentralNotification({
+        category: 'SYSTEM',
+        channel: 'PUSH',
+        recipientType: 'USER',
+        recipientId: user.id,
+        recipientAddress: user.id,
+        userId: user.id,
+        templateKey: 'test-push',
+        sourceType: 'USER',
+        sourceId: user.id,
+        eventKey: `manual-test-push:${crypto.randomUUID()}`,
+        displayMessage: 'Test push notification',
+        priority: 2,
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+        payload: {
+          kind: 'PUSH',
+          userId: user.id,
+          title: '🔔 OpsKnight Test Alert',
+          body: `Hello ${user.name || 'there'}! Your push notification channel is active.`,
+          data: { url: '/settings/profile?tab=notifications', type: 'test' },
+        },
+      });
+      return { success: true };
+    }
+
+    return { success: false, error: 'Invalid notification channel.' };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send test notification.',
     };
   }
 }

@@ -120,7 +120,7 @@ export default function PushNotificationToggle() {
     setError('');
     try {
       if (Notification.permission === 'denied') {
-        throw new Error('Notifications blocked. Please enable in browser settings.');
+        throw new Error('Notifications blocked. Please enable in device settings.');
       }
 
       // Race condition to prevent infinite hanging
@@ -137,10 +137,7 @@ export default function PushNotificationToggle() {
       // Fetch VAPID Key from API (supports DB or Env)
       const keyRes = await fetch('/api/system/vapid-public-key');
       if (!keyRes.ok) {
-        throw await errorFromResponse(
-          keyRes,
-          'VAPID Configuration missing. Please contact admin.'
-        );
+        throw await errorFromResponse(keyRes, 'VAPID Configuration missing. Please contact admin.');
       }
       const { key: vapidKey } = await keyRes.json();
       const normalized = normalizeVapidKey(String(vapidKey || ''));
@@ -180,7 +177,7 @@ export default function PushNotificationToggle() {
       logger.error('Push subscription failed', { component: 'PushNotificationToggle', error });
       setError(displayError(error, 'Failed to subscribe'));
       if (Notification.permission === 'denied') {
-        setError('Notifications blocked. Please enable in browser settings.');
+        setError('Notifications blocked. Please enable in device settings.');
       }
     } finally {
       setLoading(false);
