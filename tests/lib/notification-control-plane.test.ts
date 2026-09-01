@@ -13,6 +13,7 @@ import { acquireProviderAdmission, acquireProviderConcurrency } from '@/lib/prov
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
   sendIncidentEmail: vi.fn(),
+  sendSlackMessageToChannel: vi.fn(),
   encrypt: vi.fn(async (value: string) => `encrypted:${value}`),
   decrypt: vi.fn(async (value: string) => value.replace(/^encrypted:/, '')),
 }));
@@ -27,6 +28,7 @@ vi.mock('@/lib/prisma', () => ({
       updateMany: vi.fn(),
     },
     incident: { findUnique: vi.fn() },
+    service: { findUnique: vi.fn() },
     notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn() },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(async (operation: unknown) =>
@@ -47,6 +49,10 @@ vi.mock('@/lib/encryption', () => ({
 vi.mock('@/lib/email', () => ({
   sendEmail: mocks.sendEmail,
   sendIncidentEmail: mocks.sendIncidentEmail,
+}));
+vi.mock('@/lib/slack', () => ({
+  sendSlackMessageToChannel: mocks.sendSlackMessageToChannel,
+  sendSlackNotification: vi.fn(),
 }));
 vi.mock('@/lib/provider-admission', () => ({
   acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
@@ -222,27 +228,25 @@ describe('central notification control plane', () => {
       durableMessage: 'encrypted message snapshot',
     };
     vi.mocked(prisma.notification.findUnique).mockResolvedValue({
-        id: 'notification_sibling_channel',
-        status: 'PENDING',
-        category: 'INCIDENT',
-        attempts: 0,
-        maxAttempts: 5,
-        nextAttemptAt: due,
-        scheduledAt: due,
-        lastAttemptAt: null,
-        expiresAt: null,
-        payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
-      } as never);
-    vi.mocked(prisma.incident.findUnique).mockResolvedValue(
-      {
-        status: 'OPEN',
-        updatedAt: new Date('2026-08-30T12:01:00.000Z'),
-        acknowledgedAt: null,
-        resolvedAt: null,
-        currentEscalationStep: 1,
-        escalationGeneration: 4,
-      } as never
-    );
+      id: 'notification_sibling_channel',
+      status: 'PENDING',
+      category: 'INCIDENT',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+    } as never);
+    vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+      status: 'OPEN',
+      updatedAt: new Date('2026-08-30T12:01:00.000Z'),
+      acknowledgedAt: null,
+      resolvedAt: null,
+      currentEscalationStep: 1,
+      escalationGeneration: 4,
+    } as never);
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
     mocks.sendIncidentEmail.mockResolvedValue({ success: true, providerMessageId: 'email-1' });
 
@@ -251,6 +255,59 @@ describe('central notification control plane', () => {
       claimed: true,
     });
     expect(mocks.sendIncidentEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a queued service Slack intent after the service checkbox is disabled', async () => {
+    const due = new Date(Date.now() - 60_000);
+    const payload = {
+      kind: 'SLACK_CHANNEL' as const,
+      channel: 'opsknight-alert',
+      incident: {
+        id: 'incident-1',
+        title: 'Workflow failed',
+        status: 'RESOLVED',
+        urgency: 'HIGH',
+        serviceName: 'CI',
+      },
+      eventType: 'resolved' as const,
+      serviceId: 'service-1',
+    };
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'notification-disabled-slack',
+      status: 'PENDING',
+      category: 'INCIDENT',
+      attempts: 0,
+      maxAttempts: 3,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+      sourceType: 'SERVICE_INCIDENT',
+      sourceId: 'service-1:incident-1',
+      recipientId: 'service-1',
+      templateKey: 'service-slack-resolved',
+    } as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.service.findUnique).mockResolvedValue({
+      serviceNotificationChannels: [],
+      slackChannel: 'opsknight-alert',
+      slackWebhookUrl: null,
+    } as never);
+
+    await expect(deliverCentralNotification('notification-disabled-slack')).resolves.toEqual({
+      success: true,
+      claimed: true,
+    });
+    expect(mocks.sendSlackMessageToChannel).not.toHaveBeenCalled();
+    expect(prisma.notification.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'SKIPPED',
+          errorMsg: 'Service Slack notifications were disabled',
+        }),
+      })
+    );
   });
 
   it('uses lease expiry as the next scheduler deadline for active claims', async () => {

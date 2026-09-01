@@ -827,7 +827,9 @@ function isPermanentProviderError(message: string): boolean {
 function isLifecycleEventType(
   value: string
 ): value is 'triggered' | 'acknowledged' | 'resolved' | 'updated' {
-  return value === 'triggered' || value === 'acknowledged' || value === 'resolved' || value === 'updated';
+  return (
+    value === 'triggered' || value === 'acknowledged' || value === 'resolved' || value === 'updated'
+  );
 }
 
 async function incidentPayloadSuperseded(
@@ -963,7 +965,10 @@ async function lifecycleDeliveryRevoked(
 ): Promise<string | null> {
   const policy =
     payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK'
-      ? payload.lifecyclePolicy ?? { incidentId: payload.incident.id, eventType: payload.eventType }
+      ? (payload.lifecyclePolicy ?? {
+          incidentId: payload.incident.id,
+          eventType: payload.eventType,
+        })
       : payload.kind === 'WEBHOOK'
         ? payload.lifecyclePolicy
         : null;
@@ -985,6 +990,60 @@ async function lifecycleDeliveryRevoked(
   return isLifecycleEventType(policy.eventType)
     ? lifecycleStatusRevocation(policy.eventType, incident.status)
     : null;
+}
+
+async function serviceSlackDeliveryRevoked(
+  payload: CentralNotificationPayload,
+  notification: {
+    sourceType: string | null;
+    sourceId: string | null;
+    recipientId: string | null;
+    templateKey: string | null;
+  }
+): Promise<string | null> {
+  if (payload.kind !== 'SLACK_CHANNEL' && payload.kind !== 'SLACK_WEBHOOK') return null;
+  const inferredLegacyPolicy =
+    notification.sourceType === 'SERVICE_INCIDENT' &&
+    notification.templateKey?.startsWith('service-slack-')
+      ? {
+          serviceId:
+            (payload.kind === 'SLACK_CHANNEL' ? payload.serviceId : undefined) ||
+            notification.recipientId ||
+            notification.sourceId?.split(':')[0] ||
+            '',
+          targetType:
+            payload.kind === 'SLACK_CHANNEL' ? ('CHANNEL' as const) : ('WEBHOOK' as const),
+        }
+      : null;
+  // New rows use lifecyclePolicy and are handled by serviceTargetDeliveryRevoked.
+  // This fallback fences service Slack rows written before that metadata existed.
+  const policy = inferredLegacyPolicy;
+  if (!policy?.serviceId) return null;
+  try {
+    const service = await prisma.service.findUnique({
+      where: { id: policy.serviceId },
+      select: {
+        serviceNotificationChannels: true,
+        slackChannel: true,
+        slackWebhookUrl: true,
+      },
+    });
+    if (!service) return 'Service no longer exists';
+    if (!service.serviceNotificationChannels.includes('SLACK'))
+      return 'Service Slack notifications were disabled';
+    if (payload.kind === 'SLACK_CHANNEL') {
+      const currentChannel = service.slackChannel?.trim();
+      if (!currentChannel || currentChannel !== payload.channel.trim())
+        return 'Service Slack channel was removed or changed';
+    } else {
+      const currentWebhook = service.slackWebhookUrl?.trim();
+      if (!currentWebhook || currentWebhook !== payload.webhookUrl?.trim())
+        return 'Service Slack webhook was removed or changed';
+    }
+    return null;
+  } catch {
+    return 'Service Slack delivery policy could not be revalidated';
+  }
 }
 
 async function statusSubscriberDeliveryRevoked(
@@ -1130,6 +1189,10 @@ export async function deliverCentralNotification(
       lastAttemptAt: true,
       expiresAt: true,
       payloadEncrypted: true,
+      sourceType: true,
+      sourceId: true,
+      recipientId: true,
+      templateKey: true,
     },
   });
   if (!candidate || !candidate.payloadEncrypted) {
@@ -1207,6 +1270,7 @@ export async function deliverCentralNotification(
     supersededReason =
       (await statusSubscriberDeliveryRevoked(payload)) ??
       (await statusWebhookDeliveryRevoked(payload)) ??
+      (await serviceSlackDeliveryRevoked(payload, candidate)) ??
       (await lifecycleDeliveryRevoked(payload)) ??
       (await incidentPayloadSuperseded(payload));
   } catch (error) {
