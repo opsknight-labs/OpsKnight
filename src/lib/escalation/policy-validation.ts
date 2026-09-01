@@ -16,6 +16,17 @@ import { NOTIFICATION_CHANNELS, type NotificationDeliveryChannel } from '../noti
 /** A week. Long enough for any real policy, short enough to catch a typo. */
 export const MAX_ESCALATION_DELAY_MINUTES = 7 * 24 * 60;
 
+/**
+ * Form marker meaning "this submission is authoritative for
+ * `notificationChannels`".
+ *
+ * An absent multi-value field and a deliberately emptied one both arrive as
+ * `[]`, so a partial edit cannot tell them apart on its own. A form that
+ * renders channel controls submits this marker; one that does not omits both,
+ * and the step keeps the channels it already had.
+ */
+export const ESCALATION_STEP_CHANNELS_SUBMITTED = 'notificationChannelsSubmitted';
+
 export interface EscalationStepIssue {
   field: string;
   message: string;
