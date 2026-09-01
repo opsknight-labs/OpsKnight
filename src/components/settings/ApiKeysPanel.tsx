@@ -464,78 +464,185 @@ export default function ApiKeysPanel({
         </CardHeader>
         <CardContent className="p-4 sm:p-5">
           <Tabs defaultValue="curl" className="w-full">
-            <TabsList className="h-9 mb-3 bg-muted/60">
-              <TabsTrigger value="curl" className="text-xs gap-1.5">
-                <Terminal className="h-3.5 w-3.5" />
-                cURL
-              </TabsTrigger>
-              <TabsTrigger value="node" className="text-xs gap-1.5">
-                <Code2 className="h-3.5 w-3.5" />
-                Node.js / Fetch
-              </TabsTrigger>
-              <TabsTrigger value="python" className="text-xs gap-1.5">
-                <Code2 className="h-3.5 w-3.5" />
-                Python (requests)
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <TabsList className="h-9 bg-muted/60">
+                <TabsTrigger value="curl" className="text-xs gap-1.5">
+                  <Terminal className="h-3.5 w-3.5" />
+                  cURL
+                </TabsTrigger>
+                <TabsTrigger value="node" className="text-xs gap-1.5">
+                  <Code2 className="h-3.5 w-3.5" />
+                  Node.js / Fetch
+                </TabsTrigger>
+                <TabsTrigger value="python" className="text-xs gap-1.5">
+                  <Code2 className="h-3.5 w-3.5" />
+                  Python (requests)
+                </TabsTrigger>
+              </TabsList>
+
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/30 px-2.5 py-1 rounded-md border border-border/40">
+                <span>Header formats supported:</span>
+                <code className="text-foreground font-mono font-semibold">
+                  Bearer &lt;token&gt;
+                </code>
+                <span>or</span>
+                <code className="text-foreground font-mono font-semibold">X-API-Key</code>
+              </div>
+            </div>
 
             {/* cURL Snippet */}
-            <TabsContent value="curl" className="space-y-2">
-              <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
-                <pre className="leading-relaxed">
-                  {`curl -X POST https://api.opsknight.com/api/events \\
-  -H "Authorization: Bearer ${state?.token || 'ops_live_your_api_key'}" \\
+            <TabsContent value="curl" className="space-y-3">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  1. Trigger / Ingest Alert (POST /api/events)
+                </span>
+                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
+                  <pre className="leading-relaxed">
+                    {`curl -X POST https://api.opsknight.com/api/events \\
+  -H "Authorization: Bearer ${state?.token || 'ok_live_your_api_key'}" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "service": "payment-gateway",
-    "title": "High API Latency Degraded",
-    "severity": "CRITICAL",
-    "source": "Datadog Alert"
+    "event_action": "trigger",
+    "dedup_key": "api-gateway-5xx-spike",
+    "payload": {
+      "summary": "5xx Error Rate > 5% on Production API Gateway",
+      "source": "datadog-agent",
+      "severity": "critical",
+      "custom_details": {
+        "cluster": "prod-us-east-1",
+        "error_rate": "7.4%"
+      }
+    }
   }'`}
-                </pre>
+                  </pre>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  2. Query Active Incidents (GET /api/incidents)
+                </span>
+                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
+                  <pre className="leading-relaxed">
+                    {`curl -X GET "https://api.opsknight.com/api/incidents?status=OPEN&limit=25" \\
+  -H "Authorization: Bearer ${state?.token || 'ok_live_your_api_key'}"`}
+                  </pre>
+                </div>
               </div>
             </TabsContent>
 
             {/* Node.js Snippet */}
-            <TabsContent value="node" className="space-y-2">
-              <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
-                <pre className="leading-relaxed">
-                  {`await fetch('https://api.opsknight.com/api/events', {
+            <TabsContent value="node" className="space-y-3">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  1. Trigger / Ingest Alert (POST /api/events)
+                </span>
+                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
+                  <pre className="leading-relaxed">
+                    {`const response = await fetch('https://api.opsknight.com/api/events', {
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer ${state?.token || 'ops_live_your_api_key'}',
+    'Authorization': 'Bearer ${state?.token || 'ok_live_your_api_key'}',
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
-    service: 'auth-service',
-    title: 'OAuth Error Rate Spike',
-    severity: 'HIGH',
+    event_action: 'trigger',
+    dedup_key: 'api-gateway-5xx-spike',
+    payload: {
+      summary: '5xx Error Rate > 5% on Production API Gateway',
+      source: 'datadog-agent',
+      severity: 'critical',
+      custom_details: {
+        cluster: 'prod-us-east-1',
+        error_rate: '7.4%',
+      },
+    },
   }),
-});`}
-                </pre>
+});
+
+const result = await response.json();
+console.log(result);`}
+                  </pre>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  2. Query Active Incidents (GET /api/incidents)
+                </span>
+                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
+                  <pre className="leading-relaxed">
+                    {`const response = await fetch('https://api.opsknight.com/api/incidents?status=OPEN&limit=25', {
+  headers: {
+    'Authorization': 'Bearer ${state?.token || 'ok_live_your_api_key'}',
+  },
+});
+
+const data = await response.json();
+console.log(data.incidents);`}
+                  </pre>
+                </div>
               </div>
             </TabsContent>
 
             {/* Python Snippet */}
-            <TabsContent value="python" className="space-y-2">
-              <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
-                <pre className="leading-relaxed">
-                  {`import requests
+            <TabsContent value="python" className="space-y-3">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  1. Trigger / Ingest Alert (POST /api/events)
+                </span>
+                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
+                  <pre className="leading-relaxed">
+                    {`import requests
 
 response = requests.post(
     "https://api.opsknight.com/api/events",
     headers={
-        "Authorization": "Bearer ${state?.token || 'ops_live_your_api_key'}",
+        "Authorization": "Bearer ${state?.token || 'ok_live_your_api_key'}",
         "Content-Type": "application/json",
     },
     json={
-        "service": "database-cluster",
-        "title": "Replication Lag Exceeded 10s",
-        "severity": "CRITICAL",
+        "event_action": "trigger",
+        "dedup_key": "api-gateway-5xx-spike",
+        "payload": {
+            "summary": "5xx Error Rate > 5% on Production API Gateway",
+            "source": "datadog-agent",
+            "severity": "critical",
+            "custom_details": {
+                "cluster": "prod-us-east-1",
+                "error_rate": "7.4%",
+            },
+        },
     },
 )
+
 print(response.json())`}
-                </pre>
+                  </pre>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  2. Query Active Incidents (GET /api/incidents)
+                </span>
+                <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
+                  <pre className="leading-relaxed">
+                    {`import requests
+
+response = requests.get(
+    "https://api.opsknight.com/api/incidents",
+    headers={
+        "Authorization": "Bearer ${state?.token || 'ok_live_your_api_key'}",
+    },
+    params={
+        "status": "OPEN",
+        "limit": 25,
+    },
+)
+
+print(response.json()["incidents"])`}
+                  </pre>
+                </div>
               </div>
             </TabsContent>
           </Tabs>
