@@ -45,7 +45,9 @@ Responders and Admins bypass those central resource checks for global operationa
 
 Manual escalation is its own capability (`incident.escalate.scoped`) rather than a side effect of being signed in, because it pages other responders. It is checked against the specific incident using the same resource rules as acknowledgement: assignee, assigned team, the service's owning team, watcher, and visibility. Responders and Admins hold it globally through `operations.manage`.
 
-Every surface goes through one command, so a browser session, the mobile UI, an API key, and a Slack interaction are all subject to the same check and all produce the same audit record (`incident.escalation.requested`) naming the actor and the surface. A refusal does not reveal whether the incident exists.
+v1.5 ships no UI control that invokes it. The only caller is the `escalate` action on the Slack interactions endpoint, which the product never renders — so in practice this capability governs a Slack app shortcut an administrator wired up by hand. Treat it as an enforced boundary on that endpoint rather than a feature to grant for.
+
+Any surface that gains manual escalation later goes through the same command, so a browser session, the mobile UI, an API key, and a Slack interaction are all subject to the same check and all produce the same audit record (`incident.escalation.requested`) naming the actor and the surface. A refusal does not reveal whether the incident exists.
 
 Background escalation workers are internal trusted actors and do not pass through this check. They can only act on escalation state the engine itself created, and a client cannot supply an escalation generation.
 

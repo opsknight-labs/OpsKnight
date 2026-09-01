@@ -104,9 +104,15 @@ Policy changes can affect active incidents because escalation reads the service'
 
 ## Manual escalation
 
-An operator can advance an open incident's escalation without waiting for its next step. Because this pages other responders, it is permission-checked against that specific incident rather than being available to anyone signed in: Responders and Admins can escalate any incident, and a standard User can escalate one they are responsible for through assignment, their team, the service's owning team, or a watch. Every manual escalation is recorded in the incident timeline and the audit log with the actor and the surface it came from.
+**v1.5 has no control for manually advancing an incident's escalation.** There is no button in the web UI, the mobile UI, or the Slack message, and no REST endpoint. Escalation advances only on its own schedule, and the way to reach a different responder now is to change the incident's assignment or its service's policy.
 
-An incident that is no longer open cannot be manually escalated; there is no later tier to page. See [Authorization and Roles](../security/authorization) for the full matrix.
+The application does contain a permission-checked manual-escalation command, used by the `escalate` action on the Slack interactions endpoint. Nothing in the product sends that action, so it is reachable only from a Slack app shortcut an administrator configured by hand. It is documented because it is enforced and audited, not because it is a workflow to plan around:
+
+- it is checked against the specific incident rather than being available to anyone signed in — Responders and Admins may escalate any incident, and a standard User only one they are responsible for through assignment, their team, the service's owning team, or a watch;
+- it refuses an incident that is no longer open, since there is no later tier to page; and
+- it records the actor and the surface in the incident timeline and in the audit log as `incident.escalation.requested`.
+
+See [Authorization and Roles](../security/authorization#manual-escalation) for the capability and matrix.
 
 ## Attach, replace, or remove a policy
 
