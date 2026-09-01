@@ -125,6 +125,7 @@ describe('escalation lifecycle generation fencing', () => {
     const result = await executeEscalation('inc-generation', 0);
 
     expect(result).toEqual({
+      outcome: 'SUPERSEDED',
       escalated: false,
       reason: 'Escalation superseded by lifecycle transition',
     });

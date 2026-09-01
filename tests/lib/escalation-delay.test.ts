@@ -60,7 +60,11 @@ describe('executeEscalation delay handling', () => {
 
     const result = await executeEscalation('inc-1');
 
-    expect(result).toEqual({ escalated: false, reason: 'Escalation scheduled' });
+    expect(result).toEqual({
+      outcome: 'STEP_SCHEDULED',
+      escalated: false,
+      reason: 'Escalation scheduled',
+    });
     expect(prisma.incident.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'inc-1' },
@@ -110,7 +114,11 @@ describe('executeEscalation delay handling', () => {
 
     const result = await executeEscalation('inc-2');
 
-    expect(result).toEqual({ escalated: false, reason: 'Escalation scheduled' });
+    expect(result).toEqual({
+      outcome: 'STEP_SCHEDULED',
+      escalated: false,
+      reason: 'Escalation scheduled',
+    });
     expect(prisma.incident.update).not.toHaveBeenCalled();
     expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     expect(scheduleEscalation).not.toHaveBeenCalled();

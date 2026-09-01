@@ -3,6 +3,10 @@ import { executeEscalation } from './notifications';
 import { logger } from './logger';
 import type { EventSideEffectPayload, LifecycleSideEffectContext } from './event-outbox';
 import {
+  escalationPolicyOwnsResponderRouting,
+  type EscalationOutcome,
+} from './escalation/types';
+import {
   isRetryableNotificationOutcome,
   type NotificationDeliveryOutcome,
 } from './notification-delivery';
@@ -50,20 +54,17 @@ function requireWarRoomDelivery(result: { success: boolean; error?: string }, la
   throw new Error(`${label} failed: ${result.error || 'unknown error'}`);
 }
 
+/**
+ * Decides whether the escalation policy already owns responder routing for a
+ * freshly triggered incident, or whether the default responder fan-out must
+ * still run. Switches on the engine's typed outcome only.
+ */
 export function escalationNotificationRoute(result: {
-  escalated?: boolean;
-  reason?: string;
+  outcome?: EscalationOutcome;
 }): 'service' | 'fallback' {
-  const reason = (result.reason || '').toLowerCase();
-  const policyOwnsResponderRouting =
-    result.escalated === true ||
-    reason.includes('scheduled') ||
-    reason.includes('already in progress') ||
-    reason.includes('already completed') ||
-    reason.includes('completed') ||
-    reason.includes('exhausted') ||
-    reason.includes('superseded');
-  return policyOwnsResponderRouting ? 'service' : 'fallback';
+  return result.outcome && escalationPolicyOwnsResponderRouting(result.outcome)
+    ? 'service'
+    : 'fallback';
 }
 
 async function sideEffectSnapshotStillCurrent(payload: EventSideEffectPayload): Promise<boolean> {

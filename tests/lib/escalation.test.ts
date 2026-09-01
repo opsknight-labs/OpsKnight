@@ -215,6 +215,7 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('nonexistent');
 
     expect(result).toEqual({
+      outcome: 'NO_INCIDENT',
       escalated: false,
       reason: 'Incident not found',
     });
@@ -230,6 +231,7 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'NO_POLICY',
       escalated: false,
       reason: 'No escalation policy configured',
     });
@@ -249,6 +251,7 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'COMPLETED',
       escalated: false,
       reason: 'Escalation already completed',
     });
@@ -269,6 +272,7 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'COMPLETED',
       escalated: false,
       reason: 'All escalation steps exhausted',
     });
@@ -310,6 +314,7 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'ALREADY_CLAIMED',
       escalated: false,
       reason: 'Escalation already in progress',
     });
@@ -342,6 +347,7 @@ describe('executeEscalation', () => {
     const result = await executeEscalation('inc-1');
 
     expect(result).toEqual({
+      outcome: 'INVALID_TARGET',
       escalated: false,
       reason: 'Invalid target configuration',
     });
@@ -380,7 +386,7 @@ describe('processPendingEscalations', () => {
 
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
-    const executor = vi.fn().mockResolvedValue({ escalated: true });
+    const executor = vi.fn().mockResolvedValue({ outcome: 'STEP_EXECUTED', escalated: true });
 
     const result = await processPendingEscalations(executor);
 
@@ -400,7 +406,7 @@ describe('processPendingEscalations', () => {
     const executor = vi
       .fn()
       .mockRejectedValueOnce(new Error('Network error'))
-      .mockResolvedValueOnce({ escalated: true });
+      .mockResolvedValueOnce({ outcome: 'STEP_EXECUTED', escalated: true });
 
     const result = await processPendingEscalations(executor);
 
@@ -416,6 +422,7 @@ describe('processPendingEscalations', () => {
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
     const executor = vi.fn().mockResolvedValue({
+      outcome: 'COMPLETED',
       escalated: false,
       reason: 'already completed',
     });
@@ -425,7 +432,7 @@ describe('processPendingEscalations', () => {
     expect(result.processed).toBe(0);
     expect(result.total).toBe(1);
     expect(result.errors).toBeUndefined();
-    // Should not call update for benign reasons
+    // Should not call update for an authoritative terminal outcome
     expect(prisma.incident.update).not.toHaveBeenCalled();
   });
 
@@ -448,7 +455,7 @@ describe('processPendingEscalations', () => {
 
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
-    const executor = vi.fn().mockResolvedValue({ escalated: true });
+    const executor = vi.fn().mockResolvedValue({ outcome: 'STEP_EXECUTED', escalated: true });
 
     await processPendingEscalations(executor);
 
@@ -462,7 +469,7 @@ describe('processPendingEscalations', () => {
 
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
 
-    const executor = vi.fn().mockResolvedValue({ escalated: true });
+    const executor = vi.fn().mockResolvedValue({ outcome: 'STEP_EXECUTED', escalated: true });
 
     await processPendingEscalations(executor);
 

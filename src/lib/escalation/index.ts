@@ -1,24 +1,18 @@
 import { Prisma } from '@prisma/client';
-import prisma from './prisma';
-import { runSerializableTransaction } from './db-utils';
-import { buildScheduleBlocks, getFinalScheduleBlocks } from './oncall';
-import { logger } from './logger';
-import { ESCALATION_LOCK_TIMEOUT_MS } from './config';
-import { startOfDayInTimeZone, startOfNextDayInTimeZone } from './timezone';
-import type { NotificationChannel } from './notifications';
-// import { formatDateTime } from './timezone'; // Unused
+import prisma from '../prisma';
+import { runSerializableTransaction } from '../db-utils';
+import { buildScheduleBlocks, getFinalScheduleBlocks } from '../oncall';
+import { logger } from '../logger';
+import { ESCALATION_LOCK_TIMEOUT_MS } from '../config';
+import { startOfDayInTimeZone, startOfNextDayInTimeZone } from '../timezone';
+import type { NotificationChannel } from '../notifications';
+import {
+  escalationOutcomeForError,
+  escalationStateIsAuthoritative,
+  type EscalationExecutionResult,
+} from './types';
 
-export interface EscalationExecutionResult {
-  escalated: boolean;
-  reason?: string;
-  nextEscalationAt?: Date;
-  targetName?: string;
-  targetType?: string;
-  targetCount?: number;
-  stepIndex?: number;
-  notifications?: unknown[];
-  nextStepScheduled?: boolean;
-}
+export * from './types';
 
 function escalationWorkerInvalidated(
   currentLock: Date | null | undefined,
@@ -33,6 +27,7 @@ function escalationWorkerInvalidated(
 
 function supersededEscalationResult(): EscalationExecutionResult {
   return {
+    outcome: 'SUPERSEDED',
     escalated: false,
     reason: 'Escalation superseded by lifecycle transition',
   } as const;
@@ -277,7 +272,7 @@ export async function executeEscalation(
   });
 
   if (!incident) {
-    return { escalated: false, reason: 'Incident not found' };
+    return { outcome: 'NO_INCIDENT', escalated: false, reason: 'Incident not found' };
   }
 
   if (!incident.service.policy?.steps?.length) {
@@ -291,12 +286,12 @@ export async function executeEscalation(
         escalationProcessingAt: null,
       },
     });
-    return { escalated: false, reason: 'No escalation policy configured' };
+    return { outcome: 'NO_POLICY', escalated: false, reason: 'No escalation policy configured' };
   }
 
   // Check if escalation is already completed - prevent re-triggering
   if (incident.escalationStatus === 'COMPLETED') {
-    return { escalated: false, reason: 'Escalation already completed' };
+    return { outcome: 'COMPLETED', escalated: false, reason: 'Escalation already completed' };
   }
 
   const policy = incident.service.policy;
@@ -343,6 +338,7 @@ export async function executeEscalation(
       }
 
       return {
+        outcome: 'STEP_SCHEDULED',
         escalated: true,
         reason: `Looping back to Step 1 after cooldown (Cycle ${loopEventsCount + 1})`,
         nextEscalationAt: nextAt,
@@ -372,7 +368,7 @@ export async function executeEscalation(
       }
     } catch (_) {}
 
-    return { escalated: false, reason: 'All escalation steps exhausted' };
+    return { outcome: 'COMPLETED', escalated: false, reason: 'All escalation steps exhausted' };
   }
 
   const now = new Date();
@@ -387,7 +383,7 @@ export async function executeEscalation(
         escalationProcessingAt: null,
       },
     });
-    return { escalated: false, reason: 'Escalation step not found' };
+    return { outcome: 'STEP_MISSING', escalated: false, reason: 'Escalation step not found' };
   }
 
   const stepDelayMs = (step.delayMinutes || 0) * 60 * 1000;
@@ -413,7 +409,7 @@ export async function executeEscalation(
       });
 
       try {
-        const { scheduleEscalation } = await import('./jobs/queue');
+        const { scheduleEscalation } = await import('../jobs/queue');
         await scheduleEscalation(incidentId, currentStepIndex, stepDelayMs);
       } catch (error) {
         logger.error('Failed to schedule initial escalation job', {
@@ -422,11 +418,11 @@ export async function executeEscalation(
         });
       }
 
-      return { escalated: false, reason: 'Escalation scheduled' };
+      return { outcome: 'STEP_SCHEDULED', escalated: false, reason: 'Escalation scheduled' };
     }
 
     if (scheduledAt.getTime() > now.getTime()) {
-      return { escalated: false, reason: 'Escalation scheduled' };
+      return { outcome: 'STEP_SCHEDULED', escalated: false, reason: 'Escalation scheduled' };
     }
 
     // scheduledAt is due; continue to execute without rescheduling.
@@ -462,7 +458,7 @@ export async function executeEscalation(
   });
 
   if (claim.count === 0) {
-    return { escalated: false, reason: 'Escalation already in progress' };
+    return { outcome: 'ALREADY_CLAIMED', escalated: false, reason: 'Escalation already in progress' };
   }
 
   // The claim timestamp is also the lifecycle-generation token. Any real
@@ -536,11 +532,11 @@ export async function executeEscalation(
 
     // Try next step
     if (!isLastStep) {
-      const { scheduleEscalation } = await import('./jobs/queue');
+      const { scheduleEscalation } = await import('../jobs/queue');
       await scheduleEscalation(incidentId, currentStepIndex + 1, 0);
-      return { escalated: false, reason: 'Escalation scheduled' };
+      return { outcome: 'STEP_SCHEDULED', escalated: false, reason: 'Escalation scheduled' };
     }
-    return { escalated: false, reason: 'Invalid target configuration' };
+    return { outcome: 'INVALID_TARGET', escalated: false, reason: 'Invalid target configuration' };
   }
 
   // Resolve to user IDs using resolveEscalationTarget
@@ -652,16 +648,16 @@ export async function executeEscalation(
 
     // Try next step
     if (!isLastStep) {
-      const { scheduleEscalation } = await import('./jobs/queue');
+      const { scheduleEscalation } = await import('../jobs/queue');
       await scheduleEscalation(incidentId, currentStepIndex + 1, 0);
-      return { escalated: false, reason: 'Escalation scheduled' };
+      return { outcome: 'STEP_SCHEDULED', escalated: false, reason: 'Escalation scheduled' };
     }
-    return { escalated: false, reason: 'No users to notify' };
+    return { outcome: 'NO_ELIGIBLE_RESPONDERS', escalated: false, reason: 'No users to notify' };
   }
 
   // Use escalation-step channels when configured, intersected with each
   // recipient's enabled channels by sendUserNotification.
-  const { sendUserNotification } = await import('./user-notifications');
+  const { sendUserNotification } = await import('../user-notifications');
   const notificationsSent = [];
   const escalationChannels: NotificationChannel[] | undefined =
     step.notificationChannels.length > 0 ? step.notificationChannels : undefined;
@@ -842,9 +838,10 @@ export async function executeEscalation(
   if (shouldScheduleNextJob && nextStep && nextEscalationAt) {
     const delayMs = (nextStep.delayMinutes || 0) * 60 * 1000;
     if (delayMs === 0) {
-      const { scheduleEscalation } = await import('./jobs/queue');
+      const { scheduleEscalation } = await import('../jobs/queue');
       await scheduleEscalation(incidentId, nextStepIndex, 0);
       return {
+        outcome: 'STEP_EXECUTED',
         escalated: true,
         targetName,
         targetType: step.targetType,
@@ -855,7 +852,7 @@ export async function executeEscalation(
       };
     }
     try {
-      const { scheduleEscalation } = await import('./jobs/queue');
+      const { scheduleEscalation } = await import('../jobs/queue');
       await scheduleEscalation(incidentId, nextStepIndex, delayMs);
     } catch (error) {
       logger.error('Failed to schedule escalation job', {
@@ -867,6 +864,7 @@ export async function executeEscalation(
   }
 
   return {
+    outcome: 'STEP_EXECUTED',
     escalated: true,
     targetName,
     targetType: step.targetType,
@@ -883,7 +881,7 @@ export async function executeEscalation(
  */
 export async function processPendingEscalations(
   executorOrLimit:
-    | ((incidentId: string, stepIndex?: number) => Promise<{ escalated: boolean; reason?: string }>)
+    | ((incidentId: string, stepIndex?: number) => Promise<EscalationExecutionResult>)
     | number = executeEscalation
 ): Promise<{ processed: number; total: number; errors?: string[] }> {
   const executor = typeof executorOrLimit === 'function' ? executorOrLimit : executeEscalation;
@@ -941,23 +939,10 @@ export async function processPendingEscalations(
         if (result.escalated) {
           processed++;
         } else {
-          const reason = (result.reason || '').toLowerCase();
-          const stateAlreadyHandled =
-            reason.includes('already in progress') ||
-            reason.includes('scheduled') ||
-            reason.includes('already completed') ||
-            reason.includes('exhausted') ||
-            reason.includes('completed') ||
-            reason.includes('no escalation policy') ||
-            reason.includes('no users to notify') ||
-            reason.includes('invalid target') ||
-            reason.includes('step not found') ||
-            reason.includes('superseded by lifecycle transition');
-
           // executeEscalation persists terminal states itself (including FAILED),
           // or intentionally no-ops when a newer lifecycle generation supersedes
           // the worker. Do not overwrite either authoritative state here.
-          if (stateAlreadyHandled) continue;
+          if (escalationStateIsAuthoritative(result.outcome)) continue;
 
           await prisma.incident.update({
             where: { id: incident.id },
@@ -970,10 +955,7 @@ export async function processPendingEscalations(
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        const isRetryable =
-          errorMessage.includes('Serialization') ||
-          errorMessage.includes('deadlock') ||
-          errorMessage.includes('Connection');
+        const isRetryable = escalationOutcomeForError(error) === 'RETRYABLE_FAILURE';
 
         logger.error('Error processing escalation', {
           incidentId: incident.id,
