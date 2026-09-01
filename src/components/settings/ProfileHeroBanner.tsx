@@ -123,7 +123,6 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
               avatarUrl={currentAvatarUrl}
               gender={user.gender}
               size="2xl"
-              showOnlineStatus={user.status === 'ACTIVE'}
               className="shrink-0 ring-4 ring-primary-foreground/20 rounded-full shadow-xl transition-all duration-200 group-hover:ring-primary-foreground/40 group-hover:scale-102"
             />
 
