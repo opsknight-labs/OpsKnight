@@ -6,13 +6,10 @@ import PreferencesForm from '@/components/settings/PreferencesForm';
 import NotificationPreferencesForm from '@/components/settings/NotificationPreferencesForm';
 import QuietHoursForm from '@/components/settings/QuietHoursForm';
 import ProfileDetailTabs from '@/components/settings/ProfileDetailTabs';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Badge } from '@/components/ui/shadcn/badge';
-import UserAvatar from '@/components/UserAvatar';
+import ProfileHeroBanner from '@/components/settings/ProfileHeroBanner';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
-import { getDefaultAvatar } from '@/lib/avatar';
-import { Mail, Briefcase, Building2, Clock, RefreshCw, Users, Calendar, Flame } from 'lucide-react';
+import { Users, Calendar, Flame } from 'lucide-react';
 
 export const revalidate = 0;
 
@@ -130,95 +127,22 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
 
   return (
     <div className="space-y-6">
-      {/* Centralized Hero Header — Same pattern as /users/[id] and /teams/[id] */}
-      <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'Profile & Preferences',
+      {/* Centralized Hero Header — Single unified avatar with interactive controls */}
+      <ProfileHeroBanner
+        user={{
+          id: user?.id || 'unknown',
+          name: name,
+          email: email,
+          role: role,
+          avatarUrl: user?.avatarUrl,
+          gender: user?.gender,
+          status: user?.status,
+          department: user?.department,
+          jobTitle: user?.jobTitle,
+          lastOidcSync: lastOidcSync ? String(lastOidcSync) : null,
+          timeZone: timeZone,
         }}
-        tag="Personal Account"
-        title={name}
-        icon={
-          <UserAvatar
-            userId={user?.id || 'unknown'}
-            name={name}
-            avatarUrl={user?.avatarUrl || getDefaultAvatar(user?.gender, name, user?.id)}
-            gender={user?.gender}
-            size="xl"
-            showOnlineStatus={user?.status === 'ACTIVE'}
-            className="shrink-0 ring-2 ring-primary-foreground/20 rounded-full"
-          />
-        }
-        badges={
-          <>
-            <Badge
-              variant="outline"
-              size="xs"
-              className="bg-primary-foreground/15 text-primary-foreground border-primary-foreground/25 uppercase font-bold text-[10px] tracking-wider"
-            >
-              {role}
-            </Badge>
-
-            {lastOidcSync ? (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-emerald-500/20 text-emerald-100 border-emerald-400/30 font-medium text-[10px] gap-1"
-              >
-                <RefreshCw className="h-2.5 w-2.5" /> SSO Synced
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-primary-foreground/10 text-primary-foreground/90 border-primary-foreground/20 text-[10px]"
-              >
-                Direct Account
-              </Badge>
-            )}
-
-            {user?.status === 'ACTIVE' && (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-emerald-500/20 text-emerald-100 border-emerald-400/30 font-medium text-[10px]"
-              >
-                Active
-              </Badge>
-            )}
-          </>
-        }
-        subtitle={
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <a
-              href={`mailto:${email}`}
-              className="flex items-center gap-1.5 font-mono hover:text-white hover:underline transition-colors"
-            >
-              <Mail className="h-3.5 w-3.5 opacity-80" />
-              <span>{email}</span>
-            </a>
-
-            {user?.jobTitle && (
-              <span className="flex items-center gap-1.5">
-                <Briefcase className="h-3.5 w-3.5 opacity-80" />
-                <span>{user.jobTitle}</span>
-              </span>
-            )}
-
-            {user?.department && (
-              <span className="flex items-center gap-1.5">
-                <Building2 className="h-3.5 w-3.5 opacity-80" />
-                <span>{user.department}</span>
-              </span>
-            )}
-
-            <span className="flex items-center gap-1.5 bg-primary-foreground/10 px-2 py-0.5 rounded border border-primary-foreground/15">
-              <Clock className="h-3 w-3 opacity-80" />
-              <span>{localTimeStr}</span>
-            </span>
-          </div>
-        }
+        localTime={localTimeStr}
         stats={[
           {
             label: 'Teams',

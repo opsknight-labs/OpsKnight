@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useTransition, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useForm, FormProvider, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,8 +10,6 @@ import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { Input } from '@/components/ui/shadcn/input';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/shadcn/avatar';
-import { Button } from '@/components/ui/shadcn/button';
 import {
   Select,
   SelectContent,
@@ -20,15 +18,10 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { FormField, FormItem, FormControl } from '@/components/ui/shadcn/form';
-import { Camera, Upload, Loader2, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 import { updateProfile } from '@/app/(app)/settings/actions';
 import { useRouter } from 'next/navigation';
-import { notify as toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
-import { AvatarPicker } from '@/components/settings/AvatarPicker';
-import { getDefaultAvatar, isDefaultAvatar } from '@/lib/avatar';
-import { useAvatarUpdater } from '@/hooks/useUserAvatar';
+import { RefreshCw } from 'lucide-react';
 
 type Props = {
   name: string;
@@ -58,20 +51,11 @@ export default function ProfileForm({
   memberSince,
   department,
   jobTitle,
-  avatarUrl,
   lastOidcSync,
   gender,
 }: Props) {
   const router = useRouter();
   const { update } = useSession();
-  const { updateCurrentUser } = useAvatarUpdater();
-  const [isUploading, startTransition] = useTransition();
-  const [currentGender, setCurrentGender] = useState<string | null | undefined>(gender);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(
-    avatarUrl || getDefaultAvatar(gender, name)
-  );
 
   const defaultValues: ProfileFormData = {
     name,
@@ -127,174 +111,9 @@ export default function ProfileForm({
     enabled: form.formState.isValid && form.formState.isDirty,
   });
 
-  const handleAvatarSelect = async (selectedAvatarUrl: string) => {
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.append('avatarUrl', selectedAvatarUrl);
-
-      const result = await updateProfile({ error: null, success: false }, formData);
-
-      if (result.success) {
-        toast.success('Avatar updated');
-        setAvatarPreview(selectedAvatarUrl);
-        updateCurrentUser(selectedAvatarUrl, currentGender);
-        await update({ force: true });
-        router.refresh();
-      } else {
-        toast.error(result.error || 'Failed to update avatar');
-      }
-    });
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('File is too large. Max 2MB allowed.');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-
-      startTransition(async () => {
-        const formData = new FormData();
-        formData.append('avatar', file);
-
-        const result = await updateProfile({ error: null, success: false }, formData);
-
-        if (result.success) {
-          toast.success('Profile photo updated');
-          await update({ force: true });
-          router.refresh();
-        } else {
-          toast.error(result.error || 'Failed to upload photo');
-          setAvatarPreview(
-            avatarUrl && !isDefaultAvatar(avatarUrl)
-              ? avatarUrl
-              : getDefaultAvatar(currentGender, email || 'user')
-          );
-        }
-      });
-    }
-  };
-
-  const getInitials = (nameInput: string) => {
-    return (nameInput || 'User')
-      .split(' ')
-      .map(n => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
   return (
     <div className="space-y-6">
-      {/* Card 1: Profile Photo */}
-      <SettingsSection
-        title="Profile Photo"
-        description="Choose a preset avatar or upload your own photo"
-        footer={
-          <p className="text-xs text-muted-foreground">
-            Supported formats: PNG, JPEG, WebP, GIF. Maximum size: 2MB.
-          </p>
-        }
-      >
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 py-4">
-          <div
-            className="relative group cursor-pointer shrink-0"
-            onClick={() => !isUploading && fileInputRef.current?.click()}
-          >
-            <Avatar
-              className={cn(
-                'h-24 w-24 border-2 border-background shadow-md ring-2 ring-primary/20 transition-all group-hover:ring-primary/60',
-                isUploading && 'opacity-70'
-              )}
-            >
-              <AvatarImage
-                src={avatarPreview || getDefaultAvatar(currentGender, name)}
-                alt={name}
-                className="object-cover"
-              />
-              <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
-                {getInitials(name)}
-              </AvatarFallback>
-            </Avatar>
-
-            <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px]">
-              {isUploading ? (
-                <Loader2 className="h-6 w-6 text-white animate-spin" />
-              ) : (
-                <Camera className="h-6 w-6 text-white drop-shadow-md" />
-              )}
-            </div>
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*"
-              className="hidden"
-              disabled={isUploading}
-            />
-          </div>
-
-          <div className="flex flex-col items-center sm:items-start gap-3 flex-1 text-center sm:text-left">
-            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center sm:justify-start gap-2">
-              <AvatarPicker
-                currentAvatarUrl={avatarPreview}
-                onSelect={handleAvatarSelect}
-                userName={name}
-              />
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="gap-1.5 h-8 text-xs font-medium"
-              >
-                <Upload className="h-3.5 w-3.5" />
-                Upload Photo
-              </Button>
-
-              {avatarPreview && !isDefaultAvatar(avatarPreview) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    startTransition(async () => {
-                      const formData = new FormData();
-                      formData.append('removeAvatar', 'true');
-                      const result = await updateProfile({ error: null, success: false }, formData);
-                      if (result.success) {
-                        toast.success('Custom photo removed');
-                        const defaultAvatar = getDefaultAvatar(currentGender, name);
-                        setAvatarPreview(defaultAvatar);
-                        updateCurrentUser(null, currentGender);
-                        await update({ force: true });
-                        router.refresh();
-                      } else {
-                        toast.error(result.error || 'Failed to remove photo');
-                      }
-                    });
-                  }}
-                  disabled={isUploading}
-                  className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Reset to Default
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </SettingsSection>
-
-      {/* Card 2: Personal Information (Autosaved) */}
+      {/* Card 1: Personal Information (Autosaved) */}
       <FormProvider {...form}>
         <form
           onSubmit={e => {
@@ -335,10 +154,6 @@ export default function ProfileForm({
                       <Select
                         onValueChange={value => {
                           field.onChange(value);
-                          setCurrentGender(value);
-                          if (isDefaultAvatar(avatarPreview)) {
-                            setAvatarPreview(getDefaultAvatar(value, name));
-                          }
                         }}
                         defaultValue={field.value || undefined}
                         value={field.value || undefined}
@@ -376,13 +191,13 @@ export default function ProfileForm({
 
               <SettingsRow
                 label="Job Title"
-                description="Your professional role in the organization"
+                description="Your operational role or position"
                 htmlFor="jobTitle"
               >
                 <Input
                   id="jobTitle"
                   {...form.register('jobTitle')}
-                  placeholder="e.g. Senior Site Reliability Engineer"
+                  placeholder="e.g. Lead Site Reliability Engineer"
                   className="w-full max-w-md"
                 />
               </SettingsRow>
@@ -391,66 +206,58 @@ export default function ProfileForm({
         </form>
       </FormProvider>
 
-      {/* Card 3: Account Details (Read-Only) */}
+      {/* Card 2: Account Details (Read-Only) */}
       <SettingsSection
         title="Account Details"
-        description="Core account metadata and authentication credentials"
-        footer={
-          <p className="text-xs text-muted-foreground">
-            Contact your workspace administrator to update organizational permissions or SSO
-            mappings.
-          </p>
-        }
+        description="Managed and provisioned by your workspace organization."
       >
         <div className="divide-y text-sm">
           <SettingsRow
             label="Email Address"
-            description="Your primary contact and login identifier"
+            description="Primary identifier used for account access and communications"
           >
             <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-medium text-foreground">{email}</span>
+              <span className="font-mono text-sm text-foreground">
+                {email || 'No email configured'}
+              </span>
+              <Badge variant="outline" size="xs" className="text-muted-foreground">
+                Verified
+              </Badge>
             </div>
           </SettingsRow>
 
-          <SettingsRow label="Account Role" description="Your permissions level in this workspace">
-            <Badge
-              variant="outline"
-              size="xs"
-              className="bg-primary/10 text-primary border-primary/20 uppercase font-bold text-[10px] tracking-wider"
-            >
-              {role}
-            </Badge>
+          <SettingsRow
+            label="Workspace Role"
+            description="Defines your access permissions across services and policies"
+          >
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="font-semibold uppercase tracking-wider text-xs">
+                {role}
+              </Badge>
+            </div>
           </SettingsRow>
 
           <SettingsRow
-            label="Authentication"
-            description="Identity provider and authentication method"
+            label="Authentication Method"
+            description="Identity provider used to secure and sign into your account"
           >
-            {lastOidcSync ? (
-              <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              {lastOidcSync ? (
                 <Badge
                   variant="outline"
-                  size="xs"
-                  className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-400/30 font-medium text-[10px] w-fit"
+                  className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1 text-xs"
                 >
-                  SSO Synced
+                  <RefreshCw className="h-3 w-3" /> SSO / OIDC Managed
                 </Badge>
-                <span className="text-[11px] text-muted-foreground">
-                  Last synced: {lastOidcSync}
-                </span>
-              </div>
-            ) : (
-              <Badge
-                variant="outline"
-                size="xs"
-                className="bg-muted text-muted-foreground border-border text-[10px] w-fit"
-              >
-                Direct Password Account
-              </Badge>
-            )}
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground text-xs">
+                  Direct Password Account
+                </Badge>
+              )}
+            </div>
           </SettingsRow>
 
-          <SettingsRow label="Member Since" description="Date when your account was provisioned">
+          <SettingsRow label="Member Since" description="Timestamp of initial account provisioning">
             <span className="text-sm text-muted-foreground">{memberSince}</span>
           </SettingsRow>
         </div>
