@@ -512,7 +512,7 @@ describe('processPendingEscalations', () => {
         id: 'inc-1',
         currentEscalationStep: 0,
         escalationStatus: 'ESCALATING',
-        escalationGeneration: 7,
+        escalationGeneration: 0,
       },
     ];
 
@@ -523,17 +523,12 @@ describe('processPendingEscalations', () => {
     const result = await processPendingEscalations(executor);
 
     expect(result.errors).toHaveLength(1);
-    // Error should be recorded
     expect(result.errors![0]).toContain('Serialization failure');
-    expect(prisma.incident.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 'inc-1',
-        status: 'OPEN',
-        escalationGeneration: 7,
-        currentEscalationStep: 0,
-      },
+    expect(txIncidentUpdate).toHaveBeenCalledWith({
+      where: { id: 'inc-1' },
       data: { escalationProcessingAt: null },
     });
+    expect(prisma.incident.updateMany).not.toHaveBeenCalled();
   });
 
   it('uses provided step index from incident', async () => {
