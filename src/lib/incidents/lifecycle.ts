@@ -62,6 +62,8 @@ type IncidentLifecycleSnapshot = {
   currentEscalationStep: number | null;
   snoozedUntil: Date | null;
   snoozeReason: string | null;
+  slaPausedMs: bigint;
+  slaPauseStartedAt: Date | null;
   escalationGeneration: number;
   service: {
     policy: {
@@ -363,6 +365,21 @@ function updateDataForCommand(
     escalationProcessingAt: null,
   };
 
+  const closesPause =
+    input.command === 'UNSNOOZE' ||
+    input.command === 'UNSUPPRESS' ||
+    input.command === 'ACKNOWLEDGE' ||
+    input.command === 'RESOLVE' ||
+    input.command === 'REOPEN';
+  if (closesPause && incident.slaPauseStartedAt) {
+    const elapsed = BigInt(Math.max(0, now.getTime() - incident.slaPauseStartedAt.getTime()));
+    data.slaPausedMs = { increment: elapsed };
+    data.slaPauseStartedAt = null;
+  }
+  if ((input.command === 'SNOOZE' || input.command === 'SUPPRESS') && !incident.slaPauseStartedAt) {
+    data.slaPauseStartedAt = now;
+  }
+
   switch (input.command) {
     case 'ACKNOWLEDGE':
       if (!incident.acknowledgedAt) data.acknowledgedAt = now;
@@ -453,6 +470,8 @@ async function loadSnapshot(
       currentEscalationStep: true,
       snoozedUntil: true,
       snoozeReason: true,
+      slaPausedMs: true,
+      slaPauseStartedAt: true,
       escalationGeneration: true,
       service: {
         select: {

@@ -1,14 +1,14 @@
 export type SlaTargetSource = 'definition' | 'priority' | 'service' | 'global';
 export type SlaTarget = { ackTargetMs: number; resolveTargetMs: number; source: SlaTargetSource };
 
-const MINUTE_MS = 60_000;
-const PRIORITY_TARGETS: Record<string, { ack: number; resolve: number }> = {
-  P1: { ack: 5, resolve: 60 },
-  P2: { ack: 15, resolve: 240 },
-  P3: { ack: 30, resolve: 480 },
-  P4: { ack: 60, resolve: 1440 },
-  P5: { ack: 120, resolve: 2880 },
-};
+export const MINUTE_MS = 60_000;
+export const PRIORITY_SLA_TARGETS = [
+  { priority: 'P1', ackMinutes: 5, resolveMinutes: 60 },
+  { priority: 'P2', ackMinutes: 15, resolveMinutes: 240 },
+  { priority: 'P3', ackMinutes: 30, resolveMinutes: 480 },
+  { priority: 'P4', ackMinutes: 60, resolveMinutes: 1440 },
+  { priority: 'P5', ackMinutes: 120, resolveMinutes: 2880 },
+] as const;
 
 function normalizePriority(priority?: string | null): string | null {
   const match = priority
@@ -35,10 +35,11 @@ export function resolveSlaTarget(input: {
   }
   const priority = normalizePriority(input.priority);
   if (priority) {
-    const target = PRIORITY_TARGETS[priority];
+    const target = PRIORITY_SLA_TARGETS.find(candidate => candidate.priority === priority);
+    if (!target) throw new Error(`Unsupported normalized SLA priority: ${priority}`);
     return {
-      ackTargetMs: target.ack * MINUTE_MS,
-      resolveTargetMs: target.resolve * MINUTE_MS,
+      ackTargetMs: target.ackMinutes * MINUTE_MS,
+      resolveTargetMs: target.resolveMinutes * MINUTE_MS,
       source: 'priority',
     };
   }

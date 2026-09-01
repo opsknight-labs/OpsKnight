@@ -25,10 +25,10 @@ import { createTimeContractContext, resolveReportingWindow } from './time-retent
 import { intervalDurationMs, intervalGaps, type TimeInterval } from './metrics/domain/interval';
 import { compileIncidentMetricFilter, type IncidentMetricFilter } from './metrics/domain/filter';
 import { METRIC_ACCUMULATOR } from './metrics/domain/accumulator';
-
-// UUID validation regex - prevents SQL injection in dynamic CASE statements
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CUID_REGEX = /^c[a-z0-9]{24,}$/i;
+import { resolveSlaTarget } from './metrics/domain/sla-target';
+import { slaTargetSql } from './metrics/domain/sla-target-sql';
+import { effectiveMaterializedElapsedMs } from './metrics/domain/sla-clock';
+import { slaEffectiveElapsedSql } from './metrics/domain/sla-clock-sql';
 
 /**
  * Build a parameterized SQL `WHERE`-clause fragment that mirrors the full
@@ -74,10 +74,6 @@ export const BUSINESS_HOURS_TIMEZONE = DEFAULT_BUSINESS_HOURS_TIMEZONE;
  * Validates that an ID is a safe identifier (UUID or CUID format)
  * Used to prevent SQL injection when building dynamic CASE statements
  */
-function isValidSafeId(id: string): boolean {
-  return UUID_REGEX.test(id) || CUID_REGEX.test(id);
-}
-
 /**
  * SLA Server - World-Class SLA Metrics Calculation
  *
@@ -255,36 +251,19 @@ async function calculateDbAggregateMetrics(
 ): Promise<DbAggregateMetrics> {
   const { default: prisma } = await import('./prisma');
 
-  // Get default targets for SQL query
-  const defaultAckMs = DEFAULT_ACK_TARGET_MINUTES * 60 * 1000;
-  const defaultResolveMs = DEFAULT_RESOLVE_TARGET_MINUTES * 60 * 1000;
-
-  // Build service-specific target case expressions for SQL
-  // This handles per-service SLA targets in the aggregate query
-  // SECURITY: Filter to only valid UUIDs/CUIDs to prevent SQL injection
-  const serviceIds = Array.from(serviceTargetMap.keys()).filter(isValidSafeId);
-  let ackTargetCase = `${defaultAckMs}`;
-  let resolveTargetCase = `${defaultResolveMs}`;
-
-  if (serviceIds.length > 0) {
-    const ackCases = serviceIds
-      .map(id => {
-        const target = serviceTargetMap.get(id);
-        // Safe: id is validated as UUID/CUID format above
-        return `WHEN "serviceId" = '${id}' THEN ${(target?.ackMinutes ?? DEFAULT_ACK_TARGET_MINUTES) * 60 * 1000}`;
-      })
-      .join(' ');
-    ackTargetCase = `CASE ${ackCases} ELSE ${defaultAckMs} END`;
-
-    const resolveCases = serviceIds
-      .map(id => {
-        const target = serviceTargetMap.get(id);
-        // Safe: id is validated as UUID/CUID format above
-        return `WHEN "serviceId" = '${id}' THEN ${(target?.resolveMinutes ?? DEFAULT_RESOLVE_TARGET_MINUTES) * 60 * 1000}`;
-      })
-      .join(' ');
-    resolveTargetCase = `CASE ${resolveCases} ELSE ${defaultResolveMs} END`;
-  }
+  const ackTargetCase = slaTargetSql({
+    kind: 'ackMinutes',
+    serviceTargetMap,
+    fallbackMinutes: DEFAULT_ACK_TARGET_MINUTES,
+  });
+  const resolveTargetCase = slaTargetSql({
+    kind: 'resolveMinutes',
+    serviceTargetMap,
+    fallbackMinutes: DEFAULT_RESOLVE_TARGET_MINUTES,
+  });
+  const ackElapsed = slaEffectiveElapsedSql(Prisma.sql`"acknowledgedAt"`);
+  const resolveElapsed = slaEffectiveElapsedSql(Prisma.sql`COALESCE("resolvedAt", "updatedAt")`);
+  const currentElapsed = slaEffectiveElapsedSql(Prisma.sql`NOW()`);
 
   // Keep every aggregate surface aligned with the Prisma filter semantics.
   // Constructing a second filter set from Prisma.IncidentWhereInput omitted
@@ -323,32 +302,32 @@ async function calculateDbAggregateMetrics(
         COUNT(*) as total_incidents,
         COUNT(*) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as acknowledged_count,
         COUNT(*) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus") as resolved_count,
-        AVG(GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000))
+        AVG(${ackElapsed})
           FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as avg_mtta_ms,
-        AVG(GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000))
+        AVG(${resolveElapsed})
           FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
         COUNT(*) FILTER (
           WHERE "acknowledgedAt" IS NOT NULL
-            AND GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000) <= ${Prisma.raw(ackTargetCase)}
+            AND ${ackElapsed} <= ${ackTargetCase}
         ) as ack_sla_met,
         COUNT(*) FILTER (
           WHERE ("acknowledgedAt" IS NOT NULL
-            AND GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000) > ${Prisma.raw(ackTargetCase)})
+            AND ${ackElapsed} > ${ackTargetCase})
           OR ("acknowledgedAt" IS NULL AND "status" = 'RESOLVED'::"IncidentStatus")
           OR ("acknowledgedAt" IS NULL AND "status" != 'RESOLVED'::"IncidentStatus"
-            AND EXTRACT(EPOCH FROM (NOW() - "createdAt")) * 1000 > ${Prisma.raw(ackTargetCase)})
+            AND ${currentElapsed} > ${ackTargetCase})
         ) as ack_sla_breached,
         COUNT(*) FILTER (
           WHERE "status" = 'RESOLVED'::"IncidentStatus"
           AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL
-          AND GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000) <= ${Prisma.raw(resolveTargetCase)}
+          AND ${resolveElapsed} <= ${resolveTargetCase}
         ) as resolve_sla_met,
         COUNT(*) FILTER (
           WHERE ("status" = 'RESOLVED'::"IncidentStatus"
             AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL
-            AND GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000) > ${Prisma.raw(resolveTargetCase)})
+            AND ${resolveElapsed} > ${resolveTargetCase})
           OR ("status" != 'RESOLVED'::"IncidentStatus"
-            AND EXTRACT(EPOCH FROM (NOW() - "createdAt")) * 1000 > ${Prisma.raw(resolveTargetCase)})
+            AND ${currentElapsed} > ${resolveTargetCase})
         ) as resolve_sla_breached,
         COUNT(*) FILTER (WHERE "urgency" = 'HIGH'::"IncidentUrgency") as high_urgency_count,
         COUNT(*) FILTER (WHERE "urgency" = 'MEDIUM'::"IncidentUrgency") as medium_urgency_count,
@@ -383,16 +362,16 @@ async function calculateDbAggregateMetrics(
     >(Prisma.sql`
       SELECT
         PERCENTILE_CONT(0.5) WITHIN GROUP (
-          ORDER BY GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000)
+          ORDER BY ${ackElapsed}
         ) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as mtta_p50_ms,
         PERCENTILE_CONT(0.95) WITHIN GROUP (
-          ORDER BY GREATEST(0, EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000)
+          ORDER BY ${ackElapsed}
         ) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as mtta_p95_ms,
         PERCENTILE_CONT(0.5) WITHIN GROUP (
-          ORDER BY GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000)
+          ORDER BY ${resolveElapsed}
         ) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL) as mttr_p50_ms,
         PERCENTILE_CONT(0.95) WITHIN GROUP (
-          ORDER BY GREATEST(0, EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000)
+          ORDER BY ${resolveElapsed}
         ) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL) as mttr_p95_ms
       FROM "Incident"
       WHERE "createdAt" >= ${start}
@@ -999,6 +978,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   // team/urgency/status/visibility/assignee scope produced wrong numbers
   // for those widgets relative to the headline metrics above them.
   const fullIncidentFilterSql = buildIncidentFilterSql(filters);
+  const previousAckElapsed = slaEffectiveElapsedSql(Prisma.sql`"acknowledgedAt"`);
+  const previousResolveElapsed = slaEffectiveElapsedSql(
+    Prisma.sql`COALESCE("resolvedAt", "updatedAt")`
+  );
 
   // Step 3: Parallel fetch - lightweight queries that work at any scale
   const incidentMetricSelect = {
@@ -1008,11 +991,14 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     updatedAt: true,
     status: true,
     urgency: true,
+    priority: true,
     assigneeId: true,
     serviceId: true,
     description: true,
     acknowledgedAt: true,
     resolvedAt: true,
+    slaPausedMs: true,
+    slaPauseStartedAt: true,
     service: {
       select: {
         id: true,
@@ -1052,6 +1038,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         title: true,
         status: true,
         urgency: true,
+        priority: true,
         assigneeId: true,
         serviceId: true,
         createdAt: true,
@@ -1200,9 +1187,9 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         COUNT(*) FILTER (WHERE "urgency" = 'HIGH'::"IncidentUrgency") as high_urgency_count,
         COUNT(*) FILTER (WHERE "urgency" = 'MEDIUM'::"IncidentUrgency") as medium_urgency_count,
         COUNT(*) FILTER (WHERE "urgency" = 'LOW'::"IncidentUrgency") as low_urgency_count,
-        AVG(EXTRACT(EPOCH FROM ("acknowledgedAt" - "createdAt")) * 1000)
+        AVG(${previousAckElapsed})
           FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as avg_mtta_ms,
-        AVG(EXTRACT(EPOCH FROM (COALESCE("resolvedAt", "updatedAt") - "createdAt")) * 1000)
+        AVG(${previousResolveElapsed})
           FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
         COUNT(*) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as ack_count,
         COUNT(*) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus") as resolve_count
@@ -1439,7 +1426,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     for (const incident of recentIncidents) {
       const ackAt = ackMap.get(incident.id);
       if (ackAt && incident.createdAt) {
-        const ackTimeMs = ackAt.getTime() - incident.createdAt.getTime();
+        const ackTimeMs = effectiveMaterializedElapsedMs({
+          startedAt: incident.createdAt,
+          evaluationAt: ackAt,
+          pausedMs: incident.slaPausedMs,
+          pauseStartedAt: incident.slaPauseStartedAt,
+        });
         if (ackTimeMs >= 0) {
           // Validate: ack can't be before creation
           mttaSamples.push(ackTimeMs);
@@ -1449,7 +1441,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       if (incident.status === 'RESOLVED') {
         const resolvedAt = incident.resolvedAt || incident.updatedAt;
         if (resolvedAt && incident.createdAt) {
-          const resolveTimeMs = resolvedAt.getTime() - incident.createdAt.getTime();
+          const resolveTimeMs = effectiveMaterializedElapsedMs({
+            startedAt: incident.createdAt,
+            evaluationAt: resolvedAt,
+            pausedMs: incident.slaPausedMs,
+            pauseStartedAt: incident.slaPauseStartedAt,
+          });
           if (resolveTimeMs >= 0) {
             // Validate: resolve can't be before creation
             mttrSamples.push(resolveTimeMs);
@@ -1679,18 +1676,25 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   } else {
     // In-memory calculation for small datasets
     for (const incident of recentIncidents) {
-      const targets = serviceTargetMap.get(incident.serviceId) || {
-        ackMinutes: DEFAULT_ACK_TARGET_MINUTES,
-        resolveMinutes: DEFAULT_RESOLVE_TARGET_MINUTES,
-      };
-      const ackTarget = targets.ackMinutes;
-      const resolveTarget = targets.resolveMinutes;
+      const target = resolveSlaTarget({
+        priority: incident.priority,
+        serviceTargets: {
+          ackMinutes: incident.service.targetAckMinutes,
+          resolveMinutes: incident.service.targetResolveMinutes,
+        },
+      });
+      const elapsedAt = (evaluationAt: Date) =>
+        effectiveMaterializedElapsedMs({
+          startedAt: incident.createdAt,
+          evaluationAt,
+          pausedMs: incident.slaPausedMs,
+          pauseStartedAt: incident.slaPauseStartedAt,
+        });
 
       // ACK SLA
       const ackedAt = ackMap.get(incident.id);
       if (ackedAt && incident.createdAt) {
-        const diffMin = (ackedAt.getTime() - incident.createdAt.getTime()) / 60000;
-        if (diffMin <= ackTarget) {
+        if (elapsedAt(ackedAt) <= target.ackTargetMs) {
           ackSlaMet++;
         } else {
           ackSlaBreached++;
@@ -1699,8 +1703,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         ackSlaBreached++;
       } else {
         // Check if unacked incident is overdue
-        const elapsedMin = (now.getTime() - incident.createdAt.getTime()) / 60000;
-        if (elapsedMin > ackTarget) {
+        if (elapsedAt(now) > target.ackTargetMs) {
           ackSlaBreached++;
         }
         // If not overdue yet, don't count in either bucket (still pending)
@@ -1710,8 +1713,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       if (incident.status === 'RESOLVED') {
         const resolvedAt = incident.resolvedAt || incident.updatedAt;
         if (resolvedAt && incident.createdAt) {
-          const diffMin = (resolvedAt.getTime() - incident.createdAt.getTime()) / 60000;
-          if (diffMin <= resolveTarget) {
+          if (elapsedAt(resolvedAt) <= target.resolveTargetMs) {
             resolveSlaMet++;
           } else {
             resolveSlaBreached++;
@@ -1719,8 +1721,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         }
       } else {
         // FIX: Check if unresolved incident is overdue
-        const elapsedMin = (now.getTime() - incident.createdAt.getTime()) / 60000;
-        if (elapsedMin > resolveTarget) {
+        if (elapsedAt(now) > target.resolveTargetMs) {
           resolveSlaBreached++;
         }
         // If not overdue yet, don't count (still pending)
@@ -1877,39 +1878,44 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     }
 
     s.count++;
-    const targets = serviceTargetMap.get(incident.serviceId) || {
-      ackMinutes: DEFAULT_ACK_TARGET_MINUTES,
-      resolveMinutes: DEFAULT_RESOLVE_TARGET_MINUTES,
-    };
+    const target = resolveSlaTarget({
+      priority: incident.priority,
+      serviceTargets: {
+        ackMinutes: incident.service.targetAckMinutes,
+        resolveMinutes: incident.service.targetResolveMinutes,
+      },
+    });
+    const elapsedAt = (evaluationAt: Date) =>
+      effectiveMaterializedElapsedMs({
+        startedAt: incident.createdAt,
+        evaluationAt,
+        pausedMs: incident.slaPausedMs,
+        pauseStartedAt: incident.slaPauseStartedAt,
+      });
 
     const ackAt = ackMap.get(incident.id);
     if (ackAt) {
-      s.ackSum += ackAt.getTime() - incident.createdAt.getTime();
+      s.ackSum += elapsedAt(ackAt);
       s.ackCount++;
-      if ((ackAt.getTime() - incident.createdAt.getTime()) / 60000 > targets.ackMinutes) {
+      if (elapsedAt(ackAt) > target.ackTargetMs) {
         s.ackBreaches++;
       }
     } else if (incident.status !== 'RESOLVED') {
       // Check for overdue unacked
-      const elapsedMin = (now.getTime() - incident.createdAt.getTime()) / 60000;
-      if (elapsedMin > targets.ackMinutes) {
+      if (elapsedAt(now) > target.ackTargetMs) {
         s.ackBreaches++;
       }
     }
 
     if (incident.status === 'RESOLVED' && incident.resolvedAt) {
-      s.resolveSum += incident.resolvedAt.getTime() - incident.createdAt.getTime();
+      s.resolveSum += elapsedAt(incident.resolvedAt);
       s.resolveCount++;
-      if (
-        (incident.resolvedAt.getTime() - incident.createdAt.getTime()) / 60000 >
-        targets.resolveMinutes
-      ) {
+      if (elapsedAt(incident.resolvedAt) > target.resolveTargetMs) {
         s.resolveBreaches++;
       }
     } else if (incident.status !== 'RESOLVED') {
       // Check for overdue unresolved
-      const elapsedMin = (now.getTime() - incident.createdAt.getTime()) / 60000;
-      if (elapsedMin > targets.resolveMinutes) {
+      if (elapsedAt(now) > target.resolveTargetMs) {
         s.resolveBreaches++;
       }
     }
@@ -2126,10 +2132,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
   const activeIncidentSummaries = filters.includeActiveIncidents
     ? activeIncidentsData.map(incident => {
-        const targets = serviceTargetMap.get(incident.serviceId) || {
-          ackMinutes: DEFAULT_ACK_TARGET_MINUTES,
-          resolveMinutes: DEFAULT_RESOLVE_TARGET_MINUTES,
-        };
+        const serviceTargets = serviceTargetMap.get(incident.serviceId);
+        const target = resolveSlaTarget({
+          priority: incident.priority,
+          serviceTargets,
+        });
         return {
           id: incident.id,
           title: incident.title,
@@ -2140,8 +2147,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           serviceId: incident.serviceId,
           serviceName: serviceNameMap.get(incident.serviceId) || 'Unknown service',
           assigneeId: incident.assigneeId ?? null,
-          targetAckMinutes: targets.ackMinutes,
-          targetResolveMinutes: targets.resolveMinutes,
+          targetAckMinutes: target.ackTargetMs / 60_000,
+          targetResolveMinutes: target.resolveTargetMs / 60_000,
         };
       })
     : undefined;
@@ -2461,6 +2468,8 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
       resolvedAt: true,
       updatedAt: true,
       status: true,
+      slaPausedMs: true,
+      slaPauseStartedAt: true,
     },
   });
 
@@ -2476,12 +2485,18 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
   const targetResolveTime = (definition as { targetResolveTime?: number }).targetResolveTime;
 
   for (const incident of incidents) {
+    const elapsedAt = (at: Date) =>
+      effectiveMaterializedElapsedMs({
+        startedAt: incident.createdAt,
+        evaluationAt: at,
+        pausedMs: incident.slaPausedMs,
+        pauseStartedAt: incident.slaPauseStartedAt,
+      });
     // ACK evaluation
     if (targetAckTime) {
       if (incident.acknowledgedAt) {
         totalAckEvaluated++;
-        const ackMinutes =
-          (incident.acknowledgedAt.getTime() - incident.createdAt.getTime()) / 60000;
+        const ackMinutes = elapsedAt(incident.acknowledgedAt) / 60_000;
         if (ackMinutes <= targetAckTime) metAck++;
       } else {
         // Resolution does not imply acknowledgement. Evaluate an incident
@@ -2489,7 +2504,7 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
         // resolved-but-never-acknowledged incidents are not omitted from ACK
         // compliance entirely.
         const ackEvaluationTime = incident.resolvedAt ?? evaluationTime;
-        const elapsedMin = (ackEvaluationTime.getTime() - incident.createdAt.getTime()) / 60000;
+        const elapsedMin = elapsedAt(ackEvaluationTime) / 60_000;
         if (elapsedMin > targetAckTime) {
           totalAckEvaluated++; // Count as breach
         }
@@ -2502,11 +2517,11 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
         incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
       if (resolvedTime) {
         totalResolveEvaluated++;
-        const resolveMinutes = (resolvedTime.getTime() - incident.createdAt.getTime()) / 60000;
+        const resolveMinutes = elapsedAt(resolvedTime) / 60_000;
         if (resolveMinutes <= targetResolveTime) metResolve++;
       } else if (incident.status !== 'RESOLVED') {
         // Check if overdue
-        const elapsedMin = (evaluationTime.getTime() - incident.createdAt.getTime()) / 60000;
+        const elapsedMin = elapsedAt(evaluationTime) / 60_000;
         if (elapsedMin > targetResolveTime) {
           totalResolveEvaluated++; // Count as breach
         }
@@ -2516,7 +2531,7 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
 
   const total = incidents.length;
   const totalEvaluated = totalAckEvaluated + totalResolveEvaluated;
-  const score = totalEvaluated > 0 ? ((metAck + metResolve) / totalEvaluated) * 100 : 100;
+  const score = totalEvaluated > 0 ? ((metAck + metResolve) / totalEvaluated) * 100 : null;
 
   await prisma.sLASnapshot.upsert({
     where: {
@@ -2531,12 +2546,16 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
       totalIncidents: total,
       metAckTime: metAck,
       metResolveTime: metResolve,
+      evaluatedAckCount: totalAckEvaluated,
+      evaluatedResolveCount: totalResolveEvaluated,
       complianceScore: score,
     },
     update: {
       totalIncidents: total,
       metAckTime: metAck,
       metResolveTime: metResolve,
+      evaluatedAckCount: totalAckEvaluated,
+      evaluatedResolveCount: totalResolveEvaluated,
       complianceScore: score,
     },
   });
@@ -2554,43 +2573,50 @@ export async function checkIncidentSLA(incidentId: string): Promise<IncidentSLAR
   if (!incident) throw new Error('Incident not found');
 
   const now = new Date();
-  const createdAt = incident.createdAt.getTime();
-  const elapsedMinutes = (now.getTime() - createdAt) / 60000;
-
-  const targetAckMinutes = incident.service.targetAckMinutes || DEFAULT_ACK_TARGET_MINUTES;
-  const targetResolveMinutes =
-    incident.service.targetResolveMinutes || DEFAULT_RESOLVE_TARGET_MINUTES;
+  const target = resolveSlaTarget({
+    priority: incident.priority,
+    serviceTargets: {
+      ackMinutes: incident.service.targetAckMinutes,
+      resolveMinutes: incident.service.targetResolveMinutes,
+    },
+  });
+  const elapsedAt = (evaluationAt: Date) =>
+    effectiveMaterializedElapsedMs({
+      startedAt: incident.createdAt,
+      evaluationAt,
+      pausedMs: incident.slaPausedMs,
+      pauseStartedAt: incident.slaPauseStartedAt,
+    });
+  const elapsedMs = elapsedAt(now);
 
   let ackBreached = false,
     ackTimeRemaining: number | null = null;
   if (incident.acknowledgedAt) {
-    const ackTime = (incident.acknowledgedAt.getTime() - createdAt) / 60000;
-    ackBreached = ackTime > targetAckMinutes;
+    ackBreached = elapsedAt(incident.acknowledgedAt) > target.ackTargetMs;
   } else if (incident.status !== 'RESOLVED') {
-    ackBreached = elapsedMinutes > targetAckMinutes;
-    ackTimeRemaining = Math.max(0, targetAckMinutes - elapsedMinutes);
+    ackBreached = elapsedMs > target.ackTargetMs;
+    ackTimeRemaining = Math.max(0, (target.ackTargetMs - elapsedMs) / 60_000);
   }
 
   let resolveBreached = false,
     resolveTimeRemaining: number | null = null;
   if (incident.resolvedAt) {
-    const resolveTime = (incident.resolvedAt.getTime() - createdAt) / 60000;
-    resolveBreached = resolveTime > targetResolveMinutes;
+    resolveBreached = elapsedAt(incident.resolvedAt) > target.resolveTargetMs;
   } else if (incident.status !== 'RESOLVED') {
-    resolveBreached = elapsedMinutes > targetResolveMinutes;
-    resolveTimeRemaining = Math.max(0, targetResolveMinutes - elapsedMinutes);
+    resolveBreached = elapsedMs > target.resolveTargetMs;
+    resolveTimeRemaining = Math.max(0, (target.resolveTargetMs - elapsedMs) / 60_000);
   }
 
   return {
     ackSLA: {
       breached: ackBreached,
       timeRemaining: ackTimeRemaining,
-      targetMinutes: targetAckMinutes,
+      targetMinutes: target.ackTargetMs / 60_000,
     },
     resolveSLA: {
       breached: resolveBreached,
       timeRemaining: resolveTimeRemaining,
-      targetMinutes: targetResolveMinutes,
+      targetMinutes: target.resolveTargetMs / 60_000,
     },
   };
 }

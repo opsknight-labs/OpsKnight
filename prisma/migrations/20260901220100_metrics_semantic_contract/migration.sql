@@ -18,6 +18,8 @@ CREATE INDEX "IncidentSlaPause_incidentId_startedAt_idx"
   ON "IncidentSlaPause"("incidentId", "startedAt");
 CREATE INDEX "IncidentSlaPause_incidentId_endedAt_idx"
   ON "IncidentSlaPause"("incidentId", "endedAt");
+CREATE UNIQUE INDEX "IncidentSlaPause_one_open_per_incident_idx"
+  ON "IncidentSlaPause"("incidentId") WHERE "endedAt" IS NULL;
 
 -- Correct only rows written by the SLA monitor's stable message contract.
 UPDATE "IncidentEvent"

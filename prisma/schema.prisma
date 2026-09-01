@@ -534,6 +534,8 @@ model Incident {
   resolvedAt             DateTime? // When incident was resolved (for SLA tracking)
   snoozedUntil           DateTime? // When to auto-unsnooze (for time-based snoozing)
   snoozeReason           String? // Reason for snoozing
+  slaPausedMs            BigInt             @default(0) // Materialized closed SLA pause duration
+  slaPauseStartedAt      DateTime? // Current open SLA pause, if any
   // ChatOps War-Room fields
   slackChannelId         String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
   slackChannelName       String? // Channel name (e.g. "inc-104-payments-api")
@@ -1536,10 +1538,12 @@ model SLASnapshot {
   slaDefinitionId String
   date            DateTime // Midnight of the day captured
 
-  totalIncidents  Int
-  metAckTime      Int // Count of incidents meeting ack SLA
-  metResolveTime  Int // Count of incidents meeting resolve SLA
-  complianceScore Float // 0-100%
+  totalIncidents        Int
+  metAckTime            Int // Count of incidents meeting ack SLA
+  metResolveTime        Int // Count of incidents meeting resolve SLA
+  evaluatedAckCount     Int    @default(0)
+  evaluatedResolveCount Int    @default(0)
+  complianceScore       Float? // null when no SLA sample was evaluated
 
   slaDefinition SLADefinition @relation(fields: [slaDefinitionId], references: [id])
 
