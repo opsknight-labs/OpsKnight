@@ -96,10 +96,23 @@ interface AvatarPickerProps {
   currentAvatarUrl?: string | null;
   onSelect: (avatarUrl: string) => void;
   userName: string;
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function AvatarPicker({ currentAvatarUrl, onSelect, userName }: AvatarPickerProps) {
-  const [open, setOpen] = useState(false);
+export function AvatarPicker({
+  currentAvatarUrl,
+  onSelect,
+  userName,
+  trigger,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
+}: AvatarPickerProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? setControlledOpen || (() => {}) : setInternalOpen;
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Generate DiceBear URL via our proxy with SVG format for instant 0ms vector loading
@@ -142,7 +155,6 @@ export function AvatarPicker({ currentAvatarUrl, onSelect, userName }: AvatarPic
   const isDiceBearSelected = (avatar: { id: string; style: string; seed: string; bg: string }) => {
     if (selectedId === avatar.id) return true;
     if (!currentAvatarUrl) return false;
-    const url = getDiceBearUrl(avatar.style, avatar.seed, avatar.bg);
     return (
       currentAvatarUrl.includes(`style=${avatar.style}`) &&
       currentAvatarUrl.includes(`seed=${encodeURIComponent(avatar.seed)}`)
@@ -151,9 +163,17 @@ export function AvatarPicker({ currentAvatarUrl, onSelect, userName }: AvatarPic
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-2">
-        Choose Avatar Style
-      </Button>
+      {trigger !== undefined ? (
+        trigger ? (
+          <div onClick={() => setOpen(true)} className="inline-flex cursor-pointer">
+            {trigger}
+          </div>
+        ) : null
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-2">
+          Choose Avatar Style
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">

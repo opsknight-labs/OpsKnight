@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useRef, useTransition, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useForm, FormProvider, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,6 +10,7 @@ import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { Input } from '@/components/ui/shadcn/input';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { Button } from '@/components/ui/shadcn/button';
 import {
   Select,
   SelectContent,
@@ -18,10 +19,14 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { FormField, FormItem, FormControl } from '@/components/ui/shadcn/form';
+import { AvatarPicker } from '@/components/settings/AvatarPicker';
+import { useAvatarUpdater } from '@/hooks/useUserAvatar';
+import { isDefaultAvatar } from '@/lib/avatar';
 import { z } from 'zod';
 import { updateProfile } from '@/app/(app)/settings/actions';
 import { useRouter } from 'next/navigation';
-import { RefreshCw } from 'lucide-react';
+import { notify as toast } from '@/lib/toast';
+import { RefreshCw, Upload, RotateCcw, Loader2 } from 'lucide-react';
 
 type Props = {
   name: string;
@@ -51,11 +56,16 @@ export default function ProfileForm({
   memberSince,
   department,
   jobTitle,
+  avatarUrl,
   lastOidcSync,
   gender,
 }: Props) {
   const router = useRouter();
   const { update } = useSession();
+  const { updateCurrentUser } = useAvatarUpdater();
+  const [isUploading, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [currentAvatarUrl, setCurrentAvatarUrl] = useState<string | null | undefined>(avatarUrl);
 
   const defaultValues: ProfileFormData = {
     name,
@@ -111,6 +121,83 @@ export default function ProfileForm({
     enabled: form.formState.isValid && form.formState.isDirty,
   });
 
+  const handleAvatarSelect = async (selectedAvatarUrl: string) => {
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.append('avatarUrl', selectedAvatarUrl);
+
+      const result = await updateProfile({ error: null, success: false }, formData);
+
+      if (result.success) {
+        toast.success('Avatar updated');
+        setCurrentAvatarUrl(selectedAvatarUrl);
+        updateCurrentUser(selectedAvatarUrl, form.getValues('gender'));
+        await update({ force: true });
+        router.refresh();
+      } else {
+        toast.error(result.error || 'Failed to update avatar');
+      }
+    });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('File size exceeds 2MB limit');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload a valid image file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async event => {
+      const previewUrl = event.target?.result as string;
+      setCurrentAvatarUrl(previewUrl);
+
+      startTransition(async () => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const result = await updateProfile({ error: null, success: false }, formData);
+
+        if (result.success) {
+          toast.success('Profile photo updated');
+          updateCurrentUser(previewUrl, form.getValues('gender'));
+          await update({ force: true });
+          router.refresh();
+        } else {
+          toast.error(result.error || 'Failed to upload photo');
+          setCurrentAvatarUrl(avatarUrl);
+        }
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetToDefault = () => {
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.append('removeAvatar', 'true');
+      const result = await updateProfile({ error: null, success: false }, formData);
+      if (result.success) {
+        toast.success('Custom photo reset to default');
+        setCurrentAvatarUrl(null);
+        updateCurrentUser(null, form.getValues('gender'));
+        await update({ force: true });
+        router.refresh();
+      } else {
+        toast.error(result.error || 'Failed to reset photo');
+      }
+    });
+  };
+
+  const hasCustomAvatar = currentAvatarUrl && !isDefaultAvatar(currentAvatarUrl);
+
   return (
     <div className="space-y-6">
       {/* Card 1: Personal Information (Autosaved) */}
@@ -131,6 +218,59 @@ export default function ProfileForm({
             }
           >
             <div className="divide-y text-sm">
+              {/* Profile Photo Row */}
+              <SettingsRow
+                label="Profile Photo"
+                description="Choose a preset avatar style or upload a custom image (max 2MB)"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <AvatarPicker
+                    currentAvatarUrl={currentAvatarUrl}
+                    onSelect={handleAvatarSelect}
+                    userName={name}
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="gap-1.5 h-8 text-xs font-medium"
+                  >
+                    {isUploading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    Upload Photo
+                  </Button>
+
+                  {hasCustomAvatar && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleResetToDefault}
+                      disabled={isUploading}
+                      className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Reset Default
+                    </Button>
+                  )}
+
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isUploading}
+                  />
+                </div>
+              </SettingsRow>
+
               <SettingsRow
                 label="Full Name"
                 description="Your display name across incidents, schedules, and dashboards"
