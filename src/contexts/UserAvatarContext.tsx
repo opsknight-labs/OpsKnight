@@ -165,7 +165,7 @@ export function UserAvatarProvider({
       const effectiveName = cached?.name || _fallbackName || 'User';
 
       // Generate default avatar using consistent name for initials and userId for color
-      return getDefaultAvatar(effectiveGender, effectiveName, userId || 'user');
+      return getDefaultAvatar(effectiveName, userId || effectiveGender || 'user');
     },
     [avatarCache]
   );
@@ -278,7 +278,7 @@ export function useUserAvatarContextSafe() {
     return {
       currentUserId: null,
       getAvatar: (userId: string, gender?: string | null, fallbackName?: string | null) =>
-        getDefaultAvatar(gender, fallbackName || userId || 'User', userId),
+        getDefaultAvatar(fallbackName || userId || gender || 'User', userId),
       updateAvatar: () => {},
       invalidateAvatar: () => {},
       preloadAvatars: () => {},
