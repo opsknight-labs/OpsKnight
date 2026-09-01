@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 
@@ -39,24 +40,40 @@ export type UserDependencyReport = {
   dashboards: Array<{ dashboardId: string; name: string; visibility: string }>;
 };
 
-export async function discoverUserDependencies(userId: string): Promise<UserDependencyReport> {
+type UserDependencyClient = Pick<
+  Prisma.TransactionClient,
+  | 'teamMember'
+  | 'team'
+  | 'escalationRule'
+  | 'onCallLayerUser'
+  | 'onCallOverride'
+  | 'onCallShift'
+  | 'incident'
+  | 'actionItem'
+  | 'dashboard'
+>;
+
+async function discoverWithClient(
+  db: UserDependencyClient,
+  userId: string
+): Promise<UserDependencyReport> {
   const now = new Date();
   const [teams, teamsLed, policies, layers, overrides, shifts, incidents, actionItems, dashboards] =
     await Promise.all([
-      prisma.teamMember.findMany({
+      db.teamMember.findMany({
         where: { userId },
         select: { id: true, teamId: true, role: true, team: { select: { name: true } } },
       }),
-      prisma.team.findMany({
+      db.team.findMany({
         where: { teamLeadId: userId },
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       }),
-      prisma.escalationRule.findMany({
+      db.escalationRule.findMany({
         where: { targetUserId: userId },
         select: { id: true, stepOrder: true, policyId: true, policy: { select: { name: true } } },
       }),
-      prisma.onCallLayerUser.findMany({
+      db.onCallLayerUser.findMany({
         where: { userId },
         select: {
           id: true,
@@ -64,7 +81,7 @@ export async function discoverUserDependencies(userId: string): Promise<UserDepe
           layer: { select: { name: true, schedule: { select: { id: true, name: true } } } },
         },
       }),
-      prisma.onCallOverride.findMany({
+      db.onCallOverride.findMany({
         where: { OR: [{ userId }, { replacesUserId: userId }], end: { gte: now } },
         select: {
           id: true,
@@ -76,7 +93,7 @@ export async function discoverUserDependencies(userId: string): Promise<UserDepe
         },
         orderBy: { start: 'asc' },
       }),
-      prisma.onCallShift.findMany({
+      db.onCallShift.findMany({
         where: { userId, end: { gte: now } },
         select: {
           id: true,
@@ -87,17 +104,17 @@ export async function discoverUserDependencies(userId: string): Promise<UserDepe
         },
         orderBy: { start: 'asc' },
       }),
-      prisma.incident.findMany({
+      db.incident.findMany({
         where: { assigneeId: userId, status: { in: activeIncidentStatuses() } },
         select: { id: true, title: true, serviceId: true, service: { select: { name: true } } },
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.actionItem.findMany({
+      db.actionItem.findMany({
         where: { ownerId: userId, status: { not: 'COMPLETED' } },
         select: { id: true, title: true, incidentId: true },
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.dashboard.findMany({
+      db.dashboard.findMany({
         where: { userId },
         select: { id: true, name: true, visibility: true },
         orderBy: { name: 'asc' },
@@ -157,6 +174,17 @@ export async function discoverUserDependencies(userId: string): Promise<UserDepe
       visibility: x.visibility,
     })),
   };
+}
+
+export async function discoverUserDependencies(userId: string): Promise<UserDependencyReport> {
+  return discoverWithClient(prisma, userId);
+}
+
+export async function discoverUserDependenciesInTransaction(
+  tx: Prisma.TransactionClient,
+  userId: string
+): Promise<UserDependencyReport> {
+  return discoverWithClient(tx, userId);
 }
 
 export function dependencySummary(report: UserDependencyReport): string[] {
