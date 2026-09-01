@@ -23,15 +23,32 @@ Delays mean “wait before this step,” not “wait after the previous notifica
 
 Policies do not repeat in v1.5. A policy that executes through its valid steps can finish as completed; terminal routing failures remain failed so operators can distinguish exhaustion from successful execution.
 
+A step's outcome is recorded in a single transaction: the assignment, the responder pages, the timeline entries, the next step's due time, and the work that will run it. A step therefore cannot advance past a page that was never recorded, and cannot leave a due step with nothing scheduled to run it. Delivery to email, SMS, push, or Slack happens after that point, so a provider outage delays a page rather than stopping escalation.
+
+Escalation state is recorded when the incident is created, so an open incident on a service with a policy always has a due step. If the work that runs it is ever lost, OpsKnight recreates it from the incident's own state.
+
 ## Target types
 
-| Target       | Resolution behavior                                                                                                                |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **User**     | Contacts the selected user directly.                                                                                               |
-| **Team**     | Contacts members whose team-notification participation is enabled. Existing lead-only steps contact the configured Team Lead only. |
-| **Schedule** | Contacts the effective user or users on call at execution time after layer priority and overrides are applied.                     |
+| Target       | Resolution behavior                                                                                                                       |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **User**     | Contacts the selected user directly.                                                                                                      |
+| **Team**     | Contacts active members whose team-notification participation is enabled. Existing lead-only steps contact the configured Team Lead only. |
+| **Schedule** | Contacts the effective active users on call at execution time after layer priority and overrides are applied.                             |
 
 For a Team target, service ownership is not required. For a Schedule target, an empty coverage window resolves to no users; OpsKnight does not notify the entire schedule roster as a fallback.
+
+### Responder eligibility
+
+Only accounts with status **Active** are paged or made an incident's owner. An invited account that has not finished onboarding, and a disabled account, are both ineligible — so a step that points only at such an account reaches nobody, exactly as if the target were missing.
+
+This applies everywhere a responder is chosen:
+
+- a User step whose account is inactive is an unusable target, not an empty one, and the timeline says so;
+- a Team step contacts only its active members, and a lead-only step whose Team Lead is ineligible pages nobody rather than widening to the whole team;
+- a Schedule step contacts only active users in the effective coverage; and
+- an incident cannot be newly assigned to an inactive account.
+
+A database problem while resolving a target is retried. It is never reported as "no responders available", because those two situations need opposite responses.
 
 ## Create a policy
 
@@ -39,7 +56,7 @@ For a Team target, service ownership is not required. For a Schedule target, an 
 2. Enter a unique name and a description that states when the policy should be used.
 3. Create the empty policy.
 4. Open it and add ordered steps.
-5. For each step, select User, Team, or Schedule and set a non-negative delay.
+5. For each step, select User, Team, or Schedule and set a delay between 0 and 10080 minutes (7 days). A delay that is not a whole number of minutes, is negative, or exceeds that bound is rejected with the reason.
 6. Drag or move steps into final order.
 7. Attach the policy to a service from **Service → Settings** or view the full ladder directly in the service's **Escalation Policy** tab.
 
@@ -66,7 +83,7 @@ Choose timing based on actual acknowledgement objectives and provider latency. A
 For every policy:
 
 - include a final target that is maintained and likely to resolve;
-- avoid disabled users and empty teams;
+- avoid inactive accounts and empty teams; only active accounts are eligible, so an invited-but-not-onboarded member never pages;
 - monitor schedule end dates and coverage gaps;
 - ensure each target has at least one configured delivery channel;
 - use descriptions that distinguish critical and non-critical paths;
@@ -84,6 +101,18 @@ Policy changes can affect active incidents because escalation reads the service'
 3. Apply the smallest change.
 4. Reopen the policy and confirm target order and delays.
 5. Run a test incident through at least two steps.
+
+## Manual escalation
+
+**v1.5 has no control for manually advancing an incident's escalation.** There is no button in the web UI, the mobile UI, or the Slack message, and no REST endpoint. Escalation advances only on its own schedule, and the way to reach a different responder now is to change the incident's assignment or its service's policy.
+
+The application does contain a permission-checked manual-escalation command, used by the `escalate` action on the Slack interactions endpoint. Nothing in the product sends that action, so it is reachable only from a Slack app shortcut an administrator configured by hand. It is documented because it is enforced and audited, not because it is a workflow to plan around:
+
+- it is checked against the specific incident rather than being available to anyone signed in — Responders and Admins may escalate any incident, and a standard User only one they are responsible for through assignment, their team, the service's owning team, or a watch;
+- it refuses an incident that is no longer open, since there is no later tier to page; and
+- it records the actor and the surface in the incident timeline and in the audit log as `incident.escalation.requested`.
+
+See [Authorization and Roles](../security/authorization#manual-escalation) for the capability and matrix.
 
 ## Attach, replace, or remove a policy
 
@@ -118,7 +147,9 @@ Confirm the service has this policy, the incident is Open, the policy has steps,
 - Team: confirm eligible members have team notifications enabled; for a lead-only legacy step, configure a Team Lead and enable their team notifications.
 - Schedule: inspect effective coverage at the execution time, including timezone, restrictions, gaps, priority, and overrides.
 
-OpsKnight records the problem in the incident timeline and advances when another step exists. If the final step has an invalid target or no eligible users, the terminal escalation state remains `FAILED` so the routing problem is visible instead of being mislabeled `COMPLETED`.
+OpsKnight records the problem in the incident timeline and advances when another step exists. The timeline distinguishes an unusable target — a deleted or inactive user, a removed team or schedule, a step with no target selected — from a target that resolved to no eligible responders, because the two need different fixes.
+
+If the final step has an unusable target or no eligible users, the terminal escalation state remains `FAILED` so the routing problem is visible instead of being mislabeled `COMPLETED`. A manually assigned owner already on the incident is paged alongside the first step's target, but never counts as that step reaching someone: a step whose target covered nobody is reported as such even when the incident has an owner.
 
 ### A target is correct but receives no message
 
