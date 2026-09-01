@@ -1,14 +1,14 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import { getCurrentUser } from '@/lib/rbac';
+import { AppError } from '@/lib/errors';
 
 const INSENSITIVE_MODE = 'insensitive' as const;
 
@@ -17,28 +17,17 @@ type IncidentWithService = {
   title: string;
   status: IncidentStatus;
   urgency: IncidentUrgency;
-  service?: {
-    id: string;
-    name: string;
-  } | null;
+  service?: { id: string; name: string } | null;
 };
 
 type ServiceWithTeam = {
   id: string;
   name: string;
   status?: string | null;
-  team?: {
-    id: string;
-    name: string;
-  } | null;
+  team?: { id: string; name: string } | null;
 };
 
-type TeamSearchResult = {
-  id: string;
-  name: string;
-  description?: string | null;
-};
-
+type TeamSearchResult = { id: string; name: string; description?: string | null };
 type UserSearchResult = {
   id: string;
   name?: string | null;
@@ -46,24 +35,14 @@ type UserSearchResult = {
   role?: string | null;
   avatarUrl?: string | null;
 };
-
-type PolicySearchResult = {
-  id: string;
-  name: string;
-  description?: string | null;
-};
-
+type PolicySearchResult = { id: string; name: string; description?: string | null };
 type PostmortemSearchResult = {
   id: string;
   incidentId: string;
   title: string;
   status: string;
-  incident?: {
-    id: string;
-    title: string;
-  } | null;
+  incident?: { id: string; title: string } | null;
 };
-
 type SearchResponses = [
   IncidentWithService[],
   ServiceWithTeam[],
@@ -75,31 +54,11 @@ type SearchResponses = [
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return jsonError('Unauthorized', 401);
-    }
+    const currentUser = await getCurrentUser();
+    const actor = await resolveUserActor(currentUser.id);
+    if (!actor) return jsonError('Unauthorized', 401);
 
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: {
-        id: true,
-        role: true,
-        status: true,
-        teamMemberships: { select: { teamId: true } },
-      },
-    });
-    if (!currentUser || currentUser.status !== 'ACTIVE') {
-      return jsonError('Unauthorized', 401);
-    }
-
-    const actor: AuthorizationActor = {
-      id: currentUser.id,
-      role: currentUser.role,
-      status: currentUser.status,
-      teamIds: currentUser.teamMemberships.map(membership => membership.teamId),
-    };
-    const isPrivileged = hasCapability(currentUser.role, CAPABILITIES.INCIDENT_READ_ALL);
+    const isPrivileged = hasCapability(actor.role, CAPABILITIES.INCIDENT_READ_ALL);
     const teamIds = [...actor.teamIds];
     const incidentAccess = incidentReadWhere(actor);
     const serviceAccess = serviceReadWhere(actor);
@@ -113,38 +72,24 @@ export async function GET(req: NextRequest) {
 
     const searchParams = req.nextUrl.searchParams;
     const query = searchParams.get('q');
-
-    if (!query || query.length < 2) {
-      return jsonOk({ results: [] }, 200);
-    }
+    if (!query || query.length < 2) return jsonOk({ results: [] }, 200);
 
     const searchTerm = query.trim();
+    if (searchTerm.length < 2) return jsonOk({ results: [] }, 200);
 
-    // Performance: Skip very short queries that would match too many results
-    if (searchTerm.length < 2) {
-      return jsonOk({ results: [] }, 200);
-    }
-
-    // Performance: Limit query length to prevent regex DoS
     const sanitizedTerm = searchTerm
       .slice(0, 100)
       .replace(/[%_\\]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    if (sanitizedTerm.length < 2) {
-      return jsonOk({ results: [] }, 200);
-    }
+    if (sanitizedTerm.length < 2) return jsonOk({ results: [] }, 200);
     const searchTermLower = sanitizedTerm.toLowerCase();
-
-    // Performance: Limit word-based search to reduce OR conditions
     const searchWords = sanitizedTerm
       .split(/\s+/)
       .filter(w => w.length > 1)
       .slice(0, 5);
-    // Run all searches in parallel for better performance
-    // Note: Postmortem search is wrapped to handle missing model gracefully
+
     const searchPromises = [
-      // Search incidents - Enhanced with multiple search strategies
       prisma.incident.findMany({
         where: {
           AND: [
@@ -167,7 +112,7 @@ export async function GET(req: NextRequest) {
             },
           ],
         },
-        take: 8, // Reduced for faster response on small systems
+        take: 8,
         orderBy: [{ createdAt: 'desc' }],
         select: {
           id: true,
@@ -177,8 +122,6 @@ export async function GET(req: NextRequest) {
           service: { select: { id: true, name: true } },
         },
       }),
-
-      // Search services
       prisma.service.findMany({
         where: {
           AND: [
@@ -193,15 +136,8 @@ export async function GET(req: NextRequest) {
         },
         take: 5,
         orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          team: { select: { id: true, name: true } },
-        },
+        select: { id: true, name: true, status: true, team: { select: { id: true, name: true } } },
       }),
-
-      // Search teams
       prisma.team.findMany({
         where: {
           AND: [
@@ -216,14 +152,8 @@ export async function GET(req: NextRequest) {
         },
         take: 5,
         orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
+        select: { id: true, name: true, description: true },
       }),
-
-      // Search users
       prisma.user.findMany({
         where: {
           AND: [
@@ -245,16 +175,8 @@ export async function GET(req: NextRequest) {
         },
         take: 5,
         orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          avatarUrl: true,
-        },
+        select: { id: true, name: true, email: true, role: true, avatarUrl: true },
       }),
-
-      // Search escalation policies
       prisma.escalationPolicy.findMany({
         where: {
           AND: [
@@ -269,28 +191,15 @@ export async function GET(req: NextRequest) {
         },
         take: 5,
         orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
+        select: { id: true, name: true, description: true },
       }),
-
-      // Search postmortems (only if Postmortem model exists)
       (async () => {
         try {
-          // Check if Postmortem model exists by checking if prisma has it
-          if (!prisma.postmortem) {
-            return [];
-          }
+          if (!prisma.postmortem) return [];
           return await prisma.postmortem.findMany({
             where: {
               AND: [
-                isPrivileged
-                  ? {}
-                  : {
-                      incident: incidentAccess,
-                    },
+                isPrivileged ? {} : { incident: incidentAccess },
                 {
                   OR: [
                     { title: { contains: sanitizedTerm, mode: INSENSITIVE_MODE } },
@@ -300,7 +209,7 @@ export async function GET(req: NextRequest) {
                   ],
                 },
               ],
-              status: { not: 'ARCHIVED' }, // Don't show archived postmortems
+              status: { not: 'ARCHIVED' },
             },
             take: 5,
             orderBy: { createdAt: 'desc' },
@@ -309,16 +218,10 @@ export async function GET(req: NextRequest) {
               incidentId: true,
               title: true,
               status: true,
-              incident: {
-                select: {
-                  id: true,
-                  title: true,
-                },
-              },
+              incident: { select: { id: true, title: true } },
             },
           });
         } catch (_e) {
-          // If postmortem model doesn't exist or query fails, return empty
           return [];
         }
       })(),
@@ -327,11 +230,8 @@ export async function GET(req: NextRequest) {
     const [incidents, services, teams, users, policies, postmortemsResult] = (await Promise.all(
       searchPromises
     )) as SearchResponses;
-
-    // Handle postmortems result (unwrap promise if needed)
     const postmortems = Array.isArray(postmortemsResult) ? postmortemsResult : [];
 
-    // Format results with proper priorities (incidents first, then services, etc.)
     const results = [
       ...incidents.map(i => {
         const urgencyLabel =
@@ -388,11 +288,7 @@ export async function GET(req: NextRequest) {
         priority: 8,
       })),
     ].sort((a, b) => {
-      // Sort by priority first
-      if (a.priority !== b.priority) {
-        return a.priority - b.priority;
-      }
-      // Then by relevance (exact matches first)
+      if (a.priority !== b.priority) return a.priority - b.priority;
       const aExact = a.title.toLowerCase() === searchTermLower;
       const bExact = b.title.toLowerCase() === searchTermLower;
       if (aExact && !bExact) return -1;
@@ -400,15 +296,14 @@ export async function GET(req: NextRequest) {
       return 0;
     });
 
-    // Add cache headers for search results (short cache, private)
     return jsonOk({ results }, 200, {
       'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
     });
   } catch (error: any) {
+    if (error instanceof AppError) return jsonError(error);
     logger.error('api.search.error', {
       error: error instanceof Error ? error.message : String(error),
     });
-    // Provide more detailed error information in development
     const errorMessage =
       process.env.NODE_ENV === 'development'
         ? error?.message || 'Search failed'
