@@ -5,6 +5,10 @@ import {
   criticalEscalationCycleWasBusy,
   runCriticalEscalationCycle,
 } from './escalation/worker';
+import {
+  criticalNotificationCycleWasBusy,
+  runCriticalNotificationCycle,
+} from './notification-recovery';
 
 const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_CONCURRENCY = 15;
@@ -129,6 +133,11 @@ async function runOnce(): Promise<void> {
       concurrency: Math.min(workerConfig.concurrency, 10),
     });
 
+    // Then the pages escalation already made durable. A page committed in about
+    // a second must not wait on the maintenance lease to be delivered, so its
+    // recovery runs on every replica too.
+    const notifications = await runCriticalNotificationCycle();
+
     const result = await processPendingJobs(workerConfig.batchSize, workerConfig.concurrency);
     lastSuccessAt = new Date();
     lastError = null;
@@ -138,12 +147,14 @@ async function runOnce(): Promise<void> {
       failed: result.failed,
       claimed: result.total,
       escalation,
+      notifications,
       durationMs: Date.now() - startedAt,
     });
 
     const busy =
       result.total > 0 ||
       criticalEscalationCycleWasBusy(escalation) ||
+      criticalNotificationCycleWasBusy(notifications) ||
       consumeEscalationWakeRequest();
     const delay = busy ? workerConfig.busyPollMs : withIdleJitter(workerConfig.idlePollMs);
     scheduleNextRun(delay);

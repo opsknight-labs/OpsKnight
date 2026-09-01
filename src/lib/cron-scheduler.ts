@@ -387,6 +387,9 @@ async function runOnce() {
       handoffResult,
       reminderCount,
     ] = await Promise.all([
+      // Also on the per-replica critical notification lane. Kept here so a
+      // scheduler-only deployment with no job-worker process still recovers;
+      // both paths claim before delivering, so running both is safe.
       retryFailedNotifications(),
       processCentralNotificationQueue(),
       processAutoUnsnoozeInternal(),
