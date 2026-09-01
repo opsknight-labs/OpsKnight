@@ -23,6 +23,28 @@ let metricsCache: { expiresAt: number; value: MetricsSnapshot } | null = null;
 let metricsInflight: Promise<MetricsSnapshot> | null = null;
 let metricsCacheHits = 0;
 let metricsCacheMisses = 0;
+const DB_COLLECTOR_TIMEOUT_MS = 2_000;
+
+export async function collectWithTimeout<T>(
+  name: string,
+  timeoutMs: number,
+  collect: () => Promise<T>
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      collect(),
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`Metrics collector timed out: ${name}`)),
+          timeoutMs
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 export function clearMetricsCache() {
   metricsCache = null;
@@ -43,15 +65,20 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
   metricsCacheMisses += 1;
   metricsInflight = (async () => {
     const [jobs, jobTypes, incidents, users] = await Promise.allSettled([
-      prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } }),
-      prisma.$queryRaw<
-        Array<{
-          type: string;
-          status: string;
-          count: bigint;
-          oldestPendingAgeSeconds: number | null;
-        }>
-      >`
+      collectWithTimeout('jobs', DB_COLLECTOR_TIMEOUT_MS, () =>
+        prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } })
+      ),
+      collectWithTimeout(
+        'job-types',
+        DB_COLLECTOR_TIMEOUT_MS,
+        () => prisma.$queryRaw<
+          Array<{
+            type: string;
+            status: string;
+            count: bigint;
+            oldestPendingAgeSeconds: number | null;
+          }>
+        >`
         SELECT "type"::text, "status"::text, COUNT(*)::bigint AS count,
           CASE WHEN "status" = 'PENDING'
             THEN EXTRACT(EPOCH FROM (NOW() - MIN("scheduledAt")))::double precision
@@ -60,9 +87,14 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         FROM "BackgroundJob"
         WHERE "status" IN ('PENDING', 'PROCESSING')
         GROUP BY "type", "status"
-      `,
-      prisma.incident.count({ where: { status: { in: activeIncidentStatuses() } } }),
-      prisma.user.count({ where: { status: 'ACTIVE' } }),
+      `
+      ),
+      collectWithTimeout('incidents', DB_COLLECTOR_TIMEOUT_MS, () =>
+        prisma.incident.count({ where: { status: { in: activeIncidentStatuses() } } })
+      ),
+      collectWithTimeout('users', DB_COLLECTOR_TIMEOUT_MS, () =>
+        prisma.user.count({ where: { status: 'ACTIVE' } })
+      ),
     ]);
     const value: MetricsSnapshot = {
       jobStats:

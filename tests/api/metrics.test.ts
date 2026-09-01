@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getServerSession } from 'next-auth';
-import { clearMetricsCache, GET } from '@/app/api/metrics/route';
+import { clearMetricsCache, collectWithTimeout, GET } from '@/app/api/metrics/route';
 import prisma from '@/lib/prisma';
 
 vi.mock('next-auth', () => ({
@@ -39,6 +39,12 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
 
   afterEach(() => {
     process.env = originalEnv;
+  });
+
+  it('bounds a hung collector without waiting for its database promise', async () => {
+    await expect(collectWithTimeout('hung', 5, () => new Promise<never>(() => {}))).rejects.toThrow(
+      'Metrics collector timed out: hung'
+    );
   });
 
   it('returns 401 when unauthenticated and no valid Bearer token provided', async () => {
