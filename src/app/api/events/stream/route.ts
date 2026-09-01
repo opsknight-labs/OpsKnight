@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { getCurrentUser } from '@/lib/rbac';
 import {
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
@@ -14,45 +13,29 @@ import {
 } from '@/lib/realtime-cache';
 
 /**
- * Server-Sent Events (SSE) endpoint for real-time incident updates
- *
- * GET /api/events/stream?incidentId=xxx
- *
- * Streams real-time updates for:
- * - Incident status changes
- * - New incident events
- * - New notes
- * - Assignment changes
- * - Escalation updates
+ * Server-Sent Events (SSE) endpoint for real-time incident updates.
+ * Long-lived connections periodically re-resolve role, status, token version,
+ * and team scope so authorization changes revoke the stream promptly.
  */
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(await getAuthOptions());
-
-  if (!session?.user?.email) {
+  let currentUser;
+  try {
+    currentUser = await getCurrentUser();
+  } catch {
     return new Response('Unauthorized', { status: 401 });
   }
 
   const prisma = (await import('@/lib/prisma')).default;
-  const sessionTokenVersion = session.user.tokenVersion ?? 0;
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: {
-      id: true,
-      role: true,
-      tokenVersion: true,
-      teamMemberships: { select: { teamId: true } },
-    },
-  });
-
-  if (!user || (user.tokenVersion ?? 0) !== sessionTokenVersion) {
-    return new Response('Unauthorized', { status: 401 });
-  }
+  const sessionTokenVersion = currentUser.tokenVersion ?? 0;
 
   const searchParams = req.nextUrl.searchParams;
   const incidentId = searchParams.get('incidentId');
   const serviceId = searchParams.get('serviceId');
 
-  const initialAuthorization = await resolveStreamAuthorization(user.id, sessionTokenVersion);
+  const initialAuthorization = await resolveStreamAuthorization(
+    currentUser.id,
+    sessionTokenVersion
+  );
   if (!initialAuthorization) {
     return new Response('Unauthorized', { status: 401 });
   }
@@ -111,7 +94,6 @@ export async function GET(req: NextRequest) {
     }
   };
 
-  // Create a ReadableStream for SSE with change detection
   const stream = new ReadableStream({
     async start(controller) {
       if (req.signal.aborted) {
@@ -132,11 +114,8 @@ export async function GET(req: NextRequest) {
         }
       };
 
-      // Send initial connection message
       send({ type: 'connected', timestamp: new Date().toISOString() });
 
-      // Set up interval to check for updates
-      // Uses caching layer to reduce database load by ~10x
       interval = setInterval(async () => {
         if (isClosed || isChecking) return;
         isChecking = true;
@@ -144,7 +123,7 @@ export async function GET(req: NextRequest) {
         try {
           if (tickCount % 12 === 0) {
             const nextAuthorization = await resolveStreamAuthorization(
-              user.id,
+              currentUser.id,
               sessionTokenVersion
             );
             if (
@@ -169,7 +148,10 @@ export async function GET(req: NextRequest) {
                 where: { id: incidentId },
                 select: { service: { select: { teamId: true } } },
               });
-              if (!target?.service.teamId || !streamAuthorization.teamIds.includes(target.service.teamId)) {
+              if (
+                !target?.service.teamId ||
+                !streamAuthorization.teamIds.includes(target.service.teamId)
+              ) {
                 send({ type: 'authorization_revoked' });
                 cleanup();
                 try {
@@ -195,7 +177,6 @@ export async function GET(req: NextRequest) {
           }
           let sentUpdate = false;
           if (incidentId) {
-            // Stream updates for a specific incident using cache
             const result = await getCachedIncidentDetails(incidentId, lastDataHash);
 
             if (result && result.changed && result.data) {
@@ -218,7 +199,6 @@ export async function GET(req: NextRequest) {
               sentUpdate = true;
             }
           } else if (serviceId) {
-            // Stream updates for incidents in a service using cache
             const result = await getCachedServiceIncidents(serviceId, lastDataHash);
 
             if (result && result.changed) {
@@ -232,9 +212,8 @@ export async function GET(req: NextRequest) {
               sentUpdate = true;
             }
           } else {
-            // Stream dashboard updates using cached metrics
             const result = await getCachedDashboardMetrics(
-              user.id,
+              currentUser.id,
               streamAuthorization.role,
               [...streamAuthorization.teamIds],
               lastDataHash
@@ -258,7 +237,6 @@ export async function GET(req: NextRequest) {
             }
           }
 
-          // Emit keepalive every 15s if no update was sent
           if (!sentUpdate && tickCount % 3 === 0 && !isClosed) {
             try {
               controller.enqueue(encoder.encode(': keepalive\n\n'));
@@ -273,9 +251,8 @@ export async function GET(req: NextRequest) {
         } finally {
           isChecking = false;
         }
-      }, 5000); // Check every 5 seconds
+      }, 5000);
 
-      // Cleanup on client disconnect
       const onAbort = () => {
         cleanup();
         try {
@@ -295,7 +272,7 @@ export async function GET(req: NextRequest) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-store',
       Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no', // Disable nginx buffering
+      'X-Accel-Buffering': 'no',
     },
   });
 }
