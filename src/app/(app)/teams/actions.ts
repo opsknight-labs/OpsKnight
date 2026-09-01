@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
 import { assertAdminOrResponder, assertAdmin, assertAdminOrTeamOwner } from '@/lib/rbac';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { createInAppNotifications } from '@/lib/in-app-notifications';
 import { logger } from '@/lib/logger';
 import { assertTeamNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
@@ -90,20 +91,6 @@ export async function updateTeam(teamId: string, formData: FormData) {
   const description = formData.get('description') as string;
   const teamLeadId = formData.get('teamLeadId') as string;
 
-  // Validate team lead is a team member
-  if (teamLeadId) {
-    const isMember = await prisma.teamMember.findFirst({
-      where: {
-        teamId,
-        userId: teamLeadId,
-      },
-    });
-
-    if (!isMember) {
-      return { error: 'Team lead must be a team member' };
-    }
-  }
-
   let normalizedName = name;
   try {
     normalizedName = await assertTeamNameAvailable(name, { excludeId: teamId });
@@ -114,14 +101,33 @@ export async function updateTeam(teamId: string, formData: FormData) {
     return { error: error instanceof Error ? error.message : 'Failed to validate team name.' };
   }
 
-  await prisma.team.update({
-    where: { id: teamId },
-    data: {
-      name: normalizedName,
-      description: description || null,
-      teamLeadId: teamLeadId || null,
-    },
-  });
+  try {
+    await runSerializableTransaction(async tx => {
+      if (teamLeadId) {
+        const isMember = await tx.teamMember.findFirst({
+          where: { teamId, userId: teamLeadId },
+          select: { id: true },
+        });
+        if (!isMember) {
+          throw new Error('Team lead must be a team member.');
+        }
+        await requireOperationalUser(tx, teamLeadId, () =>
+          new Error('Team lead must be an active team member.')
+        );
+      }
+
+      await tx.team.update({
+        where: { id: teamId },
+        data: {
+          name: normalizedName,
+          description: description || null,
+          teamLeadId: teamLeadId || null,
+        },
+      });
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update team.' };
+  }
 
   const actorId = currentUser.id;
   await logAudit({
@@ -218,7 +224,7 @@ export async function addTeamMember(teamId: string, formData: FormData) {
     async tx => {
       await requireOperationalUser(tx, userId);
       await tx.teamMember.create({
-        data: { teamId, userId, role: role as 'OWNER' | 'ADMIN' | 'MEMBER' },
+        data: { teamId, userId, role },
       });
     },
     { isolationLevel: 'Serializable' }
@@ -239,7 +245,6 @@ export async function addTeamMember(teamId: string, formData: FormData) {
 
   logger.info('team.member.added', { teamId, userId, role, actorId });
 
-  // Notify the user
   const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
   if (team) {
     await createInAppNotifications({
@@ -390,7 +395,6 @@ export async function updateTeamMemberNotifications(
 }
 
 export async function removeTeamMember(memberId: string): Promise<{ error?: string } | undefined> {
-  // First get the member to find the team ID
   const member = await prisma.teamMember.findUnique({
     where: { id: memberId },
     include: { team: { select: { name: true } } },
@@ -400,7 +404,6 @@ export async function removeTeamMember(memberId: string): Promise<{ error?: stri
     return { error: 'Member not found.' };
   }
 
-  // Check if user is admin or owner of this specific team
   let currentUser;
   try {
     currentUser = await assertAdminOrTeamOwner(member.teamId);
@@ -439,7 +442,6 @@ export async function removeTeamMember(memberId: string): Promise<{ error?: stri
     actorId,
   });
 
-  // Notify the user
   if (member.team) {
     await createInAppNotifications({
       userIds: [member.userId],
@@ -465,23 +467,35 @@ export async function designateTeamLead(teamId: string, userId: string | null) {
     };
   }
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    include: { members: true },
-  });
+  try {
+    await runSerializableTransaction(async tx => {
+      const team = await tx.team.findUnique({
+        where: { id: teamId },
+        select: { id: true },
+      });
+      if (!team) throw new Error('Team not found.');
 
-  if (!team) {
-    return { error: 'Team not found.' };
+      if (userId) {
+        const member = await tx.teamMember.findFirst({
+          where: { teamId, userId },
+          select: { id: true },
+        });
+        if (!member) {
+          throw new Error('User must be a member of the team to become team lead.');
+        }
+        await requireOperationalUser(tx, userId, () =>
+          new Error('Team lead must be an active team member.')
+        );
+      }
+
+      await tx.team.update({
+        where: { id: teamId },
+        data: { teamLeadId: userId },
+      });
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update team lead.' };
   }
-
-  if (userId && !team.members.some(m => m.userId === userId)) {
-    return { error: 'User must be a member of the team to become team lead.' };
-  }
-
-  await prisma.team.update({
-    where: { id: teamId },
-    data: { teamLeadId: userId },
-  });
 
   const actorId = currentUser.id;
   await logAudit({
@@ -501,7 +515,7 @@ export async function designateTeamLead(teamId: string, userId: string | null) {
 }
 
 export async function assignServicesToTeam(teamId: string, serviceIds: string[]) {
-  let currentUser: { id: string; role: string } | null = null;
+  let currentUser;
   try {
     currentUser = await assertAdminOrTeamOwner(teamId);
   } catch (error) {
@@ -525,7 +539,7 @@ export async function assignServicesToTeam(teamId: string, serviceIds: string[])
     return { error: 'One or more services could not be found.' };
   }
   if (
-    currentUser.role !== 'ADMIN' &&
+    !hasCapability(currentUser.role, CAPABILITIES.ADMIN_MANAGE) &&
     services.some(service => service.teamId !== null && service.teamId !== teamId)
   ) {
     return { error: 'Only administrators can move a service between teams.' };
