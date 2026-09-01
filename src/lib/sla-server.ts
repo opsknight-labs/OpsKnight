@@ -23,6 +23,8 @@ import { mergeHybridMetrics } from './sla-hybrid-merge';
 import { getActiveOnCallShifts, getWindowOnCallShifts } from './oncall-shifts';
 import { createTimeContractContext, resolveReportingWindow } from './time-retention-contract';
 import { intervalDurationMs, intervalGaps, type TimeInterval } from './metrics/domain/interval';
+import { compileIncidentMetricFilter, type IncidentMetricFilter } from './metrics/domain/filter';
+import { METRIC_ACCUMULATOR } from './metrics/domain/accumulator';
 
 // UUID validation regex - prevents SQL injection in dynamic CASE statements
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -40,94 +42,7 @@ const CUID_REGEX = /^c[a-z0-9]{24,}$/i;
  *   Pass an empty string to produce un-aliased column references.
  */
 function buildIncidentFilterSql(filters: SLAMetricsFilter, tableAlias: string = ''): Prisma.Sql {
-  const prefix = tableAlias ? `${tableAlias}.` : '';
-  const predicates: Prisma.Sql[] = [];
-  const scopePredicates: Prisma.Sql[] = [];
-
-  // serviceId — scalar or array
-  if (filters.serviceId) {
-    if (Array.isArray(filters.serviceId)) {
-      if (filters.serviceId.length > 0) {
-        scopePredicates.push(
-          Prisma.sql`${Prisma.raw(`${prefix}"serviceId"`)} = ANY(${filters.serviceId}::text[])`
-        );
-      }
-    } else {
-      scopePredicates.push(
-        Prisma.sql`${Prisma.raw(`${prefix}"serviceId"`)} = ${filters.serviceId}`
-      );
-    }
-  }
-
-  // teamId — uses the Service table via subquery since Incident has no
-  // direct teamId column (Incident.teamId may exist but Service.teamId is
-  // the source of truth elsewhere in the code).
-  if (filters.teamId) {
-    const teamIds = Array.isArray(filters.teamId) ? filters.teamId : [filters.teamId];
-    if (teamIds.length > 0) {
-      const serviceTeamPredicate = Prisma.sql`${Prisma.raw(`${prefix}"serviceId"`)} IN (
-          SELECT id FROM "Service" WHERE "teamId" = ANY(${teamIds}::text[])
-        )`;
-      scopePredicates.push(
-        filters.useOrScope
-          ? Prisma.sql`(${Prisma.raw(`${prefix}"teamId"`)} = ANY(${teamIds}::text[]) OR ${serviceTeamPredicate})`
-          : serviceTeamPredicate
-      );
-    }
-  }
-
-  if (filters.urgency) {
-    predicates.push(
-      Prisma.sql`${Prisma.raw(`${prefix}"urgency"`)} = ${filters.urgency}::"IncidentUrgency"`
-    );
-  }
-
-  if (filters.priority) {
-    const priorities = Array.isArray(filters.priority) ? filters.priority : [filters.priority];
-    if (priorities.length > 0) {
-      predicates.push(
-        Prisma.sql`${Prisma.raw(`${prefix}"priority"`)} = ANY(${priorities}::text[])`
-      );
-    }
-  }
-
-  if (filters.status === 'ACTIVE') {
-    predicates.push(
-      Prisma.sql`${Prisma.raw(`${prefix}"status"`)} = ANY(${activeIncidentStatuses()}::"IncidentStatus"[])`
-    );
-  } else if (filters.status) {
-    predicates.push(
-      Prisma.sql`${Prisma.raw(`${prefix}"status"`)} = ${filters.status}::"IncidentStatus"`
-    );
-  }
-
-  if (filters.visibility && filters.visibility !== 'ALL') {
-    predicates.push(
-      Prisma.sql`${Prisma.raw(`${prefix}"visibility"`)} = ${filters.visibility}::"IncidentVisibility"`
-    );
-  }
-
-  if (filters.assigneeId !== undefined) {
-    if (filters.assigneeId === null) {
-      scopePredicates.push(Prisma.sql`${Prisma.raw(`${prefix}"assigneeId"`)} IS NULL`);
-    } else {
-      scopePredicates.push(
-        Prisma.sql`${Prisma.raw(`${prefix}"assigneeId"`)} = ${filters.assigneeId}`
-      );
-    }
-  }
-
-  if (scopePredicates.length > 0) {
-    predicates.push(
-      filters.useOrScope
-        ? Prisma.sql`(${Prisma.join(scopePredicates, ' OR ')})`
-        : Prisma.sql`(${Prisma.join(scopePredicates, ' AND ')})`
-    );
-  }
-
-  // `Prisma.join([])` throws. Returning Prisma.empty lets callers compose
-  // this fragment unconditionally without creating a placeholder.
-  return predicates.length > 0 ? Prisma.sql`AND ${Prisma.join(predicates, ' AND ')}` : Prisma.empty;
+  return compileIncidentMetricFilter(filters, tableAlias).sql;
 }
 
 // Business-hours constants moved to `./business-hours.ts` to break the
@@ -180,23 +95,15 @@ function isValidSafeId(id: string): boolean {
  * Extended SLA Metrics Filter
  * Supports all legacy analytics filters
  */
-export type SLAMetricsFilter = {
-  serviceId?: string | string[];
-  teamId?: string | string[];
-  assigneeId?: string | null;
-  urgency?: 'HIGH' | 'MEDIUM' | 'LOW';
-  priority?: string | string[];
-  status?: 'ACTIVE' | 'OPEN' | 'ACKNOWLEDGED' | 'SNOOZED' | 'SUPPRESSED' | 'RESOLVED';
+export type SLAMetricsFilter = IncidentMetricFilter & {
   startDate?: Date;
   endDate?: Date;
   windowDays?: number;
   includeAllTime?: boolean;
   userTimeZone?: string;
-  useOrScope?: boolean;
   includeIncidents?: boolean;
   incidentLimit?: number;
   includeActiveIncidents?: boolean;
-  visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
   // Pagination support for large datasets
   page?: number;
   pageSize?: number;
@@ -1053,27 +960,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     };
   }
 
+  const compiledMetricFilter = compileIncidentMetricFilter(filters);
   const recentIncidentWhere: Prisma.IncidentWhereInput = {
+    ...compiledMetricFilter.prisma,
     createdAt: { gte: finalStart, lte: finalEnd },
-    ...(urgencyWhere ?? {}),
-    ...priorityWhere,
-    ...(statusWhere ?? {}),
-    ...(visibilityWhere ?? {}),
-  } as any;
-
-  if (filters.useOrScope && (hasServiceFilter || hasTeamFilter || assigneeWhere)) {
-    recentIncidentWhere.OR = [
-      ...(hasServiceFilter ? [serviceWhere] : []),
-      ...(hasTeamFilter ? [{ service: teamWhere }] : []),
-      ...(assigneeWhere ? [assigneeWhere] : []),
-    ];
-  } else {
-    Object.assign(recentIncidentWhere, {
-      ...(hasServiceFilter ? serviceWhere : {}),
-      ...(hasTeamFilter ? { service: teamWhere } : {}),
-      ...(assigneeWhere ?? {}),
-    });
-  }
+  };
 
   // Heatmap query (last 365 days, clipped to retention policy).
   // Filter set is applied via `fullIncidentFilterSql` in the raw SQL below
@@ -2337,6 +2228,32 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
   return {
     // Retention metadata
+    [METRIC_ACCUMULATOR]: {
+      incidentCount: BigInt(totalIncidentCount),
+      ackedCount: BigInt(Math.round((currentStats.ackRate / 100) * totalIncidentCount)),
+      resolvedCount: BigInt(resolvedCountForCalc),
+      mttaSumMs: BigInt(
+        Math.round(
+          (currentStats.mtta ?? 0) * Math.round((currentStats.ackRate / 100) * totalIncidentCount)
+        )
+      ),
+      mttaCount: BigInt(Math.round((currentStats.ackRate / 100) * totalIncidentCount)),
+      mttrSumMs: BigInt(Math.round((currentStats.mttr ?? 0) * resolvedCountForCalc)),
+      mttrCount: BigInt(resolvedCountForCalc),
+      ackMet: BigInt(ackSlaMet),
+      ackBreached: BigInt(ackSlaBreached),
+      ackPending: BigInt(Math.max(0, totalIncidentCount - ackSlaMet - ackSlaBreached)),
+      resolveMet: BigInt(resolveSlaMet),
+      resolveBreached: BigInt(resolveSlaBreached),
+      resolvePending: BigInt(Math.max(0, totalIncidentCount - resolveSlaMet - resolveSlaBreached)),
+      escalationEvents: BigInt(escalationEvents.length),
+      escalatedIncidents: BigInt(escalationCountFinal),
+      reopenEvents: BigInt(reopenEvents.length),
+      reopenedIncidents: BigInt(reopenCountFinal),
+      autoResolvedIncidents: BigInt(autoResolvedCount),
+      afterHoursCount: BigInt(afterHoursCount),
+      alertCount: BigInt(alertsCount),
+    },
     effectiveStart: finalStart,
     effectiveEnd: finalEnd,
     requestedStart: requestedStartDate,
@@ -3253,6 +3170,28 @@ export async function calculateSLAMetricsFromRollups(
 
   return {
     dataSource: 'rollup',
+    [METRIC_ACCUMULATOR]: {
+      incidentCount: BigInt(totalIncidents),
+      ackedCount: BigInt(mttaCount),
+      resolvedCount: BigInt(resolvedIncidents),
+      mttaSumMs: mttaSum,
+      mttaCount: BigInt(mttaCount),
+      mttrSumMs: mttrSum,
+      mttrCount: BigInt(mttrCount),
+      ackMet: BigInt(ackSlaMet),
+      ackBreached: BigInt(ackSlaBreached),
+      ackPending: BigInt(Math.max(0, totalIncidents - ackSlaMet - ackSlaBreached)),
+      resolveMet: BigInt(resolveSlaMet),
+      resolveBreached: BigInt(resolveSlaBreached),
+      resolvePending: BigInt(Math.max(0, totalIncidents - resolveSlaMet - resolveSlaBreached)),
+      escalationEvents: BigInt(escalationCount),
+      escalatedIncidents: BigInt(escalationCount),
+      reopenEvents: BigInt(reopenCount),
+      reopenedIncidents: BigInt(reopenCount),
+      autoResolvedIncidents: BigInt(autoResolveCount),
+      afterHoursCount: BigInt(afterHoursCount),
+      alertCount: BigInt(0),
+    },
 
     // Retention metadata — preserve the user-requested range so the UI
     // can render an "X days clipped to retention policy" banner.

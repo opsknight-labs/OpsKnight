@@ -1,9 +1,13 @@
+import { METRIC_ACCUMULATOR, type MetricAccumulator } from './metrics/domain/accumulator';
+
 /**
  * Client-safe SLA utilities (pure functions, no database access)
  * For server-only functions that use Prisma, see ./sla-server.ts
  */
 
 export type SLAMetrics = {
+  /** Internal additive state; symbol keys are excluded from JSON serialization. */
+  [METRIC_ACCUMULATOR]?: MetricAccumulator;
   // Retention metadata
   effectiveStart: Date;
   effectiveEnd: Date;

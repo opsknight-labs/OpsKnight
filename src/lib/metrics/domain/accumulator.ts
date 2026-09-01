@@ -21,6 +21,8 @@ export type MetricAccumulator = {
   alertCount: bigint;
 };
 
+export const METRIC_ACCUMULATOR = Symbol('opsknight.metrics.accumulator');
+
 export function emptyMetricAccumulator(): MetricAccumulator {
   return Object.fromEntries(
     [
