@@ -1,8 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { getAuthOptions, revokeUserSessions } from '@/lib/auth';
-import { getServerSession } from 'next-auth';
+import { revokeUserSessions } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 import { revalidatePath } from 'next/cache';
 import { generateApiKey } from '@/lib/api-keys';
@@ -23,25 +22,13 @@ import {
   isApiScope,
   isWriteApiScope,
 } from '@/lib/authorization';
+import { getCurrentUser } from '@/lib/rbac';
 
 type ActionState = {
   error?: string | null;
   success?: boolean;
   token?: string | null;
 };
-
-async function getCurrentUser() {
-  const session = await getServerSession(await getAuthOptions());
-  const email = session?.user?.email;
-  if (!email) {
-    throw new Error('Unauthorized');
-  }
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    throw new Error('User not found');
-  }
-  return user;
-}
 
 export async function updateProfile(
   _prevState: ActionState,
@@ -342,8 +329,14 @@ export async function updatePassword(
       return { error: 'Passwords do not match.' };
     }
 
-    if (user.passwordHash) {
-      const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    const credentials = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true },
+    });
+    if (!credentials) return { error: 'User not found.' };
+
+    if (credentials.passwordHash) {
+      const valid = await bcrypt.compare(currentPassword, credentials.passwordHash);
       if (!valid) {
         return { error: 'Current password is incorrect.' };
       }

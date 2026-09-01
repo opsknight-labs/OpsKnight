@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
+import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import {
   executeIncidentLifecycleBatch,
   executeIncidentLifecycleTargetBatch,
@@ -138,32 +139,36 @@ export async function bulkReassign(incidentIds: string[], assigneeId: string) {
   }
 
   try {
-    const assignee = await prisma.user.findUnique({ where: { id: assigneeId } });
+    const assignee = await prisma.user.findFirst({ where: { id: assigneeId, status: 'ACTIVE' } });
     if (!assignee) {
       return { success: false, error: 'Assignee not found' };
     }
 
     const user = await getCurrentUser();
-    await prisma.$transaction(async tx => {
-      await tx.incident.updateMany({
-        where: { id: { in: incidentIds } },
-        data: { assigneeId, teamId: null },
-      });
-      await tx.incidentEvent.createMany({
-        data: incidentIds.map(incidentId => ({
-          incidentId,
-          message: `Bulk reassigned to ${assignee.name}${user ? ` by ${user.name}` : ''}`,
-        })),
-      });
-      await Promise.all(
-        incidentIds.map(incidentId =>
-          enqueueIncidentUpdateSideEffects(tx, incidentId, [
-            'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
-            'INCIDENT_UPDATE_WEBHOOK',
-          ])
-        )
-      );
-    });
+    await prisma.$transaction(
+      async tx => {
+        await requireOperationalUser(tx, assigneeId);
+        await tx.incident.updateMany({
+          where: { id: { in: incidentIds } },
+          data: { assigneeId, teamId: null },
+        });
+        await tx.incidentEvent.createMany({
+          data: incidentIds.map(incidentId => ({
+            incidentId,
+            message: `Bulk reassigned to ${assignee.name}${user ? ` by ${user.name}` : ''}`,
+          })),
+        });
+        await Promise.all(
+          incidentIds.map(incidentId =>
+            enqueueIncidentUpdateSideEffects(tx, incidentId, [
+              'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
+              'INCIDENT_UPDATE_WEBHOOK',
+            ])
+          )
+        );
+      },
+      { isolationLevel: 'Serializable' }
+    );
 
     revalidatePath('/incidents');
     return { success: true, count: incidentIds.length };

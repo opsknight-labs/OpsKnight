@@ -11,6 +11,7 @@ import {
 } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
@@ -223,23 +224,26 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
 
   // Handle unassigning (empty assigneeId and teamId)
   if ((!assigneeId || assigneeId.trim() === '') && (!teamId || teamId.trim() === '')) {
-    await prisma.$transaction(async tx => {
-      await tx.incident.update({
-        where: { id: incidentId },
-        data: {
-          assigneeId: null,
-          teamId: null,
-        },
-      });
+    await prisma.$transaction(
+      async tx => {
+        await tx.incident.update({
+          where: { id: incidentId },
+          data: {
+            assigneeId: null,
+            teamId: null,
+          },
+        });
 
-      await tx.incidentEvent.create({
-        data: {
-          incidentId,
-          type: 'ASSIGNMENT',
-          message: 'Incident unassigned',
-        },
-      });
-    });
+        await tx.incidentEvent.create({
+          data: {
+            incidentId,
+            type: 'ASSIGNMENT',
+            message: 'Incident unassigned',
+          },
+        });
+      },
+      { isolationLevel: 'Serializable' }
+    );
 
     // ChatOps: Sync unassignment & update topic in war-room
     try {
@@ -311,35 +315,40 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
 
   // Handle assigning to a user
   if (assigneeId && assigneeId.trim() !== '') {
-    await prisma.$transaction(async tx => {
-      const assigneeRecord = await tx.user.findUnique({ where: { id: assigneeId } });
-      if (!assigneeRecord) {
-        throw new AppError({
-          code: 'RESOURCE_NOT_FOUND',
-          userMessage: LEGACY_NOT_FOUND_MESSAGE,
-          details: { resource: 'user', userId: assigneeId },
+    await prisma.$transaction(
+      async tx => {
+        let assigneeRecord;
+        try {
+          assigneeRecord = await requireOperationalUser(tx, assigneeId);
+        } catch {
+          throw new AppError({
+            code: 'RESOURCE_NOT_FOUND',
+            userMessage: LEGACY_NOT_FOUND_MESSAGE,
+            details: { resource: 'user', userId: assigneeId },
+          });
+        }
+
+        await tx.incident.update({
+          where: { id: incidentId },
+          data: {
+            assigneeId,
+            teamId: null, // Clear team assignment when assigning to user
+          },
         });
-      }
 
-      await tx.incident.update({
-        where: { id: incidentId },
-        data: {
-          assigneeId,
-          teamId: null, // Clear team assignment when assigning to user
-        },
-      });
-
-      await tx.incidentEvent.create({
-        data: {
-          incidentId,
-          type: 'ASSIGNMENT',
-          message: `Incident manually reassigned to ${assigneeRecord.name}`,
-        },
-      });
-      await enqueueIncidentUpdateSideEffects(tx, incidentId, [
-        'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
-      ]);
-    });
+        await tx.incidentEvent.create({
+          data: {
+            incidentId,
+            type: 'ASSIGNMENT',
+            message: `Incident manually reassigned to ${assigneeRecord.name}`,
+          },
+        });
+        await enqueueIncidentUpdateSideEffects(tx, incidentId, [
+          'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
+        ]);
+      },
+      { isolationLevel: 'Serializable' }
+    );
 
     // ChatOps: Sync user assignment, auto-invite user & update topic in war-room
     try {

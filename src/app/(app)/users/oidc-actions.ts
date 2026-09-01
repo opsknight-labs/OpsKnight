@@ -1,6 +1,5 @@
 'use server';
 
-import { createHash, randomBytes } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
@@ -24,22 +23,19 @@ async function getManagedUser(userId: string) {
   });
 }
 
-async function readOidcLinkingState(userId: string, email: string): Promise<OidcLinkingState> {
+async function readOidcLinkingState(userId: string, _email: string): Promise<OidcLinkingState> {
   const existingIdentity = await prisma.oidcIdentity.findFirst({
     where: { userId },
     select: { id: true },
   });
   if (existingIdentity) return 'linked';
 
-  // #336 treats an INVITE record as administrator-provisioning evidence. This
-  // includes completed historical invites as well as the non-redeemable marker
-  // created by the explicit approval action.
-  const provisioningEvidence = await prisma.userToken.findFirst({
-    where: { identifier: email.toLowerCase(), type: 'INVITE' },
-    select: { id: true },
+  const provisioningEvidence = await prisma.oidcLinkingApproval.findUnique({
+    where: { userId },
+    select: { id: true, revokedAt: true },
   });
 
-  return provisioningEvidence ? 'approved' : 'not-approved';
+  return provisioningEvidence && !provisioningEvidence.revokedAt ? 'approved' : 'not-approved';
 }
 
 export async function getOidcLinkingState(userId: string): Promise<OidcLinkingApprovalResult> {
@@ -83,19 +79,14 @@ export async function allowOidcLinking(userId: string): Promise<OidcLinkingAppro
     return { success: true, alreadyApproved: true, state };
   }
 
-  const now = new Date();
-  const marker = randomBytes(32).toString('base64url');
-  const tokenHash = createHash('sha256').update(marker).digest('hex');
-
-  // This is provisioning evidence only. It is already used and expired, so it
-  // cannot be redeemed as an invitation credential.
-  await prisma.userToken.create({
-    data: {
-      identifier,
-      type: 'INVITE',
-      tokenHash,
-      expiresAt: now,
-      usedAt: now,
+  await prisma.oidcLinkingApproval.upsert({
+    where: { userId: user.id },
+    create: { userId: user.id, approvedById: admin.id },
+    update: {
+      approvedById: admin.id,
+      approvedAt: new Date(),
+      revokedAt: null,
+      generation: { increment: 1 },
     },
   });
 
@@ -143,7 +134,8 @@ export async function revokeOidcLinking(userId: string): Promise<OidcLinkingAppr
   const state = await readOidcLinkingState(user.id, identifier);
   if (state === 'linked') {
     return {
-      error: 'This user already has an OIDC identity linked. Revoking approval does not unlink identities.',
+      error:
+        'This user already has an OIDC identity linked. Revoking approval does not unlink identities.',
       alreadyLinked: true,
       state,
     };
@@ -153,8 +145,9 @@ export async function revokeOidcLinking(userId: string): Promise<OidcLinkingAppr
   // records removes the administrator-provisioning evidence used by #336, so
   // a future first-time OIDC link is denied again without affecting password
   // authentication, role, or account status.
-  await prisma.userToken.deleteMany({
-    where: { identifier, type: 'INVITE' },
+  await prisma.oidcLinkingApproval.updateMany({
+    where: { userId: user.id, revokedAt: null },
+    data: { revokedAt: new Date() },
   });
 
   await logAudit({

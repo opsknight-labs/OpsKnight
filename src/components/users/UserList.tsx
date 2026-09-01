@@ -5,6 +5,7 @@ import { UserCard } from './UserCard';
 import { Button } from '@/components/ui/shadcn/button';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import type { UserFormState } from '@/app/(app)/users/actions';
+import type { UserDependencyReport } from '@/lib/users/dependencies';
 
 import {
   DropdownMenu,
@@ -55,6 +56,9 @@ type UserListProps = {
     prevState: UserFormState,
     formData: FormData
   ) => Promise<UserFormState>;
+  getUserDependencyReport: (
+    userId: string
+  ) => Promise<{ report?: UserDependencyReport; error?: string }>;
 };
 
 export default function UserList({
@@ -68,6 +72,7 @@ export default function UserList({
   reactivateUser,
   deleteUser,
   generateInvite,
+  getUserDependencyReport,
 }: UserListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
@@ -104,17 +109,29 @@ export default function UserList({
     setIsBulkActionPending(true);
 
     try {
-      const promises = Array.from(selectedIds).map(async id => {
-        if (action === 'DEACTIVATE') await deactivateUser(id);
-        if (action === 'ACTIVATE') await reactivateUser(id);
-        if (action === 'DELETE') await deleteUser(id);
-      });
-
-      await Promise.all(promises);
-      toast.success(
-        `${action === 'DELETE' ? 'Deleted' : action === 'ACTIVATE' ? 'Activated' : 'Deactivated'} ${selectedIds.size} users`
+      const results = await Promise.all(
+        Array.from(selectedIds).map(async id => {
+          if (action === 'DEACTIVATE') return { id, result: await deactivateUser(id) };
+          if (action === 'ACTIVATE') return { id, result: await reactivateUser(id) };
+          return { id, result: await deleteUser(id) };
+        })
       );
-      setSelectedIds(new Set());
+      const failures = results.filter(entry => entry.result?.error);
+      const succeeded = results.length - failures.length;
+
+      if (succeeded > 0) {
+        toast.success(
+          `${action === 'DELETE' ? 'Deleted' : action === 'ACTIVATE' ? 'Activated' : 'Deactivated'} ${succeeded} user${succeeded === 1 ? '' : 's'}`
+        );
+      }
+      if (failures.length > 0) {
+        toast.error(
+          failures.length === 1
+            ? failures[0].result?.error || 'The user operation failed.'
+            : `${failures.length} users could not be updated. ${failures[0].result?.error || ''}`
+        );
+      }
+      setSelectedIds(new Set(failures.map(entry => entry.id)));
     } catch {
       toast.error('Failed to perform bulk action');
     } finally {
@@ -186,19 +203,27 @@ export default function UserList({
           const handleUpdateRole = async (role: string) => {
             const formData = new FormData();
             formData.append('role', role);
-            await updateUserRole(user.id, formData);
+            const result = await updateUserRole(user.id, formData);
+            if (result?.error) toast.error(result.error);
+            else toast.success('Role updated');
           };
 
           const handleDeactivate = async () => {
-            await deactivateUser(user.id);
+            const result = await deactivateUser(user.id);
+            if (result?.error) toast.error(result.error);
+            else toast.success('User disabled');
           };
 
           const handleReactivate = async () => {
-            await reactivateUser(user.id);
+            const result = await reactivateUser(user.id);
+            if (result?.error) toast.error(result.error);
+            else toast.success('User reactivated');
           };
 
           const handleDelete = async () => {
-            await deleteUser(user.id);
+            const result = await deleteUser(user.id);
+            if (result?.error) toast.error(result.error);
+            else toast.success('User permanently deleted');
           };
 
           const handleGenerateInvite = async () => {
@@ -210,7 +235,9 @@ export default function UserList({
             const formData = new FormData();
             formData.append('teamId', teamId);
             formData.append('role', 'MEMBER');
-            await addUserToTeam(user.id, formData);
+            const result = await addUserToTeam(user.id, formData);
+            if (result?.error) toast.error(result.error);
+            else toast.success('User added to team');
           };
 
           return (
@@ -225,6 +252,7 @@ export default function UserList({
               onActivate={user.status === 'DISABLED' ? handleReactivate : undefined}
               onDeactivate={user.status === 'ACTIVE' ? handleDeactivate : undefined}
               onDelete={handleDelete}
+              onGetDependencies={() => getUserDependencyReport(user.id)}
               onGenerateInvite={user.status === 'INVITED' ? handleGenerateInvite : undefined}
               onUpdateRole={handleUpdateRole}
               onAddToTeam={handleAddToTeam}

@@ -1,0 +1,33 @@
+/** Authoritative lifecycle disposition for every direct Prisma User relationship. */
+export const USER_REFERENCE_POLICY = {
+  assignedIncidents: { deactivate: 'REPORT', delete: 'BLOCK' },
+  teamMemberships: { deactivate: 'REPORT', delete: 'BLOCK' },
+  onCallShifts: { deactivate: 'REPORT', delete: 'BLOCK' },
+  escalationRules: { deactivate: 'REPORT', delete: 'BLOCK' },
+  incidentNotes: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  postmortems: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  notifications: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  inAppNotifications: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
+  devices: { deactivate: 'REVOKE', delete: 'CASCADE' },
+  incidentWatchers: { deactivate: 'SUPPRESS', delete: 'CASCADE' },
+  auditLogs: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  overrides: { deactivate: 'REPORT', delete: 'BLOCK' },
+  overrideReplacements: { deactivate: 'REPORT', delete: 'BLOCK' },
+  layerAssignments: { deactivate: 'REPORT', delete: 'BLOCK' },
+  apiKeys: { deactivate: 'REVOKE', delete: 'CASCADE' },
+  incidentTemplates: { deactivate: 'KEEP', delete: 'CASCADE' },
+  updatedProviders: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  teamsLed: { deactivate: 'REPORT', delete: 'BLOCK' },
+  slackIntegrations: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  slackOAuthConfigs: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  jiraConfigsUpdated: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  oidcConfigs: { deactivate: 'KEEP', delete: 'CASCADE' },
+  oidcIdentities: { deactivate: 'DENY_AUTH', delete: 'CASCADE' },
+  oidcLinkingApproval: { deactivate: 'REVOKE', delete: 'CASCADE' },
+  avatar: { deactivate: 'KEEP', delete: 'CASCADE' },
+  dashboards: { deactivate: 'REPORT', delete: 'BLOCK' },
+  assignedActionItems: { deactivate: 'REPORT', delete: 'BLOCK' },
+  tokens: { deactivate: 'REVOKE', delete: 'SET_NULL' },
+} as const;
+
+export type UserReferenceName = keyof typeof USER_REFERENCE_POLICY;

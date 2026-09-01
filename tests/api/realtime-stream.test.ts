@@ -37,6 +37,16 @@ describe('API Route - Realtime Stream', () => {
             timeZone: 'UTC',
             status: 'ACTIVE',
             tokenVersion: 0,
+            invitationGeneration: 0,
+            gender: null,
+            department: null,
+            jobTitle: null,
+            avatarUrl: null,
+            phoneNumber: null,
+            emailNotificationsEnabled: false,
+            smsNotificationsEnabled: false,
+            pushNotificationsEnabled: false,
+            whatsappNotificationsEnabled: false,
         };
         const streamUser = {
             id: 'user-1',
