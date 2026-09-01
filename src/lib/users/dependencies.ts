@@ -5,6 +5,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 
 export type UserDependencyReport = {
   teams: Array<{ membershipId: string; teamId: string; teamName: string; role: string }>;
+  teamsLed: Array<{ teamId: string; teamName: string }>;
   escalationPolicies: Array<{
     stepId: string;
     stepOrder: number;
@@ -40,11 +41,16 @@ export type UserDependencyReport = {
 
 export async function discoverUserDependencies(userId: string): Promise<UserDependencyReport> {
   const now = new Date();
-  const [teams, policies, layers, overrides, shifts, incidents, actionItems, dashboards] =
+  const [teams, teamsLed, policies, layers, overrides, shifts, incidents, actionItems, dashboards] =
     await Promise.all([
       prisma.teamMember.findMany({
         where: { userId },
         select: { id: true, teamId: true, role: true, team: { select: { name: true } } },
+      }),
+      prisma.team.findMany({
+        where: { teamLeadId: userId },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
       }),
       prisma.escalationRule.findMany({
         where: { targetUserId: userId },
@@ -105,6 +111,7 @@ export async function discoverUserDependencies(userId: string): Promise<UserDepe
       teamName: x.team.name,
       role: x.role,
     })),
+    teamsLed: teamsLed.map(x => ({ teamId: x.id, teamName: x.name })),
     escalationPolicies: policies.map(x => ({
       stepId: x.id,
       stepOrder: x.stepOrder,

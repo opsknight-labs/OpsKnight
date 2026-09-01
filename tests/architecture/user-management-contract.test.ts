@@ -8,7 +8,7 @@ describe('user management security contract', () => {
 
     expect(rbac).toContain('export function assertNotSelf(');
     expect(rbac).not.toContain('export async function assertNotSelf(');
-    expect(actions.match(/assertNotSelf\(/g)).toHaveLength(3);
+    expect(actions.match(/assertNotSelf\(/g)).toHaveLength(4);
   });
 
   it('uses immutable identity and explicit generation for invitation claims', () => {
@@ -58,7 +58,7 @@ describe('user management security contract', () => {
     expect(users).toContain('removeTeamMembership(memberId)');
     expect(invariant).toContain('LOCK_KEYS.USER_ADMIN_INVARIANT');
     expect(invariant).toContain("status: 'ACTIVE'");
-    expect(invariant).toContain("isolationLevel: 'Serializable'");
+    expect(invariant).toContain('runSerializableTransaction(');
   });
 
   it('declares a lifecycle disposition for every direct User relation', () => {

@@ -8,7 +8,7 @@ import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf, getCurrentUser } fr
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
 import { isAppRole } from '@/lib/authorization';
-import type { Role } from '@prisma/client';
+import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
 import {
   dependencySummary,
@@ -465,23 +465,24 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
       deactivatedAt: new Date(),
       tokenVersion: { increment: 1 },
       invitationGeneration: { increment: 1 },
+    },
+    async tx => {
+      const revokedAt = new Date();
+      await tx.userToken.updateMany({
+        where: { userId, usedAt: null, revokedAt: null },
+        data: { revokedAt },
+      });
+      await tx.apiKey.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt },
+      });
+      await tx.oidcLinkingApproval.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt },
+      });
+      await tx.userDevice.deleteMany({ where: { userId } });
     }
   );
-  await prisma.$transaction([
-    prisma.userToken.updateMany({
-      where: { userId, usedAt: null, revokedAt: null },
-      data: { revokedAt: new Date() },
-    }),
-    prisma.apiKey.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    }),
-    prisma.oidcLinkingApproval.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    }),
-    prisma.userDevice.deleteMany({ where: { userId } }),
-  ]);
   await logAudit({
     action: 'user.deactivated',
     entityType: 'USER',
@@ -699,21 +700,24 @@ export async function bulkUpdateUsers(
         deactivatedAt: new Date(),
         tokenVersion: { increment: 1 },
         invitationGeneration: { increment: 1 },
+      },
+      async tx => {
+        const revokedAt = new Date();
+        await tx.userToken.updateMany({
+          where: { userId: { in: userIds }, usedAt: null, revokedAt: null },
+          data: { revokedAt },
+        });
+        await tx.apiKey.updateMany({
+          where: { userId: { in: userIds }, revokedAt: null },
+          data: { revokedAt },
+        });
+        await tx.oidcLinkingApproval.updateMany({
+          where: { userId: { in: userIds }, revokedAt: null },
+          data: { revokedAt },
+        });
+        await tx.userDevice.deleteMany({ where: { userId: { in: userIds } } });
       }
     );
-    await prisma.userToken.updateMany({
-      where: { userId: { in: userIds }, usedAt: null, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    await prisma.apiKey.updateMany({
-      where: { userId: { in: userIds }, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    await prisma.oidcLinkingApproval.updateMany({
-      where: { userId: { in: userIds }, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    await prisma.userDevice.deleteMany({ where: { userId: { in: userIds } } });
 
     await logAudit({
       action: 'user.deactivated.bulk',
@@ -890,11 +894,11 @@ export async function updateUserProfile(
       return { error: 'Only administrators can change user roles.' };
     }
     if (isAdmin) {
-      if (existingUser.role === 'ADMIN' && role !== 'ADMIN') {
+      if (role !== existingUser.role) {
         try {
-          await assertNotLastAdmin(userId);
+          assertNotSelf(currentUser.id, userId, 'change the role of');
         } catch (err) {
-          return { error: err instanceof Error ? err.message : 'Cannot demote the last admin.' };
+          return { error: err instanceof Error ? err.message : 'You cannot change your own role.' };
         }
       }
       targetRole = role as Role;
@@ -902,46 +906,46 @@ export async function updateUserProfile(
   }
 
   try {
-    const updated = await prisma.$transaction(async tx => {
-      const result = await tx.user.update({
-        where: { id: userId },
-        data: {
-          name: name.trim(),
-          email: normalizedEmail,
-          role: targetRole,
-          department: department?.trim() || null,
-          jobTitle: jobTitle?.trim() || null,
-          timeZone: timeZone?.trim() || 'UTC',
-          phoneNumber: phoneNumber?.trim() || null,
-          ...(formData.has('emailNotificationsEnabled')
-            ? { emailNotificationsEnabled: formData.get('emailNotificationsEnabled') === 'true' }
-            : {}),
-          ...(formData.has('smsNotificationsEnabled')
-            ? { smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'true' }
-            : {}),
-          ...(formData.has('pushNotificationsEnabled')
-            ? { pushNotificationsEnabled: formData.get('pushNotificationsEnabled') === 'true' }
-            : {}),
-          ...(formData.has('whatsappNotificationsEnabled')
-            ? {
-                whatsappNotificationsEnabled:
-                  formData.get('whatsappNotificationsEnabled') === 'true',
-              }
-            : {}),
-          ...(targetRole !== existingUser.role || emailChanged
-            ? { tokenVersion: { increment: 1 } }
-            : {}),
-          ...(emailChanged ? { invitationGeneration: { increment: 1 } } : {}),
-        },
-      });
+    const roleChanged = targetRole !== existingUser.role;
+    const profileData: Prisma.UserUpdateInput = {
+      name: name.trim(),
+      email: normalizedEmail,
+      department: department?.trim() || null,
+      jobTitle: jobTitle?.trim() || null,
+      timeZone: timeZone?.trim() || 'UTC',
+      phoneNumber: phoneNumber?.trim() || null,
+      ...(formData.has('emailNotificationsEnabled')
+        ? { emailNotificationsEnabled: formData.get('emailNotificationsEnabled') === 'true' }
+        : {}),
+      ...(formData.has('smsNotificationsEnabled')
+        ? { smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'true' }
+        : {}),
+      ...(formData.has('pushNotificationsEnabled')
+        ? { pushNotificationsEnabled: formData.get('pushNotificationsEnabled') === 'true' }
+        : {}),
+      ...(formData.has('whatsappNotificationsEnabled')
+        ? {
+            whatsappNotificationsEnabled: formData.get('whatsappNotificationsEnabled') === 'true',
+          }
+        : {}),
+      ...(roleChanged || emailChanged ? { tokenVersion: { increment: 1 } } : {}),
+      ...(emailChanged ? { invitationGeneration: { increment: 1 } } : {}),
+    };
+    const revokeInviteTokens = async (tx: Prisma.TransactionClient) => {
       if (emailChanged) {
         await tx.userToken.updateMany({
           where: { userId, revokedAt: null },
           data: { revokedAt: new Date() },
         });
       }
-      return result;
-    });
+    };
+    const updated = roleChanged
+      ? await updateUserSecurityState(userId, { role: targetRole }, profileData, revokeInviteTokens)
+      : await prisma.$transaction(async tx => {
+          const result = await tx.user.update({ where: { id: userId }, data: profileData });
+          await revokeInviteTokens(tx);
+          return result;
+        });
 
     await logAudit({
       action: 'user.updated',

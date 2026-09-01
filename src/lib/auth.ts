@@ -3,6 +3,7 @@ import OIDCProvider from '@/lib/oidc';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
+import { runSerializableTransaction } from '@/lib/db-utils';
 import { logger } from '@/lib/logger';
 import { getOidcConfig } from '@/lib/oidc-config';
 import { getDefaultAvatar } from '@/lib/avatar';
@@ -794,61 +795,75 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return false;
             }
 
-            const existingIdentity = await prisma.oidcIdentity.findUnique({
+            let existingIdentity = await prisma.oidcIdentity.findUnique({
               where: { issuer_subject: { issuer, subject } },
             });
 
             if (!existingIdentity) {
               const isInvitedUser = targetUser.status === 'INVITED';
-              let hasProvisioningEvidence = false;
-
-              // Existing ACTIVE users may have completed the password invite before trying SSO.
-              // The used INVITE token is intentionally retained for audit history, so it is a
-              // durable server-side signal that an administrator provisioned this email address.
-              if (existing && !isInvitedUser) {
-                const [inviteRecord, bootstrapRecord] = await Promise.all([
-                  prisma.oidcLinkingApproval.findFirst({
-                    where: { userId: existing.id, revokedAt: null },
-                    select: { id: true },
-                  }),
-                  prisma.auditLog.findFirst({
-                    where: {
-                      entityType: 'USER',
-                      entityId: existing.id,
-                      action: 'user.bootstrap',
-                    },
-                    select: { id: true },
-                  }),
-                ]);
-                hasProvisioningEvidence = !!inviteRecord || !!bootstrapRecord;
-              }
-
-              // SECURITY: Never link a pre-existing account on email match alone. For an
-              // existing user we require BOTH explicit admin-provisioning evidence and an
-              // explicit email_verified=true claim from the configured OIDC provider.
-              if (existing) {
-                const adminProvisioned = isInvitedUser || hasProvisioningEvidence;
-                if (!adminProvisioned || emailVerifiedClaim !== true) {
-                  logger.warn('[Auth] OIDC sign-in blocked: existing account is not safe to link', {
-                    component: 'auth:signIn',
-                    email,
-                    issuer,
-                    subject,
-                    adminProvisioned,
-                    emailVerified: emailVerifiedClaim === true,
+              try {
+                existingIdentity = await runSerializableTransaction(async tx => {
+                  const currentTarget = await tx.user.findUnique({
+                    where: { id: targetUser.id },
+                    select: { id: true, status: true },
                   });
+                  if (!currentTarget || currentTarget.status === 'DISABLED') {
+                    throw new Error('OIDC_TARGET_NOT_OPERATIONAL');
+                  }
+
+                  const linked = await tx.oidcIdentity.findUnique({
+                    where: { issuer_subject: { issuer, subject } },
+                  });
+                  if (linked) {
+                    if (linked.userId !== currentTarget.id) {
+                      throw new Error('OIDC_IDENTITY_OWNED_BY_ANOTHER_USER');
+                    }
+                    return linked;
+                  }
+
+                  // An existing account must prove control of a verified address. ACTIVE
+                  // accounts additionally require a fresh, one-time administrator approval.
+                  if (existing && emailVerifiedClaim !== true) {
+                    throw new Error('OIDC_LINK_NOT_APPROVED');
+                  }
+                  if (existing && currentTarget.status !== 'INVITED') {
+                    const approval = await tx.oidcLinkingApproval.findFirst({
+                      where: { userId: currentTarget.id, revokedAt: null },
+                      select: { id: true },
+                    });
+                    if (!approval) throw new Error('OIDC_LINK_NOT_APPROVED');
+                    const consumed = await tx.oidcLinkingApproval.updateMany({
+                      where: { id: approval.id, revokedAt: null },
+                      data: { revokedAt: new Date() },
+                    });
+                    if (consumed.count !== 1) throw new Error('OIDC_LINK_NOT_APPROVED');
+                  }
+
+                  return tx.oidcIdentity.create({
+                    data: { issuer, subject, email, userId: currentTarget.id },
+                  });
+                });
+              } catch (error) {
+                if (
+                  error instanceof Error &&
+                  (error.message === 'OIDC_LINK_NOT_APPROVED' ||
+                    error.message === 'OIDC_TARGET_NOT_OPERATIONAL' ||
+                    error.message === 'OIDC_IDENTITY_OWNED_BY_ANOTHER_USER')
+                ) {
+                  logger.warn(
+                    '[Auth] OIDC sign-in blocked: account linking authorization changed',
+                    {
+                      component: 'auth:signIn',
+                      email,
+                      issuer,
+                      subject,
+                      reason: error.message,
+                    }
+                  );
                   return false;
                 }
+                throw error;
               }
-
-              await prisma.oidcIdentity.create({
-                data: {
-                  issuer,
-                  subject,
-                  email,
-                  userId: targetUser.id,
-                },
-              });
               logger.info('[Auth] Linked OIDC identity to user', {
                 component: 'auth:signIn',
                 issuer,

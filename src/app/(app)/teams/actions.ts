@@ -9,25 +9,12 @@ import { logger } from '@/lib/logger';
 import { assertTeamNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import { runSerializableTransaction } from '@/lib/db-utils';
 
 type TeamFormState = {
   error?: string | null;
   success?: boolean;
 };
-
-async function ensureTeamHasOwner(teamId: string, excludeMemberId?: string) {
-  const ownerCount = await prisma.teamMember.count({
-    where: {
-      teamId,
-      role: 'OWNER',
-      ...(excludeMemberId ? { NOT: { id: excludeMemberId } } : {}),
-    },
-  });
-
-  if (ownerCount === 0) {
-    throw new Error('Each team must have at least one owner.');
-  }
-}
 
 export async function createTeam(
   _prevState: TeamFormState,
@@ -287,20 +274,37 @@ export async function updateTeamMemberRole(
 
   if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) return { error: 'Invalid team role.' };
 
-  if (member.role === 'OWNER' && role !== 'OWNER') {
-    try {
-      await ensureTeamHasOwner(member.teamId, member.id);
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Cannot change role of last owner.',
-      };
-    }
+  try {
+    await runSerializableTransaction(async tx => {
+      const currentMember = await tx.teamMember.findUnique({ where: { id: memberId } });
+      if (!currentMember || currentMember.teamId !== member.teamId) {
+        throw new Error('Member not found.');
+      }
+      if (currentMember.role === 'OWNER' && role !== 'OWNER') {
+        const otherActiveOwners = await tx.teamMember.count({
+          where: {
+            teamId: currentMember.teamId,
+            role: 'OWNER',
+            NOT: { id: currentMember.id },
+            user: { status: 'ACTIVE' },
+          },
+        });
+        if (otherActiveOwners === 0) {
+          throw new Error('Each team must retain at least one active owner.');
+        }
+      }
+      await tx.teamMember.update({
+        where: { id: memberId },
+        data: { role: role as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+      });
+      await tx.user.update({
+        where: { id: currentMember.userId },
+        data: { tokenVersion: { increment: 1 } },
+      });
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update member role.' };
   }
-
-  await prisma.teamMember.update({
-    where: { id: memberId },
-    data: { role: role as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
-  });
 
   const actorId = currentUser.id;
   await logAudit({

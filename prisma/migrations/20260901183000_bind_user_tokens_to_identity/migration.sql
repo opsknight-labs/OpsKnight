@@ -37,18 +37,6 @@ ALTER TABLE "OidcLinkingApproval"
 ADD CONSTRAINT "OidcLinkingApproval_userId_fkey"
 FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
-INSERT INTO "OidcLinkingApproval" (
-  "id", "userId", "approvedAt", "generation", "createdAt", "updatedAt"
-)
-SELECT 'legacy_' || user_record."id", user_record."id", CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM "User" AS user_record
-WHERE user_record."status" = 'ACTIVE'
-  AND EXISTS (
-    SELECT 1 FROM "UserToken" AS token
-    WHERE token."userId" = user_record."id" AND token."type" = 'INVITE'
-  )
-ON CONFLICT ("userId") DO NOTHING;
-
 ALTER TABLE "Notification" DROP CONSTRAINT IF EXISTS "Notification_userId_fkey";
 ALTER TABLE "Notification"
 ADD CONSTRAINT "Notification_userId_fkey"

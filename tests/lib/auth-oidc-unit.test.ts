@@ -26,6 +26,7 @@ vi.mock('@/lib/prisma', () => {
     },
     oidcLinkingApproval: {
       findFirst: vi.fn(),
+      updateMany: vi.fn(),
     },
     oidcIdentity: {
       findUnique: vi.fn(),
@@ -38,7 +39,9 @@ vi.mock('@/lib/prisma', () => {
     auditLog: {
       findFirst: vi.fn(),
     },
+    $transaction: vi.fn(),
   };
+  mockPrisma.$transaction.mockImplementation(async callback => callback(mockPrisma));
   return { default: mockPrisma };
 });
 
@@ -58,6 +61,7 @@ describe('Auth JWT + OIDC (unit)', () => {
     vi.mocked(prisma.user.create).mockResolvedValue({ id: 'u1' } as never);
     vi.mocked(prisma.user.update).mockResolvedValue({} as never);
     vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.oidcLinkingApproval.updateMany).mockResolvedValue({ count: 1 } as never);
     vi.mocked(prisma.auditLog.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.oidcIdentity.create).mockResolvedValue({ id: 'id1' } as never);
@@ -154,6 +158,10 @@ describe('Auth JWT + OIDC (unit)', () => {
         email: 'user@example.com',
         userId: 'u1',
       },
+    });
+    expect(prisma.oidcLinkingApproval.updateMany).toHaveBeenCalledWith({
+      where: { id: 'approval-record', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
     });
     expect(user.id).toBe('u1');
   });

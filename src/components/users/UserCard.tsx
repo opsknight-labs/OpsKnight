@@ -522,6 +522,15 @@ export function UserCard({
                       Team: {item.teamName} ({item.role})
                     </Link>
                   ))}
+                  {dependencyReport.teamsLed.map(item => (
+                    <Link
+                      key={item.teamId}
+                      href={`/teams/${item.teamId}`}
+                      className="block text-primary hover:underline"
+                    >
+                      Team lead: {item.teamName}
+                    </Link>
+                  ))}
                   {dependencyReport.escalationPolicies.map(item => (
                     <Link
                       key={item.stepId}
