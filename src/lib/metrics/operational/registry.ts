@@ -247,8 +247,9 @@ export class OperationalMetricSnapshot {
       lines.push(`# HELP ${definition.name} ${definition.help}`);
       lines.push(`# TYPE ${definition.name} ${definition.kind}`);
       for (const row of rows) {
+        const rowLabels = new Map(Object.entries(row.labels));
         const labelText = definition.labels.length
-          ? `{${definition.labels.map(label => `${label}="${escapePrometheusLabel(row.labels[label])}"`).join(',')}}`
+          ? `{${definition.labels.map(label => `${label}="${escapePrometheusLabel(rowLabels.get(label) ?? 'other')}"`).join(',')}}`
           : '';
         lines.push(`${definition.name}${labelText} ${row.value}`);
       }

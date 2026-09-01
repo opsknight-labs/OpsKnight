@@ -57,9 +57,15 @@ export function mergeHybridMetrics(
   live: SLAMetrics
 ): SLAMetrics & { dataSource: 'hybrid' } {
   const totalIncidents = historical.totalIncidents + live.totalIncidents;
+  const historicalAccumulator = Reflect.get(historical, METRIC_ACCUMULATOR) as
+    | NonNullable<SLAMetrics[typeof METRIC_ACCUMULATOR]>
+    | undefined;
+  const liveAccumulator = Reflect.get(live, METRIC_ACCUMULATOR) as
+    | NonNullable<SLAMetrics[typeof METRIC_ACCUMULATOR]>
+    | undefined;
   const mergedAccumulator =
-    historical[METRIC_ACCUMULATOR] && live[METRIC_ACCUMULATOR]
-      ? mergeMetricAccumulators(historical[METRIC_ACCUMULATOR], live[METRIC_ACCUMULATOR])
+    historicalAccumulator && liveAccumulator
+      ? mergeMetricAccumulators(historicalAccumulator, liveAccumulator)
       : null;
 
   // Reconstruct met counts from rate + breaches.
