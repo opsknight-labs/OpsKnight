@@ -8,7 +8,6 @@ import {
   useCallback,
   ReactNode,
   useMemo,
-  useRef,
 } from 'react';
 import { getDefaultAvatar } from '@/lib/avatar';
 
@@ -159,13 +158,11 @@ export function UserAvatarProvider({
         return effectiveAvatarUrl;
       }
 
-      // Use cached gender if available, otherwise use provided gender
-      const effectiveGender = cached?.gender ?? gender;
       // Use cached name if available, otherwise use provided fallback
       const effectiveName = cached?.name || _fallbackName || 'User';
 
       // Generate default avatar using consistent name for initials and userId for color
-      return getDefaultAvatar(effectiveName, userId || effectiveGender || 'user');
+      return getDefaultAvatar(effectiveName, userId || 'user');
     },
     [avatarCache]
   );

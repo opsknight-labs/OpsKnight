@@ -5,6 +5,7 @@ import { signOut } from 'next-auth/react';
 import { revokeAllSessions } from '@/app/(app)/settings/security/actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
+import { Badge } from '@/components/ui/shadcn/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,12 +17,40 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/shadcn/alert-dialog';
-import { AlertCircle, CheckCircle2, LogOut, Shield } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Laptop, LogOut, ShieldCheck, Smartphone } from 'lucide-react';
 
-export default function ActiveSessionsSection() {
+type Props = {
+  tokenVersion?: number;
+};
+
+function getClientDeviceInfo() {
+  if (typeof window === 'undefined') {
+    return { browser: 'Web Browser', os: 'Current Device', isMobile: false };
+  }
+  const ua = navigator.userAgent;
+  let browser = 'Web Browser';
+  let os = 'Desktop';
+  const isMobile = /Mobile|Android|iPhone|iPad/i.test(ua);
+
+  if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Google Chrome';
+  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Apple Safari';
+  else if (ua.includes('Firefox')) browser = 'Mozilla Firefox';
+  else if (ua.includes('Edg')) browser = 'Microsoft Edge';
+
+  if (ua.includes('Macintosh') || ua.includes('Mac OS')) os = 'macOS';
+  else if (ua.includes('Windows')) os = 'Windows';
+  else if (ua.includes('Linux') && !ua.includes('Android')) os = 'Linux';
+  else if (ua.includes('iPhone')) os = 'iOS';
+  else if (ua.includes('Android')) os = 'Android';
+
+  return { browser, os, isMobile };
+}
+
+export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [deviceInfo] = useState(getClientDeviceInfo);
 
   const handleRevokeAll = () => {
     setError(null);
@@ -31,7 +60,6 @@ export default function ActiveSessionsSection() {
         setError(result.error);
       } else if (result.success) {
         setSuccess(true);
-        // Sign out after a brief delay to show success message
         setTimeout(async () => {
           await signOut({ callbackUrl: '/login' });
         }, 1500);
@@ -41,19 +69,41 @@ export default function ActiveSessionsSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-4 p-4 rounded-lg border border-border bg-muted/30">
-        <div className="p-2 rounded-full bg-primary/10">
-          <Shield className="h-5 w-5 text-primary" />
+      {/* Current Active Session Card */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+            {deviceInfo.isMobile ? (
+              <Smartphone className="h-5 w-5" />
+            ) : (
+              <Laptop className="h-5 w-5" />
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="font-semibold text-sm text-foreground">
+                {deviceInfo.browser} on {deviceInfo.os}
+              </h4>
+              <Badge
+                variant="outline"
+                className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-medium"
+              >
+                This Device
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Current authenticated session · Security token v{tokenVersion}
+            </p>
+          </div>
         </div>
-        <div className="flex-1">
-          <p className="font-medium">Current Session</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            You are currently signed in. Revoking all sessions will sign you out from all devices.
-          </p>
-        </div>
-        <div className="shrink-0">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-            Active
+
+        <div className="flex items-center gap-2 self-end sm:self-center">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            Active Now
           </span>
         </div>
       </div>
@@ -66,38 +116,55 @@ export default function ActiveSessionsSection() {
       )}
 
       {success && (
-        <Alert className="bg-green-50 text-green-900 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-900">
-          <CheckCircle2 className="h-4 w-4" />
-          <AlertDescription>All sessions revoked successfully. Signing you out...</AlertDescription>
+        <Alert className="bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <AlertDescription>
+            All sessions revoked successfully. You will be redirected to the sign-in page...
+          </AlertDescription>
         </Alert>
       )}
 
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="destructive" disabled={isPending || success}>
-            <LogOut className="h-4 w-4 mr-2" />
-            {isPending ? 'Revoking...' : 'Revoke All Sessions'}
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Revoke All Sessions?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will immediately sign you out from all devices, including this one. You will need
-              to sign in again to continue using OpsKnight.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRevokeAll}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+      {/* Revocation Trigger & Confirmation Modal */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+          <span>If you suspect unauthorized access, revoke all sessions immediately.</span>
+        </div>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={isPending || success}
+              className="gap-2 shrink-0"
             >
-              Revoke All Sessions
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <LogOut className="h-3.5 w-3.5" />
+              {isPending ? 'Revoking Sessions...' : 'Revoke All Sessions'}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Revoke All Active Sessions?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action will instantly invalidate your cryptographic session token across all
+                browsers, mobile apps, and devices. You will be logged out everywhere immediately
+                and must sign in again.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleRevokeAll}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-1.5"
+              >
+                <LogOut className="h-4 w-4" />
+                Revoke All Sessions
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 }
