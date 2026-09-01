@@ -806,6 +806,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
           {/* Slack & ChatOps Integration Settings */}
           <ServiceNotificationSettings
+            key={id}
             serviceId={id}
             serviceNotificationChannels={service.serviceNotificationChannels || []}
             slackChannel={service.slackChannel || null}
