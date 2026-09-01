@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/shadcn/dialog';
-import { Check, Sparkles, Bot, User, Cpu, Shield } from 'lucide-react';
+import { Check, Sparkles, Bot, User, Cpu, Shield, PawPrint } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Static high-res custom avatars (call-center and ops agents with headsets) - Local 0ms load
@@ -25,6 +25,20 @@ const STATIC_AVATARS = [
   { id: 'custom-8', src: '/avatars/avatar-8.png', label: 'Agent Red' },
   { id: 'custom-9', src: '/avatars/avatar-9.png', label: 'Agent Cyan' },
   { id: 'custom-10', src: '/avatars/avatar-10.png', label: 'Agent Indigo' },
+  { id: 'custom-11', src: '/avatars/avatar-11.png', label: 'Agent Amber' },
+  { id: 'custom-12', src: '/avatars/avatar-12.png', label: 'Agent Emerald' },
+  { id: 'custom-13', src: '/avatars/avatar-13.png', label: 'Agent Rose' },
+  { id: 'custom-14', src: '/avatars/avatar-14.png', label: 'Agent Yellow' },
+  { id: 'custom-15', src: '/avatars/avatar-15.png', label: 'Agent Lime' },
+];
+
+// Team Mascots & Animals
+const ANIMAL_AVATARS = [
+  { id: 'animal-1', src: '/avatars/avatar-animal-1.png', label: 'Night Owl' },
+  { id: 'animal-2', src: '/avatars/avatar-animal-2.png', label: 'Clever Cat' },
+  { id: 'animal-3', src: '/avatars/avatar-animal-3.png', label: 'Guard Dog' },
+  { id: 'animal-4', src: '/avatars/avatar-animal-4.png', label: 'Calm Panda' },
+  { id: 'animal-5', src: '/avatars/avatar-animal-5.png', label: 'Swift Fox' },
 ];
 
 // Personalized Initials Palettes (Using user's actual name initials with vibrant SRE colorways)
@@ -125,7 +139,7 @@ export function AvatarPicker({
     return `/api/avatar?style=${style}&seed=${encodeURIComponent(seed)}&backgroundColor=${bg}&radius=50&format=svg`;
   };
 
-  const handleStaticSelect = (avatar: (typeof STATIC_AVATARS)[0]) => {
+  const handleStaticSelect = (avatar: { id: string; src: string; label: string }) => {
     setSelectedId(avatar.id);
     onSelect(avatar.src);
     setOpen(false);
@@ -154,8 +168,8 @@ export function AvatarPicker({
     );
   };
 
-  const isStaticSelected = (id: string) =>
-    selectedId === id || STATIC_AVATARS.some(a => a.id === id && a.src === currentAvatarUrl);
+  const isStaticSelected = (src: string, id: string) =>
+    selectedId === id || currentAvatarUrl === src;
 
   const isDiceBearSelected = (avatar: { id: string; style: string; seed: string; bg: string }) => {
     if (selectedId === avatar.id) return true;
@@ -185,13 +199,57 @@ export function AvatarPicker({
           <DialogHeader>
             <DialogTitle>Choose Your Avatar</DialogTitle>
             <DialogDescription>
-              Select a professional avatar that represents you across incidents, on-call schedules,
-              and team dashboards.
+              Select an avatar that represents you across incidents, on-call schedules, and team
+              dashboards.
             </DialogDescription>
           </DialogHeader>
 
-          {/* Ops & Support Team Avatars (Local 0ms High-Res) */}
+          {/* Team Mascots & Animals */}
           <div className="space-y-3">
+            <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+              <PawPrint className="h-4 w-4 text-amber-500" />
+              <span>Team Mascots & Animals</span>
+            </h4>
+            <div className="grid grid-cols-5 gap-3">
+              {ANIMAL_AVATARS.map(avatar => {
+                const isSelected = isStaticSelected(avatar.src, avatar.id);
+                return (
+                  <button
+                    key={avatar.id}
+                    onClick={() => handleStaticSelect(avatar)}
+                    className="group relative flex flex-col items-center gap-1.5"
+                  >
+                    <div
+                      className={cn(
+                        'relative rounded-full p-0.5 transition-all duration-200',
+                        isSelected
+                          ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                          : 'hover:ring-2 hover:ring-primary/50 hover:ring-offset-2 hover:ring-offset-background'
+                      )}
+                    >
+                      <Avatar className="h-14 w-14">
+                        <AvatarImage src={avatar.src} alt={avatar.label} className="object-cover" />
+                        <AvatarFallback className="text-xs font-semibold bg-muted">
+                          {avatar.label.slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {isSelected && (
+                        <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary flex items-center justify-center">
+                          <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                      {avatar.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Ops & Support Team Avatars (Local 0ms High-Res) */}
+          <div className="space-y-3 pt-2">
             <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
               <User className="h-4 w-4 text-primary" />
               <span>Ops & Engineering Agents</span>
@@ -201,7 +259,7 @@ export function AvatarPicker({
             </h4>
             <div className="grid grid-cols-5 gap-3">
               {STATIC_AVATARS.map(avatar => {
-                const isSelected = isStaticSelected(avatar.id);
+                const isSelected = isStaticSelected(avatar.src, avatar.id);
                 return (
                   <button
                     key={avatar.id}
