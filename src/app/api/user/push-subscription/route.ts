@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getCurrentUser } from '@/lib/rbac';
 
 export async function POST(req: NextRequest) {
-  const authOptions = await getAuthOptions();
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user?.id) {
+  let user;
+  try {
+    user = await getCurrentUser();
+  } catch {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
@@ -21,43 +21,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Store subscription
-    // We use endpoint as deviceId (it's unique per browser)
     const deviceId = subscription.endpoint;
     const token = JSON.stringify(subscription);
 
-    // Remove any legacy subscriptions on this endpoint from other users on shared browsers
     await prisma.userDevice.deleteMany({
       where: {
         deviceId,
-        userId: { not: session.user.id },
+        userId: { not: user.id },
       },
     });
 
     await prisma.userDevice.upsert({
       where: {
         userId_deviceId: {
-          userId: session.user.id,
-          deviceId: deviceId,
+          userId: user.id,
+          deviceId,
         },
       },
       update: {
-        token: token,
+        token,
         lastUsed: new Date(),
         userAgent: req.headers.get('user-agent') || undefined,
       },
       create: {
-        userId: session.user.id,
-        deviceId: deviceId,
-        token: token,
+        userId: user.id,
+        deviceId,
+        token,
         platform: 'web',
         userAgent: req.headers.get('user-agent') || undefined,
       },
     });
 
-    // Also enable push notifications for user if not already
     await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: user.id },
       data: { pushNotificationsEnabled: true },
     });
 
@@ -71,9 +67,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const authOptions = await getAuthOptions();
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user?.id) {
+  let user;
+  try {
+    user = await getCurrentUser();
+  } catch {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
@@ -92,18 +89,18 @@ export async function DELETE(req: NextRequest) {
 
     await prisma.userDevice.deleteMany({
       where: {
-        userId: session.user.id,
+        userId: user.id,
         deviceId: endpoint,
       },
     });
 
     const remainingDevices = await prisma.userDevice.count({
-      where: { userId: session.user.id },
+      where: { userId: user.id },
     });
 
     if (remainingDevices === 0) {
       await prisma.user.update({
-        where: { id: session.user.id },
+        where: { id: user.id },
         data: { pushNotificationsEnabled: false },
       });
     }
