@@ -34,6 +34,8 @@ export interface CriticalEscalationCycleResult {
   /** Whether reconciliation ran, and what it repaired. */
   reconciled: boolean;
   repairs: number;
+  /** Failures that degraded this cycle without stopping independent stages. */
+  errors: string[];
 }
 
 let lastFallbackScanAt = 0;
@@ -68,6 +70,12 @@ export function resetCriticalEscalationCadence(): void {
   wakeRequested = false;
 }
 
+function scanIsDue(now: number, lastScanAt: number, intervalMs: number): boolean {
+  // Wall clocks can move backwards after NTP correction or VM resume. Treat
+  // that as immediately due instead of suppressing recovery until time catches up.
+  return lastScanAt === 0 || now < lastScanAt || now - lastScanAt >= intervalMs;
+}
+
 /**
  * One pass of the critical lane.
  *
@@ -86,6 +94,7 @@ export async function runCriticalEscalationCycle(
     fallbackProcessed: 0,
     reconciled: false,
     repairs: 0,
+    errors: [],
   };
 
   try {
@@ -98,25 +107,29 @@ export async function runCriticalEscalationCycle(
     result.jobsProcessed = jobs.processed;
     result.jobsFailed = jobs.failed;
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result.errors.push(`job batch: ${message}`);
     logger.error('escalation.worker.job_batch_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
     });
   }
 
-  if (now - lastFallbackScanAt >= FALLBACK_SCAN_INTERVAL_MS) {
+  if (scanIsDue(now, lastFallbackScanAt, FALLBACK_SCAN_INTERVAL_MS)) {
     lastFallbackScanAt = now;
     try {
       // Durable state, not the job row, decides what is owed.
       const fallback = await processPendingEscalations();
       result.fallbackProcessed = fallback.processed;
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.errors.push(`fallback scan: ${message}`);
       logger.error('escalation.worker.fallback_scan_failed', {
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       });
     }
   }
 
-  if (now - lastReconcileAt >= RECONCILE_INTERVAL_MS) {
+  if (scanIsDue(now, lastReconcileAt, RECONCILE_INTERVAL_MS)) {
     lastReconcileAt = now;
     try {
       const report = await reconcileEscalations();
@@ -126,9 +139,12 @@ export async function runCriticalEscalationCycle(
         report.dueJobsRecreated +
         report.staleJobsCancelled +
         report.leasesReleased;
+      result.errors.push(...report.errors.map(error => `reconciliation: ${error}`));
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.errors.push(`reconciliation: ${message}`);
       logger.error('escalation.worker.reconcile_failed', {
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       });
     }
   }
