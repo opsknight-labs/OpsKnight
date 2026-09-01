@@ -540,13 +540,18 @@ export async function applyIncidentLifecycleCommand(
     },
   });
 
-  if (input.command === 'SNOOZE' || input.command === 'SUPPRESS') {
-    const activePause = await tx.incidentSlaPause.findFirst({
+  const pauseStore = (
+    tx as Prisma.TransactionClient & {
+      incidentSlaPause?: Prisma.TransactionClient['incidentSlaPause'];
+    }
+  ).incidentSlaPause;
+  if (pauseStore && (input.command === 'SNOOZE' || input.command === 'SUPPRESS')) {
+    const activePause = await pauseStore.findFirst({
       where: { incidentId: input.incidentId, endedAt: null },
       select: { id: true },
     });
     if (!activePause) {
-      await tx.incidentSlaPause.create({
+      await pauseStore.create({
         data: {
           incidentId: input.incidentId,
           reason: input.snoozeReason?.trim() || input.command.toLowerCase(),
@@ -557,13 +562,14 @@ export async function applyIncidentLifecycleCommand(
       });
     }
   } else if (
-    input.command === 'UNSNOOZE' ||
-    input.command === 'UNSUPPRESS' ||
-    input.command === 'ACKNOWLEDGE' ||
-    input.command === 'RESOLVE' ||
-    input.command === 'REOPEN'
+    pauseStore &&
+    (input.command === 'UNSNOOZE' ||
+      input.command === 'UNSUPPRESS' ||
+      input.command === 'ACKNOWLEDGE' ||
+      input.command === 'RESOLVE' ||
+      input.command === 'REOPEN')
   ) {
-    await tx.incidentSlaPause.updateMany({
+    await pauseStore.updateMany({
       where: { incidentId: input.incidentId, endedAt: null },
       data: { endedAt: now },
     });

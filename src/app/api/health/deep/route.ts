@@ -5,6 +5,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { tokensMatch } from '@/app/api/metrics/route';
 import { getJobWorkerStatus } from '@/lib/job-worker';
 import { getCronSchedulerStatus } from '@/lib/cron-scheduler';
+import { jsonApiOk } from '@/lib/api-response';
 
 async function authorized(request: Request): Promise<boolean> {
   const token = process.env.PROMETHEUS_SCRAPE_TOKEN;
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
 
   const ageSeconds = (date: Date | null | undefined) =>
     date ? Math.max(0, (now - date.getTime()) / 1000) : null;
-  return NextResponse.json(
+  return jsonApiOk(
     {
       status: [queue, notifications, rollup].every(result => result.status === 'fulfilled')
         ? 'healthy'
