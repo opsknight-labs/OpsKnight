@@ -1,5 +1,11 @@
 'use server';
 
+import {
+  escalationTargetExists,
+  firstEscalationStepIssue,
+  validateEscalationStep,
+  type ValidatedEscalationStep,
+} from '@/lib/escalation/policy-validation';
 import prisma from '@/lib/prisma';
 import { NotificationChannel } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
@@ -85,16 +91,7 @@ export async function createPolicy(formData: FormData) {
   const description = formData.get('description') as string;
 
   // Parse escalation steps from form data
-  const steps: Array<{
-    targetType: 'USER' | 'TEAM' | 'SCHEDULE';
-    targetUserId?: string;
-    targetTeamId?: string;
-    targetScheduleId?: string;
-    delayMinutes: number;
-    stepOrder: number;
-    notificationChannels?: NotificationChannel[];
-    notifyOnlyTeamLead?: boolean;
-  }> = [];
+  const steps: Array<ValidatedEscalationStep & { stepOrder: number }> = [];
   let stepIndex = 0;
 
   while (true) {
@@ -108,34 +105,23 @@ export async function createPolicy(formData: FormData) {
     if (!targetValue) break;
 
     const [type, id] = (targetValue as string).split(':');
+    const targetType =
+      type === 'user' ? 'USER' : type === 'team' ? 'TEAM' : type === 'schedule' ? 'SCHEDULE' : null;
 
-    if (type === 'user') {
-      steps.push({
-        targetType: 'USER',
-        targetUserId: id,
-        delayMinutes: parseInt((delay as string) || '0'),
-        stepOrder: stepIndex,
-        notificationChannels: channels,
-        notifyOnlyTeamLead: false,
-      });
-    } else if (type === 'team') {
-      steps.push({
-        targetType: 'TEAM',
-        targetTeamId: id,
-        delayMinutes: parseInt((delay as string) || '0'),
-        stepOrder: stepIndex,
+    if (targetType) {
+      const validation = validateEscalationStep({
+        targetType,
+        targetUserId: targetType === 'USER' ? id : null,
+        targetTeamId: targetType === 'TEAM' ? id : null,
+        targetScheduleId: targetType === 'SCHEDULE' ? id : null,
+        delayMinutes: delay,
         notificationChannels: channels,
         notifyOnlyTeamLead,
       });
-    } else if (type === 'schedule') {
-      steps.push({
-        targetType: 'SCHEDULE',
-        targetScheduleId: id,
-        delayMinutes: parseInt((delay as string) || '0'),
-        stepOrder: stepIndex,
-        notificationChannels: channels,
-        notifyOnlyTeamLead: false,
-      });
+      if (!validation.valid) {
+        return { error: `Step ${stepIndex + 1}: ${firstEscalationStepIssue(validation.issues)}` };
+      }
+      steps.push({ ...validation.step, stepOrder: stepIndex });
     }
 
     stepIndex++;
@@ -279,30 +265,28 @@ export async function addPolicyStep(
     };
   }
 
-  const targetType = (formData.get('targetType') as 'USER' | 'TEAM' | 'SCHEDULE') || 'USER';
-  const targetUserId = formData.get('targetUserId') as string | null;
-  const targetTeamId = formData.get('targetTeamId') as string | null;
-  const targetScheduleId = formData.get('targetScheduleId') as string | null;
-  const delayMinutes = parseInt((formData.get('delayMinutes') as string) || '0');
-  const notificationChannels = formData.getAll('notificationChannels') as string[];
-  const notifyOnlyTeamLead = formData.get('notifyOnlyTeamLead') === 'true';
-
-  // Validate that appropriate target ID is provided
-  let targetId: string | null = null;
-  if (targetType === 'USER' && targetUserId) {
-    targetId = targetUserId;
-  } else if (targetType === 'TEAM' && targetTeamId) {
-    targetId = targetTeamId;
-  } else if (targetType === 'SCHEDULE' && targetScheduleId) {
-    targetId = targetScheduleId;
+  const validation = validateEscalationStep({
+    targetType: formData.get('targetType') ?? 'USER',
+    targetUserId: formData.get('targetUserId'),
+    targetTeamId: formData.get('targetTeamId'),
+    targetScheduleId: formData.get('targetScheduleId'),
+    delayMinutes: formData.get('delayMinutes'),
+    notificationChannels: formData.getAll('notificationChannels'),
+    notifyOnlyTeamLead: formData.get('notifyOnlyTeamLead') === 'true',
+  });
+  if (!validation.valid) {
+    return { error: firstEscalationStepIssue(validation.issues) };
   }
-
-  if (!targetId) {
-    return { error: `Target ${targetType} is required` };
-  }
+  const step = validation.step;
+  const targetType = step.targetType;
 
   try {
     const nextStepOrder = await prisma.$transaction(async tx => {
+      const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
+      if (!(await escalationTargetExists(tx, targetType, targetId))) {
+        throw new Error(`The selected ${targetType.toLowerCase()} no longer exists.`);
+      }
+
       const maxStep = await tx.escalationRule.findFirst({
         where: { policyId },
         orderBy: { stepOrder: 'desc' },
@@ -311,18 +295,7 @@ export async function addPolicyStep(
       const order = maxStep ? maxStep.stepOrder + 1 : 0;
 
       await tx.escalationRule.create({
-        data: {
-          policyId,
-          targetType,
-          targetUserId: targetType === 'USER' ? targetId : null,
-          targetTeamId: targetType === 'TEAM' ? targetId : null,
-          targetScheduleId: targetType === 'SCHEDULE' ? targetId : null,
-          delayMinutes,
-          stepOrder: order,
-          notificationChannels:
-            notificationChannels.length > 0 ? (notificationChannels as any[]) : [], // eslint-disable-line @typescript-eslint/no-explicit-any
-          notifyOnlyTeamLead: targetType === 'TEAM' ? notifyOnlyTeamLead : false,
-        },
+        data: { policyId, stepOrder: order, ...step },
       });
 
       return order;
@@ -355,71 +328,50 @@ export async function updatePolicyStep(
     };
   }
 
-  const targetType = (formData.get('targetType') as 'USER' | 'TEAM' | 'SCHEDULE') || undefined;
-  const targetUserId = formData.get('targetUserId') as string | null;
-  const targetTeamId = formData.get('targetTeamId') as string | null;
-  const targetScheduleId = formData.get('targetScheduleId') as string | null;
-  const delayMinutes = parseInt((formData.get('delayMinutes') as string) || '0');
-
-  // Get notification channels from form (checkboxes)
-  const notificationChannels = formData.getAll('notificationChannels') as string[];
-  // Default to empty array if none selected (will use user preferences)
-  const finalChannels = notificationChannels.length > 0 ? notificationChannels : [];
-
-  // Get notify only team lead option
-  const notifyOnlyTeamLead = formData.get('notifyOnlyTeamLead') === 'true';
-
-  const step = await prisma.escalationRule.findUnique({
+  const existing = await prisma.escalationRule.findUnique({
     where: { id: stepId },
     include: { policy: true },
   });
 
-  if (!step) {
+  if (!existing) {
     throw new Error('Escalation step not found');
   }
 
-  // Use existing targetType if not provided
-  const finalTargetType = targetType || step.targetType;
-
-  // Validate that appropriate target ID is provided
-  let targetId: string | null = null;
-  if (finalTargetType === 'USER') {
-    targetId = targetUserId || (step.targetType === 'USER' ? step.targetUserId : null);
-  } else if (finalTargetType === 'TEAM') {
-    targetId = targetTeamId || (step.targetType === 'TEAM' ? step.targetTeamId : null);
-  } else if (finalTargetType === 'SCHEDULE') {
-    targetId = targetScheduleId || (step.targetType === 'SCHEDULE' ? step.targetScheduleId : null);
+  // A partial edit keeps the step's current target type and id, so the merged
+  // step is validated as a whole rather than field by field.
+  const targetType = formData.get('targetType') ?? existing.targetType;
+  const validation = validateEscalationStep({
+    targetType,
+    targetUserId: formData.get('targetUserId') ?? existing.targetUserId,
+    targetTeamId: formData.get('targetTeamId') ?? existing.targetTeamId,
+    targetScheduleId: formData.get('targetScheduleId') ?? existing.targetScheduleId,
+    delayMinutes: formData.get('delayMinutes'),
+    notificationChannels: formData.getAll('notificationChannels'),
+    notifyOnlyTeamLead: formData.get('notifyOnlyTeamLead') === 'true',
+  });
+  if (!validation.valid) {
+    return { error: firstEscalationStepIssue(validation.issues) };
   }
-
-  if (!targetId) {
-    return { error: `Target ${finalTargetType} is required` };
-  }
-
-  const updateData: any = {
-    targetType: finalTargetType,
-    targetUserId: finalTargetType === 'USER' ? targetId : null,
-    targetTeamId: finalTargetType === 'TEAM' ? targetId : null,
-    targetScheduleId: finalTargetType === 'SCHEDULE' ? targetId : null,
-    delayMinutes,
-    notificationChannels: finalChannels as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
-    notifyOnlyTeamLead: finalTargetType === 'TEAM' ? notifyOnlyTeamLead : false,
-  };
+  const step = validation.step;
 
   try {
-    await prisma.escalationRule.update({
-      where: { id: stepId },
-      data: updateData,
+    await prisma.$transaction(async tx => {
+      const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
+      if (!(await escalationTargetExists(tx, step.targetType, targetId))) {
+        throw new Error(`The selected ${step.targetType.toLowerCase()} no longer exists.`);
+      }
+      await tx.escalationRule.update({ where: { id: stepId }, data: step });
     });
 
     await logAudit({
       action: 'escalation_policy.step_updated',
       entityType: 'ESCALATION_POLICY',
-      entityId: step.policyId,
+      entityId: existing.policyId,
       actorId: currentUser.id,
-      details: { stepId, stepOrder: step.stepOrder, targetType: finalTargetType },
+      details: { stepId, stepOrder: existing.stepOrder, targetType: step.targetType },
     });
 
-    revalidatePath(`/policies/${step.policyId}`);
+    revalidatePath(`/policies/${existing.policyId}`);
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to update escalation step' };
   }
