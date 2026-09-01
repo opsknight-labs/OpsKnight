@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 
 const dashboardVisibilities = new Set(['PRIVATE', 'TEAM', 'PUBLIC']);
@@ -15,39 +14,30 @@ export const dynamic = 'force-dynamic';
  * POST: Create a new dashboard (optionally from template)
  */
 
+async function getDashboardActor() {
+  const user = await getCurrentUser();
+  const memberships = await prisma.teamMember.findMany({
+    where: { userId: user.id },
+    select: { teamId: true },
+  });
+  return { user, teamIds: memberships.map(membership => membership.teamId) };
+}
+
 // GET: List dashboards
 export async function GET() {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, teamIds } = await getDashboardActor();
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, teamMemberships: { select: { teamId: true } } },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    const teamIds = user.teamMemberships.map(m => m.teamId);
-
-    // Fetch user's own dashboards, team dashboards, and templates
-    // Apply reasonable limits to prevent memory exhaustion
     const MAX_DASHBOARDS_PER_QUERY = 100;
     const MAX_WIDGETS_PER_DASHBOARD = 50;
 
     const [userDashboards, teamDashboards, publicDashboards] = await Promise.all([
-      // User's private dashboards
       prisma.dashboard.findMany({
         where: { userId: user.id, isTemplate: false },
         include: { widgets: { orderBy: { createdAt: 'asc' }, take: MAX_WIDGETS_PER_DASHBOARD } },
         orderBy: { updatedAt: 'desc' },
         take: MAX_DASHBOARDS_PER_QUERY,
       }),
-      // Team shared dashboards
       prisma.dashboard.findMany({
         where: {
           visibility: 'TEAM',
@@ -61,7 +51,6 @@ export async function GET() {
         orderBy: { updatedAt: 'desc' },
         take: MAX_DASHBOARDS_PER_QUERY,
       }),
-      // Public templates and dashboards
       prisma.dashboard.findMany({
         where: {
           OR: [{ isTemplate: true }, { visibility: 'PUBLIC' }],
@@ -75,7 +64,6 @@ export async function GET() {
       }),
     ]);
 
-    // Separate templates from public dashboards
     const templates = publicDashboards.filter(d => d.isTemplate);
     const publicShared = publicDashboards.filter(d => !d.isTemplate && d.visibility === 'PUBLIC');
 
@@ -87,6 +75,8 @@ export async function GET() {
       templates,
     });
   } catch (error) {
+    const unauthorized = error instanceof Error && error.message.includes('Unauthorized');
+    if (unauthorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     logger.error('api.dashboards.get.error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -97,27 +87,14 @@ export async function GET() {
 // POST: Create dashboard
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, teamMemberships: { select: { teamId: true } } },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
+    const { user, teamIds: teamIdList } = await getDashboardActor();
     const body = await request.json();
     const { name, description, templateId, visibility = 'PRIVATE', teamId, widgets = [] } = body;
 
     if (!name || typeof name !== 'string' || !dashboardVisibilities.has(visibility)) {
       return NextResponse.json({ error: 'Invalid dashboard configuration' }, { status: 400 });
     }
-    const teamIds = new Set(user.teamMemberships.map(membership => membership.teamId));
+    const teamIds = new Set(teamIdList);
     if (
       (visibility === 'TEAM' && (typeof teamId !== 'string' || !teamIds.has(teamId))) ||
       (visibility !== 'TEAM' && teamId !== undefined && teamId !== null)
@@ -125,7 +102,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid team dashboard configuration' }, { status: 403 });
     }
 
-    // If creating from template, clone the template's widgets
     let widgetsToCreate = widgets;
     if (templateId) {
       const template = await prisma.dashboard.findUnique({
@@ -173,6 +149,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, dashboard }, { status: 201 });
   } catch (error) {
+    const unauthorized = error instanceof Error && error.message.includes('Unauthorized');
+    if (unauthorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     logger.error('api.dashboards.post.error', {
       error: error instanceof Error ? error.message : String(error),
     });
