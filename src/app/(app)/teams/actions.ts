@@ -10,6 +10,7 @@ import { assertTeamNameAvailable, UniqueNameConflictError } from '@/lib/unique-n
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import type { TeamRole } from '@prisma/client';
 
 type TeamFormState = {
   error?: string | null;
@@ -205,10 +206,13 @@ export async function addTeamMember(teamId: string, formData: FormData) {
     };
   }
   const userId = formData.get('userId') as string;
-  const role = (formData.get('role') as string) || 'MEMBER';
+  const requestedRole = (formData.get('role') as string) || 'MEMBER';
 
   if (!userId) return;
-  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) return { error: 'Invalid team role.' };
+  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(requestedRole)) {
+    return { error: 'Invalid team role.' };
+  }
+  const role = requestedRole as TeamRole;
 
   await prisma.$transaction(
     async tx => {
@@ -254,7 +258,7 @@ export async function updateTeamMemberRole(
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
   let currentUser;
-  const role = (formData.get('role') as string) || 'MEMBER';
+  const requestedRole = (formData.get('role') as string) || 'MEMBER';
 
   const member = await prisma.teamMember.findUnique({
     where: { id: memberId },
@@ -272,7 +276,10 @@ export async function updateTeamMemberRole(
     };
   }
 
-  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) return { error: 'Invalid team role.' };
+  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(requestedRole)) {
+    return { error: 'Invalid team role.' };
+  }
+  const role = requestedRole as TeamRole;
 
   try {
     await runSerializableTransaction(async tx => {
@@ -295,7 +302,7 @@ export async function updateTeamMemberRole(
       }
       await tx.teamMember.update({
         where: { id: memberId },
-        data: { role: role as any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+        data: { role },
       });
       await tx.user.update({
         where: { id: currentMember.userId },
