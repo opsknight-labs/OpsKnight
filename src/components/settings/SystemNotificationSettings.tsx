@@ -285,10 +285,31 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
         const matchingConfigs = providerConfigs.filter(cfg => category.keys.includes(cfg.key));
         if (matchingConfigs.length === 0) return null;
 
+        const activeCount = matchingConfigs.filter(cfg => {
+          if (cfg.key === 'whatsapp') return whatsappEnabled;
+          return providerMap.get(cfg.key)?.enabled ?? false;
+        }).length;
+        const totalCount = matchingConfigs.length;
+
+        const sectionTitle = (
+          <span className="flex items-center gap-2">
+            {category.title}
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+                activeCount > 0
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                  : 'bg-muted text-muted-foreground border-border/80'
+              }`}
+            >
+              {activeCount}/{totalCount} active
+            </span>
+          </span>
+        );
+
         return (
           <SettingsSection
             key={category.title}
-            title={category.title}
+            title={sectionTitle as unknown as string}
             description={category.description}
           >
             <div className="py-4 grid grid-cols-1 gap-3.5">

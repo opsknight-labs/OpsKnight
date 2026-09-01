@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  Copy,
   XCircle,
   Loader2,
   Eye,
@@ -30,6 +31,8 @@ import {
   ShieldCheck,
   Sparkles,
   Save,
+  FlaskConical,
+  AlertOctagon,
 } from 'lucide-react';
 import type { ProviderRecord, ProviderConfigSchema, SaveStatus } from '@/types/notification-types';
 import { notify as toast } from '@/lib/toast';
@@ -72,6 +75,8 @@ export default function ProviderCard({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateNotice, setGenerateNotice] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   const hasRequiredConfig =
     Object.keys(config).length > 0 &&
@@ -265,6 +270,44 @@ export default function ProviderCard({
 
   const isConfigured = hasRequiredConfig;
 
+  const credentialAgeDays = existing?.updatedAt
+    ? Math.floor((Date.now() - new Date(existing.updatedAt).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  const handleTest = async () => {
+    setIsTesting(true);
+    setTestStatus('idle');
+    try {
+      const response = await fetch(
+        `/api/admin/notifications/providers/${providerConfig.key}/test`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+      if (response.ok) {
+        setTestStatus('success');
+        toast.success(`Test message sent via ${providerConfig.name}`);
+      } else {
+        const body = (await response.json()) as { error?: string };
+        throw new Error(body.error || 'Test failed');
+      }
+    } catch (err) {
+      setTestStatus('error');
+      toast.error(err instanceof Error ? err.message : 'Test delivery failed');
+    } finally {
+      setIsTesting(false);
+      setTimeout(() => setTestStatus('idle'), 4000);
+    }
+  };
+
+  const copyVapid = async () => {
+    const key = typeof config.vapidPublicKey === 'string' ? config.vapidPublicKey : '';
+    if (!key) return;
+    await navigator.clipboard.writeText(key);
+    toast.success('VAPID public key copied to clipboard');
+  };
+
   return (
     <Card className="border-border/80 shadow-xs bg-card overflow-hidden">
       <CardHeader className="p-4 sm:p-5">
@@ -335,6 +378,39 @@ export default function ProviderCard({
                 </>
               )}
             </Button>
+            {enabled && isConfigured && (
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => void handleTest()}
+                disabled={isTesting}
+                className={`text-xs font-semibold h-8 gap-1.5 ${
+                  testStatus === 'success'
+                    ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
+                    : testStatus === 'error'
+                      ? 'border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10'
+                      : 'border-border/80 hover:bg-accent'
+                }`}
+              >
+                {isTesting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : testStatus === 'success' ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                ) : testStatus === 'error' ? (
+                  <AlertOctagon className="h-3.5 w-3.5" />
+                ) : (
+                  <FlaskConical className="h-3.5 w-3.5" />
+                )}
+                {isTesting
+                  ? 'Testing...'
+                  : testStatus === 'success'
+                    ? 'Sent!'
+                    : testStatus === 'error'
+                      ? 'Failed'
+                      : 'Send Test'}
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -512,15 +588,33 @@ export default function ProviderCard({
 
       {existing && !isExpanded && (
         <CardContent className="px-4 sm:px-5 pb-4 pt-0">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40 pt-2.5">
-            <span className="flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3 text-emerald-500" />
-              Encrypted credentials stored securely
-            </span>
-            <span>
-              Last modified:{' '}
-              {formatDateTime(existing.updatedAt, userTimeZone, { format: 'datetime' })}
-            </span>
+          <div className="flex flex-col gap-1.5 border-t border-border/40 pt-2.5">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3 text-emerald-500" />
+                Encrypted credentials stored securely
+              </span>
+              <span>
+                Last modified:{' '}
+                {formatDateTime(existing.updatedAt, userTimeZone, { format: 'datetime' })}
+              </span>
+            </div>
+            {credentialAgeDays !== null && credentialAgeDays > 90 && (
+              <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-1">
+                <AlertOctagon className="h-3 w-3 shrink-0" />
+                Credentials are {credentialAgeDays} days old — consider rotating for security.
+              </div>
+            )}
+            {isWebPush && typeof config.vapidPublicKey === 'string' && config.vapidPublicKey && (
+              <button
+                type="button"
+                onClick={() => void copyVapid()}
+                className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors mt-0.5 w-fit"
+              >
+                <Copy className="h-3 w-3" />
+                Copy VAPID public key
+              </button>
+            )}
           </div>
         </CardContent>
       )}

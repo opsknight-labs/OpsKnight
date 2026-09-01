@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  ArrowUpDown,
   CheckCircle2,
   Clock3,
+  Download,
   Loader2,
   RefreshCw,
   RotateCcw,
@@ -138,6 +140,9 @@ export default function NotificationOperations({ canRetry }: Props) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [bulkRetrying, setBulkRetrying] = useState(false);
   const requestSequence = useRef(0);
 
   useEffect(() => {
@@ -229,6 +234,122 @@ export default function NotificationOperations({ canRetry }: Props) {
       setStatus('all');
     } else {
       setStatus(targetStatus);
+    }
+  };
+
+  const applyDatePreset = (preset: 'today' | '7d' | '30d') => {
+    const today = new Date();
+    const toStr = today.toISOString().slice(0, 10);
+    let fromStr = toStr;
+    if (preset === '7d') {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 6);
+      fromStr = d.toISOString().slice(0, 10);
+    } else if (preset === '30d') {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 29);
+      fromStr = d.toISOString().slice(0, 10);
+    }
+    if (from === fromStr && to === toStr) {
+      setFrom('');
+      setTo('');
+    } else {
+      setFrom(fromStr);
+      setTo(toStr);
+    }
+  };
+
+  const sortedRows = [...rows].sort((a, b) => {
+    let av: string | number = '';
+    let bv: string | number = '';
+    if (sortBy === 'createdAt') {
+      av = a.createdAt || '';
+      bv = b.createdAt || '';
+    } else if (sortBy === 'channel') {
+      av = a.channel;
+      bv = b.channel;
+    } else if (sortBy === 'status') {
+      av = a.status;
+      bv = b.status;
+    } else if (sortBy === 'attempts') {
+      av = a.attempts;
+      bv = b.attempts;
+    }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const bulkRetry = async () => {
+    const failedRows = rows.filter(r => r.status === 'FAILED');
+    if (failedRows.length === 0) return;
+    setBulkRetrying(true);
+    setError('');
+    try {
+      await Promise.all(
+        failedRows.map(r =>
+          fetch(`/api/admin/notifications/operations/${r.id}/retry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      );
+      await fetchOperations();
+    } catch {
+      setError('One or more retries failed. Check individual rows.');
+    } finally {
+      setBulkRetrying(false);
+    }
+  };
+
+  const exportCsv = () => {
+    const headers = [
+      'ID',
+      'Channel',
+      'Status',
+      'Category',
+      'Template',
+      'Destination',
+      'Source',
+      'Attempts',
+      'Latency(ms)',
+      'Timestamp',
+      'Error',
+    ];
+    const csvRows = [
+      headers,
+      ...rows.map(r => [
+        r.id,
+        r.channel,
+        r.status,
+        r.category,
+        r.templateKey || '',
+        r.recipientDisplay || '',
+        r.incident?.title || r.sourceType || '',
+        r.attempts,
+        r.lastAttempt?.latencyMs ?? '',
+        r.createdAt,
+        r.errorMsg || '',
+      ]),
+    ];
+    const csv = csvRows
+      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `notification-operations-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const toggleSort = (col: string) => {
+    if (sortBy === col) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(col);
+      setSortDir('desc');
     }
   };
 
@@ -374,7 +495,33 @@ export default function NotificationOperations({ canRetry }: Props) {
               </CardDescription>
             </div>
 
-            <div className="flex items-center gap-2 self-end lg:self-auto">
+            <div className="flex items-center gap-2 self-end lg:self-auto flex-wrap">
+              {canRetry && status === 'FAILED' && rows.some(r => r.status === 'FAILED') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void bulkRetry()}
+                  disabled={bulkRetrying}
+                  className="text-xs font-semibold h-8 gap-1.5 border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                >
+                  {bulkRetrying ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  )}
+                  Retry All Failed
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportCsv}
+                disabled={rows.length === 0}
+                className="text-xs font-semibold h-8 gap-1.5 border-border/80 hover:bg-accent"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -458,23 +605,54 @@ export default function NotificationOperations({ canRetry }: Props) {
               </SelectContent>
             </Select>
 
-            <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-1">
-              <Input
-                aria-label="From date"
-                type="date"
-                className="text-xs h-8 bg-background border-border/80 w-1/2"
-                value={from}
-                onChange={event => setFrom(event.target.value)}
-                placeholder="From"
-              />
-              <Input
-                aria-label="To date"
-                type="date"
-                className="text-xs h-8 bg-background border-border/80 w-1/2"
-                value={to}
-                onChange={event => setTo(event.target.value)}
-                placeholder="To"
-              />
+            <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
+              <div className="flex items-center gap-1">
+                {(['today', '7d', '30d'] as const).map(preset => {
+                  const todayStr = new Date().toISOString().slice(0, 10);
+                  const labels = { today: 'Today', '7d': 'Last 7d', '30d': 'Last 30d' } as const;
+                  let expectedFrom = todayStr;
+                  if (preset === '7d') {
+                    const d = new Date();
+                    d.setDate(d.getDate() - 6);
+                    expectedFrom = d.toISOString().slice(0, 10);
+                  } else if (preset === '30d') {
+                    const d = new Date();
+                    d.setDate(d.getDate() - 29);
+                    expectedFrom = d.toISOString().slice(0, 10);
+                  }
+                  const isActive = from === expectedFrom && to === todayStr;
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => applyDatePreset(preset)}
+                      className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
+                        isActive
+                          ? 'bg-primary/10 border-primary/40 text-primary'
+                          : 'bg-background border-border/80 text-muted-foreground hover:text-foreground hover:border-border'
+                      }`}
+                    >
+                      {labels[preset]}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  aria-label="From date"
+                  type="date"
+                  className="text-xs h-8 bg-background border-border/80 w-1/2"
+                  value={from}
+                  onChange={event => setFrom(event.target.value)}
+                />
+                <Input
+                  aria-label="To date"
+                  type="date"
+                  className="text-xs h-8 bg-background border-border/80 w-1/2"
+                  value={to}
+                  onChange={event => setTo(event.target.value)}
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -494,9 +672,23 @@ export default function NotificationOperations({ canRetry }: Props) {
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-border/60 hover:bg-transparent bg-muted/30">
-                  <TableHead className="text-xs font-bold text-foreground py-3">Status</TableHead>
                   <TableHead className="text-xs font-bold text-foreground py-3">
-                    Channel & Category
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('status')}
+                      className="inline-flex items-center gap-1 hover:text-primary transition-colors"
+                    >
+                      Status <ArrowUpDown className="h-3 w-3" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-xs font-bold text-foreground py-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('channel')}
+                      className="inline-flex items-center gap-1 hover:text-primary transition-colors"
+                    >
+                      Channel & Category <ArrowUpDown className="h-3 w-3" />
+                    </button>
                   </TableHead>
                   <TableHead className="text-xs font-bold text-foreground py-3">
                     Masked Destination
@@ -505,10 +697,22 @@ export default function NotificationOperations({ canRetry }: Props) {
                     Trigger Source
                   </TableHead>
                   <TableHead className="text-xs font-bold text-foreground py-3">
-                    Attempts & Latency
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('attempts')}
+                      className="inline-flex items-center gap-1 hover:text-primary transition-colors"
+                    >
+                      Attempts & Latency <ArrowUpDown className="h-3 w-3" />
+                    </button>
                   </TableHead>
                   <TableHead className="text-xs font-bold text-foreground py-3">
-                    Timestamp
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('createdAt')}
+                      className="inline-flex items-center gap-1 hover:text-primary transition-colors"
+                    >
+                      Timestamp <ArrowUpDown className="h-3 w-3" />
+                    </button>
                   </TableHead>
                   {canRetry && (
                     <TableHead className="text-xs font-bold text-foreground py-3 text-right">
@@ -544,7 +748,7 @@ export default function NotificationOperations({ canRetry }: Props) {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  rows.map(row => {
+                  sortedRows.map(row => {
                     const isDelivered = row.status === 'SENT' || row.status === 'DELIVERED';
                     const isPending = row.status === 'PENDING';
                     const isFailed = row.status === 'FAILED';

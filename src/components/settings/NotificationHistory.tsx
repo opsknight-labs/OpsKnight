@@ -32,7 +32,10 @@ import {
   RefreshCw,
   Search,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock3,
+  Download,
   XCircle,
   MinusCircle,
   Activity,
@@ -73,6 +76,8 @@ type Notification = {
 
 export default function NotificationHistory() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -191,6 +196,68 @@ export default function NotificationHistory() {
       setFilterStatus(targetStatus);
     }
     setOffset(0);
+  };
+
+  const applyDatePreset = (preset: 'today' | '7d' | '30d') => {
+    if (datePreset === preset) {
+      setDatePreset(null);
+      setFromDate('');
+      setToDate('');
+      setOffset(0);
+      return;
+    }
+    const today = new Date();
+    const toStr = today.toISOString().slice(0, 10);
+    let fromStr = toStr;
+    if (preset === '7d') {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 6);
+      fromStr = d.toISOString().slice(0, 10);
+    } else if (preset === '30d') {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 29);
+      fromStr = d.toISOString().slice(0, 10);
+    }
+    setDatePreset(preset);
+    setFromDate(fromStr);
+    setToDate(toStr);
+    setOffset(0);
+  };
+
+  const exportCsv = () => {
+    const headers = [
+      'ID',
+      'Channel',
+      'Status',
+      'Incident',
+      'Attempts',
+      'Latency(ms)',
+      'Dispatched At',
+      'Error',
+    ];
+    const csvRows = [
+      headers,
+      ...notifications.map(n => [
+        n.id,
+        n.channel,
+        n.status,
+        n.incident?.title || 'General Alert',
+        n.attempts,
+        n.latencyMs ?? '',
+        n.deliveredAt || n.sentAt || n.failedAt || n.createdAt,
+        n.errorMsg || '',
+      ]),
+    ];
+    const csv = csvRows
+      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `my-notification-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const getStatusBadge = (status: string) => {
@@ -394,7 +461,17 @@ export default function NotificationHistory() {
               </CardDescription>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportCsv}
+                disabled={notifications.length === 0}
+                className="h-8 text-xs font-semibold gap-1.5 border-border/80 hover:bg-accent"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -415,6 +492,7 @@ export default function NotificationHistory() {
                     setDebouncedQuery('');
                     setFromDate('');
                     setToDate('');
+                    setDatePreset(null);
                     setFilterChannel('all');
                     setFilterStatus('all');
                     setOffset(0);
@@ -480,27 +558,48 @@ export default function NotificationHistory() {
               </SelectContent>
             </Select>
 
-            <Input
-              type="date"
-              value={fromDate}
-              onChange={event => {
-                setFromDate(event.target.value);
-                setOffset(0);
-              }}
-              className="h-8 text-xs bg-background"
-              aria-label="Start date"
-            />
-
-            <Input
-              type="date"
-              value={toDate}
-              onChange={event => {
-                setToDate(event.target.value);
-                setOffset(0);
-              }}
-              className="h-8 text-xs bg-background"
-              aria-label="End date"
-            />
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1">
+                {(['today', '7d', '30d'] as const).map(preset => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => applyDatePreset(preset)}
+                    className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
+                      datePreset === preset
+                        ? 'bg-primary/10 border-primary/40 text-primary'
+                        : 'bg-background border-border/80 text-muted-foreground hover:text-foreground hover:border-border'
+                    }`}
+                  >
+                    {{ today: 'Today', '7d': 'Last 7d', '30d': 'Last 30d' }[preset]}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="date"
+                  value={fromDate}
+                  onChange={event => {
+                    setFromDate(event.target.value);
+                    setDatePreset(null);
+                    setOffset(0);
+                  }}
+                  className="h-8 text-xs bg-background w-1/2"
+                  aria-label="Start date"
+                />
+                <Input
+                  type="date"
+                  value={toDate}
+                  onChange={event => {
+                    setToDate(event.target.value);
+                    setDatePreset(null);
+                    setOffset(0);
+                  }}
+                  className="h-8 text-xs bg-background w-1/2"
+                  aria-label="End date"
+                />
+              </div>
+            </div>
           </div>
         </CardHeader>
 
@@ -529,18 +628,79 @@ export default function NotificationHistory() {
             </div>
           ) : notifications.length === 0 ? (
             <div className="py-16 text-center">
-              <Activity className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-              <h3 className="text-sm font-bold text-foreground">No notification history records</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                No outbound alerts match your active filters or time range.
-              </p>
+              <Activity className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+              {hasActiveFilters ? (
+                <>
+                  <h3 className="text-sm font-bold text-foreground">
+                    No records match your filters
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                    Try adjusting your search query, channel, status, or date range.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-sm font-bold text-foreground">No notification history yet</h3>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                    You haven&apos;t received any notifications yet. Alerts are dispatched when
+                    you&apos;re on-call or assigned to an active incident.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <>
+              {/* Channel breakdown bar */}
+              {(() => {
+                const channelCounts: Record<string, number> = {};
+                for (const n of notifications) {
+                  channelCounts[n.channel] = (channelCounts[n.channel] || 0) + 1;
+                }
+                const channelTotal = notifications.length;
+                const colors: Record<string, string> = {
+                  EMAIL: 'bg-blue-500',
+                  SMS: 'bg-red-500',
+                  PUSH: 'bg-violet-500',
+                  WHATSAPP: 'bg-emerald-500',
+                  SLACK: 'bg-amber-500',
+                  WEBHOOK: 'bg-orange-500',
+                };
+                return (
+                  <div className="px-4 sm:px-5 py-2.5 border-b border-border/40 bg-muted/10">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-1.5 flex-1 rounded-full overflow-hidden gap-px">
+                        {Object.entries(channelCounts).map(([ch, count]) => (
+                          <div
+                            key={ch}
+                            className={`${colors[ch] || 'bg-muted-foreground'} h-full`}
+                            style={{ width: `${(count / channelTotal) * 100}%` }}
+                            title={`${ch}: ${count}`}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        {Object.entries(channelCounts).map(([ch, count]) => (
+                          <span
+                            key={ch}
+                            className="flex items-center gap-1 text-[10px] text-muted-foreground"
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${colors[ch] || 'bg-muted-foreground'}`}
+                            />
+                            {ch} {Math.round((count / channelTotal) * 100)}%
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-border/60 bg-muted/10 hover:bg-muted/10">
+                      <TableHead className="w-6 py-3" />
                       <TableHead className="text-xs font-bold text-foreground py-3">
                         Status
                       </TableHead>
@@ -563,78 +723,162 @@ export default function NotificationHistory() {
                   </TableHeader>
                   <TableBody>
                     {notifications.map(notification => (
-                      <TableRow
-                        key={notification.id}
-                        className="border-b border-border/40 hover:bg-muted/30"
-                      >
-                        <TableCell className="py-2.5">
-                          {getStatusBadge(notification.status)}
-                        </TableCell>
+                      <>
+                        <TableRow
+                          key={notification.id}
+                          className="border-b border-border/40 hover:bg-muted/30 cursor-pointer"
+                          onClick={() =>
+                            setExpandedId(expandedId === notification.id ? null : notification.id)
+                          }
+                        >
+                          <TableCell className="py-2.5 pr-0 pl-3 w-6">
+                            {expandedId === notification.id ? (
+                              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2.5">
+                            {getStatusBadge(notification.status)}
+                          </TableCell>
 
-                        <TableCell className="py-2.5">
-                          <div className="flex items-center gap-1.5">
-                            {getChannelIcon(notification.channel)}
-                            <span className="text-xs font-bold text-foreground">
-                              {notification.channel}
-                            </span>
-                          </div>
-                        </TableCell>
-
-                        <TableCell className="py-2.5">
-                          {notification.incident ? (
-                            <Link
-                              href={`/incidents/${notification.incident.id}`}
-                              className="text-xs font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-1 max-w-xs truncate"
-                            >
-                              <span className="truncate">{notification.incident.title}</span>
-                              <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
-                            </Link>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">General Alert</span>
-                          )}
-                        </TableCell>
-
-                        <TableCell className="py-2.5">
-                          <div className="text-xs font-mono tabular-nums font-semibold text-foreground">
-                            {notification.attempts} attempt{notification.attempts === 1 ? '' : 's'}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground font-mono">
-                            {notification.latencyMs !== null
-                              ? `${formatDuration(notification.latencyMs)} latency`
-                              : notification.pendingForMs !== null
-                                ? `Pending ${formatDuration(notification.pendingForMs)}`
-                                : '-'}
-                          </div>
-                        </TableCell>
-
-                        <TableCell className="whitespace-nowrap text-xs py-2.5 text-muted-foreground">
-                          <div>
-                            {notification.deliveredAt ||
-                              notification.sentAt ||
-                              notification.failedAt ||
-                              notification.createdAt}
-                          </div>
-                        </TableCell>
-
-                        <TableCell className="py-2.5 max-w-sm">
-                          {notification.errorMsg ? (
-                            <div
-                              className="truncate text-[11px] text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 flex items-center gap-1"
-                              title={notification.errorMsg}
-                            >
-                              <AlertTriangle className="h-3 w-3 shrink-0 text-rose-500" />
-                              <span className="truncate">{notification.errorMsg}</span>
+                          <TableCell className="py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              {getChannelIcon(notification.channel)}
+                              <span className="text-xs font-bold text-foreground">
+                                {notification.channel}
+                              </span>
                             </div>
-                          ) : (
-                            <div
-                              className="text-xs text-muted-foreground truncate"
-                              title={notification.message || ''}
-                            >
-                              {notification.message || '-'}
+                          </TableCell>
+
+                          <TableCell className="py-2.5">
+                            {notification.incident ? (
+                              <Link
+                                href={`/incidents/${notification.incident.id}`}
+                                className="text-xs font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-1 max-w-xs truncate"
+                              >
+                                <span className="truncate">{notification.incident.title}</span>
+                                <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
+                              </Link>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">General Alert</span>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="py-2.5">
+                            <div className="text-xs font-mono tabular-nums font-semibold text-foreground">
+                              {notification.attempts} attempt
+                              {notification.attempts === 1 ? '' : 's'}
                             </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                            <div className="text-[10px] text-muted-foreground font-mono">
+                              {notification.latencyMs !== null
+                                ? `${formatDuration(notification.latencyMs)} latency`
+                                : notification.pendingForMs !== null
+                                  ? `Pending ${formatDuration(notification.pendingForMs)}`
+                                  : '-'}
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="whitespace-nowrap text-xs py-2.5 text-muted-foreground">
+                            <div>
+                              {notification.deliveredAt ||
+                                notification.sentAt ||
+                                notification.failedAt ||
+                                notification.createdAt}
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="py-2.5 max-w-sm">
+                            {notification.errorMsg ? (
+                              <div
+                                className="truncate text-[11px] text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 flex items-center gap-1"
+                                title={notification.errorMsg}
+                              >
+                                <AlertTriangle className="h-3 w-3 shrink-0 text-rose-500" />
+                                <span className="truncate">{notification.errorMsg}</span>
+                              </div>
+                            ) : (
+                              <div
+                                className="text-xs text-muted-foreground truncate"
+                                title={notification.message || ''}
+                              >
+                                {notification.message || '-'}
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                        {expandedId === notification.id && (
+                          <TableRow className="bg-muted/20 border-b border-border/40">
+                            <TableCell colSpan={7} className="py-3 px-5">
+                              <div className="space-y-2 text-xs">
+                                {notification.errorMsg && (
+                                  <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-3">
+                                    <p className="font-semibold text-rose-600 dark:text-rose-400 mb-1 flex items-center gap-1">
+                                      <AlertTriangle className="h-3.5 w-3.5" /> Error Detail
+                                    </p>
+                                    <p className="font-mono text-[11px] text-rose-700 dark:text-rose-300 break-all">
+                                      {notification.errorMsg}
+                                    </p>
+                                  </div>
+                                )}
+                                {notification.message && (
+                                  <div className="rounded-lg bg-muted/40 border border-border/60 p-3">
+                                    <p className="font-semibold text-foreground mb-1">
+                                      Message Preview
+                                    </p>
+                                    <p className="text-muted-foreground break-all font-mono text-[11px]">
+                                      {notification.message}
+                                    </p>
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground pt-1">
+                                  <span>
+                                    Attempts:{' '}
+                                    <strong className="text-foreground">
+                                      {notification.attempts}
+                                    </strong>
+                                  </span>
+                                  {notification.latencyMs !== null && (
+                                    <span>
+                                      Latency:{' '}
+                                      <strong className="text-foreground">
+                                        {notification.latencyMs}ms
+                                      </strong>
+                                    </span>
+                                  )}
+                                  {notification.deliveredAt && (
+                                    <span>
+                                      Delivered:{' '}
+                                      <strong className="text-foreground">
+                                        {notification.deliveredAt}
+                                      </strong>
+                                    </span>
+                                  )}
+                                  {notification.failedAt && (
+                                    <span>
+                                      Failed at:{' '}
+                                      <strong className="text-foreground">
+                                        {notification.failedAt}
+                                      </strong>
+                                    </span>
+                                  )}
+                                  {notification.incident && (
+                                    <span>
+                                      Incident:{' '}
+                                      <Link
+                                        href={`/incidents/${notification.incident.id}`}
+                                        className="text-primary hover:underline font-semibold"
+                                      >
+                                        {notification.incident.title}
+                                      </Link>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
                     ))}
                   </TableBody>
                 </Table>
