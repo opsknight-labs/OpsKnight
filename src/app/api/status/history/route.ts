@@ -3,8 +3,7 @@ import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/rbac';
 import { getReportingWindowForDays } from '@/lib/retention-policy';
 import {
   publicStatusVisibility,
@@ -60,14 +59,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (statusPage.requireAuth) {
-      const session = await getServerSession(await getAuthOptions());
-      if (!session) {
+      try {
+        await getCurrentUser();
+      } catch {
         return jsonError('Authentication required', 401);
       }
     }
 
     const visibility = publicStatusVisibility(statusPage);
-
     const serviceIds = statusPage.services.filter(sp => sp.showOnPage).map(sp => sp.serviceId);
 
     if (serviceId && !serviceIds.includes(serviceId)) {
@@ -111,7 +110,6 @@ export async function GET(req: NextRequest) {
           days,
           startDate: window.start.toISOString(),
           endDate: window.end.toISOString(),
-          // Retention info
           effectiveStart: metrics.effectiveStart.toISOString(),
           effectiveEnd: metrics.effectiveEnd.toISOString(),
           isClipped: window.isClipped || metrics.isClipped,
