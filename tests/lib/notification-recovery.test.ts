@@ -98,6 +98,7 @@ describe('runCriticalNotificationCycle', () => {
     await expect(runCriticalNotificationCycle({ now: T0 })).resolves.toMatchObject({
       centralProcessed: 0,
       legacyRetried: 0,
+      errors: ['central queue: control plane down', 'legacy retry: sweeper down'],
     });
   });
 
@@ -108,5 +109,13 @@ describe('runCriticalNotificationCycle', () => {
     await runCriticalNotificationCycle({ now: T0 + 500 });
 
     expect(mocks.processCentralNotificationQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('rescans immediately when the wall clock moves backwards', async () => {
+    await runCriticalNotificationCycle({ now: T0 });
+    await runCriticalNotificationCycle({ now: T0 - 60_000 });
+
+    expect(mocks.processCentralNotificationQueue).toHaveBeenCalledTimes(2);
+    expect(mocks.retryFailedNotifications).toHaveBeenCalledTimes(2);
   });
 });

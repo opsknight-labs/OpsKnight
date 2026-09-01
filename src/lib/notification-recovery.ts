@@ -48,6 +48,8 @@ export interface CriticalNotificationCycleResult {
   /** Whether each scan ran, so an idle lane is distinguishable from a skipped one. */
   scannedCentral: boolean;
   scannedLegacy: boolean;
+  /** Failures that degraded this cycle without stopping the worker loop. */
+  errors: string[];
 }
 
 let lastCentralScanAt = 0;
@@ -68,7 +70,12 @@ function emptyResult(): CriticalNotificationCycleResult {
     legacySucceeded: 0,
     scannedCentral: false,
     scannedLegacy: false,
+    errors: [],
   };
+}
+
+function scanIsDue(now: number, lastScanAt: number, intervalMs: number): boolean {
+  return lastScanAt === 0 || now < lastScanAt || now - lastScanAt >= intervalMs;
 }
 
 /**
@@ -81,7 +88,7 @@ export async function runCriticalNotificationCycle(
   const now = options.now ?? Date.now();
   const result = emptyResult();
 
-  if (now - lastCentralScanAt >= CENTRAL_QUEUE_INTERVAL_MS) {
+  if (scanIsDue(now, lastCentralScanAt, CENTRAL_QUEUE_INTERVAL_MS)) {
     lastCentralScanAt = now;
     result.scannedCentral = true;
     try {
@@ -91,13 +98,15 @@ export async function runCriticalNotificationCycle(
       result.centralSucceeded = central.succeeded;
       result.centralFailed = central.failed;
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.errors.push(`central queue: ${message}`);
       logger.error('notification.worker.central_queue_failed', {
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       });
     }
   }
 
-  if (now - lastLegacyScanAt >= LEGACY_RETRY_INTERVAL_MS) {
+  if (scanIsDue(now, lastLegacyScanAt, LEGACY_RETRY_INTERVAL_MS)) {
     lastLegacyScanAt = now;
     result.scannedLegacy = true;
     try {
@@ -106,8 +115,10 @@ export async function runCriticalNotificationCycle(
       result.legacyRetried = legacy.retried;
       result.legacySucceeded = legacy.succeeded;
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.errors.push(`legacy retry: ${message}`);
       logger.error('notification.worker.legacy_retry_failed', {
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       });
     }
   }

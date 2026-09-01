@@ -61,6 +61,7 @@ describe('dedicated job worker', () => {
       fallbackProcessed: 0,
       reconciled: false,
       repairs: 0,
+      errors: [],
     });
     vi.mocked(runCriticalNotificationCycle).mockResolvedValue({
       centralProcessed: 0,
@@ -70,6 +71,7 @@ describe('dedicated job worker', () => {
       legacySucceeded: 0,
       scannedCentral: false,
       scannedLegacy: false,
+      errors: [],
     });
     vi.mocked(criticalEscalationCycleWasBusy).mockReturnValue(false);
     vi.mocked(criticalNotificationCycleWasBusy).mockReturnValue(false);
@@ -130,6 +132,7 @@ describe('dedicated job worker', () => {
         fallbackProcessed: 0,
         reconciled: false,
         repairs: 0,
+        errors: [],
       };
     });
     vi.mocked(runCriticalNotificationCycle).mockImplementation(async () => {
@@ -142,6 +145,7 @@ describe('dedicated job worker', () => {
         legacySucceeded: 0,
         scannedCentral: false,
         scannedLegacy: false,
+        errors: [],
       };
     });
     vi.mocked(processPendingJobs).mockImplementation(async () => {
@@ -168,6 +172,57 @@ describe('dedicated job worker', () => {
     // full idle poll for the next cycle.
     await vi.advanceTimersByTimeAsync(100);
     expect(processPendingJobs).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports partial critical-lane failure as degraded worker health', async () => {
+    vi.mocked(runCriticalNotificationCycle).mockResolvedValue({
+      centralProcessed: 0,
+      centralSucceeded: 0,
+      centralFailed: 0,
+      legacyRetried: 0,
+      legacySucceeded: 0,
+      scannedCentral: true,
+      scannedLegacy: true,
+      errors: ['central queue: database unavailable'],
+    });
+
+    startJobWorker();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(getJobWorkerStatus()).toMatchObject({
+      lastSuccessAt: null,
+      lastError: 'central queue: database unavailable',
+    });
+  });
+
+  it('clears degraded health only after every critical lane succeeds', async () => {
+    vi.mocked(runCriticalEscalationCycle)
+      .mockResolvedValueOnce({
+        jobsClaimed: 0,
+        jobsProcessed: 0,
+        jobsFailed: 0,
+        fallbackProcessed: 0,
+        reconciled: false,
+        repairs: 0,
+        errors: ['job batch: database unavailable'],
+      })
+      .mockResolvedValue({
+        jobsClaimed: 0,
+        jobsProcessed: 0,
+        jobsFailed: 0,
+        fallbackProcessed: 0,
+        reconciled: false,
+        repairs: 0,
+        errors: [],
+      });
+
+    startJobWorker();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getJobWorkerStatus().lastError).toContain('database unavailable');
+
+    await vi.advanceTimersByTimeAsync(1_250);
+    expect(getJobWorkerStatus().lastError).toBeNull();
+    expect(getJobWorkerStatus().lastSuccessAt).toBeInstanceOf(Date);
   });
 
   it('does not overlap queue batches within a worker process', async () => {

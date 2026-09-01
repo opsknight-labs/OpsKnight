@@ -128,7 +128,31 @@ describe('runCriticalEscalationCycle', () => {
       jobsClaimed: 0,
       fallbackProcessed: 0,
       reconciled: false,
+      errors: [
+        'job batch: queue down',
+        'fallback scan: scan down',
+        'reconciliation: recovery down',
+      ],
     });
+  });
+
+  it('surfaces reconciliation repair errors without stopping the cycle', async () => {
+    mocks.reconcileEscalations.mockResolvedValue({
+      ...noRepairs(),
+      errors: ['recreate inc-1: database unavailable'],
+    });
+
+    const result = await runCriticalEscalationCycle({ now: T0 });
+
+    expect(result.errors).toEqual(['reconciliation: recreate inc-1: database unavailable']);
+  });
+
+  it('rescans recovery immediately when the wall clock moves backwards', async () => {
+    await runCriticalEscalationCycle({ now: T0 });
+    await runCriticalEscalationCycle({ now: T0 - 60_000 });
+
+    expect(mocks.processPendingEscalations).toHaveBeenCalledTimes(2);
+    expect(mocks.reconcileEscalations).toHaveBeenCalledTimes(2);
   });
 });
 
