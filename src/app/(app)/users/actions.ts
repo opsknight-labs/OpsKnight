@@ -3,20 +3,23 @@
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
-import { randomBytes, createHash } from 'crypto';
 import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf, getCurrentUser } from '@/lib/rbac';
-import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
-import { isAppRole } from '@/lib/authorization';
+import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
 import type { Prisma, Role } from '@prisma/client';
 import { removeTeamMembership } from '@/lib/teams/membership-commands';
-import {
-  dependencySummary,
-  discoverUserDependencies,
-  type UserDependencyReport,
-} from '@/lib/users/dependencies';
-import { bulkUpdateUserSecurityState, updateUserSecurityState } from '@/lib/users/admin-invariants';
+import { discoverUserDependencies, type UserDependencyReport } from '@/lib/users/dependencies';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import {
+  createInvitedUser,
+  deactivateUserAccount,
+  deactivateUserAccounts,
+  deleteUserAccount,
+  reactivateUserAccount,
+  rotateUserInvite,
+  updateUserRoleAccount,
+  updateUserRoleAccounts,
+} from '@/lib/users/lifecycle';
 
 async function sendInviteEmailIfConfigured(data: {
   userId: string;
@@ -73,102 +76,6 @@ async function sendInviteEmailIfConfigured(data: {
   }
 }
 
-async function assertUserIsNotSoleOwner(userId: string) {
-  const ownedMemberships = await prisma.teamMember.findMany({
-    where: { userId, role: 'OWNER' },
-    select: { teamId: true },
-  });
-
-  if (ownedMemberships.length === 0) return;
-
-  const teamIds = ownedMemberships.map(membership => membership.teamId);
-  const ownerCounts = await prisma.teamMember.groupBy({
-    by: ['teamId'],
-    where: {
-      teamId: { in: teamIds },
-      role: 'OWNER',
-    },
-    _count: { _all: true },
-  });
-
-  const soleOwnerTeamIds = ownerCounts
-    .filter(entry => entry._count._all === 1)
-    .map(entry => entry.teamId);
-
-  if (soleOwnerTeamIds.length > 0) {
-    throw new Error('Reassign team ownership before deleting this user.');
-  }
-}
-
-async function assertNotLastAdmin(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true, status: true },
-  });
-
-  // A mutation can only remove an active administrator from the active-admin set
-  // when the target currently belongs to that set. Disabled/invited admins do not.
-  if (user?.role !== 'ADMIN' || user.status !== 'ACTIVE') return;
-
-  const adminCount = await prisma.user.count({
-    where: {
-      role: 'ADMIN',
-      status: 'ACTIVE',
-    },
-  });
-
-  if (adminCount <= 1) {
-    throw new Error('Cannot delete the last admin user. Create another admin first.');
-  }
-}
-
-async function assertBatchLeavesActiveAdmin(userIds: string[]) {
-  const targetedAdminCount = await prisma.user.count({
-    where: {
-      id: { in: userIds },
-      role: 'ADMIN',
-      status: 'ACTIVE',
-    },
-  });
-
-  if (targetedAdminCount === 0) return;
-
-  const totalActiveAdmins = await prisma.user.count({
-    where: {
-      role: 'ADMIN',
-      status: 'ACTIVE',
-    },
-  });
-
-  if (totalActiveAdmins - targetedAdminCount < 1) {
-    throw new Error('Operation would leave the system with no active administrators.');
-  }
-}
-
-async function deleteUserInternal(userId: string) {
-  await assertUserIsNotSoleOwner(userId);
-  await assertNotLastAdmin(userId);
-
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
-  if (!user) throw new Error('User not found.');
-  if (user.status !== 'DISABLED') {
-    throw new Error('Deactivate the user before permanent deletion.');
-  }
-  const dependencies = dependencySummary(await discoverUserDependencies(userId));
-  if (dependencies.length > 0) {
-    throw new Error(
-      `Resolve or transfer user dependencies before deletion (${dependencies.join(', ')}).`
-    );
-  }
-
-  await prisma.$transaction([
-    // Preserve incident notes for audit trail — nullify userId so notes survive user deletion
-    prisma.incidentNote.updateMany({ where: { userId }, data: { userId: null } }),
-    prisma.incidentWatcher.deleteMany({ where: { userId } }),
-    prisma.user.delete({ where: { id: userId } }),
-  ]);
-}
-
 export type UserFormState = {
   error?: string | null;
   success?: boolean;
@@ -187,41 +94,6 @@ export async function getUserDependencyReport(
       error: error instanceof Error ? error.message : 'Unable to inspect user dependencies.',
     };
   }
-}
-
-async function createInviteToken(userId: string, email: string) {
-  const token = randomBytes(32).toString('base64url');
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-  const identifier = email.toLowerCase();
-
-  await prisma.$transaction(async tx => {
-    const rotated = await tx.user.update({
-      where: { id: userId, status: 'INVITED' },
-      data: { invitedAt: new Date(), invitationGeneration: { increment: 1 } },
-      select: { invitationGeneration: true },
-    });
-    await tx.userToken.updateMany({
-      where: { userId, type: 'INVITE', usedAt: null, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    await tx.userToken.create({
-      data: {
-        identifier,
-        userId,
-        generation: rotated.invitationGeneration,
-        type: 'INVITE',
-        tokenHash,
-        expiresAt: expires,
-      },
-    });
-  });
-
-  const baseUrl = getBaseUrl();
-  const inviteUrl = `${baseUrl}/set-password?token=${encodeURIComponent(token)}`;
-
-  return inviteUrl;
 }
 
 export async function addUser(
@@ -246,7 +118,6 @@ export async function addUser(
     return { error: 'Select a valid user role.' };
   }
 
-  // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     return { error: 'Please enter a valid email address (e.g., name@company.com).' };
@@ -257,13 +128,11 @@ export async function addUser(
       where: { email },
     });
 
-    // Rate Limit (Admin Abuse Protection)
     const { headers } = await import('next/headers');
     const headerList = await headers();
     const realIp = headerList.get('x-forwarded-for') || headerList.get('x-real-ip') || 'unknown';
 
     const { checkRateLimit } = await import('@/lib/password-reset');
-    // Limit admin creating users
     if (admin) {
       await checkRateLimit(email, realIp, 'user.invited');
     }
@@ -276,45 +145,7 @@ export async function addUser(
       return { error: 'A user with that email already exists.' };
     }
 
-    let inviteUrl = '';
-    const user = await prisma.$transaction(async tx => {
-      const newUser = await tx.user.create({
-        data: {
-          name,
-          email,
-          role,
-          status: 'INVITED',
-          invitedAt: new Date(),
-          invitationGeneration: 1,
-        },
-      });
-
-      // Inline token creation to use TX
-      const token = randomBytes(32).toString('base64url');
-      const tokenHash = createHash('sha256').update(token).digest('hex');
-      const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      const identifier = email.toLowerCase();
-
-      await tx.userToken.deleteMany({
-        where: { identifier, type: 'INVITE', usedAt: null },
-      });
-
-      await tx.userToken.create({
-        data: {
-          identifier,
-          userId: newUser.id,
-          generation: newUser.invitationGeneration,
-          type: 'INVITE',
-          tokenHash,
-          expiresAt: expires,
-        },
-      });
-
-      const baseUrl = getBaseUrl();
-      inviteUrl = `${baseUrl}/set-password?token=${encodeURIComponent(token)}`;
-
-      return newUser;
-    });
+    const { user, inviteUrl } = await createInvitedUser({ name, email, role: role as Role });
 
     await logAudit({
       action: 'user.invited',
@@ -359,17 +190,12 @@ export async function updateUserRole(userId: string, formData: FormData) {
   if (!isAppRole(role)) {
     return { error: 'Select a valid user role.' };
   }
-  if (role !== 'ADMIN') {
-    try {
-      await assertNotLastAdmin(userId);
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Cannot demote the last admin.',
-      };
-    }
-  }
 
-  await updateUserSecurityState(userId, { role }, { tokenVersion: { increment: 1 } });
+  try {
+    await updateUserRoleAccount(userId, role as Role);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update user role.' };
+  }
 
   await logAudit({
     action: 'user.role.updated',
@@ -452,37 +278,13 @@ export async function deactivateUser(userId: string, _formData?: FormData) {
   try {
     currentUser = await assertAdmin();
     assertNotSelf(currentUser.id, userId, 'deactivate');
-    await assertNotLastAdmin(userId);
+    await deactivateUserAccount(userId);
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  await updateUserSecurityState(
-    userId,
-    { status: 'DISABLED' },
-    {
-      deactivatedAt: new Date(),
-      tokenVersion: { increment: 1 },
-      invitationGeneration: { increment: 1 },
-    },
-    async tx => {
-      const revokedAt = new Date();
-      await tx.userToken.updateMany({
-        where: { userId, usedAt: null, revokedAt: null },
-        data: { revokedAt },
-      });
-      await tx.apiKey.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt },
-      });
-      await tx.oidcLinkingApproval.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt },
-      });
-      await tx.userDevice.deleteMany({ where: { userId } });
-    }
-  );
+
   await logAudit({
     action: 'user.deactivated',
     entityType: 'USER',
@@ -498,26 +300,12 @@ export async function reactivateUser(userId: string, _formData?: FormData) {
   let currentUser: { id: string } | null = null;
   try {
     currentUser = await assertAdmin();
+    await reactivateUserAccount(userId);
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
     };
   }
-  const target = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { status: true, passwordHash: true },
-  });
-  if (!target) return { error: 'User not found.' };
-  if (target.status !== 'DISABLED') return { error: 'Only disabled users can be reactivated.' };
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      status: target.passwordHash ? 'ACTIVE' : 'INVITED',
-      deactivatedAt: null,
-      tokenVersion: { increment: 1 },
-    },
-  });
 
   await logAudit({
     action: 'user.reactivated',
@@ -565,7 +353,12 @@ export async function generateInvite(
   const { checkRateLimit } = await import('@/lib/password-reset');
   await checkRateLimit(user.email, realIp, 'user.invite.resent');
 
-  const inviteUrl = await createInviteToken(user.id, user.email);
+  let inviteUrl: string;
+  try {
+    inviteUrl = await rotateUserInvite(user.id, user.email);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to rotate invitation.' };
+  }
 
   await logAudit({
     action: 'user.invite.resent',
@@ -610,7 +403,7 @@ export async function deleteUser(
       select: { email: true, name: true, role: true },
     });
 
-    await deleteUserInternal(userId);
+    await deleteUserAccount(userId);
 
     await logAudit({
       action: 'user.deleted',
@@ -651,7 +444,7 @@ export async function bulkUpdateUsers(
     return { error: 'Unauthorized. Admin access required.' };
   }
   const action = formData.get('bulkAction') as string;
-  const userIds = formData.getAll('userIds').filter(Boolean) as string[];
+  const userIds = [...new Set(formData.getAll('userIds').filter(Boolean) as string[])];
 
   if (!action) {
     return { error: 'Choose a bulk action first.' };
@@ -662,62 +455,39 @@ export async function bulkUpdateUsers(
   }
 
   if (action === 'activate') {
-    await prisma.user.updateMany({
-      where: { id: { in: userIds } },
-      data: {
-        status: 'ACTIVE',
-        deactivatedAt: null,
-      },
-    });
+    const results = await Promise.allSettled(userIds.map(id => reactivateUserAccount(id)));
+    const activatedIds = results.flatMap((result, index) =>
+      result.status === 'fulfilled' ? [userIds[index]] : []
+    );
+    const failedCount = userIds.length - activatedIds.length;
 
     await logAudit({
       action: 'user.reactivated.bulk',
       entityType: 'USER',
       entityId: 'bulk',
       actorId: admin?.id || null,
-      details: { userIds, count: userIds.length },
+      details: { userIds: activatedIds, count: activatedIds.length, failedCount },
     });
+
+    revalidatePath('/users');
+    if (failedCount > 0) {
+      return {
+        error: `Reactivated ${activatedIds.length} user(s), but ${failedCount} user(s) could not be reactivated.`,
+      };
+    }
+    return { success: true, message: `Reactivated ${activatedIds.length} user(s)` };
   } else if (action === 'deactivate') {
     if (admin && userIds.includes(admin.id)) {
       return { error: 'You cannot deactivate your own account.' };
     }
 
     try {
-      await assertBatchLeavesActiveAdmin(userIds);
-      for (const userId of userIds) {
-        await assertNotLastAdmin(userId);
-      }
+      await deactivateUserAccounts(userIds);
     } catch (error) {
       return {
-        error: error instanceof Error ? error.message : 'Cannot deactivate the last admin.',
+        error: error instanceof Error ? error.message : 'Failed to deactivate selected users.',
       };
     }
-
-    await bulkUpdateUserSecurityState(
-      userIds,
-      { status: 'DISABLED' },
-      {
-        deactivatedAt: new Date(),
-        tokenVersion: { increment: 1 },
-        invitationGeneration: { increment: 1 },
-      },
-      async tx => {
-        const revokedAt = new Date();
-        await tx.userToken.updateMany({
-          where: { userId: { in: userIds }, usedAt: null, revokedAt: null },
-          data: { revokedAt },
-        });
-        await tx.apiKey.updateMany({
-          where: { userId: { in: userIds }, revokedAt: null },
-          data: { revokedAt },
-        });
-        await tx.oidcLinkingApproval.updateMany({
-          where: { userId: { in: userIds }, revokedAt: null },
-          data: { revokedAt },
-        });
-        await tx.userDevice.deleteMany({ where: { userId: { in: userIds } } });
-      }
-    );
 
     await logAudit({
       action: 'user.deactivated.bulk',
@@ -734,25 +504,14 @@ export async function bulkUpdateUsers(
       return { error: 'You cannot delete your own account.' };
     }
 
-    try {
-      await assertBatchLeavesActiveAdmin(userIds);
-      for (const userId of userIds) {
-        await assertUserIsNotSoleOwner(userId);
-        await assertNotLastAdmin(userId);
-      }
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Unable to delete selected users.' };
-    }
-
     const usersToDelete = await prisma.user.findMany({
       where: { id: { in: userIds } },
       select: { id: true, email: true, name: true, role: true },
     });
 
-    // Cannot use deleteMany due to complex cascade logic (needs deleteUserInternal)
     const deletionResults = await Promise.allSettled(
       userIds.map(async id => {
-        await deleteUserInternal(id);
+        await deleteUserAccount(id);
         return id;
       })
     );
@@ -792,21 +551,15 @@ export async function bulkUpdateUsers(
       return { error: 'Select a valid user role.' };
     }
 
-    if (role !== 'ADMIN') {
-      if (admin && userIds.includes(admin.id)) {
-        return { error: 'You cannot demote your own admin account.' };
-      }
-      try {
-        await assertBatchLeavesActiveAdmin(userIds);
-        for (const userId of userIds) {
-          await assertNotLastAdmin(userId);
-        }
-      } catch (error) {
-        return { error: error instanceof Error ? error.message : 'Cannot demote the last admin.' };
-      }
+    if (role !== 'ADMIN' && admin && userIds.includes(admin.id)) {
+      return { error: 'You cannot demote your own admin account.' };
     }
 
-    await bulkUpdateUserSecurityState(userIds, { role }, { tokenVersion: { increment: 1 } });
+    try {
+      await updateUserRoleAccounts(userIds, role as Role);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Failed to update selected roles.' };
+    }
 
     await logAudit({
       action: 'user.role.updated.bulk',
@@ -835,7 +588,7 @@ export async function updateUserProfile(
   }
 
   const isSelf = currentUser.id === userId;
-  const isAdmin = currentUser.role === 'ADMIN';
+  const isAdmin = hasCapability(currentUser.role, CAPABILITIES.ADMIN_MANAGE);
 
   if (!isAdmin && !isSelf) {
     return { error: 'Unauthorized. You can only edit your own profile.' };
@@ -863,7 +616,6 @@ export async function updateUserProfile(
     }
   }
 
-  // Check email uniqueness if email is changed
   const existingUser = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true, role: true },
@@ -887,7 +639,6 @@ export async function updateUserProfile(
     }
   }
 
-  // Role validation
   let targetRole = existingUser.role;
   if (role && isAppRole(role)) {
     if (!isAdmin && role !== existingUser.role) {
@@ -940,7 +691,7 @@ export async function updateUserProfile(
       }
     };
     const updated = roleChanged
-      ? await updateUserSecurityState(userId, { role: targetRole }, profileData, revokeInviteTokens)
+      ? await updateUserRoleAccount(userId, targetRole, profileData, revokeInviteTokens)
       : await prisma.$transaction(async tx => {
           const result = await tx.user.update({ where: { id: userId }, data: profileData });
           await revokeInviteTokens(tx);
