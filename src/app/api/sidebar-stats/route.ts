@@ -1,62 +1,35 @@
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { Prisma } from '@prisma/client';
 import { activeIncidentStatuses } from '@/lib/incident-status';
-import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { getCurrentUser } from '@/lib/rbac';
+import { resolveUserActor } from '@/lib/authorization-actors';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 
-const RATE_LIMIT_MAX = 30; // 30 requests per minute
-const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 export async function GET() {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return jsonError('Unauthorized', 401);
-    }
+    const user = await getCurrentUser();
 
-    // Rate limiting to prevent abuse
-    const rateKey = `api:sidebar-stats:${session.user.email}`;
+    const rateKey = `api:sidebar-stats:${user.id}`;
     const rate = await checkRateLimit(rateKey, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
     if (!rate.allowed) {
       const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
       return jsonError('Rate limit exceeded', 429, { retryAfter });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: {
-        id: true,
-        role: true,
-        teamMemberships: { select: { teamId: true } },
-      },
-    });
+    const actor = await resolveUserActor(user.id);
+    if (!actor) return jsonError('Unauthorized', 401);
 
-    if (!user) {
-      return jsonError('Unauthorized', 401);
-    }
-
-    // Build efficient Where clause for Active Incidents
     const where: Prisma.IncidentWhereInput = {
       status: { in: activeIncidentStatuses() },
+      ...incidentReadWhere(actor),
     };
 
-    // Apply Scope Permissions
-    if (!hasCapability(user.role, CAPABILITIES.INCIDENT_READ_ALL)) {
-      const teamIds = user.teamMemberships.map(membership => membership.teamId);
-
-      // Use OR scope: Assigned to user OR Assigned to user's teams OR Service owned by user's teams
-      where.OR = [
-        { assigneeId: user.id },
-        { teamId: { in: teamIds } },
-        { service: { teamId: { in: teamIds } } },
-      ];
-    }
-
-    // Group by Urgency to get breakdown
     const urgencyCounts = await prisma.incident.groupBy({
       by: ['urgency'],
       where,
@@ -80,11 +53,12 @@ export async function GET() {
       },
       200,
       {
-        // Safe caching: 10 second browser cache, allows stale for 30 seconds while revalidating
         'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
       }
     );
   } catch (error) {
+    const unauthorized = error instanceof Error && error.message.includes('Unauthorized');
+    if (unauthorized) return jsonError('Unauthorized', 401);
     logger.error('api.sidebar_stats.error', {
       error: error instanceof Error ? error.message : String(error),
     });
