@@ -4,6 +4,9 @@ const mocks = vi.hoisted(() => ({
   getUserNotificationChannels: vi.fn(),
   createInAppNotifications: vi.fn(),
   dispatchNotificationAttempt: vi.fn(),
+  createCentralNotificationIntent: vi.fn(),
+  deliverCentralNotification: vi.fn(),
+  pinNotificationProviderKeys: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -20,6 +23,12 @@ vi.mock('@/lib/user-notifications', () => ({
 
 vi.mock('@/lib/in-app-notifications', () => ({
   createInAppNotifications: mocks.createInAppNotifications,
+}));
+
+vi.mock('@/lib/notification-control-plane', () => ({
+  createCentralNotificationIntent: mocks.createCentralNotificationIntent,
+  deliverCentralNotification: mocks.deliverCentralNotification,
+  pinNotificationProviderKeys: mocks.pinNotificationProviderKeys,
 }));
 
 vi.mock('@/lib/notification-delivery', async importOriginal => {
@@ -86,6 +95,13 @@ beforeEach(() => {
   mocks.getUserNotificationChannels.mockResolvedValue(['EMAIL', 'SMS']);
   mocks.createInAppNotifications.mockResolvedValue(undefined);
   mocks.dispatchNotificationAttempt.mockResolvedValue({ success: true, outcome: 'DELIVERED' });
+  mocks.createCentralNotificationIntent.mockImplementation(async () => ({
+    // The control plane derives its own id from the intent's delivery key.
+    id: 'notification_5b0c1f2d3e4a5b6c7d8e9f0a1b2',
+    created: true,
+  }));
+  mocks.deliverCentralNotification.mockResolvedValue({ success: true, claimed: true });
+  mocks.pinNotificationProviderKeys.mockResolvedValue(new Map([['SMS', 'twilio']]));
 });
 
 describe('planning a step’s pages', () => {
@@ -252,9 +268,34 @@ describe('materializing a step’s pages', () => {
   });
 });
 
+async function committedPlan(overrides: Record<string, unknown> = {}) {
+  const plan = await planEscalationNotificationIntents(planInput(overrides));
+  await materializeEscalationNotificationIntents(transactionDouble() as never, plan);
+  return plan;
+}
+
 describe('delivering committed pages', () => {
-  it('marks a delivered page as sent', async () => {
+  it('delivers nothing for a plan that was never committed', async () => {
     const plan = await planEscalationNotificationIntents(planInput({ stepChannels: ['SMS'] }));
+
+    // No materialization means no row exists to address.
+    await expect(deliverEscalationNotificationIntents(plan)).resolves.toEqual([]);
+    expect(mocks.dispatchNotificationAttempt).not.toHaveBeenCalled();
+  });
+
+  it('addresses the row by the id it was stored under', async () => {
+    const plan = await committedPlan({ stepChannels: ['SMS'] });
+
+    await deliverEscalationNotificationIntents(plan);
+
+    expect(mocks.dispatchNotificationAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({ notificationId: plan.intents[0].storedId })
+    );
+    expect(plan.intents[0].storedId).toBe(plan.intents[0].notificationId);
+  });
+
+  it('marks a delivered page as sent', async () => {
+    const plan = await committedPlan({ stepChannels: ['SMS'] });
 
     const outcomes = await deliverEscalationNotificationIntents(plan);
 
@@ -272,7 +313,7 @@ describe('delivering committed pages', () => {
       outcome: 'RETRYABLE_FAILURE',
       error: 'provider timeout',
     });
-    const plan = await planEscalationNotificationIntents(planInput({ stepChannels: ['SMS'] }));
+    const plan = await committedPlan({ stepChannels: ['SMS'] });
 
     const outcomes = await deliverEscalationNotificationIntents(plan);
 
@@ -285,9 +326,9 @@ describe('delivering committed pages', () => {
   });
 
   it('never throws out of delivery, whatever the provider does', async () => {
+    const plan = await committedPlan({ stepChannels: ['SMS'] });
     mocks.dispatchNotificationAttempt.mockRejectedValue(new Error('provider exploded'));
     vi.mocked(prisma.notification.updateMany).mockRejectedValue(new Error('database gone'));
-    const plan = await planEscalationNotificationIntents(planInput({ stepChannels: ['SMS'] }));
 
     // The step is already durable; delivery must not surface as a step failure.
     await expect(deliverEscalationNotificationIntents(plan)).resolves.toEqual([
@@ -296,14 +337,79 @@ describe('delivering committed pages', () => {
   });
 
   it('keeps delivering after one channel fails', async () => {
+    const plan = await committedPlan();
     mocks.dispatchNotificationAttempt
       .mockRejectedValueOnce(new Error('provider exploded'))
       .mockResolvedValueOnce({ success: true, outcome: 'DELIVERED' });
-    const plan = await planEscalationNotificationIntents(planInput());
 
     const outcomes = await deliverEscalationNotificationIntents(plan);
 
     expect(outcomes).toHaveLength(2);
     expect(outcomes.map(outcome => outcome.outcome)).toContain('DELIVERED');
+  });
+});
+
+describe('the durable control-plane path', () => {
+  beforeEach(() => {
+    process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL = 'true';
+  });
+
+  it('delivers the row by the id the control plane assigned, not the legacy one', async () => {
+    const plan = await planEscalationNotificationIntents(planInput({ stepChannels: ['SMS'] }));
+    await materializeEscalationNotificationIntents({} as never, plan);
+
+    await deliverEscalationNotificationIntents(plan);
+
+    // The two ids differ by construction; addressing the legacy one would make
+    // every immediate escalation delivery fail with "not found".
+    expect(plan.intents[0].storedId).toBe('notification_5b0c1f2d3e4a5b6c7d8e9f0a1b2');
+    expect(plan.intents[0].storedId).not.toBe(plan.intents[0].notificationId);
+    expect(mocks.deliverCentralNotification).toHaveBeenCalledWith(
+      'notification_5b0c1f2d3e4a5b6c7d8e9f0a1b2'
+    );
+  });
+
+  it('records the escalation run in the durable payload', async () => {
+    const plan = await planEscalationNotificationIntents(
+      planInput({ stepChannels: ['SMS'], generation: 4, stepIndex: 2 })
+    );
+    await materializeEscalationNotificationIntents({} as never, plan);
+
+    // The control plane refuses a page whose run the incident has moved past.
+    // A reopened incident is OPEN again, so status alone cannot tell an old
+    // page from a current one — only the generation can.
+    expect(mocks.createCentralNotificationIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          escalationGeneration: 4,
+          escalationStep: 2,
+          eventAt: INCIDENT.createdAt.toISOString(),
+        }),
+      }),
+      expect.anything()
+    );
+  });
+
+  it('pins the provider before the transaction opens', async () => {
+    const plan = await planEscalationNotificationIntents(planInput({ stepChannels: ['SMS'] }));
+
+    expect(mocks.pinNotificationProviderKeys).toHaveBeenCalledWith(['SMS']);
+    expect(plan.intents[0].providerKey).toBe('twilio');
+  });
+
+  it('writes through the caller transaction, not the global client', async () => {
+    const plan = await planEscalationNotificationIntents(planInput({ stepChannels: ['SMS'] }));
+    const tx = { marker: 'the-step-transaction' };
+
+    await materializeEscalationNotificationIntents(tx as never, plan);
+
+    expect(mocks.createCentralNotificationIntent).toHaveBeenCalledWith(expect.anything(), tx);
+  });
+
+  it('delivers nothing when the intent was never committed', async () => {
+    const plan = await planEscalationNotificationIntents(planInput({ stepChannels: ['SMS'] }));
+
+    await expect(deliverEscalationNotificationIntents(plan)).resolves.toEqual([]);
+    expect(mocks.deliverCentralNotification).not.toHaveBeenCalled();
   });
 });

@@ -52,7 +52,8 @@ export interface EscalationPlanInput {
   /**
    * Recipients to page in addition to the resolved target — currently the
    * incident's manual assignee on the first step, so a hand-assigned owner is
-   * not left out of the first page.
+   * not left out of the first page. Callers must only pass eligible (ACTIVE)
+   * responders, and these never affect whether the step reached anyone.
    */
   extraRecipients?: readonly string[];
   /** Delay of the step that follows this one, or null when this is the last. */
@@ -137,15 +138,20 @@ export function planEscalationStep(input: EscalationPlanInput): EscalationPlan {
   const targetName = input.resolution.targetName;
   const resolvedUserIds =
     input.resolution.outcome === 'RESOLVED' ? [...input.resolution.userIds] : [];
-  const recipients = [...new Set([...resolvedUserIds, ...(input.extraRecipients ?? [])])];
 
-  if (recipients.length === 0) {
+  // Whether the step reached anyone is decided by its *target* alone. An extra
+  // recipient rides along on a step that already works; it must never make an
+  // uncovered target look like a successful page, which would let a final tier
+  // report COMPLETED with nobody eligible actually paged.
+  if (resolvedUserIds.length === 0) {
     return planUnreachedStep(input, {
       outcome: 'NO_ELIGIBLE_RESPONDERS',
       message: `${stepLabel(input.stepIndex)} (${input.targetType}: ${targetName}) resolved to no users.`,
       terminalSuffix: ' Escalation failed: no reachable responders.',
     });
   }
+
+  const recipients = [...new Set([...resolvedUserIds, ...(input.extraRecipients ?? [])])];
 
   const assignment = selectEscalationAssignment({
     incidentId: input.incidentId,

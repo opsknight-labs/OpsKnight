@@ -20,7 +20,6 @@ import {
   type EscalationNotificationPlan,
 } from './notification-intents';
 import {
-  applyPlannedAssignment,
   claimEscalationStep,
   commitEscalationPlan,
   finalizeEscalationExecution,
@@ -274,9 +273,13 @@ export async function executeEscalation(
       targetType: step.targetType,
       targetId,
       resolution,
-      // A hand-assigned owner stays in the first page's audience.
+      // A hand-assigned owner stays in the first page's audience — but only if
+      // they are still an eligible responder. The ACTIVE-only rule the target
+      // resolver applies has to hold for an extra recipient too.
       extraRecipients:
-        currentStepIndex === 0 && incident.assigneeId ? [incident.assigneeId] : undefined,
+        currentStepIndex === 0 && incident.assigneeId && incident.assignee?.status === 'ACTIVE'
+          ? [incident.assigneeId]
+          : undefined,
       stepDelayMinutes,
       nextStepDelayMinutes: policySteps.at(currentStepIndex + 1)?.delayMinutes ?? null,
       now,
@@ -297,11 +300,6 @@ export async function executeEscalation(
           outcome: plan.outcome,
         }
       );
-    } else if (
-      !(await applyPlannedAssignment({ incidentId, workerToken, assignment: plan.assignment }))
-    ) {
-      // Ownership is taken before paging so the page and the boards agree.
-      return supersededEscalationResult();
     }
 
     // Resolve the pages before the transaction: recipient preferences, quiet

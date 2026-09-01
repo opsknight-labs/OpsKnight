@@ -211,10 +211,8 @@ describe('escalation lifecycle generation fencing', () => {
       order.push('materialize');
       return { created: 1 };
     });
-    // Ownership is taken in its own pre-page transaction; only the commit
-    // writes escalation state.
-    mocks.txIncidentUpdate.mockImplementation(async (args: { data: Record<string, unknown> }) => {
-      order.push('escalationStatus' in args.data ? 'state' : 'assign');
+    mocks.txIncidentUpdate.mockImplementation(async () => {
+      order.push('state');
       return {};
     });
     mocks.deliverEscalationNotificationIntents.mockImplementation(async () => {
@@ -225,8 +223,9 @@ describe('escalation lifecycle generation fencing', () => {
     const result = await executeEscalation('inc-generation', 0);
 
     expect(result).toMatchObject({ escalated: true, stepIndex: 0, targetCount: 1 });
-    // Pages are durable before the state advances, and delivery comes last.
-    expect(order).toEqual(['assign', 'materialize', 'state', 'deliver']);
+    // One write boundary: pages are durable before the state advances, and
+    // delivery comes last. There is no earlier ownership write to leave behind.
+    expect(order).toEqual(['materialize', 'state', 'deliver']);
     expect(mocks.planEscalationNotificationIntents).toHaveBeenCalledWith(
       expect.objectContaining({
         eventKey: 'ESCALATION:inc-generation:policy-generation:0:0',
@@ -246,12 +245,9 @@ describe('escalation lifecycle generation fencing', () => {
 
     await expect(executeEscalation('inc-generation', 0)).rejects.toThrow('intent write failed');
 
-    // The step transaction rolls back: escalation state never advances, no next
-    // job is created, and nothing is delivered.
-    const stateWrites = mocks.txIncidentUpdate.mock.calls.filter(
-      ([args]) => 'escalationStatus' in (args as { data: Record<string, unknown> }).data
-    );
-    expect(stateWrites).toHaveLength(0);
+    // The step transaction rolls back: nothing is written at all, because the
+    // commit is the only place this step mutates anything.
+    expect(mocks.txIncidentUpdate).not.toHaveBeenCalled();
     expect(mocks.txBackgroundJobCreate).not.toHaveBeenCalled();
     expect(mocks.deliverEscalationNotificationIntents).not.toHaveBeenCalled();
   });

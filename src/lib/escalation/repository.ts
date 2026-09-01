@@ -257,40 +257,6 @@ export async function releaseEscalationClaim(
 }
 
 /**
- * Applies the planned owner before responder pages are dispatched, so the page
- * and every board name the same person. Idempotent, generation-fenced, and a
- * no-op when the incident already has an owner.
- *
- * Returns false when a newer generation invalidated this worker.
- */
-export async function applyPlannedAssignment(input: {
-  incidentId: string;
-  workerToken: EscalationWorkerToken;
-  assignment: EscalationAssignment | null;
-}): Promise<boolean> {
-  return runSerializableTransaction(async tx => {
-    const current = (await tx.incident.findUnique({
-      where: { id: input.incidentId },
-      select: { assigneeId: true, teamId: true, escalationProcessingAt: true },
-    })) as Pick<IncidentStateRow, 'assigneeId' | 'teamId' | 'escalationProcessingAt'> | null;
-
-    if (
-      !current ||
-      escalationWorkerInvalidated(current.escalationProcessingAt, input.workerToken)
-    ) {
-      return false;
-    }
-    if (current.assigneeId || current.teamId || !input.assignment) return true;
-
-    await tx.incident.update({
-      where: { id: input.incidentId },
-      data: assignmentUpdateData(input.assignment),
-    });
-    return true;
-  });
-}
-
-/**
  * Confirms this worker still owns its generation. Used between page dispatches
  * so a stale worker stops paging as soon as a lifecycle transition lands.
  */
@@ -324,8 +290,9 @@ export async function escalationGenerationStillOwned(
 /**
  * The single commit path for a step's outcome.
  *
- * Assignment, timeline, escalation state, and the next escalation job either
- * all land or none do. A lifecycle transition that arrived while pages were
+ * This is the only place an escalation step mutates anything. Assignment,
+ * responder pages, timeline, escalation state, and the next escalation job
+ * either all land or none do — there is no earlier write to leave behind. A lifecycle transition that arrived while pages were
  * being dispatched wins: the plan's next state is overridden by the newer
  * lifecycle state rather than re-arming the incident.
  */
@@ -507,6 +474,85 @@ export async function initializeEscalationExecution(
   });
 
   return { initialized: true, dueAt };
+}
+
+/**
+ * Lifecycle commands that open a new escalation run and therefore owe a job.
+ *
+ * REOPEN restarts at step 0; the other three resume from the cursor the pause
+ * preserved. All four increment the generation, which is what makes every
+ * escalation job created for the previous run stale.
+ */
+export const ESCALATION_RESUME_COMMANDS = [
+  'REOPEN',
+  'UNACKNOWLEDGE',
+  'UNSNOOZE',
+  'UNSUPPRESS',
+] as const;
+
+export type EscalationResumeCommand = (typeof ESCALATION_RESUME_COMMANDS)[number];
+
+export function isEscalationResumeCommand(command: string): command is EscalationResumeCommand {
+  return (ESCALATION_RESUME_COMMANDS as readonly string[]).includes(command);
+}
+
+/**
+ * Arms the escalation job for a run a lifecycle transition just resumed.
+ *
+ * Called inside the lifecycle transaction, so the new generation's due state
+ * and the job that will execute it commit together. Without this, three of the
+ * four resume commands set `nextEscalationAt` and left the job to be
+ * discovered by the fallback scan or the reconciliation pass — recoverable,
+ * but a resumed page waited on a scanner interval instead of running when it
+ * was due.
+ *
+ * Reads the state the lifecycle engine just wrote rather than being told it, so
+ * there is one answer to "which step is now due" instead of two.
+ */
+export async function resumeEscalationExecution(
+  tx: Prisma.TransactionClient,
+  input: { incidentId: string; reason: string }
+): Promise<{ resumed: boolean; jobId: string | null }> {
+  const incident = await tx.incident.findUnique({
+    where: { id: input.incidentId },
+    select: {
+      status: true,
+      escalationStatus: true,
+      currentEscalationStep: true,
+      nextEscalationAt: true,
+      escalationGeneration: true,
+    },
+  });
+
+  // Nothing to arm unless the transition actually left an active execution with
+  // a due time — a service with no policy, or a command that paused instead.
+  if (
+    !incident ||
+    incident.status !== 'OPEN' ||
+    incident.escalationStatus !== 'ESCALATING' ||
+    !incident.nextEscalationAt
+  ) {
+    return { resumed: false, jobId: null };
+  }
+
+  // Every pending escalation job belongs to the run this transition superseded.
+  await tx.backgroundJob.updateMany({
+    where: {
+      type: 'ESCALATION',
+      status: 'PENDING',
+      payload: { path: ['incidentId'], equals: input.incidentId },
+    },
+    data: { status: 'CANCELLED', error: input.reason },
+  });
+
+  const jobId = await createEscalationJob(tx, {
+    incidentId: input.incidentId,
+    generation: incident.escalationGeneration ?? 0,
+    stepIndex: incident.currentEscalationStep ?? 0,
+    scheduledAt: incident.nextEscalationAt,
+  });
+
+  return { resumed: true, jobId };
 }
 
 /**

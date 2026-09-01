@@ -40,7 +40,17 @@ function personalControlPlaneEnabled(): boolean {
 }
 
 export interface EscalationPageIntent {
+  /**
+   * The row id on the legacy `Notification` path, derived deterministically so
+   * a replay dedupes rather than double-paging.
+   */
   notificationId: string;
+  /**
+   * The id the row was actually stored under. The durable control plane
+   * derives its own id from the intent's delivery key, so it is only known
+   * once the row is created — and delivery must be addressed by *that* id.
+   */
+  storedId?: string;
   userId: string;
   channel: NotificationDeliveryChannel;
   recipientAddress: string;
@@ -51,6 +61,21 @@ export interface EscalationPageIntent {
 export interface EscalationNotificationPlan {
   incidentId: string;
   eventKey: string;
+  /**
+   * The escalation run these pages belong to. Carried into the durable payload
+   * so the control plane's own staleness check can refuse a page whose run the
+   * incident has moved past — a reopened incident returns to OPEN, so status
+   * alone cannot tell an old page from a current one.
+   */
+  generation: number;
+  stepIndex: number;
+  /**
+   * The instant these pages belong to: the incident's creation, which is what
+   * both intent identities and the control plane's staleness check key on.
+   * Escalation scheduling fields deliberately do not appear here — they move
+   * while a step's channels are still being fanned out.
+   */
+  eventAt: Date;
   /** The encoded envelope stored on the intent row. */
   durableMessage: string;
   /** Plain text for the in-app notification. */
@@ -66,11 +91,17 @@ export interface EscalationNotificationPlan {
 
 export function emptyEscalationNotificationPlan(
   incidentId: string,
-  eventKey: string
+  eventKey: string,
+  generation = 0,
+  stepIndex = 0,
+  eventAt = new Date(0)
 ): EscalationNotificationPlan {
   return {
     incidentId,
     eventKey,
+    generation,
+    stepIndex,
+    eventAt,
     durableMessage: '',
     displayMessage: '',
     intents: [],
@@ -124,7 +155,13 @@ export async function planEscalationNotificationIntents(input: {
   stepIndex: number;
 }): Promise<EscalationNotificationPlan> {
   const incident = input.incident;
-  const plan = emptyEscalationNotificationPlan(incident.id, input.eventKey);
+  const plan = emptyEscalationNotificationPlan(
+    incident.id,
+    input.eventKey,
+    input.generation,
+    input.stepIndex,
+    incident.createdAt
+  );
   plan.displayMessage = input.displayMessage;
   if (input.recipients.length === 0) return plan;
 
@@ -274,13 +311,20 @@ export async function materializeEscalationNotificationIntents(
             userId: intent.userId,
             incidentId: plan.incidentId,
             eventType: 'triggered',
-            eventAt: new Date().toISOString(),
+            // The event instant must match the identity the control plane
+            // checks against, which is the incident's creation instant.
+            eventAt: plan.eventAt.toISOString(),
+            escalationGeneration: plan.generation,
+            escalationStep: plan.stepIndex,
             durableMessage: plan.durableMessage,
             ...(intent.providerKey ? { providerKey: intent.providerKey } : {}),
           } as never,
         },
         tx as never
       );
+      // The control plane derives its own row id. Delivery has to use that id,
+      // not the legacy one this plan computed.
+      intent.storedId = result.id;
       if (result.created) created += 1;
     }
     return { created };
@@ -288,6 +332,7 @@ export async function materializeEscalationNotificationIntents(
 
   // Legacy shape: one PENDING intent row per recipient/channel, with the same
   // deterministic id the delivery path would have used, so a replay dedupes.
+  for (const intent of plan.intents) intent.storedId = intent.notificationId;
   const result = await tx.notification.createMany({
     data: plan.intents.map(intent => ({
       id: intent.notificationId,
@@ -315,10 +360,15 @@ export async function deliverEscalationNotificationIntents(
   const outcomes: Array<{ userId: string; channel: string; outcome: string }> = [];
 
   for (const intent of plan.intents) {
+    // Set by materialization. An intent with no stored id was never committed,
+    // so there is nothing to deliver.
+    const storedId = intent.storedId;
+    if (!storedId) continue;
+
     try {
       if (plan.controlPlane) {
         const { deliverCentralNotification } = await import('../notification-control-plane');
-        const result = await deliverCentralNotification(intent.notificationId);
+        const result = await deliverCentralNotification(storedId);
         outcomes.push({
           userId: intent.userId,
           channel: intent.channel,
@@ -328,19 +378,19 @@ export async function deliverEscalationNotificationIntents(
       }
 
       const attempt = await dispatchNotificationAttempt({
-        notificationId: intent.notificationId,
+        notificationId: storedId,
         incidentId: plan.incidentId,
         userId: intent.userId,
         channel: intent.channel,
         eventType: 'triggered',
         message: plan.durableMessage,
       });
-      await applyLegacyAttemptOutcome(intent.notificationId, attempt);
+      await applyLegacyAttemptOutcome(storedId, attempt);
       outcomes.push({ userId: intent.userId, channel: intent.channel, outcome: attempt.outcome });
     } catch (error) {
       // Leave the row for the retry sweeper rather than losing the page.
       await markLegacyIntentForRetry(
-        intent.notificationId,
+        storedId,
         error instanceof Error ? error.message : String(error)
       );
       outcomes.push({

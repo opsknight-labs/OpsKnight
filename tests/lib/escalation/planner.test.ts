@@ -99,6 +99,37 @@ describe('a step that reaches responders', () => {
     expect(plan.assignment).toEqual({ type: 'USER', userId: 'user-1' });
   });
 
+  it('never lets an extra recipient make an uncovered target look successful', () => {
+    // A final tier reporting COMPLETED because a hand-assigned owner happened
+    // to be in the audience would mean nobody the policy pointed at was paged.
+    const plan = planEscalationStep(
+      planInput({
+        stepIndex: 2,
+        stepCount: 3,
+        nextStepDelayMinutes: null,
+        resolution: { outcome: 'NO_ELIGIBLE_RESPONDERS', targetName: 'Primary On-Call' },
+        extraRecipients: ['manual-owner'],
+      })
+    );
+
+    expect(plan.outcome).toBe('NO_ELIGIBLE_RESPONDERS');
+    expect(plan.notificationRecipients).toEqual([]);
+    expect(plan.assignment).toBeNull();
+    expect(plan.nextState.status).toBe('FAILED');
+  });
+
+  it('skips an uncovered intermediate tier even with an extra recipient present', () => {
+    const plan = planEscalationStep(
+      planInput({
+        resolution: { outcome: 'NO_ELIGIBLE_RESPONDERS', targetName: 'Primary On-Call' },
+        extraRecipients: ['manual-owner'],
+      })
+    );
+
+    expect(plan.outcome).toBe('STEP_SCHEDULED');
+    expect(plan.notificationRecipients).toEqual([]);
+  });
+
   it('does not page the same responder twice', () => {
     const plan = planEscalationStep(
       planInput({
