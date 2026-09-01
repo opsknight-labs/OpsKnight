@@ -2,7 +2,7 @@
 
 import { useState, useRef, useTransition, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { useForm, FormProvider } from 'react-hook-form';
+import { useForm, FormProvider, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
@@ -86,7 +86,10 @@ export default function ProfileForm({
     mode: 'onChange',
   });
 
-  const watchedData = form.watch();
+  const watchedData = useWatch({
+    control: form.control,
+    defaultValue: defaultValues,
+  }) as ProfileFormData;
 
   // Autosave handler for Personal Information
   const handleAutoSave = useCallback(
