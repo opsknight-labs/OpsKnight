@@ -1,7 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
-import { assertAdmin } from '@/lib/rbac';
+import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
@@ -19,17 +17,8 @@ const CUSTOM_FIELD_KEY_CONFLICT = {
   ],
 };
 
-/**
- * Create Custom Field
- * POST /api/settings/custom-fields
- */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session) {
-      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
-    }
-
     await assertAdmin();
 
     let body: unknown;
@@ -58,12 +47,9 @@ export async function POST(req: NextRequest) {
     const { name, key, type, required, defaultValue, options, showInList } = parsed.data;
 
     const existing = await prisma.customField.findUnique({ where: { key } });
-    if (existing) {
-      return jsonError(new AppError(CUSTOM_FIELD_KEY_CONFLICT));
-    }
+    if (existing) return jsonError(new AppError(CUSTOM_FIELD_KEY_CONFLICT));
 
     const maxOrder = await prisma.customField.aggregate({ _max: { order: true } });
-
     const fieldData: Prisma.CustomFieldCreateInput = {
       name,
       key,
@@ -73,45 +59,29 @@ export async function POST(req: NextRequest) {
       showInList: showInList || false,
       order: (maxOrder._max.order || 0) + 1,
     };
-
     if (options !== undefined && options !== null) {
       fieldData.options = options as Prisma.InputJsonValue;
     }
 
     const customField = await prisma.customField.create({ data: fieldData });
-
     logger.info('api.custom_fields.created', { customFieldId: customField.id });
     return jsonOk({ success: true, field: customField }, 200);
   } catch (error) {
     const prismaError = prismaToAppError(error, { unique: CUSTOM_FIELD_KEY_CONFLICT });
     if (prismaError) return jsonError(prismaError);
     if (isAppError(error)) return jsonError(error);
-
     logger.error('api.custom_fields.create_error', { error });
     return jsonError('Failed to create custom field', 500);
   }
 }
 
-/**
- * Get All Custom Fields
- * GET /api/settings/custom-fields
- */
 export async function GET() {
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session) {
-      return jsonError(new AppError({ code: 'AUTHENTICATION_REQUIRED' }));
-    }
-
+    await getCurrentUser();
     const customFields = await prisma.customField.findMany({
       orderBy: { order: 'asc' },
-      include: {
-        _count: {
-          select: { values: true },
-        },
-      },
+      include: { _count: { select: { values: true } } },
     });
-
     return jsonOk({ fields: customFields }, 200);
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
