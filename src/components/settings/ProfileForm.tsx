@@ -212,7 +212,7 @@ export default function ProfileForm({
               )}
             >
               <AvatarImage
-                src={avatarPreview || getDefaultAvatar(currentGender, email || 'user')}
+                src={avatarPreview || getDefaultAvatar(currentGender, name)}
                 alt={name}
                 className="object-cover"
               />
@@ -269,7 +269,7 @@ export default function ProfileForm({
                       const result = await updateProfile({ error: null, success: false }, formData);
                       if (result.success) {
                         toast.success('Custom photo removed');
-                        const defaultAvatar = getDefaultAvatar(currentGender, email || 'user');
+                        const defaultAvatar = getDefaultAvatar(currentGender, name);
                         setAvatarPreview(defaultAvatar);
                         updateCurrentUser(null, currentGender);
                         await update({ force: true });
@@ -334,7 +334,7 @@ export default function ProfileForm({
                           field.onChange(value);
                           setCurrentGender(value);
                           if (isDefaultAvatar(avatarPreview)) {
-                            setAvatarPreview(getDefaultAvatar(value, email || 'user'));
+                            setAvatarPreview(getDefaultAvatar(value, name));
                           }
                         }}
                         defaultValue={field.value || undefined}

@@ -157,10 +157,12 @@ export async function updateProfile(
     };
 
     // Avatar Logic
+    const currentName = data.name || user.name || 'User';
+
     if (removeAvatar) {
       // User explicitly requested removal - clean up DB binary and set to default based on gender
       await prisma.userAvatar.deleteMany({ where: { userId: user.id } });
-      data.avatarUrl = getDefaultAvatar(newGender, user.id);
+      data.avatarUrl = getDefaultAvatar(newGender, currentName, user.id);
     } else if (directAvatarUrl && isValidDirectUrl(directAvatarUrl)) {
       // User selected an avatar from the picker
       data.avatarUrl = directAvatarUrl;
@@ -173,7 +175,7 @@ export async function updateProfile(
       const isCurrentDefault = isDefaultAvatar(user.avatarUrl);
 
       if (isCurrentDefault) {
-        const newDefault = getDefaultAvatar(newGender, user.id);
+        const newDefault = getDefaultAvatar(newGender, currentName, user.id);
         if (newDefault !== user.avatarUrl) {
           data.avatarUrl = newDefault;
         }

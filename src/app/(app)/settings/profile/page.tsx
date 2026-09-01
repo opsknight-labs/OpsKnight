@@ -143,7 +143,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           <UserAvatar
             userId={user?.id || 'unknown'}
             name={name}
-            avatarUrl={user?.avatarUrl || getDefaultAvatar(user?.gender, email || 'user')}
+            avatarUrl={user?.avatarUrl || getDefaultAvatar(user?.gender, name, user?.id)}
             gender={user?.gender}
             size="xl"
             showOnlineStatus={user?.status === 'ACTIVE'}
