@@ -1,34 +1,23 @@
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 
-import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { logger, withRequestContext } from '@/lib/logger';
 import { updateIncidentStatus } from '@/lib/incidents/operator-lifecycle';
+import { getCurrentUser } from '@/lib/rbac';
 
 const StatusSchema = z.object({
   status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']),
   expectedStatus: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']).optional(),
 });
 
-const LEGACY_UNAUTHORIZED_MESSAGE =
-  'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
 const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
 
 async function patchIncidentStatus(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return jsonError(
-        new AppError({
-          code: 'AUTHENTICATION_REQUIRED',
-          userMessage: LEGACY_UNAUTHORIZED_MESSAGE,
-        })
-      );
-    }
+    const user = await getCurrentUser();
 
     let body: unknown;
     try {
@@ -62,9 +51,7 @@ async function patchIncidentStatus(req: NextRequest, props: { params: Promise<{ 
       parsed.data.status,
       parsed.data.expectedStatus,
       'MOBILE',
-      idempotencyKey
-        ? { key: idempotencyKey, principalId: session.user.email.toLowerCase() }
-        : undefined
+      idempotencyKey ? { key: idempotencyKey, principalId: user.id } : undefined
     );
 
     return jsonOk(
