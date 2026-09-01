@@ -26,6 +26,7 @@ import {
   releaseEscalationClaim,
   scheduleDelayedEscalationStep,
 } from './repository';
+import { settleEscalationFallbackOutcome } from './fallback-repository';
 
 export * from './types';
 export * from './state';
@@ -56,7 +57,6 @@ function supersededEscalationResult(): EscalationExecutionResult {
   };
 }
 
-/** The target ID a step points at, or null when its configuration is unusable. */
 function stepTargetId(step: PolicyStepRow): string | null {
   switch (step.targetType) {
     case 'USER':
@@ -70,25 +70,15 @@ function stepTargetId(step: PolicyStepRow): string | null {
   }
 }
 
-/**
- * Executes one escalation step for an incident:
- *
- *   load -> guard -> claim -> resolve -> plan -> page -> commit
- *
- * The planner decides every transition and the repository commits it in a
- * single transaction, so no branch in here writes escalation state of its own.
- */
 export interface ExecuteEscalationOptions {
-  /**
-   * The lifecycle generation this work was created for, from the job payload.
-   * When present it is verified before anything is claimed or paged, so a job
-   * left over from a superseded generation self-cancels. Legacy jobs written
-   * before generations were carried omit it and cannot be verified; they are
-   * allowed through so a rolling deploy does not drop in-flight escalations.
-   */
   generation?: number;
 }
 
+/**
+ * Executes one escalation step. The executor only orchestrates reads and domain
+ * decisions; all durable escalation state transitions live behind repository
+ * contracts.
+ */
 export async function executeEscalation(
   incidentId: string,
   stepIndex?: number,
@@ -97,8 +87,6 @@ export async function executeEscalation(
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
     include: {
-      // assignee/team feed the durable notification envelope; loading them here
-      // keeps a step to one incident read.
       assignee: true,
       team: true,
       service: {
@@ -130,7 +118,6 @@ export async function executeEscalation(
   const currentStepIndex = stepIndex ?? incident.currentEscalationStep ?? 0;
 
   if (policySteps.length === 0) {
-    // A service with no policy carries no escalation state.
     const finalized = await finalizeEscalationExecution({
       incidentId,
       expectedGeneration: generation,
@@ -146,8 +133,6 @@ export async function executeEscalation(
   }
 
   if (options.generation !== undefined && options.generation !== generation) {
-    // Refuse before resolving a target or paging anyone: this job belongs to an
-    // escalation run the incident has already moved past.
     logger.info('escalation.execution.superseded', {
       incidentId,
       jobGeneration: options.generation,
@@ -157,7 +142,6 @@ export async function executeEscalation(
   }
 
   if (escalationPolicyExhausted(currentStepIndex, policySteps.length)) {
-    // Policies do not repeat: running out of steps completes the execution.
     const finalized = await finalizeEscalationExecution({
       incidentId,
       expectedGeneration: generation,
@@ -186,7 +170,6 @@ export async function executeEscalation(
 
   if (stepDelayMinutes > 0) {
     if (!incident.nextEscalationAt) {
-      // First sighting of a delayed step: arm the state and its due job together.
       const dueAt = escalationDueAt(now, stepDelayMinutes);
       const scheduled = await scheduleDelayedEscalationStep({
         incidentId,
@@ -212,7 +195,6 @@ export async function executeEscalation(
         nextEscalationAt: incident.nextEscalationAt,
       };
     }
-    // The step is due; fall through and execute it.
   }
 
   const claim = await claimEscalationStep({
@@ -251,8 +233,6 @@ export async function executeEscalation(
         });
       } catch (error) {
         if (!(error instanceof EscalationInfrastructureError)) throw error;
-        // Escalation state was not advanced. Release the lease so the retry is
-        // not blocked, and let the caller classify this as a retryable failure.
         await releaseEscalationClaim(incidentId, workerToken);
         logger.error('escalation.target.resolution_failed', {
           incidentId,
@@ -273,9 +253,6 @@ export async function executeEscalation(
       targetType: step.targetType,
       targetId,
       resolution,
-      // A hand-assigned owner stays in the first page's audience — but only if
-      // they are still an eligible responder. The ACTIVE-only rule the target
-      // resolver applies has to hold for an extra recipient too.
       extraRecipients:
         currentStepIndex === 0 && incident.assigneeId && incident.assignee?.status === 'ACTIVE'
           ? [incident.assigneeId]
@@ -302,9 +279,6 @@ export async function executeEscalation(
       );
     }
 
-    // Resolve the pages before the transaction: recipient preferences, quiet
-    // hours, and provider configuration are all reads, and none of them belong
-    // inside the transaction that commits escalation state.
     const eventKey = [
       'ESCALATION',
       incidentId,
@@ -339,9 +313,6 @@ export async function executeEscalation(
 
     if (!commit.committed) return supersededEscalationResult();
 
-    // The step is durable from here. Delivery is best effort: whatever a provider
-    // rejects stays a persisted intent for the notification retry path, so an
-    // outage delays a page rather than losing it.
     const notifications = notificationPlan
       ? await deliverEscalationNotificationIntents(notificationPlan)
       : [];
@@ -399,17 +370,15 @@ export async function executeEscalation(
       stepIndex: currentStepIndex,
     };
   } catch (error) {
-    // Any failure before the plan commits must make the step immediately
-    // reclaimable. The token fence makes this a no-op after a successful
-    // commit or when a newer worker/lifecycle transition already owns state.
     await releaseEscalationClaim(incidentId, workerToken);
     throw error;
   }
 }
 
 /**
- * Check and execute pending escalations
- * This should be called periodically (e.g., via cron job) to process delayed escalations
+ * State-driven recovery scan for delayed escalation. The scanner owns no
+ * escalation mutations: every retry/terminal decision is generation-fenced by
+ * the fallback repository contract.
  */
 export async function processPendingEscalations(
   executorOrLimit:
@@ -420,19 +389,14 @@ export async function processPendingEscalations(
   const limit = typeof executorOrLimit === 'number' ? executorOrLimit : 50;
   const errors: string[] = [];
   let processed = 0;
-  const lockTimeoutMs = ESCALATION_LOCK_TIMEOUT_MS;
+  const lockCutoff = new Date(Date.now() - ESCALATION_LOCK_TIMEOUT_MS);
 
   try {
-    const lockCutoff = new Date(Date.now() - lockTimeoutMs);
-
-    // Find incidents that need escalation
     const pendingIncidents = await prisma.incident.findMany({
       where: {
         status: 'OPEN',
         escalationStatus: 'ESCALATING',
-        nextEscalationAt: {
-          lte: new Date(),
-        },
+        nextEscalationAt: { lte: new Date() },
         OR: [{ escalationProcessingAt: null }, { escalationProcessingAt: { lt: lockCutoff } }],
       },
       select: {
@@ -441,57 +405,42 @@ export async function processPendingEscalations(
         escalationGeneration: true,
       },
       take: limit,
-      orderBy: {
-        nextEscalationAt: 'asc',
-      },
+      orderBy: { nextEscalationAt: 'asc' },
     });
 
     const total = pendingIncidents.length;
-
-    // Process all pending escalations concurrently
-    const escalationPromises = pendingIncidents.map(async incident => {
-      // executeEscalation owns the single atomic per-incident claim. Pre-claiming
-      // here would make the executor reject its own fresh lock and strand the
-      // orphaned escalation until every lock timeout.
-      const stepIndex = incident.currentEscalationStep ?? 0;
-      try {
-        const result = await executor(incident.id, stepIndex);
-        return { incident, result } as const;
-      } catch (error) {
-        return { incident, error } as const;
-      }
-    });
-
-    const settledResults = await Promise.all(escalationPromises);
+    const settledResults = await Promise.all(
+      pendingIncidents.map(async incident => {
+        const stepIndex = incident.currentEscalationStep ?? 0;
+        try {
+          return { incident, result: await executor(incident.id, stepIndex) } as const;
+        } catch (error) {
+          return { incident, error } as const;
+        }
+      })
+    );
 
     for (const settledResult of settledResults) {
       const { incident } = settledResult;
-
       try {
         if ('error' in settledResult) throw settledResult.error;
         const { result } = settledResult;
         if (result.escalated) {
           processed++;
-        } else {
-          // executeEscalation persists terminal states itself (including FAILED),
-          // or intentionally no-ops when a newer lifecycle generation supersedes
-          // the worker. Do not overwrite either authoritative state here.
-          if (escalationStateIsAuthoritative(result.outcome)) continue;
-
-          await prisma.incident.updateMany({
-            where: {
-              id: incident.id,
-              status: 'OPEN',
-              escalationGeneration: incident.escalationGeneration ?? 0,
-              currentEscalationStep: incident.currentEscalationStep,
-            },
-            data: {
-              escalationStatus: 'ESCALATING',
-              nextEscalationAt: new Date(Date.now() + 30000),
-              escalationProcessingAt: null,
-            },
-          });
+          continue;
         }
+
+        if (escalationStateIsAuthoritative(result.outcome)) continue;
+
+        await settleEscalationFallbackOutcome({
+          incidentId: incident.id,
+          expectedGeneration: incident.escalationGeneration ?? 0,
+          expectedStep: incident.currentEscalationStep,
+          disposition: {
+            kind: 'RETRY_SCHEDULED',
+            retryAt: new Date(Date.now() + 30_000),
+          },
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         const isRetryable = escalationOutcomeForError(error) === 'RETRYABLE_FAILURE';
@@ -504,47 +453,21 @@ export async function processPendingEscalations(
         errors.push(`Incident ${incident.id}: ${errorMessage}`);
 
         try {
-          if (!isRetryable) {
-            const parked = await prisma.incident.updateMany({
-              where: {
-                id: incident.id,
-                status: 'OPEN',
-                escalationGeneration: incident.escalationGeneration ?? 0,
-                currentEscalationStep: incident.currentEscalationStep,
-              },
-              data: {
-                escalationStatus: 'FAILED',
-                nextEscalationAt: null,
-                escalationProcessingAt: null,
-              },
-            });
-
-            if (parked.count > 0) {
-              await prisma.incidentEvent
-                .create({
-                  data: {
-                    incidentId: incident.id,
-                    message: `Escalation processing failed (FATAL): ${errorMessage}`,
-                  },
-                })
-                .catch(() => {});
-            }
-          } else {
-            await prisma.incident.updateMany({
-              where: {
-                id: incident.id,
-                status: 'OPEN',
-                escalationGeneration: incident.escalationGeneration ?? 0,
-                currentEscalationStep: incident.currentEscalationStep,
-              },
-              data: { escalationProcessingAt: null },
-            });
+          await settleEscalationFallbackOutcome({
+            incidentId: incident.id,
+            expectedGeneration: incident.escalationGeneration ?? 0,
+            expectedStep: incident.currentEscalationStep,
+            disposition: isRetryable
+              ? { kind: 'RETRYABLE_FAILURE' }
+              : { kind: 'TERMINAL_FAILURE', message: errorMessage },
+          });
+          if (isRetryable) {
             logger.warn('Escalation failed with retryable error, releasing lock', {
               incidentId: incident.id,
             });
           }
         } catch (updateError) {
-          logger.error('Failed to update incident after escalation error', {
+          logger.error('Failed to settle incident after escalation error', {
             incidentId: incident.id,
             updateError: updateError instanceof Error ? updateError.message : 'Unknown error',
           });
@@ -560,10 +483,6 @@ export async function processPendingEscalations(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Error in processPendingEscalations batch loop', { error: errorMessage });
-    return {
-      processed,
-      total: 0,
-      errors: [errorMessage],
-    };
+    return { processed, total: 0, errors: [errorMessage] };
   }
 }
