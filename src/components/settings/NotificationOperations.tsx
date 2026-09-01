@@ -11,12 +11,8 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
-  Mail,
-  Phone,
-  Bell,
   MessageSquare,
   Radio,
-  MessageCircle,
   XCircle,
   SlidersHorizontal,
   ExternalLink,
@@ -90,23 +86,30 @@ type OperationsResponse = {
   pagination: { nextCursor: string | null; hasMore: boolean };
 };
 
+import {
+  TwilioLogo,
+  WhatsAppLogo,
+  WebPushLogo,
+  SmtpLogo,
+} from '@/components/settings/ProviderBrandLogos';
+
 type Props = { canRetry: boolean };
 
 function getChannelIcon(channel: string) {
-  switch (channel) {
+  switch (channel.toUpperCase()) {
     case 'EMAIL':
-      return <Mail className="h-3 w-3 text-blue-500" />;
+      return <SmtpLogo size={14} />;
     case 'SMS':
-      return <Phone className="h-3 w-3 text-indigo-500" />;
+      return <TwilioLogo size={14} />;
     case 'PUSH':
-      return <Bell className="h-3 w-3 text-purple-500" />;
-    case 'SLACK':
-      return <MessageSquare className="h-3 w-3 text-emerald-500" />;
+      return <WebPushLogo size={14} />;
     case 'WHATSAPP':
-      return <MessageCircle className="h-3 w-3 text-green-500" />;
+      return <WhatsAppLogo size={14} />;
+    case 'SLACK':
+      return <MessageSquare className="h-3.5 w-3.5 text-emerald-500" />;
     case 'WEBHOOK':
     default:
-      return <Radio className="h-3 w-3 text-amber-500" />;
+      return <Radio className="h-3.5 w-3.5 text-amber-500" />;
   }
 }
 

@@ -28,15 +28,12 @@ import {
   EyeOff,
   Key,
   ShieldCheck,
-  Mail,
-  MessageSquare,
-  Phone,
-  Bell,
   Sparkles,
   Save,
 } from 'lucide-react';
 import type { ProviderRecord, ProviderConfigSchema, SaveStatus } from '@/types/notification-types';
 import { notify as toast } from '@/lib/toast';
+import { getProviderBrandLogo } from '@/components/settings/ProviderBrandLogos';
 
 interface ProviderCardProps {
   providerConfig: ProviderConfigSchema;
@@ -44,23 +41,6 @@ interface ProviderCardProps {
   isExpanded: boolean;
   onToggle: () => void;
   twilioProvider?: ProviderRecord;
-}
-
-function getProviderIcon(key: string) {
-  switch (key) {
-    case 'twilio':
-      return <Phone className="h-4 w-4 text-blue-500" />;
-    case 'whatsapp':
-      return <MessageSquare className="h-4 w-4 text-emerald-500" />;
-    case 'web-push':
-      return <Bell className="h-4 w-4 text-indigo-500" />;
-    case 'resend':
-    case 'sendgrid':
-    case 'ses':
-    case 'smtp':
-    default:
-      return <Mail className="h-4 w-4 text-amber-500" />;
-  }
 }
 
 export default function ProviderCard({
@@ -290,8 +270,8 @@ export default function ProviderCard({
       <CardHeader className="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0 mt-0.5">
-              {getProviderIcon(providerConfig.key)}
+            <div className="p-2 rounded-xl bg-background border border-border/80 shadow-xs shrink-0 mt-0.5 flex items-center justify-center">
+              {getProviderBrandLogo(providerConfig.key, 24)}
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
