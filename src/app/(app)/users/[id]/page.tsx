@@ -1,8 +1,7 @@
 import prisma from '@/lib/prisma';
-import { notFound, redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { notFound } from 'next/navigation';
 import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Mail,
@@ -46,46 +45,33 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
   const resolvedSearchParams = await searchParams;
   const defaultTab = resolvedSearchParams?.tab || 'overview';
 
-  const session = await getServerSession(await getAuthOptions());
-  if (!session?.user?.email) {
-    redirect(`/login?callbackUrl=/users/${id}`);
-  }
   const viewer = await getCurrentUser();
-  if (viewer.role !== 'ADMIN' && viewer.id !== id) {
-    notFound();
-  }
+  const viewerCanAdministerUsers = hasCapability(viewer.role, CAPABILITIES.ADMIN_MANAGE);
+  if (!viewerCanAdministerUsers && viewer.id !== id) notFound();
 
-  const [user, permissions, currentUser] = await Promise.all([
+  const [user, permissions] = await Promise.all([
     prisma.user.findUnique({
       where: { id },
       include: {
         teamMemberships: {
           include: {
-            team: {
-              select: { id: true, name: true, description: true },
-            },
+            team: { select: { id: true, name: true, description: true } },
           },
           orderBy: { team: { name: 'asc' } },
         },
-        teamsLed: {
-          select: { id: true, name: true },
-        },
+        teamsLed: { select: { id: true, name: true } },
         layerAssignments: {
           include: {
             layer: {
               include: {
-                schedule: {
-                  select: { id: true, name: true, timeZone: true },
-                },
+                schedule: { select: { id: true, name: true, timeZone: true } },
               },
             },
           },
         },
         escalationRules: {
           include: {
-            policy: {
-              select: { id: true, name: true, description: true },
-            },
+            policy: { select: { id: true, name: true, description: true } },
           },
           orderBy: { stepOrder: 'asc' },
         },
@@ -103,41 +89,26 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
           take: 15,
         },
         auditLogs: {
-          select: {
-            id: true,
-            action: true,
-            createdAt: true,
-            details: true,
-          },
+          select: { id: true, action: true, createdAt: true, details: true },
           orderBy: { createdAt: 'desc' },
           take: 15,
         },
       },
     }),
     getUserPermissions(),
-    prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, role: true },
-    }),
   ]);
 
-  if (!user) {
-    notFound();
-  }
+  if (!user) notFound();
 
-  const isSelf = currentUser?.id === user.id;
+  const isSelf = viewer.id === user.id;
   const canManage = permissions.isAdmin || isSelf;
   const canManageRole = permissions.isAdmin;
-
-  // Compute summary stats
   const totalIncidents = user.assignedIncidents.length;
   const totalTeams = user.teamMemberships.length;
   const totalSchedules = user.layerAssignments.length;
   const totalPolicies = user.escalationRules.length;
-
   const localTimeStr = formatLocalTimeInTz(user.timeZone);
 
-  // Transform auditLogs.details to match UserDetailProfile type
   const transformedUser = {
     id: user.id,
     name: user.name,
@@ -174,11 +145,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Users',
-          href: '/users',
-          current: user.name,
-        }}
+        breadcrumb={{ label: 'Users', href: '/users', current: user.name }}
         tag="User Profile"
         title={user.name}
         icon={
@@ -238,21 +205,18 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
               <Mail className="h-3.5 w-3.5 opacity-80" />
               <span>{user.email}</span>
             </a>
-
             {user.jobTitle && (
               <span className="flex items-center gap-1.5">
                 <Briefcase className="h-3.5 w-3.5 opacity-80" />
                 <span>{user.jobTitle}</span>
               </span>
             )}
-
             {user.department && (
               <span className="flex items-center gap-1.5">
                 <Building2 className="h-3.5 w-3.5 opacity-80" />
                 <span>{user.department}</span>
               </span>
             )}
-
             <span className="flex items-center gap-1.5 bg-primary-foreground/10 px-2 py-0.5 rounded border border-primary-foreground/15">
               <Clock className="h-3 w-3 opacity-80" />
               <span>{localTimeStr}</span>
@@ -260,26 +224,10 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
           </div>
         }
         stats={[
-          {
-            label: 'Incidents',
-            value: totalIncidents,
-            icon: <Flame className="h-3.5 w-3.5" />,
-          },
-          {
-            label: 'Teams',
-            value: totalTeams,
-            icon: <Users className="h-3.5 w-3.5" />,
-          },
-          {
-            label: 'On-Call',
-            value: totalSchedules,
-            icon: <Calendar className="h-3.5 w-3.5" />,
-          },
-          {
-            label: 'Policies',
-            value: totalPolicies,
-            icon: <ShieldAlert className="h-3.5 w-3.5" />,
-          },
+          { label: 'Incidents', value: totalIncidents, icon: <Flame className="h-3.5 w-3.5" /> },
+          { label: 'Teams', value: totalTeams, icon: <Users className="h-3.5 w-3.5" /> },
+          { label: 'On-Call', value: totalSchedules, icon: <Calendar className="h-3.5 w-3.5" /> },
+          { label: 'Policies', value: totalPolicies, icon: <ShieldAlert className="h-3.5 w-3.5" /> },
         ]}
         actions={
           <UserProfileHeaderActions
@@ -304,7 +252,6 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
         }
       />
 
-      {/* 4-Tab Full-Width Profile Workspace */}
       <UserDetailTabs user={transformedUser} canManage={canManage} defaultTab={defaultTab} />
     </main>
   );
