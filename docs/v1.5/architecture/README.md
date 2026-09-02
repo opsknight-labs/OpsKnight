@@ -22,6 +22,7 @@ Start with these two guides:
 - [System settings](./settings) — settings boundaries, roles, API keys, and secret handling.
 - [Analytics surface matrix](./analytics-parity-audit) — desktop, mobile, executive, and export behavior.
 - [Incident metric contract](./metric-contract) — canonical formulas, scopes, data states, drill-downs, and trend semantics.
+- [Metrics and observability contract](./metrics-observability) — exporter scope, aggregation, availability, and label-safety rules.
 
 ## Important boundaries
 

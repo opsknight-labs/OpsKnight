@@ -132,17 +132,17 @@ Set the public and private variables together. The database-backed Web Push prov
 
 ## Operations and observability
 
-| Variable                                  | Default                    | Description                                                                                                                       |
-| ----------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `LOG_LEVEL`                               | `info`                     | Minimum structured-log level: `debug`, `info`, `warn`, or `error`.                                                                |
-| `LOG_FORMAT`                              | Environment dependent      | Set to `json` for JSON output.                                                                                                    |
-| `LOG_BUFFER_MAX`                          | `500`                      | Maximum in-memory log-buffer size.                                                                                                |
-| `SENTRY_DSN`                              | —                          | Requests optional Sentry initialization when a custom build includes `@sentry/nextjs`; the standard v1.4 dependency set does not. |
-| `SENTRY_ENVIRONMENT`                      | `NODE_ENV`                 | Optional Sentry environment label for such a custom build.                                                                        |
-| `SENTRY_FORCE_ENABLE`                     | `false`                    | Enables that optional Sentry path outside production when `true`.                                                                 |
-| `NEXT_PUBLIC_ENABLE_WEB_VITALS`           | `false` outside production | Enables browser Web Vitals reporting outside production.                                                                          |
-| `APP_VERSION` / `NEXT_PUBLIC_APP_VERSION` | Package version            | Server/public version label override.                                                                                             |
-| `PROMETHEUS_SCRAPE_TOKEN`                 | —                          | Bearer token for authenticated scraping of `/api/metrics`; use a high-entropy secret.                                             |
+| Variable                                  | Default                    | Description                                                                                                                                               |
+| ----------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LOG_LEVEL`                               | `info`                     | Minimum structured-log level: `debug`, `info`, `warn`, or `error`.                                                                                        |
+| `LOG_FORMAT`                              | Environment dependent      | Set to `json` for JSON output.                                                                                                                            |
+| `LOG_BUFFER_MAX`                          | `500`                      | Maximum in-memory log-buffer size.                                                                                                                        |
+| `SENTRY_DSN`                              | —                          | Requests optional Sentry initialization when a custom build includes `@sentry/nextjs`; the standard v1.4 dependency set does not.                         |
+| `SENTRY_ENVIRONMENT`                      | `NODE_ENV`                 | Optional Sentry environment label for such a custom build.                                                                                                |
+| `SENTRY_FORCE_ENABLE`                     | `false`                    | Enables that optional Sentry path outside production when `true`.                                                                                         |
+| `NEXT_PUBLIC_ENABLE_WEB_VITALS`           | `false` outside production | Enables browser Web Vitals reporting outside production.                                                                                                  |
+| `APP_VERSION` / `NEXT_PUBLIC_APP_VERSION` | Package version            | Server/public version label override.                                                                                                                     |
+| `PROMETHEUS_SCRAPE_TOKEN`                 | —                          | Bearer token for authenticated scraping of `/api/metrics`; use a high-entropy secret and follow the [Prometheus metrics guide](../deployment/prometheus). |
 
 OpenTelemetry variables are not consumed by the v1.4 application code and are therefore not part of this reference.
 

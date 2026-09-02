@@ -234,7 +234,7 @@ docker run -d --name opsknight -p 3000:3000 \
 ```
 
 PostgreSQL 14+ is required. See the
-[deployment guides](docs/v1.4/deployment/README.md) for TLS, connection pooling
+[deployment guides](docs/v1.5/deployment/README.md) for TLS, connection pooling
 and scaling.
 
 ---
@@ -270,9 +270,9 @@ We support multiple deployment strategies to fit your infrastructure needs.
 
 | Method                                                                                                        | Best For                            | Guide                                            |
 | :------------------------------------------------------------------------------------------------------------ | :---------------------------------- | :----------------------------------------------- |
-| ![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white) **Docker Compose**     | Local Development, small teams      | [Read Guide](docs/v1.4/deployment/docker.md)     |
-| ![](https://img.shields.io/badge/Kubernetes-326CE5?style=flat&logo=kubernetes&logoColor=white) **Helm Chart** | Production Kubernetes (Recommended) | [Read Guide](docs/v1.4/deployment/helm.md)       |
-| ![](https://img.shields.io/badge/-GitOps-black?style=flat&logo=git&logoColor=white) **Kustomize**             | GitOps (ArgoCD/Flux)                | [Read Guide](docs/v1.4/deployment/kubernetes.md) |
+| ![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white) **Docker Compose**     | Local Development, small teams      | [Read Guide](docs/v1.5/deployment/docker.md)     |
+| ![](https://img.shields.io/badge/Kubernetes-326CE5?style=flat&logo=kubernetes&logoColor=white) **Helm Chart** | Production Kubernetes (Recommended) | [Read Guide](docs/v1.5/deployment/helm.md)       |
+| ![](https://img.shields.io/badge/-GitOps-black?style=flat&logo=git&logoColor=white) **Kustomize**             | GitOps (ArgoCD/Flux)                | [Read Guide](docs/v1.5/deployment/kubernetes.md) |
 
 > **Note:** For production, we recommend using an external managed PostgreSQL database.
 
@@ -296,13 +296,14 @@ OpsKnight runs as a single Next.js application (UI + API routes + server actions
 Everything you need to configure and extend OpsKnight.
 
 - **[Hosted Documentation](https://opsknight.com/docs)** (Recommended)
-- **In-Repo Guides (v1.2)**:
-  - [⚡ Getting Started](docs/v1.4/getting-started/README.md)
-  - [🧩 Core Concepts](docs/v1.4/core-concepts/README.md)
-  - [🔌 Integrations](docs/v1.4/integrations/README.md)
-  - [🛡️ Security](docs/v1.4/security/README.md)
-  - [📡 API Reference](docs/v1.4/api/README.md)
-  - [🔧 Administration](docs/v1.4/administration/README.md)
+- **In-Repo Guides (v1.5)**:
+  - [⚡ Getting Started](docs/v1.5/getting-started/README.md)
+  - [🧩 Core Concepts](docs/v1.5/core-concepts/README.md)
+  - [🔌 Integrations](docs/v1.5/integrations/README.md)
+  - [🛡️ Security](docs/v1.5/security/README.md)
+  - [📡 API Reference](docs/v1.5/api/README.md)
+  - [🔧 Administration](docs/v1.5/administration/README.md)
+  - [📈 Prometheus Metrics](docs/v1.5/deployment/prometheus.md)
 
 ---
 

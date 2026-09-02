@@ -147,6 +147,16 @@ Connection limits are per application process. Size PostgreSQL capacity for the 
 
 The application ServiceAccount token is not mounted by default because OpsKnight does not require Kubernetes API access. Set `serviceAccount.automount: true` only for a deliberate extension that needs it.
 
+## Prometheus metrics
+
+The chart can inject `PROMETHEUS_SCRAPE_TOKEN` from an existing Secret and render an authenticated
+`ServiceMonitor`. Enabling the monitor without `metrics.scrapeTokenSecret.existingSecret` fails chart
+rendering. When NetworkPolicy is enabled, explicitly allow the selected Prometheus pods or namespace
+to reach the application port.
+
+See [Prometheus metrics](./prometheus) for production values, Secret creation, Operator selectors,
+NetworkPolicy, recording rules, PromQL, and validation.
+
 ## Upgrade and rollback
 
 Before upgrading:
@@ -175,5 +185,6 @@ helm upgrade opsknight helm/opsknight \
 - [Kubernetes](./kubernetes)
 - [Kustomize](./kustomize)
 - [Docker Compose](./docker)
+- [Prometheus metrics](./prometheus)
 - [Configuration reference](../getting-started/configuration)
 - [Maintenance](./maintenance)
