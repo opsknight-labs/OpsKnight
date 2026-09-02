@@ -1034,6 +1034,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     resolvedAt: true,
     slaPausedMs: true,
     slaPauseStartedAt: true,
+    slaAckTargetMs: true,
+    slaResolveTargetMs: true,
     slaPauses: { select: { startedAt: true, endedAt: true } },
     service: {
       select: {
@@ -1079,6 +1081,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         serviceId: true,
         createdAt: true,
         acknowledgedAt: true,
+        slaAckTargetMs: true,
+        slaResolveTargetMs: true,
         slaPauses: { select: { startedAt: true, endedAt: true } },
       },
     }),
@@ -1722,6 +1726,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     // In-memory calculation for small datasets
     for (const incident of recentIncidents) {
       const target = resolveSlaTarget({
+        incidentTargets: {
+          ackTargetMs: incident.slaAckTargetMs,
+          resolveTargetMs: incident.slaResolveTargetMs,
+        },
         priority: incident.priority,
         serviceTargets: {
           ackMinutes: incident.service.targetAckMinutes,
@@ -1835,6 +1843,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         trendEntry.ackCount += 1;
         const serviceTargets = serviceTargetMap.get(incident.serviceId);
         const target = resolveSlaTarget({
+          incidentTargets: {
+            ackTargetMs: incident.slaAckTargetMs,
+            resolveTargetMs: incident.slaResolveTargetMs,
+          },
           priority: incident.priority,
           serviceTargets,
           globalDefaults: {
@@ -1938,6 +1950,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
     s.count++;
     const target = resolveSlaTarget({
+      incidentTargets: {
+        ackTargetMs: incident.slaAckTargetMs,
+        resolveTargetMs: incident.slaResolveTargetMs,
+      },
       priority: incident.priority,
       serviceTargets: {
         ackMinutes: incident.service.targetAckMinutes,
@@ -2189,6 +2205,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     ? activeIncidentsData.map(incident => {
         const serviceTargets = serviceTargetMap.get(incident.serviceId);
         const target = resolveSlaTarget({
+          incidentTargets: {
+            ackTargetMs: incident.slaAckTargetMs,
+            resolveTargetMs: incident.slaResolveTargetMs,
+          },
           priority: incident.priority,
           serviceTargets,
         });
@@ -2529,6 +2549,33 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
   const end = new Date(date);
   end.setUTCHours(23, 59, 59, 999);
 
+  const existingSnapshot = await prisma.sLASnapshot.findUnique({
+    where: {
+      date_slaDefinitionId: {
+        date: start,
+        slaDefinitionId: definitionId,
+      },
+    },
+    select: {
+      targetAckMinutes: true,
+      targetResolveMinutes: true,
+      definitionVersion: true,
+      targetCapturedAt: true,
+      targetSource: true,
+    },
+  });
+  const targetAckTime = existingSnapshot
+    ? existingSnapshot.targetAckMinutes
+    : definition.targetAckTime;
+  const targetResolveTime = existingSnapshot
+    ? existingSnapshot.targetResolveMinutes
+    : definition.targetResolveTime;
+  const snapshotDefinitionVersion = existingSnapshot
+    ? existingSnapshot.definitionVersion
+    : definition.version;
+  const snapshotTargetCapturedAt = existingSnapshot?.targetCapturedAt ?? new Date();
+  const snapshotTargetSource = existingSnapshot?.targetSource ?? 'DEFINITION_CAPTURED';
+
   // Filter incidents based on definition scope
   const whereClause: Prisma.IncidentWhereInput = {
     createdAt: { gte: start, lte: end },
@@ -2546,6 +2593,8 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
       status: true,
       slaPausedMs: true,
       slaPauseStartedAt: true,
+      slaAckTargetMs: true,
+      slaResolveTargetMs: true,
       slaPauses: { select: { startedAt: true, endedAt: true } },
     },
   });
@@ -2558,9 +2607,6 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
   // Manual callers can request today's snapshot. Never evaluate against a
   // future end-of-day, which would manufacture breaches that have not happened.
   const evaluationTime = new Date(Math.min(end.getTime(), Date.now()));
-  const targetAckTime = (definition as { targetAckTime?: number }).targetAckTime;
-  const targetResolveTime = (definition as { targetResolveTime?: number }).targetResolveTime;
-
   for (const incident of incidents) {
     const elapsedAt = (at: Date) =>
       effectiveElapsedMs({
@@ -2626,6 +2672,11 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
       evaluatedResolveCount: totalResolveEvaluated,
       denominatorUnknown: false,
       complianceScore: score,
+      targetAckMinutes: targetAckTime,
+      targetResolveMinutes: targetResolveTime,
+      definitionVersion: snapshotDefinitionVersion,
+      targetCapturedAt: snapshotTargetCapturedAt,
+      targetSource: snapshotTargetSource,
     },
     update: {
       totalIncidents: total,
@@ -2652,6 +2703,10 @@ export async function checkIncidentSLA(incidentId: string): Promise<IncidentSLAR
 
   const now = new Date();
   const target = resolveSlaTarget({
+    incidentTargets: {
+      ackTargetMs: incident.slaAckTargetMs,
+      resolveTargetMs: incident.slaResolveTargetMs,
+    },
     priority: incident.priority,
     serviceTargets: {
       ackMinutes: incident.service.targetAckMinutes,

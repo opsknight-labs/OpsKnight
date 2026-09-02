@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { definitionFindMock, incidentFindManyMock, snapshotUpsertMock } = vi.hoisted(() => ({
-  definitionFindMock: vi.fn(),
-  incidentFindManyMock: vi.fn(),
-  snapshotUpsertMock: vi.fn(),
-}));
+const { definitionFindMock, incidentFindManyMock, snapshotFindMock, snapshotUpsertMock } = vi.hoisted(
+  () => ({
+    definitionFindMock: vi.fn(),
+    incidentFindManyMock: vi.fn(),
+    snapshotFindMock: vi.fn(),
+    snapshotUpsertMock: vi.fn(),
+  })
+);
 
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     sLADefinition: { findUnique: definitionFindMock },
     incident: { findMany: incidentFindManyMock },
-    sLASnapshot: { upsert: snapshotUpsertMock },
+    sLASnapshot: { findUnique: snapshotFindMock, upsert: snapshotUpsertMock },
   },
 }));
 
@@ -29,7 +32,9 @@ describe('generateDailySnapshot', () => {
       serviceId: null,
       targetAckTime: 15,
       targetResolveTime: 120,
+      version: 1,
     });
+    snapshotFindMock.mockResolvedValue(null);
   });
 
   it('counts a resolved but never acknowledged incident as an ACK breach', async () => {
@@ -41,6 +46,7 @@ describe('generateDailySnapshot', () => {
         resolvedAt: new Date('2026-08-01T01:00:00.000Z'),
         updatedAt: new Date('2026-08-01T01:00:00.000Z'),
         status: 'RESOLVED',
+        slaPauses: [],
       },
     ]);
 
@@ -63,6 +69,7 @@ describe('generateDailySnapshot', () => {
         resolvedAt: null,
         updatedAt: new Date('2026-08-01T01:00:00.000Z'),
         status: 'RESOLVED',
+        slaPauses: [],
       },
     ]);
 

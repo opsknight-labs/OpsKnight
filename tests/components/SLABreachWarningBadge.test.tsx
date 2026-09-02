@@ -72,6 +72,10 @@ describe('SLABreachWarningBadge', () => {
     warRoomArchivedAt: null,
     slaPausedMs: BigInt(0),
     slaPauseStartedAt: null,
+    slaAckTargetMs: null,
+    slaResolveTargetMs: null,
+    slaTargetSource: null,
+    slaTargetCapturedAt: null,
   };
 
   it('renders correctly with Date objects', () => {
