@@ -1547,6 +1547,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       status: string;
       resolvedAt: Date | null;
       updatedAt?: Date | null;
+      slaPauses: Array<{ startedAt: Date; endedAt: Date | null }>;
     }>,
     eventsMap: Map<string, Date>
   ) => {
@@ -1566,7 +1567,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       // Ack
       const ackAt = inc.acknowledgedAt || eventsMap.get(inc.id);
       if (ackAt && inc.createdAt) {
-        const diff = ackAt.getTime() - inc.createdAt.getTime();
+        const diff = effectiveElapsedMs({
+          startedAt: inc.createdAt,
+          evaluationAt: ackAt,
+          pauses: inc.slaPauses,
+        });
         if (diff >= 0) {
           ackSum += diff;
           ackCount++;
@@ -1577,7 +1582,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       if (inc.status === 'RESOLVED') {
         const resAt = inc.resolvedAt || inc.updatedAt;
         if (resAt && inc.createdAt) {
-          const diff = resAt.getTime() - inc.createdAt.getTime();
+          const diff = effectiveElapsedMs({
+            startedAt: inc.createdAt,
+            evaluationAt: resAt,
+            pauses: inc.slaPauses,
+          });
           if (diff >= 0) {
             resolveSum += diff;
             resolveCount++;
@@ -1808,15 +1817,30 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       trendEntry.count += 1;
       const ackAt = ackMap.get(incident.id);
       if (ackAt) {
-        trendEntry.ackSum += ackAt.getTime() - incident.createdAt.getTime();
+        const ackElapsed = effectiveElapsedMs({
+          startedAt: incident.createdAt,
+          evaluationAt: ackAt,
+          pauses: incident.slaPauses,
+        });
+        trendEntry.ackSum += ackElapsed;
         trendEntry.ackCount += 1;
-        const targets = serviceTargetMap.get(incident.serviceId);
-        const ackTarget = targets?.ackMinutes ?? DEFAULT_ACK_TARGET_MINUTES;
-        const ackDiffMin = (ackAt.getTime() - incident.createdAt.getTime()) / 60000;
-        if (ackDiffMin <= ackTarget) trendEntry.ackSlaMet += 1;
+        const serviceTargets = serviceTargetMap.get(incident.serviceId);
+        const target = resolveSlaTarget({
+          priority: incident.priority,
+          serviceTargets,
+          globalDefaults: {
+            ackMinutes: DEFAULT_ACK_TARGET_MINUTES,
+            resolveMinutes: DEFAULT_RESOLVE_TARGET_MINUTES,
+          },
+        });
+        if (ackElapsed <= target.ackTargetMs) trendEntry.ackSlaMet += 1;
       }
       if (incident.status === 'RESOLVED' && incident.resolvedAt) {
-        trendEntry.resolveSum += incident.resolvedAt.getTime() - incident.createdAt.getTime();
+        trendEntry.resolveSum += effectiveElapsedMs({
+          startedAt: incident.createdAt,
+          evaluationAt: incident.resolvedAt,
+          pauses: incident.slaPauses,
+        });
         trendEntry.resolveCount += 1;
       }
     }
@@ -3132,9 +3156,7 @@ export async function calculateSLAMetricsFromRollups(
   // which is more accurate. Same-day churn is rare; flagged as a known
   // delta in the data-source contract.
   const ackRateApprox =
-    !priorityFilter && totalIncidents > 0
-      ? ((acknowledgedIncidents + resolvedIncidents) / totalIncidents) * 100
-      : 0;
+    !priorityFilter && totalIncidents > 0 ? (mttaCount / totalIncidents) * 100 : 0;
   const resolveRateApprox =
     !priorityFilter && totalIncidents > 0 ? (resolvedIncidents / totalIncidents) * 100 : 0;
 
@@ -3144,11 +3166,11 @@ export async function calculateSLAMetricsFromRollups(
   // `manualResolved = resolved - autoResolved` can go negative when event
   // ILIKE matching over-counts auto-resolves (a known fragility in the
   // event-message classifier). Clamp at 0 and log.
-  const rawManualResolved = resolvedIncidents - autoResolveCount;
+  const rawManualResolved = resolvedIncidents - autoResolvedIncidentCount;
   if (rawManualResolved < 0) {
     logger.warn('[SLA] manualResolved computed as negative; clamping to 0', {
       resolvedIncidents,
-      autoResolveCount,
+      autoResolvedIncidentCount,
     });
   }
   const manualResolvedCount = Math.max(0, rawManualResolved);

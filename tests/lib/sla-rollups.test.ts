@@ -28,8 +28,14 @@ const makeRollup = (overrides: Record<string, unknown> = {}) => ({
   resolveSlaMet: 5,
   resolveSlaBreached: 2,
   escalationCount: 2,
+  escalationEventCount: 2,
+  escalatedIncidentCount: 2,
   reopenCount: 0,
+  reopenEventCount: 0,
+  reopenedIncidentCount: 0,
   autoResolveCount: 3,
+  autoResolveEventCount: 3,
+  autoResolvedIncidentCount: 3,
   alertCount: 0,
   afterHoursCount: 2,
   createdAt: new Date(),
@@ -226,7 +232,13 @@ describe('calculateSLAMetricsFromRollups', () => {
     findManyMock.mockResolvedValueOnce([
       // 2 resolves but the event-classifier thinks 5 were auto-resolved
       // (over-counted from message ILIKE matching).
-      makeRollup({ totalIncidents: 5, resolvedIncidents: 2, autoResolveCount: 5 }),
+      makeRollup({
+        totalIncidents: 5,
+        resolvedIncidents: 2,
+        autoResolveCount: 5,
+        autoResolveEventCount: 5,
+        autoResolvedIncidentCount: 2,
+      }),
     ]);
     findManyMock.mockResolvedValueOnce([]);
 
@@ -239,6 +251,50 @@ describe('calculateSLAMetricsFromRollups', () => {
     );
 
     expect(result.manualResolvedCount).toBe(0);
+  });
+
+  it('derives ACK rate from canonical acknowledged samples, not resolved status', async () => {
+    findManyMock.mockResolvedValueOnce([
+      makeRollup({
+        totalIncidents: 10,
+        acknowledgedIncidents: 0,
+        resolvedIncidents: 8,
+        mttaCount: 3,
+      }),
+    ]);
+    findManyMock.mockResolvedValueOnce([]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false
+    );
+
+    expect(result.ackRate).toBe(30);
+  });
+
+  it('subtracts distinct auto-resolved incidents, not raw auto-resolve events', async () => {
+    findManyMock.mockResolvedValueOnce([
+      makeRollup({
+        resolvedIncidents: 7,
+        autoResolveCount: 5,
+        autoResolveEventCount: 5,
+        autoResolvedIncidentCount: 2,
+      }),
+    ]);
+    findManyMock.mockResolvedValueOnce([]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false
+    );
+
+    expect(result.manualResolvedCount).toBe(5);
   });
 
   it('applies priority filter to the heatmap as well as the headline metrics', async () => {

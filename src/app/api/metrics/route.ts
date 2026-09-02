@@ -16,6 +16,9 @@ type MetricsSnapshot = {
   }> | null;
   incidentCount: number | null;
   activeUsers: number | null;
+  notificationBacklog: { count: number; oldestAt: Date | null } | null;
+  escalationBacklog: { count: number; oldestDueAt: Date | null } | null;
+  rollupUpdatedAt: Date | null | undefined;
   collectedAt: number;
 };
 
@@ -71,21 +74,22 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
   }
   metricsCacheMisses += 1;
   metricsInflight = (async () => {
-    const [jobs, jobTypes, incidents, users] = await Promise.allSettled([
-      collectWithTimeout('jobs', DB_COLLECTOR_TIMEOUT_MS, () =>
-        prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } })
-      ),
-      collectWithTimeout(
-        'job-types',
-        DB_COLLECTOR_TIMEOUT_MS,
-        () => prisma.$queryRaw<
-          Array<{
-            type: string;
-            status: string;
-            count: bigint;
-            oldestPendingAgeSeconds: number | null;
-          }>
-        >`
+    const [jobs, jobTypes, incidents, users, notifications, escalations, rollup] =
+      await Promise.allSettled([
+        collectWithTimeout('jobs', DB_COLLECTOR_TIMEOUT_MS, () =>
+          prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } })
+        ),
+        collectWithTimeout(
+          'job-types',
+          DB_COLLECTOR_TIMEOUT_MS,
+          () => prisma.$queryRaw<
+            Array<{
+              type: string;
+              status: string;
+              count: bigint;
+              oldestPendingAgeSeconds: number | null;
+            }>
+          >`
         SELECT "type"::text, "status"::text, COUNT(*)::bigint AS count,
           CASE WHEN "status" = 'PENDING'
             THEN EXTRACT(EPOCH FROM (NOW() - MIN("scheduledAt")))::double precision
@@ -95,14 +99,37 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
         WHERE "status" IN ('PENDING', 'PROCESSING')
         GROUP BY "type", "status"
       `
-      ),
-      collectWithTimeout('incidents', DB_COLLECTOR_TIMEOUT_MS, () =>
-        prisma.incident.count({ where: { status: { in: activeIncidentStatuses() } } })
-      ),
-      collectWithTimeout('users', DB_COLLECTOR_TIMEOUT_MS, () =>
-        prisma.user.count({ where: { status: 'ACTIVE' } })
-      ),
-    ]);
+        ),
+        collectWithTimeout('incidents', DB_COLLECTOR_TIMEOUT_MS, () =>
+          prisma.incident.count({ where: { status: { in: activeIncidentStatuses() } } })
+        ),
+        collectWithTimeout('users', DB_COLLECTOR_TIMEOUT_MS, () =>
+          prisma.user.count({ where: { status: 'ACTIVE' } })
+        ),
+        collectWithTimeout('notifications', DB_COLLECTOR_TIMEOUT_MS, async () => {
+          const value = await prisma.notification.aggregate({
+            where: { status: { in: ['PENDING', 'FAILED'] } },
+            _count: { id: true },
+            _min: { createdAt: true },
+          });
+          return { count: value._count.id, oldestAt: value._min.createdAt };
+        }),
+        collectWithTimeout('escalations', DB_COLLECTOR_TIMEOUT_MS, async () => {
+          const value = await prisma.incident.aggregate({
+            where: { escalationStatus: 'ESCALATING', nextEscalationAt: { lt: new Date() } },
+            _count: { id: true },
+            _min: { nextEscalationAt: true },
+          });
+          return { count: value._count.id, oldestDueAt: value._min.nextEscalationAt };
+        }),
+        collectWithTimeout('rollup-freshness', DB_COLLECTOR_TIMEOUT_MS, () =>
+          prisma.incidentMetricRollup.findFirst({
+            where: { granularity: 'daily' },
+            orderBy: { date: 'desc' },
+            select: { updatedAt: true },
+          })
+        ),
+      ]);
     const value: MetricsSnapshot = {
       jobStats:
         jobs.status === 'fulfilled'
@@ -117,13 +144,19 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
           : null,
       incidentCount: incidents.status === 'fulfilled' ? incidents.value : null,
       activeUsers: users.status === 'fulfilled' ? users.value : null,
+      notificationBacklog: notifications.status === 'fulfilled' ? notifications.value : null,
+      escalationBacklog: escalations.status === 'fulfilled' ? escalations.value : null,
+      rollupUpdatedAt: rollup.status === 'fulfilled' ? rollup.value?.updatedAt : undefined,
       collectedAt: Date.now(),
     };
     const degraded =
       value.jobStats === null ||
       value.jobTypeStats === null ||
       value.incidentCount === null ||
-      value.activeUsers === null;
+      value.activeUsers === null ||
+      value.notificationBacklog === null ||
+      value.escalationBacklog === null ||
+      value.rollupUpdatedAt === undefined;
     // A JS timeout cannot cancel every Prisma operation. Back off degraded
     // collectors so repeated scrapes cannot create an unbounded query storm.
     metricsCache = { value, expiresAt: Date.now() + (degraded ? 60_000 : 10_000) };
@@ -187,12 +220,34 @@ async function getMetrics(req: Request) {
       }
     }
   }
+  const ageSeconds = (date: Date | null) =>
+    date ? Math.max(0, (Date.now() - date.getTime()) / 1000) : 0;
+  if (snapshot.notificationBacklog) {
+    metrics.set('opsknight_notifications_undelivered', snapshot.notificationBacklog.count);
+    metrics.set(
+      'opsknight_notifications_oldest_undelivered_age_seconds',
+      ageSeconds(snapshot.notificationBacklog.oldestAt)
+    );
+  }
+  if (snapshot.escalationBacklog) {
+    metrics.set('opsknight_escalations_overdue', snapshot.escalationBacklog.count);
+    metrics.set(
+      'opsknight_escalation_max_lag_seconds',
+      ageSeconds(snapshot.escalationBacklog.oldestDueAt)
+    );
+  }
+  if (snapshot.rollupUpdatedAt) {
+    metrics.set('opsknight_rollup_freshness_age_seconds', ageSeconds(snapshot.rollupUpdatedAt));
+  }
 
   const collectionErrors =
     Number(snapshot.incidentCount === null) +
     Number(snapshot.activeUsers === null) +
     Number(snapshot.jobStats === null) +
-    Number(snapshot.jobTypeStats === null);
+    Number(snapshot.jobTypeStats === null) +
+    Number(snapshot.notificationBacklog === null) +
+    Number(snapshot.escalationBacklog === null) +
+    Number(snapshot.rollupUpdatedAt === undefined);
   metrics.set('opsknight_metrics_collection_errors', collectionErrors);
   metrics.set('opsknight_metrics_cache_hits_total', metricsCacheHits);
   metrics.set('opsknight_metrics_cache_misses_total', metricsCacheMisses);
