@@ -1,8 +1,23 @@
 import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { SlackLogo } from '@/components/common/BrandLogos';
+import {
+  Shield,
+  ShieldCheck,
+  Hash,
+  Lock,
+  CheckCircle2,
+  AlertTriangle,
+  ArrowUpRight,
+} from 'lucide-react';
+import { SLACK_REQUIRED_BOT_SCOPES } from '@/lib/slack/app-manifest';
 import SlackIntegrationPage from '@/components/settings/SlackIntegrationPage';
-import { SettingsPageHeader } from '@/components/settings/layout/SettingsPageHeader';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function GlobalSlackIntegrationPage() {
   const permissions = await getUserPermissions();
@@ -49,16 +64,98 @@ export default async function GlobalSlackIntegrationPage() {
   const isSigningSecretConfigured =
     !!oauthConfig?.signingSecret || !!process.env.SLACK_SIGNING_SECRET;
 
+  const isConnected = Boolean(globalIntegration?.enabled);
+  const scopeSet = new Set(globalIntegration?.scopes ?? []);
+  const missingRequiredScopes = SLACK_REQUIRED_BOT_SCOPES.filter(s => !scopeSet.has(s));
+
   return (
     <div className="space-y-6">
-      <SettingsPageHeader
+      <DetailHeroBanner
+        breadcrumb={{ label: 'Settings', href: '/settings', current: 'Slack Integration' }}
+        tag="COLLABORATION ENGINE"
         title="Slack Integration"
-        description="Connect your Slack workspace to receive incident notifications."
-        backHref="/settings"
-        backLabel="Back to Settings"
-        breadcrumbs={[
-          { label: 'Settings', href: '/settings' },
-          { label: 'Slack', href: '/settings/integrations/slack' },
+        subtitle="Connect your Slack workspace for incident alerts, bi-directional triage, slash commands, and video war rooms."
+        badges={
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge
+              variant="outline"
+              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground text-[10px] font-semibold"
+            >
+              <Shield className="h-3 w-3 mr-1" />
+              Admin Only
+            </Badge>
+            <Badge
+              variant="outline"
+              className={`text-[10px] font-semibold ${
+                isConnected
+                  ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-100'
+                  : isOAuthConfigured
+                    ? 'border-blue-400/60 bg-blue-400/15 text-blue-100'
+                    : 'border-amber-400/60 bg-amber-400/15 text-amber-100'
+              }`}
+            >
+              {isConnected ? (
+                <>
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Workspace Connected
+                </>
+              ) : isOAuthConfigured ? (
+                <>
+                  <ArrowUpRight className="h-3 w-3 mr-1" />
+                  Ready to Connect
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  Setup Required
+                </>
+              )}
+            </Badge>
+          </div>
+        }
+        statsPlacement="bottom"
+        stats={[
+          {
+            label: 'Workspace',
+            value:
+              globalIntegration?.workspaceName ??
+              (isOAuthConfigured ? 'Not Connected' : 'Unconfigured'),
+            icon: <SlackLogo className="h-4 w-4" />,
+            valueClassName: globalIntegration?.workspaceName
+              ? 'text-primary-foreground font-medium text-xs truncate max-w-[140px]'
+              : 'text-primary-foreground/70',
+            subtext: globalIntegration?.enabled ? 'Active integration' : 'OAuth needed',
+          },
+          {
+            label: 'Bot Permissions',
+            value: globalIntegration
+              ? missingRequiredScopes.length === 0
+                ? 'All 13 Granted'
+                : `${missingRequiredScopes.length} Missing`
+              : 'OAuth required',
+            icon: <ShieldCheck className="h-4 w-4" />,
+            valueClassName:
+              globalIntegration && missingRequiredScopes.length === 0
+                ? 'text-emerald-300'
+                : 'text-amber-300',
+            subtext: 'Bot token scopes',
+          },
+          {
+            label: 'Channel Routing',
+            value: globalIntegration?.enabled ? 'Available' : 'Disabled',
+            icon: <Hash className="h-4 w-4" />,
+            valueClassName: globalIntegration?.enabled
+              ? 'text-emerald-300'
+              : 'text-primary-foreground/70',
+            subtext: 'Incident channels',
+          },
+          {
+            label: 'Security & Verification',
+            value: isSigningSecretConfigured ? 'HMAC Verified' : 'Secret Missing',
+            icon: <Lock className="h-4 w-4" />,
+            valueClassName: isSigningSecretConfigured ? 'text-emerald-300' : 'text-amber-300',
+            subtext: 'Request signature',
+          },
         ]}
       />
 
