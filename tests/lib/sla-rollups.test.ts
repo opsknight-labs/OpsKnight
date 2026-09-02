@@ -275,7 +275,7 @@ describe('calculateSLAMetricsFromRollups', () => {
     expect(result.resolvedIncidents).toBe(2);
     expect(result.ackRate).toBe(75);
     expect(result.resolveRate).toBe(50);
-    expect(result[METRIC_ACCUMULATOR]?.resolvedCount).toBe(BigInt(2));
+    expect(Reflect.get(result, METRIC_ACCUMULATOR)?.resolvedCount).toBe(BigInt(2));
   });
 
   it('propagates stored alert and raw event volume through historical metrics', async () => {
@@ -302,7 +302,7 @@ describe('calculateSLAMetricsFromRollups', () => {
     expect(result.alertsPerIncident).toBe(2.1);
     expect(result.eventsCount).toBe(9);
     expect(result.eventsPerIncident).toBe(0.9);
-    expect(result[METRIC_ACCUMULATOR]?.alertCount).toBe(BigInt(21));
+    expect(Reflect.get(result, METRIC_ACCUMULATOR)?.alertCount).toBe(BigInt(21));
   });
 
   it('preserves user-requested range distinct from effective (clipped) range', async () => {
