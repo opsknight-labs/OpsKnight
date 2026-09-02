@@ -181,11 +181,20 @@ export function WebPushLogo({ className = '', size = 20 }: LogoProps) {
   );
 }
 
+export { JiraLogo, SlackLogo } from '@/components/common/BrandLogos';
+import { JiraLogo, SlackLogo } from '@/components/common/BrandLogos';
+
 /**
  * Helper to render the official logo based on provider/channel key
  */
 export function getProviderBrandLogo(key: string, size = 24) {
+  const sizeClass = size >= 24 ? 'h-6 w-6' : size >= 20 ? 'h-5 w-5' : 'h-4 w-4';
   switch (key.toLowerCase()) {
+    case 'jira':
+    case 'atlassian':
+      return <JiraLogo className={sizeClass} />;
+    case 'slack':
+      return <SlackLogo className={sizeClass} />;
     case 'twilio':
       return <TwilioLogo size={size} />;
     case 'whatsapp':
