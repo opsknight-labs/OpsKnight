@@ -7,10 +7,12 @@ import { APP_VERSION } from '@/lib/version';
 import { getMetricsByIntegration, getMetricsSummary } from '@/lib/integrations/metrics';
 
 export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+export type HealthCategory = 'database' | 'workers' | 'alerting' | 'security' | 'platform';
 
 export type AdminHealthCheck = {
   id: string;
   label: string;
+  category: HealthCategory;
   status: HealthLevel;
   summary: string;
   details: string[];
@@ -69,8 +71,11 @@ function compareVersions(current: string, latest: string): number {
       .map(value => Number.parseInt(value, 10) || 0);
   const left = parts(current);
   const right = parts(latest);
-  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
-    const difference = (left[index] || 0) - (right[index] || 0);
+  const maxLen = Math.max(left.length, right.length);
+  for (let index = 0; index < maxLen; index += 1) {
+    const lVal = left.at(index) ?? 0;
+    const rVal = right.at(index) ?? 0;
+    const difference = lVal - rVal;
     if (difference !== 0) return difference;
   }
   return 0;
@@ -120,6 +125,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     checks.push({
       id: 'database',
       label: 'Database',
+      category: 'database',
       status: latency > 1000 ? 'degraded' : 'healthy',
       summary: `PostgreSQL responded in ${latency} ms.`,
       details: [
@@ -136,6 +142,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     checks.push({
       id: 'database',
       label: 'Database',
+      category: 'database',
       status: 'unhealthy',
       summary: 'PostgreSQL is unavailable to this application instance.',
       details: [
@@ -167,6 +174,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'database-capacity',
         label: 'Database capacity',
+        category: 'database',
         status: !capacity
           ? 'unknown'
           : utilization >= 95 || capacity.longTransactions > 0
@@ -194,6 +202,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'database-capacity',
         label: 'Database capacity',
+        category: 'database',
         status: 'unknown',
         summary: 'Database capacity statistics could not be read.',
         details: [
@@ -222,6 +231,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'migrations',
         label: 'Database migrations',
+        category: 'database',
         status: failed.length > 0 ? 'unhealthy' : pending.length > 0 ? 'degraded' : 'healthy',
         summary:
           failed.length > 0
@@ -250,6 +260,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'migrations',
         label: 'Database migrations',
+        category: 'database',
         status: 'unknown',
         summary: 'Migration history could not be inspected.',
         details: [
@@ -266,6 +277,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'scheduler',
         label: 'Scheduler and workers',
+        category: 'workers',
         status: !schedulerEnabled ? 'unknown' : state?.lastError || stale ? 'unhealthy' : 'healthy',
         summary: !schedulerEnabled
           ? 'Internal scheduler is disabled; an external worker must own scheduled work.'
@@ -291,6 +303,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'scheduler',
         label: 'Scheduler and workers',
+        category: 'workers',
         status: 'unknown',
         summary: 'Scheduler state could not be read.',
         details: ['Check migration state and scheduler logs.'],
@@ -310,6 +323,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'jobs',
         label: 'Background jobs',
+        category: 'workers',
         status: stale > 0 || failed > 0 ? 'unhealthy' : overdue > 0 ? 'degraded' : 'healthy',
         summary: `${pending} pending, ${processing} processing, ${failed} failed.`,
         details: [`Overdue pending: ${overdue}`, `Processing longer than 10 minutes: ${stale}`],
@@ -318,6 +332,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'jobs',
         label: 'Background jobs',
+        category: 'workers',
         status: 'unknown',
         summary: 'Background-job state could not be read.',
         details: ['Check database migration and scheduler health.'],
@@ -352,6 +367,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'sla-performance',
         label: 'SLA query performance',
+        category: 'workers',
         status:
           logs.length === 0
             ? 'unknown'
@@ -374,6 +390,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'sla-performance',
         label: 'SLA query performance',
+        category: 'workers',
         status: 'unknown',
         summary: 'SLA query performance could not be measured.',
         details: [
@@ -397,6 +414,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'escalations',
         label: 'Escalation backlog',
+        category: 'workers',
         status: locked > 0 ? 'unhealthy' : due > 0 ? 'degraded' : 'healthy',
         summary:
           due === 0
@@ -409,6 +427,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'escalations',
         label: 'Escalation backlog',
+        category: 'workers',
         status: 'unknown',
         summary: 'Escalation backlog could not be measured.',
         details: ['Check incidents and scheduler health directly.'],
@@ -432,6 +451,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'paging-configuration',
         label: 'Paging configuration coverage',
+        category: 'alerting',
         status: services.length === 0 ? 'unknown' : gaps > 0 ? 'degraded' : 'healthy',
         summary:
           services.length === 0
@@ -450,6 +470,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'paging-configuration',
         label: 'Paging configuration coverage',
+        category: 'alerting',
         status: 'unknown',
         summary: 'Service paging configuration could not be inspected.',
         details: ['Review service escalation policies directly.'],
@@ -476,6 +497,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'notifications',
         label: 'Notification providers',
+        category: 'alerting',
         status:
           incomplete.length > 0 || pending > 0 ? 'unhealthy' : failed > 0 ? 'degraded' : 'healthy',
         summary: `${enabled.length} enabled provider(s); ${failed} failed delivery record(s) in 24 hours.`,
@@ -489,6 +511,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'notifications',
         label: 'Notification providers',
+        category: 'alerting',
         status: 'unknown',
         summary: 'Notification health could not be measured.',
         details: ['Open Notification History and provider settings.'],
@@ -508,6 +531,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'integrations',
         label: 'Inbound integrations',
+        category: 'alerting',
         status: metrics.healthStatus,
         summary: `${enabledIntegrations.length} enabled integration(s); ${metrics.errorRate}% in-process error rate.`,
         details: [
@@ -520,6 +544,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'integrations',
         label: 'Inbound integrations',
+        category: 'alerting',
         status: 'unknown',
         summary: 'Integration health could not be measured.',
         details: ['Review integration test results and system logs.'],
@@ -542,6 +567,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'public-url',
         label: 'Public URL',
+        category: 'security',
         status:
           origins.length === 0 || !productionHttps
             ? 'unhealthy'
@@ -562,6 +588,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       checks.push({
         id: 'public-url',
         label: 'Public URL',
+        category: 'security',
         status: 'unknown',
         summary: 'Public URL configuration could not be compared.',
         details: ['Review system settings and deployment environment.'],
@@ -574,6 +601,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
   checks.push({
     id: 'encryption',
     label: 'Encryption configuration',
+    category: 'security',
     status: encryptionValid
       ? 'healthy'
       : process.env.NODE_ENV === 'development'
@@ -594,6 +622,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
   checks.push({
     id: 'version',
     label: 'Version and upgrades',
+    category: 'platform',
     status: !latest ? 'unknown' : comparison < 0 ? 'degraded' : 'healthy',
     summary: !latest
       ? `Running ${APP_VERSION}; the latest release could not be checked.`
