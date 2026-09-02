@@ -536,6 +536,10 @@ model Incident {
   snoozeReason           String? // Reason for snoozing
   slaPausedMs            BigInt             @default(0) // Materialized closed SLA pause duration
   slaPauseStartedAt      DateTime? // Current open SLA pause, if any
+  slaAckTargetMs         Int? // Immutable effective ACK target captured when the incident is created
+  slaResolveTargetMs     Int? // Immutable effective resolve target captured when the incident is created
+  slaTargetSource        String? // Provenance for the frozen target (priority/service/default/backfill)
+  slaTargetCapturedAt    DateTime? // When the immutable target contract was captured
   // ChatOps War-Room fields
   slackChannelId         String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
   slackChannelName       String? // Channel name (e.g. "inc-104-payments-api")
@@ -1551,6 +1555,11 @@ model SLASnapshot {
   evaluatedResolveCount Int     @default(0)
   complianceScore       Float? // null when no SLA sample was evaluated
   denominatorUnknown    Boolean @default(false) // legacy snapshot awaiting canonical regeneration
+  targetAckMinutes      Int? // Immutable definition ACK target used for this materialization
+  targetResolveMinutes  Int? // Immutable definition resolve target used for this materialization
+  definitionVersion     Int? // Immutable SLA definition version used for this materialization
+  targetCapturedAt      DateTime? // When the snapshot target contract was captured
+  targetSource          String? // Provenance for legacy/current target capture
 
   slaDefinition SLADefinition @relation(fields: [slaDefinitionId], references: [id])
 
