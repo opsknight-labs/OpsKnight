@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import ProviderCard from '@/components/settings/ProviderCard';
+import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import type { ProviderRecord, ProviderConfigSchema } from '@/types/notification-types';
 
 interface SystemNotificationSettingsProps {
@@ -251,24 +252,85 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
       }
     : undefined;
 
+  const categories = [
+    {
+      title: 'SMS Messaging',
+      description:
+        'Outbound SMS text message dispatch for high-priority incidents and on-call paging via Twilio.',
+      keys: ['twilio'],
+    },
+    {
+      title: 'WhatsApp Business Messaging',
+      description:
+        'Interactive WhatsApp alert templates and conversational responder acknowledgments via Twilio Business API.',
+      keys: ['whatsapp'],
+    },
+    {
+      title: 'Transactional Email Gateways',
+      description:
+        'Primary and fallback SMTP/API providers for rich HTML incident alerts, postmortems, and team invites.',
+      keys: ['resend', 'sendgrid', 'ses', 'smtp'],
+    },
+    {
+      title: 'Native Browser Push (PWA)',
+      description:
+        'Encrypted Web Push notifications (VAPID) for real-time mobile and desktop browser alerts.',
+      keys: ['web-push'],
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      {providerConfigs.map(providerConfig => {
-        const existing =
-          providerConfig.key === 'whatsapp'
-            ? whatsappProvider
-            : providerMap.get(providerConfig.key);
-        const isExpanded = expandedProvider === providerConfig.key;
+      {categories.map(category => {
+        const matchingConfigs = providerConfigs.filter(cfg => category.keys.includes(cfg.key));
+        if (matchingConfigs.length === 0) return null;
+
+        const activeCount = matchingConfigs.filter(cfg => {
+          if (cfg.key === 'whatsapp') return whatsappEnabled;
+          return providerMap.get(cfg.key)?.enabled ?? false;
+        }).length;
+        const totalCount = matchingConfigs.length;
+
+        const activeBadge = (
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              activeCount > 0
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                : 'bg-muted text-muted-foreground border-border/80'
+            }`}
+          >
+            {activeCount}/{totalCount} active
+          </span>
+        );
 
         return (
-          <ProviderCard
-            key={providerConfig.key}
-            providerConfig={providerConfig}
-            existing={existing}
-            isExpanded={isExpanded}
-            onToggle={() => setExpandedProvider(isExpanded ? null : providerConfig.key)}
-            twilioProvider={providerConfig.key === 'whatsapp' ? twilioProvider : undefined}
-          />
+          <SettingsSection
+            key={category.title}
+            title={category.title}
+            description={category.description}
+            action={activeBadge}
+          >
+            <div className="py-4 grid grid-cols-1 gap-3.5">
+              {matchingConfigs.map(providerConfig => {
+                const existing =
+                  providerConfig.key === 'whatsapp'
+                    ? whatsappProvider
+                    : providerMap.get(providerConfig.key);
+                const isExpanded = expandedProvider === providerConfig.key;
+
+                return (
+                  <ProviderCard
+                    key={providerConfig.key}
+                    providerConfig={providerConfig}
+                    existing={existing}
+                    isExpanded={isExpanded}
+                    onToggle={() => setExpandedProvider(isExpanded ? null : providerConfig.key)}
+                    twilioProvider={providerConfig.key === 'whatsapp' ? twilioProvider : undefined}
+                  />
+                );
+              })}
+            </div>
+          </SettingsSection>
         );
       })}
     </div>
