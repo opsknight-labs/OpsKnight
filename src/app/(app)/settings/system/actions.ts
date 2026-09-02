@@ -634,3 +634,28 @@ export async function validateOidcConnectionAction(issuer: string) {
   const { validateOidcConnection } = await import('@/lib/oidc-validation');
   return await validateOidcConnection(issuer);
 }
+
+/**
+ * Re-collect admin health diagnostic report
+ */
+export async function refreshAdminHealthAction(): Promise<{
+  report: import('@/lib/admin-health').AdminHealthReport;
+}> {
+  await assertAdmin();
+  const { collectAdminHealth } = await import('@/lib/admin-health');
+  const report = await collectAdminHealth();
+  return { report };
+}
+
+/**
+ * Re-evaluate a single admin health check by ID
+ */
+export async function refreshSingleHealthCheckAction(checkId: string): Promise<{
+  check: import('@/lib/admin-health').AdminHealthCheck | null;
+}> {
+  await assertAdmin();
+  const { collectAdminHealth } = await import('@/lib/admin-health');
+  const report = await collectAdminHealth();
+  const check = report.checks.find(c => c.id === checkId) || null;
+  return { check };
+}
