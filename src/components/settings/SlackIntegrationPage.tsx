@@ -6,30 +6,25 @@ import { useRouter } from 'next/navigation';
 import { notify as toast } from '@/lib/toast';
 
 // Shadcn UI Components
-import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Button } from '@/components/ui/shadcn/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
+import { Badge } from '@/components/ui/shadcn/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 
 // Lucide Icons
-import {
-  AlertTriangle,
-  Slack,
-  Info,
-  ExternalLink,
-  Activity,
-  CheckCircle2,
-  XCircle,
-} from 'lucide-react';
+import { AlertTriangle, ExternalLink, Hash, Copy, Check, RotateCcw, FileCode2 } from 'lucide-react';
+import { SlackLogo } from '@/components/common/BrandLogos';
 
-// New Slack Components
+// Subcomponents
 import {
   SlackChannelCard,
   SlackScopeList,
@@ -44,17 +39,6 @@ import SlackSigningSecretCard from '@/components/settings/SlackSigningSecretCard
 import SlackManifestCard from '@/components/settings/SlackManifestCard';
 import { getBaseUrl } from '@/lib/env-validation';
 import { SLACK_REQUIRED_BOT_SCOPES, SLACK_OPTIONAL_BOT_SCOPES } from '@/lib/slack/app-manifest';
-import { Badge } from '@/components/ui/shadcn/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/shadcn/alert-dialog';
 
 interface SlackIntegration {
   id: string;
@@ -96,6 +80,7 @@ export default function SlackIntegrationPage({
   const [bulkConnecting, setBulkConnecting] = useState(false);
   const [testingChannelId, setTestingChannelId] = useState<string | null>(null);
   const [leavingChannelId, setLeavingChannelId] = useState<string | null>(null);
+  const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{
     channelId: string;
     success: boolean;
@@ -116,12 +101,13 @@ export default function SlackIntegrationPage({
     variant: 'default',
   });
 
-  // Shared with the OAuth request and the generated app manifest, so the
-  // checklist cannot claim a healthy install while the code asks for more.
-  const requiredScopes = [...SLACK_REQUIRED_BOT_SCOPES];
-  const optionalScopes = [...SLACK_OPTIONAL_BOT_SCOPES];
+  const requiredScopes = useMemo(() => [...SLACK_REQUIRED_BOT_SCOPES], []);
+  const optionalScopes = useMemo(() => [...SLACK_OPTIONAL_BOT_SCOPES], []);
   const scopeSet = useMemo(() => new Set(integration?.scopes ?? []), [integration]);
-  const missingRequiredScopes = requiredScopes.filter(scope => !scopeSet.has(scope));
+  const missingRequiredScopes = useMemo(
+    () => requiredScopes.filter(scope => !scopeSet.has(scope)),
+    [requiredScopes, scopeSet]
+  );
 
   // Check if Slack was just connected (from URL param)
   useEffect(() => {
@@ -202,6 +188,12 @@ export default function SlackIntegrationPage({
     }
   };
 
+  const handleOAuthRedirect = () => {
+    window.location.assign(
+      new URL(['/api', 'slack', 'oauth'].join('/'), window.location.origin).toString()
+    );
+  };
+
   const handleDisconnectClick = () => {
     setConfirmation({
       isOpen: true,
@@ -219,7 +211,7 @@ export default function SlackIntegrationPage({
       if (!response.ok) {
         throw new Error('Failed to disconnect Slack. Try again.');
       }
-      window.location.href = '/api/slack/oauth';
+      handleOAuthRedirect();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error('Replace failed', { description: errorMessage });
@@ -403,425 +395,393 @@ export default function SlackIntegrationPage({
     return filteredChannels.slice(0, visibleCount);
   }, [filteredChannels, searchQuery, visibleCount]);
 
-  // Compute integration status
-  const integrationStatus = integration
-    ? integration.enabled
-      ? 'Connected'
-      : 'Disabled'
-    : 'Not Connected';
-  const oauthStatus = isOAuthConfigured ? 'Configured' : 'Not Configured';
-  const scopeStatus = integration && missingRequiredScopes.length === 0 ? 'Complete' : 'Incomplete';
+  const baseUrl = getBaseUrl();
+  const eventEndpoints = useMemo(
+    () => [
+      {
+        name: 'Event Subscriptions URL',
+        url: `${baseUrl}/api/slack/events`,
+        desc: 'Subscribes bot to reaction_added (📌 pin-to-incident notes)',
+      },
+      {
+        name: 'Interactivity Request URL',
+        url: `${baseUrl}/api/slack/actions`,
+        desc: 'Handles interactive buttons (Acknowledge, Escalate, Resolve)',
+      },
+      {
+        name: 'Slash Command Request URL',
+        url: `${baseUrl}/api/slack/commands`,
+        desc: 'Executes /incident command from Slack channels',
+      },
+    ],
+    [baseUrl]
+  );
+
+  const copyEndpoint = (url: string, key: string) => {
+    void navigator.clipboard.writeText(url);
+    setCopiedEndpoint(key);
+    toast.success('URL copied to clipboard');
+    setTimeout(() => setCopiedEndpoint(null), 2000);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Overview Card */}
-      <Card className="border-primary/20 bg-primary/5">
-        <CardHeader>
-          <div className="flex items-start gap-4">
-            <div className="p-3 rounded-lg bg-primary/10">
-              <Slack className="h-6 w-6 text-primary" />
-            </div>
-            <div className="flex-1">
-              <CardTitle className="text-2xl">Slack Integration</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                Connect your Slack workspace to receive real-time incident notifications. Configure
-                channels per service for targeted alerts and updates.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Scope Card */}
-            <div className="p-4 rounded-lg border border-border bg-background">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Info className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Configuration</span>
-                </div>
-                <p className="font-semibold">
-                  {integration ? integration.workspaceName || 'Connected' : 'Setup Required'}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {integration
-                    ? integration.installer?.name
-                      ? `Connected by ${integration.installer.name}`
-                      : 'Connected to workspace'
-                    : 'Connect your Slack workspace to enable notifications'}
-                </p>
-              </div>
-            </div>
-
-            {/* Status Card */}
-            <div className="p-4 rounded-lg border border-border bg-background">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Status</span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">OAuth Config</span>
-                    <Badge variant={isOAuthConfigured ? 'default' : 'secondary'}>
-                      {oauthStatus}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Workspace</span>
-                    <Badge
-                      variant={
-                        integration ? (integration.enabled ? 'default' : 'secondary') : 'secondary'
-                      }
-                    >
-                      {integrationStatus}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Scopes</span>
-                    <Badge
-                      variant={
-                        integration && missingRequiredScopes.length === 0 ? 'default' : 'secondary'
-                      }
-                    >
-                      {scopeStatus}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* OAuth Configuration Section */}
-      <SettingsSection
-        title="OAuth Configuration"
-        description="Configure Slack App credentials to enable workspace connection"
-        action={
-          <div className="flex gap-2">
-            <Badge variant="outline">Admin Only</Badge>
-            <Badge variant="outline">Required</Badge>
-          </div>
-        }
-        footer={
-          <div className="flex items-start gap-2">
-            <Info className="h-4 w-4 text-muted-foreground mt-0.5" />
-            <div>
-              <p className="text-sm font-medium">Setup Instructions</p>
-              <p className="text-sm text-muted-foreground">
-                Create a Slack App, add OAuth scopes, and enter credentials to enable workspace
-                connections.
-              </p>
-            </div>
-          </div>
-        }
-      >
-        {/* Guided Setup Wizard (Admin Only) */}
-        {!isOAuthConfigured && isAdmin && <GuidedSlackSetup />}
-
-        {/* Signing secret — the guided setup is hidden once Slack is connected,
-            so an existing install needs somewhere to supply it */}
-        {isOAuthConfigured && isAdmin && (
-          <SlackSigningSecretCard isConfigured={isSigningSecretConfigured} />
-        )}
-
-        {/* Manifest stays available after setup: scopes and event subscriptions
-            change as features land, and this is how an existing app catches up */}
-        {isOAuthConfigured && isAdmin && (
-          <div className="mb-4 rounded-lg border bg-background p-4">
-            <SlackManifestCard baseUrl={getBaseUrl()} />
-          </div>
-        )}
-
-        {/* Configuration Actions */}
-        {isOAuthConfigured && isAdmin && (
-          <div className="flex justify-end mb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => {
-                setConfirmation({
-                  isOpen: true,
-                  title: 'Reset App Credentials?',
-                  description:
-                    'Are you sure you want to reset the Slack App configuration? This will require you to re-enter Client ID and Secret.',
-                  variant: 'destructive',
-                  action: async () => {
-                    await fetch('/api/settings/slack-oauth', { method: 'DELETE' });
-                    window.location.reload();
-                  },
-                });
-              }}
-            >
-              Reset App Credentials
-            </Button>
-          </div>
-        )}
-
-        {/* Not Configured Warning (Non-Admin) */}
-        {!isOAuthConfigured && !isAdmin && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Setup Required</AlertTitle>
-            <AlertDescription>
-              Slack integration needs to be configured by an administrator first. Please contact
-              your admin to set up Slack OAuth credentials.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {!isOAuthConfigured && isAdmin && (
-          <div className="flex justify-end">
-            <Button asChild>
-              <a href="https://api.slack.com/apps?new_app=1" target="_blank" rel="noreferrer">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Create Slack App
-              </a>
-            </Button>
-          </div>
-        )}
-      </SettingsSection>
-
-      {/* Workspace Connection Section */}
-      <SettingsSection
-        title="Workspace Connection"
-        description="Connect and manage your Slack workspace integration"
-        action={
-          <div className="flex gap-2">
-            <Badge variant="outline">Notifications</Badge>
-            <Badge variant="outline">Real-time</Badge>
-          </div>
-        }
-        footer={
-          integration && (
-            <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="text-sm font-medium">Channel Management</p>
-                <p className="text-sm text-muted-foreground">
-                  Configure which channels receive notifications in the service-specific settings.
-                </p>
-              </div>
-            </div>
-          )
-        }
-      >
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* CASE 1: WORKSPACE IS CONNECTED                                */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {integration ? (
         <div className="space-y-6">
-          {integration ? (
-            <>
-              {/* Workspace Header */}
-              <SlackWorkspaceHeader
-                workspaceName={integration.workspaceName || 'Slack Workspace'}
-                installerName={integration.installer?.name || 'Administrator'}
-                updatedAt={integration.updatedAt}
-                enabled={integration.enabled}
-                isAdmin={isAdmin}
-                onReconnect={() => {
-                  window.location.href = '/api/slack/oauth';
-                }}
-                onReplaceWorkspace={handleReplaceWorkspaceClick}
-              />
+          {/* Card 1: Workspace Header & Identity */}
+          <SlackWorkspaceHeader
+            workspaceName={integration.workspaceName || 'Slack Workspace'}
+            installerName={integration.installer?.name || 'Administrator'}
+            updatedAt={integration.updatedAt}
+            enabled={integration.enabled}
+            isAdmin={isAdmin}
+            onReconnect={handleOAuthRedirect}
+            onReplaceWorkspace={handleReplaceWorkspaceClick}
+          />
 
-              {/* Missing Scopes Alert */}
-              {missingRequiredScopes.length > 0 && (
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Missing Slack scopes</AlertTitle>
-                  <AlertDescription className="space-y-2">
-                    <p>
-                      Not granted to this workspace:{' '}
-                      <strong>{missingRequiredScopes.join(', ')}</strong>
+          {/* Missing Scopes Alert */}
+          {missingRequiredScopes.length > 0 && (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 sm:p-5 text-xs text-rose-800 dark:text-rose-300 space-y-3">
+              <div className="flex items-center gap-2 font-semibold">
+                <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                <span>Missing Slack scopes: {missingRequiredScopes.join(', ')}</span>
+              </div>
+              <p className="leading-relaxed">
+                Slack only grants scopes that your app manifest requests. If you recently updated
+                OpsKnight, apply the App Manifest below to your Slack app in the Slack API console,
+                then reconnect the workspace to grant the new scopes.
+              </p>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  asChild
+                  className="h-8 text-xs font-semibold"
+                >
+                  <a href="/api/slack/oauth">Reconnect to refresh scopes</a>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Card 2: Channel Discovery & Notifications */}
+          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
+            {loadingChannels && channels.length === 0 ? (
+              <>
+                <SlackChannelToolbarSkeleton />
+                <div className="space-y-2">
+                  {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <SlackChannelToolbar
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  filter={filter}
+                  onFilterChange={setFilter}
+                  summary={channelSummary}
+                  isLoading={loadingChannels}
+                  isBulkConnecting={bulkConnecting}
+                  lastSyncTime={lastChannelsSync}
+                  onRefresh={() => void loadChannels()}
+                  onBulkConnect={() => void handleBulkConnect()}
+                  scopeHealthy={missingRequiredScopes.length === 0}
+                />
+
+                {channelsError && channels.length === 0 ? (
+                  <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-8 text-center space-y-3">
+                    <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
+                    <p className="font-semibold text-foreground text-sm">
+                      Unable to load Slack channels
                     </p>
-                    <p className="text-xs">
-                      Reconnecting alone will not add them — Slack only grants scopes the app itself
-                      declares. Apply the App Manifest below first, then reinstall.
+                    <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                      {channelsError}
                     </p>
                     {isAdmin && (
-                      <Button size="sm" asChild>
-                        <a href="/api/slack/oauth">Reconnect to refresh scopes</a>
-                      </Button>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {/* Scope Checklist */}
-              <Card>
-                <SlackScopeList
-                  presentScopes={integration.scopes}
-                  requiredScopes={requiredScopes}
-                  optionalScopes={optionalScopes}
-                  isAdmin={isAdmin}
-                  onReconnect={() => {
-                    window.location.href = '/api/slack/oauth';
-                  }}
-                />
-              </Card>
-
-              {/* Available Channels Section */}
-              <div className="space-y-4">
-                {loadingChannels && channels.length === 0 ? (
-                  <>
-                    <SlackChannelToolbarSkeleton />
-                    <div className="space-y-2">
-                      {[...Array(5)].map((_, i) => (
-                        <Skeleton key={i} className="h-16 w-full rounded-lg" />
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <SlackChannelToolbar
-                      searchQuery={searchQuery}
-                      onSearchChange={setSearchQuery}
-                      filter={filter}
-                      onFilterChange={setFilter}
-                      summary={channelSummary}
-                      isLoading={loadingChannels}
-                      isBulkConnecting={bulkConnecting}
-                      lastSyncTime={lastChannelsSync}
-                      onRefresh={() => void loadChannels()}
-                      onBulkConnect={() => void handleBulkConnect()}
-                      scopeHealthy={missingRequiredScopes.length === 0}
-                    />
-
-                    {channelsError && channels.length === 0 ? (
-                      <Card className="border-destructive/50 bg-destructive/5">
-                        <CardContent className="p-6 text-center space-y-3">
-                          <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
-                          <p className="font-medium">Unable to load channels</p>
-                          <p className="text-sm text-muted-foreground">{channelsError}</p>
-                          {isAdmin && (
-                            <div className="flex justify-center gap-2 pt-2">
-                              <Button variant="outline" onClick={() => void loadChannels()}>
-                                Retry fetch
-                              </Button>
-                              <Button asChild>
-                                <a href="/api/slack/oauth">Reconnect Slack</a>
-                              </Button>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ) : filteredChannels.length === 0 ? (
-                      <Card className="border-dashed">
-                        <CardContent className="p-8 text-center">
-                          <Info className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                          <p className="font-medium">
-                            {searchQuery ? 'No channels match your search' : 'No channels found'}
-                          </p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {searchQuery ? (
-                              <>
-                                No channels match &quot;{searchQuery}&quot;. Try a different search
-                                term.
-                              </>
-                            ) : (
-                              <>
-                                Invite the bot to private channels or select a public channel in
-                                service settings to auto-add.
-                              </>
-                            )}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <div className="space-y-2">
-                        {visibleChannels.map(ch => (
-                          <SlackChannelCard
-                            key={ch.id}
-                            channel={ch}
-                            onJoin={() => void handleJoinChannel(ch)}
-                            onLeave={() => void handleLeaveChannelClick(ch)}
-                            onTest={() => void handleTestChannel(ch)}
-                            isJoining={joiningChannelId === ch.id}
-                            isLeaving={leavingChannelId === ch.id}
-                            isTesting={testingChannelId === ch.id}
-                            testResult={testResult?.channelId === ch.id ? testResult : null}
-                          />
-                        ))}
-
-                        {!searchQuery && filteredChannels.length > visibleCount && (
-                          <div className="flex justify-center pt-4">
-                            <Button
-                              variant="outline"
-                              onClick={() => setVisibleCount(count => count + 50)}
-                            >
-                              Show next {Math.min(50, filteredChannels.length - visibleCount)}
-                            </Button>
-                          </div>
-                        )}
+                      <div className="flex justify-center gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void loadChannels()}
+                          className="h-8 text-xs"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                          Retry fetch
+                        </Button>
+                        <Button size="sm" asChild className="h-8 text-xs">
+                          <a href="/api/slack/oauth">Reconnect Slack</a>
+                        </Button>
                       </div>
                     )}
-
-                    <p className="text-xs text-muted-foreground">
-                      Private channels require{' '}
-                      <code className="bg-muted px-1 py-0.5 rounded">groups:read</code> and inviting
-                      the bot.
-                    </p>
-                  </>
-                )}
-              </div>
-            </>
-          ) : (
-            <Card className="border-dashed">
-              <CardContent className="p-12 text-center space-y-4">
-                <div className="flex justify-center">
-                  <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center">
-                    <Slack className="h-8 w-8 text-muted-foreground" />
                   </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Connect Your Slack Workspace</h3>
-                  <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-                    Connect Slack to receive incident notifications. You&apos;ll be able to choose
-                    which channels to use for each service.
-                  </p>
-                </div>
-                {isOAuthConfigured ? (
-                  <Button size="lg" asChild>
-                    <a href="/api/slack/oauth">
-                      <Slack className="h-4 w-4 mr-2" />
-                      {isAdmin ? 'Connect to Slack' : 'Ask admin to connect'}
+                ) : filteredChannels.length === 0 ? (
+                  <div className="rounded-xl border border-dashed p-10 text-center space-y-2">
+                    <Hash className="h-8 w-8 text-muted-foreground mx-auto" />
+                    <p className="font-semibold text-sm text-foreground">
+                      {searchQuery ? 'No channels match your search' : 'No channels found'}
+                    </p>
+                    <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                      {searchQuery ? (
+                        <>No channels match &quot;{searchQuery}&quot;. Try a different query.</>
+                      ) : (
+                        <>
+                          Invite the bot to private channels using{' '}
+                          <code className="bg-muted px-1 py-0.5 rounded font-mono">
+                            /invite @OpsKnight
+                          </code>
+                          , or click &quot;Connect&quot; on public channels.
+                        </>
+                      )}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 pt-1">
+                    {visibleChannels.map(ch => (
+                      <SlackChannelCard
+                        key={ch.id}
+                        channel={ch}
+                        onJoin={() => void handleJoinChannel(ch)}
+                        onLeave={() => void handleLeaveChannelClick(ch)}
+                        onTest={() => void handleTestChannel(ch)}
+                        isJoining={joiningChannelId === ch.id}
+                        isLeaving={leavingChannelId === ch.id}
+                        isTesting={testingChannelId === ch.id}
+                        testResult={testResult?.channelId === ch.id ? testResult : null}
+                      />
+                    ))}
+
+                    {!searchQuery && filteredChannels.length > visibleCount && (
+                      <div className="flex justify-center pt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setVisibleCount(count => count + 50)}
+                          className="h-8 text-xs font-semibold"
+                        >
+                          Show next {Math.min(50, filteredChannels.length - visibleCount)} channels
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Card 3: Scope Checklist & Permissions */}
+          <SlackScopeList
+            presentScopes={integration.scopes}
+            requiredScopes={requiredScopes}
+            optionalScopes={optionalScopes}
+            isAdmin={isAdmin}
+            onReconnect={handleOAuthRedirect}
+          />
+
+          {/* Card 4: App Credentials, Signing Secret & Manifest */}
+          {isAdmin && (
+            <div className="space-y-6">
+              {/* Signing Secret Card */}
+              <SlackSigningSecretCard isConfigured={isSigningSecretConfigured} />
+
+              {/* App Manifest & Live Webhook URLs */}
+              <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0">
+                      <FileCode2 className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">
+                        App Manifest & Webhook URLs
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Copy pre-configured URLs and manifest for your Slack developer application.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs font-semibold gap-1.5 self-start sm:self-auto"
+                  >
+                    <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer">
+                      <span>Slack API Console</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   </Button>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Slack OAuth must be configured first. Use the setup wizard above.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </SettingsSection>
+                </div>
 
-      {/* Danger Zone */}
-      {integration && (
-        <SettingsSection
-          title="Danger Zone"
-          description="Disconnect Slack workspace and remove all notification configurations"
-          action={<Badge variant="destructive">Destructive</Badge>}
-          footer={
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Warning</AlertTitle>
-              <AlertDescription>
-                Disconnecting will remove OpsKnight&apos;s access to your Slack workspace and
-                disable all incident notifications across all services.
-              </AlertDescription>
-            </Alert>
-          }
-        >
-          <div className="py-4">
-            <Button variant="destructive" onClick={handleDisconnectClick}>
-              Disconnect Integration
-            </Button>
+                {/* Reference Endpoints Grid */}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {eventEndpoints.map((ep, idx) => {
+                    const isCopied = copiedEndpoint === `ep-${idx}`;
+                    return (
+                      <div
+                        key={ep.name}
+                        className="p-3.5 rounded-lg border bg-muted/20 flex flex-col justify-between gap-2.5"
+                      >
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-semibold text-foreground block">
+                            {ep.name}
+                          </span>
+                          <p className="text-[10px] text-muted-foreground leading-snug">
+                            {ep.desc}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <code className="text-[10px] font-mono bg-background px-2 py-1 rounded border flex-1 truncate text-foreground">
+                            {ep.url}
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 shrink-0"
+                            onClick={() => copyEndpoint(ep.url, `ep-${idx}`)}
+                            title="Copy URL"
+                          >
+                            {isCopied ? (
+                              <Check className="h-3.5 w-3.5 text-emerald-600" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* App Manifest Viewer */}
+                <SlackManifestCard baseUrl={baseUrl} />
+
+                {/* Reset Credentials Action */}
+                <div className="flex items-center justify-between pt-3 border-t text-xs">
+                  <span className="text-muted-foreground">
+                    Need to rotate Client ID or Client Secret?
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      setConfirmation({
+                        isOpen: true,
+                        title: 'Reset App Credentials?',
+                        description:
+                          'Are you sure you want to reset the Slack App configuration? This will clear your Client ID and Client Secret.',
+                        variant: 'destructive',
+                        action: async () => {
+                          await fetch('/api/settings/slack-oauth', { method: 'DELETE' });
+                          window.location.reload();
+                        },
+                      });
+                    }}
+                  >
+                    Reset App Credentials
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Card 5: Danger Zone */}
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 sm:p-6 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <h3 className="text-base font-semibold text-foreground">Danger Zone</h3>
+                  <Badge variant="destructive" className="text-[9px] px-1.5 py-0">
+                    Destructive
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+                  Disconnecting will remove OpsKnight&apos;s access to your Slack workspace and
+                  disable incident notifications across all services.
+                </p>
+              </div>
+
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDisconnectClick}
+                className="h-8 text-xs font-semibold shrink-0 self-start sm:self-auto"
+              >
+                Disconnect Integration
+              </Button>
+            </div>
           </div>
-        </SettingsSection>
+        </div>
+      ) : (
+        /* ───────────────────────────────────────────────────────────── */
+        /* CASE 2: WORKSPACE NOT CONNECTED                               */
+        /* ───────────────────────────────────────────────────────────── */
+        <div className="space-y-6">
+          {/* Guided Setup Wizard (Admin Only when OAuth credentials not yet saved) */}
+          {!isOAuthConfigured && isAdmin && <GuidedSlackSetup />}
+
+          {/* Non-Admin Warning */}
+          {!isOAuthConfigured && !isAdmin && (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 flex items-start gap-3 text-xs text-destructive">
+              <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-sm">Setup Required</p>
+                <p className="text-muted-foreground leading-relaxed">
+                  Slack integration needs to be configured by an administrator first. Please contact
+                  your administrator to configure Slack OAuth credentials.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Connect Workspace Hero Card */}
+          <div className="rounded-xl border bg-card p-8 sm:p-12 text-center space-y-5 shadow-sm">
+            <div className="flex justify-center">
+              <div className="h-16 w-16 rounded-2xl bg-[#4A154B]/10 border border-[#4A154B]/20 flex items-center justify-center shadow-inner">
+                <SlackLogo className="h-8 w-8" />
+              </div>
+            </div>
+
+            <div className="space-y-2 max-w-md mx-auto">
+              <h3 className="text-xl font-bold tracking-tight text-foreground">
+                Connect Your Slack Workspace
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Connect Slack to receive real-time incident notifications, trigger automated slash
+                commands, and triage directly from your team channels.
+              </p>
+            </div>
+
+            {isOAuthConfigured ? (
+              <div className="pt-2">
+                <Button
+                  size="lg"
+                  asChild
+                  className="gap-2 text-sm font-semibold h-11 px-6 shadow-md"
+                >
+                  <a href="/api/slack/oauth">
+                    <SlackLogo className="h-4 w-4" />
+                    <span>{isAdmin ? 'Connect to Slack' : 'Ask admin to connect'}</span>
+                  </a>
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground pt-2">
+                Slack OAuth must be configured first. Use the setup wizard above.
+              </p>
+            )}
+          </div>
+        </div>
       )}
 
+      {/* Confirmation Dialog */}
       <AlertDialog
         open={confirmation.isOpen}
         onOpenChange={isOpen => setConfirmation(prev => ({ ...prev, isOpen }))}
@@ -836,11 +796,11 @@ export default function SlackIntegrationPage({
             <AlertDialogAction
               className={
                 confirmation.variant === 'destructive'
-                  ? 'bg-destructive hover:bg-destructive/90'
+                  ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground'
                   : ''
               }
               onClick={async e => {
-                e.preventDefault(); // Prevent auto close to handle async
+                e.preventDefault();
                 await confirmation.action();
                 setConfirmation(prev => ({ ...prev, isOpen: false }));
               }}

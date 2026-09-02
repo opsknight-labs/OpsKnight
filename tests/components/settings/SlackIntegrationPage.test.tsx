@@ -75,5 +75,23 @@ describe('SlackIntegrationPage', () => {
     expect(screen.getByText('Replace Workspace')).toBeInTheDocument();
     expect(screen.getByText('Scope Checklist')).toBeInTheDocument();
     expect(screen.getByText('Refresh')).toBeInTheDocument();
+    expect(screen.getByText('App Manifest & Webhook URLs')).toBeInTheDocument();
+    expect(screen.getByText('Event Subscriptions URL')).toBeInTheDocument();
+    expect(screen.getByText('Slack Signing Secret')).toBeInTheDocument();
+  });
+
+  it('renders signing secret card and allows rotation', async () => {
+    render(
+      <SlackIntegrationPage
+        integration={integrationFixture}
+        isOAuthConfigured={true}
+        isSigningSecretConfigured={false}
+        isAdmin={true}
+      />
+    );
+
+    expect(screen.getByText('Slack Signing Secret')).toBeInTheDocument();
+    expect(screen.getByText('Secret Missing')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Paste 32-character Signing Secret/i)).toBeInTheDocument();
   });
 });
