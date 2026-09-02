@@ -198,7 +198,30 @@ export function mergeHybridMetrics(
     // Best-effort in hybrid mode; documented in the public PR.
     previousPeriod: live.previousPeriod,
 
-    // Trend / heatmap / detail come from live (rollups don't carry these).
+    // Detail fields currently come from the live partition. Publish that
+    // narrower interval as data, rather than allowing consumers to assume it
+    // matches the full-range headline accumulator.
+    detailCoverage: {
+      mode: 'bounded-detail',
+      start: live.effectiveStart,
+      end: live.effectiveEnd,
+      sampledIncidents: live.detailCoverage?.sampledIncidents,
+      totalIncidents: live.totalIncidents,
+      fields: [
+        'trendSeries',
+        'statusMix',
+        'urgencyMix',
+        'topServices',
+        'assigneeLoad',
+        'statusAges',
+        'onCallLoad',
+        'serviceSlaTable',
+        'recurringTitles',
+        'heatmapData',
+        'serviceMetrics',
+        'insights',
+      ],
+    },
     trendSeries: live.trendSeries,
     statusMix: live.statusMix,
     urgencyMix: live.urgencyMix,

@@ -15,3 +15,38 @@ groups:
           severity: critical
         annotations:
           summary: OpsKnight durable work is not being dispatched promptly
+      - alert: OpsKnightEscalationExecutionLagging
+        expr: opsknight_escalations_overdue > 0 and opsknight_escalation_max_lag_seconds > 60
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: OpsKnight has overdue escalation executions
+      - alert: OpsKnightNotificationDeliveryStale
+        expr: opsknight_notifications_undelivered > 0 and opsknight_notifications_oldest_undelivered_age_seconds > 300
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: OpsKnight notification delivery backlog is stale
+      - alert: OpsKnightRollupsStale
+        expr: opsknight_rollup_freshness_age_seconds > 172800
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: OpsKnight daily metric rollups have not refreshed
+      - alert: OpsKnightHttpErrorRateHigh
+        expr: sum(rate(opsknight_http_requests_total{status_class="5xx"}[5m])) / clamp_min(sum(rate(opsknight_http_requests_total[5m])), 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: OpsKnight HTTP 5xx rate exceeds 5 percent
+      - alert: OpsKnightHttpP95LatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(opsknight_http_request_duration_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: OpsKnight HTTP p95 latency exceeds two seconds

@@ -99,6 +99,18 @@ export type SLAMetrics = {
   saturation: number | null;
 
   // Chart Data
+  /**
+   * Coverage contract for analytical details that intentionally do not span
+   * the same interval as the headline accumulator.
+   */
+  detailCoverage?: {
+    mode: 'full-range' | 'bounded-detail';
+    start: Date;
+    end: Date;
+    sampledIncidents?: number;
+    totalIncidents: number;
+    fields: string[];
+  };
   trendSeries: Array<{
     key: string;
     label: string;

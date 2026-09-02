@@ -43,8 +43,9 @@ const makeRollup = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const { findManyMock } = vi.hoisted(() => ({
+const { findManyMock, priorityFindManyMock } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
+  priorityFindManyMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -52,6 +53,9 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     incidentMetricRollup: {
       findMany: findManyMock,
+    },
+    incidentMetricRollupByPriority: {
+      findMany: priorityFindManyMock,
     },
     systemSettings: {
       findUnique: vi.fn().mockResolvedValue({
@@ -82,6 +86,7 @@ const REQUESTED_END = new Date('2024-01-03T23:59:59.999Z');
 describe('calculateSLAMetricsFromRollups', () => {
   beforeEach(() => {
     findManyMock.mockReset();
+    priorityFindManyMock.mockReset().mockResolvedValue([]);
   });
 
   it('aggregates total incidents across rollup days without priority filter', async () => {
@@ -202,6 +207,40 @@ describe('calculateSLAMetricsFromRollups', () => {
     expect(result.mttr).toBeNull();
     expect(result.ackCompliance).toBeNull();
     expect(result.resolveCompliance).toBeNull();
+  });
+
+  it('rejects partial priority side-table coverage for a multi-day range', async () => {
+    const first = makeRollup({ id: 'rollup-day-1', p1Incidents: 1 });
+    const second = makeRollup({ id: 'rollup-day-2', p1Incidents: 1 });
+    findManyMock.mockResolvedValueOnce([first, second]).mockResolvedValueOnce([]);
+    priorityFindManyMock.mockResolvedValueOnce([
+      {
+        rollupId: first.id,
+        priority: 'P1',
+        incidents: 1,
+        mttaSum: BigInt(60_000),
+        mttaCount: 1,
+        mttrSum: BigInt(0),
+        mttrCount: 0,
+        ackSlaMet: 1,
+        ackSlaBreached: 0,
+        resolveSlaMet: 0,
+        resolveSlaBreached: 0,
+      },
+    ]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false,
+      { priority: 'P1' }
+    );
+
+    expect(result.totalIncidents).toBe(2);
+    expect(result.mttd).toBeNull();
+    expect(result.ackCompliance).toBeNull();
   });
 
   it('preserves user-requested range distinct from effective (clipped) range', async () => {

@@ -42,11 +42,16 @@ describeIfRealDB('SLA aggregation threshold parity', { timeout: 60_000 }, () => 
         })),
       });
       await testPrisma.incidentSlaPause.createMany({
-        data: ids.map(incidentId => ({
-          incidentId,
-          startedAt: pauseStartedAt,
-          endedAt: pauseEndedAt,
-        })),
+        data: ids.flatMap(incidentId => [
+          { incidentId, startedAt: pauseStartedAt, endedAt: pauseEndedAt },
+          // Deliberately overlaps the first interval. Both TS and SQL must
+          // subtract the interval union (10 minutes), not the row sum (15).
+          {
+            incidentId,
+            startedAt: new Date(createdAt.getTime() + 7 * 60_000),
+            endedAt: new Date(createdAt.getTime() + 12 * 60_000),
+          },
+        ]),
       });
     };
 

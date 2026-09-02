@@ -2439,6 +2439,16 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     saturation: null,
 
     // Charts
+    detailCoverage: {
+      mode: useDbAggregation ? 'bounded-detail' : 'full-range',
+      start: finalStart,
+      end: finalEnd,
+      sampledIncidents: useDbAggregation ? recentIncidents.length : undefined,
+      totalIncidents: totalIncidentCount,
+      fields: useDbAggregation
+        ? ['trendSeries', 'topServices', 'serviceMetrics', 'serviceSlaTable']
+        : [],
+    },
     trendSeries: trendSeries.map(s => ({
       key: s.key,
       label: s.label,
@@ -3033,11 +3043,22 @@ export async function calculateSLAMetricsFromRollups(
           priority: { in: Array.from(priorityFilter) },
         },
       });
-      // Available only if at least *some* rows came back — otherwise we
-      // can't tell "not yet backfilled" from "no incidents of this
-      // priority", and the conservative choice is to fall back to null
-      // lifecycle rather than report 0% for un-backfilled days.
-      perPriorityAvailable = perPriorityRows.length > 0;
+      // Coverage is all-or-nothing. A rolling upgrade may leave only the
+      // newest parent rollups with side rows; treating "some rows" as
+      // available publishes a plausible metric for only part of the range.
+      const requestedPriorities = Array.from(priorityFilter);
+      const expectedKeys = new Set(
+        rollups.flatMap(rollup =>
+          requestedPriorities.map(priority => `${rollup.id}\u0000${priority}`)
+        )
+      );
+      const actualKeys = new Set(
+        perPriorityRows.map(row => `${row.rollupId}\u0000${row.priority}`)
+      );
+      perPriorityAvailable =
+        expectedKeys.size > 0 &&
+        actualKeys.size === expectedKeys.size &&
+        Array.from(expectedKeys).every(key => actualKeys.has(key));
     } catch (perPriorityErr) {
       logger.warn('[SLA] per-priority side-table read failed; falling back to aggregate rollups', {
         error: perPriorityErr instanceof Error ? perPriorityErr.message : String(perPriorityErr),
