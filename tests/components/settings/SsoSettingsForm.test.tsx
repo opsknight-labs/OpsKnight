@@ -54,18 +54,15 @@ describe('SsoSettingsForm', () => {
   it('renders all main sections', () => {
     render(<SsoSettingsForm {...defaultProps} />);
 
-    // Check Section Headers
-    expect(screen.getByText('Access & Availability')).toBeInTheDocument();
-    expect(screen.getByText('Identity Provider')).toBeInTheDocument();
-    expect(screen.getByText('Provisioning Rules')).toBeInTheDocument();
-    expect(screen.getByText('Advanced Mapping')).toBeInTheDocument();
-    expect(screen.getByText('Role Mapping')).toBeInTheDocument();
-    expect(screen.getByText('Profile Attribute Mapping')).toBeInTheDocument();
-    expect(screen.getByText('Callback URL')).toBeInTheDocument();
-    expect(screen.getByText(/Provider presets/i)).toBeInTheDocument();
-    expect(screen.getByText(/Setup checklist/i)).toBeInTheDocument();
-    expect(screen.getByText(/SSO overview/i)).toBeInTheDocument();
-    expect(screen.getByText(/JSON preview/i)).toBeInTheDocument();
+    // Check Redesigned Card Headers
+    expect(screen.getByText('Single Sign-On (OIDC)')).toBeInTheDocument();
+    expect(screen.getByText('Identity Provider Credentials')).toBeInTheDocument();
+    expect(screen.getByText('User Provisioning & Restrictions')).toBeInTheDocument();
+    expect(screen.getByText('Claims, Scopes & Role Mapping')).toBeInTheDocument();
+    expect(screen.getByText('Authorized Redirect URI (Callback URL)')).toBeInTheDocument();
+    expect(screen.getByText('User Profile Attribute Claims')).toBeInTheDocument();
+    expect(screen.getByText('Provider Template')).toBeInTheDocument();
+    expect(screen.getByText(/Verify Before Enforcing Workspace-Wide/i)).toBeInTheDocument();
   });
 
   it('displays profile attribute mapping inputs correctly', () => {

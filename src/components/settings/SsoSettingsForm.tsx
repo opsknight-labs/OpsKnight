@@ -620,7 +620,7 @@ export default function SsoSettingsForm({
             id="provider-label"
             type="text"
             name="providerLabel"
-            placeholder="Auto-detect from issuer (e.g. 'Sign in with Okta')"
+            placeholder="Auto-detect from issuer"
             value={providerLabelValue}
             onChange={event => setProviderLabelValue(event.target.value)}
             className="text-sm h-10"
