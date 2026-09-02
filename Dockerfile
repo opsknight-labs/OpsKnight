@@ -96,6 +96,7 @@ RUN apk update && apk upgrade && \
 # Set environment to production
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_RUNTIME=nodejs
 
 # Create non-root user with specific UID/GID for consistency
 RUN addgroup --system --gid 1001 nodejs && \

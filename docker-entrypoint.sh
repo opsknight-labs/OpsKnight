@@ -58,4 +58,5 @@ fi
 
 echo "✅ Database is ready."
 echo "🚀 Starting application..."
+export NEXT_RUNTIME=nodejs
 exec node server.js
