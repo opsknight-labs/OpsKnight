@@ -9,13 +9,21 @@ import { Switch } from '@/components/ui/shadcn/switch';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from '@/components/ui/shadcn/card';
-import { AlertTriangle, CheckCircle2, Loader2, Copy, ExternalLink, Settings } from 'lucide-react';
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Copy,
+  Check,
+  ExternalLink,
+  Shield,
+  Key,
+  Users,
+  Sliders,
+  Globe,
+  Lock,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
 import RoleMappingEditor, { type RoleMappingRule } from '@/components/settings/RoleMappingEditor';
 import { saveOidcConfig, validateOidcConnectionAction } from '@/app/(app)/settings/system/actions';
 
@@ -122,59 +130,16 @@ function CopyButton({ text }: { text: string }) {
       variant="outline"
       size="sm"
       onClick={handleCopy}
-      className="whitespace-nowrap"
+      className="whitespace-nowrap h-8 text-xs gap-1.5"
       aria-live="polite"
     >
-      <Copy className="mr-2 h-4 w-4" />
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-emerald-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
       {copied ? 'Copied' : 'Copy'}
     </Button>
-  );
-}
-
-function FieldRow({
-  label,
-  description,
-  helpText,
-  error,
-  children,
-  required,
-  optional,
-}: {
-  label: string;
-  description?: string;
-  helpText?: string;
-  error?: string;
-  children: React.ReactNode;
-  required?: boolean;
-  optional?: boolean;
-}) {
-  return (
-    <div className="space-y-3 pb-6 border-b last:border-0 last:pb-0">
-      <div>
-        <Label className="text-sm font-medium flex items-center gap-2">
-          {label}
-          {required && (
-            <Badge variant="danger" size="xs">
-              Required
-            </Badge>
-          )}
-          {optional && (
-            <Badge variant="secondary" size="xs">
-              Optional
-            </Badge>
-          )}
-        </Label>
-        {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
-        {helpText && <p className="text-xs text-muted-foreground mt-1">{helpText}</p>}
-      </div>
-      <div className="space-y-2">{children}</div>
-      {error && (
-        <p className="text-sm text-destructive flex items-center gap-1">
-          <AlertTriangle className="h-3 w-3" />
-          {error}
-        </p>
-      )}
-    </div>
   );
 }
 
@@ -204,6 +169,7 @@ export default function SsoSettingsForm({
   const [enabled, setEnabled] = useState(initialEnabled);
   const [clientIdValue, setClientIdValue] = useState(initialClientId);
   const [clientSecretValue, setClientSecretValue] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
   const [providerLabelValue, setProviderLabelValue] = useState(initialProviderLabel);
   const [customScopesValue, setCustomScopesValue] = useState(initialCustomScopes);
   const [autoProvision, setAutoProvision] = useState(initialAutoProvision);
@@ -246,14 +212,10 @@ export default function SsoSettingsForm({
     }
   };
 
-  const enabledTone = enabled ? 'ok' : 'off';
-  const enabledLabel = enabled ? 'Enabled' : 'Disabled';
   const clientSecretRequired = !initialConfig?.hasClientSecret;
   const selectedPresetNote =
     PROVIDER_PRESETS.find(preset => preset.id === selectedPreset)?.note ??
     'Enter the issuer URL from your provider.';
-  const saveStatus = state?.success ? 'Saved' : state?.error ? 'Save failed' : 'Not saved yet';
-  const saveStatusTone = state?.success ? 'ok' : state?.error ? 'warn' : 'off';
   const isRoleMappingDirty =
     JSON.stringify(roleMappingPreview) !== JSON.stringify(initialRoleMapping);
   const isDirty =
@@ -318,7 +280,6 @@ export default function SsoSettingsForm({
   return (
     <form
       action={formAction}
-      className="space-y-6"
       onSubmit={event => {
         if (!validateFields()) {
           event.preventDefault();
@@ -343,16 +304,18 @@ export default function SsoSettingsForm({
         setRoleMappingPreview(initialRoleMapping);
         setRoleMappingResetKey(current => current + 1);
       }}
+      className="space-y-6"
     >
+      {/* ── System Alerts ── */}
       {!hasEncryptionKey && (
-        <Alert className="bg-orange-50 border-orange-200">
-          <AlertTriangle className="h-4 w-4 text-orange-600" />
-          <AlertDescription className="text-orange-900">
-            Encryption key is required before saving SSO secrets.
+        <Alert className="bg-amber-500/10 border-amber-500/30">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertDescription className="text-amber-700 dark:text-amber-300">
+            Encryption key is required before saving SSO secrets. Set{' '}
+            <code className="font-mono text-xs">ENCRYPTION_KEY</code> in your environment.
           </AlertDescription>
         </Alert>
       )}
-
       {configError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -362,116 +325,135 @@ export default function SsoSettingsForm({
         </Alert>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">SSO Overview</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Status</span>
-            <Badge variant={enabled ? 'success' : 'neutral'} size="sm">
-              {enabledLabel}
-            </Badge>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Last save</span>
-            <Badge
-              variant={state?.success ? 'success' : state?.error ? 'danger' : 'neutral'}
-              size="xs"
-            >
-              {saveStatus}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Access & Availability</CardTitle>
-          <CardDescription>
-            Control whether users can sign in with your identity provider. These changes apply to
-            every workspace member.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Badge variant={enabled ? 'success' : 'neutral'} size="sm">
-                  {enabledLabel}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {enabled ? 'SSO sign-in is active.' : 'SSO sign-in is currently off.'}
-                </span>
-              </div>
+      {/* ════════════════════════════════════════════════
+          CARD 1: SSO ACTIVATION & REDIRECT URI
+      ════════════════════════════════════════════════ */}
+      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
+              <Shield className="h-5 w-5" />
             </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="sso-enabled" className="text-sm font-medium">
-                Enable SSO
-              </Label>
-              <Switch
-                id="sso-enabled"
-                name="enabled"
-                checked={enabled}
-                onCheckedChange={setEnabled}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Identity Provider</CardTitle>
-          <CardDescription>Connect your OIDC issuer and client credentials.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-4">
             <div>
-              <h4 className="text-sm font-semibold mb-1">Provider Presets</h4>
-              <p className="text-sm text-muted-foreground">
-                Start with a known issuer template or choose Custom.
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-foreground">Single Sign-On (OIDC)</h3>
+                <Badge variant={enabled ? 'success' : 'neutral'} className="text-xs font-semibold">
+                  {enabled ? 'Active' : 'Disabled'}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Allow workspace members to authenticate securely through your enterprise identity
+                provider.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Provider presets">
-              {PROVIDER_PRESETS.map(preset => (
-                <Button
+          </div>
+          <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+            <Label
+              htmlFor="sso-enabled"
+              className="text-xs font-medium text-muted-foreground cursor-pointer"
+            >
+              {enabled ? 'SSO Enabled' : 'SSO Disabled'}
+            </Label>
+            <Switch
+              id="sso-enabled"
+              name="enabled"
+              checked={enabled}
+              onCheckedChange={setEnabled}
+            />
+          </div>
+        </div>
+
+        {/* Redirect URI Box */}
+        <div className="rounded-xl border bg-muted/30 p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Authorized Redirect URI (Callback URL)
+              </span>
+              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                Required for IdP setup
+              </Badge>
+            </div>
+            <a
+              href="https://next-auth.js.org/providers/oidc"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-primary hover:underline inline-flex items-center gap-1 font-medium"
+            >
+              OIDC Docs
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="text-xs sm:text-sm font-mono font-bold text-foreground flex-1 truncate select-all bg-background/80 px-3 py-1.5 rounded-md border">
+              {callbackUrl}
+            </code>
+            <CopyButton text={callbackUrl} />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Register this exact URL in your IdP application settings before attempting connection
+            tests.
+          </p>
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════
+          CARD 2: IDENTITY PROVIDER CREDENTIALS
+      ════════════════════════════════════════════════ */}
+      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex items-start sm:items-center gap-3.5 pb-4 border-b">
+          <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
+            <Key className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-foreground">Identity Provider Credentials</h3>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              Configure the OIDC discovery endpoint and client authentication credentials from your
+              provider.
+            </p>
+          </div>
+        </div>
+
+        {/* Provider Templates */}
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Provider Template
+          </Label>
+          <div className="flex flex-wrap gap-2">
+            {PROVIDER_PRESETS.map(preset => {
+              const isSelected = selectedPreset === preset.id;
+              return (
+                <button
                   key={preset.id}
                   type="button"
-                  variant={selectedPreset === preset.id ? 'default' : 'outline'}
-                  size="sm"
                   onClick={() => handlePresetSelect(preset)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                  }`}
                 >
                   {preset.label}
-                </Button>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">{selectedPresetNote}</p>
+                </button>
+              );
+            })}
           </div>
+          <p className="text-xs text-muted-foreground">{selectedPresetNote}</p>
+        </div>
 
-          <FieldRow
-            label="Custom sign-in label"
-            description="Optional label for the sign-in button. Leave empty to auto-detect."
-            optional
-          >
-            <Input
-              type="text"
-              name="providerLabel"
-              placeholder="Auto-detect from issuer"
-              value={providerLabelValue}
-              onChange={event => setProviderLabelValue(event.target.value)}
-            />
-          </FieldRow>
-
-          <FieldRow
-            label="Issuer URL"
-            description="Your OIDC issuer URL from the identity provider."
-            helpText="Example: https://login.company.com"
-            error={validationErrors.issuer}
-            required
-          >
-            <div className="flex items-center gap-2">
+        {/* Issuer URL */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="issuer-url" className="text-sm font-semibold">
+              Issuer URL <span className="text-destructive">*</span>
+            </Label>
+            <span className="text-[11px] text-muted-foreground">HTTPS OIDC discovery base</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
+                id="issuer-url"
                 type="url"
                 name="issuer"
                 placeholder="https://login.company.com"
@@ -483,62 +465,73 @@ export default function SsoSettingsForm({
                     setValidationErrors(current => ({ ...current, issuer: undefined }));
                   }
                 }}
-                className="flex-1"
+                className={`pl-9 font-mono text-sm h-10 ${validationErrors.issuer ? 'border-destructive' : ''}`}
               />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleTestConnection}
-                disabled={testStatus === 'testing' || !issuerUrl}
-              >
-                {testStatus === 'testing' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {testStatus === 'testing' ? 'Testing...' : 'Test connection'}
-              </Button>
             </div>
-            {testStatus !== 'idle' && (
-              <Alert
-                className={
-                  testStatus === 'success'
-                    ? 'bg-green-50 border-green-200'
-                    : testStatus === 'error'
-                      ? 'bg-red-50 border-red-200'
-                      : ''
-                }
-              >
-                {testStatus === 'success' ? (
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                ) : (
-                  <AlertTriangle className="h-4 w-4 text-destructive" />
-                )}
-                <AlertDescription className={testStatus === 'success' ? 'text-green-700' : ''}>
-                  {testMessage}
-                  {lastTested && (
-                    <span className="block text-xs mt-1">Last tested: {lastTested}</span>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
-            <a
-              className="text-xs text-primary hover:underline flex items-center gap-1"
-              href="https://openid.net/specs/openid-connect-discovery-1_0.html"
-              target="_blank"
-              rel="noreferrer"
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleTestConnection}
+              disabled={testStatus === 'testing' || !issuerUrl}
+              className="h-10 text-xs gap-1.5 shrink-0 px-4 font-semibold"
             >
-              Issuer URL docs
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </FieldRow>
+              {testStatus === 'testing' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {testStatus === 'testing' ? 'Testing...' : 'Test Connection'}
+            </Button>
+          </div>
+          {validationErrors.issuer && (
+            <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+              <AlertTriangle className="h-3 w-3" />
+              {validationErrors.issuer}
+            </p>
+          )}
 
-          <FieldRow
-            label="Client ID"
-            description="OIDC client identifier from your provider."
-            error={validationErrors.clientId}
-            required
-          >
+          {/* Live Test Feedback */}
+          {testStatus !== 'idle' && (
+            <div
+              className={`rounded-lg border p-3 text-xs flex items-center gap-2 ${
+                testStatus === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                  : testStatus === 'error'
+                    ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                    : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {testStatus === 'success' ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+              )}
+              <div className="flex-1">
+                <span className="font-semibold">{testMessage}</span>
+                {lastTested && <span className="opacity-70 ml-2">({lastTested})</span>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Client ID & Client Secret in a 2-Column Responsive Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Client ID */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="client-id" className="text-sm font-semibold">
+                Client ID <span className="text-destructive">*</span>
+              </Label>
+              <a
+                href="https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-muted-foreground hover:text-primary inline-flex items-center gap-0.5"
+              >
+                Help <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            </div>
             <Input
+              id="client-id"
               type="text"
               name="clientId"
-              placeholder="0oa123abcXYZ"
+              placeholder="e.g. 0oa123abcXYZ"
               value={clientIdValue}
               onChange={event => {
                 setClientIdValue(event.target.value);
@@ -546,271 +539,352 @@ export default function SsoSettingsForm({
                   setValidationErrors(current => ({ ...current, clientId: undefined }));
                 }
               }}
+              className={`font-mono text-sm h-10 ${validationErrors.clientId ? 'border-destructive' : ''}`}
             />
-            <a
-              className="text-xs text-primary hover:underline flex items-center gap-1"
-              href="https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Client ID help
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </FieldRow>
-
-          <FieldRow
-            label="Client Secret"
-            description="Stored securely."
-            helpText={
-              initialConfig?.hasClientSecret
-                ? 'Leave blank to keep current secret.'
-                : 'Required for new configuration.'
-            }
-            error={validationErrors.clientSecret}
-            required={clientSecretRequired}
-            optional={!clientSecretRequired}
-          >
-            <Input
-              type="password"
-              name="clientSecret"
-              placeholder={initialConfig?.hasClientSecret ? '********' : 'Enter client secret'}
-              autoComplete="off"
-              value={clientSecretValue}
-              onChange={event => {
-                setClientSecretValue(event.target.value);
-                if (validationErrors.clientSecret) {
-                  setValidationErrors(current => ({ ...current, clientSecret: undefined }));
-                }
-              }}
-            />
-            <a
-              className="text-xs text-primary hover:underline flex items-center gap-1"
-              href="https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Client secret help
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </FieldRow>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Provisioning Rules</CardTitle>
-          <CardDescription>Define how users are created and approved through SSO.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between pb-6 border-b">
-            <div>
-              <Label className="text-sm font-medium">Auto-provision users</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                Create user accounts automatically on first SSO sign-in.
+            {validationErrors.clientId && (
+              <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+                <AlertTriangle className="h-3 w-3" />
+                {validationErrors.clientId}
               </p>
-            </div>
-            <Switch
-              name="autoProvision"
-              checked={autoProvision}
-              onCheckedChange={setAutoProvision}
-            />
+            )}
           </div>
 
-          <FieldRow
-            label="Allowed email domains"
-            description="Optional allowlist of domains that can use SSO."
-            helpText="Separate multiple domains with commas or spaces."
-            optional
-          >
-            <Input
-              type="text"
-              name="allowedDomains"
-              placeholder="example.com, ops.example.com"
-              value={domains}
-              onChange={event => setDomains(event.target.value)}
-            />
-          </FieldRow>
-        </CardContent>
-      </Card>
+          {/* Client Secret */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="client-secret" className="text-sm font-semibold">
+                Client Secret{' '}
+                {clientSecretRequired ? (
+                  <span className="text-destructive">*</span>
+                ) : (
+                  <span className="text-muted-foreground font-normal text-xs">
+                    (optional to update)
+                  </span>
+                )}
+              </Label>
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Lock className="h-3 w-3 text-muted-foreground" />
+                Encrypted at rest
+              </span>
+            </div>
+            <div className="relative">
+              <Input
+                id="client-secret"
+                type={showSecret ? 'text' : 'password'}
+                name="clientSecret"
+                placeholder={
+                  initialConfig?.hasClientSecret
+                    ? '••••••••  (Secret configured)'
+                    : 'Enter client secret'
+                }
+                autoComplete="off"
+                value={clientSecretValue}
+                onChange={event => {
+                  setClientSecretValue(event.target.value);
+                  if (validationErrors.clientSecret) {
+                    setValidationErrors(current => ({ ...current, clientSecret: undefined }));
+                  }
+                }}
+                className={`font-mono text-sm h-10 pr-10 ${validationErrors.clientSecret ? 'border-destructive' : ''}`}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSecret(!showSecret)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                aria-label={showSecret ? 'Hide secret' : 'Show secret'}
+                title={showSecret ? 'Hide secret' : 'Show secret'}
+              >
+                {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+            {validationErrors.clientSecret && (
+              <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+                <AlertTriangle className="h-3 w-3" />
+                {validationErrors.clientSecret}
+              </p>
+            )}
+          </div>
+        </div>
 
-      <div className="flex items-center justify-between text-sm border-t pt-4">
-        <span className="text-muted-foreground">Last updated</span>
-        <span className="font-medium">{lastSaved || 'Not saved yet'}</span>
+        {/* Sign-in Button Label */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="provider-label" className="text-sm font-semibold">
+              Custom Button Label
+            </Label>
+            <span className="text-[11px] text-muted-foreground">Optional sign-in display text</span>
+          </div>
+          <Input
+            id="provider-label"
+            type="text"
+            name="providerLabel"
+            placeholder="Auto-detect from issuer (e.g. 'Sign in with Okta')"
+            value={providerLabelValue}
+            onChange={event => setProviderLabelValue(event.target.value)}
+            className="text-sm h-10"
+          />
+        </div>
       </div>
 
-      <details className="rounded-lg border bg-card p-6 space-y-4">
-        <summary className="cursor-pointer list-none">
-          <div className="flex items-center gap-2 -m-6 p-6">
-            <Settings className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <h3 className="font-semibold">Advanced Mapping</h3>
-              <p className="text-sm text-muted-foreground">
-                Request extra scopes and map claims to roles or profile fields.
-              </p>
-            </div>
+      {/* ════════════════════════════════════════════════
+          CARD 3: USER PROVISIONING & RESTRICTIONS
+      ════════════════════════════════════════════════ */}
+      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex items-start sm:items-center gap-3.5 pb-4 border-b">
+          <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+            <Users className="h-5 w-5" />
           </div>
-        </summary>
-        <div className="space-y-6 pt-4">
-          <FieldRow
-            label="Custom scopes"
-            description="Additional OIDC scopes to request."
-            helpText="Standard scopes (openid, email, profile) are always requested."
-            optional
-          >
-            <Input
-              type="text"
-              name="customScopes"
-              placeholder="groups department"
-              value={customScopesValue}
-              onChange={event => setCustomScopesValue(event.target.value)}
-            />
-          </FieldRow>
-
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-semibold">Role Mapping</h4>
-              <p className="text-sm text-muted-foreground">
-                Assign roles automatically based on OIDC claims.
-              </p>
-            </div>
-            <RoleMappingEditor
-              key={roleMappingResetKey}
-              initialMappings={initialRoleMapping}
-              onChange={setRoleMappingPreview}
-            />
-            <div className="rounded-lg border bg-muted p-4">
-              <div className="text-xs font-semibold text-muted-foreground mb-2">JSON PREVIEW</div>
-              <pre className="text-xs overflow-auto">
-                {JSON.stringify(roleMappingPreview, null, 2)}
-              </pre>
-            </div>
+          <div>
+            <h3 className="text-base font-bold text-foreground">
+              User Provisioning & Restrictions
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              Control how accounts are created upon login and enforce company domain boundaries.
+            </p>
           </div>
+        </div>
 
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-semibold">Profile Attribute Mapping</h4>
-              <p className="text-sm text-muted-foreground">
-                Sync profile data from your identity provider on each login.
-              </p>
-            </div>
-            <Alert>
-              <AlertDescription className="text-sm">
-                Use the exact claim keys from your IdP. Leave empty to skip a field.
-              </AlertDescription>
-            </Alert>
+        {/* JIT Switch Tile */}
+        <div className="rounded-xl border bg-muted/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <Label htmlFor="auto-provision" className="text-sm font-semibold cursor-pointer">
+              Just-In-Time (JIT) Account Auto-Provisioning
+            </Label>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Automatically create an OpsKnight user account on first successful SSO sign-in.
+              Disable to require existing administrator invitations.
+            </p>
           </div>
+          <Switch
+            id="auto-provision"
+            name="autoProvision"
+            checked={autoProvision}
+            onCheckedChange={setAutoProvision}
+            className="shrink-0"
+          />
+        </div>
 
+        {/* Allowed Domains */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="allowed-domains" className="text-sm font-semibold">
+              Allowed Email Domains
+            </Label>
+            <span className="text-[11px] text-muted-foreground">Comma-separated whitelist</span>
+          </div>
+          <Input
+            id="allowed-domains"
+            type="text"
+            name="allowedDomains"
+            placeholder="e.g. acme.com, engineering.acme.com"
+            value={domains}
+            onChange={event => setDomains(event.target.value)}
+            className="font-mono text-sm h-10"
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave empty to allow any domain verified and sent by your identity provider.
+          </p>
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════
+          CARD 4: ADVANCED MAPPING & CLAIMS
+      ════════════════════════════════════════════════ */}
+      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
+        <div className="flex items-start sm:items-center gap-3.5 pb-4 border-b">
+          <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+            <Sliders className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-foreground">Claims, Scopes & Role Mapping</h3>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              Assign OpsKnight roles dynamically and sync profile fields from OIDC token claims.
+            </p>
+          </div>
+        </div>
+
+        {/* Custom Scopes */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="custom-scopes" className="text-sm font-semibold">
+              Custom OIDC Scopes
+            </Label>
+            <span className="text-[11px] text-muted-foreground">
+              openid, email, profile included by default
+            </span>
+          </div>
+          <Input
+            id="custom-scopes"
+            type="text"
+            name="customScopes"
+            placeholder="e.g. groups department offline_access"
+            value={customScopesValue}
+            onChange={event => setCustomScopesValue(event.target.value)}
+            className="font-mono text-sm h-10"
+          />
+          <div className="flex items-center gap-1.5 flex-wrap pt-1">
+            <span className="text-[11px] text-muted-foreground mr-1">Quick add:</span>
+            {['groups', 'offline_access', 'roles'].map(scope => {
+              const currentScopes = customScopesValue.split(/\s+/).filter(Boolean);
+              const isIncluded = currentScopes.includes(scope);
+              return (
+                <button
+                  key={scope}
+                  type="button"
+                  onClick={() => {
+                    if (isIncluded) {
+                      setCustomScopesValue(currentScopes.filter(s => s !== scope).join(' '));
+                    } else {
+                      setCustomScopesValue([...currentScopes, scope].join(' '));
+                    }
+                  }}
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
+                    isIncluded
+                      ? 'bg-primary/10 border-primary/30 text-primary font-semibold'
+                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                  }`}
+                >
+                  {isIncluded ? `✓ ${scope}` : `+ ${scope}`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Role Mapping Rule Builder (via rewritten RoleMappingEditor) */}
+        <div className="space-y-3 pt-2">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">Claim-to-Role Mapping Rules</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Automatically grant Admin, Responder, or Auditor roles based on user group or role
+              claims.
+            </p>
+          </div>
+          <RoleMappingEditor
+            key={roleMappingResetKey}
+            initialMappings={initialRoleMapping}
+            onChange={setRoleMappingPreview}
+          />
+        </div>
+
+        {/* Profile Attribute Mapping Grid */}
+        <div className="space-y-3 pt-4 border-t">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">User Profile Attribute Claims</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Map IdP token claim names to user profile properties on each login.
+            </p>
+          </div>
           {enabled ? (
-            <>
-              <FieldRow
-                label="Department claim"
-                description="Claim name for user's department."
-                optional
-              >
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-xl border bg-muted/20 p-3.5 space-y-1.5">
+                <Label htmlFor="claim-dept" className="text-xs font-semibold">
+                  Department Claim
+                </Label>
                 <Input
+                  id="claim-dept"
                   type="text"
                   name="profileMapping.department"
-                  placeholder="department"
+                  placeholder="e.g. department"
                   defaultValue={initialConfig?.profileMapping?.department ?? ''}
+                  className="h-8 text-xs font-mono"
                 />
-              </FieldRow>
-
-              <FieldRow
-                label="Job title claim"
-                description="Claim name for user's job title."
-                optional
-              >
+              </div>
+              <div className="rounded-xl border bg-muted/20 p-3.5 space-y-1.5">
+                <Label htmlFor="claim-title" className="text-xs font-semibold">
+                  Job Title Claim
+                </Label>
                 <Input
+                  id="claim-title"
                   type="text"
                   name="profileMapping.jobTitle"
-                  placeholder="title"
+                  placeholder="e.g. title"
                   defaultValue={initialConfig?.profileMapping?.jobTitle ?? ''}
+                  className="h-8 text-xs font-mono"
                 />
-              </FieldRow>
-
-              <FieldRow
-                label="Avatar URL claim"
-                description="Claim name for profile picture URL."
-                optional
-              >
+              </div>
+              <div className="rounded-xl border bg-muted/20 p-3.5 space-y-1.5">
+                <Label htmlFor="claim-avatar" className="text-xs font-semibold">
+                  Avatar URL Claim
+                </Label>
                 <Input
+                  id="claim-avatar"
                   type="text"
                   name="profileMapping.avatarUrl"
-                  placeholder="picture"
+                  placeholder="e.g. picture"
                   defaultValue={initialConfig?.profileMapping?.avatarUrl ?? ''}
+                  className="h-8 text-xs font-mono"
                 />
-              </FieldRow>
-            </>
+              </div>
+            </div>
           ) : (
-            <Alert className="bg-muted">
-              <AlertDescription>
-                Enable SSO to configure profile attribute mapping.
-              </AlertDescription>
-            </Alert>
+            <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-xs text-muted-foreground flex items-center gap-2">
+              <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span>Enable SSO in Card 1 to configure profile attribute claims.</span>
+            </div>
           )}
         </div>
-      </details>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Callback URL</CardTitle>
-          <CardDescription>Add this URL to your identity provider redirect list.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border bg-muted p-4">
-            <h4 className="text-sm font-semibold mb-3">Setup Checklist</h4>
-            <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-              <li>Create an OIDC application in your IdP.</li>
-              <li>Copy the Client ID and Client Secret.</li>
-              <li>Add the callback URL to your redirect list.</li>
-              <li>Test the issuer connection before enabling.</li>
-            </ol>
-          </div>
-          <div className="flex items-center gap-2">
-            <Input
-              type="text"
-              readOnly
-              value={callbackUrl}
-              className="flex-1 font-mono text-sm bg-muted"
-            />
-            <CopyButton text={callbackUrl} />
-          </div>
-          <a
-            className="text-xs text-primary hover:underline flex items-center gap-1"
-            href="https://next-auth.js.org/providers/oidc"
-            target="_blank"
-            rel="noreferrer"
-          >
-            OIDC redirect docs
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        </CardContent>
-      </Card>
+      {/* ════════════════════════════════════════════════
+          CARD 5: PRE-ACTIVATION ADVISORY & SAVE BAR
+      ════════════════════════════════════════════════ */}
+      <div className="rounded-xl border bg-amber-500/5 border-amber-500/25 p-4 flex items-start gap-3">
+        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+        <div className="space-y-0.5 text-xs">
+          <p className="font-semibold text-amber-800 dark:text-amber-300">
+            Verify Before Enforcing Workspace-Wide
+          </p>
+          <p className="text-muted-foreground leading-relaxed">
+            Always verify the callback URL and login flow in a private browser window before asking
+            team members to use SSO. Misconfigured credentials can lock users out of OpsKnight.
+          </p>
+        </div>
+      </div>
 
+      {/* State alerts */}
       {state?.error && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>{state.error}</AlertDescription>
         </Alert>
       )}
-
       {state?.success && (
-        <Alert className="bg-green-50 border-green-200">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-700">
-            Settings saved. Complete required fields to enable SSO.
+        <Alert className="bg-emerald-500/10 border-emerald-500/30">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <AlertDescription className="text-emerald-700 dark:text-emerald-300 font-medium">
+            SSO configuration saved successfully.
           </AlertDescription>
         </Alert>
       )}
 
-      <div className="flex items-center justify-end gap-3 border-t pt-4">
-        {isDirty && <span className="text-sm text-muted-foreground">Unsaved changes</span>}
-        {isDirty && (
-          <Button type="reset" variant="ghost">
-            Reset
-          </Button>
-        )}
-        <SubmitButton disabled={isSaveDisabled} />
+      {/* ── Bottom Save Action Bar ── */}
+      <div className="sticky bottom-4 z-10 rounded-xl border bg-card/95 backdrop-blur-md p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
+        <div className="text-xs text-muted-foreground">
+          {lastSaved ? (
+            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+              <CheckCircle2 className="h-4 w-4" />
+              Configuration saved at {lastSaved}
+            </span>
+          ) : isDirty ? (
+            <span className="text-amber-600 dark:text-amber-400 font-medium">
+              You have unsaved changes
+            </span>
+          ) : (
+            <span>SSO configuration is synchronized</span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {isDirty && (
+            <Button type="reset" variant="outline" size="sm" className="h-9 text-xs">
+              Discard Changes
+            </Button>
+          )}
+          <SubmitButton disabled={isSaveDisabled} />
+        </div>
       </div>
     </form>
   );
