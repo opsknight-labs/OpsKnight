@@ -1,4 +1,11 @@
 import { runWithContext, requestContextStorage } from './request-context';
+import {
+  addOperationalMetric,
+  observeOperationalHistogram,
+  setOperationalGauge,
+} from './metrics/operational/registry';
+
+const httpInFlight = new Map<string, number>();
 
 export {
   getRequestContext,
@@ -20,18 +27,48 @@ export function withRequestContext<R extends Request, A extends unknown[], T>(
 ) {
   return async (request: R, ...args: A): Promise<T> => {
     const requestId = trustedRequestId(request);
-    return runWithContext({ requestId, component }, async () => {
-      const result = await handler(request, ...args);
-      if (result instanceof Response) {
-        try {
-          if (!result.headers.has('x-request-id')) result.headers.set('x-request-id', requestId);
-        } catch {
-          // Some runtime-generated responses expose immutable headers. Logs
-          // still retain the correlation id in that case.
-        }
-      }
-      return result;
+    const route = component;
+    const method = request.method.toUpperCase();
+    const startedAt = performance.now();
+    httpInFlight.set(route, (httpInFlight.get(route) ?? 0) + 1);
+    setOperationalGauge('opsknight_http_requests_in_flight', httpInFlight.get(route) ?? 0, {
+      route,
     });
+    try {
+      return await runWithContext({ requestId, component }, async () => {
+        const result = await handler(request, ...args);
+        if (result instanceof Response) {
+          try {
+            if (!result.headers.has('x-request-id')) result.headers.set('x-request-id', requestId);
+          } catch {
+            // Some runtime-generated responses expose immutable headers. Logs
+            // still retain the correlation id in that case.
+          }
+          addOperationalMetric('opsknight_http_requests_total', 1, {
+            method,
+            route,
+            status_class: `${Math.floor(result.status / 100)}xx`,
+          });
+        }
+        return result;
+      });
+    } catch (error) {
+      addOperationalMetric('opsknight_http_requests_total', 1, {
+        method,
+        route,
+        status_class: '5xx',
+      });
+      throw error;
+    } finally {
+      observeOperationalHistogram(
+        'opsknight_http_request_duration_seconds',
+        (performance.now() - startedAt) / 1000,
+        { method, route }
+      );
+      const next = Math.max(0, (httpInFlight.get(route) ?? 1) - 1);
+      httpInFlight.set(route, next);
+      setOperationalGauge('opsknight_http_requests_in_flight', next, { route });
+    }
   };
 }
 

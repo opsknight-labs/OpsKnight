@@ -379,13 +379,19 @@ export async function GET(req: NextRequest) {
     csvRows.push(['TOP SERVICES BY INCIDENT COUNT']);
     csvRows.push(['---------------------------------------------------------------']);
     csvRows.push(['Rank', 'Service', 'Incident Count', 'Percentage', 'Visual Bar']);
+    const serviceDetailDenominator =
+      metrics.detailCoverage?.mode === 'bounded-detail'
+        ? (metrics.detailCoverage.sampledIncidents ?? 0)
+        : totalIncidents;
     const maxServiceCount =
       metrics.topServices.length > 0
         ? Math.max(...metrics.topServices.map(entry => entry.count))
         : 1;
     metrics.topServices.forEach((entry, index) => {
       const serviceName = entry.name || 'Unknown Service';
-      const percentage = totalIncidents ? ((entry.count / totalIncidents) * 100).toFixed(1) : '0.0';
+      const percentage = serviceDetailDenominator
+        ? ((entry.count / serviceDetailDenominator) * 100).toFixed(1)
+        : '0.0';
       const progressBar = createProgressBar(entry.count, maxServiceCount, 25);
       csvRows.push([
         `#${index + 1}`,

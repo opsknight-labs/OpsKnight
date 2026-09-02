@@ -1,4 +1,10 @@
 import type { SLAMetrics } from './sla';
+import {
+  METRIC_ACCUMULATOR,
+  deriveAverageMs,
+  deriveRate,
+  mergeMetricAccumulators,
+} from './metrics/domain/accumulator';
 
 /**
  * Hybrid merge for SLA metrics over a range that straddles the
@@ -8,25 +14,18 @@ import type { SLAMetrics } from './sla';
  *   - `historical` — rollup-derived metrics for [start, realtimeStart)
  *   - `live`       — live-DB-derived metrics for [realtimeStart, end]
  *
- * Both inputs are full `SLAMetrics` shapes, so we don't have direct
- * access to the underlying sums and counts. Where exact arithmetic is
- * possible we reconstruct met/breached/acked/resolved counts from the
- * fields we do have (`ackBreaches`, `resolveBreaches`, `ackRate`,
- * `resolveRate`, `totalIncidents`) and sum them. Where reconstruction
- * isn't safe (percentiles) we honestly return `null` rather than
- * pretending to merge.
+ * Both inputs must carry the canonical additive accumulator. Hybrid headline
+ * values are derived once after accumulator addition; summary rates are never
+ * reverse-engineered into counts. Non-additive percentiles remain null.
  *
  * Field-by-field policy:
  *   - **Counts**: straight sum (totalIncidents, breaches, urgency
  *     buckets, escalation/reopen/autoResolve, alerts, etc.).
- *   - **Averages (MTTR)**: weighted by reconstructed acked/resolved
- *     counts. Null if both sides null OR both sides have zero
- *     resolveds.
+ *   - **Averages**: derived from exact accumulated sums and sample counts.
  *   - **Percentiles (P50/P95)**: cannot merge from summaries; always
  *     `null` in hybrid mode. The UI should render "n/a" rather than a
  *     misleading number.
- *   - **Compliance (ack/resolve)**: reconstruct met counts from rate
- *     and breach count, sum, recompute.
+ *   - **Compliance (ack/resolve)**: derived from exact met/breached counts.
  *   - **Rates (afterHoursRate, escalationRate, …)**: recompute against
  *     the merged total.
  *   - **Snapshot-of-"now" fields** (resolved24h, unassignedActive,
@@ -38,9 +37,9 @@ import type { SLAMetrics } from './sla';
  *     carry these in directly-usable form; the live partition's
  *     versions cover the most-recent window the user actually wants
  *     to drill into.
- *   - **previousPeriod**: take from the live partition. It's a
- *     same-duration shift, computed against the live partition only
- *     — best-effort under hybrid mode.
+ *   - **previousPeriod**: unavailable until the complete preceding range can
+ *     be evaluated through the same rollup/live/hybrid engine. A live-only
+ *     comparison is not mathematically comparable with merged headlines.
  *   - **Retention metadata**: `effectiveStart`/`requestedStart` come
  *     from the historical side (the earlier of the two), `*End` from
  *     the live side, `isClipped` is OR of the two.
@@ -51,109 +50,58 @@ export function mergeHybridMetrics(
   live: SLAMetrics
 ): SLAMetrics & { dataSource: 'hybrid' } {
   const totalIncidents = historical.totalIncidents + live.totalIncidents;
+  const historicalAccumulator = Reflect.get(historical, METRIC_ACCUMULATOR) as
+    | NonNullable<SLAMetrics[typeof METRIC_ACCUMULATOR]>
+    | undefined;
+  const liveAccumulator = Reflect.get(live, METRIC_ACCUMULATOR) as
+    | NonNullable<SLAMetrics[typeof METRIC_ACCUMULATOR]>
+    | undefined;
+  const mergedAccumulator =
+    historicalAccumulator && liveAccumulator
+      ? mergeMetricAccumulators(historicalAccumulator, liveAccumulator)
+      : null;
+  if (!mergedAccumulator) {
+    throw new Error('Hybrid metrics require canonical additive accumulators from both sources');
+  }
 
-  // Reconstruct met counts from rate + breaches.
-  // Compliance = met / (met + breached) * 100. If both met+breached = 0
-  // compliance is null (no evaluation possible). When compliance is
-  // null we treat met as 0.
-  const reconstructMet = (
-    _compliance: number | null,
-    breaches: number,
-    totalIncidents: number,
-    rate: number
-  ): number => {
-    const evaluatedTotal = Math.round((rate / 100) * totalIncidents);
-    return Math.max(0, evaluatedTotal - breaches);
-  };
-
-  const ackMetHist = reconstructMet(
-    historical.ackCompliance,
-    historical.ackBreaches,
-    historical.totalIncidents,
-    historical.ackRate
+  const ackBreachesTotal = Number(mergedAccumulator.ackBreached);
+  const ackCompliance = deriveRate(
+    mergedAccumulator.ackMet,
+    mergedAccumulator.ackMet + mergedAccumulator.ackBreached
   );
-  const ackMetLive = reconstructMet(
-    live.ackCompliance,
-    live.ackBreaches,
-    live.totalIncidents,
-    live.ackRate
+
+  const resolveBreachesTotal = Number(mergedAccumulator.resolveBreached);
+  const resolveCompliance = deriveRate(
+    mergedAccumulator.resolveMet,
+    mergedAccumulator.resolveMet + mergedAccumulator.resolveBreached
   );
-  const ackBreachesTotal = historical.ackBreaches + live.ackBreaches;
-  const ackMetTotal = ackMetHist + ackMetLive;
-  const ackEvaluatedTotal = ackMetTotal + ackBreachesTotal;
-  const ackCompliance = ackEvaluatedTotal > 0 ? (ackMetTotal / ackEvaluatedTotal) * 100 : null;
-
-  const resolveMetHist = reconstructMet(
-    historical.resolveCompliance,
-    historical.resolveBreaches,
-    historical.totalIncidents,
-    historical.resolveRate
+  const ackedTotal = Number(mergedAccumulator.ackedCount);
+  const resolvedTotal = Number(mergedAccumulator.resolvedCount);
+  const accumulatedMttrMs = deriveAverageMs(
+    mergedAccumulator.mttrSumMs,
+    mergedAccumulator.mttrCount
   );
-  const resolveMetLive = reconstructMet(
-    live.resolveCompliance,
-    live.resolveBreaches,
-    live.totalIncidents,
-    live.resolveRate
+  const accumulatedMttaMs = deriveAverageMs(
+    mergedAccumulator.mttaSumMs,
+    mergedAccumulator.mttaCount
   );
-  const resolveBreachesTotal = historical.resolveBreaches + live.resolveBreaches;
-  const resolveMetTotal = resolveMetHist + resolveMetLive;
-  const resolveEvaluatedTotal = resolveMetTotal + resolveBreachesTotal;
-  const resolveCompliance =
-    resolveEvaluatedTotal > 0 ? (resolveMetTotal / resolveEvaluatedTotal) * 100 : null;
-
-  // Reconstruct acked / resolved counts from rate * total.
-  const ackedHist = Math.round((historical.ackRate / 100) * historical.totalIncidents);
-  const ackedLive = Math.round((live.ackRate / 100) * live.totalIncidents);
-  const resolvedHist = Math.round((historical.resolveRate / 100) * historical.totalIncidents);
-  const resolvedLive = Math.round((live.resolveRate / 100) * live.totalIncidents);
-  const ackedTotal = ackedHist + ackedLive;
-  const resolvedTotal = resolvedHist + resolvedLive;
-
-  // Weighted MTTR by resolved counts. (SLAMetrics has no top-level
-  // `mtta` field — only the percentiles, which we null.)
-  const weightedAvg = (
-    valA: number | null,
-    countA: number,
-    valB: number | null,
-    countB: number
-  ): number | null => {
-    const a = valA ?? null;
-    const b = valB ?? null;
-    if (a === null && b === null) return null;
-    const sumA = a !== null ? a * countA : 0;
-    const sumB = b !== null ? b * countB : 0;
-    const wA = a !== null ? countA : 0;
-    const wB = b !== null ? countB : 0;
-    const totalW = wA + wB;
-    return totalW > 0 ? (sumA + sumB) / totalW : null;
-  };
-
-  const mttr = weightedAvg(historical.mttr, resolvedHist, live.mttr, resolvedLive);
-  const mttd = weightedAvg(historical.mttd, ackedHist, live.mttd, ackedLive);
+  const mttr = accumulatedMttrMs === null ? null : accumulatedMttrMs / 60_000;
+  const mttd = accumulatedMttaMs === null ? null : accumulatedMttaMs / 60_000;
 
   // Urgency / event totals — straight sum.
   const highUrgencyCount = historical.highUrgencyCount + live.highUrgencyCount;
   const mediumUrgencyCount = historical.mediumUrgencyCount + live.mediumUrgencyCount;
   const lowUrgencyCount = historical.lowUrgencyCount + live.lowUrgencyCount;
-  const escalationCount = Math.round(
-    (historical.escalationRate / 100) * historical.totalIncidents +
-      (live.escalationRate / 100) * live.totalIncidents
+  const escalationCount = Number(mergedAccumulator.escalatedIncidents);
+  const reopenCount = Number(mergedAccumulator.reopenedIncidents);
+  const autoResolveCount = Number(mergedAccumulator.autoResolvedIncidents);
+  const afterHoursCount = Number(mergedAccumulator.afterHoursCount);
+  const alertsCountTotal = Number(mergedAccumulator.alertCount);
+  const eventsCountTotal = Number(
+    mergedAccumulator.escalationEvents +
+      mergedAccumulator.reopenEvents +
+      mergedAccumulator.autoResolveEvents
   );
-  // live.reopenRate was computed as (reopenCount / resolvedCount) * 100
-  const liveReopenCount = Math.round(
-    (live.reopenRate / 100) * (live.resolvedIncidents ?? live.totalIncidents)
-  );
-  // Both live and corrected historical metrics define reopen rate against
-  // resolved incidents: an incident must have been resolved before reopening.
-  const histReopenCount = Math.round((historical.reopenRate / 100) * resolvedHist);
-  const reopenCount = liveReopenCount + histReopenCount;
-
-  const autoResolveCount = historical.autoResolvedCount + live.autoResolvedCount;
-  const afterHoursCount = Math.round(
-    (historical.afterHoursRate / 100) * historical.totalIncidents +
-      (live.afterHoursRate / 100) * live.totalIncidents
-  );
-  const alertsCountTotal = historical.alertsCount + live.alertsCount;
 
   // Rates against merged total.
   const safeRate = (count: number) => (totalIncidents > 0 ? (count / totalIncidents) * 100 : 0);
@@ -167,6 +115,7 @@ export function mergeHybridMetrics(
 
   return {
     dataSource: 'hybrid',
+    [METRIC_ACCUMULATOR]: mergedAccumulator,
 
     // Range metadata: span both partitions.
     requestedStart: historical.requestedStart,
@@ -235,7 +184,7 @@ export function mergeHybridMetrics(
     // Events.
     autoResolvedCount: autoResolveCount,
     manualResolvedCount: Math.max(0, resolvedTotal - autoResolveCount),
-    eventsCount: historical.eventsCount + live.eventsCount,
+    eventsCount: eventsCountTotal,
 
     // Golden signals (live only).
     avgLatencyP99: live.avgLatencyP99,
@@ -243,11 +192,38 @@ export function mergeHybridMetrics(
     totalRequests: live.totalRequests,
     saturation: live.saturation,
 
-    // previousPeriod: live partition's same-duration comparison only.
-    // Best-effort in hybrid mode; documented in the public PR.
-    previousPeriod: live.previousPeriod,
+    // The live partition's previous period covers only the live subrange and
+    // cannot be compared with a headline that merges historical + live data.
+    // Preserve its shape for compatibility but explicitly suppress deltas.
+    previousPeriod: {
+      ...live.previousPeriod,
+      available: false,
+    },
 
-    // Trend / heatmap / detail come from live (rollups don't carry these).
+    // Detail fields currently come from the live partition. Publish that
+    // narrower interval as data, rather than allowing consumers to assume it
+    // matches the full-range headline accumulator.
+    detailCoverage: {
+      mode: 'bounded-detail',
+      start: live.effectiveStart,
+      end: live.effectiveEnd,
+      sampledIncidents: live.detailCoverage?.sampledIncidents,
+      totalIncidents: live.totalIncidents,
+      fields: [
+        'trendSeries',
+        'statusMix',
+        'urgencyMix',
+        'topServices',
+        'assigneeLoad',
+        'statusAges',
+        'onCallLoad',
+        'serviceSlaTable',
+        'recurringTitles',
+        'heatmapData',
+        'serviceMetrics',
+        'insights',
+      ],
+    },
     trendSeries: live.trendSeries,
     statusMix: live.statusMix,
     urgencyMix: live.urgencyMix,
@@ -257,8 +233,7 @@ export function mergeHybridMetrics(
     onCallLoad: live.onCallLoad,
     serviceSlaTable: live.serviceSlaTable,
     recurringTitles: live.recurringTitles,
-    eventsPerIncident:
-      totalIncidents > 0 ? (historical.eventsCount + live.eventsCount) / totalIncidents : 0,
+    eventsPerIncident: totalIncidents > 0 ? eventsCountTotal / totalIncidents : 0,
     heatmapData: live.heatmapData, // 365-day heatmap always comes from live
     serviceMetrics: live.serviceMetrics,
     insights: live.insights,

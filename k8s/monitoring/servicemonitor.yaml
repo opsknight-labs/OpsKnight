@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: opsknight
+  namespace: opsknight
+spec:
+  selector:
+    matchLabels:
+      app: opsknight
+  endpoints:
+    - port: http
+      path: /api/metrics
+      interval: 30s
+      scrapeTimeout: 5s
+      bearerTokenSecret:
+        name: opsknight-metrics
+        key: PROMETHEUS_SCRAPE_TOKEN

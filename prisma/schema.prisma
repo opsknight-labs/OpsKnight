@@ -143,6 +143,8 @@ enum EscalationTargetType {
 enum IncidentEventType {
   ACKNOWLEDGED
   ESCALATED
+  SLA_WARNING
+  SLA_BREACHED
   REOPENED
   AUTO_RESOLVED
   MANUAL_RESOLVED
@@ -187,7 +189,7 @@ model User {
   emailVerified                DateTime?
   // Session revocation marker: increment to force-logout all JWT sessions
   tokenVersion                 Int        @default(0)
-  invitationGeneration        Int        @default(0)
+  invitationGeneration         Int        @default(0)
   role                         Role       @default(USER)
   status                       UserStatus @default(INVITED)
   passwordHash                 String?
@@ -532,6 +534,8 @@ model Incident {
   resolvedAt             DateTime? // When incident was resolved (for SLA tracking)
   snoozedUntil           DateTime? // When to auto-unsnooze (for time-based snoozing)
   snoozeReason           String? // Reason for snoozing
+  slaPausedMs            BigInt             @default(0) // Materialized closed SLA pause duration
+  slaPauseStartedAt      DateTime? // Current open SLA pause, if any
   // ChatOps War-Room fields
   slackChannelId         String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
   slackChannelName       String? // Channel name (e.g. "inc-104-payments-api")
@@ -555,6 +559,7 @@ model Incident {
   actionItemRecords       ActionItem[]
   externalIssueLinks      ExternalIssueLink[]
   pinnedMessages          SlackPinnedMessage[]
+  slaPauses               IncidentSlaPause[]
 
   @@index([dedupKey]) // Index for fast deduplication lookups
   @@index([serviceId, dedupKey, status]) // For service-scoped deduplication checks
@@ -586,6 +591,23 @@ model Incident {
   @@index([serviceId, updatedAt], name: "idx_incident_service_updated_at") // Per-service realtime updates
   // Dashboard filtering by priority (SLA dashboards, widgets, exports)
   @@index([priority, status], name: "idx_incident_priority_status")
+}
+
+model IncidentSlaPause {
+  id                  String    @id @default(cuid())
+  incidentId          String
+  reason              String?
+  startedAt           DateTime
+  endedAt             DateTime?
+  lifecycleGeneration Int       @default(0)
+  actorId             String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, startedAt])
+  @@index([incidentId, endedAt])
 }
 
 model Tag {
@@ -1402,10 +1424,16 @@ model IncidentMetricRollup {
   resolveSlaBreached Int @default(0)
 
   // Event Counts
-  escalationCount  Int @default(0)
-  reopenCount      Int @default(0)
-  autoResolveCount Int @default(0)
-  alertCount       Int @default(0)
+  escalationCount           Int @default(0)
+  reopenCount               Int @default(0)
+  autoResolveCount          Int @default(0)
+  escalationEventCount      Int @default(0)
+  escalatedIncidentCount    Int @default(0)
+  reopenEventCount          Int @default(0)
+  reopenedIncidentCount     Int @default(0)
+  autoResolveEventCount     Int @default(0)
+  autoResolvedIncidentCount Int @default(0)
+  alertCount                Int @default(0)
 
   // After Hours
   afterHoursCount Int @default(0)
@@ -1516,10 +1544,13 @@ model SLASnapshot {
   slaDefinitionId String
   date            DateTime // Midnight of the day captured
 
-  totalIncidents  Int
-  metAckTime      Int // Count of incidents meeting ack SLA
-  metResolveTime  Int // Count of incidents meeting resolve SLA
-  complianceScore Float // 0-100%
+  totalIncidents        Int
+  metAckTime            Int // Count of incidents meeting ack SLA
+  metResolveTime        Int // Count of incidents meeting resolve SLA
+  evaluatedAckCount     Int     @default(0)
+  evaluatedResolveCount Int     @default(0)
+  complianceScore       Float? // null when no SLA sample was evaluated
+  denominatorUnknown    Boolean @default(false) // legacy snapshot awaiting canonical regeneration
 
   slaDefinition SLADefinition @relation(fields: [slaDefinitionId], references: [id])
 

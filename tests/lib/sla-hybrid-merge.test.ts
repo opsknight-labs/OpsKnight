@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { mergeHybridMetrics } from '@/lib/sla-hybrid-merge';
 import type { SLAMetrics } from '@/lib/sla';
+import { METRIC_ACCUMULATOR, emptyMetricAccumulator } from '@/lib/metrics/domain/accumulator';
 
 // Tiny factory that fills the SLAMetrics shape with sensible defaults
 // so each test can override only the fields it cares about.
 function metric(overrides: Partial<SLAMetrics> = {}): SLAMetrics {
-  return {
+  const result: SLAMetrics = {
     effectiveStart: new Date('2024-01-01T00:00:00Z'),
     effectiveEnd: new Date('2024-01-31T23:59:59Z'),
     requestedStart: new Date('2024-01-01T00:00:00Z'),
@@ -96,6 +97,46 @@ function metric(overrides: Partial<SLAMetrics> = {}): SLAMetrics {
     currentShifts: [],
     ...overrides,
   };
+  if (!Reflect.get(result, METRIC_ACCUMULATOR)) {
+    const accumulator = emptyMetricAccumulator();
+    accumulator.incidentCount = BigInt(result.totalIncidents);
+    accumulator.ackedCount = BigInt(Math.round((result.ackRate / 100) * result.totalIncidents));
+    accumulator.resolvedCount = BigInt(
+      result.resolvedIncidents || Math.round((result.resolveRate / 100) * result.totalIncidents)
+    );
+    accumulator.mttaCount = accumulator.ackedCount;
+    accumulator.mttaSumMs = BigInt(
+      Math.round((result.mttd ?? 0) * 60_000 * Number(accumulator.mttaCount))
+    );
+    accumulator.mttrCount = accumulator.resolvedCount;
+    accumulator.mttrSumMs = BigInt(
+      Math.round((result.mttr ?? 0) * 60_000 * Number(accumulator.mttrCount))
+    );
+    accumulator.ackBreached = BigInt(result.ackBreaches);
+    accumulator.ackMet = BigInt(
+      Math.max(0, Math.round((result.ackRate / 100) * result.totalIncidents) - result.ackBreaches)
+    );
+    accumulator.resolveBreached = BigInt(result.resolveBreaches);
+    accumulator.resolveMet = BigInt(
+      Math.max(
+        0,
+        Math.round((result.resolveRate / 100) * result.totalIncidents) - result.resolveBreaches
+      )
+    );
+    accumulator.escalatedIncidents = BigInt(
+      Math.round((result.escalationRate / 100) * result.totalIncidents)
+    );
+    accumulator.reopenedIncidents = BigInt(
+      Math.round((result.reopenRate / 100) * Number(accumulator.resolvedCount))
+    );
+    accumulator.autoResolvedIncidents = BigInt(result.autoResolvedCount);
+    accumulator.afterHoursCount = BigInt(
+      Math.round((result.afterHoursRate / 100) * result.totalIncidents)
+    );
+    accumulator.alertCount = BigInt(result.alertsCount);
+    Reflect.set(result, METRIC_ACCUMULATOR, accumulator);
+  }
+  return result;
 }
 
 describe('mergeHybridMetrics', () => {
@@ -257,6 +298,51 @@ describe('mergeHybridMetrics', () => {
 
     expect(merged.trendSeries).toBe(liveTrend);
     expect(merged.heatmapData).toHaveLength(1);
+  });
+
+  it('suppresses previous-period deltas that cover only the live partition', () => {
+    const historical = metric({ totalIncidents: 80 });
+    const live = metric({
+      totalIncidents: 20,
+      previousPeriod: {
+        available: true,
+        totalIncidents: 10,
+        highUrgencyCount: 2,
+        mtta: 12,
+        mttr: 30,
+        ackRate: 80,
+        resolveRate: 70,
+      },
+    });
+
+    const merged = mergeHybridMetrics(historical, live);
+
+    expect(merged.totalIncidents).toBe(100);
+    expect(merged.previousPeriod.available).toBe(false);
+  });
+
+  it('publishes the live detail interval separately from the full headline interval', () => {
+    const historical = metric({
+      totalIncidents: 80,
+      effectiveStart: new Date('2024-01-01T00:00:00Z'),
+      effectiveEnd: new Date('2024-02-29T23:59:59Z'),
+    });
+    const live = metric({
+      totalIncidents: 20,
+      effectiveStart: new Date('2024-03-01T00:00:00Z'),
+      effectiveEnd: new Date('2024-03-31T23:59:59Z'),
+    });
+
+    const merged = mergeHybridMetrics(historical, live);
+
+    expect(merged.detailCoverage).toMatchObject({
+      mode: 'bounded-detail',
+      start: new Date('2024-03-01T00:00:00Z'),
+      end: new Date('2024-03-31T23:59:59Z'),
+      totalIncidents: 20,
+    });
+    expect(merged.effectiveStart).toEqual(new Date('2024-01-01T00:00:00Z'));
+    expect(merged.effectiveEnd).toEqual(new Date('2024-03-31T23:59:59Z'));
   });
 
   it('preserves the user-requested range across both partitions', () => {

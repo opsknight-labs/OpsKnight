@@ -275,7 +275,7 @@ export function useUserAvatarContextSafe() {
     return {
       currentUserId: null,
       getAvatar: (userId: string, gender?: string | null, fallbackName?: string | null) =>
-        getDefaultAvatar(gender, fallbackName || userId || 'User', userId),
+        getDefaultAvatar(fallbackName || userId || gender || 'User', userId),
       updateAvatar: () => {},
       invalidateAvatar: () => {},
       preloadAvatars: () => {},

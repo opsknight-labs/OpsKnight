@@ -1,0 +1,9 @@
+groups:
+  - name: opsknight.cluster
+    rules:
+      - record: opsknight:active_incidents
+        expr: max without(instance, pod) (opsknight_active_incidents)
+      - record: opsknight:jobs_pending
+        expr: max without(instance, pod) (opsknight_jobs_pending)
+      - record: opsknight:jobs_oldest_pending_age_seconds
+        expr: max without(instance, pod) (opsknight_jobs_oldest_pending_age_seconds)

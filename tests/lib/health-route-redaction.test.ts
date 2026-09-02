@@ -18,6 +18,7 @@ import { GET } from '@/app/api/health/route';
 describe('public readiness response', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'web';
     queryRaw.mockResolvedValue([{ '?column?': 1 }]);
   });
 
@@ -30,7 +31,7 @@ describe('public readiness response', () => {
     const response = await GET(new NextRequest('http://localhost/api/health?mode=readiness'));
     const body = await response.json();
 
-    expect(body.checks.scheduler.error).toBeUndefined();
+    expect(body.checks.scheduler).toEqual({ status: 'disabled', expected: false });
     expect(JSON.stringify(body)).not.toContain('secret-password');
     expect(response.status).toBe(200);
   });

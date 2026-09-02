@@ -35,8 +35,8 @@ export interface OnCallStatus {
 }
 
 export interface SLAMetrics {
-  mtta: number; // minutes
-  mttr: number; // minutes
+  mtta: number | null; // minutes
+  mttr: number | null; // minutes
   ackCompliance: number | null; // percentage
   resolveCompliance: number | null; // percentage
   trendMtta: 'up' | 'down' | 'stable';
@@ -115,7 +115,8 @@ export function buildWidgetActivityIncidentWhere(
  * Determines trend direction based on current and previous values
  * Lower is better for response times, so 'down' is positive
  */
-function determineTrend(current: number, previous: number): 'up' | 'down' | 'stable' {
+function determineTrend(current: number | null, previous: number | null): 'up' | 'down' | 'stable' {
+  if (current === null || previous === null) return 'stable';
   if (!Number.isFinite(current) || !Number.isFinite(previous)) return 'stable';
   if (previous === 0 && current === 0) return 'stable';
   if (previous === 0) return current > 0 ? 'up' : 'stable';
@@ -159,14 +160,8 @@ export async function getWidgetData(
   const activeIncidentsData: ActiveIncidentData[] = (
     slaMetricsRaw.activeIncidentSummaries || []
   ).map(inc => {
-    const slaAckDeadline =
-      inc.status !== 'ACKNOWLEDGED'
-        ? new Date(new Date(inc.createdAt).getTime() + inc.targetAckMinutes * 60000)
-        : null;
-
-    const slaResolveDeadline = new Date(
-      new Date(inc.createdAt).getTime() + inc.targetResolveMinutes * 60000
-    );
+    const slaAckDeadline = inc.slaAckDeadline ? new Date(inc.slaAckDeadline) : null;
+    const slaResolveDeadline = new Date(inc.slaResolveDeadline);
 
     return {
       id: inc.id,
@@ -232,10 +227,10 @@ export async function getWidgetData(
       };
 
   // SLA metrics directly from sla-server (single source of truth)
-  const currentMtta = slaMetricsRaw.mttd ?? 0;
-  const prevMtta = slaMetricsRaw.previousPeriod?.mtta ?? 0;
-  const currentMttr = slaMetricsRaw.mttr ?? 0;
-  const prevMttr = slaMetricsRaw.previousPeriod?.mttr ?? 0;
+  const currentMtta = slaMetricsRaw.mttd;
+  const prevMtta = slaMetricsRaw.previousPeriod?.mtta ?? null;
+  const currentMttr = slaMetricsRaw.mttr;
+  const prevMttr = slaMetricsRaw.previousPeriod?.mttr ?? null;
 
   const slaMetrics: SLAMetrics = {
     mtta: currentMtta,

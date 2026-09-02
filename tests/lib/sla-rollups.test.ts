@@ -28,8 +28,14 @@ const makeRollup = (overrides: Record<string, unknown> = {}) => ({
   resolveSlaMet: 5,
   resolveSlaBreached: 2,
   escalationCount: 2,
+  escalationEventCount: 2,
+  escalatedIncidentCount: 2,
   reopenCount: 0,
+  reopenEventCount: 0,
+  reopenedIncidentCount: 0,
   autoResolveCount: 3,
+  autoResolveEventCount: 3,
+  autoResolvedIncidentCount: 3,
   alertCount: 0,
   afterHoursCount: 2,
   createdAt: new Date(),
@@ -37,8 +43,9 @@ const makeRollup = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const { findManyMock } = vi.hoisted(() => ({
+const { findManyMock, priorityFindManyMock } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
+  priorityFindManyMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -46,6 +53,9 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     incidentMetricRollup: {
       findMany: findManyMock,
+    },
+    incidentMetricRollupByPriority: {
+      findMany: priorityFindManyMock,
     },
     systemSettings: {
       findUnique: vi.fn().mockResolvedValue({
@@ -69,6 +79,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { calculateSLAMetricsFromRollups } from '@/lib/sla-server';
+import { METRIC_ACCUMULATOR } from '@/lib/metrics/domain/accumulator';
 
 const REQUESTED_START = new Date('2024-01-01T00:00:00.000Z');
 const REQUESTED_END = new Date('2024-01-03T23:59:59.999Z');
@@ -76,6 +87,7 @@ const REQUESTED_END = new Date('2024-01-03T23:59:59.999Z');
 describe('calculateSLAMetricsFromRollups', () => {
   beforeEach(() => {
     findManyMock.mockReset();
+    priorityFindManyMock.mockReset().mockResolvedValue([]);
   });
 
   it('aggregates total incidents across rollup days without priority filter', async () => {
@@ -198,6 +210,101 @@ describe('calculateSLAMetricsFromRollups', () => {
     expect(result.resolveCompliance).toBeNull();
   });
 
+  it('rejects partial priority side-table coverage for a multi-day range', async () => {
+    const first = makeRollup({ id: 'rollup-day-1', p1Incidents: 1 });
+    const second = makeRollup({ id: 'rollup-day-2', p1Incidents: 1 });
+    findManyMock.mockResolvedValueOnce([first, second]).mockResolvedValueOnce([]);
+    priorityFindManyMock.mockResolvedValueOnce([
+      {
+        rollupId: first.id,
+        priority: 'P1',
+        incidents: 1,
+        mttaSum: BigInt(60_000),
+        mttaCount: 1,
+        mttrSum: BigInt(0),
+        mttrCount: 0,
+        ackSlaMet: 1,
+        ackSlaBreached: 0,
+        resolveSlaMet: 0,
+        resolveSlaBreached: 0,
+      },
+    ]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false,
+      { priority: 'P1' }
+    );
+
+    expect(result.totalIncidents).toBe(2);
+    expect(result.mttd).toBeNull();
+    expect(result.ackCompliance).toBeNull();
+  });
+
+  it('propagates complete priority lifecycle counts into rates and the accumulator', async () => {
+    const rollup = makeRollup({ id: 'rollup-complete', p1Incidents: 4 });
+    findManyMock.mockResolvedValueOnce([rollup]).mockResolvedValueOnce([]);
+    priorityFindManyMock.mockResolvedValueOnce([
+      {
+        rollupId: rollup.id,
+        priority: 'P1',
+        incidents: 4,
+        mttaSum: BigInt(3 * 60_000),
+        mttaCount: 3,
+        mttrSum: BigInt(4 * 60_000),
+        mttrCount: 2,
+        ackSlaMet: 2,
+        ackSlaBreached: 1,
+        resolveSlaMet: 1,
+        resolveSlaBreached: 1,
+      },
+    ]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false,
+      { priority: 'P1' }
+    );
+
+    expect(result.resolvedIncidents).toBe(2);
+    expect(result.ackRate).toBe(75);
+    expect(result.resolveRate).toBe(50);
+    expect(Reflect.get(result, METRIC_ACCUMULATOR)?.resolvedCount).toBe(BigInt(2));
+  });
+
+  it('propagates stored alert and raw event volume through historical metrics', async () => {
+    findManyMock.mockResolvedValueOnce([
+      makeRollup({
+        totalIncidents: 10,
+        alertCount: 21,
+        escalationCount: 3,
+        reopenCount: 2,
+        autoResolveCount: 4,
+      }),
+    ]);
+    findManyMock.mockResolvedValueOnce([]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false
+    );
+
+    expect(result.alertsCount).toBe(21);
+    expect(result.alertsPerIncident).toBe(2.1);
+    expect(result.eventsCount).toBe(9);
+    expect(result.eventsPerIncident).toBe(0.9);
+    expect(Reflect.get(result, METRIC_ACCUMULATOR)?.alertCount).toBe(BigInt(21));
+  });
+
   it('preserves user-requested range distinct from effective (clipped) range', async () => {
     findManyMock.mockResolvedValueOnce([]);
     findManyMock.mockResolvedValueOnce([]);
@@ -226,7 +333,13 @@ describe('calculateSLAMetricsFromRollups', () => {
     findManyMock.mockResolvedValueOnce([
       // 2 resolves but the event-classifier thinks 5 were auto-resolved
       // (over-counted from message ILIKE matching).
-      makeRollup({ totalIncidents: 5, resolvedIncidents: 2, autoResolveCount: 5 }),
+      makeRollup({
+        totalIncidents: 5,
+        resolvedIncidents: 2,
+        autoResolveCount: 5,
+        autoResolveEventCount: 5,
+        autoResolvedIncidentCount: 2,
+      }),
     ]);
     findManyMock.mockResolvedValueOnce([]);
 
@@ -239,6 +352,50 @@ describe('calculateSLAMetricsFromRollups', () => {
     );
 
     expect(result.manualResolvedCount).toBe(0);
+  });
+
+  it('derives ACK rate from canonical acknowledged samples, not resolved status', async () => {
+    findManyMock.mockResolvedValueOnce([
+      makeRollup({
+        totalIncidents: 10,
+        acknowledgedIncidents: 0,
+        resolvedIncidents: 8,
+        mttaCount: 3,
+      }),
+    ]);
+    findManyMock.mockResolvedValueOnce([]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false
+    );
+
+    expect(result.ackRate).toBe(30);
+  });
+
+  it('subtracts distinct auto-resolved incidents, not raw auto-resolve events', async () => {
+    findManyMock.mockResolvedValueOnce([
+      makeRollup({
+        resolvedIncidents: 7,
+        autoResolveCount: 5,
+        autoResolveEventCount: 5,
+        autoResolvedIncidentCount: 2,
+      }),
+    ]);
+    findManyMock.mockResolvedValueOnce([]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false
+    );
+
+    expect(result.manualResolvedCount).toBe(5);
   });
 
   it('applies priority filter to the heatmap as well as the headline metrics', async () => {

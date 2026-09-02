@@ -330,6 +330,37 @@ export default async function AnalyticsContent({
           </span>
         </div>
       )}
+      {metrics.detailCoverage?.mode === 'bounded-detail' && (
+        <div
+          className="analytics-coverage-banner"
+          style={{
+            marginBottom: '1rem',
+            padding: '0.75rem 1rem',
+            background: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            borderRadius: '8px',
+            color: 'var(--color-warning)',
+            fontSize: 'var(--font-size-sm)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}
+        >
+          <AlertCircle className="w-4 h-4" />
+          <span>
+            <strong>Detail coverage:</strong> Detail charts cover{' '}
+            {formatDate(metrics.detailCoverage.start)} -{' '}
+            {formatDate(metrics.detailCoverage.end)}, using{' '}
+            {(
+              metrics.detailCoverage.sampledIncidents ?? metrics.detailCoverage.totalIncidents
+            ).toLocaleString()}{' '}
+            of {metrics.detailCoverage.totalIncidents.toLocaleString()} incidents in that interval.
+            Headline metrics cover {formatDate(metrics.effectiveStart)} -{' '}
+            {formatDate(metrics.effectiveEnd)} across {metrics.totalIncidents.toLocaleString()}{' '}
+            incidents.
+          </span>
+        </div>
+      )}
 
       <div className="analytics-context analytics-context-compact">
         <div className="analytics-context-row">

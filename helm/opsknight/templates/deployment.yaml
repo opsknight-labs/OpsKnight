@@ -67,6 +67,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" . }}
                   key: {{ .Values.secrets.keys.encryptionKey }}
+            {{- if .Values.metrics.scrapeTokenSecret.existingSecret }}
+            - name: PROMETHEUS_SCRAPE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metrics.scrapeTokenSecret.existingSecret }}
+                  key: {{ .Values.metrics.scrapeTokenSecret.key }}
+            {{- end }}
           startupProbe:
             {{- toYaml .Values.startupProbe | nindent 12 }}
           livenessProbe:

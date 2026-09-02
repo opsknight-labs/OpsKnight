@@ -41,6 +41,18 @@ service:
   port: 80
   targetPort: 3000
 
+metrics:
+  enabled: true
+  path: /api/metrics
+  scrapeTokenSecret:
+    existingSecret: ''
+    key: PROMETHEUS_SCRAPE_TOKEN
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 5s
+    labels: {}
+
 ingress:
   enabled: false
   className: ''

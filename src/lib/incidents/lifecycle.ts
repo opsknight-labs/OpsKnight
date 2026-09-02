@@ -62,6 +62,9 @@ type IncidentLifecycleSnapshot = {
   currentEscalationStep: number | null;
   snoozedUntil: Date | null;
   snoozeReason: string | null;
+  slaPausedMs: bigint;
+  slaPauseStartedAt: Date | null;
+  escalationGeneration: number;
   service: {
     policy: {
       steps: Array<{ delayMinutes: number }>;
@@ -362,6 +365,21 @@ function updateDataForCommand(
     escalationProcessingAt: null,
   };
 
+  const closesPause =
+    input.command === 'UNSNOOZE' ||
+    input.command === 'UNSUPPRESS' ||
+    input.command === 'ACKNOWLEDGE' ||
+    input.command === 'RESOLVE' ||
+    input.command === 'REOPEN';
+  if (closesPause && incident.slaPauseStartedAt) {
+    const elapsed = BigInt(Math.max(0, now.getTime() - incident.slaPauseStartedAt.getTime()));
+    data.slaPausedMs = { increment: elapsed };
+    data.slaPauseStartedAt = null;
+  }
+  if ((input.command === 'SNOOZE' || input.command === 'SUPPRESS') && !incident.slaPauseStartedAt) {
+    data.slaPauseStartedAt = now;
+  }
+
   switch (input.command) {
     case 'ACKNOWLEDGE':
       if (!incident.acknowledgedAt) data.acknowledgedAt = now;
@@ -452,6 +470,9 @@ async function loadSnapshot(
       currentEscalationStep: true,
       snoozedUntil: true,
       snoozeReason: true,
+      slaPausedMs: true,
+      slaPauseStartedAt: true,
+      escalationGeneration: true,
       service: {
         select: {
           policy: {
@@ -537,6 +558,41 @@ export async function applyIncidentLifecycleCommand(
       events: { create: lifecycleEvent },
     },
   });
+
+  const pauseStore = (
+    tx as Prisma.TransactionClient & {
+      incidentSlaPause?: Prisma.TransactionClient['incidentSlaPause'];
+    }
+  ).incidentSlaPause;
+  if (pauseStore && (input.command === 'SNOOZE' || input.command === 'SUPPRESS')) {
+    const activePause = await pauseStore.findFirst({
+      where: { incidentId: input.incidentId, endedAt: null },
+      select: { id: true },
+    });
+    if (!activePause) {
+      await pauseStore.create({
+        data: {
+          incidentId: input.incidentId,
+          reason: input.snoozeReason?.trim() || input.command.toLowerCase(),
+          startedAt: now,
+          lifecycleGeneration: incident.escalationGeneration,
+          actorId: input.actor?.id ?? null,
+        },
+      });
+    }
+  } else if (
+    pauseStore &&
+    (input.command === 'UNSNOOZE' ||
+      input.command === 'UNSUPPRESS' ||
+      input.command === 'ACKNOWLEDGE' ||
+      input.command === 'RESOLVE' ||
+      input.command === 'REOPEN')
+  ) {
+    await pauseStore.updateMany({
+      where: { incidentId: input.incidentId, endedAt: null },
+      data: { endedAt: now },
+    });
+  }
 
   if (input.command === 'RESOLVE' && resolutionNote && input.actor?.id) {
     await tx.incidentNote.create({
