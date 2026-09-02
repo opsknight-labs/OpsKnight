@@ -74,9 +74,11 @@ function SubmitButton({ disabled, isDirty }: { disabled: boolean; isDirty: boole
 export default function JiraIntegrationPage({
   config,
   isAdmin,
+  appUrl,
 }: {
   config: JiraConfigView;
   isAdmin: boolean;
+  appUrl?: string;
 }) {
   const [state, formAction] = useActionState(saveJiraConfig, {
     error: null,
@@ -102,13 +104,26 @@ export default function JiraIntegrationPage({
   const [testing, setTesting] = useState(false);
   const [testLatency, setTestLatency] = useState<number | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [webhookUrl, setWebhookUrl] = useState<string>('/api/jira/webhook');
+
+  const clientOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const effectiveBaseUrl =
+    appUrl && appUrl !== 'http://localhost:3000'
+      ? appUrl
+      : clientOrigin && !clientOrigin.includes('localhost')
+        ? clientOrigin
+        : appUrl || clientOrigin || '';
+
+  const [webhookUrl, setWebhookUrl] = useState<string>(
+    effectiveBaseUrl ? `${effectiveBaseUrl}/api/jira/webhook` : '/api/jira/webhook'
+  );
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setWebhookUrl(`${window.location.origin}/api/jira/webhook`);
+    if (!appUrl || appUrl === 'http://localhost:3000') {
+      if (typeof window !== 'undefined' && window.location.origin) {
+        setWebhookUrl(`${window.location.origin}/api/jira/webhook`);
+      }
     }
-  }, []);
+  }, [appUrl]);
 
   // Dirty tracking
   const isDirty = useMemo(() => {
