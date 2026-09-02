@@ -24,8 +24,8 @@ export default async function NotificationOperationsPage() {
       {/* 1. Simple Grey Shaded Hero Banner */}
       <DetailHeroBanner
         breadcrumb={{
-          label: 'Notification Providers',
-          href: '/settings/notifications',
+          label: user.role === 'ADMIN' ? 'Notification Providers' : 'Settings',
+          href: user.role === 'ADMIN' ? '/settings/notifications' : '/settings',
           current: 'Operations',
         }}
         tag="Delivery Control Plane"
@@ -54,17 +54,19 @@ export default async function NotificationOperationsPage() {
         }
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
-            >
-              <Link href="/settings/notifications">
-                <BellRing className="h-3.5 w-3.5" />
-                Configure Providers
-              </Link>
-            </Button>
+            {user.role === 'ADMIN' && (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+              >
+                <Link href="/settings/notifications">
+                  <BellRing className="h-3.5 w-3.5" />
+                  Configure Providers
+                </Link>
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

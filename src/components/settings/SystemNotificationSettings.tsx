@@ -291,26 +291,24 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
         }).length;
         const totalCount = matchingConfigs.length;
 
-        const sectionTitle = (
-          <span className="flex items-center gap-2">
-            {category.title}
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
-                activeCount > 0
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                  : 'bg-muted text-muted-foreground border-border/80'
-              }`}
-            >
-              {activeCount}/{totalCount} active
-            </span>
+        const activeBadge = (
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              activeCount > 0
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                : 'bg-muted text-muted-foreground border-border/80'
+            }`}
+          >
+            {activeCount}/{totalCount} active
           </span>
         );
 
         return (
           <SettingsSection
             key={category.title}
-            title={sectionTitle as unknown as string}
+            title={category.title}
             description={category.description}
+            action={activeBadge}
           >
             <div className="py-4 grid grid-cols-1 gap-3.5">
               {matchingConfigs.map(providerConfig => {

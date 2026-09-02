@@ -14,13 +14,16 @@ export default async function NotificationHistoryPage() {
     redirect('/login');
   }
 
+  const canManageProviders = permissions.isAdmin;
+  const canViewOperations = permissions.isAdmin || permissions.isAuditor;
+
   return (
     <div className="space-y-6">
       {/* 1. Shaded Top Hero Banner */}
       <DetailHeroBanner
         breadcrumb={{
-          label: 'Notification Providers',
-          href: '/settings/notifications',
+          label: canManageProviders ? 'Notification Providers' : 'Settings',
+          href: canManageProviders ? '/settings/notifications' : '/settings',
           current: 'History',
         }}
         tag="Your Account Activity"
@@ -48,30 +51,36 @@ export default async function NotificationHistoryPage() {
           </div>
         }
         actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
-            >
-              <Link href="/settings/notifications">
-                <BellRing className="h-3.5 w-3.5" />
-                Configure Providers
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
-            >
-              <Link href="/settings/notifications/operations">
-                <Activity className="h-3.5 w-3.5" />
-                Delivery Operations
-              </Link>
-            </Button>
-          </div>
+          canManageProviders || canViewOperations ? (
+            <div className="flex items-center gap-2">
+              {canManageProviders && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+                >
+                  <Link href="/settings/notifications">
+                    <BellRing className="h-3.5 w-3.5" />
+                    Configure Providers
+                  </Link>
+                </Button>
+              )}
+              {canViewOperations && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="gap-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground border-primary-foreground/20 text-xs font-semibold h-8 shadow-xs"
+                >
+                  <Link href="/settings/notifications/operations">
+                    <Activity className="h-3.5 w-3.5" />
+                    Delivery Operations
+                  </Link>
+                </Button>
+              )}
+            </div>
+          ) : undefined
         }
       />
 

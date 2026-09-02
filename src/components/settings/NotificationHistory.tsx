@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { logger } from '@/lib/logger';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -119,7 +119,7 @@ export default function NotificationHistory() {
   const fetchNotifications = useCallback(
     async (options?: { refresh?: boolean }) => {
       try {
-        if (options?.refresh && notifications.length > 0) {
+        if (options?.refresh) {
           setRefreshing(true);
         } else {
           setLoading(true);
@@ -166,16 +166,7 @@ export default function NotificationHistory() {
         setRefreshing(false);
       }
     },
-    [
-      debouncedQuery,
-      filterChannel,
-      filterStatus,
-      fromDate,
-      limit,
-      notifications.length,
-      offset,
-      toDate,
-    ]
+    [debouncedQuery, filterChannel, filterStatus, fromDate, limit, offset, toDate]
   );
 
   useEffect(() => {
@@ -723,9 +714,8 @@ export default function NotificationHistory() {
                   </TableHeader>
                   <TableBody>
                     {notifications.map(notification => (
-                      <>
+                      <Fragment key={notification.id}>
                         <TableRow
-                          key={notification.id}
                           className="border-b border-border/40 hover:bg-muted/30 cursor-pointer"
                           onClick={() =>
                             setExpandedId(expandedId === notification.id ? null : notification.id)
@@ -878,7 +868,7 @@ export default function NotificationHistory() {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     ))}
                   </TableBody>
                 </Table>
