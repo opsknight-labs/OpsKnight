@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { SLACK_REQUIRED_BOT_SCOPES } from '@/lib/slack/app-manifest';
 import SlackIntegrationPage from '@/components/settings/SlackIntegrationPage';
+import { getAppUrl } from '@/lib/app-url';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -68,8 +69,11 @@ export default async function GlobalSlackIntegrationPage() {
   const scopeSet = new Set(globalIntegration?.scopes ?? []);
   const missingRequiredScopes = SLACK_REQUIRED_BOT_SCOPES.filter(s => !scopeSet.has(s));
 
+  const appUrl = await getAppUrl();
+
   return (
     <div className="space-y-6">
+      {/* Detail Hero Header */}
       <DetailHeroBanner
         breadcrumb={{ label: 'Settings', href: '/settings', current: 'Slack Integration' }}
         tag="COLLABORATION ENGINE"
@@ -121,8 +125,9 @@ export default async function GlobalSlackIntegrationPage() {
               globalIntegration?.workspaceName ??
               (isOAuthConfigured ? 'Not Connected' : 'Unconfigured'),
             icon: <SlackLogo className="h-4 w-4" />,
+            tooltip: globalIntegration?.workspaceName ?? undefined,
             valueClassName: globalIntegration?.workspaceName
-              ? 'text-primary-foreground font-medium text-xs truncate max-w-[140px]'
+              ? 'text-primary-foreground font-semibold text-sm sm:text-base truncate'
               : 'text-primary-foreground/70',
             subtext: globalIntegration?.enabled ? 'Active integration' : 'OAuth needed',
           },
@@ -136,8 +141,8 @@ export default async function GlobalSlackIntegrationPage() {
             icon: <ShieldCheck className="h-4 w-4" />,
             valueClassName:
               globalIntegration && missingRequiredScopes.length === 0
-                ? 'text-emerald-300'
-                : 'text-amber-300',
+                ? 'text-emerald-300 font-semibold text-sm sm:text-base'
+                : 'text-amber-300 font-semibold text-sm sm:text-base',
             subtext: 'Bot token scopes',
           },
           {
@@ -145,7 +150,7 @@ export default async function GlobalSlackIntegrationPage() {
             value: globalIntegration?.enabled ? 'Available' : 'Disabled',
             icon: <Hash className="h-4 w-4" />,
             valueClassName: globalIntegration?.enabled
-              ? 'text-emerald-300'
+              ? 'text-emerald-300 font-semibold text-sm sm:text-base'
               : 'text-primary-foreground/70',
             subtext: 'Incident channels',
           },
@@ -153,7 +158,9 @@ export default async function GlobalSlackIntegrationPage() {
             label: 'Security & Verification',
             value: isSigningSecretConfigured ? 'HMAC Verified' : 'Secret Missing',
             icon: <Lock className="h-4 w-4" />,
-            valueClassName: isSigningSecretConfigured ? 'text-emerald-300' : 'text-amber-300',
+            valueClassName: isSigningSecretConfigured
+              ? 'text-emerald-300 font-semibold text-sm sm:text-base'
+              : 'text-amber-300 font-semibold text-sm sm:text-base',
             subtext: 'Request signature',
           },
         ]}
@@ -164,6 +171,7 @@ export default async function GlobalSlackIntegrationPage() {
         isOAuthConfigured={isOAuthConfigured}
         isSigningSecretConfigured={isSigningSecretConfigured}
         isAdmin={permissions.isAdmin}
+        appUrl={appUrl}
       />
     </div>
   );

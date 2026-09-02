@@ -203,19 +203,21 @@ export default function DetailHeroBanner({
           >
             {stats.map((stat, idx) => {
               const statContent = (
-                <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/75 truncate">
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-foreground/75 truncate w-full">
                     {stat.label}
                   </p>
                   <div
                     className={cn(
-                      'mt-1 flex items-center justify-center gap-1.5 text-base sm:text-lg font-bold text-primary-foreground min-w-0 max-w-full px-1',
+                      'mt-0.5 flex h-7 items-center justify-center gap-1.5 text-sm sm:text-base font-semibold text-primary-foreground min-w-0 max-w-full px-1',
                       stat.valueClassName
                     )}
                   >
-                    {stat.icon && <span className="shrink-0">{stat.icon}</span>}
+                    {stat.icon && (
+                      <span className="shrink-0 flex items-center justify-center">{stat.icon}</span>
+                    )}
                     <span
-                      className="truncate max-w-full"
+                      className="truncate max-w-full leading-tight"
                       title={
                         stat.tooltip ?? (typeof stat.value === 'string' ? stat.value : undefined)
                       }
@@ -224,15 +226,15 @@ export default function DetailHeroBanner({
                     </span>
                   </div>
                   {stat.subtext && (
-                    <p className="text-[9px] text-primary-foreground/70 mt-0.5 truncate">
+                    <p className="text-[9px] text-primary-foreground/70 mt-0.5 truncate w-full">
                       {stat.subtext}
                     </p>
                   )}
-                </>
+                </div>
               );
 
               const itemClassName = cn(
-                'min-w-0 overflow-hidden rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-2.5 text-center backdrop-blur-sm transition-all duration-150',
+                'min-w-0 overflow-hidden rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-2.5 text-center backdrop-blur-sm transition-all duration-150 flex flex-col justify-center min-h-[72px]',
                 stat.href &&
                   'hover:bg-primary-foreground/20 hover:scale-[1.01] hover:border-primary-foreground/30 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary-foreground/50',
                 stat.active &&

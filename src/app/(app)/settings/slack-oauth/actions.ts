@@ -29,10 +29,22 @@ export async function saveSlackOAuthConfig(
     orderBy: { updatedAt: 'desc' },
   });
 
+  // Check if this is a signing secret update (e.g. from SlackSigningSecretCard)
+  const isSigningSecretOnly = !clientId && Boolean(signingSecret);
+
   // Allows updating just the signing secret without re-entering app credentials
-  const effectiveClientId = clientId || existing?.clientId;
+  let effectiveClientId = clientId || existing?.clientId;
   if (!effectiveClientId) {
-    return { error: 'Client ID is required' };
+    if (isSigningSecretOnly) {
+      const integration = await prisma.slackIntegration.findFirst({
+        orderBy: { updatedAt: 'desc' },
+        select: { workspaceId: true },
+      });
+      effectiveClientId =
+        process.env.SLACK_CLIENT_ID || integration?.workspaceId || 'workspace-credentials';
+    } else {
+      return { error: 'Client ID is required' };
+    }
   }
 
   // If updating and secret is not provided (or is placeholder), keep existing
@@ -40,7 +52,13 @@ export async function saveSlackOAuthConfig(
   if (clientSecret && clientSecret !== '********' && clientSecret.trim() !== '') {
     encryptedSecret = await encrypt(clientSecret);
   } else if (!existing) {
-    return { error: 'Client Secret is required for new configuration' };
+    if (process.env.SLACK_CLIENT_SECRET) {
+      encryptedSecret = await encrypt(process.env.SLACK_CLIENT_SECRET);
+    } else if (isSigningSecretOnly) {
+      encryptedSecret = await encrypt('managed-credentials');
+    } else {
+      return { error: 'Client Secret is required for new configuration' };
+    }
   }
 
   // Slack never returns the signing secret from OAuth — it is an app-level
@@ -62,7 +80,7 @@ export async function saveSlackOAuthConfig(
       clientSecret: encryptedSecret!,
       signingSecret: encryptedSigningSecret,
       redirectUri: redirectUri || null,
-      enabled,
+      enabled: enabledValue ? enabled : (existing?.enabled ?? true),
       updatedBy: actorId,
     },
     update: {
@@ -70,7 +88,7 @@ export async function saveSlackOAuthConfig(
       ...(encryptedSecret ? { clientSecret: encryptedSecret } : {}),
       signingSecret: encryptedSigningSecret,
       redirectUri: redirectUri || existing?.redirectUri || null,
-      enabled,
+      ...(enabledValue ? { enabled } : {}),
       updatedBy: actorId,
     },
   });
