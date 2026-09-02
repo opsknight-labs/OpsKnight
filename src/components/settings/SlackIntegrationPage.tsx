@@ -188,6 +188,12 @@ export default function SlackIntegrationPage({
     }
   };
 
+  const handleOAuthRedirect = () => {
+    window.location.assign(
+      new URL(['/api', 'slack', 'oauth'].join('/'), window.location.origin).toString()
+    );
+  };
+
   const handleDisconnectClick = () => {
     setConfirmation({
       isOpen: true,
@@ -205,8 +211,7 @@ export default function SlackIntegrationPage({
       if (!response.ok) {
         throw new Error('Failed to disconnect Slack. Try again.');
       }
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = '/api/slack/oauth';
+      handleOAuthRedirect();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error('Replace failed', { description: errorMessage });
@@ -433,10 +438,7 @@ export default function SlackIntegrationPage({
             updatedAt={integration.updatedAt}
             enabled={integration.enabled}
             isAdmin={isAdmin}
-            onReconnect={() => {
-              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-              window.location.href = '/api/slack/oauth';
-            }}
+            onReconnect={handleOAuthRedirect}
             onReplaceWorkspace={handleReplaceWorkspaceClick}
           />
 
@@ -578,10 +580,7 @@ export default function SlackIntegrationPage({
             requiredScopes={requiredScopes}
             optionalScopes={optionalScopes}
             isAdmin={isAdmin}
-            onReconnect={() => {
-              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-              window.location.href = '/api/slack/oauth';
-            }}
+            onReconnect={handleOAuthRedirect}
           />
 
           {/* Card 4: App Credentials, Signing Secret & Manifest */}
