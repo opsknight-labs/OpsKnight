@@ -266,9 +266,15 @@ async function calculateDbAggregateMetrics(
     serviceTargetMap,
     fallbackMinutes: DEFAULT_RESOLVE_TARGET_MINUTES,
   });
-  const ackElapsed = slaEffectiveElapsedSql(Prisma.sql`"acknowledgedAt"`);
-  const resolveElapsed = slaEffectiveElapsedSql(Prisma.sql`COALESCE("resolvedAt", "updatedAt")`);
-  const currentElapsed = slaEffectiveElapsedSql(Prisma.sql`NOW()`);
+  // Qualify the outer Incident columns because the correlated pause
+  // subquery also has an `id` column. An unqualified `"id"` binds to the
+  // inner IncidentSlaPause row and silently makes every pause sum empty.
+  const ackElapsed = slaEffectiveElapsedSql(Prisma.sql`"Incident"."acknowledgedAt"`, 'Incident');
+  const resolveElapsed = slaEffectiveElapsedSql(
+    Prisma.sql`COALESCE("Incident"."resolvedAt", "Incident"."updatedAt")`,
+    'Incident'
+  );
+  const currentElapsed = slaEffectiveElapsedSql(Prisma.sql`NOW()`, 'Incident');
 
   // Keep every aggregate surface aligned with the Prisma filter semantics.
   // Constructing a second filter set from Prisma.IncidentWhereInput omitted
@@ -433,14 +439,14 @@ async function calculateDbAggregateMetrics(
       totalIncidents: Number(agg?.total_incidents ?? 0),
       acknowledgedCount: Number(agg?.acknowledged_count ?? 0),
       resolvedCount: Number(agg?.resolved_count ?? 0),
-      avgMttaMs: agg?.avg_mtta_ms ?? null,
-      avgMttrMs: agg?.avg_mttr_ms ?? null,
+      avgMttaMs: agg?.avg_mtta_ms == null ? null : Number(agg.avg_mtta_ms),
+      avgMttrMs: agg?.avg_mttr_ms == null ? null : Number(agg.avg_mttr_ms),
       mttaSumMs: BigInt(agg?.mtta_sum_ms ?? 0),
       mttrSumMs: BigInt(agg?.mttr_sum_ms ?? 0),
-      mttaP50Ms: pct?.mtta_p50_ms ?? null,
-      mttaP95Ms: pct?.mtta_p95_ms ?? null,
-      mttrP50Ms: pct?.mttr_p50_ms ?? null,
-      mttrP95Ms: pct?.mttr_p95_ms ?? null,
+      mttaP50Ms: pct?.mtta_p50_ms == null ? null : Number(pct.mtta_p50_ms),
+      mttaP95Ms: pct?.mtta_p95_ms == null ? null : Number(pct.mtta_p95_ms),
+      mttrP50Ms: pct?.mttr_p50_ms == null ? null : Number(pct.mttr_p50_ms),
+      mttrP95Ms: pct?.mttr_p95_ms == null ? null : Number(pct.mttr_p95_ms),
       ackSlaMet: Number(agg?.ack_sla_met ?? 0),
       ackSlaBreached: Number(agg?.ack_sla_breached ?? 0),
       resolveSlaMet: Number(agg?.resolve_sla_met ?? 0),
@@ -1005,9 +1011,13 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   // team/urgency/status/visibility/assignee scope produced wrong numbers
   // for those widgets relative to the headline metrics above them.
   const fullIncidentFilterSql = buildIncidentFilterSql(filters);
-  const previousAckElapsed = slaEffectiveElapsedSql(Prisma.sql`"acknowledgedAt"`);
+  const previousAckElapsed = slaEffectiveElapsedSql(
+    Prisma.sql`"Incident"."acknowledgedAt"`,
+    'Incident'
+  );
   const previousResolveElapsed = slaEffectiveElapsedSql(
-    Prisma.sql`COALESCE("resolvedAt", "updatedAt")`
+    Prisma.sql`COALESCE("Incident"."resolvedAt", "Incident"."updatedAt")`,
+    'Incident'
   );
 
   // Step 3: Parallel fetch - lightweight queries that work at any scale
@@ -1250,8 +1260,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   const prevHighUrgCount = Number(prevAgg?.high_urgency_count ?? 0);
   const prevMediumUrgCount = Number(prevAgg?.medium_urgency_count ?? 0);
   const prevLowUrgCount = Number(prevAgg?.low_urgency_count ?? 0);
-  const prevMttaMs = prevAgg?.avg_mtta_ms ?? null;
-  const prevMttrMs = prevAgg?.avg_mttr_ms ?? null;
+  const prevMttaMs = prevAgg?.avg_mtta_ms == null ? null : Number(prevAgg.avg_mtta_ms);
+  const prevMttrMs = prevAgg?.avg_mttr_ms == null ? null : Number(prevAgg.avg_mttr_ms);
   const prevAckCount = Number(prevAgg?.ack_count ?? 0);
   const prevResolveCount = Number(prevAgg?.resolve_count ?? 0);
 
