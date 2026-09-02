@@ -348,10 +348,16 @@ export default async function AnalyticsContent({
         >
           <AlertCircle className="w-4 h-4" />
           <span>
-            <strong>Detail coverage:</strong> Detail charts use{' '}
-            {metrics.detailCoverage.sampledIncidents?.toLocaleString() ?? 'a bounded set'} of{' '}
-            {metrics.detailCoverage.totalIncidents.toLocaleString()} incidents. Headline metrics use
-            the complete selected range.
+            <strong>Detail coverage:</strong> Detail charts cover{' '}
+            {formatDate(metrics.detailCoverage.start)} -{' '}
+            {formatDate(metrics.detailCoverage.end)}, using{' '}
+            {(
+              metrics.detailCoverage.sampledIncidents ?? metrics.detailCoverage.totalIncidents
+            ).toLocaleString()}{' '}
+            of {metrics.detailCoverage.totalIncidents.toLocaleString()} incidents in that interval.
+            Headline metrics cover {formatDate(metrics.effectiveStart)} -{' '}
+            {formatDate(metrics.effectiveEnd)} across {metrics.totalIncidents.toLocaleString()}{' '}
+            incidents.
           </span>
         </div>
       )}

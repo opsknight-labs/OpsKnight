@@ -37,9 +37,9 @@ import {
  *     carry these in directly-usable form; the live partition's
  *     versions cover the most-recent window the user actually wants
  *     to drill into.
- *   - **previousPeriod**: take from the live partition. It's a
- *     same-duration shift, computed against the live partition only
- *     — best-effort under hybrid mode.
+ *   - **previousPeriod**: unavailable until the complete preceding range can
+ *     be evaluated through the same rollup/live/hybrid engine. A live-only
+ *     comparison is not mathematically comparable with merged headlines.
  *   - **Retention metadata**: `effectiveStart`/`requestedStart` come
  *     from the historical side (the earlier of the two), `*End` from
  *     the live side, `isClipped` is OR of the two.
@@ -192,9 +192,13 @@ export function mergeHybridMetrics(
     totalRequests: live.totalRequests,
     saturation: live.saturation,
 
-    // previousPeriod: live partition's same-duration comparison only.
-    // Best-effort in hybrid mode; documented in the public PR.
-    previousPeriod: live.previousPeriod,
+    // The live partition's previous period covers only the live subrange and
+    // cannot be compared with a headline that merges historical + live data.
+    // Preserve its shape for compatibility but explicitly suppress deltas.
+    previousPeriod: {
+      ...live.previousPeriod,
+      available: false,
+    },
 
     // Detail fields currently come from the live partition. Publish that
     // narrower interval as data, rather than allowing consumers to assume it

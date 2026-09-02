@@ -24,6 +24,7 @@ import { getActiveOnCallShifts, getWindowOnCallShifts } from './oncall-shifts';
 import { createTimeContractContext, resolveReportingWindow } from './time-retention-contract';
 import { intervalDurationMs, intervalGaps, type TimeInterval } from './metrics/domain/interval';
 import { compileIncidentMetricFilter, type IncidentMetricFilter } from './metrics/domain/filter';
+import { isRollupCompatibleIncidentFilter } from './metrics/domain/rollup-eligibility';
 import { METRIC_ACCUMULATOR } from './metrics/domain/accumulator';
 import { resolveSlaTarget } from './metrics/domain/sla-target';
 import { slaTargetSql } from './metrics/domain/sla-target-sql';
@@ -709,18 +710,14 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   // completed past days.
   //
   // Constraints (any one of these forces the live path):
-  // - The schema doesn't store urgency/assignee/status/visibility breakdowns
-  //   per-day, so those filters can't be honored by rollups.
+  // - The schema doesn't store complete priority/team/urgency/assignee/status/
+  //   visibility breakdowns per day, so those filters can't be honored by
+  //   rollups without publishing synthetic zeros for unsupported metrics.
   // - The range must be *entirely* older than realTimeWindowDays. A range
   //   that crosses the boundary would silently miss the most recent days
   //   (rollups aren't generated for today). `shouldUseRollups(start, end)`
   //   enforces this.
-  const hasIncompatibleFilters =
-    filters.teamId !== undefined ||
-    filters.urgency ||
-    filters.assigneeId !== undefined ||
-    filters.status ||
-    (filters.visibility && filters.visibility !== 'ALL');
+  const hasIncompatibleFilters = !isRollupCompatibleIncidentFilter(filters);
   const useRollups =
     !filters._forceLive &&
     !hasIncompatibleFilters &&

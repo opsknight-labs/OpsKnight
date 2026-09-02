@@ -300,6 +300,51 @@ describe('mergeHybridMetrics', () => {
     expect(merged.heatmapData).toHaveLength(1);
   });
 
+  it('suppresses previous-period deltas that cover only the live partition', () => {
+    const historical = metric({ totalIncidents: 80 });
+    const live = metric({
+      totalIncidents: 20,
+      previousPeriod: {
+        available: true,
+        totalIncidents: 10,
+        highUrgencyCount: 2,
+        mtta: 12,
+        mttr: 30,
+        ackRate: 80,
+        resolveRate: 70,
+      },
+    });
+
+    const merged = mergeHybridMetrics(historical, live);
+
+    expect(merged.totalIncidents).toBe(100);
+    expect(merged.previousPeriod.available).toBe(false);
+  });
+
+  it('publishes the live detail interval separately from the full headline interval', () => {
+    const historical = metric({
+      totalIncidents: 80,
+      effectiveStart: new Date('2024-01-01T00:00:00Z'),
+      effectiveEnd: new Date('2024-02-29T23:59:59Z'),
+    });
+    const live = metric({
+      totalIncidents: 20,
+      effectiveStart: new Date('2024-03-01T00:00:00Z'),
+      effectiveEnd: new Date('2024-03-31T23:59:59Z'),
+    });
+
+    const merged = mergeHybridMetrics(historical, live);
+
+    expect(merged.detailCoverage).toMatchObject({
+      mode: 'bounded-detail',
+      start: new Date('2024-03-01T00:00:00Z'),
+      end: new Date('2024-03-31T23:59:59Z'),
+      totalIncidents: 20,
+    });
+    expect(merged.effectiveStart).toEqual(new Date('2024-01-01T00:00:00Z'));
+    expect(merged.effectiveEnd).toEqual(new Date('2024-03-31T23:59:59Z'));
+  });
+
   it('preserves the user-requested range across both partitions', () => {
     const historical = metric({
       requestedStart: new Date('2024-01-01T00:00:00Z'),
