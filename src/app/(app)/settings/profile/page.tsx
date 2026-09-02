@@ -115,11 +115,12 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
 
   const localTimeStr = formatLocalTimeInTz(timeZone);
 
-  // Centralized SLA Metrics Calculation for Current User
+  // Centralized SLA Metrics Calculation for Current User (Last 30 Days)
   const slaMetrics = user?.id
     ? await calculateSLAMetrics({
         assigneeId: user.id,
         userTimeZone: timeZone,
+        windowDays: 30,
       })
     : null;
 
@@ -175,6 +176,8 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
                 ? `${(slaMetrics.resolveCompliance ?? slaMetrics.ackCompliance ?? 100).toFixed(0)}%`
                 : '100%',
             icon: <ShieldCheck className="h-3.5 w-3.5" />,
+            subtext: 'Last 30 days',
+            tooltip: 'SLA compliance score for the last 30 days',
           },
         ]}
       />
