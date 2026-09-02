@@ -63,6 +63,20 @@ export default function AppUrlSettings({ appUrl, fallback }: Props) {
     }
   };
 
+  const handleTestLink = () => {
+    try {
+      const candidate = (value.trim() || fallback).trim();
+      const parsed = new URL(candidate);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        window.open(parsed.href, '_blank', 'noopener,noreferrer');
+        return;
+      }
+    } catch {
+      // Invalid URL
+    }
+    showToast('Please configure a valid HTTP or HTTPS URL to test', 'error');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (value.trim() && !isValidUrl(value.trim())) {
@@ -149,15 +163,20 @@ export default function AppUrlSettings({ appUrl, fallback }: Props) {
               )}
               <span>{copied ? 'Copied' : 'Copy'}</span>
             </Button>
-            <a
-              href={activeUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center rounded-md border border-input bg-background h-8 px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground gap-1.5 transition-colors"
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleTestLink}
+              disabled={urlStatus === 'invalid'}
+              className="h-8 text-xs gap-1.5"
+              title={
+                urlStatus === 'invalid' ? 'Enter a valid URL to test' : 'Open active URL in new tab'
+              }
             >
               <span>Test Link</span>
               <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-            </a>
+            </Button>
           </div>
         </div>
       </div>
