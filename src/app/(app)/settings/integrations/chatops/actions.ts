@@ -83,7 +83,7 @@ export async function saveChatOpsConfig(
       },
     });
 
-    revalidatePath('/settings/integrations');
+    revalidatePath('/settings');
     revalidatePath('/settings/integrations/chatops');
 
     return { success: true, error: null };
