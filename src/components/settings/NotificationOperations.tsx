@@ -230,7 +230,7 @@ export default function NotificationOperations({ canRetry }: Props) {
   const skipped = stats.SKIPPED || 0;
 
   const handleStatusFilterClick = (targetStatus: string) => {
-    if (status === targetStatus) {
+    if (status === targetStatus || (targetStatus === 'SENT' && status === 'DELIVERED')) {
       setStatus('all');
     } else {
       setStatus(targetStatus);
@@ -396,7 +396,7 @@ export default function NotificationOperations({ canRetry }: Props) {
 
         <button
           type="button"
-          onClick={() => handleStatusFilterClick('DELIVERED')}
+          onClick={() => handleStatusFilterClick('SENT')}
           className={`text-left p-4 rounded-xl border transition-all ${
             status === 'DELIVERED' || status === 'SENT'
               ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/40 shadow-xs'
