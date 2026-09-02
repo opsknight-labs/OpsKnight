@@ -6,7 +6,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: opsknight
+      app: opsknight-app
   endpoints:
     - port: http
       path: /api/metrics

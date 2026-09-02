@@ -32,6 +32,11 @@ At minimum customize:
 - resource requests/limits, replicas, HPA and PDB;
 - NetworkPolicy ingress namespace labels and database destinations.
 
+For Prometheus Operator, add the optional `k8s/monitoring/servicemonitor.yaml` from the production
+overlay, inject `PROMETHEUS_SCRAPE_TOKEN` into the application from a dedicated Secret, and allow the
+monitoring source through NetworkPolicy. The monitor is intentionally excluded from the base so
+clusters without the `ServiceMonitor` CRD remain deployable. See [Prometheus metrics](./prometheus).
+
 Use your platform secret controller/store for production values. Do not commit rendered production Secrets.
 
 ## Render and validate
@@ -72,4 +77,5 @@ Kubernetes rollout rollback does not undo PostgreSQL migrations. Confirm schema 
 - [Deployment](./README)
 - [Helm](./helm)
 - [Monitoring](./monitoring)
+- [Prometheus metrics](./prometheus)
 - [Configuration reference](../getting-started/configuration)

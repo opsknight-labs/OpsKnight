@@ -26,6 +26,7 @@ Do not install both into the same namespace. Their resource names and lifecycle 
 - A PostgreSQL topology with durable storage, capacity monitoring, backups, and a tested restore.
 - A secrets-delivery process for the database password, `NEXTAUTH_SECRET`, and 64-hex-character `ENCRYPTION_KEY`.
 - External collection for application/container logs and platform/database metrics.
+- A dedicated Secret and Prometheus/Operator discovery plan when scraping `/api/metrics`.
 
 Validate rendered API versions and admission/security policies against the actual target cluster. v1.4 does not declare one universal Kubernetes-version support matrix.
 
@@ -179,6 +180,7 @@ A Deployment or Helm rollback changes application resources; it does not reverse
 - [Kustomize](./kustomize)
 - [Helm](./helm)
 - [Monitoring](./monitoring)
+- [Prometheus metrics](./prometheus)
 - [Database migrations](./database-migrations)
 - [Backup and restore](./backup-restore)
 - [Upgrade and rollback](./upgrade-rollback)
