@@ -551,18 +551,22 @@ export default function NotificationHistory() {
 
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1">
-                {(['today', '7d', '30d'] as const).map(preset => (
+                {[
+                  { id: 'today', label: 'Today' },
+                  { id: '7d', label: 'Last 7d' },
+                  { id: '30d', label: 'Last 30d' },
+                ].map(preset => (
                   <button
-                    key={preset}
+                    key={preset.id}
                     type="button"
-                    onClick={() => applyDatePreset(preset)}
+                    onClick={() => applyDatePreset(preset.id as 'today' | '7d' | '30d')}
                     className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
-                      datePreset === preset
+                      datePreset === preset.id
                         ? 'bg-primary/10 border-primary/40 text-primary'
                         : 'bg-background border-border/80 text-muted-foreground hover:text-foreground hover:border-border'
                     }`}
                   >
-                    {{ today: 'Today', '7d': 'Last 7d', '30d': 'Last 30d' }[preset]}
+                    {preset.label}
                   </button>
                 ))}
               </div>
@@ -643,40 +647,51 @@ export default function NotificationHistory() {
             <>
               {/* Channel breakdown bar */}
               {(() => {
-                const channelCounts: Record<string, number> = {};
+                const channelCounts = new Map<string, number>();
                 for (const n of notifications) {
-                  channelCounts[n.channel] = (channelCounts[n.channel] || 0) + 1;
+                  channelCounts.set(n.channel, (channelCounts.get(n.channel) || 0) + 1);
                 }
                 const channelTotal = notifications.length;
-                const colors: Record<string, string> = {
-                  EMAIL: 'bg-blue-500',
-                  SMS: 'bg-red-500',
-                  PUSH: 'bg-violet-500',
-                  WHATSAPP: 'bg-emerald-500',
-                  SLACK: 'bg-amber-500',
-                  WEBHOOK: 'bg-orange-500',
+                const entries = Array.from(channelCounts.entries());
+                const getChannelBarColor = (channel: string) => {
+                  switch (channel) {
+                    case 'EMAIL':
+                      return 'bg-blue-500';
+                    case 'SMS':
+                      return 'bg-red-500';
+                    case 'PUSH':
+                      return 'bg-violet-500';
+                    case 'WHATSAPP':
+                      return 'bg-emerald-500';
+                    case 'SLACK':
+                      return 'bg-amber-500';
+                    case 'WEBHOOK':
+                      return 'bg-orange-500';
+                    default:
+                      return 'bg-muted-foreground';
+                  }
                 };
                 return (
                   <div className="px-4 sm:px-5 py-2.5 border-b border-border/40 bg-muted/10">
                     <div className="flex items-center gap-3">
                       <div className="flex h-1.5 flex-1 rounded-full overflow-hidden gap-px">
-                        {Object.entries(channelCounts).map(([ch, count]) => (
+                        {entries.map(([ch, count]) => (
                           <div
                             key={ch}
-                            className={`${colors[ch] || 'bg-muted-foreground'} h-full`}
+                            className={`${getChannelBarColor(ch)} h-full`}
                             style={{ width: `${(count / channelTotal) * 100}%` }}
                             title={`${ch}: ${count}`}
                           />
                         ))}
                       </div>
                       <div className="flex items-center gap-2.5 shrink-0">
-                        {Object.entries(channelCounts).map(([ch, count]) => (
+                        {entries.map(([ch, count]) => (
                           <span
                             key={ch}
                             className="flex items-center gap-1 text-[10px] text-muted-foreground"
                           >
                             <span
-                              className={`h-1.5 w-1.5 rounded-full ${colors[ch] || 'bg-muted-foreground'}`}
+                              className={`h-1.5 w-1.5 rounded-full ${getChannelBarColor(ch)}`}
                             />
                             {ch} {Math.round((count / channelTotal) * 100)}%
                           </span>

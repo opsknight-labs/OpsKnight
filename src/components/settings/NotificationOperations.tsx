@@ -607,32 +607,31 @@ export default function NotificationOperations({ canRetry }: Props) {
 
             <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
               <div className="flex items-center gap-1">
-                {(['today', '7d', '30d'] as const).map(preset => {
+                {[
+                  { id: 'today', label: 'Today', days: 0 },
+                  { id: '7d', label: 'Last 7d', days: 6 },
+                  { id: '30d', label: 'Last 30d', days: 29 },
+                ].map(preset => {
                   const todayStr = new Date().toISOString().slice(0, 10);
-                  const labels = { today: 'Today', '7d': 'Last 7d', '30d': 'Last 30d' } as const;
                   let expectedFrom = todayStr;
-                  if (preset === '7d') {
+                  if (preset.days > 0) {
                     const d = new Date();
-                    d.setDate(d.getDate() - 6);
-                    expectedFrom = d.toISOString().slice(0, 10);
-                  } else if (preset === '30d') {
-                    const d = new Date();
-                    d.setDate(d.getDate() - 29);
+                    d.setDate(d.getDate() - preset.days);
                     expectedFrom = d.toISOString().slice(0, 10);
                   }
                   const isActive = from === expectedFrom && to === todayStr;
                   return (
                     <button
-                      key={preset}
+                      key={preset.id}
                       type="button"
-                      onClick={() => applyDatePreset(preset)}
+                      onClick={() => applyDatePreset(preset.id as 'today' | '7d' | '30d')}
                       className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-all ${
                         isActive
                           ? 'bg-primary/10 border-primary/40 text-primary'
                           : 'bg-background border-border/80 text-muted-foreground hover:text-foreground hover:border-border'
                       }`}
                     >
-                      {labels[preset]}
+                      {preset.label}
                     </button>
                   );
                 })}
