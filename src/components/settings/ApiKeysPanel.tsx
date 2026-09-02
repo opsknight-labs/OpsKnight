@@ -237,12 +237,13 @@ export default function ApiKeysPanel({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
           {/* Search Bar */}
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search by name, prefix, or owner..."
-              className="pl-9 h-9 text-xs bg-background"
+              className="pl-10 h-9 text-xs bg-background"
+              style={{ paddingLeft: '2.5rem' }}
             />
             {searchQuery && (
               <button

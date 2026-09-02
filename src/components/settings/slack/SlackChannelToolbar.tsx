@@ -93,13 +93,14 @@ export function SlackChannelToolbar({
       {/* Search and Filter Row */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Search channels..."
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
-            className="pl-9"
+            className="h-9 pl-10 text-xs sm:text-sm bg-background"
+            style={{ paddingLeft: '2.5rem' }}
           />
         </div>
 
