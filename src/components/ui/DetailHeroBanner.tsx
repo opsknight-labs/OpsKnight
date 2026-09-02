@@ -12,6 +12,7 @@ export type DetailStatItem = {
   valueClassName?: string;
   href?: string;
   active?: boolean;
+  tooltip?: string;
 };
 
 export type DetailBreadcrumb = {
@@ -122,15 +123,23 @@ export default function DetailHeroBanner({
                         </p>
                         <div
                           className={cn(
-                            'mt-0.5 flex items-center justify-center gap-1 text-sm font-semibold text-primary-foreground',
+                            'mt-0.5 flex items-center justify-center gap-1 text-sm font-semibold text-primary-foreground min-w-0 max-w-full',
                             stat.valueClassName
                           )}
                         >
-                          {stat.icon}
-                          <span>{stat.value}</span>
+                          {stat.icon && <span className="shrink-0">{stat.icon}</span>}
+                          <span
+                            className="truncate max-w-full"
+                            title={
+                              stat.tooltip ??
+                              (typeof stat.value === 'string' ? stat.value : undefined)
+                            }
+                          >
+                            {stat.value}
+                          </span>
                         </div>
                         {stat.subtext && (
-                          <p className="text-[9px] text-primary-foreground/70 mt-0.5">
+                          <p className="text-[9px] text-primary-foreground/70 mt-0.5 truncate">
                             {stat.subtext}
                           </p>
                         )}
@@ -138,7 +147,7 @@ export default function DetailHeroBanner({
                     );
 
                     const itemClassName = cn(
-                      'min-w-0 rounded-md px-2.5 py-1.5 text-center transition-all duration-150',
+                      'min-w-0 overflow-hidden rounded-md px-2.5 py-1.5 text-center transition-all duration-150',
                       idx > 0 && stats.length <= 3 && 'border-l border-primary-foreground/20',
                       idx > 0 &&
                         stats.length === 4 &&
@@ -200,12 +209,19 @@ export default function DetailHeroBanner({
                   </p>
                   <div
                     className={cn(
-                      'mt-1 flex items-center justify-center gap-1.5 text-base sm:text-lg font-bold text-primary-foreground',
+                      'mt-1 flex items-center justify-center gap-1.5 text-base sm:text-lg font-bold text-primary-foreground min-w-0 max-w-full px-1',
                       stat.valueClassName
                     )}
                   >
-                    {stat.icon}
-                    <span>{stat.value}</span>
+                    {stat.icon && <span className="shrink-0">{stat.icon}</span>}
+                    <span
+                      className="truncate max-w-full"
+                      title={
+                        stat.tooltip ?? (typeof stat.value === 'string' ? stat.value : undefined)
+                      }
+                    >
+                      {stat.value}
+                    </span>
                   </div>
                   {stat.subtext && (
                     <p className="text-[9px] text-primary-foreground/70 mt-0.5 truncate">
@@ -216,7 +232,7 @@ export default function DetailHeroBanner({
               );
 
               const itemClassName = cn(
-                'min-w-0 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-2.5 text-center backdrop-blur-sm transition-all duration-150',
+                'min-w-0 overflow-hidden rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-2.5 text-center backdrop-blur-sm transition-all duration-150',
                 stat.href &&
                   'hover:bg-primary-foreground/20 hover:scale-[1.01] hover:border-primary-foreground/30 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary-foreground/50',
                 stat.active &&
