@@ -91,6 +91,7 @@ export async function saveSlackOAuthConfig(
     },
   });
 
+  revalidatePath('/settings');
   revalidatePath('/settings/integrations/slack');
   revalidatePath('/services');
 

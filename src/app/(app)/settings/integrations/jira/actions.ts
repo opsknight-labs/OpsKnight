@@ -90,7 +90,7 @@ export async function saveJiraConfig(
       },
     });
 
-    revalidatePath('/settings/integrations');
+    revalidatePath('/settings');
     revalidatePath('/settings/integrations/jira');
 
     return { success: true, error: null };

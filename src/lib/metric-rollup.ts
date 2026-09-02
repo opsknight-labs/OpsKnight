@@ -157,6 +157,8 @@ export async function generateDailyRollup(
             updatedAt: true,
             slaPausedMs: true,
             slaPauseStartedAt: true,
+            slaAckTargetMs: true,
+            slaResolveTargetMs: true,
             slaPauses: { select: { startedAt: true, endedAt: true } },
             serviceId: true,
             service: {
@@ -293,6 +295,10 @@ export async function generateDailyRollup(
           const resolvedTime =
             incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
           const target = resolveSlaTarget({
+            incidentTargets: {
+              ackTargetMs: incident.slaAckTargetMs,
+              resolveTargetMs: incident.slaResolveTargetMs,
+            },
             priority: incident.priority,
             serviceTargets: {
               ackMinutes: incident.service?.targetAckMinutes,
