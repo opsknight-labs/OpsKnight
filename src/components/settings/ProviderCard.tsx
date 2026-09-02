@@ -278,20 +278,10 @@ export default function ProviderCard({
     setIsTesting(true);
     setTestStatus('idle');
     try {
-      const response = await fetch(
-        `/api/admin/notifications/providers/${providerConfig.key}/test`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-      if (response.ok) {
-        setTestStatus('success');
-        toast.success(`Test message sent via ${providerConfig.name}`);
-      } else {
-        const body = (await response.json()) as { error?: string };
-        throw new Error(body.error || 'Test failed');
-      }
+      const { testNotificationProvider } = await import('@/app/(app)/settings/system/actions');
+      const result = await testNotificationProvider(providerConfig.key);
+      setTestStatus('success');
+      toast.success(result.message || `Test message sent via ${providerConfig.name}`);
     } catch (err) {
       setTestStatus('error');
       toast.error(err instanceof Error ? err.message : 'Test delivery failed');
