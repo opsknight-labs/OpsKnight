@@ -151,12 +151,17 @@ export async function updateService(serviceId: string, formData: FormData) {
 export async function updateServiceNotificationSettings(serviceId: string, formData: FormData) {
   const currentUser = await assertCanModifyService(serviceId);
   const channels = parseServiceNotificationChannels(formData);
-  const slackChannel = formData.has('slackChannel')
-    ? String(formData.get('slackChannel') ?? '').trim() || null
-    : undefined;
-  const slackWebhookUrl = formData.has('slackWebhookUrl')
-    ? String(formData.get('slackWebhookUrl') ?? '').trim() || null
-    : undefined;
+  const isSlackEnabled = channels.includes('SLACK');
+  const slackChannel = isSlackEnabled
+    ? formData.has('slackChannel')
+      ? String(formData.get('slackChannel') ?? '').trim() || null
+      : undefined
+    : null;
+  const slackWebhookUrl = isSlackEnabled
+    ? formData.has('slackWebhookUrl')
+      ? String(formData.get('slackWebhookUrl') ?? '').trim() || null
+      : undefined
+    : null;
 
   await prisma.service.update({
     where: { id: serviceId },

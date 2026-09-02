@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const checks: Record<
     string,
     {
-      status: 'healthy' | 'unhealthy' | 'disabled';
+      status: 'healthy' | 'unhealthy' | 'disabled' | 'degraded';
       latency?: number;
       error?: string;
       expected?: boolean;
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
         withinStartupGrace;
       const healthy = worker.running && recentSuccess;
       checks.worker = {
-        status: healthy ? 'healthy' : 'unhealthy',
+        status: healthy ? 'healthy' : 'degraded',
         latency: secondsSinceSuccess ?? undefined,
         ...(healthy
           ? {}
@@ -146,12 +146,26 @@ export async function GET(request: NextRequest) {
       ? true
       : readinessChecks.every(check => check.status === 'healthy');
   const allReady = readinessChecks.every(
-    check => check.status === 'healthy' || check.status === 'disabled'
+    check =>
+      check.status === 'healthy' || check.status === 'disabled' || check.status === 'degraded'
   );
-  const anyUnhealthy = readinessChecks.some(check => check.status === 'unhealthy');
 
-  const overallStatus =
-    allReady || allHealthy ? 'healthy' : anyUnhealthy ? 'unhealthy' : 'degraded';
+  // For HTTP traffic readiness, database connectivity is the hard requirement.
+  // Auxiliary background worker, scheduler, or memory degradations report as 'degraded' (HTTP 200)
+  // so the pod continues serving web traffic and avoids CrashLoopBackOff.
+  const criticalFailure =
+    mode === 'readiness'
+      ? checks.database?.status === 'unhealthy'
+      : readinessChecks.some(check => check.status === 'unhealthy');
+
+  const anyDegraded = readinessChecks.some(check => check.status === 'degraded');
+  const overallStatus = criticalFailure
+    ? 'unhealthy'
+    : anyDegraded
+      ? 'degraded'
+      : allReady || allHealthy
+        ? 'healthy'
+        : 'degraded';
 
   const response = {
     status: overallStatus,

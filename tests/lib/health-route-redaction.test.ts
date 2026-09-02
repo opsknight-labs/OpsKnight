@@ -49,4 +49,15 @@ describe('public readiness response', () => {
     expect(JSON.stringify(body)).not.toContain('secret-password');
     expect(response.status).toBe(503);
   });
+
+  it('keeps readiness 200 when background worker is degraded', async () => {
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'worker';
+    schedulerFindUnique.mockResolvedValue({ lastRunAt: new Date(), lastError: null });
+
+    const response = await GET(new NextRequest('http://localhost/api/health?mode=readiness'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe('degraded');
+  });
 });
