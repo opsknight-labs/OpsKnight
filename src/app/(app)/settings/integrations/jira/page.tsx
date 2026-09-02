@@ -30,11 +30,23 @@ export default async function GlobalJiraIntegrationPage() {
   });
 
   let siteHostname = 'Not configured';
+  let siteDisplayName = 'Not configured';
+  let siteSubtext = 'Site URL needed';
   if (config?.baseUrl) {
     try {
-      siteHostname = new URL(config.baseUrl).hostname;
+      const parsed = new URL(config.baseUrl);
+      siteHostname = parsed.hostname;
+      if (parsed.hostname.toLowerCase().endsWith('.atlassian.net')) {
+        siteDisplayName = parsed.hostname.replace(/\.atlassian\.net$/i, '');
+        siteSubtext = 'Atlassian Cloud';
+      } else {
+        siteDisplayName = parsed.hostname;
+        siteSubtext = 'Self-hosted Jira';
+      }
     } catch {
       siteHostname = config.baseUrl;
+      siteDisplayName = config.baseUrl;
+      siteSubtext = 'Jira Instance';
     }
   }
 
@@ -82,19 +94,21 @@ export default async function GlobalJiraIntegrationPage() {
         stats={[
           {
             label: 'Jira Site',
-            value: siteHostname,
+            value: siteDisplayName,
             icon: <JiraLogo className="h-4 w-4" />,
+            tooltip: siteHostname,
             valueClassName: config?.baseUrl
-              ? 'text-primary-foreground font-mono text-xs'
+              ? 'text-primary-foreground font-semibold text-xs sm:text-sm font-mono truncate max-w-full'
               : 'text-primary-foreground/70',
-            subtext: config?.baseUrl ? 'Atlassian Cloud' : 'Site URL needed',
+            subtext: siteSubtext,
           },
           {
             label: 'Service Account',
             value: config?.userEmail ?? 'None',
             icon: <Mail className="h-4 w-4" />,
+            tooltip: config?.userEmail ?? undefined,
             valueClassName: config?.userEmail
-              ? 'text-primary-foreground text-xs font-mono'
+              ? 'text-primary-foreground text-xs font-mono truncate max-w-full'
               : 'text-primary-foreground/70',
             subtext: config?.userEmail ? 'API token auth' : 'Email required',
           },
