@@ -1076,6 +1076,18 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               email,
               userId: user.id,
             });
+
+            try {
+              const { logLoginSuccess } = await import('@/lib/login-audit');
+              const { headers } = await import('next/headers');
+              const h = await headers();
+              const ua = h.get('user-agent') || 'Unknown';
+              const ip =
+                h.get('x-forwarded-for')?.split(',')[0].trim() || h.get('x-real-ip') || 'Unknown';
+              await logLoginSuccess(email, targetUser.id, ip, ua, 'oidc');
+            } catch {
+              // Non-critical audit logging failure
+            }
           }
 
           return true;

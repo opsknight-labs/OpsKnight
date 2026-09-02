@@ -115,6 +115,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     );
   }
 
+  // Record active session heartbeat (debounced per device)
+  if (dbUser?.id) {
+    try {
+      const { headers } = await import('next/headers');
+      const headerList = await headers();
+      const userAgent = headerList.get('user-agent') || '';
+      const ip =
+        headerList.get('x-forwarded-for')?.split(',')[0].trim() ||
+        headerList.get('x-real-ip') ||
+        '127.0.0.1';
+      const { recordSessionHeartbeat } = await import('@/lib/active-sessions');
+      void recordSessionHeartbeat({ userId: dbUser.id, userAgent, ip }).catch(() => {});
+    } catch {
+      // Non-critical background heartbeat
+    }
+  }
+
   if (!dbError && !dbUser) {
     // Check if system is uninitialized
     let userCount = 0;

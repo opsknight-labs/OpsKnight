@@ -11,7 +11,9 @@ import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { ShieldCheck, KeyRound, Fingerprint, ExternalLink, Laptop } from 'lucide-react';
+import { getUserActiveSessions, recordSessionHeartbeat } from '@/lib/active-sessions';
 
 export default async function SecuritySettingsPage() {
   const session = await getServerSession(await getAuthOptions());
@@ -78,6 +80,31 @@ export default async function SecuritySettingsPage() {
     }
   }
 
+  // Resolve multi-device active sessions
+  const headerList = await headers();
+  const currentUserAgent = headerList.get('user-agent') || '';
+  const currentIp =
+    headerList.get('x-forwarded-for')?.split(',')[0].trim() ||
+    headerList.get('x-real-ip') ||
+    '127.0.0.1';
+
+  if (user?.id) {
+    await recordSessionHeartbeat({
+      userId: user.id,
+      userAgent: currentUserAgent,
+      ip: currentIp,
+    });
+  }
+
+  const activeSessions = user?.id
+    ? await getUserActiveSessions({
+        userId: user.id,
+        currentIp,
+        currentUserAgent,
+        tokenVersion: user.tokenVersion ?? 0,
+      })
+    : [];
+
   // Format issuer for clean presentation (e.g., https://accounts.google.com -> Google)
   const formatIssuerName = (issuerUrl: string) => {
     try {
@@ -141,9 +168,13 @@ export default async function SecuritySettingsPage() {
           },
           {
             label: 'Active Sessions',
-            value: '1 Device',
+            value: `${activeSessions.length} ${activeSessions.length === 1 ? 'Device' : 'Devices'}`,
             icon: <Laptop className="h-3.5 w-3.5" />,
-            subtext: 'Current browser',
+            subtext:
+              activeSessions.length === 1
+                ? 'Current browser'
+                : `${activeSessions.length} active devices`,
+            tooltip: `${activeSessions.length} authenticated ${activeSessions.length === 1 ? 'session' : 'sessions'}`,
           },
           {
             label: 'Auth Method',
@@ -185,7 +216,7 @@ export default async function SecuritySettingsPage() {
           </p>
         }
       >
-        <ActiveSessionsSection tokenVersion={user?.tokenVersion ?? 1} />
+        <ActiveSessionsSection tokenVersion={user?.tokenVersion ?? 1} sessions={activeSessions} />
       </SettingsSection>
 
       {/* Section 3: Identity & Single Sign-On */}
