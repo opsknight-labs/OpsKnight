@@ -1,5 +1,9 @@
-export type SlaTargetSource = 'definition' | 'priority' | 'service' | 'global';
+export type SlaTargetSource = 'incident' | 'definition' | 'priority' | 'service' | 'global';
 export type SlaTarget = { ackTargetMs: number; resolveTargetMs: number; source: SlaTargetSource };
+export type IncidentSlaTargetSnapshot = {
+  ackTargetMs?: number | null;
+  resolveTargetMs?: number | null;
+};
 
 export const MINUTE_MS = 60_000;
 export const PRIORITY_SLA_TARGETS = [
@@ -18,13 +22,30 @@ function normalizePriority(priority?: string | null): string | null {
   return match ? `P${match[1]}` : null;
 }
 
+function isPositiveFinite(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
 export function resolveSlaTarget(input: {
+  incidentTargets?: IncidentSlaTargetSnapshot | null;
   priority?: string | null;
   serviceTargets?: { ackMinutes?: number | null; resolveMinutes?: number | null };
   definitionOverride?: { ackMinutes?: number | null; resolveMinutes?: number | null } | null;
   globalDefaults?: { ackMinutes: number; resolveMinutes: number };
 }): SlaTarget {
   const defaults = input.globalDefaults ?? { ackMinutes: 15, resolveMinutes: 120 };
+  const incidentTargets = input.incidentTargets;
+  if (
+    isPositiveFinite(incidentTargets?.ackTargetMs) &&
+    isPositiveFinite(incidentTargets?.resolveTargetMs)
+  ) {
+    return {
+      ackTargetMs: incidentTargets.ackTargetMs,
+      resolveTargetMs: incidentTargets.resolveTargetMs,
+      source: 'incident',
+    };
+  }
+
   const override = input.definitionOverride;
   if (override?.ackMinutes != null || override?.resolveMinutes != null) {
     return {

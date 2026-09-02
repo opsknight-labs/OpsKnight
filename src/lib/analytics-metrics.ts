@@ -1,3 +1,6 @@
+import { effectiveElapsedMs } from './metrics/domain/sla-clock';
+import { resolveSlaTarget } from './metrics/domain/sla-target';
+
 export type StatusAgeEntry = { status: string; avgMs: number | null };
 
 export type OnCallShift = {
@@ -173,6 +176,10 @@ export function buildServiceSlaTable(
     resolvedAt: Date | null;
     updatedAt: Date | null;
     serviceId: string;
+    priority?: string | null;
+    slaAckTargetMs?: number | null;
+    slaResolveTargetMs?: number | null;
+    slaPauses?: Array<{ startedAt: Date; endedAt: Date | null }>;
   }>,
   ackMap: Map<string, Date>,
   serviceTargets: Map<string, { ackMinutes: number; resolveMinutes: number }>,
@@ -189,39 +196,51 @@ export function buildServiceSlaTable(
 
   for (const incident of incidents) {
     const targets = serviceTargets.get(incident.serviceId);
-    const ackTargetMinutes = targets?.ackMinutes ?? defaultAckMinutes;
-    const resolveTargetMinutes = targets?.resolveMinutes ?? defaultResolveMinutes;
+    const target = resolveSlaTarget({
+      incidentTargets: {
+        ackTargetMs: incident.slaAckTargetMs,
+        resolveTargetMs: incident.slaResolveTargetMs,
+      },
+      priority: incident.priority,
+      serviceTargets: targets,
+      globalDefaults: {
+        ackMinutes: defaultAckMinutes,
+        resolveMinutes: defaultResolveMinutes,
+      },
+    });
     const current = serviceSlaStats.get(incident.serviceId) || {
       ackMet: 0,
       ackTotal: 0,
       resolveMet: 0,
       resolveTotal: 0,
     };
+    const elapsedAt = (evaluationAt: Date) =>
+      effectiveElapsedMs({
+        startedAt: incident.createdAt,
+        evaluationAt,
+        pauses: incident.slaPauses ?? [],
+      });
 
     const ackedAt = ackMap.get(incident.id);
     if (ackedAt) {
       current.ackTotal += 1;
-      const diffMinutes = (ackedAt.getTime() - incident.createdAt.getTime()) / 60000;
-      if (diffMinutes <= ackTargetMinutes) {
-        current.ackMet += 1;
-      }
-    } else if (incident.status !== 'RESOLVED') {
-      // Active incidents become evaluated SLA breaches once their
-      // acknowledgement deadline passes. Omitting them from the denominator
-      // can otherwise report 100% compliance while incidents remain unacked.
-      const ageMinutes = (now.getTime() - incident.createdAt.getTime()) / 60000;
-      if (ageMinutes > ackTargetMinutes) current.ackTotal += 1;
+      if (elapsedAt(ackedAt) <= target.ackTargetMs) current.ackMet += 1;
+    } else if (incident.status === 'RESOLVED') {
+      // Resolution is not acknowledgement. A resolved incident with no ACK event
+      // is an evaluated ACK miss rather than disappearing from the denominator.
+      current.ackTotal += 1;
+    } else if (elapsedAt(now) > target.ackTargetMs) {
+      current.ackTotal += 1;
     }
 
     if (incident.status === 'RESOLVED') {
       const resolvedAt = incident.resolvedAt || incident.updatedAt;
       if (resolvedAt) {
         current.resolveTotal += 1;
-        const diffMinutes = (resolvedAt.getTime() - incident.createdAt.getTime()) / 60000;
-        if (diffMinutes <= resolveTargetMinutes) {
-          current.resolveMet += 1;
-        }
+        if (elapsedAt(resolvedAt) <= target.resolveTargetMs) current.resolveMet += 1;
       }
+    } else if (elapsedAt(now) > target.resolveTargetMs) {
+      current.resolveTotal += 1;
     }
 
     serviceSlaStats.set(incident.serviceId, current);

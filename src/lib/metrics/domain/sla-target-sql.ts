@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { MINUTE_MS, PRIORITY_SLA_TARGETS } from './sla-target';
 
 type ServiceTarget = { ackMinutes: number; resolveMinutes: number };
+type IncidentSlaColumn = 'priority' | 'serviceId' | 'slaAckTargetMs' | 'slaResolveTargetMs';
 
 function priorityMinutes(
   target: (typeof PRIORITY_SLA_TARGETS)[number],
@@ -10,7 +11,7 @@ function priorityMinutes(
   return kind === 'ackMinutes' ? target.ackMinutes : target.resolveMinutes;
 }
 
-function column(alias: string | undefined, name: 'priority' | 'serviceId') {
+function column(alias: string | undefined, name: IncidentSlaColumn) {
   if (alias !== undefined && !/^[a-z][a-z0-9_]*$/i.test(alias)) {
     throw new Error('Invalid SQL alias');
   }
@@ -33,7 +34,7 @@ function serviceTargetExpression(
   ), ${fallbackMinutes * MINUTE_MS})`;
 }
 
-/** SQL equivalent of resolveSlaTarget priority > service > global precedence. */
+/** SQL equivalent of resolveSlaTarget incident > priority > service > global precedence. */
 export function slaTargetSql(input: {
   kind: 'ackMinutes' | 'resolveMinutes';
   serviceTargetMap: ReadonlyMap<string, ServiceTarget>;
@@ -45,13 +46,20 @@ export function slaTargetSql(input: {
       Prisma.sql`WHEN CONCAT('P', REGEXP_REPLACE(BTRIM(UPPER(${column(input.alias, 'priority')})), '^P', '')) = ${target.priority}
       THEN ${priorityMinutes(target, input.kind) * MINUTE_MS}`
   );
-  return Prisma.sql`CASE
-    ${Prisma.join(priorityCases, ' ')}
-    ELSE ${serviceTargetExpression(
-      input.serviceTargetMap,
-      input.kind,
-      input.fallbackMinutes,
-      input.alias
-    )}
-  END`;
+  const frozenColumn = column(
+    input.alias,
+    input.kind === 'ackMinutes' ? 'slaAckTargetMs' : 'slaResolveTargetMs'
+  );
+  return Prisma.sql`COALESCE(
+    NULLIF(${frozenColumn}, 0),
+    CASE
+      ${Prisma.join(priorityCases, ' ')}
+      ELSE ${serviceTargetExpression(
+        input.serviceTargetMap,
+        input.kind,
+        input.fallbackMinutes,
+        input.alias
+      )}
+    END
+  )`;
 }
