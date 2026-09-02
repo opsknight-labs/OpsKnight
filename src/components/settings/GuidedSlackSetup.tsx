@@ -20,14 +20,11 @@ import SlackManifestCard from '@/components/settings/SlackManifestCard';
 
 type SetupStep = 1 | 2 | 3;
 
-function getBaseUrl(): string {
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
-  }
-  return 'https://yourdomain.com';
+interface GuidedSlackSetupProps {
+  baseUrl?: string;
 }
 
-export default function GuidedSlackSetup() {
+export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlackSetupProps = {}) {
   const [step, setStep] = useState<SetupStep>(1);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
@@ -35,7 +32,15 @@ export default function GuidedSlackSetup() {
   const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
 
-  const redirectUri = `${getBaseUrl()}/api/slack/oauth/callback`;
+  const clientOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const baseUrl =
+    initialBaseUrl && initialBaseUrl !== 'http://localhost:3000'
+      ? initialBaseUrl
+      : clientOrigin && !clientOrigin.includes('localhost')
+        ? clientOrigin
+        : initialBaseUrl || clientOrigin || 'https://yourdomain.com';
+
+  const redirectUri = `${baseUrl}/api/slack/oauth/callback`;
 
   const handleSave = async () => {
     if (!clientId || !clientSecret || !signingSecret) {
@@ -135,7 +140,7 @@ export default function GuidedSlackSetup() {
         {step === 1 && (
           <div className="space-y-6">
             <div className="mb-6 rounded-lg border bg-background p-4">
-              <SlackManifestCard baseUrl={getBaseUrl()} />
+              <SlackManifestCard baseUrl={baseUrl} />
             </div>
 
             <div className="space-y-4">
@@ -279,7 +284,7 @@ export default function GuidedSlackSetup() {
                 <p className="text-sm text-muted-foreground">
                   Open &quot;Event Subscriptions&quot;, turn it on, and set the Request URL:
                 </p>
-                <Input value={`${getBaseUrl()}/api/slack/events`} readOnly className="font-mono" />
+                <Input value={`${baseUrl}/api/slack/events`} readOnly className="font-mono" />
                 <p className="text-sm text-muted-foreground">
                   Then under &quot;Subscribe to bot events&quot; add{' '}
                   <Badge variant="secondary" size="xs" className="font-mono">

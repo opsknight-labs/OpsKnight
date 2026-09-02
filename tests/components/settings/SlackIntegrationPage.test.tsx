@@ -94,4 +94,20 @@ describe('SlackIntegrationPage', () => {
     expect(screen.getByText('Secret Missing')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Paste 32-character Signing Secret/i)).toBeInTheDocument();
   });
+
+  it('uses configured appUrl from system settings in webhook endpoints', () => {
+    render(
+      <SlackIntegrationPage
+        integration={integrationFixture}
+        isOAuthConfigured={true}
+        isSigningSecretConfigured={true}
+        isAdmin={true}
+        appUrl="https://ops.example.com"
+      />
+    );
+
+    expect(screen.getByText('https://ops.example.com/api/slack/events')).toBeInTheDocument();
+    expect(screen.getByText('https://ops.example.com/api/slack/actions')).toBeInTheDocument();
+    expect(screen.getByText('https://ops.example.com/api/slack/commands')).toBeInTheDocument();
+  });
 });

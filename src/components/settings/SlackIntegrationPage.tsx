@@ -60,6 +60,7 @@ interface SlackIntegrationPageProps {
   isOAuthConfigured: boolean;
   isSigningSecretConfigured: boolean;
   isAdmin: boolean;
+  appUrl?: string;
 }
 
 export default function SlackIntegrationPage({
@@ -67,6 +68,7 @@ export default function SlackIntegrationPage({
   isOAuthConfigured,
   isSigningSecretConfigured,
   isAdmin,
+  appUrl,
 }: SlackIntegrationPageProps) {
   const router = useRouter();
   const [channels, setChannels] = useState<SlackChannel[]>([]);
@@ -395,7 +397,13 @@ export default function SlackIntegrationPage({
     return filteredChannels.slice(0, visibleCount);
   }, [filteredChannels, searchQuery, visibleCount]);
 
-  const baseUrl = getBaseUrl();
+  const clientOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const baseUrl =
+    appUrl && appUrl !== 'http://localhost:3000'
+      ? appUrl
+      : clientOrigin && !clientOrigin.includes('localhost')
+        ? clientOrigin
+        : appUrl || getBaseUrl();
   const eventEndpoints = useMemo(
     () => [
       {
@@ -725,7 +733,7 @@ export default function SlackIntegrationPage({
         /* ───────────────────────────────────────────────────────────── */
         <div className="space-y-6">
           {/* Guided Setup Wizard (Admin Only when OAuth credentials not yet saved) */}
-          {!isOAuthConfigured && isAdmin && <GuidedSlackSetup />}
+          {!isOAuthConfigured && isAdmin && <GuidedSlackSetup baseUrl={baseUrl} />}
 
           {/* Non-Admin Warning */}
           {!isOAuthConfigured && !isAdmin && (

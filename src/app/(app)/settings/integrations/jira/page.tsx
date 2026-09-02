@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { JiraLogo } from '@/components/common/BrandLogos';
 import { Shield, Globe, Mail, Lock, CheckCircle2, XCircle } from 'lucide-react';
 import JiraIntegrationPage from '@/components/settings/JiraIntegrationPage';
+import { getAppUrl } from '@/lib/app-url';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -129,7 +130,11 @@ export default async function GlobalJiraIntegrationPage() {
         ]}
       />
 
-      <JiraIntegrationPage config={config} isAdmin={permissions.isAdmin} />
+      <JiraIntegrationPage
+        config={config}
+        isAdmin={permissions.isAdmin}
+        appUrl={await getAppUrl()}
+      />
     </div>
   );
 }
