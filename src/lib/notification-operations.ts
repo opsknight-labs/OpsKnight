@@ -87,10 +87,15 @@ export async function getNotificationOperations(
   const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const cursor = decodeCursor(filters.cursor);
   const query = filters.query?.trim().slice(0, 120);
-  const baseWhere: Prisma.NotificationWhereInput = {
+  const statusCondition =
+    filters.status === 'SENT' || filters.status === 'DELIVERED'
+      ? { in: ['SENT', 'DELIVERED'] as NotificationStatus[] }
+      : filters.status
+        ? filters.status
+        : undefined;
+
+  const baseFilters: Prisma.NotificationWhereInput = {
     ...(filters.channel ? { channel: filters.channel } : {}),
-    ...(filters.status ? { status: filters.status } : {}),
-    ...(filters.category ? { category: filters.category } : {}),
     createdAt: {
       gte: filters.from ?? defaultFrom,
       ...(filters.to ? { lte: filters.to } : {}),
@@ -107,6 +112,23 @@ export async function getNotificationOperations(
         }
       : {}),
   };
+
+  const statusStatsWhere: Prisma.NotificationWhereInput = {
+    ...baseFilters,
+    ...(filters.category ? { category: filters.category } : {}),
+  };
+
+  const categoryStatsWhere: Prisma.NotificationWhereInput = {
+    ...baseFilters,
+    ...(statusCondition ? { status: statusCondition } : {}),
+  };
+
+  const baseWhere: Prisma.NotificationWhereInput = {
+    ...baseFilters,
+    ...(statusCondition ? { status: statusCondition } : {}),
+    ...(filters.category ? { category: filters.category } : {}),
+  };
+
   const where: Prisma.NotificationWhereInput = {
     ...baseWhere,
     ...(cursor
@@ -155,8 +177,16 @@ export async function getNotificationOperations(
         },
       },
     }),
-    prisma.notification.groupBy({ by: ['status'], where: baseWhere, _count: { _all: true } }),
-    prisma.notification.groupBy({ by: ['category'], where: baseWhere, _count: { _all: true } }),
+    prisma.notification.groupBy({
+      by: ['status'],
+      where: statusStatsWhere,
+      _count: { _all: true },
+    }),
+    prisma.notification.groupBy({
+      by: ['category'],
+      where: categoryStatsWhere,
+      _count: { _all: true },
+    }),
   ]);
 
   const hasMore = rows.length > limit;
