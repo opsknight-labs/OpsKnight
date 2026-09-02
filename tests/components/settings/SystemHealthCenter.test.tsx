@@ -5,6 +5,7 @@ import type { AdminHealthReport } from '@/lib/admin-health';
 
 vi.mock('@/app/(app)/settings/system/actions', () => ({
   refreshAdminHealthAction: vi.fn(),
+  refreshSingleHealthCheckAction: vi.fn(),
 }));
 
 vi.mock('@/lib/toast', () => ({
@@ -17,6 +18,20 @@ vi.mock('@/lib/toast', () => ({
 const mockReport: AdminHealthReport = {
   generatedAt: '2026-09-02T12:00:00.000Z',
   overall: 'degraded',
+  history: [
+    {
+      timestamp: '2026-09-02T11:00:00.000Z',
+      hourLabel: '11:00',
+      status: 'healthy',
+      scorePercent: 100,
+    },
+    {
+      timestamp: '2026-09-02T12:00:00.000Z',
+      hourLabel: '12:00',
+      status: 'degraded',
+      scorePercent: 85,
+    },
+  ],
   checks: [
     {
       id: 'database',
@@ -25,6 +40,11 @@ const mockReport: AdminHealthReport = {
       status: 'healthy',
       summary: 'PostgreSQL responded in 12 ms.',
       details: ['Connection check passed.'],
+      telemetry: {
+        latencyMs: 12,
+        latencyThresholdMs: 1000,
+        rawPayload: { latencyMs: 12, pingQuery: 'SELECT 1' },
+      },
       action: { label: 'Monitoring guide', href: 'https://opsknight.com/docs/monitoring' },
     },
     {
@@ -34,14 +54,33 @@ const mockReport: AdminHealthReport = {
       status: 'healthy',
       summary: '15 of 100 connections in use (15%).',
       details: ['Active connections: 4', 'Database size: 45.2 MiB'],
+      telemetry: {
+        poolUtilization: {
+          used: 15,
+          max: 100,
+          percent: 15,
+          active: 4,
+          sizeFormatted: '45.2 MiB',
+          longTx: 0,
+        },
+      },
     },
     {
       id: 'migrations',
       label: 'Database migrations',
       category: 'database',
-      status: 'healthy',
-      summary: 'Packaged migrations match the database history.',
-      details: ['Applied records: 28'],
+      status: 'degraded',
+      summary: '2 packaged migration(s) are not applied.',
+      details: ['Applied records: 28', 'Pending: 20260901_add_quiet_hours'],
+      commandSnippet: {
+        command: 'npx prisma migrate deploy',
+        description: 'Deploy packaged Prisma migrations to PostgreSQL',
+        steps: [
+          'Take a full database snapshot or backup before migrating.',
+          'Run "npx prisma migrate deploy" in your terminal or container.',
+          'Run "npx prisma migrate status" to confirm all migrations applied successfully.',
+        ],
+      },
     },
     {
       id: 'scheduler',
@@ -59,6 +98,15 @@ const mockReport: AdminHealthReport = {
       status: 'unhealthy',
       summary: '12 pending, 1 failed.',
       details: ['Processing longer than 10 minutes: 1'],
+      telemetry: {
+        queueDistribution: {
+          pending: 12,
+          processing: 2,
+          failed: 1,
+          overdue: 0,
+          stale: 1,
+        },
+      },
     },
     {
       id: 'sla-performance',
@@ -67,6 +115,14 @@ const mockReport: AdminHealthReport = {
       status: 'healthy',
       summary: '142 queries in 24 hours; p95 180 ms.',
       details: ['Average: 45 ms', 'p50: 32 ms'],
+      telemetry: {
+        slaMetrics: {
+          p95Ms: 180,
+          p50Ms: 32,
+          avgMs: 45,
+          sampleCount: 142,
+        },
+      },
     },
     {
       id: 'escalations',
@@ -130,57 +186,73 @@ const mockReport: AdminHealthReport = {
 describe('SystemHealthCenter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    });
   });
 
-  it('renders overall health status and metric summary counts', () => {
+  it('renders overall health status, history ribbon, and metric summary counts inside DetailHeroBanner', () => {
     render(<SystemHealthCenter initialReport={mockReport} />);
 
+    expect(screen.getByRole('heading', { name: 'System Health Center' })).toBeInTheDocument();
     expect(screen.getByText('Operational with Warnings')).toBeInTheDocument();
+    expect(screen.getByText('24-Hour System Health Trend')).toBeInTheDocument();
     expect(screen.getAllByText('13').length).toBeGreaterThanOrEqual(1); // Total signals
-    expect(screen.getAllByText('11').length).toBeGreaterThanOrEqual(1); // Healthy count
-    expect(screen.getAllByText('Action Required').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders all diagnostic check cards initially', () => {
+  it('renders visual telemetry gauges, latency pills, and queue distribution bars', () => {
     render(<SystemHealthCenter initialReport={mockReport} />);
 
-    expect(screen.getByRole('heading', { name: 'PostgreSQL Database' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Scheduler and workers' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Background jobs' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Encryption configuration' })).toBeInTheDocument();
+    // Latency pills
+    expect(screen.getByText('12ms')).toBeInTheDocument();
+    expect(screen.getByText('p95: 180ms')).toBeInTheDocument();
+
+    // Pool utilization gauge
+    expect(screen.getByText('Pool Utilization')).toBeInTheDocument();
+    expect(screen.getByText('15 / 100 (15%)')).toBeInTheDocument();
+
+    // Queue distribution gauge
+    expect(screen.getByText('Queue Distribution')).toBeInTheDocument();
+    expect(screen.getByText('Pending: 12')).toBeInTheDocument();
   });
 
-  it('filters check cards by category when clicking a category chip', () => {
+  it('renders migration command box and copies command to clipboard', () => {
     render(<SystemHealthCenter initialReport={mockReport} />);
 
-    // Click "Database & Storage" chip
-    const dbChip = screen.getByRole('button', { name: /database & storage/i });
-    fireEvent.click(dbChip);
+    expect(screen.getByText('npx prisma migrate deploy')).toBeInTheDocument();
 
-    expect(screen.getByRole('heading', { name: 'PostgreSQL Database' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Database capacity' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Database migrations' })).toBeInTheDocument();
+    const copyBtn = screen.getByRole('button', { name: /copy command/i });
+    fireEvent.click(copyBtn);
 
-    // Other categories should be hidden
-    expect(
-      screen.queryByRole('heading', { name: 'Scheduler and workers' })
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('heading', { name: 'Encryption configuration' })
-    ).not.toBeInTheDocument();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('npx prisma migrate deploy');
   });
 
-  it('filters check cards by search keyword', () => {
+  it('opens technical diagnostics inspector modal on Inspect click', () => {
     render(<SystemHealthCenter initialReport={mockReport} />);
 
-    const searchInput = screen.getByPlaceholderText(/search diagnostic signals/i);
-    fireEvent.change(searchInput, { target: { value: 'encryption' } });
+    const inspectBtn = screen.getByRole('button', { name: /inspect postgresql database/i });
+    fireEvent.click(inspectBtn);
 
-    expect(screen.getByRole('heading', { name: 'Encryption configuration' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'PostgreSQL Database' })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('heading', { name: 'Scheduler and workers' })
-    ).not.toBeInTheDocument();
+    expect(screen.getByText('Live JSON Telemetry Payload')).toBeInTheDocument();
+    expect(screen.getByText(/Diagnostic Facts/)).toBeInTheDocument();
+  });
+
+  it('filters check cards by category when clicking a DetailTabs tab', () => {
+    render(<SystemHealthCenter initialReport={mockReport} />);
+
+    const dbTab = screen.getByRole('tab', { name: /database/i });
+    fireEvent.pointerDown(dbTab, { button: 0 });
+    fireEvent.click(dbTab);
+    fireEvent.keyDown(dbTab, { key: 'Enter' });
+
+    expect(screen.getByText('PostgreSQL Database')).toBeInTheDocument();
+    expect(screen.getByText('Database capacity')).toBeInTheDocument();
+    expect(screen.getByText('Database migrations')).toBeInTheDocument();
+
+    expect(screen.queryByText('Scheduler and workers')).not.toBeInTheDocument();
+    expect(screen.queryByText('Encryption configuration')).not.toBeInTheDocument();
   });
 
   it('filters to only attention-required cards when toggling Needs Attention Only', () => {
@@ -189,13 +261,9 @@ describe('SystemHealthCenter', () => {
     const attentionToggle = screen.getByRole('button', { name: /needs attention only/i });
     fireEvent.click(attentionToggle);
 
-    // Only degraded (Scheduler) and unhealthy (Background jobs) should be visible
-    expect(screen.getByRole('heading', { name: 'Scheduler and workers' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Background jobs' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'PostgreSQL Database' })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('heading', { name: 'Encryption configuration' })
-    ).not.toBeInTheDocument();
+    expect(screen.getByText('Scheduler and workers')).toBeInTheDocument();
+    expect(screen.getByText('Background jobs')).toBeInTheDocument();
+    expect(screen.queryByText('PostgreSQL Database')).not.toBeInTheDocument();
   });
 
   it('re-runs diagnostics when clicking the Re-run Diagnostics button', async () => {
@@ -218,18 +286,36 @@ describe('SystemHealthCenter', () => {
     });
   });
 
-  it('shows empty state when no checks match search and resets filters on button click', () => {
+  it('renders countdown badge when Live (30s) auto-refresh is toggled on', () => {
     render(<SystemHealthCenter initialReport={mockReport} />);
 
-    const searchInput = screen.getByPlaceholderText(/search diagnostic signals/i);
-    fireEvent.change(searchInput, { target: { value: 'nonexistent-query-xyz' } });
+    expect(screen.queryByLabelText('Refresh countdown')).not.toBeInTheDocument();
 
-    expect(screen.getByText('No Diagnostic Signals Found')).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: /toggle live 30s refresh/i });
+    fireEvent.click(toggle);
 
-    const resetBtn = screen.getByRole('button', { name: /reset all filters/i });
-    fireEvent.click(resetBtn);
+    expect(screen.getByLabelText('Refresh countdown')).toBeInTheDocument();
+    expect(screen.getByText('30s')).toBeInTheDocument();
+  });
 
-    expect(screen.getByRole('heading', { name: 'PostgreSQL Database' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Scheduler and workers' })).toBeInTheDocument();
+  it('re-tests a single health check when clicking its Re-test button', async () => {
+    const { refreshSingleHealthCheckAction } = await import('@/app/(app)/settings/system/actions');
+    vi.mocked(refreshSingleHealthCheckAction).mockResolvedValue({
+      check: {
+        ...mockReport.checks[0],
+        summary: 'PostgreSQL responded in 8 ms.',
+        telemetry: { latencyMs: 8 },
+      },
+    });
+
+    render(<SystemHealthCenter initialReport={mockReport} />);
+
+    const retestBtn = screen.getByRole('button', { name: /re-test postgresql database/i });
+    fireEvent.click(retestBtn);
+
+    await waitFor(() => {
+      expect(refreshSingleHealthCheckAction).toHaveBeenCalledWith('database');
+      expect(screen.getByText('PostgreSQL responded in 8 ms.')).toBeInTheDocument();
+    });
   });
 });

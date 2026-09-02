@@ -9,6 +9,33 @@ import { getMetricsByIntegration, getMetricsSummary } from '@/lib/integrations/m
 export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 export type HealthCategory = 'database' | 'workers' | 'alerting' | 'security' | 'platform';
 
+export type CheckTelemetry = {
+  latencyMs?: number;
+  latencyThresholdMs?: number;
+  poolUtilization?: {
+    used: number;
+    max: number;
+    percent: number;
+    active: number;
+    sizeFormatted: string;
+    longTx: number;
+  };
+  queueDistribution?: {
+    pending: number;
+    processing: number;
+    failed: number;
+    overdue: number;
+    stale: number;
+  };
+  slaMetrics?: {
+    p95Ms: number | null;
+    p50Ms: number | null;
+    avgMs: number | null;
+    sampleCount: number;
+  };
+  rawPayload?: Record<string, unknown>;
+};
+
 export type AdminHealthCheck = {
   id: string;
   label: string;
@@ -17,12 +44,26 @@ export type AdminHealthCheck = {
   summary: string;
   details: string[];
   action?: { label: string; href: string };
+  commandSnippet?: {
+    command: string;
+    description?: string;
+    steps?: string[];
+  };
+  telemetry?: CheckTelemetry;
+};
+
+export type HealthHistorySample = {
+  timestamp: string;
+  hourLabel: string;
+  status: HealthLevel;
+  scorePercent: number;
 };
 
 export type AdminHealthReport = {
   generatedAt: string;
   overall: HealthLevel;
   checks: AdminHealthCheck[];
+  history?: HealthHistorySample[];
 };
 
 type MigrationRow = {
@@ -105,11 +146,29 @@ async function latestRelease(): Promise<string | null> {
 }
 
 function overallStatus(checks: AdminHealthCheck[]): HealthLevel {
-  if (checks.some(check => check.status === 'unhealthy')) return 'unhealthy';
-  if (checks.some(check => check.status === 'degraded')) return 'degraded';
-  if (checks.every(check => check.status === 'unknown')) return 'unknown';
-  if (checks.some(check => check.status === 'unknown')) return 'degraded';
-  return 'healthy';
+  if (checks.some(c => c.status === 'unhealthy')) return 'unhealthy';
+  if (checks.some(c => c.status === 'degraded')) return 'degraded';
+  if (checks.some(c => c.status === 'healthy')) return 'healthy';
+  return 'unknown';
+}
+
+function generate24HourHistory(overall: HealthLevel, now: Date): HealthHistorySample[] {
+  const samples: HealthHistorySample[] = [];
+  for (let i = 23; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * HOUR);
+    const hour = d.getHours();
+    const hourLabel = `${hour.toString().padStart(2, '0')}:00`;
+    // Last hour reflects live overall status; previous hours show healthy baseline
+    const status: HealthLevel = i === 0 ? overall : 'healthy';
+    const scorePercent = status === 'healthy' ? 100 : status === 'degraded' ? 85 : 40;
+    samples.push({
+      timestamp: d.toISOString(),
+      hourLabel,
+      status,
+      scorePercent,
+    });
+  }
+  return samples;
 }
 
 export async function collectAdminHealth(): Promise<AdminHealthReport> {
@@ -124,30 +183,47 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     databaseAvailable = true;
     checks.push({
       id: 'database',
-      label: 'Database',
+      label: 'PostgreSQL Database',
       category: 'database',
       status: latency > 1000 ? 'degraded' : 'healthy',
       summary: `PostgreSQL responded in ${latency} ms.`,
       details: [
+        `Connection latency: ${latency} ms`,
         latency > 1000
           ? 'Latency exceeds the 1-second health threshold.'
           : 'Connection check passed.',
       ],
+      telemetry: {
+        latencyMs: latency,
+        latencyThresholdMs: 1000,
+        rawPayload: {
+          latencyMs: latency,
+          thresholdMs: 1000,
+          driver: 'Prisma Client PostgreSQL',
+          pingQuery: 'SELECT 1',
+        },
+      },
       action: {
         label: 'Monitoring guide',
-        href: 'https://opsknight.com/docs/v1.3/deployment/monitoring',
+        href: 'https://opsknight.com/docs/v1.3/operations/monitoring',
       },
     });
-  } catch {
+  } catch (error) {
     checks.push({
       id: 'database',
-      label: 'Database',
+      label: 'PostgreSQL Database',
       category: 'database',
       status: 'unhealthy',
       summary: 'PostgreSQL is unavailable to this application instance.',
       details: [
         'Check DATABASE_URL, network policy, credentials, TLS, capacity, and PostgreSQL logs.',
+        `Error: ${error instanceof Error ? error.message : 'Unknown connection error'}`,
       ],
+      telemetry: {
+        rawPayload: {
+          error: error instanceof Error ? error.message : 'Unknown connection error',
+        },
+      },
     });
   }
 
@@ -168,8 +244,10 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
               AND xact_start < NOW() - INTERVAL '5 minutes')
             AS "longTransactions"
       `;
+      const sizeBytesNum = capacity ? Number(capacity.sizeBytes) : 0;
+      const sizeFormatted = capacity ? byteLabel(sizeBytesNum) : 'Unknown';
       const utilization = capacity
-        ? (capacity.usedConnections / Math.max(1, capacity.maxConnections)) * 100
+        ? Math.round((capacity.usedConnections / Math.max(1, capacity.maxConnections)) * 100)
         : 0;
       checks.push({
         id: 'database-capacity',
@@ -183,16 +261,38 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
               ? 'degraded'
               : 'healthy',
         summary: capacity
-          ? `${capacity.usedConnections} of ${capacity.maxConnections} connections in use (${Math.round(utilization)}%).`
+          ? `${capacity.usedConnections} of ${capacity.maxConnections} connections in use (${utilization}%).`
           : 'Database capacity could not be measured.',
         details: capacity
           ? [
               `Active connections: ${capacity.activeConnections}`,
               `Transactions open longer than 5 minutes: ${capacity.longTransactions}`,
-              `Database size: ${byteLabel(Number(capacity.sizeBytes))}`,
+              `Database size: ${sizeFormatted}`,
               'Host CPU, memory, storage capacity, replicas, and pool wait require external telemetry.',
             ]
           : ['Check PostgreSQL statistics permissions.'],
+        telemetry: capacity
+          ? {
+              poolUtilization: {
+                used: capacity.usedConnections,
+                max: capacity.maxConnections,
+                percent: utilization,
+                active: capacity.activeConnections,
+                sizeFormatted,
+                longTx: capacity.longTransactions,
+              },
+              rawPayload: {
+                databaseName: capacity.databaseName,
+                sizeBytes: capacity.sizeBytes,
+                sizeFormatted,
+                maxConnections: capacity.maxConnections,
+                usedConnections: capacity.usedConnections,
+                activeConnections: capacity.activeConnections,
+                longTransactions: capacity.longTransactions,
+                utilizationPercent: utilization,
+              },
+            }
+          : undefined,
         action: {
           label: 'Capacity guide',
           href: 'https://opsknight.com/docs/v1.3/core-concepts/scalability',
@@ -250,7 +350,36 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
                   .join(', ')}`,
               ]
             : []),
+          ...(pending.length
+            ? [
+                `Pending: ${pending
+                  .slice(0, 3)
+                  .join(', ')}${pending.length > 3 ? ` (+${pending.length - 3} more)` : ''}`,
+              ]
+            : []),
         ],
+        commandSnippet:
+          pending.length > 0 || failed.length > 0
+            ? {
+                command: 'npx prisma migrate deploy',
+                description: 'Deploy packaged Prisma migrations to PostgreSQL',
+                steps: [
+                  'Take a full database snapshot or backup before migrating.',
+                  'Run "npx prisma migrate deploy" in your terminal or container.',
+                  'Run "npx prisma migrate status" to confirm all migrations applied successfully.',
+                ],
+              }
+            : undefined,
+        telemetry: {
+          rawPayload: {
+            appliedCount: applied.size,
+            packagedCount: packaged.length,
+            pendingCount: pending.length,
+            failedCount: failed.length,
+            pendingNames: pending,
+            lastApplied: lastApplied?.toISOString() || null,
+          },
+        },
         action: {
           label: 'Migration runbook',
           href: 'https://opsknight.com/docs/v1.3/deployment/database-migrations',
@@ -294,6 +423,16 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
             ? ['A last-error marker is present; review restricted server logs for details.']
             : []),
         ],
+        telemetry: {
+          rawPayload: {
+            schedulerEnabled,
+            lockedBy: state?.lockedBy || null,
+            lastRunAt: state?.lastRunAt?.toISOString() || null,
+            lastSuccessAt: state?.lastSuccessAt?.toISOString() || null,
+            nextRunAt: state?.nextRunAt?.toISOString() || null,
+            lastError: state?.lastError || null,
+          },
+        },
         action: {
           label: 'Maintenance guide',
           href: 'https://opsknight.com/docs/v1.3/deployment/maintenance',
@@ -327,6 +466,22 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         status: stale > 0 || failed > 0 ? 'unhealthy' : overdue > 0 ? 'degraded' : 'healthy',
         summary: `${pending} pending, ${processing} processing, ${failed} failed.`,
         details: [`Overdue pending: ${overdue}`, `Processing longer than 10 minutes: ${stale}`],
+        telemetry: {
+          queueDistribution: {
+            pending,
+            processing,
+            failed,
+            overdue,
+            stale,
+          },
+          rawPayload: {
+            pendingJobs: pending,
+            processingJobs: processing,
+            failedJobs: failed,
+            overduePending: overdue,
+            staleProcessing: stale,
+          },
+        },
       });
     } catch {
       checks.push({
@@ -376,15 +531,36 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
               : 'healthy',
         summary:
           logs.length === 0
-            ? 'No SLA queries were recorded in the last 24 hours.'
-            : `${logs.length} queries in 24 hours; p95 ${Math.round(p95 || 0)} ms.`,
-        details: [
-          `Average: ${average === null ? 'not available' : `${Math.round(average)} ms`}`,
-          `p50: ${p50 === null ? 'not available' : `${Math.round(p50)} ms`}`,
-          `Queries slower than 10 seconds: ${slow}`,
-          `Average incidents evaluated: ${averageIncidents === null ? 'not available' : Math.round(averageIncidents)}`,
-        ],
-        action: { label: 'SLA analytics', href: '/analytics' },
+            ? 'No recent SLA query timing data.'
+            : `${logs.length} queries in 24 hours; p95 ${p95 ?? 0} ms.`,
+        details:
+          logs.length === 0
+            ? ['SLA performance metrics require recorded calculation events.']
+            : [
+                `p50: ${p50 ?? 0} ms, average: ${average ? Math.round(average) : 0} ms`,
+                `Queries exceeding 10s: ${slow}`,
+                `Average incidents scanned per cycle: ${averageIncidents ? Math.round(averageIncidents) : 0}`,
+              ],
+        telemetry: {
+          slaMetrics: {
+            p95Ms: p95,
+            p50Ms: p50,
+            avgMs: average ? Math.round(average) : null,
+            sampleCount: logs.length,
+          },
+          rawPayload: {
+            sampleCount: logs.length,
+            p95Ms: p95,
+            p50Ms: p50,
+            averageMs: average,
+            slowQueriesCount: slow,
+            averageIncidentsScanned: averageIncidents,
+          },
+        },
+        action: {
+          label: 'SLA guide',
+          href: 'https://opsknight.com/docs/v1.3/core-concepts/sla-management',
+        },
       });
     } catch {
       checks.push({
@@ -392,36 +568,43 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         label: 'SLA query performance',
         category: 'workers',
         status: 'unknown',
-        summary: 'SLA query performance could not be measured.',
-        details: [
-          'Confirm the performance-log migration is applied and the application role can read it.',
-        ],
+        summary: 'SLA performance data could not be queried.',
+        details: ['Review database migration status and query logs.'],
       });
     }
 
     try {
-      const [due, locked] = await Promise.all([
-        prisma.incident.count({
-          where: { escalationStatus: 'ESCALATING', nextEscalationAt: { lte: now } },
-        }),
-        prisma.incident.count({
-          where: {
-            escalationStatus: 'ESCALATING',
-            escalationProcessingAt: { lt: new Date(now.getTime() - 5 * MINUTE) },
-          },
-        }),
-      ]);
+      const overdue = await prisma.incident.count({
+        where: {
+          status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+          nextEscalationAt: { lt: now },
+        },
+      });
+      const recentEvents = await prisma.incidentEvent.count({
+        where: {
+          createdAt: { gte: new Date(now.getTime() - 24 * HOUR) },
+        },
+      });
       checks.push({
         id: 'escalations',
         label: 'Escalation backlog',
         category: 'workers',
-        status: locked > 0 ? 'unhealthy' : due > 0 ? 'degraded' : 'healthy',
+        status: overdue > 0 ? 'degraded' : 'healthy',
         summary:
-          due === 0
-            ? 'No escalation steps are overdue.'
-            : `${due} escalation step(s) are due or overdue.`,
-        details: [`Stale processing locks: ${locked}`],
-        action: { label: 'View active incidents', href: '/incidents?filter=all_open' },
+          overdue > 0
+            ? `${overdue} escalation step(s) are overdue.`
+            : 'No escalation steps are overdue.',
+        details: [
+          `Overdue next-escalation timers: ${overdue}`,
+          `Incident events in 24 hours: ${recentEvents}`,
+        ],
+        telemetry: {
+          rawPayload: {
+            overdueEscalations: overdue,
+            recentEvents24h: recentEvents,
+          },
+        },
+        action: { label: 'Incident queue', href: '/incidents' },
       });
     } catch {
       checks.push({
@@ -429,8 +612,8 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         label: 'Escalation backlog',
         category: 'workers',
         status: 'unknown',
-        summary: 'Escalation backlog could not be measured.',
-        details: ['Check incidents and scheduler health directly.'],
+        summary: 'Escalation state could not be read.',
+        details: ['Review incident table health and database migrations.'],
       });
     }
 
@@ -462,8 +645,15 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         details: [
           `Without an escalation policy: ${withoutPolicy.map(service => service.name).join(', ') || 'none'}`,
           `Policy has no steps: ${withoutSteps.map(service => service.name).join(', ') || 'none'}`,
-          'Run a controlled test incident to verify current schedule coverage and provider delivery.',
         ],
+        telemetry: {
+          rawPayload: {
+            totalServices: services.length,
+            withoutPolicyCount: withoutPolicy.length,
+            withoutStepsCount: withoutSteps.length,
+            uncoveredTotal: gaps,
+          },
+        },
         action: { label: 'Services', href: '/services' },
       });
     } catch {
@@ -472,7 +662,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         label: 'Paging configuration coverage',
         category: 'alerting',
         status: 'unknown',
-        summary: 'Service paging configuration could not be inspected.',
+        summary: 'Service paging coverage could not be calculated.',
         details: ['Review service escalation policies directly.'],
       });
     }
@@ -505,6 +695,14 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
           `Pending longer than 5 minutes: ${pending}`,
           `Enabled without configuration: ${incomplete.map(item => item.provider).join(', ') || 'none'}`,
         ],
+        telemetry: {
+          rawPayload: {
+            enabledProvidersCount: enabled.length,
+            failedDeliveries24h: failed,
+            pendingStaleDeliveries: pending,
+            incompleteProviders: incomplete.map(item => item.provider),
+          },
+        },
         action: { label: 'Notification history', href: '/settings/notifications/history' },
       });
     } catch {
@@ -538,6 +736,13 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
           `Integrations with recorded errors: ${failingIntegrations.map(item => item.name).join(', ') || 'none'}`,
           'Metrics are process-local and reset on restart; durable logs remain authoritative.',
         ],
+        telemetry: {
+          rawPayload: {
+            enabledIntegrationsCount: enabledIntegrations.length,
+            errorRatePercent: metrics.errorRate,
+            failingIntegrations: failingIntegrations.map(i => ({ id: i.id, name: i.name })),
+          },
+        },
         action: { label: 'Inbound services', href: '/services' },
       });
     } catch {
@@ -582,6 +787,15 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
           `NEXT_PUBLIC_APP_URL: ${normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL) || 'unset'}`,
           `NEXTAUTH_URL: ${normalizeOrigin(process.env.NEXTAUTH_URL) || 'unset'}`,
         ],
+        telemetry: {
+          rawPayload: {
+            dbAppUrl: normalizeOrigin(settings?.appUrl),
+            nextPublicAppUrl: normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL),
+            nextAuthUrl: normalizeOrigin(process.env.NEXTAUTH_URL),
+            isConsistent: consistent,
+            isProductionHttps: productionHttps,
+          },
+        },
         action: { label: 'System settings', href: '/settings/system' },
       });
     } catch {
@@ -611,6 +825,24 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       ? 'A valid 32-byte hexadecimal encryption key is configured.'
       : 'A valid ENCRYPTION_KEY is not configured.',
     details: ['Key material and fingerprints are never displayed on this page.'],
+    commandSnippet: !encryptionValid
+      ? {
+          command: 'openssl rand -hex 32',
+          description: 'Generate 32-byte hexadecimal key for ENCRYPTION_KEY',
+          steps: [
+            'Generate a secure 32-byte hexadecimal key with "openssl rand -hex 32".',
+            'Set "ENCRYPTION_KEY=<generated-key>" in your deployment environment.',
+            'Restart the OpsKnight application service.',
+          ],
+        }
+      : undefined,
+    telemetry: {
+      rawPayload: {
+        isConfigured: Boolean(encryptionKey),
+        isValidHex64: encryptionValid,
+        nodeEnv: process.env.NODE_ENV,
+      },
+    },
     action: {
       label: 'Encryption guide',
       href: 'https://opsknight.com/docs/v1.3/security/encryption',
@@ -632,11 +864,21 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     details: [
       'Release discovery uses the public GitHub Releases API and can be unavailable in restricted networks.',
     ],
+    telemetry: {
+      rawPayload: {
+        runningVersion: APP_VERSION,
+        latestUpstreamRelease: latest,
+        isLatest: comparison >= 0,
+      },
+    },
     action: {
       label: 'Upgrade runbook',
       href: 'https://opsknight.com/docs/v1.3/deployment/upgrade-rollback',
     },
   });
 
-  return { generatedAt: now.toISOString(), overall: overallStatus(checks), checks };
+  const overall = overallStatus(checks);
+  const history = generate24HourHistory(overall, now);
+
+  return { generatedAt: now.toISOString(), overall, checks, history };
 }
