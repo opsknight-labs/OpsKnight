@@ -1,4 +1,5 @@
 import { METRIC_ACCUMULATOR, type MetricAccumulator } from './metrics/domain/accumulator';
+import { effectiveMaterializedElapsedMs } from './metrics/domain/sla-clock';
 
 /**
  * Client-safe SLA utilities (pure functions, no database access)
@@ -280,9 +281,16 @@ export { formatTimeMinutes, formatTimeMinutesMs } from './time-format';
 export function calculateMTTA(incident: {
   acknowledgedAt: Date | null;
   createdAt: Date;
+  slaPausedMs?: bigint | number | null;
+  slaPauseStartedAt?: Date | null;
 }): number | null {
   if (incident.acknowledgedAt && incident.createdAt) {
-    return incident.acknowledgedAt.getTime() - incident.createdAt.getTime();
+    return effectiveMaterializedElapsedMs({
+      startedAt: incident.createdAt,
+      evaluationAt: incident.acknowledgedAt,
+      pausedMs: incident.slaPausedMs,
+      pauseStartedAt: incident.slaPauseStartedAt,
+    });
   }
   return null;
 }
@@ -294,9 +302,16 @@ export function calculateMTTA(incident: {
 export function calculateMTTR(incident: {
   resolvedAt: Date | null;
   createdAt: Date;
+  slaPausedMs?: bigint | number | null;
+  slaPauseStartedAt?: Date | null;
 }): number | null {
   if (incident.resolvedAt && incident.createdAt) {
-    return incident.resolvedAt.getTime() - incident.createdAt.getTime();
+    return effectiveMaterializedElapsedMs({
+      startedAt: incident.createdAt,
+      evaluationAt: incident.resolvedAt,
+      pausedMs: incident.slaPausedMs,
+      pauseStartedAt: incident.slaPauseStartedAt,
+    });
   }
   return null;
 }
@@ -305,16 +320,24 @@ export function calculateMTTR(incident: {
  * Check if an incident met the acknowledgement SLA
  */
 export function checkAckSLA(
-  incident: { acknowledgedAt: Date | null; createdAt: Date; snoozedMs?: number },
+  incident: {
+    acknowledgedAt: Date | null;
+    createdAt: Date;
+    snoozedMs?: number;
+    slaPausedMs?: bigint | number | null;
+    slaPauseStartedAt?: Date | null;
+  },
   service: { targetAckMinutes?: number | null },
   snoozedMs?: number
 ): boolean {
   if (!incident.acknowledgedAt || !incident.createdAt) return false;
   const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
-  const activeMs = Math.max(
-    0,
-    incident.acknowledgedAt.getTime() - incident.createdAt.getTime() - snooze
-  );
+  const activeMs = effectiveMaterializedElapsedMs({
+    startedAt: incident.createdAt,
+    evaluationAt: incident.acknowledgedAt,
+    pausedMs: incident.slaPausedMs ?? snooze,
+    pauseStartedAt: incident.slaPauseStartedAt,
+  });
   const ackTimeMinutes = activeMs / 1000 / 60;
   const target = service.targetAckMinutes ?? 15; // Default to 15 minutes
   return ackTimeMinutes <= target;
@@ -324,16 +347,24 @@ export function checkAckSLA(
  * Check if an incident met the resolution SLA
  */
 export function checkResolveSLA(
-  incident: { resolvedAt: Date | null; createdAt: Date; snoozedMs?: number },
+  incident: {
+    resolvedAt: Date | null;
+    createdAt: Date;
+    snoozedMs?: number;
+    slaPausedMs?: bigint | number | null;
+    slaPauseStartedAt?: Date | null;
+  },
   service: { targetResolveMinutes?: number | null },
   snoozedMs?: number
 ): boolean {
   if (!incident.resolvedAt || !incident.createdAt) return false;
   const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
-  const activeMs = Math.max(
-    0,
-    incident.resolvedAt.getTime() - incident.createdAt.getTime() - snooze
-  );
+  const activeMs = effectiveMaterializedElapsedMs({
+    startedAt: incident.createdAt,
+    evaluationAt: incident.resolvedAt,
+    pausedMs: incident.slaPausedMs ?? snooze,
+    pauseStartedAt: incident.slaPauseStartedAt,
+  });
   const resolveTimeMinutes = activeMs / 1000 / 60;
   const target = service.targetResolveMinutes ?? 120; // Default to 120 minutes
   return resolveTimeMinutes <= target;

@@ -14,25 +14,18 @@ import {
  *   - `historical` — rollup-derived metrics for [start, realtimeStart)
  *   - `live`       — live-DB-derived metrics for [realtimeStart, end]
  *
- * Both inputs are full `SLAMetrics` shapes, so we don't have direct
- * access to the underlying sums and counts. Where exact arithmetic is
- * possible we reconstruct met/breached/acked/resolved counts from the
- * fields we do have (`ackBreaches`, `resolveBreaches`, `ackRate`,
- * `resolveRate`, `totalIncidents`) and sum them. Where reconstruction
- * isn't safe (percentiles) we honestly return `null` rather than
- * pretending to merge.
+ * Both inputs must carry the canonical additive accumulator. Hybrid headline
+ * values are derived once after accumulator addition; summary rates are never
+ * reverse-engineered into counts. Non-additive percentiles remain null.
  *
  * Field-by-field policy:
  *   - **Counts**: straight sum (totalIncidents, breaches, urgency
  *     buckets, escalation/reopen/autoResolve, alerts, etc.).
- *   - **Averages (MTTR)**: weighted by reconstructed acked/resolved
- *     counts. Null if both sides null OR both sides have zero
- *     resolveds.
+ *   - **Averages**: derived from exact accumulated sums and sample counts.
  *   - **Percentiles (P50/P95)**: cannot merge from summaries; always
  *     `null` in hybrid mode. The UI should render "n/a" rather than a
  *     misleading number.
- *   - **Compliance (ack/resolve)**: reconstruct met counts from rate
- *     and breach count, sum, recompute.
+ *   - **Compliance (ack/resolve)**: derived from exact met/breached counts.
  *   - **Rates (afterHoursRate, escalationRate, …)**: recompute against
  *     the merged total.
  *   - **Snapshot-of-"now" fields** (resolved24h, unassignedActive,
@@ -104,6 +97,11 @@ export function mergeHybridMetrics(
   const autoResolveCount = Number(mergedAccumulator.autoResolvedIncidents);
   const afterHoursCount = Number(mergedAccumulator.afterHoursCount);
   const alertsCountTotal = Number(mergedAccumulator.alertCount);
+  const eventsCountTotal = Number(
+    mergedAccumulator.escalationEvents +
+      mergedAccumulator.reopenEvents +
+      mergedAccumulator.autoResolveEvents
+  );
 
   // Rates against merged total.
   const safeRate = (count: number) => (totalIncidents > 0 ? (count / totalIncidents) * 100 : 0);
@@ -186,7 +184,7 @@ export function mergeHybridMetrics(
     // Events.
     autoResolvedCount: autoResolveCount,
     manualResolvedCount: Math.max(0, resolvedTotal - autoResolveCount),
-    eventsCount: historical.eventsCount + live.eventsCount,
+    eventsCount: eventsCountTotal,
 
     // Golden signals (live only).
     avgLatencyP99: live.avgLatencyP99,
@@ -231,8 +229,7 @@ export function mergeHybridMetrics(
     onCallLoad: live.onCallLoad,
     serviceSlaTable: live.serviceSlaTable,
     recurringTitles: live.recurringTitles,
-    eventsPerIncident:
-      totalIncidents > 0 ? (historical.eventsCount + live.eventsCount) / totalIncidents : 0,
+    eventsPerIncident: totalIncidents > 0 ? eventsCountTotal / totalIncidents : 0,
     heatmapData: live.heatmapData, // 365-day heatmap always comes from live
     serviceMetrics: live.serviceMetrics,
     insights: live.insights,

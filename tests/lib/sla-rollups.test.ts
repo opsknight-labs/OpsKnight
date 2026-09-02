@@ -79,6 +79,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { calculateSLAMetricsFromRollups } from '@/lib/sla-server';
+import { METRIC_ACCUMULATOR } from '@/lib/metrics/domain/accumulator';
 
 const REQUESTED_START = new Date('2024-01-01T00:00:00.000Z');
 const REQUESTED_END = new Date('2024-01-03T23:59:59.999Z');
@@ -241,6 +242,67 @@ describe('calculateSLAMetricsFromRollups', () => {
     expect(result.totalIncidents).toBe(2);
     expect(result.mttd).toBeNull();
     expect(result.ackCompliance).toBeNull();
+  });
+
+  it('propagates complete priority lifecycle counts into rates and the accumulator', async () => {
+    const rollup = makeRollup({ id: 'rollup-complete', p1Incidents: 4 });
+    findManyMock.mockResolvedValueOnce([rollup]).mockResolvedValueOnce([]);
+    priorityFindManyMock.mockResolvedValueOnce([
+      {
+        rollupId: rollup.id,
+        priority: 'P1',
+        incidents: 4,
+        mttaSum: BigInt(3 * 60_000),
+        mttaCount: 3,
+        mttrSum: BigInt(4 * 60_000),
+        mttrCount: 2,
+        ackSlaMet: 2,
+        ackSlaBreached: 1,
+        resolveSlaMet: 1,
+        resolveSlaBreached: 1,
+      },
+    ]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false,
+      { priority: 'P1' }
+    );
+
+    expect(result.resolvedIncidents).toBe(2);
+    expect(result.ackRate).toBe(75);
+    expect(result.resolveRate).toBe(50);
+    expect(result[METRIC_ACCUMULATOR]?.resolvedCount).toBe(BigInt(2));
+  });
+
+  it('propagates stored alert and raw event volume through historical metrics', async () => {
+    findManyMock.mockResolvedValueOnce([
+      makeRollup({
+        totalIncidents: 10,
+        alertCount: 21,
+        escalationCount: 3,
+        reopenCount: 2,
+        autoResolveCount: 4,
+      }),
+    ]);
+    findManyMock.mockResolvedValueOnce([]);
+
+    const result = await calculateSLAMetricsFromRollups(
+      REQUESTED_START,
+      REQUESTED_END,
+      REQUESTED_START,
+      REQUESTED_END,
+      false
+    );
+
+    expect(result.alertsCount).toBe(21);
+    expect(result.alertsPerIncident).toBe(2.1);
+    expect(result.eventsCount).toBe(9);
+    expect(result.eventsPerIncident).toBe(0.9);
+    expect(result[METRIC_ACCUMULATOR]?.alertCount).toBe(BigInt(21));
   });
 
   it('preserves user-requested range distinct from effective (clipped) range', async () => {

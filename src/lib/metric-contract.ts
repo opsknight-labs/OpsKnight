@@ -113,15 +113,16 @@ export const INCIDENT_METRIC_DEFINITIONS = {
   },
   mtta: {
     label: 'MTTA',
-    description: 'Mean time from incident creation to acknowledgment.',
-    formula: 'Average acknowledgedAt − createdAt for acknowledged eligible incidents',
+    description: 'Mean SLA-active time from incident creation to acknowledgment.',
+    formula:
+      'Average creation-to-acknowledgment elapsed time excluding canonical SLA pause intervals',
     scope: 'selected_period',
     direction: 'lower_is_better',
   },
   mttr: {
     label: 'MTTR',
-    description: 'Mean time from incident creation to resolution.',
-    formula: 'Average resolvedAt − createdAt for resolved eligible incidents',
+    description: 'Mean SLA-active time from incident creation to resolution.',
+    formula: 'Average creation-to-resolution elapsed time excluding canonical SLA pause intervals',
     scope: 'selected_period',
     direction: 'lower_is_better',
   },

@@ -330,6 +330,31 @@ export default async function AnalyticsContent({
           </span>
         </div>
       )}
+      {metrics.detailCoverage?.mode === 'bounded-detail' && (
+        <div
+          className="analytics-coverage-banner"
+          style={{
+            marginBottom: '1rem',
+            padding: '0.75rem 1rem',
+            background: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            borderRadius: '8px',
+            color: 'var(--color-warning)',
+            fontSize: 'var(--font-size-sm)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}
+        >
+          <AlertCircle className="w-4 h-4" />
+          <span>
+            <strong>Detail coverage:</strong> Detail charts use{' '}
+            {metrics.detailCoverage.sampledIncidents?.toLocaleString() ?? 'a bounded set'} of{' '}
+            {metrics.detailCoverage.totalIncidents.toLocaleString()} incidents. Headline metrics use
+            the complete selected range.
+          </span>
+        </div>
+      )}
 
       <div className="analytics-context analytics-context-compact">
         <div className="analytics-context-row">

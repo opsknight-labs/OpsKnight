@@ -33,24 +33,24 @@ When a requested window extends beyond incident retention, OpsKnight clips the q
 
 ## Metric definitions
 
-| Metric                 | Meaning                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| Total incidents        | Incidents created in the effective filtered period                                          |
-| Active incidents       | Current Triggered (`OPEN`) or Acknowledged work; no historical date cutoff                  |
-| Unassigned active      | Active incidents with no user assignee                                                      |
-| MTTA                   | Mean time from incident creation to `acknowledgedAt`, for incidents with an acknowledgement |
-| MTTR                   | Mean time from incident creation to `resolvedAt`, for resolved incidents                    |
-| MTBF                   | Mean time between failures: total operating time divided by failure count in window         |
-| Acknowledgement rate   | Share of the relevant incident set with an acknowledgement                                  |
-| Resolution rate        | Share of the relevant incident set that is resolved                                         |
-| Acknowledge compliance | Incidents acknowledged at or before the service's acknowledge target                        |
-| Resolve compliance     | Incidents resolved at or before the service's resolve target                                |
-| Escalation rate        | Share of incidents with a recorded escalation event                                         |
-| Reopen rate            | Share of incidents with a recorded reopen event                                             |
-| Auto-resolve rate      | Share of resolved incidents classified as automatically resolved                            |
-| Alerts per incident    | Stored inbound alerts divided by incidents in scope                                         |
-| After-hours rate       | Share created outside Monday–Friday 08:00–18:00 in the configured business-hours time zone  |
-| Coverage               | Scheduled on-call coverage calculated for the window                                        |
+| Metric                 | Meaning                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------- |
+| Total incidents        | Incidents created in the effective filtered period                                             |
+| Active incidents       | Current Triggered (`OPEN`) or Acknowledged work; no historical date cutoff                     |
+| Unassigned active      | Active incidents with no user assignee                                                         |
+| MTTA                   | Mean SLA-active time from incident creation to `acknowledgedAt`, excluding SLA pause intervals |
+| MTTR                   | Mean SLA-active time from incident creation to `resolvedAt`, excluding SLA pause intervals     |
+| MTBF                   | Mean time between failures: total operating time divided by failure count in window            |
+| Acknowledgement rate   | Share of the relevant incident set with an acknowledgement                                     |
+| Resolution rate        | Share of the relevant incident set that is resolved                                            |
+| Acknowledge compliance | Incidents acknowledged at or before the service's acknowledge target                           |
+| Resolve compliance     | Incidents resolved at or before the service's resolve target                                   |
+| Escalation rate        | Share of incidents with a recorded escalation event                                            |
+| Reopen rate            | Share of incidents with a recorded reopen event                                                |
+| Auto-resolve rate      | Share of resolved incidents classified as automatically resolved                               |
+| Alerts per incident    | Stored inbound alerts divided by incidents in scope                                            |
+| After-hours rate       | Share created outside Monday–Friday 08:00–18:00 in the configured business-hours time zone     |
+| Coverage               | Scheduled on-call coverage calculated for the window                                           |
 
 ### Metric scope contract
 

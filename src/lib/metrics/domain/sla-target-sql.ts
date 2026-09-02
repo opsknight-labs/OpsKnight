@@ -42,7 +42,7 @@ export function slaTargetSql(input: {
 }) {
   const priorityCases = PRIORITY_SLA_TARGETS.map(
     target =>
-      Prisma.sql`WHEN CONCAT('P', REGEXP_REPLACE(UPPER(${column(input.alias, 'priority')}), '^P', '')) = ${target.priority}
+      Prisma.sql`WHEN CONCAT('P', REGEXP_REPLACE(BTRIM(UPPER(${column(input.alias, 'priority')})), '^P', '')) = ${target.priority}
       THEN ${priorityMinutes(target, input.kind) * MINUTE_MS}`
   );
   return Prisma.sql`CASE

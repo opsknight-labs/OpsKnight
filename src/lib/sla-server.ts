@@ -716,6 +716,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   //   (rollups aren't generated for today). `shouldUseRollups(start, end)`
   //   enforces this.
   const hasIncompatibleFilters =
+    filters.teamId !== undefined ||
     filters.urgency ||
     filters.assigneeId !== undefined ||
     filters.status ||
@@ -1100,8 +1101,9 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     prisma.alert.count({
       where: {
         createdAt: { gte: alertStart, lte: alertEnd },
-        ...(Object.keys(serviceWhere).length > 0 ? serviceWhere : {}),
-        ...(Object.keys(teamWhere).length > 0 ? { service: teamWhere } : {}),
+        // Noise ratio is defined over the same incident population as its
+        // denominator. Unattached alerts are intentionally excluded.
+        incident: { is: recentIncidentWhere },
       },
     }),
     getWindowOnCallShifts(now, coverageWindowEnd).then(shifts =>
@@ -2111,17 +2113,14 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   }
   const manualResolvedCount = Math.max(0, rawManualResolved);
 
-  // `eventsCount` is "distinct incidents with notable events" — i.e. the
-  // union of escalated/reopened/auto-resolved incident IDs. Previously
-  // summed raw event rows across four separately-queried sets, which
-  // double-counted any incident matching multiple ILIKE patterns (a known
-  // fragility of the message-classifier; see follow-up to replace with an
-  // enumerated IncidentEvent.type).
-  const eventfulIncidentIds = new Set<string>();
-  for (const e of escalationEvents) eventfulIncidentIds.add(e.incidentId);
-  for (const e of reopenEvents) eventfulIncidentIds.add(e.incidentId);
-  for (const e of autoResolveEvents) eventfulIncidentIds.add(e.incidentId);
-  const eventsCount = eventfulIncidentIds.size;
+  // Public event volume has one definition in every mode: raw classified
+  // escalation + reopen + auto-resolve event rows. Affected-incident counts
+  // remain separate accumulator dimensions for rates.
+  const eventsCount = dbAggMetrics
+    ? dbAggMetrics.escalationEventCount +
+      dbAggMetrics.reopenEventCount +
+      dbAggMetrics.autoResolveEventCount
+    : escalationEvents.length + reopenEvents.length + autoResolveEvents.length;
   const autoResolveRate = resolvedCountForCalc
     ? (autoResolvedCount / resolvedCountForCalc) * 100
     : 0;
@@ -2446,7 +2445,16 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       sampledIncidents: useDbAggregation ? recentIncidents.length : undefined,
       totalIncidents: totalIncidentCount,
       fields: useDbAggregation
-        ? ['trendSeries', 'topServices', 'serviceMetrics', 'serviceSlaTable']
+        ? [
+            'mtbfMs',
+            'trendSeries',
+            'topServices',
+            'serviceMetrics',
+            'serviceSlaTable',
+            'statusAges',
+            'onCallLoad',
+            'recentIncidents',
+          ]
         : [],
     },
     trendSeries: trendSeries.map(s => ({
@@ -2472,14 +2480,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
     // V2 Additions
     recurringTitles: recurringTitleCounts.map(t => ({ title: t.title, count: t._count._all })),
-    eventsPerIncident:
-      totalRecent > 0
-        ? (ackEvents.length +
-            escalationEvents.length +
-            reopenEvents.length +
-            autoResolveEvents.length) /
-          totalRecent
-        : 0,
+    eventsPerIncident: totalRecent > 0 ? eventsCount / totalRecent : 0,
     heatmapData,
     heatmapAvailable,
     currentShifts: currentShiftsData.map(s => ({
@@ -3010,6 +3011,7 @@ export async function calculateSLAMetricsFromRollups(
   let reopenedIncidentCount = 0;
   let autoResolveCount = 0;
   let autoResolvedIncidentCount = 0;
+  let alertCount = 0;
   let afterHoursCount = 0;
   let highUrgencyIncidents = 0;
   let mediumUrgencyIncidents = 0;
@@ -3100,6 +3102,7 @@ export async function calculateSLAMetricsFromRollups(
       reopenedIncidentCount += rollup.reopenedIncidentCount ?? rollup.reopenCount;
       autoResolveCount += rollup.autoResolveCount;
       autoResolvedIncidentCount += rollup.autoResolvedIncidentCount ?? rollup.autoResolveCount;
+      alertCount += rollup.alertCount;
       afterHoursCount += rollup.afterHoursCount;
       highUrgencyIncidents += rollup.highUrgencyIncidents;
       mediumUrgencyIncidents += rollup.mediumUrgencyIncidents;
@@ -3122,6 +3125,10 @@ export async function calculateSLAMetricsFromRollups(
       resolveSlaMet += row.resolveSlaMet;
       resolveSlaBreached += row.resolveSlaBreached;
     }
+    // The priority side table's sample counts are the canonical acknowledged
+    // and resolved populations for this filtered partition.
+    acknowledgedIncidents = mttaCount;
+    resolvedIncidents = mttrCount;
   }
 
   // Averages: convert sum to Number first then float-divide.
@@ -3187,9 +3194,9 @@ export async function calculateSLAMetricsFromRollups(
   // which is more accurate. Same-day churn is rare; flagged as a known
   // delta in the data-source contract.
   const ackRateApprox =
-    !priorityFilter && totalIncidents > 0 ? (mttaCount / totalIncidents) * 100 : 0;
+    lifecycleAvailable && totalIncidents > 0 ? (mttaCount / totalIncidents) * 100 : 0;
   const resolveRateApprox =
-    !priorityFilter && totalIncidents > 0 ? (resolvedIncidents / totalIncidents) * 100 : 0;
+    lifecycleAvailable && totalIncidents > 0 ? (resolvedIncidents / totalIncidents) * 100 : 0;
 
   const highUrgencyRate =
     !priorityFilter && totalIncidents > 0 ? (highUrgencyIncidents / totalIncidents) * 100 : 0;
@@ -3315,7 +3322,7 @@ export async function calculateSLAMetricsFromRollups(
       autoResolveEvents: BigInt(autoResolveCount),
       autoResolvedIncidents: BigInt(autoResolvedIncidentCount),
       afterHoursCount: BigInt(afterHoursCount),
-      alertCount: BigInt(0),
+      alertCount: BigInt(alertCount),
     },
 
     // Retention metadata — preserve the user-requested range so the UI
@@ -3343,7 +3350,7 @@ export async function calculateSLAMetricsFromRollups(
     // query (e.g., calculateSLAMetrics with a small live window).
     resolved24h: 0,
     unassignedActive: 0,
-    alertsCount: 0,
+    alertsCount: alertCount,
     snoozedCount: 0,
     suppressedCount: 0,
     criticalCount: 0,
@@ -3373,7 +3380,7 @@ export async function calculateSLAMetricsFromRollups(
     resolveRate: resolveRateApprox,
     highUrgencyRate,
     afterHoursRate,
-    alertsPerIncident: 0, // alerts aren't rolled up
+    alertsPerIncident: totalIncidents > 0 ? alertCount / totalIncidents : 0,
     escalationRate,
     reopenRate,
     autoResolveRate,
@@ -3425,7 +3432,8 @@ export async function calculateSLAMetricsFromRollups(
     serviceSlaTable: [],
 
     recurringTitles: [],
-    eventsPerIncident: totalIncidents > 0 ? (escalationCount + reopenCount) / totalIncidents : 0,
+    eventsPerIncident:
+      totalIncidents > 0 ? (escalationCount + reopenCount + autoResolveCount) / totalIncidents : 0,
     heatmapData: heatmapRollups.map(r => ({
       date: r.date.toISOString().split('T')[0],
       // Apply priority filter to heatmap as well so service-health

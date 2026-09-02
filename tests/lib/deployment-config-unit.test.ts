@@ -50,6 +50,14 @@ describe('deployment configuration invariants', () => {
     expect(read('helm/opsknight/templates/configmap.yaml')).toContain('NEXT_PUBLIC_APP_URL');
   });
 
+  it('fails Helm rendering when ServiceMonitor authentication is missing', () => {
+    const serviceMonitor = read('helm/opsknight/templates/servicemonitor.yaml');
+    expect(serviceMonitor).toContain(
+      'metrics.serviceMonitor.enabled requires metrics.scrapeTokenSecret.existingSecret'
+    );
+    expect(serviceMonitor).toContain('bearerTokenSecret:');
+  });
+
   it('protects long migration starts and fails closed on migration failure', () => {
     expect(read('k8s/deployment.yaml')).toContain('startupProbe:');
     expect(read('helm/opsknight/templates/deployment.yaml')).toContain('startupProbe:');

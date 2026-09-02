@@ -1,4 +1,7 @@
 {{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+{{- if not .Values.metrics.scrapeTokenSecret.existingSecret }}
+{{- fail "metrics.serviceMonitor.enabled requires metrics.scrapeTokenSecret.existingSecret" }}
+{{- end }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -17,9 +20,7 @@ spec:
       path: {{ .Values.metrics.path }}
       interval: {{ .Values.metrics.serviceMonitor.interval }}
       scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
-      {{- if .Values.metrics.scrapeTokenSecret.existingSecret }}
       bearerTokenSecret:
         name: {{ .Values.metrics.scrapeTokenSecret.existingSecret }}
         key: {{ .Values.metrics.scrapeTokenSecret.key }}
-      {{- end }}
 {{- end }}

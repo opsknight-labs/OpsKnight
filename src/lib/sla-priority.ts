@@ -1,5 +1,6 @@
 import { Incident, Service } from '@prisma/client';
 import { resolveSlaTarget } from './metrics/domain/sla-target';
+import { effectiveMaterializedElapsedMs } from './metrics/domain/sla-clock';
 
 // Priority-based SLA targets (in minutes)
 export type SlaTargetService = {
@@ -31,10 +32,12 @@ export function checkPriorityAckSLA(
 ): boolean {
   if (!incident.acknowledgedAt || !incident.createdAt || !incident.priority) return false;
   const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
-  const activeMs = Math.max(
-    0,
-    incident.acknowledgedAt.getTime() - incident.createdAt.getTime() - snooze
-  );
+  const activeMs = effectiveMaterializedElapsedMs({
+    startedAt: incident.createdAt,
+    evaluationAt: incident.acknowledgedAt,
+    pausedMs: incident.slaPausedMs ?? snooze,
+    pauseStartedAt: incident.slaPauseStartedAt,
+  });
   const ackTimeMinutes = activeMs / 1000 / 60;
   const target = getPrioritySLATarget(incident.priority, service);
   return ackTimeMinutes <= target.ack;
@@ -47,10 +50,12 @@ export function checkPriorityResolveSLA(
 ): boolean {
   if (!incident.resolvedAt || !incident.createdAt || !incident.priority) return false;
   const snooze = snoozedMs ?? incident.snoozedMs ?? 0;
-  const activeMs = Math.max(
-    0,
-    incident.resolvedAt.getTime() - incident.createdAt.getTime() - snooze
-  );
+  const activeMs = effectiveMaterializedElapsedMs({
+    startedAt: incident.createdAt,
+    evaluationAt: incident.resolvedAt,
+    pausedMs: incident.slaPausedMs ?? snooze,
+    pauseStartedAt: incident.slaPauseStartedAt,
+  });
   const resolveTimeMinutes = activeMs / 1000 / 60;
   const target = getPrioritySLATarget(incident.priority, service);
   return resolveTimeMinutes <= target.resolve;
