@@ -6,42 +6,48 @@ import { describe, it, expect } from 'vitest';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pagePath = path.resolve(__dirname, '../../src/app/(app)/settings/system/page.tsx');
-const cssPath = path.resolve(__dirname, '../../src/styles/pages/settings.css');
+const tabsPath = path.resolve(__dirname, '../../src/components/settings/SystemSettingsTabs.tsx');
 
 describe('system settings redesign', () => {
-  it('adds system settings layout hooks', () => {
+  it('uses DetailHeroBanner with stat capsules and env badge', () => {
     const page = readFileSync(pagePath, 'utf8');
-    const hooks = [
-      'system-settings-shell',
-      'system-settings-hero',
-      'system-settings-grid',
-      'system-settings-card',
-      'system-settings-helper',
-      'system-settings-meta-card',
-      'system-settings-pill',
-      'system-settings-empty',
-    ];
 
-    hooks.forEach(hook => {
-      expect(page).toContain(hook);
-    });
+    // Centralized hero banner
+    expect(page).toContain('DetailHeroBanner');
+    expect(page).toContain('statsPlacement="bottom"');
+
+    // Stat capsules
+    expect(page).toContain('App URL');
+    expect(page).toContain('SSO / OIDC');
+    expect(page).toContain('Environment');
+    expect(page).toContain('Health Center');
+
+    // Encryption badge
+    expect(page).toContain('Encryption Key Set');
+    expect(page).toContain('Encryption Key Missing');
+
+    // Health Center link
+    expect(page).toContain('/settings/system/health');
   });
 
-  it('defines system settings styles', () => {
-    const css = readFileSync(cssPath, 'utf8');
-    const selectors = [
-      '.system-settings-shell',
-      '.system-settings-hero',
-      '.system-settings-grid',
-      '.system-settings-card',
-      '.system-settings-helper',
-      '.system-settings-meta-card',
-      '.system-settings-pill',
-      '.system-settings-empty',
-    ];
+  it('uses SystemSettingsTabs (DetailTabs) for section navigation', () => {
+    const page = readFileSync(pagePath, 'utf8');
+    const tabs = readFileSync(tabsPath, 'utf8');
 
-    selectors.forEach(selector => {
-      expect(css).toContain(selector);
-    });
+    // Page delegates to SystemSettingsTabs
+    expect(page).toContain('SystemSettingsTabs');
+
+    // Tabs component uses DetailTabs
+    expect(tabs).toContain('DetailTabs');
+
+    // 4 tabs defined
+    expect(tabs).toContain("id: 'app-url'");
+    expect(tabs).toContain("id: 'sso'");
+    expect(tabs).toContain("id: 'retention'");
+    expect(tabs).toContain("id: 'environment'");
+
+    // Health Center shortcut action button in tabs toolbar
+    expect(tabs).toContain('/settings/system/health');
+    expect(tabs).toContain('Health Center');
   });
 });
