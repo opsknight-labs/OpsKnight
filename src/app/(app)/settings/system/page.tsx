@@ -8,7 +8,6 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import SystemSettingsTabs from '@/components/settings/SystemSettingsTabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Button } from '@/components/ui/shadcn/button';
 
 import {
   Shield,
@@ -17,11 +16,9 @@ import {
   Lock,
   Database,
   Key,
-  HeartPulse,
   CheckCircle2,
   XCircle,
   Layers,
-  ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -109,10 +106,17 @@ export default async function SystemSettingsPage() {
     }
 
     const env = detectEnvStatus();
+    const isAppUrlConfigured = Boolean(appUrl || env.appUrl);
     const ssoEnabled = Boolean(oidcConfig?.enabled);
     const appUrlConfigured = Boolean(appUrl);
-    const allEnvOk = Object.values(env).every(Boolean);
-    const missingCount = Object.values(env).filter(v => !v).length;
+    const effectiveEnv = {
+      encryptionKey: env.encryptionKey,
+      appUrl: isAppUrlConfigured,
+      databaseUrl: env.databaseUrl,
+      nextAuthSecret: env.nextAuthSecret,
+    };
+    const allEnvOk = Object.values(effectiveEnv).every(Boolean);
+    const missingCount = Object.values(effectiveEnv).filter(v => !v).length;
 
     // ─────────────────────────────────────────────
     // TAB PANELS  — all use SettingsSection for a consistent header
@@ -157,24 +161,48 @@ export default async function SystemSettingsPage() {
         ok: env.encryptionKey,
         icon: <Lock className="h-4 w-4" />,
         scope: 'Server Secret',
+        source: env.encryptionKey ? 'Environment (.env)' : 'Not Set',
+        statusBadgeText: env.encryptionKey ? 'Configured' : 'Missing',
         note: 'Required to encrypt SSO client secrets and integration credentials at rest',
         impact: 'SSO & Integrations',
         required: true,
       },
       {
         key: 'NEXT_PUBLIC_APP_URL',
-        ok: env.appUrl,
+        ok: isAppUrlConfigured,
         icon: <Globe className="h-4 w-4" />,
         scope: 'Public URL',
-        note: 'Public base address used in email alerts, webhook payloads, and RSS feeds',
+        source: appUrl
+          ? env.appUrl
+            ? 'UI Console (Overrides .env)'
+            : 'UI Console (Database)'
+          : env.appUrl
+            ? 'Environment (.env)'
+            : 'Auto Fallback',
+        statusBadgeText: isAppUrlConfigured
+          ? appUrl
+            ? env.appUrl
+              ? 'Configured (UI & Env)'
+              : 'Configured (UI)'
+            : 'Configured (Env)'
+          : 'Missing',
+        note: appUrl
+          ? `Configured via UI Console (${appUrl}). Active base URL used in dispatch emails, webhooks, and RSS feeds.`
+          : env.appUrl
+            ? `Configured via environment variable (${process.env.NEXT_PUBLIC_APP_URL}). Can also be customized in the App URL tab.`
+            : 'Public base address used in email alerts, webhook payloads, and RSS feeds. Configurable in .env or the App URL tab.',
         impact: 'Notifications & Webhooks',
         required: false,
+        actionHref: '/settings/system?section=app-url',
+        actionLabel: appUrl ? 'Edit in App URL tab →' : 'Configure in UI →',
       },
       {
         key: 'DATABASE_URL',
         ok: env.databaseUrl,
         icon: <Database className="h-4 w-4" />,
         scope: 'Server Secret',
+        source: env.databaseUrl ? 'Environment (.env)' : 'Not Set',
+        statusBadgeText: env.databaseUrl ? 'Configured' : 'Missing',
         note: 'Primary PostgreSQL connection string with pooling and migration access',
         impact: 'Core Persistence',
         required: true,
@@ -184,6 +212,8 @@ export default async function SystemSettingsPage() {
         ok: env.nextAuthSecret,
         icon: <Key className="h-4 w-4" />,
         scope: 'Server Secret',
+        source: env.nextAuthSecret ? 'Environment (.env)' : 'Auto-generated fallback',
+        statusBadgeText: env.nextAuthSecret ? 'Configured' : 'Missing',
         note: 'Cryptographic key used to sign and verify user authentication session cookies',
         impact: 'Authentication',
         required: true,
@@ -236,8 +266,8 @@ export default async function SystemSettingsPage() {
             )}
             <span>
               {allEnvOk
-                ? 'All 4 critical environment variables are detected and active in the current runtime.'
-                : `${missingCount} required environment variable${missingCount > 1 ? 's are' : ' is'} missing. Related system functions will be limited.`}
+                ? 'All critical environment variables and console overrides are active in the current runtime.'
+                : `${missingCount} required configuration${missingCount > 1 ? 's are' : ' is'} missing. Related system functions will be limited.`}
             </span>
           </div>
 
@@ -276,12 +306,12 @@ export default async function SystemSettingsPage() {
                       {row.ok ? (
                         <>
                           <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Configured
+                          {row.statusBadgeText}
                         </>
                       ) : (
                         <>
                           <XCircle className="h-3 w-3 mr-1" />
-                          Missing
+                          {row.statusBadgeText}
                         </>
                       )}
                     </Badge>
@@ -291,16 +321,32 @@ export default async function SystemSettingsPage() {
                 </div>
 
                 {/* Footer metadata */}
-                <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span className="font-mono text-[10px] text-muted-foreground/80">
-                    {row.scope}
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] font-normal text-muted-foreground border-border/70"
-                  >
-                    {row.impact}
-                  </Badge>
+                <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[10px] text-muted-foreground/80">
+                      {row.scope}
+                    </span>
+                    <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 border border-border/50 text-muted-foreground font-medium">
+                      {row.source}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {row.actionHref && (
+                      <Link
+                        href={row.actionHref}
+                        className="text-[11px] font-medium text-primary hover:underline"
+                      >
+                        {row.actionLabel}
+                      </Link>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-normal text-muted-foreground border-border/70"
+                    >
+                      {row.impact}
+                    </Badge>
+                  </div>
                 </div>
               </div>
             ))}
@@ -366,59 +412,21 @@ export default async function SystemSettingsPage() {
               subtext: ssoEnabled ? String(oidcConfig?.providerType ?? 'oidc') : 'Not configured',
             },
             {
+              label: 'Data Retention',
+              value: 'Active',
+              icon: <Database className="h-4 w-4" />,
+              valueClassName: 'text-emerald-300',
+              subtext: '5 retention policies active',
+            },
+            {
               label: 'Environment',
               value: allEnvOk ? 'All Set' : `${missingCount} Missing`,
               icon: <Key className="h-4 w-4" />,
               valueClassName: allEnvOk ? 'text-emerald-300' : 'text-rose-300',
-              subtext: `${4 - missingCount}/4 variables detected`,
-            },
-            {
-              label: 'Health Center',
-              value: 'Open →',
-              icon: <HeartPulse className="h-4 w-4" />,
-              href: '/settings/system/health',
+              subtext: `${4 - missingCount}/4 configurations active`,
             },
           ]}
         />
-
-        {/* ── System Health & Diagnostic Center Banner ── */}
-        <div className="group relative overflow-hidden rounded-xl border bg-card/60 p-4 sm:p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-emerald-500/40">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-              <div className="shrink-0 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                <HeartPulse className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-foreground">
-                    System Health & Telemetry Center
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
-                  >
-                    Live Telemetry
-                  </Badge>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
-                  Real-time database latency, scheduler heartbeats, background queue status, and
-                  query telemetry.
-                </p>
-              </div>
-            </div>
-            <Link href="/settings/system/health" className="shrink-0 self-start sm:self-center">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1.5 text-xs font-medium hover:border-emerald-500/40 hover:text-emerald-600 dark:hover:text-emerald-400"
-              >
-                <span>Open Health Center</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </Link>
-          </div>
-        </div>
 
         {/* ── Encryption key warning (non-dev) ── */}
         {!env.encryptionKey && process.env.NODE_ENV !== 'development' && (

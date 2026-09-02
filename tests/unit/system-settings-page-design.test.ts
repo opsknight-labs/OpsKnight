@@ -16,18 +16,15 @@ describe('system settings redesign', () => {
     expect(page).toContain('DetailHeroBanner');
     expect(page).toContain('statsPlacement="bottom"');
 
-    // Stat capsules
+    // Stat capsules — maps 1-to-1 to the 4 system settings tabs
     expect(page).toContain('App URL');
     expect(page).toContain('SSO / OIDC');
+    expect(page).toContain('Data Retention');
     expect(page).toContain('Environment');
-    expect(page).toContain('Health Center');
 
     // Encryption badge
     expect(page).toContain('Encryption Key Set');
     expect(page).toContain('Encryption Key Missing');
-
-    // Health Center link
-    expect(page).toContain('/settings/system/health');
   });
 
   it('uses SystemSettingsTabs (DetailTabs) for section navigation', () => {
