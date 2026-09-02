@@ -35,11 +35,14 @@ describe('notification operations query', () => {
 
     const rowArgs = vi.mocked(prisma.notification.findMany).mock.calls[0]![0]!;
     const statusArgs = vi.mocked(prisma.notification.groupBy).mock.calls[0]![0]!;
+    const categoryArgs = vi.mocked(prisma.notification.groupBy).mock.calls[1]![0]!;
     const rowWhere = rowArgs.where;
     const statusWhere = statusArgs.where;
+    const categoryWhere = categoryArgs.where;
     expect(rowWhere).toHaveProperty('AND');
     expect(statusWhere).not.toHaveProperty('AND');
-    expect(statusWhere).toMatchObject({ status: 'FAILED' });
+    expect(statusWhere).not.toHaveProperty('status');
+    expect(categoryWhere).toMatchObject({ status: 'FAILED' });
   });
 
   it('caps page size to protect the operations database path', async () => {
