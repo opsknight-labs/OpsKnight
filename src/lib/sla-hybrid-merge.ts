@@ -67,147 +67,43 @@ export function mergeHybridMetrics(
     historicalAccumulator && liveAccumulator
       ? mergeMetricAccumulators(historicalAccumulator, liveAccumulator)
       : null;
+  if (!mergedAccumulator) {
+    throw new Error('Hybrid metrics require canonical additive accumulators from both sources');
+  }
 
-  // Reconstruct met counts from rate + breaches.
-  // Compliance = met / (met + breached) * 100. If both met+breached = 0
-  // compliance is null (no evaluation possible). When compliance is
-  // null we treat met as 0.
-  const reconstructMet = (
-    _compliance: number | null,
-    breaches: number,
-    totalIncidents: number,
-    rate: number
-  ): number => {
-    const evaluatedTotal = Math.round((rate / 100) * totalIncidents);
-    return Math.max(0, evaluatedTotal - breaches);
-  };
-
-  const ackMetHist = reconstructMet(
-    historical.ackCompliance,
-    historical.ackBreaches,
-    historical.totalIncidents,
-    historical.ackRate
+  const ackBreachesTotal = Number(mergedAccumulator.ackBreached);
+  const ackCompliance = deriveRate(
+    mergedAccumulator.ackMet,
+    mergedAccumulator.ackMet + mergedAccumulator.ackBreached
   );
-  const ackMetLive = reconstructMet(
-    live.ackCompliance,
-    live.ackBreaches,
-    live.totalIncidents,
-    live.ackRate
+
+  const resolveBreachesTotal = Number(mergedAccumulator.resolveBreached);
+  const resolveCompliance = deriveRate(
+    mergedAccumulator.resolveMet,
+    mergedAccumulator.resolveMet + mergedAccumulator.resolveBreached
   );
-  const ackBreachesTotal = mergedAccumulator
-    ? Number(mergedAccumulator.ackBreached)
-    : historical.ackBreaches + live.ackBreaches;
-  const ackMetTotal = mergedAccumulator
-    ? Number(mergedAccumulator.ackMet)
-    : ackMetHist + ackMetLive;
-  const ackEvaluatedTotal = ackMetTotal + ackBreachesTotal;
-  const ackCompliance = mergedAccumulator
-    ? deriveRate(mergedAccumulator.ackMet, mergedAccumulator.ackMet + mergedAccumulator.ackBreached)
-    : ackEvaluatedTotal > 0
-      ? (ackMetTotal / ackEvaluatedTotal) * 100
-      : null;
-
-  const resolveMetHist = reconstructMet(
-    historical.resolveCompliance,
-    historical.resolveBreaches,
-    historical.totalIncidents,
-    historical.resolveRate
+  const ackedTotal = Number(mergedAccumulator.ackedCount);
+  const resolvedTotal = Number(mergedAccumulator.resolvedCount);
+  const accumulatedMttrMs = deriveAverageMs(
+    mergedAccumulator.mttrSumMs,
+    mergedAccumulator.mttrCount
   );
-  const resolveMetLive = reconstructMet(
-    live.resolveCompliance,
-    live.resolveBreaches,
-    live.totalIncidents,
-    live.resolveRate
+  const accumulatedMttaMs = deriveAverageMs(
+    mergedAccumulator.mttaSumMs,
+    mergedAccumulator.mttaCount
   );
-  const resolveBreachesTotal = mergedAccumulator
-    ? Number(mergedAccumulator.resolveBreached)
-    : historical.resolveBreaches + live.resolveBreaches;
-  const resolveMetTotal = mergedAccumulator
-    ? Number(mergedAccumulator.resolveMet)
-    : resolveMetHist + resolveMetLive;
-  const resolveEvaluatedTotal = resolveMetTotal + resolveBreachesTotal;
-  const resolveCompliance = mergedAccumulator
-    ? deriveRate(
-        mergedAccumulator.resolveMet,
-        mergedAccumulator.resolveMet + mergedAccumulator.resolveBreached
-      )
-    : resolveEvaluatedTotal > 0
-      ? (resolveMetTotal / resolveEvaluatedTotal) * 100
-      : null;
-
-  // Reconstruct acked / resolved counts from rate * total.
-  const ackedHist = Math.round((historical.ackRate / 100) * historical.totalIncidents);
-  const ackedLive = Math.round((live.ackRate / 100) * live.totalIncidents);
-  const resolvedHist = Math.round((historical.resolveRate / 100) * historical.totalIncidents);
-  const resolvedLive = Math.round((live.resolveRate / 100) * live.totalIncidents);
-  const ackedTotal = mergedAccumulator
-    ? Number(mergedAccumulator.ackedCount)
-    : ackedHist + ackedLive;
-  const resolvedTotal = mergedAccumulator
-    ? Number(mergedAccumulator.resolvedCount)
-    : resolvedHist + resolvedLive;
-
-  // Weighted MTTR by resolved counts. (SLAMetrics has no top-level
-  // `mtta` field — only the percentiles, which we null.)
-  const weightedAvg = (
-    valA: number | null,
-    countA: number,
-    valB: number | null,
-    countB: number
-  ): number | null => {
-    const a = valA ?? null;
-    const b = valB ?? null;
-    if (a === null && b === null) return null;
-    const sumA = a !== null ? a * countA : 0;
-    const sumB = b !== null ? b * countB : 0;
-    const wA = a !== null ? countA : 0;
-    const wB = b !== null ? countB : 0;
-    const totalW = wA + wB;
-    return totalW > 0 ? (sumA + sumB) / totalW : null;
-  };
-
-  const accumulatedMttrMs = mergedAccumulator
-    ? deriveAverageMs(mergedAccumulator.mttrSumMs, mergedAccumulator.mttrCount)
-    : null;
-  const accumulatedMttaMs = mergedAccumulator
-    ? deriveAverageMs(mergedAccumulator.mttaSumMs, mergedAccumulator.mttaCount)
-    : null;
-  const mttr = mergedAccumulator
-    ? accumulatedMttrMs === null
-      ? null
-      : accumulatedMttrMs / 60_000
-    : weightedAvg(historical.mttr, resolvedHist, live.mttr, resolvedLive);
-  const mttd = mergedAccumulator
-    ? accumulatedMttaMs === null
-      ? null
-      : accumulatedMttaMs / 60_000
-    : weightedAvg(historical.mttd, ackedHist, live.mttd, ackedLive);
+  const mttr = accumulatedMttrMs === null ? null : accumulatedMttrMs / 60_000;
+  const mttd = accumulatedMttaMs === null ? null : accumulatedMttaMs / 60_000;
 
   // Urgency / event totals — straight sum.
   const highUrgencyCount = historical.highUrgencyCount + live.highUrgencyCount;
   const mediumUrgencyCount = historical.mediumUrgencyCount + live.mediumUrgencyCount;
   const lowUrgencyCount = historical.lowUrgencyCount + live.lowUrgencyCount;
-  const escalationCount = mergedAccumulator
-    ? Number(mergedAccumulator.escalatedIncidents)
-    : Math.round(
-        (historical.escalationRate / 100) * historical.totalIncidents +
-          (live.escalationRate / 100) * live.totalIncidents
-      );
-  // live.reopenRate was computed as (reopenCount / resolvedCount) * 100
-  const liveReopenCount = Math.round(
-    (live.reopenRate / 100) * (live.resolvedIncidents ?? live.totalIncidents)
-  );
-  // Both live and corrected historical metrics define reopen rate against
-  // resolved incidents: an incident must have been resolved before reopening.
-  const histReopenCount = Math.round((historical.reopenRate / 100) * resolvedHist);
-  const reopenCount = liveReopenCount + histReopenCount;
-
-  const autoResolveCount = historical.autoResolvedCount + live.autoResolvedCount;
-  const afterHoursCount = Math.round(
-    (historical.afterHoursRate / 100) * historical.totalIncidents +
-      (live.afterHoursRate / 100) * live.totalIncidents
-  );
-  const alertsCountTotal = historical.alertsCount + live.alertsCount;
+  const escalationCount = Number(mergedAccumulator.escalatedIncidents);
+  const reopenCount = Number(mergedAccumulator.reopenedIncidents);
+  const autoResolveCount = Number(mergedAccumulator.autoResolvedIncidents);
+  const afterHoursCount = Number(mergedAccumulator.afterHoursCount);
+  const alertsCountTotal = Number(mergedAccumulator.alertCount);
 
   // Rates against merged total.
   const safeRate = (count: number) => (totalIncidents > 0 ? (count / totalIncidents) * 100 : 0);
@@ -221,7 +117,7 @@ export function mergeHybridMetrics(
 
   return {
     dataSource: 'hybrid',
-    ...(mergedAccumulator ? { [METRIC_ACCUMULATOR]: mergedAccumulator } : {}),
+    [METRIC_ACCUMULATOR]: mergedAccumulator,
 
     // Range metadata: span both partitions.
     requestedStart: historical.requestedStart,

@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { mergeHybridMetrics } from '@/lib/sla-hybrid-merge';
 import type { SLAMetrics } from '@/lib/sla';
+import { METRIC_ACCUMULATOR, emptyMetricAccumulator } from '@/lib/metrics/domain/accumulator';
 
 // Tiny factory that fills the SLAMetrics shape with sensible defaults
 // so each test can override only the fields it cares about.
 function metric(overrides: Partial<SLAMetrics> = {}): SLAMetrics {
-  return {
+  const result: SLAMetrics = {
     effectiveStart: new Date('2024-01-01T00:00:00Z'),
     effectiveEnd: new Date('2024-01-31T23:59:59Z'),
     requestedStart: new Date('2024-01-01T00:00:00Z'),
@@ -96,6 +97,46 @@ function metric(overrides: Partial<SLAMetrics> = {}): SLAMetrics {
     currentShifts: [],
     ...overrides,
   };
+  if (!Reflect.get(result, METRIC_ACCUMULATOR)) {
+    const accumulator = emptyMetricAccumulator();
+    accumulator.incidentCount = BigInt(result.totalIncidents);
+    accumulator.ackedCount = BigInt(Math.round((result.ackRate / 100) * result.totalIncidents));
+    accumulator.resolvedCount = BigInt(
+      result.resolvedIncidents || Math.round((result.resolveRate / 100) * result.totalIncidents)
+    );
+    accumulator.mttaCount = accumulator.ackedCount;
+    accumulator.mttaSumMs = BigInt(
+      Math.round((result.mttd ?? 0) * 60_000 * Number(accumulator.mttaCount))
+    );
+    accumulator.mttrCount = accumulator.resolvedCount;
+    accumulator.mttrSumMs = BigInt(
+      Math.round((result.mttr ?? 0) * 60_000 * Number(accumulator.mttrCount))
+    );
+    accumulator.ackBreached = BigInt(result.ackBreaches);
+    accumulator.ackMet = BigInt(
+      Math.max(0, Math.round((result.ackRate / 100) * result.totalIncidents) - result.ackBreaches)
+    );
+    accumulator.resolveBreached = BigInt(result.resolveBreaches);
+    accumulator.resolveMet = BigInt(
+      Math.max(
+        0,
+        Math.round((result.resolveRate / 100) * result.totalIncidents) - result.resolveBreaches
+      )
+    );
+    accumulator.escalatedIncidents = BigInt(
+      Math.round((result.escalationRate / 100) * result.totalIncidents)
+    );
+    accumulator.reopenedIncidents = BigInt(
+      Math.round((result.reopenRate / 100) * Number(accumulator.resolvedCount))
+    );
+    accumulator.autoResolvedIncidents = BigInt(result.autoResolvedCount);
+    accumulator.afterHoursCount = BigInt(
+      Math.round((result.afterHoursRate / 100) * result.totalIncidents)
+    );
+    accumulator.alertCount = BigInt(result.alertsCount);
+    Reflect.set(result, METRIC_ACCUMULATOR, accumulator);
+  }
+  return result;
 }
 
 describe('mergeHybridMetrics', () => {

@@ -3,6 +3,7 @@ import {
   addOperationalMetric,
   clearRuntimeOperationalMetrics,
   OperationalMetricSnapshot,
+  observeOperationalHistogram,
   runtimeOperationalMetrics,
   setOperationalGauge,
   validateMetricDefinitions,
@@ -40,5 +41,25 @@ describe('operational metric registry', () => {
     const runtime = runtimeOperationalMetrics();
     expect(runtime.get('opsknight_http_requests_total')?.[0]?.value).toBe(3);
     expect(runtime.get('opsknight_http_requests_in_flight')?.[0]?.value).toBe(1);
+  });
+
+  it('renders cumulative histogram buckets, sum, and count', () => {
+    observeOperationalHistogram('opsknight_http_request_duration_seconds', 0.02, {
+      method: 'GET',
+      route: 'api.health',
+    });
+    observeOperationalHistogram('opsknight_http_request_duration_seconds', 0.3, {
+      method: 'GET',
+      route: 'api.health',
+    });
+
+    const rendered = new OperationalMetricSnapshot().render();
+    expect(rendered).toContain('# TYPE opsknight_http_request_duration_seconds histogram');
+    expect(rendered).toContain('le="0.025"} 1');
+    expect(rendered).toContain('le="0.5"} 2');
+    expect(rendered).toContain('le="+Inf"} 2');
+    expect(rendered).toContain(
+      'opsknight_http_request_duration_seconds_count{method="GET",route="api.health"} 2'
+    );
   });
 });

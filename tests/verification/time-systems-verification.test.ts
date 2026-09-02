@@ -13,6 +13,7 @@ import { mergeHybridMetrics } from '@/lib/sla-hybrid-merge';
 import type { SLAMetrics } from '@/lib/sla';
 import { incidentEventWhereFor, incidentEventSqlPredicate } from '@/lib/incident-event-classifier';
 import { retry, isRetryableApiError } from '@/lib/retry';
+import { METRIC_ACCUMULATOR, emptyMetricAccumulator } from '@/lib/metrics/domain/accumulator';
 
 describe('Comprehensive Time & Scheduling Verification Suite', () => {
   // =========================================================================
@@ -210,10 +211,22 @@ describe('Comprehensive Time & Scheduling Verification Suite', () => {
       const live = makeEmptyMetrics();
       live.totalIncidents = 5;
       live.mttr = 20;
+      const historicalAccumulator = emptyMetricAccumulator();
+      historicalAccumulator.incidentCount = BigInt(10);
+      historicalAccumulator.resolvedCount = BigInt(9);
+      historicalAccumulator.mttrCount = BigInt(9);
+      historicalAccumulator.mttrSumMs = BigInt(9 * 10 * 60_000);
+      const liveAccumulator = emptyMetricAccumulator();
+      liveAccumulator.incidentCount = BigInt(5);
+      liveAccumulator.resolvedCount = BigInt(5);
+      liveAccumulator.mttrCount = BigInt(5);
+      liveAccumulator.mttrSumMs = BigInt(5 * 20 * 60_000);
+      Reflect.set(historical, METRIC_ACCUMULATOR, historicalAccumulator);
+      Reflect.set(live, METRIC_ACCUMULATOR, liveAccumulator);
 
       const merged = mergeHybridMetrics(historical, live);
       expect(merged.totalIncidents).toBe(15);
-      // Reconstructed resolved: 9 for hist, 5 for live => (9*10 + 5*20) / 14 = 190/14 = 13.57 min
+      // Exact additive state: (9*10 + 5*20) / 14 = 190/14 = 13.57 min
       expect(merged.mttr).toBeCloseTo(13.57, 1);
     });
   });

@@ -210,6 +210,8 @@ type DbAggregateMetrics = {
   resolvedCount: number;
   avgMttaMs: number | null;
   avgMttrMs: number | null;
+  mttaSumMs: bigint;
+  mttrSumMs: bigint;
   mttaP50Ms: number | null;
   mttaP95Ms: number | null;
   mttrP50Ms: number | null;
@@ -223,8 +225,11 @@ type DbAggregateMetrics = {
   lowUrgencyCount: number;
   afterHoursCount: number;
   escalationCount: number;
+  escalationEventCount: number;
   reopenCount: number;
+  reopenEventCount: number;
   autoResolveCount: number;
+  autoResolveEventCount: number;
 };
 
 /**
@@ -288,6 +293,8 @@ async function calculateDbAggregateMetrics(
         resolved_count: bigint;
         avg_mtta_ms: number | null;
         avg_mttr_ms: number | null;
+        mtta_sum_ms: bigint | null;
+        mttr_sum_ms: bigint | null;
         ack_sla_met: bigint;
         ack_sla_breached: bigint;
         resolve_sla_met: bigint;
@@ -306,6 +313,10 @@ async function calculateDbAggregateMetrics(
           FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as avg_mtta_ms,
         AVG(${resolveElapsed})
           FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
+        SUM(${ackElapsed})
+          FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as mtta_sum_ms,
+        SUM(${resolveElapsed})
+          FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as mttr_sum_ms,
         COUNT(*) FILTER (
           WHERE "acknowledgedAt" IS NOT NULL
             AND ${ackElapsed} <= ${ackTargetCase}
@@ -393,14 +404,20 @@ async function calculateDbAggregateMetrics(
     const eventCountsResult = await prisma.$queryRaw<
       Array<{
         escalation_count: bigint;
+        escalation_event_count: bigint;
         reopen_count: bigint;
+        reopen_event_count: bigint;
         auto_resolve_count: bigint;
+        auto_resolve_event_count: bigint;
       }>
     >(Prisma.sql`
       SELECT
         COUNT(DISTINCT e."incidentId") FILTER (WHERE ${escalatedPredicate}) as escalation_count,
+        COUNT(*) FILTER (WHERE ${escalatedPredicate}) as escalation_event_count,
         COUNT(DISTINCT e."incidentId") FILTER (WHERE ${reopenedPredicate}) as reopen_count,
-        COUNT(DISTINCT e."incidentId") FILTER (WHERE ${autoResolvedPredicate}) as auto_resolve_count
+        COUNT(*) FILTER (WHERE ${reopenedPredicate}) as reopen_event_count,
+        COUNT(DISTINCT e."incidentId") FILTER (WHERE ${autoResolvedPredicate}) as auto_resolve_count,
+        COUNT(*) FILTER (WHERE ${autoResolvedPredicate}) as auto_resolve_event_count
       FROM "IncidentEvent" e
       INNER JOIN "Incident" i ON e."incidentId" = i."id"
       WHERE i."createdAt" >= ${start}
@@ -418,6 +435,8 @@ async function calculateDbAggregateMetrics(
       resolvedCount: Number(agg?.resolved_count ?? 0),
       avgMttaMs: agg?.avg_mtta_ms ?? null,
       avgMttrMs: agg?.avg_mttr_ms ?? null,
+      mttaSumMs: BigInt(agg?.mtta_sum_ms ?? 0),
+      mttrSumMs: BigInt(agg?.mttr_sum_ms ?? 0),
       mttaP50Ms: pct?.mtta_p50_ms ?? null,
       mttaP95Ms: pct?.mtta_p95_ms ?? null,
       mttrP50Ms: pct?.mttr_p50_ms ?? null,
@@ -431,8 +450,11 @@ async function calculateDbAggregateMetrics(
       lowUrgencyCount: Number(agg?.low_urgency_count ?? 0),
       afterHoursCount: Number(agg?.after_hours_count ?? 0),
       escalationCount: Number(evt?.escalation_count ?? 0),
+      escalationEventCount: Number(evt?.escalation_event_count ?? 0),
       reopenCount: Number(evt?.reopen_count ?? 0),
+      reopenEventCount: Number(evt?.reopen_event_count ?? 0),
       autoResolveCount: Number(evt?.auto_resolve_count ?? 0),
+      autoResolveEventCount: Number(evt?.auto_resolve_event_count ?? 0),
     };
   } catch (error) {
     logger.error('[SLA] Database aggregation failed, falling back to in-memory', { error });
@@ -443,6 +465,8 @@ async function calculateDbAggregateMetrics(
       resolvedCount: 0,
       avgMttaMs: null,
       avgMttrMs: null,
+      mttaSumMs: BigInt(0),
+      mttrSumMs: BigInt(0),
       mttaP50Ms: null,
       mttaP95Ms: null,
       mttrP50Ms: null,
@@ -456,8 +480,11 @@ async function calculateDbAggregateMetrics(
       lowUrgencyCount: 0,
       afterHoursCount: 0,
       escalationCount: 0,
+      escalationEventCount: 0,
       reopenCount: 0,
+      reopenEventCount: 0,
       autoResolveCount: 0,
+      autoResolveEventCount: 0,
     };
   }
 }
@@ -1044,6 +1071,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         serviceId: true,
         createdAt: true,
         acknowledgedAt: true,
+        slaPauses: { select: { startedAt: true, endedAt: true } },
       },
     }),
     // Muted status counts (snoozed/suppressed)
@@ -2134,6 +2162,13 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           priority: incident.priority,
           serviceTargets,
         });
+        const elapsedMs = effectiveElapsedMs({
+          startedAt: incident.createdAt,
+          evaluationAt: now,
+          pauses: incident.slaPauses,
+        });
+        const ackRemainingMs = Math.max(0, target.ackTargetMs - elapsedMs);
+        const resolveRemainingMs = Math.max(0, target.resolveTargetMs - elapsedMs);
         return {
           id: incident.id,
           title: incident.title,
@@ -2146,6 +2181,9 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           assigneeId: incident.assigneeId ?? null,
           targetAckMinutes: target.ackTargetMs / 60_000,
           targetResolveMinutes: target.resolveTargetMs / 60_000,
+          slaAckDeadline:
+            incident.status === 'ACKNOWLEDGED' ? null : new Date(now.getTime() + ackRemainingMs),
+          slaResolveDeadline: new Date(now.getTime() + resolveRemainingMs),
         };
       })
     : undefined;
@@ -2234,26 +2272,25 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     // Retention metadata
     [METRIC_ACCUMULATOR]: {
       incidentCount: BigInt(totalIncidentCount),
-      ackedCount: BigInt(Math.round((currentStats.ackRate / 100) * totalIncidentCount)),
+      ackedCount: BigInt(dbAggMetrics?.acknowledgedCount ?? mttaSamples.length),
       resolvedCount: BigInt(resolvedCountForCalc),
-      mttaSumMs: BigInt(
-        Math.round(
-          (currentStats.mtta ?? 0) * Math.round((currentStats.ackRate / 100) * totalIncidentCount)
-        )
-      ),
-      mttaCount: BigInt(Math.round((currentStats.ackRate / 100) * totalIncidentCount)),
-      mttrSumMs: BigInt(Math.round((currentStats.mttr ?? 0) * resolvedCountForCalc)),
-      mttrCount: BigInt(resolvedCountForCalc),
+      mttaSumMs:
+        dbAggMetrics?.mttaSumMs ?? BigInt(mttaSamples.reduce((sum, value) => sum + value, 0)),
+      mttaCount: BigInt(dbAggMetrics?.acknowledgedCount ?? mttaSamples.length),
+      mttrSumMs:
+        dbAggMetrics?.mttrSumMs ?? BigInt(mttrSamples.reduce((sum, value) => sum + value, 0)),
+      mttrCount: BigInt(dbAggMetrics?.resolvedCount ?? mttrSamples.length),
       ackMet: BigInt(ackSlaMet),
       ackBreached: BigInt(ackSlaBreached),
       ackPending: BigInt(Math.max(0, totalIncidentCount - ackSlaMet - ackSlaBreached)),
       resolveMet: BigInt(resolveSlaMet),
       resolveBreached: BigInt(resolveSlaBreached),
       resolvePending: BigInt(Math.max(0, totalIncidentCount - resolveSlaMet - resolveSlaBreached)),
-      escalationEvents: BigInt(escalationEvents.length),
+      escalationEvents: BigInt(dbAggMetrics?.escalationEventCount ?? escalationEvents.length),
       escalatedIncidents: BigInt(escalationCountFinal),
-      reopenEvents: BigInt(reopenEvents.length),
+      reopenEvents: BigInt(dbAggMetrics?.reopenEventCount ?? reopenEvents.length),
       reopenedIncidents: BigInt(reopenCountFinal),
+      autoResolveEvents: BigInt(dbAggMetrics?.autoResolveEventCount ?? autoResolveEvents.length),
       autoResolvedIncidents: BigInt(autoResolvedCount),
       afterHoursCount: BigInt(afterHoursCount),
       alertCount: BigInt(alertsCount),
@@ -2924,8 +2961,11 @@ export async function calculateSLAMetricsFromRollups(
   let resolveSlaMet = 0;
   let resolveSlaBreached = 0;
   let escalationCount = 0;
+  let escalatedIncidentCount = 0;
   let reopenCount = 0;
+  let reopenedIncidentCount = 0;
   let autoResolveCount = 0;
+  let autoResolvedIncidentCount = 0;
   let afterHoursCount = 0;
   let highUrgencyIncidents = 0;
   let mediumUrgencyIncidents = 0;
@@ -3000,8 +3040,11 @@ export async function calculateSLAMetricsFromRollups(
       resolveSlaMet += rollup.resolveSlaMet;
       resolveSlaBreached += rollup.resolveSlaBreached;
       escalationCount += rollup.escalationCount;
+      escalatedIncidentCount += rollup.escalatedIncidentCount ?? rollup.escalationCount;
       reopenCount += rollup.reopenCount;
+      reopenedIncidentCount += rollup.reopenedIncidentCount ?? rollup.reopenCount;
       autoResolveCount += rollup.autoResolveCount;
+      autoResolvedIncidentCount += rollup.autoResolvedIncidentCount ?? rollup.autoResolveCount;
       afterHoursCount += rollup.afterHoursCount;
       highUrgencyIncidents += rollup.highUrgencyIncidents;
       mediumUrgencyIncidents += rollup.mediumUrgencyIncidents;
@@ -3072,11 +3115,15 @@ export async function calculateSLAMetricsFromRollups(
   const afterHoursRate =
     !priorityFilter && totalIncidents > 0 ? (afterHoursCount / totalIncidents) * 100 : 0;
   const escalationRate =
-    !priorityFilter && totalIncidents > 0 ? (escalationCount / totalIncidents) * 100 : 0;
+    !priorityFilter && totalIncidents > 0 ? (escalatedIncidentCount / totalIncidents) * 100 : 0;
   const reopenRate =
-    !priorityFilter && resolvedIncidents > 0 ? (reopenCount / resolvedIncidents) * 100 : 0;
+    !priorityFilter && resolvedIncidents > 0
+      ? (reopenedIncidentCount / resolvedIncidents) * 100
+      : 0;
   const autoResolveRate =
-    !priorityFilter && resolvedIncidents > 0 ? (autoResolveCount / resolvedIncidents) * 100 : 0;
+    !priorityFilter && resolvedIncidents > 0
+      ? (autoResolvedIncidentCount / resolvedIncidents) * 100
+      : 0;
 
   // Acknowledged / resolved rate from rollup snapshot counts. This is an
   // upper-bound approximation: rollups store status-at-end-of-day, which
@@ -3209,10 +3256,11 @@ export async function calculateSLAMetricsFromRollups(
       resolveBreached: BigInt(resolveSlaBreached),
       resolvePending: BigInt(Math.max(0, totalIncidents - resolveSlaMet - resolveSlaBreached)),
       escalationEvents: BigInt(escalationCount),
-      escalatedIncidents: BigInt(escalationCount),
+      escalatedIncidents: BigInt(escalatedIncidentCount),
       reopenEvents: BigInt(reopenCount),
-      reopenedIncidents: BigInt(reopenCount),
-      autoResolvedIncidents: BigInt(autoResolveCount),
+      reopenedIncidents: BigInt(reopenedIncidentCount),
+      autoResolveEvents: BigInt(autoResolveCount),
+      autoResolvedIncidents: BigInt(autoResolvedIncidentCount),
       afterHoursCount: BigInt(afterHoursCount),
       alertCount: BigInt(0),
     },

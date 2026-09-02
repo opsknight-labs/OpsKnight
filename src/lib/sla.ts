@@ -144,6 +144,8 @@ export type SLAMetrics = {
     assigneeId: string | null;
     targetAckMinutes: number;
     targetResolveMinutes: number;
+    slaAckDeadline: Date | null;
+    slaResolveDeadline: Date;
   }>;
 
   // New Enhanced Features

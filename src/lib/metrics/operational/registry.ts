@@ -7,6 +7,7 @@ export type MetricDefinition = {
   labels: readonly string[];
   scope: MetricScope;
   estimatedMaxSeries: number;
+  buckets?: readonly number[];
 };
 
 const FORBIDDEN_LABELS = new Set([
@@ -37,11 +38,12 @@ export const OPERATIONAL_METRICS = [
   },
   {
     name: 'opsknight_http_request_duration_seconds',
-    help: 'Cumulative HTTP request duration by normalized route',
-    kind: 'counter',
+    help: 'HTTP request duration by normalized route',
+    kind: 'histogram',
     labels: ['method', 'route'],
     scope: 'counter',
     estimatedMaxSeries: 200,
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
   },
   {
     name: 'opsknight_http_requests_in_flight',
@@ -144,6 +146,8 @@ export const OPERATIONAL_METRICS = [
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];
 type RuntimeRow = { labels: Record<string, string>; value: number };
 const runtimeValues = new Map<RegisteredMetricName, Map<string, RuntimeRow>>();
+type HistogramRow = RuntimeRow & { count: number; buckets: number[] };
+const runtimeHistograms = new Map<RegisteredMetricName, Map<string, HistogramRow>>();
 
 function runtimeKey(labels: Record<string, string>) {
   return Object.entries(labels)
@@ -167,12 +171,36 @@ export function addOperationalMetric(
   labels: Record<string, string> = {}
 ) {
   const definition = assertLabels(name, labels);
-  if (definition.kind === 'gauge') throw new Error(`Cannot add to gauge metric: ${name}`);
+  if (definition.kind !== 'counter') throw new Error(`Cannot add to non-counter metric: ${name}`);
   const rows = runtimeValues.get(name) ?? new Map<string, RuntimeRow>();
   const key = runtimeKey(labels);
   const current = rows.get(key)?.value ?? 0;
   rows.set(key, { labels, value: current + Math.max(0, Number.isFinite(value) ? value : 0) });
   runtimeValues.set(name, rows);
+}
+
+export function observeOperationalHistogram(
+  name: RegisteredMetricName,
+  value: number,
+  labels: Record<string, string> = {}
+) {
+  const definition = assertLabels(name, labels);
+  if (definition.kind !== 'histogram')
+    throw new Error(`Cannot observe non-histogram metric: ${name}`);
+  const observation = Math.max(0, Number.isFinite(value) ? value : 0);
+  const boundaries = definition.buckets ?? [];
+  const rows = runtimeHistograms.get(name) ?? new Map<string, HistogramRow>();
+  const key = runtimeKey(labels);
+  const current = rows.get(key) ?? { labels, value: 0, count: 0, buckets: boundaries.map(() => 0) };
+  rows.set(key, {
+    labels,
+    value: current.value + observation,
+    count: current.count + 1,
+    buckets: boundaries.map(
+      (boundary, index) => (current.buckets.at(index) ?? 0) + (observation <= boundary ? 1 : 0)
+    ),
+  });
+  runtimeHistograms.set(name, rows);
 }
 
 export function setOperationalGauge(
@@ -195,6 +223,7 @@ export function runtimeOperationalMetrics() {
 
 export function clearRuntimeOperationalMetrics() {
   runtimeValues.clear();
+  runtimeHistograms.clear();
 }
 
 export const ACTIVE_SERIES_BUDGET = 10_000;
@@ -243,10 +272,31 @@ export class OperationalMetricSnapshot {
     const lines: string[] = [];
     for (const definition of OPERATIONAL_METRICS) {
       const rows = this.values.get(definition.name);
-      if (!rows?.length) continue;
+      const histogramRows = runtimeHistograms.get(definition.name);
+      if (!rows?.length && !histogramRows?.size) continue;
       lines.push(`# HELP ${definition.name} ${definition.help}`);
       lines.push(`# TYPE ${definition.name} ${definition.kind}`);
-      for (const row of rows) {
+      if (definition.kind === 'histogram' && histogramRows) {
+        for (const row of histogramRows.values()) {
+          const rowLabels = new Map(Object.entries(row.labels));
+          const baseLabels = definition.labels.map(
+            label => `${label}="${escapePrometheusLabel(rowLabels.get(label) ?? 'other')}"`
+          );
+          for (const [index, boundary] of (definition.buckets ?? []).entries()) {
+            lines.push(
+              `${definition.name}_bucket{${[...baseLabels, `le="${boundary}"`].join(',')}} ${row.buckets.at(index) ?? 0}`
+            );
+          }
+          lines.push(
+            `${definition.name}_bucket{${[...baseLabels, 'le="+Inf"'].join(',')}} ${row.count}`
+          );
+          const labelText = baseLabels.length ? `{${baseLabels.join(',')}}` : '';
+          lines.push(`${definition.name}_sum${labelText} ${row.value}`);
+          lines.push(`${definition.name}_count${labelText} ${row.count}`);
+        }
+        continue;
+      }
+      for (const row of rows ?? []) {
         const rowLabels = new Map(Object.entries(row.labels));
         const labelText = definition.labels.length
           ? `{${definition.labels.map(label => `${label}="${escapePrometheusLabel(rowLabels.get(label) ?? 'other')}"`).join(',')}}`

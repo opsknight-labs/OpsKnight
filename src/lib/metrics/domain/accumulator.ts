@@ -16,6 +16,7 @@ export type MetricAccumulator = {
   escalatedIncidents: bigint;
   reopenEvents: bigint;
   reopenedIncidents: bigint;
+  autoResolveEvents: bigint;
   autoResolvedIncidents: bigint;
   afterHoursCount: bigint;
   alertCount: bigint;
@@ -43,6 +44,7 @@ export function emptyMetricAccumulator(): MetricAccumulator {
     escalatedIncidents: zero,
     reopenEvents: zero,
     reopenedIncidents: zero,
+    autoResolveEvents: zero,
     autoResolvedIncidents: zero,
     afterHoursCount: zero,
     alertCount: zero,
@@ -69,6 +71,7 @@ export function mergeMetricAccumulators(...values: MetricAccumulator[]): MetricA
       escalatedIncidents: left.escalatedIncidents + right.escalatedIncidents,
       reopenEvents: left.reopenEvents + right.reopenEvents,
       reopenedIncidents: left.reopenedIncidents + right.reopenedIncidents,
+      autoResolveEvents: left.autoResolveEvents + right.autoResolveEvents,
       autoResolvedIncidents: left.autoResolvedIncidents + right.autoResolvedIncidents,
       afterHoursCount: left.afterHoursCount + right.afterHoursCount,
       alertCount: left.alertCount + right.alertCount,

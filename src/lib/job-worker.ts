@@ -33,6 +33,7 @@ let activeRun: Promise<void> | null = null;
 let workerConfig: JobWorkerConfig | null = null;
 let lastRunAt: Date | null = null;
 let lastSuccessAt: Date | null = null;
+let startedAt: Date | null = null;
 let lastError: string | null = null;
 
 function readBoundedInteger(
@@ -197,6 +198,7 @@ export function startJobWorker(): void {
   initialized = true;
   lastRunAt = null;
   lastSuccessAt = null;
+  startedAt = new Date();
   lastError = null;
 
   logger.info('[JobWorker] Starting', {
@@ -231,6 +233,7 @@ export async function stopJobWorker(): Promise<void> {
   }
 
   workerConfig = null;
+  startedAt = null;
 
   if (wasRunning) {
     logger.info('[JobWorker] Stopped');
@@ -243,6 +246,7 @@ export function getJobWorkerStatus() {
     inFlight: activeRun !== null,
     lastRunAt,
     lastSuccessAt,
+    startedAt,
     lastError,
     config: workerConfig ? { ...workerConfig } : null,
   };

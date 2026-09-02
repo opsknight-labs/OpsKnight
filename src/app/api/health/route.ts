@@ -89,9 +89,29 @@ export async function GET(request: NextRequest) {
 
     if (responsibilities.startJobWorker) {
       const worker = getJobWorkerStatus();
+      const nowMs = Date.now();
+      const idlePollMs = worker.config?.idlePollMs ?? 5_000;
+      const startupGraceMs = Math.max(30_000, idlePollMs * 5);
+      const staleAfterMs = Math.max(60_000, idlePollMs * 10);
+      const withinStartupGrace =
+        worker.startedAt !== null && nowMs - worker.startedAt.getTime() <= startupGraceMs;
+      const secondsSinceSuccess = worker.lastSuccessAt
+        ? Math.max(0, (nowMs - worker.lastSuccessAt.getTime()) / 1000)
+        : null;
+      const recentSuccess =
+        (worker.lastSuccessAt !== null && nowMs - worker.lastSuccessAt.getTime() <= staleAfterMs) ||
+        withinStartupGrace;
+      const healthy = worker.running && recentSuccess;
       checks.worker = {
-        status: worker.running ? 'healthy' : 'unhealthy',
-        ...(worker.running ? {} : { error: 'Required local worker is not running' }),
+        status: healthy ? 'healthy' : 'unhealthy',
+        latency: secondsSinceSuccess ?? undefined,
+        ...(healthy
+          ? {}
+          : {
+              error: worker.running
+                ? 'Required local worker has no recent successful cycle'
+                : 'Required local worker is not running',
+            }),
       };
     }
   }

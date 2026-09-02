@@ -1424,10 +1424,16 @@ model IncidentMetricRollup {
   resolveSlaBreached Int @default(0)
 
   // Event Counts
-  escalationCount  Int @default(0)
-  reopenCount      Int @default(0)
-  autoResolveCount Int @default(0)
-  alertCount       Int @default(0)
+  escalationCount           Int @default(0)
+  reopenCount               Int @default(0)
+  autoResolveCount          Int @default(0)
+  escalationEventCount      Int @default(0)
+  escalatedIncidentCount    Int @default(0)
+  reopenEventCount          Int @default(0)
+  reopenedIncidentCount     Int @default(0)
+  autoResolveEventCount     Int @default(0)
+  autoResolvedIncidentCount Int @default(0)
+  alertCount                Int @default(0)
 
   // After Hours
   afterHoursCount Int @default(0)

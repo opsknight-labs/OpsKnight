@@ -52,8 +52,14 @@ export interface RollupData {
 
   // Events
   escalationCount: number;
+  escalationEventCount: number;
+  escalatedIncidentCount: number;
   reopenCount: number;
+  reopenEventCount: number;
+  reopenedIncidentCount: number;
   autoResolveCount: number;
+  autoResolveEventCount: number;
+  autoResolvedIncidentCount: number;
   alertCount: number;
 
   // After Hours
@@ -390,25 +396,28 @@ export async function generateDailyRollup(
         // classifier so the rollup numbers match the live aggregate's
         // classification for the same day.
         const incidentIds = incidents.map(i => i.id);
-        const [escalationCount, reopenCount, autoResolveCount, alertCount] = incidentIds.length
+        const [escalationEvents, reopenEvents, autoResolveEvents, alertCount] = incidentIds.length
           ? await Promise.all([
-              tx.incidentEvent.count({
+              tx.incidentEvent.findMany({
                 where: {
                   incidentId: { in: incidentIds },
                   ...incidentEventWhereFor('ESCALATED'),
                 },
+                select: { incidentId: true },
               }),
-              tx.incidentEvent.count({
+              tx.incidentEvent.findMany({
                 where: {
                   incidentId: { in: incidentIds },
                   ...incidentEventWhereFor('REOPENED'),
                 },
+                select: { incidentId: true },
               }),
-              tx.incidentEvent.count({
+              tx.incidentEvent.findMany({
                 where: {
                   incidentId: { in: incidentIds },
                   ...incidentEventWhereFor('AUTO_RESOLVED'),
                 },
+                select: { incidentId: true },
               }),
               tx.alert.count({
                 where: {
@@ -417,7 +426,19 @@ export async function generateDailyRollup(
                 },
               }),
             ])
-          : [0, 0, 0, 0];
+          : [[], [], [], 0];
+        const escalationEventCount = escalationEvents.length;
+        const escalatedIncidentCount = new Set(escalationEvents.map(event => event.incidentId))
+          .size;
+        const reopenEventCount = reopenEvents.length;
+        const reopenedIncidentCount = new Set(reopenEvents.map(event => event.incidentId)).size;
+        const autoResolveEventCount = autoResolveEvents.length;
+        const autoResolvedIncidentCount = new Set(autoResolveEvents.map(event => event.incidentId))
+          .size;
+        // Compatibility aliases retain their historic event-throughput meaning.
+        const escalationCount = escalationEventCount;
+        const reopenCount = reopenEventCount;
+        const autoResolveCount = autoResolveEventCount;
 
         // Upsert the rollup - use a unique approach since composite key has nullable fields
         const existingRollup = await tx.incidentMetricRollup.findFirst({
@@ -456,8 +477,14 @@ export async function generateDailyRollup(
               resolveSlaMet,
               resolveSlaBreached,
               escalationCount,
+              escalationEventCount,
+              escalatedIncidentCount,
               reopenCount,
+              reopenEventCount,
+              reopenedIncidentCount,
               autoResolveCount,
+              autoResolveEventCount,
+              autoResolvedIncidentCount,
               alertCount,
               afterHoursCount,
             },
@@ -490,8 +517,14 @@ export async function generateDailyRollup(
               resolveSlaMet,
               resolveSlaBreached,
               escalationCount,
+              escalationEventCount,
+              escalatedIncidentCount,
               reopenCount,
+              reopenEventCount,
+              reopenedIncidentCount,
               autoResolveCount,
+              autoResolveEventCount,
+              autoResolvedIncidentCount,
               alertCount,
               afterHoursCount,
             },

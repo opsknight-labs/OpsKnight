@@ -1,5 +1,9 @@
 import { runWithContext, requestContextStorage } from './request-context';
-import { addOperationalMetric, setOperationalGauge } from './metrics/operational/registry';
+import {
+  addOperationalMetric,
+  observeOperationalHistogram,
+  setOperationalGauge,
+} from './metrics/operational/registry';
 
 const httpInFlight = new Map<string, number>();
 
@@ -56,7 +60,7 @@ export function withRequestContext<R extends Request, A extends unknown[], T>(
       });
       throw error;
     } finally {
-      addOperationalMetric(
+      observeOperationalHistogram(
         'opsknight_http_request_duration_seconds',
         (performance.now() - startedAt) / 1000,
         { method, route }
