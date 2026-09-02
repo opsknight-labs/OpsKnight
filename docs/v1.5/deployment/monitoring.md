@@ -8,6 +8,10 @@ description: Monitor health, database readiness, logs, resources, scheduled work
 
 Monitor OpsKnight as part of the incident-delivery path. A reachable login page alone does not prove that database work, integrations, escalation, or outbound notifications operate correctly.
 
+OpsKnight publishes authenticated, low-cardinality Prometheus metrics at `/api/metrics`. See the
+[Prometheus metrics guide](./prometheus) for the complete metric catalog, Bearer-token setup,
+Compose and Kubernetes configuration, recording rules, PromQL, alerts, and troubleshooting.
+
 ## Health endpoint
 
 ```bash
@@ -58,6 +62,7 @@ Avoid routing an OpsKnight-self outage solely through the same OpsKnight install
 
 ## Related topics
 
+- [Prometheus metrics](./prometheus)
 - [Deployment](./README)
 - [Notifications](../administration/notifications)
 - [Troubleshooting](../troubleshooting)

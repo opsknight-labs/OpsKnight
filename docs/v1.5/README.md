@@ -18,6 +18,7 @@ This tree is **v1.5**. Switch versions in the sidebar for older releases.
 - [Installation](./getting-started/installation) — Compose, Helm, Kustomize, from source. First boot needs `NEXTAUTH_SECRET` and `ENCRYPTION_KEY`.
 - [Troubleshooting](./troubleshooting) — Compose, database, auth, paging
 - [Notifications](./administration/notifications) — How someone actually gets paged (no voice), including user-controlled Quiet Hours.
+- [Prometheus metrics](./deployment/prometheus) — Secure scraping, Helm/Compose/Kustomize setup, PromQL, recording rules, and alerts.
 - [Incidents](./core-concepts/incidents)
 - [Escalation policies](./core-concepts/escalation-policies)
 - [On-call schedules](./core-concepts/schedules)

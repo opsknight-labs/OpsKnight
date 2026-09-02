@@ -58,6 +58,14 @@ describe('deployment configuration invariants', () => {
     expect(serviceMonitor).toContain('bearerTokenSecret:');
   });
 
+  it('keeps the raw ServiceMonitor selector aligned with the application Service', () => {
+    const service = read('k8s/service.yaml');
+    const serviceMonitor = read('k8s/monitoring/servicemonitor.yaml');
+    expect(service).toContain('app: opsknight-app');
+    expect(serviceMonitor).toContain('app: opsknight-app');
+    expect(serviceMonitor).not.toContain('app: opsknight\n');
+  });
+
   it('protects long migration starts and fails closed on migration failure', () => {
     expect(read('k8s/deployment.yaml')).toContain('startupProbe:');
     expect(read('helm/opsknight/templates/deployment.yaml')).toContain('startupProbe:');

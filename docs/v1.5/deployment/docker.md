@@ -39,6 +39,11 @@ APP_PORT=3000
 OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:1.4.0
 ```
 
+To let Prometheus monitor OpsKnight, also provide a dedicated high-entropy
+`PROMETHEUS_SCRAPE_TOKEN` and configure Prometheus to scrape the authenticated `/api/metrics`
+endpoint. See [Prometheus metrics](./prometheus) for secure token handling, scrape configuration,
+queries, and alerts.
+
 Pin `OPSKNIGHT_IMAGE` to the immutable version or digest you tested. The default remains `latest` for convenience and should not be the production release policy. The `1.4.0` stable image includes fail-closed migrations and is published for amd64 and arm64; the test image built from `main` remains amd64-only.
 
 The checked-in fallbacks are development values, not production secrets. Keep `ENCRYPTION_KEY` stable and backed up with the database; losing it means re-entering encrypted provider/integration credentials.
@@ -163,4 +168,5 @@ docker compose down
 | Managed DB cannot connect               | `OPSKNIGHT_DATABASE_URL`, URI encoding, TLS parameters, firewall/routing.             |
 | Provider credentials fail after restore | Database backup and the original `ENCRYPTION_KEY` must belong together.               |
 
-See [Troubleshooting](../troubleshooting) and [Configuration reference](../getting-started/configuration).
+See [Troubleshooting](../troubleshooting), [Configuration reference](../getting-started/configuration),
+[Prometheus metrics](./prometheus), and [Monitoring](./monitoring).
