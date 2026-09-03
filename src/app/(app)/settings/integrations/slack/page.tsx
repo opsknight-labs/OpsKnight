@@ -61,7 +61,13 @@ export default async function GlobalSlackIntegrationPage() {
     orderBy: { updatedAt: 'desc' },
   });
 
-  const isOAuthConfigured = !!(oauthConfig?.clientId && oauthConfig?.clientSecret);
+  const isClientIdValid =
+    Boolean(oauthConfig?.clientId) &&
+    !oauthConfig!.clientId.startsWith('T') &&
+    !oauthConfig!.clientId.startsWith('A') &&
+    oauthConfig!.clientId !== 'workspace-credentials';
+
+  const isOAuthConfigured = Boolean(isClientIdValid && oauthConfig?.clientSecret);
   const isSigningSecretConfigured =
     !!oauthConfig?.signingSecret || !!process.env.SLACK_SIGNING_SECRET;
 

@@ -33,17 +33,33 @@ export async function saveSlackOAuthConfig(
   const isSigningSecretOnly = !clientId && Boolean(signingSecret);
 
   // Allows updating just the signing secret without re-entering app credentials
-  let effectiveClientId = clientId || existing?.clientId;
+  let effectiveClientId = clientId ? clientId.trim() : existing?.clientId;
   if (!effectiveClientId) {
     if (isSigningSecretOnly) {
-      const integration = await prisma.slackIntegration.findFirst({
-        orderBy: { updatedAt: 'desc' },
-        select: { workspaceId: true },
-      });
-      effectiveClientId =
-        process.env.SLACK_CLIENT_ID || integration?.workspaceId || 'workspace-credentials';
+      effectiveClientId = process.env.SLACK_CLIENT_ID || 'workspace-credentials';
     } else {
       return { error: 'Client ID is required' };
+    }
+  }
+
+  // Validate clientId format: reject Slack Workspace IDs (starts with T) and App IDs (starts with A)
+  if (clientId) {
+    const trimmed = clientId.trim();
+    if (trimmed.startsWith('T') && /^T[A-Z0-9]+$/i.test(trimmed)) {
+      return {
+        error:
+          "Invalid Client ID: '" +
+          trimmed +
+          "' is a Slack Workspace/Team ID (starts with 'T'). Please enter your OAuth Client ID from https://api.slack.com/apps (under Basic Information > App Credentials, formatted like '123456789.987654321').",
+      };
+    }
+    if (trimmed.startsWith('A') && /^A[A-Z0-9]+$/i.test(trimmed)) {
+      return {
+        error:
+          "Invalid Client ID: '" +
+          trimmed +
+          "' is a Slack App ID (starts with 'A'). Please enter your OAuth Client ID from https://api.slack.com/apps (under Basic Information > App Credentials, formatted like '123456789.987654321').",
+      };
     }
   }
 

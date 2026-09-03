@@ -50,12 +50,21 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
       return;
     }
 
+    const trimmedClientId = clientId.trim();
+    if (trimmedClientId.startsWith('T') || trimmedClientId.startsWith('A')) {
+      toast.error('Invalid Client ID', {
+        description:
+          "The entered Client ID looks like a Slack Workspace ID ('T...') or App ID ('A...'). Please use the numeric Client ID from App Credentials (e.g. 123456789.987654321).",
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
       const formData = new FormData();
-      formData.append('clientId', clientId);
-      formData.append('clientSecret', clientSecret);
-      formData.append('signingSecret', signingSecret);
+      formData.append('clientId', trimmedClientId);
+      formData.append('clientSecret', clientSecret.trim());
+      formData.append('signingSecret', signingSecret.trim());
       formData.append('redirectUri', redirectUri);
       formData.append('enabled', 'true');
 
@@ -317,12 +326,26 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                       type="text"
                       value={clientId}
                       onChange={e => setClientId(e.target.value)}
-                      placeholder="Paste Client ID here"
+                      placeholder="e.g. 123456789012.345678901234"
                       className="font-mono"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Found at the top of OAuth & Permissions page
+                      Found under Basic Information &gt; App Credentials in your Slack app. Format:{' '}
+                      <code className="text-foreground">123456789.987654321</code>. Do not use your
+                      Workspace ID (starts with T) or App ID (starts with A).
                     </p>
+                    {clientId.trim().startsWith('T') && (
+                      <p className="text-xs text-destructive font-medium">
+                        ⚠️ This looks like a Slack Workspace ID (starts with &apos;T&apos;). Please
+                        enter the numeric Client ID from App Credentials.
+                      </p>
+                    )}
+                    {clientId.trim().startsWith('A') && (
+                      <p className="text-xs text-destructive font-medium">
+                        ⚠️ This looks like a Slack App ID (starts with &apos;A&apos;). Please enter
+                        the numeric Client ID from App Credentials.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -372,7 +395,14 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={!clientId || !clientSecret || !signingSecret || isSaving}
+                disabled={
+                  !clientId ||
+                  !clientSecret ||
+                  !signingSecret ||
+                  isSaving ||
+                  clientId.trim().startsWith('T') ||
+                  clientId.trim().startsWith('A')
+                }
               >
                 {isSaving ? 'Saving...' : 'Save & Continue'}
                 <ArrowRight className="ml-2 h-4 w-4" />
