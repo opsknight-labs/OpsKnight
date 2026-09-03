@@ -112,10 +112,20 @@ export default function GlobalKeyboardHandler({ onShortcutsToggle }: KeyboardHan
         onShortcutsToggleRef.current();
       }
 
-      // C key for Quick Create Menu
-      if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        window.dispatchEvent(new CustomEvent('openQuickCreate'));
+      // C or Cmd+C / Ctrl+C for Quick Create Menu
+      if (e.key.toLowerCase() === 'c' && !e.altKey) {
+        if (e.metaKey || e.ctrlKey) {
+          // If Cmd/Ctrl is held, only trigger if no text is currently selected
+          const selectedText = window.getSelection()?.toString();
+          if (!selectedText || selectedText.trim().length === 0) {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('openQuickCreate'));
+          }
+        } else {
+          // Plain 'c' without modifiers
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('openQuickCreate'));
+        }
       }
 
       // N key for new incident (when on incidents page)

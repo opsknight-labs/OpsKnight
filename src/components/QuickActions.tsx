@@ -22,7 +22,6 @@ import {
   Shield,
   ArrowRight,
   Sparkles,
-  Command,
   ChevronDown,
   LayoutTemplate,
 } from 'lucide-react';
@@ -49,7 +48,7 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const handleOpen = () => setOpen(true);
+    const handleOpen = () => setOpen(prev => !prev);
     window.addEventListener('openQuickCreate', handleOpen);
     return () => window.removeEventListener('openQuickCreate', handleOpen);
   }, []);
@@ -127,29 +126,27 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="w-52 p-0 overflow-hidden border border-border shadow-xl bg-white/95 backdrop-blur-xl z-[1050]"
+        className="w-64 p-1 overflow-hidden border border-border shadow-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl z-[1050] rounded-xl"
       >
-        {/* Compact Header */}
-        <div className="relative p-2 bg-gradient-to-br from-primary/90 via-primary to-primary/90 text-primary-foreground overflow-hidden border-b border-white/10">
+        {/* Comfortable Header */}
+        <div className="relative p-3 bg-gradient-to-br from-primary/90 via-primary to-primary/90 text-primary-foreground overflow-hidden rounded-lg mb-1 border-b border-white/10">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_50%)]" />
 
-          <div className="relative z-10 flex items-center gap-2">
-            <div className="flex items-center justify-center h-6 w-6 rounded-full bg-white/10 border border-white/20 shadow-sm backdrop-blur-md">
-              <Sparkles className="h-3 w-3 text-white" />
+          <div className="relative z-10 flex items-center gap-2.5">
+            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 border border-white/20 shadow-sm backdrop-blur-md shrink-0">
+              <Sparkles className="h-4 w-4 text-white" />
             </div>
-            <div className="flex flex-col min-w-0">
-              <p className="text-xs font-semibold truncate leading-none text-white">Create New</p>
-              <p className="text-[8px] text-primary-foreground/80 font-medium truncate">
-                Select resource type
-              </p>
+            <div className="flex flex-col min-w-0 flex-1">
+              <p className="text-sm font-semibold truncate leading-tight text-white">Create New</p>
+              <p className="text-xs text-white/75 font-normal truncate">Select resource type</p>
             </div>
           </div>
         </div>
 
-        <div className="p-0.5">
+        <div className="p-0.5 space-y-0.5">
           {quickActions.map((action, index) => (
             <React.Fragment key={action.href}>
-              {index === 2 && <DropdownMenuSeparator className="my-0.5 bg-border/60" />}
+              {index === 2 && <DropdownMenuSeparator className="my-1 bg-border/60" />}
               <DropdownMenuItem
                 onClick={() => {
                   if (action.label === 'New Incident') {
@@ -158,49 +155,56 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
                     router.push(action.href);
                   }
                 }}
-                className="group cursor-pointer focus:bg-muted/60 data-[highlighted]:bg-muted/60 rounded py-1 px-1.5"
+                className="group cursor-pointer focus:bg-muted/70 data-[highlighted]:bg-muted/70 rounded-lg py-2 px-2"
               >
                 <div
                   className={cn(
-                    'flex items-center justify-center w-5 h-5 rounded-full mr-2 shrink-0 transition-all shadow-sm border',
+                    'flex items-center justify-center w-6 h-6 rounded-md mr-2.5 shrink-0 transition-all shadow-xs border',
                     action.colorClass
                   )}
                 >
-                  {React.cloneElement(action.icon, { className: 'h-3 w-3' })}
+                  {React.cloneElement(action.icon, { className: 'h-3.5 w-3.5' })}
                 </div>
                 <div className="flex flex-col flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-medium text-foreground">{action.label}</span>
+                    <span className="text-xs font-medium text-foreground">{action.label}</span>
                     {action.badge && (
-                      <Badge variant="neutral" size="xs" className="uppercase text-[7px] px-1 py-0">
+                      <Badge
+                        variant="neutral"
+                        size="xs"
+                        className="uppercase text-[8px] px-1 py-0 font-semibold"
+                      >
                         {action.badge}
                       </Badge>
                     )}
                   </div>
                   {action.description && (
-                    <span className="text-[8px] text-muted-foreground truncate leading-tight">
+                    <span className="text-[10px] text-muted-foreground truncate leading-tight">
                       {action.description}
                     </span>
                   )}
                 </div>
                 {action.shortcut ? (
-                  <DropdownMenuShortcut className="text-[8px] bg-muted px-0.5 rounded border border-border/50">
+                  <DropdownMenuShortcut className="text-[9px] bg-muted px-1 py-0.5 rounded border border-border/50">
                     ⌘{action.shortcut}
                   </DropdownMenuShortcut>
                 ) : (
-                  <ArrowRight className="h-2 w-2 text-muted-foreground/30 group-hover:text-primary transition-all opacity-0 group-hover:opacity-100" />
+                  <ArrowRight className="h-3 w-3 text-muted-foreground/40 group-hover:text-primary transition-all opacity-0 group-hover:opacity-100" />
                 )}
               </DropdownMenuItem>
             </React.Fragment>
           ))}
         </div>
 
-        <div className="p-1 bg-muted/30 border-t flex items-center justify-center gap-1.5">
-          <Command className="h-2 w-2 text-muted-foreground" />
-          <p className="text-[8px] text-muted-foreground">
+        <div className="py-1.5 px-3 bg-muted/40 border-t flex items-center justify-center gap-1.5 rounded-b-lg">
+          <p className="text-[10px] text-muted-foreground font-medium">
             Press{' '}
-            <kbd className="font-mono bg-muted border border-border/50 px-0.5 rounded text-foreground font-medium">
+            <kbd className="font-mono bg-background border border-border px-1 py-0.5 rounded text-foreground font-semibold">
               C
+            </kbd>{' '}
+            or{' '}
+            <kbd className="font-mono bg-background border border-border px-1 py-0.5 rounded text-foreground font-semibold">
+              ⌘C
             </kbd>{' '}
             to open
           </p>
