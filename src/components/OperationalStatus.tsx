@@ -121,14 +121,18 @@ export default function OperationalStatus({
     },
   };
 
-  const currentTheme = initialTone
-    ? // eslint-disable-next-line security/detect-object-injection
-      theme[initialTone]
-    : isDanger
+  const currentTheme =
+    initialTone === 'danger'
       ? theme.danger
-      : isWarning
+      : initialTone === 'warning'
         ? theme.warning
-        : theme.ok;
+        : initialTone === 'ok'
+          ? theme.ok
+          : isDanger
+            ? theme.danger
+            : isWarning
+              ? theme.warning
+              : theme.ok;
 
   if (loading && !initialTone && !hasOverrides) {
     // Show loading only if no fallback

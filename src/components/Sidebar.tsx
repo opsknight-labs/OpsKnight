@@ -449,10 +449,7 @@ export default function Sidebar(
               avatarUrl={userAvatar}
               size="sm"
               showOnlineStatus={true}
-              className={cn(
-                'border-white/10 transition-transform group-hover:scale-105 shrink-0',
-                !isDesktopCollapsed && 'h-8 w-8'
-              )}
+              className={cn('border-white/10 shrink-0', !isDesktopCollapsed && 'h-8 w-8')}
               fallbackClassName="bg-indigo-500/20 text-indigo-200 backdrop-blur-md text-xs"
             />
 
