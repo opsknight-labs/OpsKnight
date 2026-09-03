@@ -1,11 +1,18 @@
-import { after, NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { handleSlashCommand } from '@/lib/chatops/slash-commands';
-import { verifySlackSignature, toSlackResponseUrl } from '@/lib/slack-signature';
+import { verifySlackSignature } from '@/lib/slack-signature';
+import { enqueueChatOpsIntent } from '@/lib/chatops/intent';
+import {
+  IntegrationBodyTooLargeError,
+  readIntegrationBody,
+} from '@/lib/integrations/request-security';
+
+const MAX_SLACK_COMMAND_BYTES = 64 * 1024;
+const MAX_SLACK_TEXT_LENGTH = 4_000;
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.text();
+    const body = await readIntegrationBody(request, MAX_SLACK_COMMAND_BYTES);
     const signature = request.headers.get('x-slack-signature') || '';
     const timestamp = request.headers.get('x-slack-request-timestamp') || '';
 
@@ -16,10 +23,17 @@ export async function POST(request: NextRequest) {
     }
 
     const params = new URLSearchParams(body);
+    const text = params.get('text') || '';
+    if (text.length > MAX_SLACK_TEXT_LENGTH) {
+      return NextResponse.json(
+        { response_type: 'ephemeral', text: '⚠️ Command text is too long.' },
+        { status: 400 }
+      );
+    }
 
     const payload = {
       command: params.get('command') || '',
-      text: params.get('text') || '',
+      text,
       channel_id: params.get('channel_id') || '',
       channel_name: params.get('channel_name') || '',
       user_id: params.get('user_id') || '',
@@ -28,56 +42,34 @@ export async function POST(request: NextRequest) {
       response_url: params.get('response_url') || '',
     };
 
-    const handlePromise = handleSlashCommand(payload);
-    const timeoutPromise = new Promise<{ timeout: true }>(resolve =>
-      setTimeout(() => resolve({ timeout: true }), 1500)
-    );
-
-    const raceResult = await Promise.race([handlePromise, timeoutPromise]);
-
-    if ('timeout' in raceResult && raceResult.timeout) {
-      // Processing taking longer than 1.5s -> finish in background and post to response_url
-      // Rebuilt against a literal origin, so this can only ever reach Slack
-      const responseUrl = toSlackResponseUrl(payload.response_url);
-      after(async () => {
-        try {
-          const result = await handlePromise;
-          // Attacker-controlled input — only ever POST back to Slack's own host
-          if (responseUrl && result) {
-            try {
-              await fetch(responseUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(result),
-              });
-            } catch (err) {
-              logger.error('[Slack] Failed to post async command response to response_url', {
-                error: err,
-              });
-            }
-          }
-        } catch (err) {
-          logger.error('[Slack] Error in async slash command processing', { error: err });
-        }
-      });
-
-      // Return immediate HTTP 200 to Slack within 1.5s to prevent 3000ms operation_timeout
-      return NextResponse.json({
-        response_type: 'ephemeral',
-        text: '⚙️ Processing `/incident` command...',
-      });
+    if (!payload.team_id || !payload.user_id || !payload.channel_id) {
+      return NextResponse.json({ error: 'Missing Slack request identity' }, { status: 400 });
     }
 
-    return NextResponse.json(await handlePromise);
-  } catch (error: any) {
-    logger.error('[Slack] Commands API error', {
-      error: error.message,
-      stack: error.stack,
+    // Acknowledge Slack only after a durable, encrypted intent exists. The
+    // deterministic signature/timestamp identity makes Slack retries idempotent
+    // across replicas and process restarts.
+    await enqueueChatOpsIntent({
+      kind: 'SLASH_COMMAND',
+      workspaceId: payload.team_id,
+      requestIdentity: `${timestamp}:${signature}`,
+      payload,
     });
 
     return NextResponse.json({
       response_type: 'ephemeral',
-      text: 'An error occurred while processing your command.',
+      text: '⚙️ Processing `/incident` command...',
     });
+  } catch (error: unknown) {
+    if (error instanceof IntegrationBodyTooLargeError) {
+      return NextResponse.json({ error: 'Slack command payload too large' }, { status: 413 });
+    }
+    logger.error('[Slack] Commands API error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { response_type: 'ephemeral', text: 'An error occurred while accepting your command.' },
+      { status: 500 }
+    );
   }
 }
