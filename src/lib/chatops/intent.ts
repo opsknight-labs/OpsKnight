@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { decrypt, encrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
 import { toSlackResponseUrl } from '@/lib/slack-signature';
+import type { SlashCommandPayload } from '@/lib/chatops/slash-commands';
 
 export const CHATOPS_COMMAND_TASK = 'CHATOPS_COMMAND';
 const MAX_CHATOPS_PAYLOAD_BYTES = 128 * 1024;
@@ -88,6 +89,21 @@ function parseIntent(payload: unknown): PersistedChatOpsIntent {
   return value as PersistedChatOpsIntent;
 }
 
+function isSlashCommandPayload(value: unknown): value is SlashCommandPayload {
+  if (!value || Array.isArray(value) || typeof value !== 'object') return false;
+  const payload = value as Record<string, unknown>;
+  return (
+    typeof payload.command === 'string' &&
+    typeof payload.text === 'string' &&
+    typeof payload.channel_id === 'string' &&
+    typeof payload.channel_name === 'string' &&
+    typeof payload.user_id === 'string' &&
+    typeof payload.user_name === 'string' &&
+    typeof payload.team_id === 'string' &&
+    typeof payload.response_url === 'string'
+  );
+}
+
 async function postDeferredSlackResponse(responseUrl: unknown, body: unknown): Promise<void> {
   const url = typeof responseUrl === 'string' ? toSlackResponseUrl(responseUrl) : null;
   if (!url) return;
@@ -108,9 +124,11 @@ export async function processChatOpsIntent(rawJobPayload: unknown): Promise<void
   const payload = JSON.parse(decrypted) as Record<string, unknown>;
 
   if (intent.kind === 'SLASH_COMMAND') {
+    if (!isSlashCommandPayload(payload)) {
+      throw new Error('Invalid persisted Slack slash command payload');
+    }
     const { handleSlashCommand } = await import('@/lib/chatops/slash-commands');
-    const slashPayload = payload as Parameters<typeof handleSlashCommand>[0];
-    const result = await handleSlashCommand(slashPayload);
+    const result = await handleSlashCommand(payload);
     await postDeferredSlackResponse(payload.response_url, result);
     return;
   }
