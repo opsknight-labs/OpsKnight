@@ -9,40 +9,131 @@ import { logger } from '@/lib/logger';
 import { toSafeStyleTagContent } from '@/lib/status-page-content';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
 
-interface StatusPageLivePreviewProps {
-  previewData: {
-    statusPage: {
-      name: string;
-      contactEmail?: string | null;
-      contactUrl?: string | null;
-    };
-    branding: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    services: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
-    statusPageServices: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
-    announcements: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
-    uptime90: Record<string, number>;
-    incidents: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
-    showServices: boolean;
-    showIncidents: boolean;
-    showSubscribe?: boolean;
-    showServicesByRegion?: boolean;
-    showServiceOwners?: boolean;
-    showServiceSlaTier?: boolean;
-    showChangelog?: boolean;
-    showRegionHeatmap?: boolean;
-    showPostIncidentReview?: boolean;
-    showHeader: boolean;
-    showFooter: boolean;
-    footerText?: string | null;
-    showRssLink: boolean;
-    showApiLink: boolean;
-    layout: string;
-    privacySettings?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+export interface StatusPagePreviewService {
+  id: string;
+  name: string;
+  status: string;
+  region?: string | null;
+  slaTier?: string | null;
+  team?: {
+    id: string;
+    name: string;
+  } | null;
+  _count?: {
+    incidents: number;
   };
+  [key: string]: unknown;
+}
+
+export interface StatusPagePreviewStatusPageService {
+  id: string;
+  serviceId: string;
+  displayName?: string | null;
+  showOnPage: boolean;
+  [key: string]: unknown;
+}
+
+export interface StatusPagePreviewAnnouncement {
+  id: string;
+  title: string;
+  message: string;
+  type?: string;
+  severity?: string;
+  startDate?: string;
+  endDate?: string;
+  services?: Array<{ id: string; name: string }>;
+  [key: string]: unknown;
+}
+
+export interface StatusPagePreviewIncident {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  urgency?: string;
+  createdAt: string | Date;
+  acknowledgedAt?: string | Date | null;
+  resolvedAt?: string | Date | null;
+  service?: {
+    id: string;
+    name: string;
+    region?: string | null;
+  };
+  events?: Array<{
+    id: string;
+    message: string;
+    createdAt: string | Date;
+  }>;
+  postmortem?: {
+    id: string;
+    status: string;
+    isPublic?: boolean | null;
+  } | null;
+  [key: string]: unknown;
+}
+
+export interface StatusPagePreviewPrivacySettings {
+  showServiceMetrics?: boolean;
+  showServiceDescriptions?: boolean;
+  showServiceRegions?: boolean;
+  showUptimeHistory?: boolean;
+  showTeamInformation?: boolean;
+  showIncidentTitles?: boolean;
+  showIncidentDescriptions?: boolean;
+  showAffectedServices?: boolean;
+  showIncidentTimestamps?: boolean;
+  showIncidentUrgency?: boolean;
+  showIncidentDetails?: boolean;
+  [key: string]: unknown;
+}
+
+export interface StatusPagePreviewData {
+  statusPage: {
+    name: string;
+    contactEmail?: string | null;
+    contactUrl?: string | null;
+  };
+  branding: Record<string, unknown>;
+  services: StatusPagePreviewService[];
+  statusPageServices: StatusPagePreviewStatusPageService[];
+  announcements: StatusPagePreviewAnnouncement[];
+  uptime90: Record<string, number>;
+  incidents: StatusPagePreviewIncident[];
+  showServices: boolean;
+  showIncidents: boolean;
+  showSubscribe?: boolean;
+  showServicesByRegion?: boolean;
+  showServiceOwners?: boolean;
+  showServiceSlaTier?: boolean;
+  showChangelog?: boolean;
+  showRegionHeatmap?: boolean;
+  showPostIncidentReview?: boolean;
+  showHeader: boolean;
+  showFooter: boolean;
+  footerText?: string | null;
+  showRssLink: boolean;
+  showApiLink: boolean;
+  layout: string;
+  privacySettings?: StatusPagePreviewPrivacySettings | null;
+}
+
+export interface StatusPageLivePreviewProps {
+  previewData: StatusPagePreviewData;
   maxWidth?: string;
 }
 
 type DeviceView = 'mac' | 'ipad' | 'iphone';
+
+const PREVIEW_DEVICES: Array<{
+  id: DeviceView;
+  label: string;
+  shortLabel: string;
+  icon: string;
+}> = [
+  { id: 'mac', label: 'MacBook Pro', shortLabel: 'Mac', icon: '💻' },
+  { id: 'ipad', label: 'iPad Pro 12.9"', shortLabel: 'iPad', icon: '📱' },
+  { id: 'iphone', label: 'iPhone 15 Pro', shortLabel: 'iPhone', icon: '📱' },
+];
 
 export default function StatusPageLivePreview({
   previewData,
@@ -57,8 +148,8 @@ export default function StatusPageLivePreview({
   // Calculate overall status based on services
   // Derived state - no need for effect
   const overallStatus = useMemo(() => {
-    const hasOutage = previewData.services.some((s: any) => s.status === 'MAJOR_OUTAGE'); // eslint-disable-line @typescript-eslint/no-explicit-any
-    const hasDegraded = previewData.services.some((s: any) => s.status === 'PARTIAL_OUTAGE'); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const hasOutage = previewData.services.some(s => s.status === 'MAJOR_OUTAGE');
+    const hasDegraded = previewData.services.some(s => s.status === 'PARTIAL_OUTAGE');
     return hasOutage ? 'outage' : hasDegraded ? 'degraded' : 'operational';
   }, [previewData.services]);
 
@@ -92,18 +183,15 @@ export default function StatusPageLivePreview({
   // Extract numeric value from string like "1600px" or "900px"
   const contentMaxWidthNum = parseInt(contentMaxWidthStr.replace(/px$/, '')) || 1280;
 
-  // Apple device frame dimensions
-  const deviceDimensions: Record<
-    DeviceView,
-    { width: number; height: number | null; label: string }
-  > = {
-    mac: { width: Math.max(1440, contentMaxWidthNum), height: 900, label: 'MacBook Pro' },
-    ipad: { width: 1024, height: 1366, label: 'iPad Pro 12.9"' },
-    iphone: { width: 393, height: 852, label: 'iPhone 15 Pro' },
-  };
+  // Apple device frame dimensions without dynamic object index sink
+  const targetWidth =
+    deviceView === 'iphone'
+      ? 393
+      : deviceView === 'ipad'
+        ? 1024
+        : Math.max(1440, contentMaxWidthNum);
 
-  const targetWidth = deviceDimensions[deviceView].width;
-  const targetHeight = deviceDimensions[deviceView].height;
+  const targetHeight = deviceView === 'iphone' ? 852 : deviceView === 'ipad' ? 1366 : 900;
 
   // Calculate scale based on container size
   useEffect(() => {
@@ -167,21 +255,29 @@ export default function StatusPageLivePreview({
     setScale(prev => Math.min(Math.max(prev + delta, 0.25), 1.5)); // Limit zoom 0.25x to 1.5x
   };
 
-  const deviceLabels: Record<DeviceView, string> = {
-    mac: deviceDimensions.mac.label,
-    ipad: deviceDimensions.ipad.label,
-    iphone: deviceDimensions.iphone.label,
-  };
-
   // For the inner content max-width (inside the scaled container)
   // Always use 100% for ipad and iphone, use contentMaxWidthStr for mac
   const contentMaxWidth = deviceView === 'mac' ? contentMaxWidthStr : '100%';
   const computedTheme = useMemo(() => {
     return computeStatusPageTheme({
-      primaryColor: previewData.branding?.primaryColor || previewData.branding?.primary,
-      backgroundColor: previewData.branding?.backgroundColor || previewData.branding?.background,
-      textColor: previewData.branding?.textColor || previewData.branding?.text,
-      fontFamily: previewData.branding?.fontFamily,
+      primaryColor:
+        (typeof previewData.branding?.primaryColor === 'string' &&
+          previewData.branding.primaryColor) ||
+        (typeof previewData.branding?.primary === 'string' && previewData.branding.primary) ||
+        null,
+      backgroundColor:
+        (typeof previewData.branding?.backgroundColor === 'string' &&
+          previewData.branding.backgroundColor) ||
+        (typeof previewData.branding?.background === 'string' && previewData.branding.background) ||
+        null,
+      textColor:
+        (typeof previewData.branding?.textColor === 'string' && previewData.branding.textColor) ||
+        (typeof previewData.branding?.text === 'string' && previewData.branding.text) ||
+        null,
+      fontFamily:
+        typeof previewData.branding?.fontFamily === 'string'
+          ? previewData.branding.fontFamily
+          : null,
     });
   }, [
     previewData.branding?.primaryColor,
@@ -221,18 +317,38 @@ export default function StatusPageLivePreview({
       >
         {previewData.announcements.length > 0 && (
           <StatusPageAnnouncements
-            announcements={previewData.announcements}
+            announcements={
+              previewData.announcements as unknown as React.ComponentProps<
+                typeof StatusPageAnnouncements
+              >['announcements']
+            }
             showServiceRegions={previewData.privacySettings?.showServiceRegions !== false}
           />
         )}
 
         {previewData.showServices && previewData.services.length > 0 && (
           <StatusPageServices
-            services={previewData.services}
-            statusPageServices={previewData.statusPageServices}
+            services={
+              previewData.services as unknown as React.ComponentProps<
+                typeof StatusPageServices
+              >['services']
+            }
+            statusPageServices={
+              previewData.statusPageServices as unknown as React.ComponentProps<
+                typeof StatusPageServices
+              >['statusPageServices']
+            }
             uptime90={previewData.uptime90}
-            incidents={previewData.incidents}
-            privacySettings={previewData.privacySettings}
+            incidents={
+              previewData.incidents as unknown as React.ComponentProps<
+                typeof StatusPageServices
+              >['incidents']
+            }
+            privacySettings={
+              (previewData.privacySettings ?? undefined) as unknown as React.ComponentProps<
+                typeof StatusPageServices
+              >['privacySettings']
+            }
             groupByRegionDefault={previewData.showServicesByRegion}
             showServiceOwners={previewData.showServiceOwners}
             showServiceSlaTier={previewData.showServiceSlaTier}
@@ -241,8 +357,16 @@ export default function StatusPageLivePreview({
 
         {previewData.showIncidents && (
           <StatusPageIncidents
-            incidents={previewData.incidents}
-            privacySettings={previewData.privacySettings}
+            incidents={
+              previewData.incidents as unknown as React.ComponentProps<
+                typeof StatusPageIncidents
+              >['incidents']
+            }
+            privacySettings={
+              (previewData.privacySettings ?? undefined) as unknown as React.ComponentProps<
+                typeof StatusPageIncidents
+              >['privacySettings']
+            }
           />
         )}
 
@@ -501,21 +625,16 @@ export default function StatusPageLivePreview({
               background: '#e2e8f0',
             }}
           >
-            {(['mac', 'ipad', 'iphone'] as DeviceView[]).map(device => {
-              const isActive = deviceView === device;
-              const deviceIcons: Record<DeviceView, string> = {
-                mac: '💻',
-                ipad: '📱',
-                iphone: '📲',
-              };
+            {PREVIEW_DEVICES.map(device => {
+              const isActive = deviceView === device.id;
               return (
                 <button
-                  key={device}
+                  key={device.id}
                   type="button"
                   onClick={() => {
-                    setDeviceView(device);
+                    setDeviceView(device.id);
                     setZoomMode('fit'); // Auto-fit on switch
-                    logger.debug('Switched device view', { device });
+                    logger.debug('Switched device view', { device: device.id });
                   }}
                   onMouseEnter={event => {
                     if (!isActive) {
@@ -543,12 +662,10 @@ export default function StatusPageLivePreview({
                     alignItems: 'center',
                     gap: '0.35rem',
                   }}
-                  title={deviceLabels[device]}
+                  title={device.label}
                 >
-                  <span style={{ fontSize: '1rem' }}>{deviceIcons[device]}</span>
-                  <span style={{ textTransform: 'capitalize' }}>
-                    {device === 'mac' ? 'Mac' : device === 'ipad' ? 'iPad' : 'iPhone'}
-                  </span>
+                  <span style={{ fontSize: '1rem' }}>{device.icon}</span>
+                  <span style={{ textTransform: 'capitalize' }}>{device.shortLabel}</span>
                 </button>
               );
             })}

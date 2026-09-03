@@ -11,7 +11,7 @@ interface StatusPageHeaderProps {
     contactUrl?: string | null;
   };
   overallStatus: 'operational' | 'maintenance' | 'degraded' | 'outage';
-  branding?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  branding?: Record<string, unknown>;
   lastUpdated?: string;
 }
 
@@ -56,12 +56,30 @@ export default function StatusPageHeader({
   branding = {},
   lastUpdated,
 }: StatusPageHeaderProps) {
-  const status = STATUS_CONFIG[overallStatus];
-  const logoUrl = branding.logoUrl || branding.logo || '/logo.svg';
-  const primaryColor = branding.primaryColor || branding.primary || '#667eea';
-  const backgroundColor = branding.backgroundColor || branding.background || '#ffffff';
+  const status =
+    overallStatus === 'maintenance'
+      ? STATUS_CONFIG.maintenance
+      : overallStatus === 'degraded'
+        ? STATUS_CONFIG.degraded
+        : overallStatus === 'outage'
+          ? STATUS_CONFIG.outage
+          : STATUS_CONFIG.operational;
+  const logoUrl =
+    (typeof branding.logoUrl === 'string' && branding.logoUrl) ||
+    (typeof branding.logo === 'string' && branding.logo) ||
+    '/logo.svg';
+  const primaryColor =
+    (typeof branding.primaryColor === 'string' && branding.primaryColor) ||
+    (typeof branding.primary === 'string' && branding.primary) ||
+    '#667eea';
+  const backgroundColor =
+    (typeof branding.backgroundColor === 'string' && branding.backgroundColor) ||
+    (typeof branding.background === 'string' && branding.background) ||
+    '#ffffff';
   const isDark = isDarkHex(backgroundColor);
-  const textColor = branding.textColor || (isDark ? '#f8fafc' : 'var(--status-text, #111827)');
+  const textColor =
+    (typeof branding.textColor === 'string' && branding.textColor) ||
+    (isDark ? '#f8fafc' : 'var(--status-text, #111827)');
   const [updatedLabel, setUpdatedLabel] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 

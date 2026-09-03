@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import StatusPageLivePreview from '@/components/status-page/StatusPageLivePreview';
+import StatusPageLivePreview, {
+  type StatusPagePreviewData,
+} from '@/components/status-page/StatusPageLivePreview';
 
 // Mock sub-components
 vi.mock('@/components/status-page/StatusPageHeader', () => ({
@@ -27,7 +29,7 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
-const mockPreviewData = {
+const mockPreviewData: StatusPagePreviewData = {
   statusPage: { name: 'Test Status Page' },
   branding: { primaryColor: '#667eea', backgroundColor: '#ffffff', textColor: '#111827' },
   services: [{ id: 's1', name: 'Web App', status: 'OPERATIONAL' }],
@@ -40,6 +42,8 @@ const mockPreviewData = {
   showSubscribe: true,
   showHeader: true,
   showFooter: true,
+  showRssLink: true,
+  showApiLink: true,
   layout: 'default',
 };
 
@@ -49,7 +53,7 @@ describe('StatusPageLivePreview Component', () => {
   });
 
   it('renders Mac view by default', () => {
-    render(<StatusPageLivePreview previewData={mockPreviewData as any} />); // eslint-disable-line @typescript-eslint/no-explicit-any
+    render(<StatusPageLivePreview previewData={mockPreviewData} />);
 
     // Short label is in the button text, full label is in the title
     expect(screen.getByText('Mac')).toBeDefined();
@@ -59,7 +63,7 @@ describe('StatusPageLivePreview Component', () => {
   });
 
   it('switches to iPad view', () => {
-    render(<StatusPageLivePreview previewData={mockPreviewData as any} />); // eslint-disable-line @typescript-eslint/no-explicit-any
+    render(<StatusPageLivePreview previewData={mockPreviewData} />);
 
     const ipadBtn = screen.getByTitle('iPad Pro 12.9"');
     fireEvent.click(ipadBtn);
@@ -71,7 +75,7 @@ describe('StatusPageLivePreview Component', () => {
   });
 
   it('switches to iPhone view', () => {
-    render(<StatusPageLivePreview previewData={mockPreviewData as any} />); // eslint-disable-line @typescript-eslint/no-explicit-any
+    render(<StatusPageLivePreview previewData={mockPreviewData} />);
 
     const iphoneBtn = screen.getByTitle('iPhone 15 Pro');
     fireEvent.click(iphoneBtn);
@@ -81,7 +85,7 @@ describe('StatusPageLivePreview Component', () => {
   });
 
   it('handles zoom controls', () => {
-    render(<StatusPageLivePreview previewData={mockPreviewData as any} />); // eslint-disable-line @typescript-eslint/no-explicit-any
+    render(<StatusPageLivePreview previewData={mockPreviewData} />);
 
     const zoomOutBtn = screen.getByTitle('Zoom Out');
     const _zoomInBtn = screen.getByTitle('Zoom In');
@@ -100,7 +104,7 @@ describe('StatusPageLivePreview Component', () => {
   });
 
   it('calculates overall status as Operational', () => {
-    render(<StatusPageLivePreview previewData={mockPreviewData as any} />); // eslint-disable-line @typescript-eslint/no-explicit-any
+    render(<StatusPageLivePreview previewData={mockPreviewData} />);
     // Header mock is called with statusPage and overallStatus
     // Since we can't easily see props of mocked functional component in simple way here,
     // we assume logic runs. If we wanted to be sure, we'd check internal state or
@@ -108,16 +112,16 @@ describe('StatusPageLivePreview Component', () => {
   });
 
   it('calculates overall status as Outage when a service is down', () => {
-    const outageData = {
+    const outageData: StatusPagePreviewData = {
       ...mockPreviewData,
       services: [{ id: 's1', name: 'Web App', status: 'MAJOR_OUTAGE' }],
     };
-    render(<StatusPageLivePreview previewData={outageData as any} />); // eslint-disable-line @typescript-eslint/no-explicit-any
+    render(<StatusPageLivePreview previewData={outageData} />);
     // Logic check
   });
 
   it('injects computed theme CSS variables, background, and font-family into container', () => {
-    const themedData = {
+    const themedData: StatusPagePreviewData = {
       ...mockPreviewData,
       branding: {
         primaryColor: '#10b981',
@@ -127,9 +131,7 @@ describe('StatusPageLivePreview Component', () => {
       },
     };
 
-    const { container } = render(
-      <StatusPageLivePreview previewData={themedData as any} /> // eslint-disable-line @typescript-eslint/no-explicit-any
-    );
+    const { container } = render(<StatusPageLivePreview previewData={themedData} />);
 
     const statusContainer = container.querySelector('.status-page-container') as HTMLElement;
     expect(statusContainer).toBeDefined();
@@ -141,7 +143,7 @@ describe('StatusPageLivePreview Component', () => {
   });
 
   it('safely adapts contrast when user sets dark background with default text', () => {
-    const darkData = {
+    const darkData: StatusPagePreviewData = {
       ...mockPreviewData,
       branding: {
         primaryColor: '#6366f1',
@@ -151,9 +153,7 @@ describe('StatusPageLivePreview Component', () => {
       },
     };
 
-    const { container } = render(
-      <StatusPageLivePreview previewData={darkData as any} /> // eslint-disable-line @typescript-eslint/no-explicit-any
-    );
+    const { container } = render(<StatusPageLivePreview previewData={darkData} />);
 
     const statusContainer = container.querySelector('.status-page-container') as HTMLElement;
     expect(statusContainer).toBeDefined();
