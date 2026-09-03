@@ -104,9 +104,56 @@ describe('Slack OAuth Integration', () => {
       const req = new NextRequest('http://localhost:3000/api/slack/oauth');
       const response = await initiationHandler(req);
 
-      expect(response.status).toBe(503);
+      expect(response.status).toBe(400);
       const body = await response.json();
-      expect(body.error).toContain('not configured');
+      expect(body.error).toContain('not configured with a valid Client ID');
+    });
+
+    it('should reject and redirect if Client ID is a Slack Workspace ID (starts with T)', async () => {
+      vi.mocked(prisma.slackOAuthConfig.findFirst).mockResolvedValue({
+        id: 'default',
+        clientId: 'T0BTSM5GP8D',
+        clientSecret: 'encrypted_secret',
+        signingSecret: null,
+        redirectUri: null,
+        enabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        updatedBy: 'user-1',
+      });
+
+      const req = new NextRequest('http://localhost:3000/api/slack/oauth', {
+        headers: { accept: 'text/html' },
+      });
+      const response = await initiationHandler(req);
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get('Location')).toContain(
+        '/settings/integrations/slack?error=invalid_client_id'
+      );
+    });
+
+    it('should reject with 400 if Client ID is a Slack App ID (starts with A)', async () => {
+      vi.mocked(prisma.slackOAuthConfig.findFirst).mockResolvedValue({
+        id: 'default',
+        clientId: 'A0123456789',
+        clientSecret: 'encrypted_secret',
+        signingSecret: null,
+        redirectUri: null,
+        enabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        updatedBy: 'user-1',
+      });
+
+      const req = new NextRequest('http://localhost:3000/api/slack/oauth', {
+        headers: { accept: 'application/json' },
+      });
+      const response = await initiationHandler(req);
+
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.error).toContain('not configured with a valid Client ID');
     });
   });
 

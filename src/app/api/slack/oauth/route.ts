@@ -55,17 +55,32 @@ export async function GET(request: NextRequest) {
       process.env.SLACK_REDIRECT_URI ||
       `${configuredAppUrl}/api/slack/oauth/callback`;
 
-    if (!SLACK_CLIENT_ID || !SLACK_CLIENT_SECRET) {
-      logger.warn('[Slack] Slack OAuth attempted but not fully configured', {
+    const isClientIdInvalid =
+      !SLACK_CLIENT_ID ||
+      SLACK_CLIENT_ID.startsWith('T') ||
+      SLACK_CLIENT_ID.startsWith('A') ||
+      SLACK_CLIENT_ID === 'workspace-credentials';
+
+    if (isClientIdInvalid || !SLACK_CLIENT_SECRET) {
+      logger.warn('[Slack] Slack OAuth attempted with missing or invalid credentials', {
         hasClientId: !!SLACK_CLIENT_ID,
+        isClientIdInvalid,
         hasClientSecret: !!SLACK_CLIENT_SECRET,
       });
+
+      const acceptsHtml = request.headers.get('accept')?.includes('text/html');
+      if (acceptsHtml) {
+        return NextResponse.redirect(
+          new URL('/settings/integrations/slack?error=invalid_client_id', request.url)
+        );
+      }
+
       return NextResponse.json(
         {
           error:
-            'Slack OAuth not configured. Please configure Slack OAuth settings in Settings > Slack OAuth Configuration.',
+            'Slack OAuth is not configured with a valid Client ID. Please re-enter your Client ID in Settings > Slack Integration.',
         },
-        { status: 503 }
+        { status: 400 }
       );
     }
 

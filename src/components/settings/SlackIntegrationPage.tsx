@@ -213,7 +213,9 @@ export default function SlackIntegrationPage({
       if (!response.ok) {
         throw new Error('Failed to disconnect Slack. Try again.');
       }
-      handleOAuthRedirect();
+      // Treat as a totally fresh connection: clear old credentials so wizard opens
+      await fetch('/api/settings/slack-oauth', { method: 'DELETE' });
+      window.location.reload();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error('Replace failed', { description: errorMessage });
@@ -768,7 +770,7 @@ export default function SlackIntegrationPage({
             </div>
 
             {isOAuthConfigured ? (
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Button
                   size="lg"
                   asChild
@@ -779,6 +781,28 @@ export default function SlackIntegrationPage({
                     <span>{isAdmin ? 'Connect to Slack' : 'Ask admin to connect'}</span>
                   </a>
                 </Button>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="h-11 px-5 text-xs font-semibold text-muted-foreground hover:text-foreground border-border/80"
+                    onClick={() => {
+                      setConfirmation({
+                        isOpen: true,
+                        title: 'Reset Slack App Credentials?',
+                        description:
+                          'Are you sure you want to reset the saved Slack App credentials? This will clear your Client ID and Client Secret so you can re-enter fresh credentials.',
+                        variant: 'destructive',
+                        action: async () => {
+                          await fetch('/api/settings/slack-oauth', { method: 'DELETE' });
+                          window.location.reload();
+                        },
+                      });
+                    }}
+                  >
+                    Reset Credentials
+                  </Button>
+                )}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground pt-2">
