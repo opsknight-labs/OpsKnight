@@ -3,7 +3,9 @@ import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 
 export const MAX_INTEGRATION_BODY_BYTES = 1024 * 1024;
-const REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const WEBHOOK_DELIVERY_TASK = 'INBOUND_INTEGRATION_DELIVERY';
+const WEBHOOK_DELIVERY_LEASE_MS = 5 * 60 * 1000;
+const MAX_RECORDED_ERROR_LENGTH = 1000;
 
 export class IntegrationBodyTooLargeError extends Error {
   constructor() {
@@ -43,29 +45,154 @@ export async function readIntegrationBody(
   }
 }
 
-export async function rejectWebhookReplay(
+export type WebhookDeliveryClaim =
+  | { tracked: false }
+  | {
+      tracked: true;
+      id: string;
+      state: 'ACQUIRED' | 'SUCCEEDED' | 'IN_PROGRESS';
+    };
+
+function deliveryRecordId(integrationId: string, provider: string, deliveryId: string): string {
+  const fingerprint = createHash('sha256')
+    .update(`${provider}\0${integrationId}\0${deliveryId}`)
+    .digest('hex');
+  return `inbound-delivery:${fingerprint}`;
+}
+
+/**
+ * Claim a provider delivery before business processing.
+ *
+ * Unlike the old replay tombstone, this is a durable inbox lease:
+ * - COMPLETED means the delivery already committed successfully and is a safe no-op.
+ * - PROCESSING with a live lease means another replica owns it.
+ * - FAILED or an expired PROCESSING lease can be reclaimed by a provider retry.
+ *
+ * The provider nonce is hashed before persistence so request identifiers that may
+ * contain sensitive provider metadata are never stored verbatim.
+ */
+export async function claimWebhookDelivery(
   integrationId: string,
+  provider: string,
   deliveryId?: string | null
-): Promise<boolean> {
-  // A body/signature is not a delivery nonce: providers legitimately resend
-  // identical state notifications. Only claim an explicit provider delivery
-  // ID (or a signed timestamp+signature tuple supplied by the caller).
+): Promise<WebhookDeliveryClaim> {
   const nonce = deliveryId?.trim();
-  if (!nonce) return false;
-  const fingerprint = createHash('sha256').update(`${integrationId}\0${nonce}`).digest('hex');
-  const key = `webhook-replay:${fingerprint}`;
+  if (!nonce) return { tracked: false };
+
+  const id = deliveryRecordId(integrationId, provider, nonce);
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + REPLAY_WINDOW_MS);
+  const leaseExpiredBefore = new Date(now.getTime() - WEBHOOK_DELIVERY_LEASE_MS);
+  const deliveryHash = createHash('sha256').update(nonce).digest('hex');
+
   try {
-    await prisma.rateLimit.create({ data: { key, count: 1, expiresAt } });
-    return false;
-  } catch {
-    // Reclaim an expired nonce atomically. If no expired row was reclaimed,
-    // another request owns an unexpired claim and this delivery is a replay.
-    const reclaimed = await prisma.rateLimit.updateMany({
-      where: { key, expiresAt: { lte: now } },
-      data: { count: 1, expiresAt },
+    await prisma.backgroundJob.create({
+      data: {
+        id,
+        type: 'SCHEDULED_TASK',
+        status: 'PROCESSING',
+        scheduledAt: now,
+        startedAt: now,
+        attempts: 1,
+        // Provider retries, not the generic worker, own retry cadence for inbox rows.
+        maxAttempts: 1000,
+        payload: {
+          task: WEBHOOK_DELIVERY_TASK,
+          integrationId,
+          provider,
+          deliveryHash,
+        },
+      },
     });
-    return reclaimed.count === 0;
+    return { tracked: true, id, state: 'ACQUIRED' };
+  } catch {
+    const existing = await prisma.backgroundJob.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+
+    if (existing?.status === 'COMPLETED') {
+      return { tracked: true, id, state: 'SUCCEEDED' };
+    }
+
+    const reclaimed = await prisma.backgroundJob.updateMany({
+      where: {
+        id,
+        OR: [
+          { status: 'FAILED' },
+          { status: 'PROCESSING', startedAt: { lte: leaseExpiredBefore } },
+        ],
+      },
+      data: {
+        status: 'PROCESSING',
+        startedAt: now,
+        completedAt: null,
+        failedAt: null,
+        error: null,
+        attempts: { increment: 1 },
+      },
+    });
+
+    if (reclaimed.count === 1) {
+      return { tracked: true, id, state: 'ACQUIRED' };
+    }
+
+    // Re-read after the conditional update so a concurrent owner that completed
+    // between our first read and reclaim attempt is recognized as a success.
+    const current = await prisma.backgroundJob.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+    if (current?.status === 'COMPLETED') {
+      return { tracked: true, id, state: 'SUCCEEDED' };
+    }
+
+    return { tracked: true, id, state: 'IN_PROGRESS' };
   }
+}
+
+export async function completeWebhookDelivery(claim: WebhookDeliveryClaim): Promise<void> {
+  if (!claim.tracked || claim.state !== 'ACQUIRED') return;
+  await prisma.backgroundJob.updateMany({
+    where: { id: claim.id, status: 'PROCESSING' },
+    data: {
+      status: 'COMPLETED',
+      completedAt: new Date(),
+      failedAt: null,
+      error: null,
+    },
+  });
+}
+
+export async function failWebhookDelivery(
+  claim: WebhookDeliveryClaim,
+  error: unknown
+): Promise<void> {
+  if (!claim.tracked || claim.state !== 'ACQUIRED') return;
+  const message = (error instanceof Error ? error.message : String(error)).slice(
+    0,
+    MAX_RECORDED_ERROR_LENGTH
+  );
+  await prisma.backgroundJob.updateMany({
+    where: { id: claim.id, status: 'PROCESSING' },
+    data: {
+      status: 'FAILED',
+      failedAt: new Date(),
+      completedAt: null,
+      error: message || 'Inbound integration processing failed',
+    },
+  });
+}
+
+export function webhookDeliveryResponse(claim: WebhookDeliveryClaim): Response | null {
+  if (!claim.tracked || claim.state === 'ACQUIRED') return null;
+  if (claim.state === 'SUCCEEDED') {
+    return new Response(JSON.stringify({ status: 'duplicate', processed: true }), {
+      status: 202,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  return new Response(JSON.stringify({ status: 'processing', retry: true }), {
+    status: 503,
+    headers: { 'Content-Type': 'application/json', 'Retry-After': '1' },
+  });
 }
