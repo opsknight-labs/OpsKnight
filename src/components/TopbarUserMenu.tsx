@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +13,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
-import { Settings, LogOut, User, Keyboard, HelpCircle, ChevronDown, Activity } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
+import { Settings, LogOut, User, Keyboard, HelpCircle } from 'lucide-react';
 import { useUserAvatarSafe } from '@/hooks/useUserAvatar';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -34,55 +36,69 @@ export default function TopbarUserMenu({ name, email, role, avatarUrl, gender, u
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="group flex items-center gap-1.5 p-1 pl-1.5 pr-2 rounded-full border border-border/70 hover:border-border hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors cursor-pointer"
-          aria-label="User account menu"
+        <Button
+          variant="ghost"
+          className="relative h-10 w-10 rounded-full p-0 transition-all duration-300 hover:scale-105 group ring-0 focus-visible:ring-2 focus-visible:ring-offset-2 overflow-hidden"
         >
-          {/* Avatar with online dot */}
-          <div className="relative shrink-0">
-            <Avatar className="h-7 w-7 rounded-full border border-black/5 dark:border-white/10 shadow-xs">
-              <AvatarImage
-                src={finalAvatarUrl}
-                alt={name || 'User'}
-                className="object-cover h-full w-full"
-              />
-              <AvatarFallback className="flex items-center justify-center h-full w-full bg-primary/10 text-primary font-semibold text-[11px]">
+          {/* 1. Outer Gradient Frame */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 via-muted to-primary/20 group-hover:from-primary/40 group-hover:via-primary/10 group-hover:to-primary/40 transition-all duration-500" />
+
+          {/* 2. White/Background Gap */}
+          <div className="absolute inset-[2px] rounded-full bg-background" />
+
+          {/* 3. Avatar Image */}
+          <Avatar className="absolute inset-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full border border-black/5 dark:border-white/10 shadow-sm">
+            <AvatarImage
+              src={finalAvatarUrl}
+              alt={name || 'User'}
+              className="object-cover h-full w-full"
+            />
+            <AvatarFallback className="flex items-center justify-center h-full w-full bg-gradient-to-br from-primary/10 to-primary/20 text-primary font-bold text-[10px]">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+
+          {/* 4. Online Status Dot */}
+          <span className="absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full border-[1.5px] border-background bg-emerald-500 shadow-sm z-20" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="w-52 p-0 overflow-hidden border border-border shadow-xl bg-white/95 backdrop-blur-xl z-[1050]"
+        align="end"
+        forceMount
+      >
+        {/* Compact Header */}
+        <div className="relative p-2 bg-gradient-to-br from-primary/90 via-primary to-primary/90 text-primary-foreground overflow-hidden border-b border-white/10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_50%)]" />
+
+          <div className="relative z-10 flex items-center gap-2">
+            <Avatar className="h-6 w-6 border border-white/20 shadow-sm">
+              <AvatarImage src={finalAvatarUrl} />
+              <AvatarFallback className="bg-white/10 text-white backdrop-blur-md text-[10px]">
                 {initials}
               </AvatarFallback>
             </Avatar>
-            <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-background bg-emerald-500 shadow-xs" />
-          </div>
-
-          {/* Chevron Dropdown Indicator with open rotation */}
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
-        </button>
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent
-        className="w-56 p-1.5 overflow-hidden border border-border shadow-xl bg-popover/95 backdrop-blur-xl z-[1050] rounded-xl"
-        align="end"
-      >
-        {/* User Info Header */}
-        <DropdownMenuLabel className="p-2 font-normal">
-          <div className="flex flex-col space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold leading-none truncate text-foreground">
+            <div className="flex flex-col min-w-0">
+              <p className="text-xs font-semibold truncate leading-none text-white">
                 {name || 'User'}
               </p>
+              <p className="text-[8px] text-white/70 font-medium truncate">{email}</p>
               {role && (
                 <span
                   className={cn(
-                    'px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border shadow-2xs inline-block shrink-0',
+                    'mt-0.5 px-1 py-0 rounded text-[7px] font-medium uppercase tracking-wider border shadow-sm backdrop-blur-md inline-block w-fit',
                     {
-                      'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20':
-                        role.toLowerCase() === 'admin',
-                      'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20':
-                        role.toLowerCase() === 'responder',
-                      'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20':
-                        role.toLowerCase() === 'observer',
-                      'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/20':
-                        !['admin', 'responder', 'observer'].includes(role.toLowerCase()),
+                      'text-rose-300 bg-rose-500/10 border-rose-500/20':
+                        role?.toLowerCase() === 'admin',
+                      'text-indigo-300 bg-indigo-500/10 border-indigo-500/20':
+                        role?.toLowerCase() === 'responder',
+                      'text-emerald-300 bg-emerald-500/10 border-emerald-500/20':
+                        role?.toLowerCase() === 'observer',
+                      'text-sky-300 bg-sky-500/10 border-sky-500/20': ![
+                        'admin',
+                        'responder',
+                        'observer',
+                      ].includes(role?.toLowerCase() || ''),
                     }
                   )}
                 >
@@ -90,88 +106,88 @@ export default function TopbarUserMenu({ name, email, role, avatarUrl, gender, u
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground truncate">{email || 'No email'}</p>
           </div>
-        </DropdownMenuLabel>
+        </div>
 
-        <DropdownMenuSeparator className="my-1 bg-border/60" />
+        <div className="p-0.5">
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              asChild
+              className="group cursor-pointer focus:bg-muted/60 data-[highlighted]:bg-muted/60 rounded py-1 px-1.5"
+            >
+              <Link href="/settings/profile" className="flex items-center w-full">
+                <div className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-50 text-blue-600 mr-2 group-hover:bg-blue-100 transition-all shadow-sm border border-blue-100">
+                  <User className="h-3 w-3" />
+                </div>
+                <div className="flex flex-col flex-1">
+                  <span className="text-[11px] font-medium text-foreground">My Profile</span>
+                  <span className="text-[8px] text-muted-foreground leading-tight">
+                    Details & preferences
+                  </span>
+                </div>
+                <DropdownMenuShortcut className="text-[8px] bg-muted px-0.5 rounded border border-border/50">
+                  ⇧⌘P
+                </DropdownMenuShortcut>
+              </Link>
+            </DropdownMenuItem>
 
-        {/* Primary Navigation */}
-        <DropdownMenuGroup>
+            <DropdownMenuItem
+              asChild
+              className="group cursor-pointer focus:bg-muted/60 data-[highlighted]:bg-muted/60 rounded py-1 px-1.5"
+            >
+              <Link href="/settings" className="flex items-center w-full">
+                <div className="flex items-center justify-center w-5 h-5 rounded-full bg-purple-50 text-purple-600 mr-2 group-hover:bg-purple-100 transition-all shadow-sm border border-purple-100">
+                  <Settings className="h-3 w-3" />
+                </div>
+                <div className="flex flex-col flex-1">
+                  <span className="text-[11px] font-medium text-foreground">Settings</span>
+                  <span className="text-[8px] text-muted-foreground leading-tight">
+                    System configuration
+                  </span>
+                </div>
+                <DropdownMenuShortcut className="text-[8px] bg-muted px-0.5 rounded border border-border/50">
+                  ⌘S
+                </DropdownMenuShortcut>
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+
+          <DropdownMenuSeparator className="my-0.5 bg-border/60" />
+
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
+              className="group cursor-pointer focus:bg-muted/60 rounded py-1 px-1.5"
+            >
+              <Keyboard className="mr-2 h-3 w-3 text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="text-[11px]">Keyboard Shortcuts</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              asChild
+              className="group cursor-pointer focus:bg-muted/60 rounded py-1 px-1.5"
+            >
+              <Link href="/help" className="flex items-center w-full">
+                <HelpCircle className="mr-2 h-3 w-3 text-muted-foreground group-hover:text-primary transition-colors" />
+                <span className="text-[11px]">Help & Docs</span>
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+
+          <DropdownMenuSeparator className="my-0.5 bg-border/60" />
+
           <DropdownMenuItem
-            asChild
-            className="group cursor-pointer focus:bg-accent focus:text-accent-foreground rounded-lg py-1.5 px-2 text-xs"
+            className="group cursor-pointer focus:bg-red-50 focus:text-red-600 rounded py-1 px-1.5 text-red-600"
+            onClick={() => router.push('/auth/signout')}
           >
-            <Link href="/settings/profile" className="flex items-center w-full">
-              <User className="mr-2 h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-              <span className="flex-1">My Profile</span>
-              <DropdownMenuShortcut className="text-[10px] text-muted-foreground">
-                ⇧⌘P
-              </DropdownMenuShortcut>
-            </Link>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem
-            asChild
-            className="group cursor-pointer focus:bg-accent focus:text-accent-foreground rounded-lg py-1.5 px-2 text-xs"
-          >
-            <Link href="/settings" className="flex items-center w-full">
-              <Settings className="mr-2 h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-              <span className="flex-1">Settings</span>
-              <DropdownMenuShortcut className="text-[10px] text-muted-foreground">
-                ⌘S
-              </DropdownMenuShortcut>
-            </Link>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem
-            asChild
-            className="group cursor-pointer focus:bg-accent focus:text-accent-foreground rounded-lg py-1.5 px-2 text-xs"
-          >
-            <Link href="/status" className="flex items-center w-full">
-              <Activity className="mr-2 h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-              <span className="flex-1">Status Page</span>
-            </Link>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-
-        <DropdownMenuSeparator className="my-1 bg-border/60" />
-
-        {/* Support & Shortcuts */}
-        <DropdownMenuGroup>
-          <DropdownMenuItem
-            onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
-            className="group cursor-pointer focus:bg-accent focus:text-accent-foreground rounded-lg py-1.5 px-2 text-xs"
-          >
-            <Keyboard className="mr-2 h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-            <span className="flex-1">Keyboard Shortcuts</span>
-            <DropdownMenuShortcut className="text-[10px] text-muted-foreground">
-              ?
+            <div className="flex items-center justify-center w-5 h-5 rounded-full bg-red-50 text-red-500 mr-2 group-hover:bg-red-100 transition-all shadow-sm border border-red-100">
+              <LogOut className="h-3 w-3" />
+            </div>
+            <span className="font-medium text-[11px]">Sign Out</span>
+            <DropdownMenuShortcut className="text-[8px] bg-red-100/50 text-red-600 px-0.5 rounded border border-red-200">
+              ⇧⌘Q
             </DropdownMenuShortcut>
           </DropdownMenuItem>
-
-          <DropdownMenuItem
-            asChild
-            className="group cursor-pointer focus:bg-accent focus:text-accent-foreground rounded-lg py-1.5 px-2 text-xs"
-          >
-            <Link href="/help" className="flex items-center w-full">
-              <HelpCircle className="mr-2 h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-              <span className="flex-1">Help & Documentation</span>
-            </Link>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-
-        <DropdownMenuSeparator className="my-1 bg-border/60" />
-
-        {/* Sign Out */}
-        <DropdownMenuItem
-          className="group cursor-pointer focus:bg-rose-50 dark:focus:bg-rose-950/40 text-rose-600 dark:text-rose-400 focus:text-rose-700 dark:focus:text-rose-300 rounded-lg py-1.5 px-2 text-xs"
-          onClick={() => router.push('/auth/signout')}
-        >
-          <LogOut className="mr-2 h-3.5 w-3.5 text-rose-500 group-hover:text-rose-600 transition-colors" />
-          <span className="font-medium flex-1">Sign Out</span>
-          <DropdownMenuShortcut className="text-[10px] text-rose-500">⇧⌘Q</DropdownMenuShortcut>
-        </DropdownMenuItem>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );
