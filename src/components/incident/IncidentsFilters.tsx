@@ -125,7 +125,7 @@ export default function IncidentsFilters({
                 onClick={clearFilters}
                 disabled={isPending}
               >
-                <X className="mr-1 h-3.5 w-3.5" /> Clear filters
+                <X className="mr-1 h-3.5 w-3.5" /> Clear All
               </Button>
             )}
             {canCreateIncident && (
