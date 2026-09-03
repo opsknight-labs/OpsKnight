@@ -54,17 +54,26 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get('state');
     const error = searchParams.get('error');
 
+    // Get service ID if provided
+    const serviceId = request.cookies.get('slack_oauth_service_id')?.value || null;
+    const errorTarget = serviceId
+      ? `/services/${serviceId}/settings`
+      : '/settings/integrations/slack';
+
     // Check for OAuth errors
     if (error) {
       logger.error('[Slack] OAuth error', { error });
       return NextResponse.redirect(
-        getFullUrl(`/services?error=slack_oauth_error&message=${encodeURIComponent(error)}`, appUrl)
+        getFullUrl(
+          `${errorTarget}?error=slack_oauth_error&message=${encodeURIComponent(error)}`,
+          appUrl
+        )
       );
     }
 
     if (!code || !state) {
       return NextResponse.redirect(
-        getFullUrl('/services?error=slack_oauth_missing_params', appUrl)
+        getFullUrl(`${errorTarget}?error=slack_oauth_missing_params`, appUrl)
       );
     }
 
@@ -72,11 +81,11 @@ export async function GET(request: NextRequest) {
     const storedState = request.cookies.get('slack_oauth_state')?.value;
     if (!storedState || storedState !== state) {
       logger.warn('[Slack] Invalid OAuth state', { state, storedState });
-      return NextResponse.redirect(getFullUrl('/services?error=slack_oauth_invalid_state', appUrl));
+      return NextResponse.redirect(
+        getFullUrl(`${errorTarget}?error=slack_oauth_invalid_state`, appUrl)
+      );
     }
 
-    // Get service ID if provided
-    const serviceId = request.cookies.get('slack_oauth_service_id')?.value || null;
     const user = serviceId ? await assertCanModifyService(serviceId) : await assertAdmin();
 
     // Get OAuth config from database (fallback to env for backward compatibility)
@@ -95,7 +104,7 @@ export async function GET(request: NextRequest) {
     if (!SLACK_CLIENT_ID || !SLACK_CLIENT_SECRET) {
       return NextResponse.redirect(
         getFullUrl(
-          `/services?error=slack_oauth_not_configured&message=${encodeURIComponent('Slack OAuth not configured. Please configure in Settings > Slack OAuth Configuration.')}`,
+          `${errorTarget}?error=slack_oauth_not_configured&message=${encodeURIComponent('Slack OAuth not configured. Please configure in Settings > Slack OAuth Configuration.')}`,
           appUrl
         )
       );
@@ -122,7 +131,7 @@ export async function GET(request: NextRequest) {
       logger.error('[Slack] Token exchange failed', { error: tokenData.error });
       return NextResponse.redirect(
         getFullUrl(
-          `/services?error=slack_oauth_token_error&message=${encodeURIComponent(tokenData.error || 'Unknown error')}`,
+          `${errorTarget}?error=slack_oauth_token_error&message=${encodeURIComponent(tokenData.error || 'Unknown error')}`,
           appUrl
         )
       );
@@ -235,7 +244,10 @@ export async function GET(request: NextRequest) {
       error: error.message,
       stack: error.stack,
     });
-    // Use the determined appUrl (which might have been updated from DB)
-    return NextResponse.redirect(getFullUrl('/services?error=slack_oauth_error', appUrl));
+    const serviceId = request.cookies.get('slack_oauth_service_id')?.value || null;
+    const errorTarget = serviceId
+      ? `/services/${serviceId}/settings`
+      : '/settings/integrations/slack';
+    return NextResponse.redirect(getFullUrl(`${errorTarget}?error=slack_oauth_error`, appUrl));
   }
 }

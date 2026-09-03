@@ -59,6 +59,14 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
       return;
     }
 
+    if (clientSecret.trim() === signingSecret.trim()) {
+      toast.error('Identical Secrets Detected', {
+        description:
+          "Client Secret and Signing Secret are two different values in Slack (under Basic Information > App Credentials). Copying the same secret into both will cause Slack to reject token exchange with 'bad_client_secret'.",
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
       const formData = new FormData();
@@ -383,6 +391,16 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                       requests are rejected. Slack never sends this during OAuth, so reconnecting
                       will not fill it in.
                     </p>
+                    {clientSecret.trim() &&
+                      signingSecret.trim() &&
+                      clientSecret.trim() === signingSecret.trim() && (
+                        <p className="text-xs text-destructive font-medium">
+                          ⚠️ Client Secret and Signing Secret are identical. In Slack under Basic
+                          Information &gt; App Credentials, Client Secret and Signing Secret are two
+                          distinct keys. Click &quot;Show&quot; next to each to copy their separate
+                          values.
+                        </p>
+                      )}
                   </div>
                 </div>
               </div>
@@ -401,7 +419,8 @@ export default function GuidedSlackSetup({ baseUrl: initialBaseUrl }: GuidedSlac
                   !signingSecret ||
                   isSaving ||
                   clientId.trim().startsWith('T') ||
-                  clientId.trim().startsWith('A')
+                  clientId.trim().startsWith('A') ||
+                  clientSecret.trim() === signingSecret.trim()
                 }
               >
                 {isSaving ? 'Saving...' : 'Save & Continue'}
