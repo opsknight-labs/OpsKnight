@@ -224,8 +224,39 @@
   --gradient-glass: linear-gradient(145deg, rgba(255, 255, 255, 0.6) 0%, rgba(248, 250, 252, 0.4) 100%);
   --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 
-  /* Layout */
+  /* Layout - Responsive sidebar widths */
   --sidebar-width: 240px;
+  --sidebar-width-collapsed: 64px;
+}
+
+@media (min-width: 769px) and (max-width: 1536px),
+       (min-width: 769px) and (max-height: 860px) {
+  :root {
+    --sidebar-width: 216px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1280px),
+       (min-width: 769px) and (max-height: 740px) {
+  :root {
+    --sidebar-width: 208px;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 0px;
+    --sidebar-width-collapsed: 0px;
+  }
+}
+
+@media (min-width: 769px) {
+  .app-shell:has(.sidebar-collapsed) .app-header,
+  .app-shell:has(.sidebar-collapsed) header,
+  .app-shell:has([data-collapsed='true']) .app-header,
+  .app-shell:has([data-collapsed='true']) header {
+    left: var(--sidebar-width-collapsed) !important;
+  }
 }
 
 .focus-border:focus,
@@ -676,6 +707,38 @@ textarea:focus-visible {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* Default / Mobile: 16px standard to avoid iOS Safari input auto-zoom */
+html {
+  font-size: 16px;
+}
+
+/* 13"-14" Laptops & standard compact desktop viewports:
+   width: 769px to 1536px, OR any desktop screen with viewport height <= 860px.
+   90% scaling factor (14.4px root) proportionally scales every REM unit to exactly 90%,
+   reproducing your preferred 90% browser zoom density natively in CSS. */
+@media (min-width: 769px) and (max-width: 1536px),
+       (min-width: 769px) and (max-height: 860px) {
+  html {
+    font-size: 14.4px;
+  }
+}
+
+/* Very compact laptops & lower resolutions (1366x768, 1280x800, or height <= 740px) */
+@media (min-width: 769px) and (max-width: 1280px),
+       (min-width: 769px) and (max-height: 740px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+/* Large external displays (27"-32" desktop monitors > 1536px width AND > 860px height):
+   Full comfortable 16px standard scale for effortless readability from desktop viewing distances */
+@media (min-width: 1537px) and (min-height: 861px) {
+  html {
+    font-size: 16px;
+  }
 }
 
 body {
@@ -3087,7 +3150,7 @@ select option {
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
+  .users-sidebar {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;

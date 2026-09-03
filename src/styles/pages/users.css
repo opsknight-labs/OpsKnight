@@ -668,7 +668,7 @@
         grid-template-columns: 1fr;
     }
 
-    .sidebar {
+    .users-sidebar {
         flex-direction: row;
         flex-wrap: wrap;
         align-items: center;
