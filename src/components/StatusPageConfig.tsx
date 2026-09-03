@@ -17,6 +17,7 @@ import StatusPageWebhooksSettings from '@/components/status-page/StatusPageWebho
 import StatusPageSubscribers from '@/components/status-page/StatusPageSubscribers';
 import StatusPageEmailConfig from '@/components/status-page/StatusPageEmailConfig';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { STATUS_PAGE_FONTS, STATUS_PAGE_COLOR_PRESETS, isDarkHex } from '@/lib/status-page-theme';
 
 type StatusPageConfigProps = {
   statusPage: {
@@ -702,11 +703,12 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     contactEmail: statusPage.contactEmail || '',
     contactUrl: statusPage.contactUrl || '',
     // Branding
-    logoUrl: branding.logoUrl || '/logo.svg',
+    logoUrl: branding.logoUrl || branding.logo || '/logo.svg',
     faviconUrl: branding.faviconUrl || '',
-    primaryColor: branding.primaryColor || '#667eea',
-    backgroundColor: branding.backgroundColor || '#ffffff',
-    textColor: branding.textColor || '#111827',
+    primaryColor: branding.primaryColor || branding.primary || '#667eea',
+    backgroundColor: branding.backgroundColor || branding.background || '#ffffff',
+    textColor: branding.textColor || branding.text || '#111827',
+    fontFamily: branding.fontFamily || 'default',
     // Custom CSS
     customCss: branding.customCss || '',
     // Layout
@@ -920,6 +922,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     primaryColor: formData.primaryColor,
     backgroundColor: formData.backgroundColor,
     textColor: formData.textColor,
+    fontFamily: formData.fontFamily,
     customCss: formData.customCss,
     layout: formData.layout,
     showHeader: formData.showHeader,
@@ -945,6 +948,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
           primaryColor: formData.primaryColor,
           backgroundColor: formData.backgroundColor,
           textColor: formData.textColor,
+          fontFamily: formData.fontFamily,
           customCss: formData.customCss,
           layout: formData.layout,
           showHeader: formData.showHeader,
@@ -1898,8 +1902,233 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             marginBottom: 'var(--spacing-4)',
                           }}
                         >
+                          Typography & Font Family
+                        </h2>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--spacing-4)',
+                          }}
+                        >
+                          <FormField
+                            type="select"
+                            label="Primary Font Family"
+                            value={formData.fontFamily || 'default'}
+                            onChange={e => setFormData({ ...formData, fontFamily: e.target.value })}
+                            options={STATUS_PAGE_FONTS.map(f => ({
+                              value: f.id,
+                              label: `${f.name} (${f.category})`,
+                            }))}
+                            helperText="Applies clean typography to the header, incident reports, service metrics, and subscriber forms."
+                          />
+                          <div
+                            style={{
+                              padding: 'var(--spacing-4)',
+                              borderRadius: 'var(--radius-md)',
+                              border: '1px solid #e2e8f0',
+                              background: '#ffffff',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: '11px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.08em',
+                                color: 'var(--text-muted)',
+                                fontWeight: '600',
+                              }}
+                            >
+                              Live Font Preview
+                            </div>
+                            <div
+                              style={{
+                                fontFamily:
+                                  STATUS_PAGE_FONTS.find(
+                                    f => f.id === (formData.fontFamily || 'default')
+                                  )?.fontFamily || 'inherit',
+                                fontSize: '1.125rem',
+                                fontWeight: '700',
+                                color: '#0f172a',
+                              }}
+                            >
+                              All Systems Operational — 99.98% 30-Day Uptime
+                            </div>
+                            <div
+                              style={{
+                                fontFamily:
+                                  STATUS_PAGE_FONTS.find(
+                                    f => f.id === (formData.fontFamily || 'default')
+                                  )?.fontFamily || 'inherit',
+                                fontSize: '0.875rem',
+                                color: '#475569',
+                              }}
+                            >
+                              Incident communication, automated health telemetry, and service status
+                              tracking.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+
+                    <Card>
+                      <div style={{ padding: 'var(--spacing-6)' }}>
+                        <h2
+                          style={{
+                            fontSize: 'var(--font-size-xl)',
+                            fontWeight: '700',
+                            marginBottom: 'var(--spacing-4)',
+                          }}
+                        >
                           Color Scheme
                         </h2>
+
+                        {/* Quick Presets */}
+                        <div style={{ marginBottom: 'var(--spacing-5)' }}>
+                          <label
+                            style={{
+                              display: 'block',
+                              marginBottom: 'var(--spacing-2)',
+                              fontSize: 'var(--font-size-sm)',
+                              fontWeight: '600',
+                            }}
+                          >
+                            Curated Theme Palettes
+                          </label>
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                              gap: 'var(--spacing-2)',
+                            }}
+                          >
+                            {STATUS_PAGE_COLOR_PRESETS.map(preset => {
+                              const isActive =
+                                formData.primaryColor === preset.primary &&
+                                formData.backgroundColor === preset.background &&
+                                formData.textColor === preset.text;
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setFormData({
+                                      ...formData,
+                                      primaryColor: preset.primary,
+                                      backgroundColor: preset.background,
+                                      textColor: preset.text,
+                                    })
+                                  }
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '8px 12px',
+                                    borderRadius: 'var(--radius-md)',
+                                    border: isActive
+                                      ? '2px solid var(--primary-color)'
+                                      : '1px solid #e2e8f0',
+                                    background: isActive ? '#f8fafc' : '#ffffff',
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', gap: '3px' }}>
+                                    <span
+                                      style={{
+                                        width: '12px',
+                                        height: '12px',
+                                        borderRadius: '999px',
+                                        background: preset.primary,
+                                      }}
+                                    />
+                                    <span
+                                      style={{
+                                        width: '12px',
+                                        height: '12px',
+                                        borderRadius: '999px',
+                                        background: preset.background,
+                                        border: '1px solid #cbd5e1',
+                                      }}
+                                    />
+                                    <span
+                                      style={{
+                                        width: '12px',
+                                        height: '12px',
+                                        borderRadius: '999px',
+                                        background: preset.text,
+                                      }}
+                                    />
+                                  </div>
+                                  <span
+                                    style={{
+                                      fontSize: 'var(--font-size-xs)',
+                                      fontWeight: isActive ? '700' : '500',
+                                    }}
+                                  >
+                                    {preset.name}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Quick Contrast Actions */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 'var(--spacing-2)',
+                            marginBottom: 'var(--spacing-5)',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFormData({
+                                ...formData,
+                                backgroundColor: '#ffffff',
+                                textColor: '#111827',
+                              })
+                            }
+                            className="status-page-button"
+                          >
+                            Light theme defaults
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFormData({
+                                ...formData,
+                                backgroundColor: '#0f172a',
+                                textColor: '#f8fafc',
+                              })
+                            }
+                            className="status-page-button"
+                          >
+                            Dark theme defaults
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const isDark = isDarkHex(formData.backgroundColor);
+                              setFormData({
+                                ...formData,
+                                textColor: isDark ? '#f8fafc' : '#111827',
+                              });
+                            }}
+                            className="status-page-button"
+                          >
+                            Auto-pair text contrast
+                          </button>
+                        </div>
+
                         <div
                           style={{
                             display: 'grid',

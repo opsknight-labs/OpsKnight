@@ -16,6 +16,7 @@ import StatusPageAutoRefresh from '@/components/status-page/StatusPageAutoRefres
 import { getReportingWindowForDays } from '@/lib/retention-policy';
 import { serializeJsonForHtml, toSafeStyleTagContent } from '@/lib/status-page-content';
 import { publicStatusVisibility } from '@/lib/status-page-public-data';
+import { computeStatusPageTheme } from '@/lib/status-page-theme';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -154,8 +155,14 @@ async function renderStatusPage(statusPage: any) {
       ? (statusPage.branding as Record<string, any>) // eslint-disable-line @typescript-eslint/no-explicit-any
       : {};
 
-  const backgroundColor = branding.backgroundColor || '#ffffff';
-  const textColor = branding.textColor || 'var(--status-text, #111827)';
+  const computedTheme = computeStatusPageTheme({
+    primaryColor: (branding.primaryColor as string) || (branding.primary as string),
+    backgroundColor: (branding.backgroundColor as string) || (branding.background as string),
+    textColor: (branding.textColor as string) || (branding.text as string),
+    fontFamily: (branding.fontFamily as string) || null,
+  });
+  const backgroundColor = computedTheme.backgroundColor;
+  const textColor = computedTheme.textColor;
   const customCss = toSafeStyleTagContent(branding.customCss);
   const layout = branding.layout || 'default';
   const showHeader = branding.showHeader !== false;
@@ -509,6 +516,9 @@ async function renderStatusPage(statusPage: any) {
         style={{
           minHeight: '100vh',
           background: backgroundColor,
+          color: textColor,
+          fontFamily: computedTheme.fontFamily,
+          ...(computedTheme.cssVariables as React.CSSProperties),
         }}
       >
         {/* Header */}
@@ -583,63 +593,67 @@ async function renderStatusPage(statusPage: any) {
               </div>
               {visibility.showServices && (
                 <div style={{ display: 'grid', gap: '0.5rem' }}>
-                <div
-                  style={{
-                    fontSize: '0.75rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    color: 'var(--status-text-muted, #64748b)',
-                    fontWeight: '600',
-                  }}
-                >
-                  Services
-                </div>
-                <div
-                  style={{
-                    fontSize: '1.5rem',
-                    fontWeight: '700',
-                    color: 'var(--status-text, #111827)',
-                  }}
-                >
-                  {services.length}
-                </div>
-                <div style={{ fontSize: '0.8125rem', color: 'var(--status-text-muted, #6b7280)' }}>
-                  {affectedServices} affected
-                </div>
+                  <div
+                    style={{
+                      fontSize: '0.75rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      color: 'var(--status-text-muted, #64748b)',
+                      fontWeight: '600',
+                    }}
+                  >
+                    Services
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '1.5rem',
+                      fontWeight: '700',
+                      color: 'var(--status-text, #111827)',
+                    }}
+                  >
+                    {services.length}
+                  </div>
+                  <div
+                    style={{ fontSize: '0.8125rem', color: 'var(--status-text-muted, #6b7280)' }}
+                  >
+                    {affectedServices} affected
+                  </div>
                 </div>
               )}
               {visibility.showMetrics && (
                 <div style={{ display: 'grid', gap: '0.5rem' }}>
-                <div
-                  style={{
-                    fontSize: '0.75rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    color: 'var(--status-text-muted, #64748b)',
-                    fontWeight: '600',
-                  }}
-                >
-                  Active Incidents
-                </div>
-                <div
-                  style={{
-                    fontSize: '1.5rem',
-                    fontWeight: '700',
-                    color: 'var(--status-text, #111827)',
-                  }}
-                >
-                  {activeIncidentCount}
-                </div>
-                <div style={{ fontSize: '0.8125rem', color: 'var(--status-text-muted, #6b7280)' }}>
-                  Excludes snoozed/suppressed incidents.
-                </div>
-                {visibility.showIncidents && (
+                  <div
+                    style={{
+                      fontSize: '0.75rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      color: 'var(--status-text-muted, #64748b)',
+                      fontWeight: '600',
+                    }}
+                  >
+                    Active Incidents
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '1.5rem',
+                      fontWeight: '700',
+                      color: 'var(--status-text, #111827)',
+                    }}
+                  >
+                    {activeIncidentCount}
+                  </div>
                   <div
                     style={{ fontSize: '0.8125rem', color: 'var(--status-text-muted, #6b7280)' }}
                   >
-                    Last 90 days: {recentIncidents.length}
+                    Excludes snoozed/suppressed incidents.
                   </div>
-                )}
+                  {visibility.showIncidents && (
+                    <div
+                      style={{ fontSize: '0.8125rem', color: 'var(--status-text-muted, #6b7280)' }}
+                    >
+                      Last 90 days: {recentIncidents.length}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
