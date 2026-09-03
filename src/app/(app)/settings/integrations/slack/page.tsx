@@ -20,7 +20,13 @@ import { getAppUrl } from '@/lib/app-url';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function GlobalSlackIntegrationPage() {
+export default async function GlobalSlackIntegrationPage(props: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const search = (await props.searchParams) || {};
+  const oauthError = typeof search.error === 'string' ? search.error : null;
+  const oauthMessage = typeof search.message === 'string' ? search.message : null;
+
   const permissions = await getUserPermissions();
 
   if (!permissions) {
@@ -171,6 +177,24 @@ export default async function GlobalSlackIntegrationPage() {
           },
         ]}
       />
+
+      {oauthError && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 sm:p-5 text-xs text-rose-800 dark:text-rose-300 space-y-1.5">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            <span>
+              {oauthMessage === 'bad_client_secret'
+                ? 'Slack Connection Failed: Bad Client Secret'
+                : 'Slack Connection Error'}
+            </span>
+          </div>
+          <p className="leading-relaxed">
+            {oauthMessage === 'bad_client_secret'
+              ? 'The Client Secret entered in OpsKnight does not match your Slack App Client Secret. In https://api.slack.com/apps under Basic Information > App Credentials, click "Show" next to Client Secret and copy that distinct value into OpsKnight (it is different from the Signing Secret).'
+              : oauthMessage || oauthError}
+          </p>
+        </div>
+      )}
 
       <SlackIntegrationPage
         integration={globalIntegration}
