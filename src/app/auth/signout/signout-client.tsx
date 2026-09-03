@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 import { LogOut, ArrowLeft } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
+import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 
 export default function SignOutClient() {
   const searchParams = useSearchParams();
@@ -15,6 +16,7 @@ export default function SignOutClient() {
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
+    await purgeBrowserAuthCaches();
     await signOut({ callbackUrl });
   };
 

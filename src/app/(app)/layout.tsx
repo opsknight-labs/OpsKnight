@@ -24,6 +24,8 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
 import { IncidentCreationModalProvider } from '@/contexts/IncidentCreationModalContext';
 import CreateIncidentModal from '@/components/incident/CreateIncidentModal';
+import SidebarMobileTrigger from '@/components/SidebarMobileTrigger';
+import AppHeader from '@/components/layout/AppHeader';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -240,8 +242,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   userId={userId}
                 />
                 <div className="content-shell">
-                  <header className="fixed top-0 right-0 left-[var(--sidebar-width)] z-30 flex h-14 items-center gap-3 border-b bg-background px-4">
-                    <div className="flex items-center gap-4">
+                  <AppHeader>
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                      <SidebarMobileTrigger />
                       <OperationalStatus
                         tone={statusTone}
                         label={statusLabel}
@@ -250,12 +253,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                         mediumCount={mediumOpenCount}
                         lowCount={lowOpenCount}
                       />
-                      <TopbarBreadcrumbs />
+                      <div className="hidden xl:block">
+                        <TopbarBreadcrumbs />
+                      </div>
                     </div>
-                    <div className="flex flex-1 items-center justify-center px-4">
+                    <div className="hidden md:flex flex-1 items-center justify-center max-w-md mx-auto px-2">
                       <SidebarSearch />
                     </div>
-                    <div className="flex items-center gap-4 ml-auto">
+                    <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">
                       <TopbarNotifications />
                       <QuickActions canCreate={canCreate} />
                       <TopbarUserMenu
@@ -267,7 +272,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                         userId={userId}
                       />
                     </div>
-                  </header>
+                  </AppHeader>
                   <main id="main-content" className="page-shell pt-14">
                     {children}
                   </main>

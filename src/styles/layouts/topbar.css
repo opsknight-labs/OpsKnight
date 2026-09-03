@@ -997,11 +997,15 @@
 /* Mobile Sidebar Styles */
 @media (max-width: 768px) {
   .sidebar {
+    width: min(280px, 85vw) !important;
     transform: translateX(-100%);
+    z-index: 1050;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .sidebar-mobile-open {
-    transform: translateX(0);
+    transform: translateX(0) !important;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.6);
   }
 
   .mobile-menu-button {
@@ -1013,7 +1017,8 @@
   }
 
   .content-shell {
-    width: 100%;
+    width: 100% !important;
+    margin-left: 0 !important;
   }
 }
 

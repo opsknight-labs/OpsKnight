@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import {
   ChevronsLeft,
   ChevronsRight,
-  Menu,
   X,
   HelpCircle,
   Settings,
@@ -161,8 +160,8 @@ export default function Sidebar(
   // Prefer client-side session data for immediate updates
   const currentName = session?.user?.name || userName;
   const currentEmail = session?.user?.email || userEmail;
-  const currentRole = (session?.user as any)?.role || userRole;
-  const currentGender = (session?.user as any)?.gender || userGender;
+  const currentRole = (session?.user as { role?: string } | undefined)?.role || userRole;
+  const currentGender = (session?.user as { gender?: string } | undefined)?.gender || userGender;
 
   const [stats, setStats] = useState<{ count: number; calculatedAt?: string } | null>(null);
 
@@ -213,6 +212,7 @@ export default function Sidebar(
         const section = item.section || 'MAIN';
         // eslint-disable-next-line security/detect-object-injection
         if (!acc[section]) acc[section] = [];
+        // eslint-disable-next-line security/detect-object-injection
         acc[section].push(item);
         return acc;
       },
@@ -242,20 +242,22 @@ export default function Sidebar(
             'bg-white/15 text-white ring-1 ring-white/10 shadow-[0_0_15px_rgba(255,255,255,0.08)]',
           active &&
             'after:absolute after:left-0 after:top-2 after:bottom-2 after:w-[3px] after:rounded-r-full after:bg-white/70',
-          isDesktopCollapsed ? 'h-10 w-10 justify-center px-0' : 'px-3 py-2 gap-3'
+          isDesktopCollapsed ? 'h-9 w-9 justify-center px-0' : 'px-2.5 py-1.5 gap-2.5 text-[13px]'
         )}
       >
         <span
           className={cn(
             'shrink-0 flex items-center justify-center opacity-85 group-hover:opacity-100',
             'transition-transform duration-200 group-hover:scale-110',
-            '[&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:shrink-0'
+            '[&_svg]:h-[16px] [&_svg]:w-[16px] [&_svg]:shrink-0'
           )}
         >
           {item.icon}
         </span>
 
-        {!isDesktopCollapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+        {!isDesktopCollapsed && (
+          <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
+        )}
 
         {showBadge &&
           (isDesktopCollapsed ? (
@@ -274,7 +276,7 @@ export default function Sidebar(
               size="xs"
               aria-label={`${stats!.count} active incidents`}
               title={stats?.calculatedAt ? `Current as of ${stats.calculatedAt}` : 'Current'}
-              className="ml-auto h-5 min-w-5 rounded-full px-1.5"
+              className="ml-auto h-4.5 min-w-4.5 rounded-full px-1 text-[10px]"
             >
               {stats!.count > 99 ? '99+' : stats!.count}
             </Badge>
@@ -298,19 +300,19 @@ export default function Sidebar(
     return (
       <div
         key={sectionName}
-        className={cn('w-full', isDesktopCollapsed ? 'mb-3' : 'mb-4')}
+        className={cn('w-full', isDesktopCollapsed ? 'mb-2' : 'mb-2.5')}
         data-section={sectionName}
       >
         {!isDesktopCollapsed && sectionName !== 'MAIN' && (
-          <div className="flex items-center gap-2 mb-2 px-1">
+          <div className="flex items-center gap-1.5 mb-1.5 px-1">
             <div className={cn('h-1.5 w-1.5 rounded-full', colors.dotClass)} />
-            <span className={cn('text-[11px] font-bold tracking-wide uppercase', colors.textClass)}>
+            <span className={cn('text-[10px] font-bold tracking-wide uppercase', colors.textClass)}>
               {sectionName}
             </span>
           </div>
         )}
 
-        <div className={cn('flex flex-col gap-1', isDesktopCollapsed && 'items-center')}>
+        <div className={cn('flex flex-col gap-0.5', isDesktopCollapsed && 'items-center')}>
           {items.map(renderNavItem)}
         </div>
       </div>
@@ -319,11 +321,6 @@ export default function Sidebar(
 
   return (
     <>
-      <MobileMenuButton
-        isMobile={isMobile}
-        isMobileMenuOpen={isMobileMenuOpen}
-        setIsMobileMenuOpen={setIsMobileMenuOpen}
-      />
       <MobileBackdrop
         isMobile={isMobile}
         isMobileMenuOpen={isMobileMenuOpen}
@@ -347,7 +344,7 @@ export default function Sidebar(
           className={cn(
             'relative shrink-0 border-b border-white/10',
             'bg-gradient-to-b from-white/5 to-transparent',
-            isDesktopCollapsed ? 'p-3' : 'px-4 py-5'
+            isDesktopCollapsed ? 'p-2.5' : 'px-3 py-3'
           )}
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.05)_0%,transparent_55%)] pointer-events-none" />
@@ -357,8 +354,8 @@ export default function Sidebar(
             className={cn(
               'relative z-10 flex items-center no-underline transition-transform hover:translate-x-0.5',
               isDesktopCollapsed
-                ? 'flex-col justify-center gap-2 w-full'
-                : 'flex-row justify-start gap-3 w-full'
+                ? 'flex-col justify-center gap-1.5 w-full'
+                : 'flex-row justify-start gap-2.5 w-full'
             )}
           >
             <div
@@ -366,28 +363,28 @@ export default function Sidebar(
                 'relative shrink-0 rounded-xl border border-white/12 bg-white/8',
                 'shadow-md flex items-center justify-center overflow-hidden',
                 'transition-transform hover:scale-105',
-                isDesktopCollapsed ? 'h-10 w-10' : 'h-11 w-11'
+                isDesktopCollapsed ? 'h-8 w-8' : 'h-9 w-9'
               )}
             >
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.2)_0%,transparent_70%)] pointer-events-none" />
               <Image
                 src="/logo.svg"
                 alt="OpsKnight logo"
-                width={40}
-                height={40}
+                width={36}
+                height={36}
                 className={cn(
                   'relative z-10 object-contain',
-                  isDesktopCollapsed ? 'h-6 w-6' : 'h-7 w-7'
+                  isDesktopCollapsed ? 'h-5 w-5' : 'h-6 w-6'
                 )}
               />
             </div>
 
             {!isDesktopCollapsed && (
-              <div className="flex flex-col gap-1 min-w-0 flex-1">
-                <h1 className="text-[1.4rem] font-extrabold text-white m-0 leading-none tracking-tighter font-display drop-shadow-sm">
+              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                <h1 className="text-[1.15rem] font-extrabold text-white m-0 leading-none tracking-tight font-display drop-shadow-sm">
                   OpsKnight
                 </h1>
-                <span className="text-[0.65rem] text-white/60 font-bold uppercase tracking-widest">
+                <span className="text-[0.6rem] text-white/60 font-bold uppercase tracking-widest">
                   Incident Response
                 </span>
               </div>
@@ -435,13 +432,13 @@ export default function Sidebar(
         <div
           className={cn(
             'mt-auto shrink-0 border-t border-white/5',
-            isDesktopCollapsed ? 'p-2' : 'p-3'
+            isDesktopCollapsed ? 'p-2' : 'px-3 py-2.5'
           )}
         >
           {/* User Profile Row */}
           <div
             className={cn(
-              'flex items-center gap-3 group',
+              'flex items-center gap-2.5 group',
               isDesktopCollapsed ? 'justify-center' : ''
             )}
           >
@@ -450,21 +447,21 @@ export default function Sidebar(
               name={currentName}
               gender={currentGender}
               avatarUrl={userAvatar}
-              size={isDesktopCollapsed ? 'sm' : 'sm'}
+              size="sm"
               showOnlineStatus={true}
               className={cn(
                 'border-white/10 transition-transform group-hover:scale-105 shrink-0',
-                !isDesktopCollapsed && 'h-9 w-9'
+                !isDesktopCollapsed && 'h-8 w-8'
               )}
-              fallbackClassName="bg-indigo-500/20 text-indigo-200 backdrop-blur-md"
+              fallbackClassName="bg-indigo-500/20 text-indigo-200 backdrop-blur-md text-xs"
             />
 
             {!isDesktopCollapsed && (
               <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <div className="text-sm font-semibold text-white truncate group-hover:text-indigo-200 transition-colors">
+                <div className="text-[13px] font-semibold text-white truncate group-hover:text-indigo-200 transition-colors">
                   {currentName || 'User'}
                 </div>
-                <div className="text-xs text-white/40 font-medium truncate">
+                <div className="text-[11px] text-white/40 font-medium truncate">
                   {currentEmail || 'user@example.com'}
                 </div>
               </div>
@@ -473,61 +470,61 @@ export default function Sidebar(
 
           {/* Action Bar */}
           {!isDesktopCollapsed && (
-            <div className="grid grid-cols-4 gap-1 mt-3">
+            <div className="grid grid-cols-4 gap-1 mt-2">
               <Link
                 href="/help"
-                className="flex items-center justify-center h-8 rounded-md hover:bg-white/5 text-white/40 hover:text-white transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-white/5 text-white/40 hover:text-white transition-colors"
                 title="Help & Support"
               >
-                <HelpCircle className="h-4 w-4" />
+                <HelpCircle className="h-3.5 w-3.5" />
               </Link>
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
-                className="flex items-center justify-center h-8 rounded-md hover:bg-white/5 text-white/40 hover:text-white transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-white/5 text-white/40 hover:text-white transition-colors"
                 title="Keyboard Shortcuts (?)"
                 aria-label="Keyboard Shortcuts"
               >
-                <Keyboard className="h-4 w-4" />
+                <Keyboard className="h-3.5 w-3.5" />
               </button>
               <Link
                 href="/settings"
-                className="flex items-center justify-center h-8 rounded-md hover:bg-white/5 text-white/40 hover:text-white transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-white/5 text-white/40 hover:text-white transition-colors"
                 title="Settings"
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-3.5 w-3.5" />
               </Link>
               <Link
                 href="/auth/signout"
-                className="flex items-center justify-center h-8 rounded-md hover:bg-rose-500/10 text-white/40 hover:text-rose-400 transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-rose-500/10 text-white/40 hover:text-rose-400 transition-colors"
                 title="Sign Out"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-3.5 w-3.5" />
               </Link>
             </div>
           )}
 
           {/* Collapsed Sign Out */}
           {isDesktopCollapsed && (
-            <div className="mt-2 flex flex-col gap-1 items-center">
+            <div className="mt-1.5 flex flex-col gap-1 items-center">
               <div className="h-px w-4 bg-white/10 my-1" />
               <Link
                 href="/auth/signout"
-                className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-rose-500/10 text-white/40 hover:text-rose-400 transition-colors"
+                className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-rose-500/10 text-white/40 hover:text-rose-400 transition-colors"
                 title="Sign Out"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-3.5 w-3.5" />
               </Link>
             </div>
           )}
 
           {/* Footer Metadata */}
           {!isDesktopCollapsed && (
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
-              <span className="text-xs text-white/20 font-medium hover:text-white/40 transition-colors cursor-default">
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
+              <span className="text-[10.5px] text-white/20 font-medium hover:text-white/40 transition-colors cursor-default">
                 opsknight.com
               </span>
-              <span className="text-xs text-white/10 font-mono">{APP_VERSION}</span>
+              <span className="text-[10.5px] text-white/10 font-mono">{APP_VERSION}</span>
             </div>
           )}
         </div>
@@ -583,30 +580,17 @@ export default function Sidebar(
   );
 }
 
-interface MobileMenuProps {
+interface MobileBackdropProps {
   isMobile: boolean;
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
 }
 
-const MobileMenuButton = ({ isMobile, isMobileMenuOpen, setIsMobileMenuOpen }: MobileMenuProps) => (
-  <Button
-    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-    className={cn(
-      'fixed left-4 top-4 z-[1001] h-11 w-11 rounded-lg shadow-lg',
-      'bg-primary text-white',
-      'transition-transform hover:scale-[1.02] active:scale-[0.98]',
-      isMobile ? 'flex' : 'hidden'
-    )}
-    aria-label="Toggle navigation menu"
-    aria-expanded={isMobileMenuOpen}
-    size="icon"
-  >
-    {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-  </Button>
-);
-
-const MobileBackdrop = ({ isMobile, isMobileMenuOpen, setIsMobileMenuOpen }: MobileMenuProps) =>
+const MobileBackdrop = ({
+  isMobile,
+  isMobileMenuOpen,
+  setIsMobileMenuOpen,
+}: MobileBackdropProps) =>
   isMobile && isMobileMenuOpen ? (
     <div
       className="fixed inset-0 z-[999] bg-black/50 backdrop-blur-sm"

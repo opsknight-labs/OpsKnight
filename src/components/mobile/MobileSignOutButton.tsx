@@ -2,6 +2,7 @@
 
 import { signOut } from 'next-auth/react';
 import { useState, type ReactNode } from 'react';
+import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 
 type Props = {
   icon: ReactNode;
@@ -15,6 +16,7 @@ export default function MobileSignOutButton({ icon, label, description, tone }: 
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
+    await purgeBrowserAuthCaches();
     await signOut({ callbackUrl: '/m/login' });
   };
 

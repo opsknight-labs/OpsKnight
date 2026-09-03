@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
 import Spinner from '@/components/ui/Spinner';
 import SsoButton from '@/components/auth/SsoButton';
 import LoginTicker from '@/components/auth/LoginTicker';
@@ -11,6 +10,7 @@ import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, X, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { calculatePasswordStrength } from '@/lib/password-strength';
+import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 
 type Props = {
   callbackUrl: string;
@@ -31,20 +31,20 @@ function formatError(message: string | null | undefined) {
   if (message === 'SessionExpired') return 'Your session has expired. Please sign in again.';
   if (message === 'OAuthSignin' || message === 'OAuthCallback')
     return 'SSO authentication failed. Please try again or contact your administrator.';
-  if (message === 'Configuration') return 'Server configuration error. Please contact your administrator.';
+  if (message === 'Configuration')
+    return 'Server configuration error. Please contact your administrator.';
   return 'Authentication failed. Please try again.';
 }
 
 export default function LoginClient({
   callbackUrl,
   errorCode,
-  passwordSet,
+  passwordSet: _passwordSet,
   ssoError,
   ssoEnabled,
   ssoProviderType,
   ssoProviderLabel,
 }: Props) {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -80,6 +80,7 @@ export default function LoginClient({
   const handleSSO = async () => {
     setIsSSOLoading(true);
     try {
+      await purgeBrowserAuthCaches();
       await signIn('oidc', { callbackUrl });
     } catch {
       setError('Connection failed');
@@ -118,20 +119,23 @@ export default function LoginClient({
         // itself, breaking the post-login navigation. Use the
         // validated `callbackUrl` prop, guarded against /login loop.
         const safeTarget =
-          callbackUrl && callbackUrl.startsWith('/') && !callbackUrl.startsWith('/login')
+          callbackUrl &&
+          callbackUrl.startsWith('/') &&
+          !callbackUrl.startsWith('/login') &&
+          !callbackUrl.includes('/auth/signout')
             ? callbackUrl
             : '/';
-        // Soft transition: `router.push` is significantly snappier
-        // than a full-page reload, and we follow with `router.refresh`
-        // to make sure the new (app) layout server-renders against the
-        // freshly-issued session cookie rather than a cached RSC tree.
-        // Short delay (250ms) gives the success animation a beat
-        // without loitering — the prior 1200ms was a perceptible
-        // pause that felt slow vs. Amazon/Linear/etc.
+
+        // Purge any stale Service Worker dynamic/RSC caches immediately
+        void purgeBrowserAuthCaches();
+
+        // Standard enterprise practice for post-authentication transition:
+        // A hard navigation via window.location.assign() completely blows away
+        // the client-side RSC router cache and forces a full server document
+        // request with the newly issued session cookie.
         setTimeout(() => {
-          router.push(safeTarget);
-          router.refresh();
-        }, 250);
+          window.location.assign(safeTarget);
+        }, 200);
       }
     } catch {
       setError('Unexpected error');

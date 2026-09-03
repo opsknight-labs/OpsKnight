@@ -67,12 +67,12 @@ export default function DetailHeroBanner({
       )}
 
       {/* Main Glassmorphic Hero Banner */}
-      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
+      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-3.5 sm:p-4 text-primary-foreground shadow-lg md:p-5">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
 
-        <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+        <div className="relative flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           {/* Left: Icon/Avatar & Identity Details */}
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3.5">
             {icon && <div className="shrink-0">{icon}</div>}
 
             <div className="min-w-0">
@@ -87,7 +87,7 @@ export default function DetailHeroBanner({
                 </div>
               )}
 
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary-foreground md:text-3xl">
+              <h1 className="mt-1 text-xl sm:text-2xl font-extrabold tracking-tight text-primary-foreground md:text-[1.65rem]">
                 {title}
               </h1>
 

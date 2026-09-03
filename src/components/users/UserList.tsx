@@ -14,8 +14,17 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/shadcn/dropdown-menu';
-import { ChevronDown, Trash2, UserX, UserCheck, MoreHorizontal } from 'lucide-react';
+import {
+  ChevronDown,
+  Trash2,
+  UserX,
+  UserCheck,
+  MoreHorizontal,
+  LayoutGrid,
+  List,
+} from 'lucide-react';
 import { notify as toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 
 type User = {
   id: string;
@@ -76,6 +85,7 @@ export default function UserList({
 }: UserListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const toggleUser = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -188,17 +198,58 @@ export default function UserList({
       )}
 
       {users.length > 0 && selectedIds.size === 0 && (
-        <div className="flex items-center gap-3 px-4 py-2 bg-muted/30 rounded-md border border-transparent">
-          <Checkbox
-            checked={allSelected}
-            onCheckedChange={toggleAll}
-            aria-label="Select all users"
-          />
-          <span className="text-sm text-muted-foreground">Select all</span>
+        <div className="flex items-center justify-between px-3 py-2 bg-muted/20 rounded-xl border border-border/60">
+          {isAdmin ? (
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={toggleAll}
+                aria-label="Select all users"
+              />
+              <span className="text-xs font-medium text-muted-foreground">Select all</span>
+            </div>
+          ) : (
+            <span className="text-xs font-medium text-muted-foreground">
+              {users.length} {users.length === 1 ? 'user' : 'users'}
+            </span>
+          )}
+
+          <div className="flex items-center gap-1 border border-border/60 rounded-lg p-0.5 bg-background shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                'p-1.5 rounded-md text-xs font-medium transition-all cursor-pointer',
+                viewMode === 'grid'
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+              aria-label="Grid view"
+              title="Grid View"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={cn(
+                'p-1.5 rounded-md text-xs font-medium transition-all cursor-pointer',
+                viewMode === 'list'
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+              aria-label="List view"
+              title="List View"
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="space-y-2">
+      <div
+        className={cn(viewMode === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-3')}
+      >
         {users.map(user => {
           const handleUpdateRole = async (role: string) => {
             const formData = new FormData();
@@ -249,6 +300,7 @@ export default function UserList({
               isCurrentUser={user.id === currentUserId}
               isAdmin={isAdmin}
               teams={teams}
+              viewMode={viewMode}
               onActivate={user.status === 'DISABLED' ? handleReactivate : undefined}
               onDeactivate={user.status === 'ACTIVE' ? handleDeactivate : undefined}
               onDelete={handleDelete}
