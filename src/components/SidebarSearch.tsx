@@ -1,10 +1,8 @@
 'use client';
 
-import { logger } from '@/lib/logger';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
-import { useModalState } from '@/hooks/useModalState';
 import { Command as CommandPrimitive } from 'cmdk';
 import {
   Command,
@@ -12,7 +10,6 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandItem,
-  CommandSeparator,
 } from '@/components/ui/shadcn/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import {
@@ -24,13 +21,11 @@ import {
   FileText,
   Search as SearchIcon,
   History,
-  ArrowRight,
   Loader2,
   CornerDownLeft,
   X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { cn } from '@/lib/utils';
 import { DirectUserAvatar } from '@/components/UserAvatar';
 import { getDefaultAvatar } from '@/lib/avatar';
 
@@ -41,7 +36,7 @@ type SearchResult = {
   subtitle?: string;
   href: string;
   priority?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   avatarUrl?: string | null;
   gender?: string | null;
 };
@@ -54,6 +49,7 @@ type RecentSearch = {
 
 const RECENT_SEARCHES_KEY = 'OpsKnight-recent-searches-v2';
 const MAX_RECENT_SEARCHES = 5;
+const TYPE_ORDER = ['incident', 'service', 'team', 'user'] as const;
 
 const QUICK_ACTIONS = [
   {
@@ -195,7 +191,6 @@ export default function SidebarSearch() {
     }
 
     setIsLoading(true);
-    if (!open) setOpen(true);
 
     const timeoutId = setTimeout(async () => {
       const abortController = new AbortController();
@@ -209,7 +204,7 @@ export default function SidebarSearch() {
         if (data.results) {
           setResults(data.results);
         }
-      } catch (err) {
+      } catch (_err) {
         // ignore
       } finally {
         if (!abortController.signal.aborted) {
@@ -219,7 +214,7 @@ export default function SidebarSearch() {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [query, open]);
+  }, [query]);
 
   // Keyboard shortcut handler
   useEffect(() => {
@@ -239,7 +234,7 @@ export default function SidebarSearch() {
   }, [open]);
 
   const handleSelect = useCallback(
-    (value: string, item?: any) => {
+    (_value: string, item?: { href?: string; id?: string; query?: string }) => {
       if (item?.href) {
         if (item.href === '/incidents/create' || item.id === 'qa-create') {
           openCreateIncident();
@@ -261,16 +256,18 @@ export default function SidebarSearch() {
   );
 
   const groupedResults = useMemo(() => {
-    if (!results.length) return {};
-    const groups: Record<string, SearchResult[]> = {};
+    const groups = new Map<string, SearchResult[]>();
+    TYPE_ORDER.forEach(type => groups.set(type, []));
     results.forEach(result => {
-      if (!groups[result.type]) groups[result.type] = [];
-      groups[result.type].push(result);
+      const existing = groups.get(result.type);
+      if (existing) {
+        existing.push(result);
+      } else {
+        groups.set(result.type, [result]);
+      }
     });
     return groups;
   }, [results]);
-
-  const typeOrder = ['incident', 'service', 'team', 'user'];
 
   return (
     <Command shouldFilter={false} className="overflow-visible bg-transparent border-0 shadow-none">
@@ -299,6 +296,21 @@ export default function SidebarSearch() {
                 }}
                 className="flex h-full w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               />
+              {query.length > 0 && (
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setQuery('');
+                    setResults([]);
+                    setOpen(false);
+                  }}
+                  className="mr-1 p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
               {isLoading ? (
                 <Loader2 className="ml-2 h-3 w-3 animate-spin text-muted-foreground" />
               ) : (
@@ -316,6 +328,10 @@ export default function SidebarSearch() {
           align="center"
           sideOffset={8}
           onOpenAutoFocus={(e: Event) => e.preventDefault()} // Don't steal focus from input
+          onInteractOutside={() => {
+            setOpen(false);
+            inputRef.current?.blur();
+          }}
         >
           <CommandList className="max-h-[500px] py-1">
             {/* Hidden empty state to prevent command from collapsing when empty if we handle it manually? 
@@ -372,8 +388,8 @@ export default function SidebarSearch() {
 
             {query.length > 0 && (
               <>
-                {typeOrder.map(type => {
-                  const items = groupedResults[type];
+                {TYPE_ORDER.map(type => {
+                  const items = groupedResults.get(type);
                   if (!items?.length) return null;
                   return (
                     <CommandGroup key={type} heading={getTypeLabel(type)}>
@@ -415,7 +431,7 @@ export default function SidebarSearch() {
                             )}
                           </div>
                           <div className="ml-auto">
-                            {result.metadata?.status && (
+                            {typeof result.metadata?.status === 'string' && (
                               <Badge
                                 variant={
                                   result.metadata.status === 'resolved' ? 'success' : 'danger'
