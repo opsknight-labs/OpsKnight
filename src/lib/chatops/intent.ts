@@ -109,13 +109,15 @@ export async function processChatOpsIntent(rawJobPayload: unknown): Promise<void
 
   if (intent.kind === 'SLASH_COMMAND') {
     const { handleSlashCommand } = await import('@/lib/chatops/slash-commands');
-    const result = await handleSlashCommand(payload as any); // validated by the transport and handler
+    const slashPayload = payload as Parameters<typeof handleSlashCommand>[0];
+    const result = await handleSlashCommand(slashPayload);
     await postDeferredSlackResponse(payload.response_url, result);
     return;
   }
 
   const { handleSlackActionRequest } = await import('@/app/api/slack/actions/route');
-  const result = await handleSlackActionRequest(payload as any);
+  const actionPayload = payload as Parameters<typeof handleSlackActionRequest>[0];
+  const result = await handleSlackActionRequest(actionPayload);
   const resultBody = await result.json();
   await postDeferredSlackResponse(payload.response_url, resultBody);
 
