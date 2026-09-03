@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { purgeBrowserAuthCaches, DYNAMIC_AUTH_CACHE_PATTERNS } from '@/lib/auth-cache-purge';
 
 describe('purgeBrowserAuthCaches', () => {
