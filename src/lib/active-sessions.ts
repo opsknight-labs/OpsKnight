@@ -83,7 +83,7 @@ export interface ActiveSession {
 
 // In-memory throttle to avoid writing heartbeats too frequently
 const heartbeatCache = new Map<string, number>();
-const HEARTBEAT_THROTTLE_MS = 10 * 60 * 1000; // 10 minutes
+const HEARTBEAT_THROTTLE_MS = 2 * 60 * 1000; // 2 minutes (keeps open browser tabs firmly in Active Now)
 
 /**
  * Records an active session heartbeat if throttled window has elapsed.
@@ -100,7 +100,7 @@ export async function recordSessionHeartbeat({
   if (!userId) return;
 
   const parsed = parseUserAgent(userAgent);
-  const cacheKey = `${userId}:${parsed.browser}:${parsed.os}:${ip}`;
+  const cacheKey = `${userId}:${parsed.browser}:${parsed.os}:${parsed.deviceType}`;
   const now = Date.now();
   const lastHeartbeat = heartbeatCache.get(cacheKey) ?? 0;
 
@@ -146,8 +146,9 @@ export async function getUserActiveSessions({
 }): Promise<ActiveSession[]> {
   const currentParsed = parseUserAgent(currentUserAgent);
 
-  // Determine cutoff date: either the last session revocation or 30 days ago (max session lifetime)
-  let cutoffDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  // Active session cutoff window: 14 days (stale/dormant devices drop off)
+  const ACTIVE_SESSION_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+  let cutoffDate = new Date(Date.now() - ACTIVE_SESSION_MAX_AGE_MS);
 
   try {
     const lastRevocation = await prisma.auditLog.findFirst({
@@ -184,8 +185,10 @@ export async function getUserActiveSessions({
     },
   });
 
-  // Group events by client identity (Browser + OS + IP or UserAgent)
-  const sessionMap = new Map<string, ActiveSession>();
+  // Group events by distinct client device profile (Browser + OS + DeviceType).
+  // Since sessionLogs are sorted descending by createdAt, the first entry encountered
+  // is guaranteed to be the most recent activity and IP for that physical device.
+  const deviceMap = new Map<string, ActiveSession>();
 
   for (const log of sessionLogs) {
     const details = (log.details as Record<string, unknown>) || {};
@@ -194,41 +197,36 @@ export async function getUserActiveSessions({
     const parsed = parseUserAgent(ua);
     const ip = log.ip || (details.ip as string) || 'Unknown IP';
 
-    // Unique identity key per physical client
-    const key = `${parsed.browser}:${parsed.os}:${ip}`;
+    // Grouping key per physical client device profile
+    const deviceKey = `${parsed.browser}:${parsed.os}:${parsed.deviceType}`;
 
-    const isCurrent =
-      Boolean(currentUserAgent) &&
-      parsed.browser === currentParsed.browser &&
-      parsed.os === currentParsed.os;
-
-    if (!sessionMap.has(key)) {
-      sessionMap.set(key, {
+    if (!deviceMap.has(deviceKey)) {
+      deviceMap.set(deviceKey, {
         id: log.id,
         browser: parsed.browser,
         os: parsed.os,
         deviceType: parsed.deviceType,
         ip,
-        isCurrent,
+        isCurrent: false, // will be explicitly set for the single current device below
         lastActive: log.createdAt.toISOString(),
         tokenVersion,
       });
     }
   }
 
-  // Always ensure current device is present in the list
-  const currentKey = `${currentParsed.browser}:${currentParsed.os}:${currentIp || '127.0.0.1'}`;
-  let hasCurrent = false;
+  // Current client device key
+  const currentDeviceKey = `${currentParsed.browser}:${currentParsed.os}:${currentParsed.deviceType}`;
 
-  for (const session of sessionMap.values()) {
-    if (session.isCurrent) {
-      hasCurrent = true;
-      break;
+  if (deviceMap.has(currentDeviceKey)) {
+    const currentSession = deviceMap.get(currentDeviceKey)!;
+    currentSession.isCurrent = true;
+    currentSession.lastActive = new Date().toISOString();
+    if (currentIp && currentIp !== '127.0.0.1' && currentIp !== 'Unknown IP') {
+      currentSession.ip = currentIp;
     }
-  }
-
-  if (!hasCurrent) {
-    sessionMap.set(currentKey, {
+  } else {
+    // Current device had no prior audit log within the window; register it as current
+    deviceMap.set(currentDeviceKey, {
       id: 'current-session',
       browser: currentParsed.browser,
       os: currentParsed.os,
@@ -240,8 +238,8 @@ export async function getUserActiveSessions({
     });
   }
 
-  // Sort sessions: Current device first, then by lastActive descending
-  const sessions = Array.from(sessionMap.values()).sort((a, b) => {
+  // Sort sessions: Single current device first, then other devices sorted by lastActive descending
+  const sessions = Array.from(deviceMap.values()).sort((a, b) => {
     if (a.isCurrent) return -1;
     if (b.isCurrent) return 1;
     return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime();
