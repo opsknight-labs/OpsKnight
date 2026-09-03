@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatDateTime } from '@/lib/timezone';
+import { isDarkHex } from '@/lib/status-page-theme';
 
 interface StatusPageHeaderProps {
   statusPage: {
@@ -10,7 +11,7 @@ interface StatusPageHeaderProps {
     contactUrl?: string | null;
   };
   overallStatus: 'operational' | 'maintenance' | 'degraded' | 'outage';
-  branding?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  branding?: Record<string, unknown>;
   lastUpdated?: string;
 }
 
@@ -55,10 +56,30 @@ export default function StatusPageHeader({
   branding = {},
   lastUpdated,
 }: StatusPageHeaderProps) {
-  const status = STATUS_CONFIG[overallStatus];
-  const logoUrl = branding.logoUrl || '/logo.svg';
-  const _primaryColor = branding.primaryColor || '#667eea';
-  const textColor = branding.textColor || 'var(--status-text, #111827)';
+  const status =
+    overallStatus === 'maintenance'
+      ? STATUS_CONFIG.maintenance
+      : overallStatus === 'degraded'
+        ? STATUS_CONFIG.degraded
+        : overallStatus === 'outage'
+          ? STATUS_CONFIG.outage
+          : STATUS_CONFIG.operational;
+  const logoUrl =
+    (typeof branding.logoUrl === 'string' && branding.logoUrl) ||
+    (typeof branding.logo === 'string' && branding.logo) ||
+    '/logo.svg';
+  const primaryColor =
+    (typeof branding.primaryColor === 'string' && branding.primaryColor) ||
+    (typeof branding.primary === 'string' && branding.primary) ||
+    '#667eea';
+  const backgroundColor =
+    (typeof branding.backgroundColor === 'string' && branding.backgroundColor) ||
+    (typeof branding.background === 'string' && branding.background) ||
+    '#ffffff';
+  const isDark = isDarkHex(backgroundColor);
+  const textColor =
+    (typeof branding.textColor === 'string' && branding.textColor) ||
+    (isDark ? '#f8fafc' : 'var(--status-text, #111827)');
   const [updatedLabel, setUpdatedLabel] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -112,9 +133,13 @@ export default function StatusPageHeader({
     <header
       className="status-page-header"
       style={{
-        background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
-        borderBottom: '1px solid #e2e8f0',
-        boxShadow: '0 10px 24px rgba(15, 23, 42, 0.08)',
+        background: isDark
+          ? 'linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%)'
+          : 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+        borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid #e2e8f0',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        boxShadow: isDark ? '0 10px 24px rgba(0, 0, 0, 0.4)' : '0 10px 24px rgba(15, 23, 42, 0.08)',
         position: 'sticky',
         top: 0,
         zIndex: 100,
@@ -160,7 +185,8 @@ export default function StatusPageHeader({
                   flexShrink: 0,
                   padding: 'clamp(0.25rem, 1vw, 0.5rem)',
                   borderRadius: '0.5rem', // Smaller radius
-                  background: '#ffffff',
+                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#ffffff',
+                  border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid transparent',
                   boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
                   transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                 }}
@@ -196,7 +222,9 @@ export default function StatusPageHeader({
                   margin: 0,
                   color: textColor,
                   letterSpacing: '-0.03em',
-                  background: `linear-gradient(135deg, ${textColor} 0%, color-mix(in srgb, ${textColor} 85%, transparent) 100%)`,
+                  background: isDark
+                    ? `linear-gradient(135deg, ${textColor} 0%, rgba(255, 255, 255, 0.75) 100%)`
+                    : `linear-gradient(135deg, ${textColor} 0%, color-mix(in srgb, ${textColor} 85%, transparent) 100%)`,
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
@@ -218,7 +246,7 @@ export default function StatusPageHeader({
                 <p
                   style={{
                     margin: 0,
-                    color: 'var(--status-text-muted, #475569)',
+                    color: isDark ? '#94a3b8' : 'var(--status-text-muted, #475569)',
                     fontSize: 'clamp(0.75rem, 2vw, 0.95rem)', // Smaller subtitle
                     fontWeight: '500',
                   }}
@@ -228,7 +256,10 @@ export default function StatusPageHeader({
                 {updatedLabel && (
                   <>
                     <span
-                      style={{ color: 'var(--status-text-subtle, #cbd5e1)', fontSize: '0.75rem' }}
+                      style={{
+                        color: isDark ? '#475569' : 'var(--status-text-subtle, #cbd5e1)',
+                        fontSize: '0.75rem',
+                      }}
                     >
                       |
                     </span>
@@ -236,7 +267,7 @@ export default function StatusPageHeader({
                       suppressHydrationWarning
                       style={{
                         margin: 0,
-                        color: 'var(--status-text-subtle, #94a3b8)',
+                        color: isDark ? '#64748b' : 'var(--status-text-subtle, #94a3b8)',
                         fontSize: '0.75rem', // Smaller text
                         display: 'flex',
                         alignItems: 'center',
@@ -322,6 +353,9 @@ export default function StatusPageHeader({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.5rem',
+                  background: primaryColor,
+                  borderColor: primaryColor,
+                  color: '#ffffff',
                 }}
               >
                 <svg

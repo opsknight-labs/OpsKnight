@@ -22,8 +22,11 @@
 }
 
 .status-page-container {
-  --primary: var(--status-primary, var(--primary-color));
-  --primary-hover: var(--status-primary-hover, var(--primary-hover));
+  color: var(--status-text, #111827);
+  background-color: var(--status-bg, #ffffff);
+  font-family: var(--status-font-family, inherit);
+  --primary: var(--status-primary, var(--primary-color, #2563eb));
+  --primary-hover: var(--status-primary-hover, var(--primary-hover, #1d4ed8));
   --status-text: var(--sp-ink, #111827);
   --status-text-strong: var(--sp-ink-strong, var(--sp-ink, #0f172a));
   --status-text-muted: var(--sp-muted, #6b7280);
