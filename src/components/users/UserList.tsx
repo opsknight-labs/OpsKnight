@@ -199,14 +199,20 @@ export default function UserList({
 
       {users.length > 0 && selectedIds.size === 0 && (
         <div className="flex items-center justify-between px-3 py-2 bg-muted/20 rounded-xl border border-border/60">
-          <div className="flex items-center gap-2.5">
-            <Checkbox
-              checked={allSelected}
-              onCheckedChange={toggleAll}
-              aria-label="Select all users"
-            />
-            <span className="text-xs font-medium text-muted-foreground">Select all</span>
-          </div>
+          {isAdmin ? (
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={toggleAll}
+                aria-label="Select all users"
+              />
+              <span className="text-xs font-medium text-muted-foreground">Select all</span>
+            </div>
+          ) : (
+            <span className="text-xs font-medium text-muted-foreground">
+              {users.length} {users.length === 1 ? 'user' : 'users'}
+            </span>
+          )}
 
           <div className="flex items-center gap-1 border border-border/60 rounded-lg p-0.5 bg-background shadow-2xs">
             <button

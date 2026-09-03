@@ -483,16 +483,18 @@ export function UserCard({
             {/* Card Top Toolbar */}
             <div className="flex items-center justify-between gap-2 p-4 pb-1 shrink-0">
               <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="userIds"
-                  value={user.id}
-                  form="bulk-users-form"
-                  checked={selected}
-                  onChange={onSelect}
-                  aria-label={`Select ${user.name}`}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 focus:ring-offset-0 cursor-pointer shrink-0 transition-all"
-                />
+                {isAdmin && !isCurrentUser && (
+                  <input
+                    type="checkbox"
+                    name="userIds"
+                    value={user.id}
+                    form="bulk-users-form"
+                    checked={selected}
+                    onChange={onSelect}
+                    aria-label={`Select ${user.name}`}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 focus:ring-offset-0 cursor-pointer shrink-0 transition-all"
+                  />
+                )}
                 {isCurrentUser && (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs">
                     You
@@ -663,25 +665,27 @@ export function UserCard({
               <ExternalLink className="h-3 w-3 transition-transform group-hover/link:translate-x-0.5" />
             </Link>
 
-            {(user.status === 'ACTIVE' || user.status === 'INVITED') && (
-              <button
-                type="button"
-                onClick={handleGenerateLink}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              >
-                {user.status === 'INVITED' ? (
-                  <>
-                    <LinkIcon className="h-3 w-3 text-blue-500" />
-                    <span>Invite Link</span>
-                  </>
-                ) : (
-                  <>
-                    <Key className="h-3 w-3 text-emerald-500" />
-                    <span>Reset Key</span>
-                  </>
-                )}
-              </button>
-            )}
+            {isAdmin &&
+              !isCurrentUser &&
+              (user.status === 'ACTIVE' || user.status === 'INVITED') && (
+                <button
+                  type="button"
+                  onClick={handleGenerateLink}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  {user.status === 'INVITED' ? (
+                    <>
+                      <LinkIcon className="h-3 w-3 text-blue-500" />
+                      <span>Invite Link</span>
+                    </>
+                  ) : (
+                    <>
+                      <Key className="h-3 w-3 text-emerald-500" />
+                      <span>Reset Key</span>
+                    </>
+                  )}
+                </button>
+              )}
           </div>
         </div>
       ) : (
@@ -716,16 +720,18 @@ export function UserCard({
           />
 
           <div className="flex items-center gap-3.5 min-w-0 flex-1 pl-1.5">
-            <input
-              type="checkbox"
-              name="userIds"
-              value={user.id}
-              form="bulk-users-form"
-              checked={selected}
-              onChange={onSelect}
-              aria-label={`Select ${user.name}`}
-              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 focus:ring-offset-0 cursor-pointer shrink-0 transition-colors"
-            />
+            {isAdmin && !isCurrentUser && (
+              <input
+                type="checkbox"
+                name="userIds"
+                value={user.id}
+                form="bulk-users-form"
+                checked={selected}
+                onChange={onSelect}
+                aria-label={`Select ${user.name}`}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 focus:ring-offset-0 cursor-pointer shrink-0 transition-colors"
+              />
+            )}
 
             <Link href={`/users/${user.id}`} className="shrink-0 group/avatar">
               <UserAvatar
