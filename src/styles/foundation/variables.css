@@ -198,7 +198,31 @@
     --badge-neutral-bg: #e2e8f0;
     --badge-neutral-text: #334155;
 
-    /* Layout - Industry standard sidebar widths (AWS Console style) */
-    --sidebar-width: 280px;
+    /* Layout - Responsive sidebar widths */
+    --sidebar-width: 240px;
     --sidebar-width-collapsed: 64px;
+}
+
+/* 13"-14" Laptops & compact desktop viewports */
+@media (min-width: 769px) and (max-width: 1536px),
+       (min-width: 769px) and (max-height: 860px) {
+    :root {
+        --sidebar-width: 216px;
+    }
+}
+
+/* Very compact screens */
+@media (min-width: 769px) and (max-width: 1280px),
+       (min-width: 769px) and (max-height: 740px) {
+    :root {
+        --sidebar-width: 208px;
+    }
+}
+
+/* Mobile screens: zero sidebar width in main flow */
+@media (max-width: 768px) {
+    :root {
+        --sidebar-width: 0px;
+        --sidebar-width-collapsed: 0px;
+    }
 }

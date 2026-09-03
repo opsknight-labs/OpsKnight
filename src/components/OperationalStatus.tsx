@@ -62,7 +62,7 @@ export default function OperationalStatus({
   const isDanger = critical > 0;
   // Warning if explicitly passed mediumCount > 0 OR if falling back to old logic
   const isWarning = !isDanger && (medium > 0 || nonCriticalCount > 0);
-  const isOk = !isDanger && !isWarning;
+  const _isOk = !isDanger && !isWarning;
 
   // Derived Label/Detail
   const label =
@@ -121,13 +121,18 @@ export default function OperationalStatus({
     },
   };
 
-  const currentTheme = initialTone
-    ? theme[initialTone]
-    : isDanger
+  const currentTheme =
+    initialTone === 'danger'
       ? theme.danger
-      : isWarning
+      : initialTone === 'warning'
         ? theme.warning
-        : theme.ok;
+        : initialTone === 'ok'
+          ? theme.ok
+          : isDanger
+            ? theme.danger
+            : isWarning
+              ? theme.warning
+              : theme.ok;
 
   if (loading && !initialTone && !hasOverrides) {
     // Show loading only if no fallback
@@ -146,7 +151,7 @@ export default function OperationalStatus({
       <HoverCardTrigger asChild>
         <button
           className={cn(
-            'flex items-center gap-2 px-2.5 py-1 rounded-full select-none border',
+            'flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-full select-none border shrink-0 whitespace-nowrap',
             currentTheme.bg,
             currentTheme.border,
             currentTheme.text
@@ -173,9 +178,13 @@ export default function OperationalStatus({
             />
           </span>
 
-          <span className="text-[11px] font-semibold tracking-wide uppercase">{label}</span>
-          <span className="text-[11px] text-muted-foreground">|</span>
-          <span className="text-[11px] font-semibold text-slate-700">{summary}</span>
+          <span className="text-[10.5px] sm:text-[11px] font-semibold tracking-wide uppercase">
+            {label}
+          </span>
+          <span className="hidden sm:inline text-[11px] text-muted-foreground">|</span>
+          <span className="hidden sm:inline text-[11px] font-semibold text-slate-700">
+            {summary}
+          </span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent

@@ -117,23 +117,8 @@
 }
 
 @media (max-width: 980px) {
-  .app-shell {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    width: 100% !important;
-    height: auto !important;
-    position: relative !important;
-  }
-
-  .sidebar-nav {
-    flex-direction: row !important;
-    flex-wrap: wrap;
-  }
-
-  .topbar {
-    position: relative;
+  .schedule-calendar-grid {
+    overflow-x: auto;
   }
 
   .schedule-grid,

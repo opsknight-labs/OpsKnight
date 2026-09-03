@@ -21,6 +21,35 @@ html {
     -webkit-filter: none !important;
     forced-color-adjust: none;
     -ms-high-contrast-adjust: none;
+    /* Default / Mobile: 16px standard to avoid iOS Safari input auto-zoom */
+    font-size: 16px;
+}
+
+/* 13"-14" Laptops & standard compact desktop viewports:
+   width: 769px to 1536px, OR any desktop screen with viewport height <= 860px.
+   90% scaling factor (14.4px root) proportionally scales every REM unit to exactly 90%,
+   reproducing your preferred 90% browser zoom density natively in CSS. */
+@media (min-width: 769px) and (max-width: 1536px),
+       (min-width: 769px) and (max-height: 860px) {
+    html {
+        font-size: 14.4px;
+    }
+}
+
+/* Very compact laptops & lower resolutions (1366x768, 1280x800, or height <= 740px) */
+@media (min-width: 769px) and (max-width: 1280px),
+       (min-width: 769px) and (max-height: 740px) {
+    html {
+        font-size: 14px;
+    }
+}
+
+/* Large external displays (27"-32" desktop monitors > 1536px width AND > 860px height):
+   Full comfortable 16px standard scale for effortless readability from desktop viewing distances */
+@media (min-width: 1537px) and (min-height: 861px) {
+    html {
+        font-size: 16px;
+    }
 }
 
 body {
@@ -297,6 +326,15 @@ select option {
 .app-shell:has(.sidebar[data-collapsed='true']) .content-shell {
     margin-left: var(--sidebar-width-collapsed);
     width: calc(100% - var(--sidebar-width-collapsed));
+}
+
+@media (min-width: 769px) {
+    .app-shell:has(.sidebar-collapsed) .app-header,
+    .app-shell:has(.sidebar-collapsed) header,
+    .app-shell:has(.sidebar[data-collapsed='true']) .app-header,
+    .app-shell:has(.sidebar[data-collapsed='true']) header {
+        left: var(--sidebar-width-collapsed) !important;
+    }
 }
 
 .page-shell {
