@@ -424,6 +424,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           // Initial sign in
           if (user && account) {
+            delete (token as AugmentedJWT).error;
             logger.warn('[Auth-Debug] Initial Sign In', {
               component: 'auth:jwt',
               userId: user.id,
@@ -474,6 +475,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               }
             } else {
               // For Credentials, 'user' comes from authorize() and is already the DB user object
+              delete (token as AugmentedJWT).error;
               token.role = (user as AugmentedUser).role;
               token.sub = user.id;
               token.name = user.name;
@@ -496,6 +498,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           // and `token.role` is set correctly.
           // This block handles the initial population of the token from the `user` object.
           else if (user) {
+            delete (token as AugmentedJWT).error;
             logger.warn('[Auth-Debug] Initial Sign In (Fallback)', {
               component: 'auth:jwt',
               userId: user.id || (user as AugmentedUser).id,

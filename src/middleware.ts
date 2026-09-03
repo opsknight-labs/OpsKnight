@@ -414,19 +414,31 @@ export default async function middleware(req: NextRequest) {
 
   // Handle authenticated users trying to access public auth pages
   if (isAuthenticated) {
-    // Redirect authenticated users away from auth-related pages
-    if (pathname === '/login' || pathname.startsWith('/login')) {
-      // Allow access if explicitly handling a session error (prevents redirect loop)
-      if (req.nextUrl.searchParams.get('error') === 'SessionExpired') {
+    // Redirect authenticated users away from auth-related pages (/login, /m/login)
+    const isLoginPage =
+      pathname === '/login' ||
+      pathname.startsWith('/login/') ||
+      pathname === '/m/login' ||
+      pathname.startsWith('/m/login/');
+
+    if (isLoginPage) {
+      // Allow access if explicitly handling an error parameter (prevents redirect loops on session failure/revocation)
+      if (req.nextUrl.searchParams.has('error')) {
         return response;
       }
 
-      // Redirect authenticated users away from login page
+      // Redirect authenticated users away from login page to target or home
       const callbackUrl = req.nextUrl.searchParams.get('callbackUrl');
-      const redirectUrl =
-        callbackUrl && callbackUrl.startsWith('/') && !callbackUrl.startsWith('/login')
-          ? callbackUrl
-          : '/'; // Default to dashboard
+      const defaultDest = isMobile && !preferDesktop ? '/m' : '/';
+      const isValidTarget =
+        callbackUrl &&
+        callbackUrl.startsWith('/') &&
+        !callbackUrl.startsWith('/login') &&
+        !callbackUrl.startsWith('/m/login') &&
+        !callbackUrl.includes('/signout') &&
+        !callbackUrl.includes('/auth/signout');
+
+      const redirectUrl = isValidTarget ? callbackUrl : defaultDest;
       const redirectResponse = NextResponse.redirect(new URL(redirectUrl, req.url));
       // Apply security headers to redirect
       Object.entries(securityHeaders).forEach(([key, value]) => {

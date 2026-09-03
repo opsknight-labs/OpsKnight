@@ -13,8 +13,12 @@ const withPWA = require('@ducanh2912/next-pwa').default({
     disableDevLogs: true,
     additionalManifestEntries: [],
     importScripts: ['/custom-sw.js'],
-    // Add custom runtime caching and handlers
+    // Explicit runtime caching rules:
+    // Dynamic pages, RSC streams, and APIs MUST ALWAYS be NetworkOnly.
+    // Caching HTML or RSC payloads in a Service Worker poisons session
+    // states and causes login deadlocks when credentials change or sessions expire.
     runtimeCaching: [
+      // 1. ALL API routes must ALWAYS bypass Service Worker cache
       {
         urlPattern: /^\/api\/.*/i,
         handler: 'NetworkOnly',
@@ -22,6 +26,38 @@ const withPWA = require('@ducanh2912/next-pwa').default({
           cacheName: 'no-cache-apis',
         },
       },
+      // 2. RSC payloads & Next.js router prefetch streams must ALWAYS bypass cache
+      {
+        urlPattern: ({ request, url }: { request: Request; url: URL }) =>
+          request.headers.get('RSC') === '1' ||
+          url.searchParams.has('_rsc') ||
+          request.headers.get('Next-Router-Prefetch') === '1',
+        handler: 'NetworkOnly',
+        options: {
+          cacheName: 'no-cache-rsc',
+        },
+      },
+      // 3. Dynamic auth, app, and settings page documents must ALWAYS bypass cache
+      {
+        urlPattern: ({ url }: { url: URL }) =>
+          url.pathname === '/' ||
+          url.pathname === '/m' ||
+          url.pathname.startsWith('/login') ||
+          url.pathname.startsWith('/auth') ||
+          url.pathname.startsWith('/m/') ||
+          url.pathname.startsWith('/incidents') ||
+          url.pathname.startsWith('/settings') ||
+          url.pathname.startsWith('/services') ||
+          url.pathname.startsWith('/teams') ||
+          url.pathname.startsWith('/users') ||
+          url.pathname.startsWith('/schedules') ||
+          url.pathname.startsWith('/policies'),
+        handler: 'NetworkOnly',
+        options: {
+          cacheName: 'no-cache-pages',
+        },
+      },
+      // 4. Google fonts webfonts (immutable)
       {
         urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
         handler: 'CacheFirst',
@@ -33,16 +69,54 @@ const withPWA = require('@ducanh2912/next-pwa').default({
           },
         },
       },
+      // 5. Google fonts stylesheets
+      {
+        urlPattern: /^https:\/\/fonts\.(?:googleapis)\.com\/.*/i,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'google-fonts-stylesheets',
+          expiration: {
+            maxEntries: 4,
+            maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+          },
+        },
+      },
+      // 6. Next.js immutable static JS/CSS chunks (hashed names)
+      {
+        urlPattern: /\/_next\/static\/.+\.(?:js|css)$/i,
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'next-static-assets',
+          expiration: {
+            maxEntries: 64,
+            maxAgeSeconds: 24 * 60 * 60, // 1 day
+          },
+        },
+      },
+      // 7. Static images
+      {
+        urlPattern: /\.(?:jpg|jpeg|gif|png|svg|ico|webp)$/i,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'static-images',
+          expiration: {
+            maxEntries: 64,
+            maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+          },
+        },
+      },
     ],
   },
-  // Inject custom push event handlers
-  extendDefaultRuntimeCaching: true,
+  // DO NOT inherit next-pwa's default runtime caching rules: they blindly cache
+  // pages-rsc and HTML documents in NetworkFirst, which caches 307 auth redirects.
+  extendDefaultRuntimeCaching: false,
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
   swcMinify: true,
   fallbacks: {},
-  cacheStartUrl: true,
+  // Never precache the dynamic root document as start_url
+  cacheStartUrl: false,
   dynamicStartUrl: false,
 });
 

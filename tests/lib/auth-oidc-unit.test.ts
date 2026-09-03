@@ -140,7 +140,9 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'ACTIVE',
     });
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'approval-record' } as never);
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
+      id: 'approval-record',
+    } as never);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
 
     const user = { email: 'user@example.com', name: 'User', id: 'oidc-sub' };
@@ -177,7 +179,9 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'ACTIVE',
     });
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'approval-record' } as never);
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
+      id: 'approval-record',
+    } as never);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
 
     const result = await signIn({
@@ -201,7 +205,9 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'DISABLED',
     });
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'historical-approval' } as never);
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
+      id: 'historical-approval',
+    } as never);
 
     const result = await signIn({
       user: { email: 'disabled@example.com', name: 'Disabled', id: 'oidc-sub' },
@@ -362,15 +368,22 @@ describe('Auth JWT + OIDC (unit)', () => {
 
   it('jwt callback revokes session when user is disabled', async () => {
     const authOptions = await getAuthOptions();
-    const jwt = authOptions.callbacks?.jwt as unknown as (args: any) => Promise<any>;
+    type JwtCallback = (params: {
+      token: Record<string, unknown>;
+      user?: Record<string, unknown>;
+      account?: Record<string, unknown>;
+      trigger?: string;
+    }) => Promise<Record<string, unknown>>;
+    const jwt = authOptions.callbacks?.jwt as unknown as JwtCallback;
 
-    (prisma.user.findUnique as any).mockResolvedValueOnce({
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: 'u1',
       name: 'Disabled',
       email: 'disabled@example.com',
       role: 'USER',
       tokenVersion: 0,
       status: 'DISABLED',
-    });
+    } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>);
 
     const token = await jwt({
       token: { sub: 'u1', tokenVersion: 0 },
@@ -378,6 +391,47 @@ describe('Auth JWT + OIDC (unit)', () => {
 
     expect(token.sub).toBeUndefined();
     expect(token.error).toBe('USER_DISABLED');
+  });
+
+  it('jwt callback removes error property from incoming token upon fresh credential sign-in', async () => {
+    const authOptions = await getAuthOptions();
+    type JwtCallback = (params: {
+      token: Record<string, unknown>;
+      user?: Record<string, unknown>;
+      account?: Record<string, unknown>;
+      trigger?: string;
+    }) => Promise<Record<string, unknown>>;
+    const jwt = authOptions.callbacks?.jwt as unknown as JwtCallback;
+
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: 'u-clean',
+      email: 'clean@example.com',
+      name: 'Clean User',
+      role: 'ADMIN',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+    } as unknown as Awaited<ReturnType<typeof prisma.user.findUnique>>);
+
+    // Simulate incoming token that was previously poisoned with SESSION_REVOKED
+    const poisonedToken = {
+      sub: 'old-sub',
+      error: 'SESSION_REVOKED',
+    };
+
+    const token = await jwt({
+      token: poisonedToken,
+      user: {
+        id: 'u-clean',
+        email: 'clean@example.com',
+        name: 'Clean User',
+        role: 'ADMIN',
+        tokenVersion: 0,
+      },
+      account: { provider: 'credentials', type: 'credentials' },
+    });
+
+    expect(token.sub).toBe('u-clean');
+    expect(token.error).toBeUndefined();
   });
 
   it('revokeUserSessions increments tokenVersion', async () => {
