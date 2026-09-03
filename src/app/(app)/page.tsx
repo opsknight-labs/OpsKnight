@@ -545,12 +545,9 @@ export default async function Dashboard({
             />
 
             {/* Ops Pulse Panel - Unified Container */}
-            <div className="group relative rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-white to-primary/5 shadow-sm overflow-hidden">
-              {/* Accent bar */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/60" />
-
+            <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
               {/* Header */}
-              <div className="p-4 pb-3 border-b border-primary/10">
+              <div className="p-4 pb-3 border-b border-border">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="relative">
@@ -559,8 +556,8 @@ export default async function Dashboard({
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">Ops Pulse</h3>
-                      <p className="text-[10px] text-slate-500 font-medium">
+                      <h3 className="text-sm font-bold text-foreground">Ops Pulse</h3>
+                      <p className="text-[10px] text-muted-foreground font-medium">
                         Signals that need attention right now
                       </p>
                     </div>
@@ -577,25 +574,25 @@ export default async function Dashboard({
               <div className="p-4">
                 <div className="grid gap-5 md:grid-cols-3">
                   {/* My Queue Card */}
-                  <div className="group/card relative rounded-2xl border border-primary/20 bg-gradient-to-br from-emerald-50/30 via-white to-emerald-50/20 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col">
-                    {/* Accent bar */}
-                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-400 to-emerald-500" />
+                  <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
                     {/* Header */}
                     <div className="p-4 pb-2">
                       <div className="flex items-center gap-3">
                         <div className="relative">
-                          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-200/50 flex items-center justify-center text-emerald-600">
+                          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-border/80 flex items-center justify-center text-primary">
                             <UserRound className="w-4 h-4" />
                           </div>
                           {myQueueItems.length > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-sm">
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm">
                               {myQueueItems.length}
                             </span>
                           )}
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-slate-800">My Queue</h4>
-                          <p className="text-[10px] text-slate-500 font-medium">Assigned to you</p>
+                          <h4 className="text-sm font-bold text-foreground">My Queue</h4>
+                          <p className="text-[10px] text-muted-foreground font-medium">
+                            Assigned to you
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -604,15 +601,17 @@ export default async function Dashboard({
                     <div className="px-4 pb-4 flex-1 flex flex-col">
                       {metricDataState === 'unavailable' ? (
                         <div className="py-6 text-center">
-                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-300 mb-2" />
-                          <p className="text-xs text-slate-500 font-medium">
+                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
                             Queue metrics unavailable
                           </p>
                         </div>
                       ) : myQueueItems.length === 0 ? (
                         <div className="py-6 text-center">
-                          <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-300 mb-2" />
-                          <p className="text-xs text-slate-500 font-medium">Queue is clear!</p>
+                          <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-500 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
+                            Queue is clear!
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -620,11 +619,11 @@ export default async function Dashboard({
                             <Link
                               key={item.id}
                               href={`/incidents/${item.id}`}
-                              className="block p-2.5 rounded-xl bg-white/80 border border-emerald-100/80 hover:border-emerald-300 hover:bg-emerald-50/50 hover:shadow-sm transition-all duration-200"
+                              className="block p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
                             >
                               <div className="flex items-center gap-2.5">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 shadow-sm" />
-                                <p className="text-xs font-semibold text-slate-700 truncate">
+                                <div className="w-2 h-2 rounded-full bg-primary shrink-0 shadow-sm" />
+                                <p className="text-xs font-semibold text-foreground truncate">
                                   {item.title}
                                 </p>
                               </div>
@@ -638,7 +637,7 @@ export default async function Dashboard({
                             ? `/?status=ACTIVE&assignee=${user.id}`
                             : buildIncidentListHref({ filter: 'all_open' })
                         }
-                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100/70 rounded-lg transition-colors"
+                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
                       >
                         View my queue &rarr;
                       </Link>
@@ -646,9 +645,7 @@ export default async function Dashboard({
                   </div>
 
                   {/* Critical Focus Card */}
-                  <div className="group/card relative rounded-2xl border border-primary/20 bg-gradient-to-br from-rose-50/30 via-white to-rose-50/20 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col">
-                    {/* Accent bar */}
-                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-rose-400 to-rose-500" />
+                  <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
                     {/* Header */}
                     <div className="p-4 pb-2">
                       <div className="flex items-center gap-3">
@@ -657,14 +654,14 @@ export default async function Dashboard({
                             <Siren className="w-4 h-4" />
                           </div>
                           {currentCriticalActive > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-sm animate-pulse">
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm animate-pulse">
                               {currentCriticalActive}
                             </span>
                           )}
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-slate-800">Critical Focus</h4>
-                          <p className="text-[10px] text-slate-500 font-medium">
+                          <h4 className="text-sm font-bold text-foreground">Critical Focus</h4>
+                          <p className="text-[10px] text-muted-foreground font-medium">
                             Immediate attention
                           </p>
                         </div>
@@ -675,15 +672,17 @@ export default async function Dashboard({
                     <div className="px-4 pb-4 flex-1 flex flex-col">
                       {metricDataState === 'unavailable' ? (
                         <div className="py-6 text-center">
-                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-300 mb-2" />
-                          <p className="text-xs text-slate-500 font-medium">
+                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
                             Critical metrics unavailable
                           </p>
                         </div>
                       ) : criticalFocus.length === 0 ? (
                         <div className="py-6 text-center">
-                          <ShieldAlert className="w-6 h-6 mx-auto text-rose-200 mb-2" />
-                          <p className="text-xs text-slate-500 font-medium">All systems stable</p>
+                          <ShieldAlert className="w-6 h-6 mx-auto text-rose-400 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
+                            All systems stable
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -691,11 +690,11 @@ export default async function Dashboard({
                             <Link
                               key={incident.id}
                               href={`/incidents/${incident.id}`}
-                              className="block p-2.5 rounded-xl bg-white/80 border border-rose-100/80 hover:border-rose-300 hover:bg-rose-50/50 hover:shadow-sm transition-all duration-200"
+                              className="block p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
                             >
                               <div className="flex items-center gap-2.5">
                                 <div className="w-2 h-2 rounded-full bg-rose-500 shrink-0 shadow-sm animate-pulse" />
-                                <p className="text-xs font-semibold text-slate-700 truncate">
+                                <p className="text-xs font-semibold text-foreground truncate">
                                   {incident.title}
                                 </p>
                               </div>
@@ -705,7 +704,7 @@ export default async function Dashboard({
                       )}
                       <Link
                         href={buildIncidentListHref({ filter: 'all_open', urgency: 'HIGH' })}
-                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50/50 hover:bg-rose-100/70 rounded-lg transition-colors"
+                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
                       >
                         View critical &rarr;
                       </Link>
@@ -713,25 +712,23 @@ export default async function Dashboard({
                   </div>
 
                   {/* Services at Risk Card */}
-                  <div className="group/card relative rounded-2xl border border-primary/20 bg-gradient-to-br from-amber-50/30 via-white to-amber-50/20 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col">
-                    {/* Accent bar */}
-                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-400 to-amber-500" />
+                  <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
                     {/* Header */}
                     <div className="p-4 pb-2">
                       <div className="flex items-center gap-3">
                         <div className="relative">
-                          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-200/50 flex items-center justify-center text-amber-600">
+                          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-border/80 flex items-center justify-center text-primary">
                             <AlertTriangle className="w-4 h-4" />
                           </div>
                           {servicesAtRisk.length > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-sm">
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm">
                               {servicesAtRisk.length}
                             </span>
                           )}
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-slate-800">Services at Risk</h4>
-                          <p className="text-[10px] text-slate-500 font-medium">
+                          <h4 className="text-sm font-bold text-foreground">Services at Risk</h4>
+                          <p className="text-[10px] text-muted-foreground font-medium">
                             Active by service
                           </p>
                         </div>
@@ -742,15 +739,17 @@ export default async function Dashboard({
                     <div className="px-4 pb-4 flex-1 flex flex-col">
                       {metricDataState === 'unavailable' ? (
                         <div className="py-6 text-center">
-                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-300 mb-2" />
-                          <p className="text-xs text-slate-500 font-medium">
+                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
                             Service risk unavailable
                           </p>
                         </div>
                       ) : servicesAtRisk.length === 0 ? (
                         <div className="py-6 text-center">
-                          <List className="w-6 h-6 mx-auto text-amber-200 mb-2" />
-                          <p className="text-xs text-slate-500 font-medium">All services healthy</p>
+                          <List className="w-6 h-6 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
+                            All services healthy
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -758,16 +757,16 @@ export default async function Dashboard({
                             <Link
                               key={serviceItem.id}
                               href={`/services/${serviceItem.id}`}
-                              className="flex items-center justify-between p-2.5 rounded-xl bg-white/80 border border-amber-100/80 hover:border-amber-300 hover:bg-amber-50/50 hover:shadow-sm transition-all duration-200"
+                              className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
                             >
                               <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0 shadow-sm" />
-                                <p className="text-xs font-semibold text-slate-700 truncate">
+                                <div className="w-2 h-2 rounded-full bg-primary shrink-0 shadow-sm" />
+                                <p className="text-xs font-semibold text-foreground truncate">
                                   {serviceItem.name}
                                 </p>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100/80 px-1.5 py-0.5 rounded">
+                                <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/60">
                                   {serviceItem.activeCount}
                                 </span>
                                 {serviceItem.criticalCount > 0 && (
@@ -782,7 +781,7 @@ export default async function Dashboard({
                       )}
                       <Link
                         href="/services"
-                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50/50 hover:bg-amber-100/70 rounded-lg transition-colors"
+                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
                       >
                         View services &rarr;
                       </Link>

@@ -77,12 +77,20 @@ type IncidentsListTableProps = {
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 type BulkActionMode = 'reassign' | 'priority' | 'snooze' | 'urgency' | 'status' | null;
 
-const statusAccentClass: Record<IncidentStatus, string> = {
-  OPEN: 'border-l-red-500',
-  ACKNOWLEDGED: 'border-l-amber-500',
-  RESOLVED: 'border-l-emerald-500',
-  SNOOZED: 'border-l-slate-400',
-  SUPPRESSED: 'border-l-slate-400',
+const statusAccentBar: Record<IncidentStatus, string> = {
+  OPEN: 'bg-rose-500',
+  ACKNOWLEDGED: 'bg-blue-600',
+  RESOLVED: 'bg-emerald-500',
+  SNOOZED: 'bg-slate-400',
+  SUPPRESSED: 'bg-slate-400',
+};
+
+const statusHoverBorder: Record<IncidentStatus, string> = {
+  OPEN: 'hover:border-rose-300/80 dark:hover:border-rose-800/60',
+  ACKNOWLEDGED: 'hover:border-blue-300/80 dark:hover:border-blue-800/60',
+  RESOLVED: 'hover:border-emerald-300/80 dark:hover:border-emerald-800/60',
+  SNOOZED: 'hover:border-slate-300/80 dark:hover:border-slate-700/60',
+  SUPPRESSED: 'hover:border-slate-300/80 dark:hover:border-slate-700/60',
 };
 
 export default function IncidentsListTable({
@@ -295,16 +303,10 @@ export default function IncidentsListTable({
     );
   };
 
-  const rowPad = 'p-3.5 md:p-4';
-  const metaText = 'text-xs';
-  const titleText = 'text-sm';
-
   const headerTitle = title ?? 'Incident list';
 
   return (
-    <div className="group relative rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-white to-primary/5 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
-      {/* Accent bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/60" />
+    <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
       {/* Sticky Command Bar (Bulk Actions) */}
       {(selectedCount > 0 || bulkAction) && (
         <div className="sticky top-0 z-20 border-b border-white/15 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
@@ -535,17 +537,17 @@ export default function IncidentsListTable({
       )}
 
       {/* Header */}
-      <div className="px-4 md:px-5 py-3.5 border-b border-primary/10 flex flex-wrap justify-between items-center gap-3">
+      <div className="px-4 md:px-5 py-3.5 border-b border-border/60 flex flex-wrap justify-between items-center gap-3">
         <div className="min-w-[220px]">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500 font-extrabold">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">
             {headerTitle}
           </div>
-          <div className="text-sm text-slate-600 mt-0.5">
+          <div className="text-sm text-muted-foreground mt-0.5">
             Showing{' '}
-            <span className="font-semibold text-slate-900">
+            <span className="font-semibold text-foreground">
               {showingFrom}-{showingTo}
             </span>{' '}
-            of <span className="font-semibold text-slate-900">{totalItems}</span>
+            of <span className="font-semibold text-foreground">{totalItems}</span>
           </div>
         </div>
 
@@ -553,20 +555,21 @@ export default function IncidentsListTable({
           {canManageIncidents && (
             <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={toggleSelectAllOnPage}
-              className="glass-button"
-              style={{ padding: '0.45rem 0.75rem', whiteSpace: 'nowrap' }}
+              className="h-8 gap-1.5 text-xs font-medium border-border/80 hover:bg-accent cursor-pointer"
               aria-label="Select all incidents on page"
             >
               {selectedIds.size === incidents.length && incidents.length > 0 ? (
                 <>
-                  <XCircle className="mr-2 h-4 w-4 text-slate-500" />
-                  Clear selection
+                  <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Clear selection</span>
                 </>
               ) : (
                 <>
-                  <CheckSquare className="mr-2 h-4 w-4 text-slate-500" />
-                  Select page
+                  <CheckSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Select page</span>
                 </>
               )}
             </Button>
@@ -579,20 +582,26 @@ export default function IncidentsListTable({
                   variant="outline"
                   size="sm"
                   aria-label="Export incidents"
-                  className="bg-white shadow-sm hover:bg-slate-50"
+                  className="h-8 gap-1.5 text-xs font-medium border-border/80 hover:bg-accent cursor-pointer"
                 >
-                  <Download className="mr-2 h-4 w-4 text-slate-600" />
-                  Export
+                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Export</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onSelect={() => handleExport('csv')}>
-                  <Download className="mr-2 h-4 w-4 text-slate-500" />
-                  CSV (.csv)
+              <DropdownMenuContent align="end" className="w-44 p-1 rounded-xl shadow-xl">
+                <DropdownMenuItem
+                  onSelect={() => handleExport('csv')}
+                  className="text-xs cursor-pointer py-1.5"
+                >
+                  <Download className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                  <span>CSV (.csv)</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleExport('xlsx')}>
-                  <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" />
-                  Excel (.xlsx)
+                <DropdownMenuItem
+                  onSelect={() => handleExport('xlsx')}
+                  className="text-xs cursor-pointer py-1.5"
+                >
+                  <FileSpreadsheet className="mr-2 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Excel (.xlsx)</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -624,13 +633,12 @@ export default function IncidentsListTable({
                 <div
                   key={incident.id}
                   className={cn(
-                    'group relative rounded-2xl border bg-white shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-all',
-                    'hover:shadow-md hover:-translate-y-[1px]',
+                    'group relative rounded-2xl border bg-card transition-all duration-200 overflow-hidden',
+                    'hover:shadow-md hover:border-border',
                     'focus-within:ring-2 focus-within:ring-primary/20',
-                    'border-slate-200',
-                    statusAccentClass[incidentStatus] ?? 'border-l-slate-300',
-                    'border-l-4',
-                    isSelected && 'ring-2 ring-primary/20 border-primary/40 bg-primary/5',
+                    'border-border/75',
+                    statusHoverBorder[incidentStatus],
+                    isSelected && 'ring-1 ring-primary/30 border-primary/50 bg-primary/5',
                     navigatingId === incident.id && 'opacity-70 pointer-events-none'
                   )}
                   onClick={e => {
@@ -653,18 +661,29 @@ export default function IncidentsListTable({
                     }
                   }}
                 >
+                  {/* Left status indicator pill */}
+                  <div
+                    className={cn(
+                      'absolute left-0 top-3 bottom-3 w-1 rounded-r-full transition-all duration-200',
+                      statusAccentBar[incidentStatus] ?? 'bg-slate-400',
+                      isSelected
+                        ? 'w-1.5 opacity-100'
+                        : 'opacity-80 group-hover:opacity-100 group-hover:w-1.25'
+                    )}
+                  />
+
                   {/* Loading overlay */}
                   {navigatingId === incident.id && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[1px] rounded-2xl">
-                      <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/70 backdrop-blur-[1px] rounded-2xl">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 shadow-sm">
                         <Loader2 className="h-4 w-4 animate-spin text-primary" />
                         <span className="text-sm font-medium text-primary">Opening...</span>
                       </div>
                     </div>
                   )}
-                  <div className={cn('flex gap-3 items-start', rowPad)}>
+                  <div className="flex gap-3 items-center pl-4 pr-3.5 py-3.5 md:py-4">
                     {canManageIncidents && (
-                      <div data-no-row-nav="true" className="pt-1">
+                      <div data-no-row-nav="true" className="shrink-0 flex items-center">
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -674,29 +693,25 @@ export default function IncidentsListTable({
                             const shiftKey = (e.nativeEvent as unknown as MouseEvent).shiftKey;
                             toggleSelectWithRange(incident.id, idx, shiftKey);
                           }}
-                          className="w-4 h-4 cursor-pointer accent-primary"
+                          className="w-4 h-4 rounded border-border text-primary focus:ring-primary/40 focus:ring-offset-0 cursor-pointer transition-colors"
                           aria-label={`Select incident ${incident.title}`}
                         />
                       </div>
                     )}
 
                     {/* Main layout: compact, scannable rows */}
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <Link
                           href={`/incidents/${incident.id}`}
                           data-no-row-nav="true"
                           onClick={e => e.stopPropagation()}
-                          className={cn(
-                            'block font-extrabold text-slate-900 leading-tight truncate',
-                            titleText,
-                            'group-hover:text-primary transition-colors'
-                          )}
+                          className="font-bold text-sm md:text-base text-foreground leading-snug group-hover:text-primary transition-colors truncate block"
                         >
                           {incident.title}
                         </Link>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           <StatusBadge status={incidentStatus as any} size="sm" showDot />
                           <PriorityBadge priority={incident.priority} size="sm" />
                           {urgencyChip}
@@ -711,13 +726,8 @@ export default function IncidentsListTable({
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div
-                          className={cn(
-                            'flex flex-wrap items-center gap-2 text-slate-500',
-                            metaText
-                          )}
-                        >
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Link
                             href={`/services/${incident.service.id}`}
                             data-no-row-nav="true"
@@ -727,11 +737,13 @@ export default function IncidentsListTable({
                             {incident.service.name}
                           </Link>
 
-                          <span className="opacity-50">&middot;</span>
+                          <span className="opacity-40">&middot;</span>
 
-                          <span className="font-mono">#{incident.id.slice(-5).toUpperCase()}</span>
+                          <span className="font-mono text-muted-foreground/80">
+                            #{incident.id.slice(-5).toUpperCase()}
+                          </span>
 
-                          <span className="opacity-50">&middot;</span>
+                          <span className="opacity-40">&middot;</span>
 
                           <span>
                             {formatDateTime(incident.createdAt, userTimeZone, {
@@ -742,140 +754,180 @@ export default function IncidentsListTable({
                       </div>
                     </div>
 
-                    <AssigneeSection
-                      assignee={incident.assignee}
-                      incidentId={incident.id}
-                      canManage={canManageIncidents}
-                      users={users}
-                      teams={[]}
-                      team={incident.team}
-                      assigneeId={incident.assigneeId}
-                      teamId={incident.teamId}
-                    />
+                    <div className="flex items-center gap-2 shrink-0 pl-1">
+                      <AssigneeSection
+                        assignee={incident.assignee}
+                        incidentId={incident.id}
+                        canManage={canManageIncidents}
+                        users={users}
+                        teams={[]}
+                        team={incident.team}
+                        assigneeId={incident.assigneeId}
+                        teamId={incident.teamId}
+                      />
 
-                    <div className="self-start sm:self-center" data-no-row-nav="true">
+                      {/* Quick triage hover action */}
+                      {canManageIncidents && incidentStatus === 'OPEN' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          data-no-row-nav="true"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleStatusChange(incident.id, 'ACKNOWLEDGED');
+                          }}
+                          disabled={isPending}
+                          className="hidden sm:inline-flex opacity-0 group-hover:opacity-100 transition-all duration-150 h-7 px-2 text-xs font-semibold gap-1 border-blue-500/40 text-blue-700 hover:bg-blue-500/10 dark:text-blue-300 cursor-pointer shadow-2xs shrink-0"
+                          title="Quick Acknowledge"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Ack</span>
+                        </Button>
+                      )}
+
+                      {canManageIncidents && incidentStatus === 'ACKNOWLEDGED' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          data-no-row-nav="true"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleStatusChange(incident.id, 'RESOLVED');
+                          }}
+                          disabled={isPending}
+                          className="hidden sm:inline-flex opacity-0 group-hover:opacity-100 transition-all duration-150 h-7 px-2 text-xs font-semibold gap-1 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300 cursor-pointer shadow-2xs shrink-0"
+                          title="Quick Resolve"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Resolve</span>
+                        </Button>
+                      )}
+
                       {canManageIncidents && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
-                              onClick={e => e.stopPropagation()}
-                              aria-label="Incident actions"
-                            >
-                              <MoreHorizontal className="h-4 w-4 text-slate-600" />
-                            </Button>
-                          </DropdownMenuTrigger>
-
-                          <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuItem asChild>
-                              <Link
-                                href={`/incidents/${incident.id}`}
+                        <div data-no-row-nav="true" className="shrink-0">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7.5 w-7.5 p-0 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground border border-border/60 transition-colors"
                                 onClick={e => e.stopPropagation()}
-                                className="flex items-center gap-2"
+                                aria-label="Incident actions"
                               >
-                                <Eye className="h-4 w-4 text-slate-500" />
-                                View details
-                              </Link>
-                            </DropdownMenuItem>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
 
-                            <DropdownMenuSeparator />
-
-                            {incident.status !== 'RESOLVED' && (
-                              <DropdownMenuItem
-                                onSelect={e => {
-                                  e.preventDefault();
-                                  handleStatusChange(incident.id, 'RESOLVED');
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                Resolve
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/incidents/${incident.id}`}
+                                  onClick={e => e.stopPropagation()}
+                                  className="flex items-center gap-2"
+                                >
+                                  <Eye className="h-4 w-4 text-slate-500" />
+                                  View details
+                                </Link>
                               </DropdownMenuItem>
-                            )}
 
-                            {incident.status !== 'ACKNOWLEDGED' &&
-                              incident.status !== 'RESOLVED' &&
-                              incident.status !== 'SUPPRESSED' && (
+                              <DropdownMenuSeparator />
+
+                              {incident.status !== 'RESOLVED' && (
                                 <DropdownMenuItem
                                   onSelect={e => {
                                     e.preventDefault();
-                                    handleStatusChange(incident.id, 'ACKNOWLEDGED');
+                                    handleStatusChange(incident.id, 'RESOLVED');
                                   }}
                                   className="flex items-center gap-2"
                                 >
-                                  <CheckCircle2 className="h-4 w-4 text-amber-600" />
-                                  Acknowledge
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                  Resolve
                                 </DropdownMenuItem>
                               )}
 
-                            {incident.status === 'ACKNOWLEDGED' && (
-                              <DropdownMenuItem
-                                onSelect={e => {
-                                  e.preventDefault();
-                                  handleStatusChange(incident.id, 'OPEN');
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <Circle className="h-4 w-4 text-slate-500" />
-                                Unacknowledge
-                              </DropdownMenuItem>
-                            )}
+                              {incident.status !== 'ACKNOWLEDGED' &&
+                                incident.status !== 'RESOLVED' &&
+                                incident.status !== 'SUPPRESSED' && (
+                                  <DropdownMenuItem
+                                    onSelect={e => {
+                                      e.preventDefault();
+                                      handleStatusChange(incident.id, 'ACKNOWLEDGED');
+                                    }}
+                                    className="flex items-center gap-2"
+                                  >
+                                    <CheckCircle2 className="h-4 w-4 text-amber-600" />
+                                    Acknowledge
+                                  </DropdownMenuItem>
+                                )}
 
-                            {incident.status !== 'SNOOZED' && incident.status !== 'RESOLVED' && (
-                              <DropdownMenuItem
-                                onSelect={e => {
-                                  e.preventDefault();
-                                  handleStatusChange(incident.id, 'SNOOZED');
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <PauseCircle className="h-4 w-4 text-slate-600" />
-                                Snooze
-                              </DropdownMenuItem>
-                            )}
+                              {incident.status === 'ACKNOWLEDGED' && (
+                                <DropdownMenuItem
+                                  onSelect={e => {
+                                    e.preventDefault();
+                                    handleStatusChange(incident.id, 'OPEN');
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <Circle className="h-4 w-4 text-slate-500" />
+                                  Unacknowledge
+                                </DropdownMenuItem>
+                              )}
 
-                            {incident.status === 'SNOOZED' && (
-                              <DropdownMenuItem
-                                onSelect={e => {
-                                  e.preventDefault();
-                                  handleStatusChange(incident.id, 'OPEN');
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <CheckCircle2 className="h-4 w-4 text-slate-600" />
-                                Unsnooze
-                              </DropdownMenuItem>
-                            )}
+                              {incident.status !== 'SNOOZED' && incident.status !== 'RESOLVED' && (
+                                <DropdownMenuItem
+                                  onSelect={e => {
+                                    e.preventDefault();
+                                    handleStatusChange(incident.id, 'SNOOZED');
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <PauseCircle className="h-4 w-4 text-slate-600" />
+                                  Snooze
+                                </DropdownMenuItem>
+                              )}
 
-                            {incident.status !== 'SUPPRESSED' && incident.status !== 'RESOLVED' && (
-                              <DropdownMenuItem
-                                onSelect={e => {
-                                  e.preventDefault();
-                                  handleStatusChange(incident.id, 'SUPPRESSED');
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <ShieldOff className="h-4 w-4 text-rose-600" />
-                                Suppress
-                              </DropdownMenuItem>
-                            )}
+                              {incident.status === 'SNOOZED' && (
+                                <DropdownMenuItem
+                                  onSelect={e => {
+                                    e.preventDefault();
+                                    handleStatusChange(incident.id, 'OPEN');
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <CheckCircle2 className="h-4 w-4 text-slate-600" />
+                                  Unsnooze
+                                </DropdownMenuItem>
+                              )}
 
-                            {incident.status === 'SUPPRESSED' && (
-                              <DropdownMenuItem
-                                onSelect={e => {
-                                  e.preventDefault();
-                                  handleStatusChange(incident.id, 'OPEN');
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                                Unsuppress
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              {incident.status !== 'SUPPRESSED' &&
+                                incident.status !== 'RESOLVED' && (
+                                  <DropdownMenuItem
+                                    onSelect={e => {
+                                      e.preventDefault();
+                                      handleStatusChange(incident.id, 'SUPPRESSED');
+                                    }}
+                                    className="flex items-center gap-2"
+                                  >
+                                    <ShieldOff className="h-4 w-4 text-rose-600" />
+                                    Suppress
+                                  </DropdownMenuItem>
+                                )}
+
+                              {incident.status === 'SUPPRESSED' && (
+                                <DropdownMenuItem
+                                  onSelect={e => {
+                                    e.preventDefault();
+                                    handleStatusChange(incident.id, 'OPEN');
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                                  Unsuppress
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       )}
                     </div>
                   </div>

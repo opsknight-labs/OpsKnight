@@ -124,20 +124,19 @@ export default function DashboardIncidentFilters({
   ].filter(Boolean).length;
 
   return (
-    <div className="group relative rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-white to-primary/5 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
-      {/* Accent bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/60" />
-
+    <div className="rounded-2xl border border-border bg-card shadow-xs transition-all duration-200 overflow-hidden">
       {/* Header */}
-      <div className="p-4 pb-3 border-b border-slate-200/60">
+      <div className="p-4 pb-3 border-b border-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Filter className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Filter Incidents</h3>
-              <p className="text-[10px] text-slate-500 font-medium">Refine your incident feed</p>
+              <h3 className="text-sm font-bold text-foreground">Filter Incidents</h3>
+              <p className="text-[10px] text-muted-foreground font-medium">
+                Refine your incident feed
+              </p>
             </div>
           </div>
 

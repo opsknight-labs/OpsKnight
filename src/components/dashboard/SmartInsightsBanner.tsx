@@ -118,9 +118,9 @@ export default function SmartInsightsBanner({
   if (insights.length === 0) return null;
 
   const typeStyles = {
-    warning: 'bg-amber-50 border-amber-200 text-amber-800',
-    info: 'bg-blue-50 border-blue-200 text-blue-800',
-    success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+    warning: 'bg-card border-border text-foreground shadow-2xs',
+    info: 'bg-card border-border text-foreground shadow-2xs',
+    success: 'bg-card border-border text-foreground shadow-2xs',
   };
 
   const iconStyles = {
