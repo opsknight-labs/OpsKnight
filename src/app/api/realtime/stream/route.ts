@@ -7,6 +7,7 @@ import {
   resolveStreamAuthorization,
   type StreamAuthorization,
 } from '@/lib/realtime-stream-authorization';
+import { recordSessionHeartbeat } from '@/lib/active-sessions';
 
 /**
  * Server-Sent Events (SSE) endpoint for real-time updates
@@ -22,6 +23,14 @@ export async function GET(req: NextRequest) {
       return new Response('Unauthorized', { status: 401 });
     }
     let streamAuthorization: StreamAuthorization = initialAuthorization;
+
+    // Record session heartbeat on realtime stream connect
+    const userAgent = req.headers.get('user-agent') || '';
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      req.headers.get('x-real-ip') ||
+      '127.0.0.1';
+    void recordSessionHeartbeat({ userId: user.id, userAgent, ip }).catch(() => {});
 
     let cleanup: () => void = () => {};
 
@@ -142,6 +151,7 @@ export async function GET(req: NextRequest) {
             if (heartbeatCounter >= 6) {
               heartbeatCounter = 0;
               send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
+              void recordSessionHeartbeat({ userId: user.id, userAgent, ip }).catch(() => {});
             }
           } catch (error) {
             logger.error('SSE polling error', { component: 'api-realtime-stream', error });
