@@ -17,36 +17,65 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/shadcn/alert-dialog';
-import { AlertCircle, CheckCircle2, Laptop, LogOut, ShieldCheck, Smartphone } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Laptop,
+  LogOut,
+  ShieldCheck,
+  Smartphone,
+  Tablet,
+} from 'lucide-react';
+import type { ActiveSession } from '@/lib/active-sessions';
 
 type Props = {
   tokenVersion?: number;
+  sessions?: ActiveSession[];
 };
+
+function formatRelativeTime(isoString: string): { label: string; isActiveNow: boolean } {
+  try {
+    const diffMs = Date.now() - new Date(isoString).getTime();
+    if (diffMs < 5 * 60 * 1000) {
+      return { label: 'Active Now', isActiveNow: true };
+    }
+    const mins = Math.floor(diffMs / (60 * 1000));
+    if (mins < 60) return { label: `Active ${mins}m ago`, isActiveNow: false };
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return { label: `Active ${hours}h ago`, isActiveNow: false };
+    const days = Math.floor(hours / 24);
+    return { label: `Active ${days}d ago`, isActiveNow: false };
+  } catch {
+    return { label: 'Recently Active', isActiveNow: false };
+  }
+}
 
 function getClientDeviceInfo() {
   if (typeof window === 'undefined') {
-    return { browser: 'Web Browser', os: 'Current Device', isMobile: false };
+    return { browser: 'Web Browser', os: 'Current Device', isMobile: false, isTablet: false };
   }
   const ua = navigator.userAgent;
   let browser = 'Web Browser';
   let os = 'Desktop';
-  const isMobile = /Mobile|Android|iPhone|iPad/i.test(ua);
+  const isTablet = /iPad|tablet|(android(?!.*mobile))/i.test(ua);
+  const isMobile = /Mobile|Android|iPhone|iPad/i.test(ua) && !isTablet;
 
-  if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Google Chrome';
+  if (ua.includes('Edg/') || ua.includes('Edge/')) browser = 'Microsoft Edge';
+  else if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Google Chrome';
   else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Apple Safari';
   else if (ua.includes('Firefox')) browser = 'Mozilla Firefox';
-  else if (ua.includes('Edg')) browser = 'Microsoft Edge';
 
   if (ua.includes('Macintosh') || ua.includes('Mac OS')) os = 'macOS';
   else if (ua.includes('Windows')) os = 'Windows';
   else if (ua.includes('Linux') && !ua.includes('Android')) os = 'Linux';
   else if (ua.includes('iPhone')) os = 'iOS';
+  else if (ua.includes('iPad')) os = 'iPadOS';
   else if (ua.includes('Android')) os = 'Android';
 
-  return { browser, os, isMobile };
+  return { browser, os, isMobile, isTablet };
 }
 
-export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
+export default function ActiveSessionsSection({ tokenVersion = 1, sessions }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -67,45 +96,104 @@ export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
     });
   };
 
+  // Fallback if no server sessions provided
+  const displaySessions: ActiveSession[] =
+    sessions && sessions.length > 0
+      ? sessions
+      : [
+          {
+            id: 'current-fallback',
+            browser: deviceInfo.browser,
+            os: deviceInfo.os,
+            deviceType: deviceInfo.isTablet ? 'tablet' : deviceInfo.isMobile ? 'mobile' : 'desktop',
+            ip: 'Current Connection',
+            isCurrent: true,
+            lastActive: new Date().toISOString(),
+            tokenVersion,
+          },
+        ];
+
   return (
     <div className="space-y-4">
-      {/* Current Active Session Card */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card shadow-sm">
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
-            {deviceInfo.isMobile ? (
-              <Smartphone className="h-5 w-5" />
-            ) : (
-              <Laptop className="h-5 w-5" />
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="font-semibold text-sm text-foreground">
-                {deviceInfo.browser} on {deviceInfo.os}
-              </h4>
-              <Badge
-                variant="outline"
-                className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-medium"
-              >
-                This Device
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Current authenticated session · Security token v{tokenVersion}
-            </p>
-          </div>
-        </div>
+      {/* Session Cards List */}
+      <div className="space-y-3">
+        {displaySessions.map(session => {
+          const timeInfo = formatRelativeTime(session.lastActive);
+          const isLive = session.isCurrent || timeInfo.isActiveNow;
 
-        <div className="flex items-center gap-2 self-end sm:self-center">
-          <span className="flex h-2 w-2 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            Active Now
-          </span>
-        </div>
+          return (
+            <div
+              key={session.id}
+              className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border transition-all ${
+                session.isCurrent
+                  ? 'border-primary/30 bg-primary/5 shadow-sm'
+                  : 'border-border bg-card hover:border-border/80'
+              }`}
+            >
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div
+                  className={`p-2.5 rounded-xl border shrink-0 ${
+                    session.isCurrent
+                      ? 'bg-primary/15 text-primary border-primary/25'
+                      : 'bg-muted/80 text-muted-foreground border-border'
+                  }`}
+                >
+                  {session.deviceType === 'mobile' ? (
+                    <Smartphone className="h-5 w-5" />
+                  ) : session.deviceType === 'tablet' ? (
+                    <Tablet className="h-5 w-5" />
+                  ) : (
+                    <Laptop className="h-5 w-5" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-semibold text-sm text-foreground">
+                      {session.browser} on {session.os}
+                    </h4>
+                    {session.isCurrent ? (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold"
+                      >
+                        This Device
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-muted text-muted-foreground border-border/80 font-medium"
+                      >
+                        Connected Device
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {session.isCurrent ? 'Current authenticated session' : `IP: ${session.ip}`} ·
+                    Security token v{session.tokenVersion || tokenVersion}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                {isLive ? (
+                  <>
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      Active Now
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {timeInfo.label}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {error && (

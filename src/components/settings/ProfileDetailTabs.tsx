@@ -172,22 +172,25 @@ export default function ProfileDetailTabs({
         {/* SLA & Response Performance Card (Centralized via sla-server) */}
         <Card>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="space-y-1">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-primary" />
                   <span>SLA & Response Performance</span>
+                  <Badge variant="secondary" className="text-[10px] font-medium ml-1">
+                    Last 30 Days
+                  </Badge>
                 </CardTitle>
                 <CardDescription>
-                  Your incident response and resolution metrics computed across your operational
-                  history
+                  Your incident response, resolution, and SLA compliance metrics computed over the
+                  last 30 days
                 </CardDescription>
               </div>
               <Badge
                 variant="outline"
-                className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-semibold"
+                className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-semibold self-start sm:self-auto"
               >
-                {complianceVal.toFixed(1)}% Compliance
+                {complianceVal.toFixed(1)}% Compliance (30d)
               </Badge>
             </div>
           </CardHeader>
@@ -201,7 +204,7 @@ export default function ProfileDetailTabs({
                 <p className="text-lg font-bold font-mono text-foreground">
                   {formatMinutes(slaMetrics?.mttaP50)}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Median response time</p>
+                <p className="text-[11px] text-muted-foreground">Median response time (last 30d)</p>
               </div>
 
               <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
@@ -212,7 +215,7 @@ export default function ProfileDetailTabs({
                 <p className="text-lg font-bold font-mono text-foreground">
                   {formatMinutes(slaMetrics?.mttr ?? slaMetrics?.mttrP50)}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Mean resolution time</p>
+                <p className="text-[11px] text-muted-foreground">Mean resolution time (last 30d)</p>
               </div>
 
               <div className="p-3.5 rounded-lg border bg-card/60 space-y-1">
@@ -234,7 +237,7 @@ export default function ProfileDetailTabs({
                 <p className="text-lg font-bold font-mono text-foreground">
                   {slaMetrics?.resolvedIncidents ?? 0}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Resolved incidents</p>
+                <p className="text-[11px] text-muted-foreground">Resolved in last 30d</p>
               </div>
             </div>
           </CardContent>

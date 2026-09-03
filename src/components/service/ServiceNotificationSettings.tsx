@@ -101,7 +101,7 @@ export default function ServiceNotificationSettings({
   useEffect(() => {
     if (!selectRef.current) return;
 
-    if (!selectedSlackChannel) {
+    if (!channels.includes('SLACK') || !selectedSlackChannel) {
       selectRef.current.setCustomValidity('');
       return;
     }
@@ -112,7 +112,7 @@ export default function ServiceNotificationSettings({
     } else {
       selectRef.current.setCustomValidity('');
     }
-  }, [selectedSlackChannel, slackChannels]);
+  }, [selectedSlackChannel, slackChannels, channels]);
 
   const refreshChannels = () => {
     if (!slackIntegration) return;
@@ -287,7 +287,7 @@ export default function ServiceNotificationSettings({
         style={{ opacity: 0, height: 1, position: 'absolute' }}
         tabIndex={-1}
         required={channels.includes('SLACK')}
-        value={selectedSlackChannel || ''}
+        value={channels.includes('SLACK') ? selectedSlackChannel || '' : ''}
         readOnly
         // Adding onChange to avoid React warning about uncontrolled component since we set value
         onChange={() => {}}

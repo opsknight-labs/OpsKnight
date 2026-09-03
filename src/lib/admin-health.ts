@@ -450,10 +450,13 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     }
 
     try {
+      const since24h = new Date(now.getTime() - 24 * HOUR);
       const [pending, processing, failed, overdue, stale] = await Promise.all([
         prisma.backgroundJob.count({ where: { status: 'PENDING' } }),
         prisma.backgroundJob.count({ where: { status: 'PROCESSING' } }),
-        prisma.backgroundJob.count({ where: { status: 'FAILED' } }),
+        prisma.backgroundJob.count({
+          where: { status: 'FAILED', updatedAt: { gte: since24h } },
+        }),
         prisma.backgroundJob.count({ where: { status: 'PENDING', scheduledAt: { lt: now } } }),
         prisma.backgroundJob.count({
           where: { status: 'PROCESSING', startedAt: { lt: new Date(now.getTime() - 10 * MINUTE) } },
@@ -464,7 +467,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         label: 'Background jobs',
         category: 'workers',
         status: stale > 0 || failed > 0 ? 'unhealthy' : overdue > 0 ? 'degraded' : 'healthy',
-        summary: `${pending} pending, ${processing} processing, ${failed} failed.`,
+        summary: `${pending} pending, ${processing} processing, ${failed} failed in 24 hours.`,
         details: [`Overdue pending: ${overdue}`, `Processing longer than 10 minutes: ${stale}`],
         telemetry: {
           queueDistribution: {

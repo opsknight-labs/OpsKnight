@@ -49,7 +49,7 @@ function requestShutdown(): void {
 
 export async function register() {
   // Only run validation in Node.js runtime (not Edge)
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
+  if (process.env.NEXT_RUNTIME !== 'edge') {
     // Skip validation during build phase
     if (process.env.NEXT_PHASE === 'phase-production-build') {
       return;
