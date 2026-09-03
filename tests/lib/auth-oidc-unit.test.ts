@@ -140,7 +140,9 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'ACTIVE',
     });
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'approval-record' } as never);
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
+      id: 'approval-record',
+    } as never);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
 
     const user = { email: 'user@example.com', name: 'User', id: 'oidc-sub' };
@@ -177,7 +179,9 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'ACTIVE',
     });
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'approval-record' } as never);
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
+      id: 'approval-record',
+    } as never);
     (prisma.oidcIdentity.findUnique as any).mockResolvedValue(null);
 
     const result = await signIn({
@@ -201,7 +205,9 @@ describe('Auth JWT + OIDC (unit)', () => {
       role: 'USER',
       status: 'DISABLED',
     });
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({ id: 'historical-approval' } as never);
+    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
+      id: 'historical-approval',
+    } as never);
 
     const result = await signIn({
       user: { email: 'disabled@example.com', name: 'Disabled', id: 'oidc-sub' },
@@ -378,6 +384,41 @@ describe('Auth JWT + OIDC (unit)', () => {
 
     expect(token.sub).toBeUndefined();
     expect(token.error).toBe('USER_DISABLED');
+  });
+
+  it('jwt callback removes error property from incoming token upon fresh credential sign-in', async () => {
+    const authOptions = await getAuthOptions();
+    const jwt = authOptions.callbacks?.jwt as unknown as (args: any) => Promise<any>;
+
+    (prisma.user.findUnique as any).mockResolvedValueOnce({
+      id: 'u-clean',
+      email: 'clean@example.com',
+      name: 'Clean User',
+      role: 'ADMIN',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+    });
+
+    // Simulate incoming token that was previously poisoned with SESSION_REVOKED
+    const poisonedToken = {
+      sub: 'old-sub',
+      error: 'SESSION_REVOKED',
+    };
+
+    const token = await jwt({
+      token: poisonedToken,
+      user: {
+        id: 'u-clean',
+        email: 'clean@example.com',
+        name: 'Clean User',
+        role: 'ADMIN',
+        tokenVersion: 0,
+      },
+      account: { provider: 'credentials', type: 'credentials' },
+    });
+
+    expect(token.sub).toBe('u-clean');
+    expect(token.error).toBeUndefined();
   });
 
   it('revokeUserSessions increments tokenVersion', async () => {

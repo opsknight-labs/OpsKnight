@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import SsoButton from '@/components/auth/SsoButton';
@@ -21,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { calculatePasswordStrength } from '@/lib/password-strength';
+import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 
 type Props = {
   callbackUrl: string;
@@ -41,7 +41,8 @@ function formatError(message: string | null | undefined) {
   if (message === 'SessionExpired') return 'Your session has expired. Please sign in again.';
   if (message === 'OAuthSignin' || message === 'OAuthCallback')
     return 'SSO authentication failed. Please try again or contact your administrator.';
-  if (message === 'Configuration') return 'Server configuration error. Please contact your administrator.';
+  if (message === 'Configuration')
+    return 'Server configuration error. Please contact your administrator.';
   return 'Authentication failed. Please try again.';
 }
 
@@ -54,7 +55,6 @@ export default function MobileLoginClient({
   ssoProviderType,
   ssoProviderLabel,
 }: Props) {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   // Mobile defaults Remember Me ON: on mobile, server-side revocation
@@ -136,6 +136,7 @@ export default function MobileLoginClient({
       ) {
         finalCallbackUrl = '/m';
       }
+      await purgeBrowserAuthCaches();
       await signIn('oidc', { callbackUrl: finalCallbackUrl });
     } catch {
       setError('Connection failed');
@@ -167,13 +168,24 @@ export default function MobileLoginClient({
       } else if (result?.ok) {
         setIsSubmitting(false);
         setIsSuccess(true);
-        // Soft navigation matches the desktop client: faster perceived
-        // transition + `router.refresh()` ensures the (app) layout
-        // server-renders against the fresh session cookie.
+        const target =
+          safeCallbackUrl &&
+          safeCallbackUrl.startsWith('/') &&
+          !safeCallbackUrl.startsWith('/login') &&
+          !safeCallbackUrl.includes('/auth/signout')
+            ? safeCallbackUrl
+            : '/m';
+
+        // Purge any stale Service Worker dynamic/RSC caches immediately
+        void purgeBrowserAuthCaches();
+
+        // Standard enterprise practice for post-authentication transition:
+        // A hard navigation via window.location.assign() completely blows away
+        // the client-side RSC router cache and forces a full server document
+        // request with the newly issued session cookie.
         setTimeout(() => {
-          router.push(safeCallbackUrl);
-          router.refresh();
-        }, 250);
+          window.location.assign(target);
+        }, 200);
       }
     } catch {
       setError('Unexpected error');

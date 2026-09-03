@@ -213,10 +213,40 @@ self.addEventListener('install', function (event) {
   self.skipWaiting(); // Activate immediately
 });
 
-// Optional: Handle service worker activation
+// Handle service worker activation
 self.addEventListener('activate', function (event) {
   console.log('[Service Worker] Activating');
-  event.waitUntil(clients.claim()); // Take control immediately
+  event.waitUntil(
+    (async () => {
+      // Clean up legacy or poisoned runtime caches from previous versions
+      const DYNAMIC_CACHES_TO_PURGE = [
+        'pages',
+        'pages-rsc',
+        'pages-rsc-prefetch',
+        'start-url',
+        'apis',
+        'static-data-assets',
+        'cross-origin',
+        'no-cache-pages',
+        'no-cache-rsc',
+      ];
+      try {
+        const cacheNames = await caches.keys();
+        await Promise.all(
+          cacheNames.map(name => {
+            if (DYNAMIC_CACHES_TO_PURGE.some(pattern => name.includes(pattern))) {
+              console.log('[Service Worker] Deleting legacy cache:', name);
+              return caches.delete(name);
+            }
+            return Promise.resolve(false);
+          })
+        );
+      } catch (err) {
+        console.warn('[Service Worker] Failed to purge legacy caches', err);
+      }
+      return self.clients.claim();
+    })()
+  );
 });
 
 self.addEventListener('sync', function (event) {
@@ -228,6 +258,21 @@ self.addEventListener('sync', function (event) {
 self.addEventListener('message', function (event) {
   if (event.data && event.data.type === 'SYNC_OFFLINE_QUEUE') {
     event.waitUntil(flushQueuedRequests());
+  } else if (event.data && event.data.type === 'PURGE_AUTH_CACHES') {
+    event.waitUntil(
+      (async () => {
+        try {
+          const names = await caches.keys();
+          await Promise.all(
+            names
+              .filter(n => n.includes('page') || n.includes('start-url') || n.includes('api') || n.includes('rsc'))
+              .map(n => caches.delete(n))
+          );
+        } catch (err) {
+          console.warn('[Service Worker] Failed to purge auth caches on message', err);
+        }
+      })()
+    );
   }
 });
 
