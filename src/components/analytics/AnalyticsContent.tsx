@@ -1,10 +1,11 @@
-import { calculateSLAMetrics } from '@/lib/sla-server';
+import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { formatTimeMinutesMs } from '@/lib/time-format';
 import { smoothSeries } from '@/lib/analytics-metrics';
 import { formatDateTime } from '@/lib/timezone';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import { INCIDENT_METRIC_DEFINITIONS, metricDefinitionTooltip } from '@/lib/metric-contract';
 import { logger } from '@/lib/logger';
+import type { AuthorizationActor } from '@/lib/authorization-policy';
 import MetricCard from '@/components/analytics/MetricCard';
 import MetricIcon from '@/components/analytics/MetricIcon';
 import GaugeChart from '@/components/analytics/GaugeChart';
@@ -32,6 +33,7 @@ type AllowedStatus = 'OPEN' | 'ACKNOWLEDGED' | 'SNOOZED' | 'SUPPRESSED' | 'RESOL
 type AllowedUrgency = 'HIGH' | 'MEDIUM' | 'LOW';
 
 interface Props {
+  actor: AuthorizationActor;
   teamId?: string;
   serviceId?: string;
   assigneeId?: string;
@@ -80,6 +82,7 @@ function buildSparklineAreaPath(values: number[], width: number = 72, height: nu
 }
 
 export default async function AnalyticsContent({
+  actor,
   teamId,
   serviceId,
   assigneeId,
@@ -88,7 +91,7 @@ export default async function AnalyticsContent({
   windowDays,
   userTimeZone,
 }: Props) {
-  const metrics = await calculateSLAMetrics({
+  const metrics = await calculateActorSLAMetrics(actor, {
     teamId,
     serviceId,
     assigneeId,
@@ -349,8 +352,8 @@ export default async function AnalyticsContent({
           <AlertCircle className="w-4 h-4" />
           <span>
             <strong>Detail coverage:</strong> Detail charts cover{' '}
-            {formatDate(metrics.detailCoverage.start)} -{' '}
-            {formatDate(metrics.detailCoverage.end)}, using{' '}
+            {formatDate(metrics.detailCoverage.start)} - {formatDate(metrics.detailCoverage.end)},
+            using{' '}
             {(
               metrics.detailCoverage.sampledIncidents ?? metrics.detailCoverage.totalIncidents
             ).toLocaleString()}{' '}

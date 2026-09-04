@@ -2,7 +2,8 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import PostmortemForm from '@/components/PostmortemForm';
-import { getUserPermissions } from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
+import { dashboardUserReadWhere, incidentReadWhere } from '@/lib/authorization-filters';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
@@ -16,7 +17,10 @@ export default async function CreatePostmortemPage() {
     redirect('/login');
   }
 
-  const permissions = await getUserPermissions();
+  const [permissions, actor] = await Promise.all([
+    getUserPermissions(),
+    getCurrentAuthorizationActor(),
+  ]);
   const canCreate = permissions.isResponderOrAbove;
 
   if (!canCreate) {
@@ -33,8 +37,7 @@ export default async function CreatePostmortemPage() {
   // Get all resolved incidents without postmortems
   const resolvedIncidents = await prisma.incident.findMany({
     where: {
-      status: 'RESOLVED',
-      postmortem: null,
+      AND: [incidentReadWhere(actor), { status: 'RESOLVED', postmortem: null }],
     },
     include: {
       service: {
@@ -49,7 +52,7 @@ export default async function CreatePostmortemPage() {
 
   // Get users for action items assignment
   const users = await prisma.user.findMany({
-    where: { status: 'ACTIVE' },
+    where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
     select: { id: true, name: true, email: true },
     orderBy: { name: 'asc' },
   });

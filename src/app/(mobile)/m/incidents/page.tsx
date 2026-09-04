@@ -5,6 +5,8 @@ import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { activeIncidentStatuses, mutedIncidentStatuses } from '@/lib/incident-status';
 import { normalizeIncidentStatus } from '@/lib/incidents-query';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import { AlertTriangle, Plus, ChevronLeft, ChevronRight, SearchX } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -68,36 +70,36 @@ export default async function MobileIncidentsPage(props: {
   const createdBefore = createdBeforeValue ? new Date(createdBeforeValue) : undefined;
   const page = Math.max(1, parseInt(searchParams?.page || '1', 10));
 
-  const where: Prisma.IncidentWhereInput = {};
+  const selectedWhere: Prisma.IncidentWhereInput = {};
 
   if (query) {
-    where.title = { contains: query, mode: 'insensitive' };
+    selectedWhere.title = { contains: query, mode: 'insensitive' };
   }
 
   if (filter === 'all_open') {
-    where.status = { in: activeIncidentStatuses() };
+    selectedWhere.status = { in: activeIncidentStatuses() };
   } else if (filter === 'muted') {
-    where.status = { in: mutedIncidentStatuses() };
+    selectedWhere.status = { in: mutedIncidentStatuses() };
   } else if (filter === 'open') {
-    where.status = 'OPEN';
+    selectedWhere.status = 'OPEN';
   } else if (filter === 'acknowledged') {
-    where.status = 'ACKNOWLEDGED';
+    selectedWhere.status = 'ACKNOWLEDGED';
   } else if (filter === 'resolved') {
-    where.status = 'RESOLVED';
+    selectedWhere.status = 'RESOLVED';
   }
 
-  if (status) where.status = status;
-  if (assignee) where.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
-  if (serviceId) where.serviceId = serviceId;
-  if (urgency) where.urgency = urgency;
+  if (status) selectedWhere.status = status;
+  if (assignee) selectedWhere.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
+  if (serviceId) selectedWhere.serviceId = serviceId;
+  if (urgency) selectedWhere.urgency = urgency;
   if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime())) {
-    where.resolvedAt = { gte: resolvedAfter };
+    selectedWhere.resolvedAt = { gte: resolvedAfter };
   }
   if (createdAfter && !Number.isNaN(createdAfter.getTime())) {
-    where.createdAt = { ...(where.createdAt as Prisma.DateTimeFilter), gte: createdAfter };
+    selectedWhere.createdAt = { ...(selectedWhere.createdAt as Prisma.DateTimeFilter), gte: createdAfter };
   }
   if (createdBefore && !Number.isNaN(createdBefore.getTime())) {
-    where.createdAt = { ...(where.createdAt as Prisma.DateTimeFilter), lte: createdBefore };
+    selectedWhere.createdAt = { ...(selectedWhere.createdAt as Prisma.DateTimeFilter), lte: createdBefore };
   }
 
   const orderBy: Prisma.IncidentOrderByWithRelationInput[] =
@@ -106,6 +108,11 @@ export default async function MobileIncidentsPage(props: {
       : sort === 'urgency'
         ? [{ urgency: 'desc' }, { createdAt: 'desc' }]
         : [{ createdAt: 'desc' }];
+
+  const actor = await getCurrentAuthorizationActor();
+  const where: Prisma.IncidentWhereInput = {
+    AND: [incidentReadWhere(actor), selectedWhere],
+  };
 
   const [incidents, totalCount] = await Promise.all([
     prisma.incident.findMany({

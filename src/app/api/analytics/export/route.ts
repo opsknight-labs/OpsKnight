@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { assertResponderOrAbove } from '@/lib/rbac';
+import { assertResponderOrAbove, getCurrentAuthorizationActor } from '@/lib/rbac';
+import {
+  dashboardUserReadWhere,
+  incidentReadWhere,
+  serviceReadWhere,
+  teamReadWhere,
+} from '@/lib/authorization-filters';
 import prisma from '@/lib/prisma';
 import { jsonError } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
@@ -12,7 +18,7 @@ import {
 import type { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { getReportingWindowForDays } from '@/lib/retention-policy';
-import { calculateSLAMetrics } from '@/lib/sla-server';
+import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { INCIDENT_METRIC_DEFINITIONS, metricScopeLabel } from '@/lib/metric-contract';
 import { incidentStatusLabel } from '@/lib/incident-status';
 
@@ -76,6 +82,7 @@ export async function GET(req: NextRequest) {
     } catch (error) {
       return jsonError(error instanceof Error ? error.message : 'Unauthorized', 403);
     }
+    const actor = await getCurrentAuthorizationActor();
 
     // Get user timezone for date formatting
     const email = session?.user?.email ?? null;
@@ -129,7 +136,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch data with limits to prevent memory issues on large datasets
     const [metrics, recentIncidents, services, teams, users] = await Promise.all([
-      calculateSLAMetrics({
+      calculateActorSLAMetrics(actor, {
         startDate: effectiveStart,
         endDate: effectiveEnd,
         teamId: teamId || undefined,
@@ -140,7 +147,7 @@ export async function GET(req: NextRequest) {
         userTimeZone,
       }),
       prisma.incident.findMany({
-        where: recentIncidentWhere,
+        where: { AND: [incidentReadWhere(actor), recentIncidentWhere] },
         include: {
           service: true,
           assignee: true,
@@ -149,15 +156,17 @@ export async function GET(req: NextRequest) {
         take: 10000, // Limit to prevent OOM on large datasets
       }),
       prisma.service.findMany({
-        where: teamId ? { teamId } : undefined,
+        where: { AND: [serviceReadWhere(actor), teamId ? { teamId } : {}] },
         select: { id: true, name: true, teamId: true },
         take: 500, // Reasonable limit for services
       }),
       prisma.team.findMany({
+        where: teamReadWhere(actor),
         select: { id: true, name: true },
         take: 200, // Reasonable limit for teams
       }),
       prisma.user.findMany({
+        where: dashboardUserReadWhere(actor),
         select: { id: true, name: true, email: true },
         take: 2000, // Reasonable limit for users
       }),

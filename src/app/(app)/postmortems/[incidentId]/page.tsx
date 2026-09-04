@@ -5,7 +5,8 @@ import { getPostmortem } from '../actions';
 import { notFound } from 'next/navigation';
 import PostmortemForm from '@/components/PostmortemForm';
 import PostmortemDetailView from '@/components/postmortem/PostmortemDetailView';
-import { getUserPermissions } from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
+import { dashboardUserReadWhere, incidentReadWhere } from '@/lib/authorization-filters';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
@@ -30,14 +31,17 @@ export default async function PostmortemPage({
   const editMode = searchParamsData?.edit === 'true';
 
   const postmortem = await getPostmortem(incidentId);
-  const permissions = await getUserPermissions();
+  const [permissions, actor] = await Promise.all([
+    getUserPermissions(),
+    getCurrentAuthorizationActor(),
+  ]);
   const canEdit = permissions.isResponderOrAbove;
   // All users can view published postmortems, but only responders+ can edit
   const canView = postmortem ? postmortem.status === 'PUBLISHED' || canEdit : canEdit;
 
   // Get users for action items assignment
   const users = await prisma.user.findMany({
-    where: { status: 'ACTIVE' },
+    where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
     select: { id: true, name: true, email: true },
     orderBy: { name: 'asc' },
   });
@@ -45,8 +49,8 @@ export default async function PostmortemPage({
   if (!postmortem) {
     // Check if incident exists and is resolved
     const prisma = (await import('@/lib/prisma')).default;
-    const incident = await prisma.incident.findUnique({
-      where: { id: incidentId },
+    const incident = await prisma.incident.findFirst({
+      where: { AND: [incidentReadWhere(actor), { id: incidentId }] },
       select: { id: true, title: true, status: true },
     });
 

@@ -6,6 +6,12 @@ import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import {
+  dashboardUserReadWhere,
+  incidentReadWhere,
+  teamReadWhere,
+} from '@/lib/authorization-filters';
 import MobileTime from '@/components/mobile/MobileTime';
 import type { ReactNode } from 'react';
 import {
@@ -59,9 +65,10 @@ export default async function MobileIncidentDetailPage({ params }: PageProps) {
   const authOptions = await getAuthOptions();
   const session = await getServerSession(authOptions);
   const currentUserId = session?.user?.id || null;
+  const actor = await getCurrentAuthorizationActor();
 
-  const incident = await prisma.incident.findUnique({
-    where: { id },
+  const incident = await prisma.incident.findFirst({
+    where: { AND: [incidentReadWhere(actor), { id }] },
     include: {
       service: { select: { id: true, name: true } },
       assignee: { select: { id: true, name: true, email: true, avatarUrl: true, gender: true } },
@@ -100,11 +107,12 @@ export default async function MobileIncidentDetailPage({ params }: PageProps) {
 
   const [users, teams] = await Promise.all([
     prisma.user.findMany({
-      where: { status: 'ACTIVE' },
+      where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
       select: { id: true, name: true, email: true },
       orderBy: { name: 'asc' },
     }),
     prisma.team.findMany({
+      where: teamReadWhere(actor),
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),

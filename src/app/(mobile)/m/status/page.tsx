@@ -3,6 +3,8 @@ import MobileCard from '@/components/mobile/MobileCard';
 import Link from 'next/link';
 import MobileTime from '@/components/mobile/MobileTime';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +37,7 @@ type Announcement = {
 export default async function MobileStatusPage() {
   const now = new Date();
   const metricsWindowDays = 90;
+  const actor = await getCurrentAuthorizationActor();
 
   // Get status page config
   // Get status page config (optional for internal view)
@@ -54,6 +57,7 @@ export default async function MobileStatusPage() {
 
   // Fetch ALL services for internal dashboard view
   const services = await prisma.service.findMany({
+    where: serviceReadWhere(actor),
     orderBy: { name: 'asc' },
     select: { id: true, name: true, targetAckMinutes: true, targetResolveMinutes: true },
   });
@@ -62,7 +66,7 @@ export default async function MobileStatusPage() {
   const activeIncidentCounts = await prisma.incident.groupBy({
     by: ['serviceId', 'urgency'],
     where: {
-      status: { in: activeIncidentStatuses() },
+      AND: [incidentReadWhere(actor), { status: { in: activeIncidentStatuses() } }],
     },
     _count: { id: true },
   });
@@ -75,12 +79,15 @@ export default async function MobileStatusPage() {
     verifiedCounts.set(group.serviceId, current);
   }
 
-  const { calculateSLAMetrics, getExternalStatusLabel } = await import('@/lib/sla-server');
+  const [{ calculateActorSLAMetrics }, { getExternalStatusLabel }] = await Promise.all([
+    import('@/lib/actor-metrics'),
+    import('@/lib/sla-server'),
+  ]);
   const { getServiceDynamicStatus } = await import('@/lib/service-status');
 
   // Use all services for metrics
   const serviceIds = services.map(s => s.id);
-  const metrics = await calculateSLAMetrics({
+  const metrics = await calculateActorSLAMetrics(actor, {
     serviceId: serviceIds,
     windowDays: metricsWindowDays,
     includeActiveIncidents: true,

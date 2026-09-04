@@ -9,6 +9,12 @@ import FilterChips from '@/components/analytics/FilterChips';
 import AnalyticsContent from '@/components/analytics/AnalyticsContent';
 import AnalyticsSkeleton from '@/components/analytics/AnalyticsSkeleton';
 import { buildAnalyticsExportUrl } from '@/lib/analytics-export';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import {
+  dashboardUserReadWhere,
+  serviceReadWhere,
+  teamReadWhere,
+} from '@/lib/authorization-filters';
 import { LayoutDashboard, BarChart3, Repeat } from 'lucide-react';
 
 import './analytics-v2.css';
@@ -39,6 +45,7 @@ export default async function AnalyticsV2Page({
   searchParams?: Promise<SearchParams>;
 }) {
   const session = await getServerSession(await getAuthOptions());
+  const actor = await getCurrentAuthorizationActor();
   const email = session?.user?.email ?? null;
   const user = email
     ? await prisma.user.findUnique({ where: { email }, select: { timeZone: true } })
@@ -66,17 +73,26 @@ export default async function AnalyticsV2Page({
   const windowDays = allowedWindows.has(windowCandidate) ? windowCandidate : 7;
 
   const [teams, services, users] = await Promise.all([
-    prisma.team.findMany({ select: { id: true, name: true } }),
-    prisma.service.findMany({ select: { id: true, name: true, teamId: true } }),
-    prisma.user.findMany({ select: { id: true, name: true, email: true } }),
+    prisma.team.findMany({ where: teamReadWhere(actor), select: { id: true, name: true } }),
+    prisma.service.findMany({
+      where: serviceReadWhere(actor),
+      select: { id: true, name: true, teamId: true },
+    }),
+    prisma.user.findMany({
+      where: dashboardUserReadWhere(actor),
+      select: { id: true, name: true, email: true },
+    }),
   ]);
 
   const servicesForFilter = teamId ? services.filter(s => s.teamId === teamId) : services;
+  const effectiveServiceId = servicesForFilter.some(service => service.id === serviceId)
+    ? serviceId
+    : undefined;
 
   const exportUrl = buildAnalyticsExportUrl({
     windowDays,
     teamId,
-    serviceId,
+    serviceId: effectiveServiceId,
     assigneeId,
     status: statusFilter,
     urgency: urgencyFilter,
@@ -87,7 +103,7 @@ export default async function AnalyticsV2Page({
   // re-query instead of stale content frozen on screen.
   const suspenseKey = [
     teamId ?? 'ALL',
-    serviceId ?? 'ALL',
+    effectiveServiceId ?? 'ALL',
     assigneeId ?? 'ALL',
     statusFilter ?? 'ALL',
     urgencyFilter ?? 'ALL',
@@ -158,7 +174,7 @@ export default async function AnalyticsV2Page({
         users={users}
         currentFilters={{
           team: teamId ?? 'ALL',
-          service: serviceId ?? 'ALL',
+          service: effectiveServiceId ?? 'ALL',
           assignee: assigneeId ?? 'ALL',
           status: statusFilter ?? 'ALL',
           urgency: urgencyFilter ?? 'ALL',
@@ -170,7 +186,7 @@ export default async function AnalyticsV2Page({
         <FilterChips
           filters={{
             team: teamId ?? 'ALL',
-            service: serviceId ?? 'ALL',
+            service: effectiveServiceId ?? 'ALL',
             assignee: assigneeId ?? 'ALL',
             status: statusFilter ?? 'ALL',
             urgency: urgencyFilter ?? 'ALL',
@@ -188,7 +204,8 @@ export default async function AnalyticsV2Page({
       <Suspense key={suspenseKey} fallback={<AnalyticsSkeleton />}>
         <AnalyticsContent
           teamId={teamId}
-          serviceId={serviceId}
+          actor={actor}
+          serviceId={effectiveServiceId}
           assigneeId={assigneeId}
           statusFilter={statusFilter}
           urgencyFilter={urgencyFilter}

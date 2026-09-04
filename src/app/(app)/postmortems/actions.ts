@@ -1,8 +1,15 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
-import { getCurrentUser, assertResponderOrAbove, getUserPermissions } from '@/lib/rbac';
+import {
+  getCurrentAuthorizationActor,
+  getCurrentUser,
+  assertResponderOrAbove,
+  getUserPermissions,
+} from '@/lib/rbac';
+import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   getStoredActionItemId,
@@ -208,11 +215,14 @@ export async function upsertPostmortem(incidentId: string, data: PostmortemData)
  */
 export async function getPostmortem(incidentId: string) {
   const user = await getCurrentUser();
+  const actor = await getCurrentAuthorizationActor();
   const canViewDrafts = hasCapability(user.role, CAPABILITIES.POSTMORTEM_DRAFT_READ);
-  const postmortem = await prisma.postmortem.findUnique({
+  const postmortem = await prisma.postmortem.findFirst({
     where: {
-      incidentId,
-      ...(canViewDrafts ? {} : { status: 'PUBLISHED' }),
+      AND: [
+        postmortemReadWhere(actor),
+        { incidentId, ...(canViewDrafts ? {} : { status: 'PUBLISHED' }) },
+      ],
     },
     include: {
       createdBy: {
@@ -342,30 +352,32 @@ export async function getAllPostmortems(
   const { status, search, serviceId, page = 1, limit = 50 } = options;
   const skip = (page - 1) * limit;
 
-  const permissions = await getUserPermissions();
-  const baseWhere: Record<string, unknown> = permissions.isResponderOrAbove
+  const [permissions, actor] = await Promise.all([
+    getUserPermissions(),
+    getCurrentAuthorizationActor(),
+  ]);
+  const selectedWhere: Prisma.PostmortemWhereInput = permissions.isResponderOrAbove
     ? status
       ? { status }
       : {}
     : { status: 'PUBLISHED' as const };
 
   if (serviceId && serviceId !== 'all') {
-    baseWhere.incident = {
-      ...((baseWhere.incident as Record<string, unknown>) || {}),
-      serviceId,
-    };
+    selectedWhere.incident = { serviceId };
   }
 
   if (search && search.trim()) {
     const q = search.trim();
-    baseWhere.OR = [
+    selectedWhere.OR = [
       { title: { contains: q, mode: 'insensitive' } },
       { incident: { title: { contains: q, mode: 'insensitive' } } },
       { incident: { service: { name: { contains: q, mode: 'insensitive' } } } },
     ];
   }
 
-  const where = baseWhere;
+  const where: Prisma.PostmortemWhereInput = {
+    AND: [postmortemReadWhere(actor), selectedWhere],
+  };
 
   const [postmortems, total] = await Promise.all([
     prisma.postmortem.findMany({

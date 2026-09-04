@@ -10,6 +10,15 @@ export type IncidentMetricFilter = {
   status?: 'ACTIVE' | 'OPEN' | 'ACKNOWLEDGED' | 'SNOOZED' | 'SUPPRESSED' | 'RESOLVED';
   visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
   useOrScope?: boolean;
+  /**
+   * Mandatory row-level authorization scope for user-facing metric reads.
+   * Internal/system callers may omit it, but UI/API boundaries must obtain it
+   * from the centralized authorization layer rather than constructing it.
+   */
+  authorizationScope?: {
+    actorId: string;
+    teamIds: readonly string[];
+  };
 };
 
 export type MetricFilterIdentity = {
@@ -21,10 +30,11 @@ export type MetricFilterIdentity = {
   status: string | null;
   visibility: string | null;
   scope: 'and' | 'or';
+  authorization: string | null;
 };
 
-const values = (value?: string | string[]): string[] =>
-  value ? (Array.isArray(value) ? [...new Set(value)].sort() : [value]) : [];
+const values = (value?: string | readonly string[]): string[] =>
+  value ? (typeof value === 'string' ? [value] : [...new Set(value)].sort()) : [];
 
 export function compileIncidentMetricFilter(
   filter: IncidentMetricFilter,
@@ -36,11 +46,43 @@ export function compileIncidentMetricFilter(
   const services = values(filter.serviceId);
   const teams = values(filter.teamId);
   const priorities = values(filter.priority);
+  const authorizationTeamIds = values(filter.authorizationScope?.teamIds);
   const prisma: Prisma.IncidentWhereInput = {};
+  const prismaPredicates: Prisma.IncidentWhereInput[] = [];
   const sqlPredicates: Prisma.Sql[] = [];
   const prismaScopes: Prisma.IncidentWhereInput[] = [];
   const sqlScopes: Prisma.Sql[] = [];
   const column = (name: string) => Prisma.raw(`${tableAlias ? `${tableAlias}.` : ''}"${name}"`);
+
+  if (filter.authorizationScope) {
+    const { actorId } = filter.authorizationScope;
+    const teamScope: Prisma.IncidentWhereInput = {
+      AND: [
+        { visibility: 'PUBLIC' },
+        {
+          OR: [
+            { teamId: { in: authorizationTeamIds } },
+            { service: { teamId: { in: authorizationTeamIds } } },
+          ],
+        },
+      ],
+    };
+    prismaPredicates.push({
+      OR: [
+        { assigneeId: actorId },
+        { watchers: { some: { userId: actorId } } },
+        ...(authorizationTeamIds.length > 0 ? [teamScope] : []),
+      ],
+    });
+
+    const teamSql =
+      authorizationTeamIds.length > 0
+        ? Prisma.sql` OR (${column('visibility')} = 'PUBLIC'::"IncidentVisibility" AND (${column('teamId')} = ANY(${authorizationTeamIds}::text[]) OR ${column('serviceId')} IN (SELECT id FROM "Service" WHERE "teamId" = ANY(${authorizationTeamIds}::text[]))))`
+        : Prisma.empty;
+    sqlPredicates.push(
+      Prisma.sql`(${column('assigneeId')} = ${actorId} OR EXISTS (SELECT 1 FROM "IncidentWatcher" iw WHERE iw."incidentId" = ${column('id')} AND iw."userId" = ${actorId})${teamSql})`
+    );
+  }
 
   if (services.length) {
     prismaScopes.push({ serviceId: { in: services } });
@@ -93,9 +135,14 @@ export function compileIncidentMetricFilter(
     );
   }
   if (prismaScopes.length) {
-    if (filter.useOrScope) prisma.OR = prismaScopes;
-    else prisma.AND = prismaScopes;
+    if (!filter.authorizationScope) {
+      if (filter.useOrScope) prisma.OR = prismaScopes;
+      else prisma.AND = prismaScopes;
+    } else {
+      prismaPredicates.push(filter.useOrScope ? { OR: prismaScopes } : { AND: prismaScopes });
+    }
   }
+  if (prismaPredicates.length) prisma.AND = prismaPredicates;
   if (sqlScopes.length) {
     sqlPredicates.push(
       filter.useOrScope
@@ -118,6 +165,9 @@ export function compileIncidentMetricFilter(
       status: filter.status ?? null,
       visibility: filter.visibility === 'ALL' ? null : (filter.visibility ?? null),
       scope: filter.useOrScope ? 'or' : 'and',
+      authorization: filter.authorizationScope
+        ? `${filter.authorizationScope.actorId}:${authorizationTeamIds.join(',')}`
+        : null,
     },
   };
 }

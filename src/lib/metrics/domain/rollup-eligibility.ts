@@ -9,6 +9,7 @@ import type { IncidentMetricFilter } from './filter';
 export function isRollupCompatibleIncidentFilter(filter: IncidentMetricFilter): boolean {
   return !(
     filter.teamId !== undefined ||
+    filter.authorizationScope !== undefined ||
     filter.priority !== undefined ||
     filter.urgency !== undefined ||
     filter.assigneeId !== undefined ||

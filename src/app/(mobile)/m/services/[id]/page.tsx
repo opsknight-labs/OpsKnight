@@ -7,6 +7,8 @@ import MobileTime from '@/components/mobile/MobileTime';
 import type { ReactNode } from 'react';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { buildIncidentListHref } from '@/lib/incident-links';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,13 +18,17 @@ type PageProps = {
 
 export default async function MobileServiceDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const actor = await getCurrentAuthorizationActor();
+  const incidentAccess = incidentReadWhere(actor);
 
-  const service = await prisma.service.findUnique({
-    where: { id },
+  const service = await prisma.service.findFirst({
+    where: { AND: [serviceReadWhere(actor), { id }] },
     include: {
       policy: true,
       incidents: {
-        where: { status: { in: activeIncidentStatuses() } },
+        where: {
+          AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }],
+        },
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: {
@@ -36,7 +42,9 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
       _count: {
         select: {
           incidents: {
-            where: { status: { in: activeIncidentStatuses() } },
+            where: {
+              AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }],
+            },
           },
         },
       },
