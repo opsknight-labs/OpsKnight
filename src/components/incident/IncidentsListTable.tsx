@@ -75,6 +75,7 @@ type IncidentsListTableProps = {
   };
   title?: string;
   showExport?: boolean;
+  readOnly?: boolean;
 };
 
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
@@ -117,7 +118,9 @@ export default function IncidentsListTable({
   pagination,
   title,
   showExport = true,
+  readOnly = false,
 }: IncidentsListTableProps) {
+  const isManageable = !readOnly && canManageIncidents;
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
@@ -273,6 +276,8 @@ export default function IncidentsListTable({
   );
 
   useEffect(() => {
+    if (readOnly) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in input, textarea, contentEditable, or inside a modal dialog
       const target = e.target as HTMLElement | null;
@@ -342,7 +347,7 @@ export default function IncidentsListTable({
       }
 
       if (key === 'x') {
-        if (focused && focusedIndex !== null) {
+        if (focused && focusedIndex !== null && isManageable) {
           e.preventDefault();
           toggleSelectWithRange(focused.id, focusedIndex, false);
         }
@@ -350,7 +355,7 @@ export default function IncidentsListTable({
       }
 
       if (key === 'a') {
-        if (focused && canManageIncidents && focused.status === 'OPEN') {
+        if (focused && isManageable && focused.status === 'OPEN') {
           e.preventDefault();
           handleStatusChange(focused.id, 'ACKNOWLEDGED');
         }
@@ -358,7 +363,7 @@ export default function IncidentsListTable({
       }
 
       if (key === 'r' || key === 'e') {
-        if (focused && canManageIncidents && focused.status !== 'RESOLVED') {
+        if (focused && isManageable && focused.status !== 'RESOLVED') {
           e.preventDefault();
           setResolvingIncident({
             id: focused.id,
@@ -393,9 +398,10 @@ export default function IncidentsListTable({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    readOnly,
     incidents,
     focusedIndex,
-    canManageIncidents,
+    isManageable,
     selectedIds,
     handleStatusChange,
     router,
@@ -524,7 +530,7 @@ export default function IncidentsListTable({
   return (
     <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
       {/* Sticky Command Bar (Bulk Actions) */}
-      {(selectedCount > 0 || bulkAction) && (
+      {!readOnly && (selectedCount > 0 || bulkAction) && (
         <div className="sticky top-0 z-20 border-b border-white/15 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
           <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -780,37 +786,39 @@ export default function IncidentsListTable({
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Subtle keyboard shortcuts guide */}
-          <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-muted-foreground/70 mr-1 select-none">
-            <span>Shortcuts:</span>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-              J
-            </kbd>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-              K
-            </kbd>
-            <span>nav</span>
-            <span className="opacity-40">&middot;</span>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-              X
-            </kbd>
-            <span>select</span>
-            <span className="opacity-40">&middot;</span>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-              A
-            </kbd>
-            <span>ack</span>
-            <span className="opacity-40">&middot;</span>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-              R
-            </kbd>
-            <span>resolve</span>
-            <span className="opacity-40">&middot;</span>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
-              /
-            </kbd>
-            <span>search</span>
-          </div>
-          {canManageIncidents && (
+          {!readOnly && (
+            <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-muted-foreground/70 mr-1 select-none">
+              <span>Shortcuts:</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+                J
+              </kbd>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+                K
+              </kbd>
+              <span>nav</span>
+              <span className="opacity-40">&middot;</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+                X
+              </kbd>
+              <span>select</span>
+              <span className="opacity-40">&middot;</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+                A
+              </kbd>
+              <span>ack</span>
+              <span className="opacity-40">&middot;</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+                R
+              </kbd>
+              <span>resolve</span>
+              <span className="opacity-40">&middot;</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+                /
+              </kbd>
+              <span>search</span>
+            </div>
+          )}
+          {isManageable && (
             <Button
               type="button"
               variant="outline"
@@ -884,9 +892,9 @@ export default function IncidentsListTable({
           <div className="flex flex-col gap-3">
             {incidents.map((incident, idx) => {
               const incidentStatus = incident.status as IncidentStatus;
-              const isSelected = selectedIds.has(incident.id);
+              const isSelected = !readOnly && selectedIds.has(incident.id);
               const urgencyChip = buildUrgencyChip(incident.urgency);
-              const isFocused = focusedIndex === idx;
+              const isFocused = !readOnly && focusedIndex === idx;
               const isNewlyIncoming = highlightedIncidentIds.has(incident.id);
 
               return (
@@ -952,7 +960,7 @@ export default function IncidentsListTable({
                     </div>
                   )}
                   <div className="flex gap-3 items-center pl-4 pr-3.5 py-3.5 md:py-4">
-                    {canManageIncidents && (
+                    {isManageable && (
                       <div data-no-row-nav="true" className="shrink-0 flex items-center">
                         <input
                           type="checkbox"
@@ -1035,7 +1043,7 @@ export default function IncidentsListTable({
                       <AssigneeSection
                         assignee={incident.assignee}
                         incidentId={incident.id}
-                        canManage={canManageIncidents}
+                        canManage={isManageable}
                         users={users}
                         teams={[]}
                         team={incident.team}
@@ -1044,7 +1052,7 @@ export default function IncidentsListTable({
                       />
 
                       {/* Quick triage actions */}
-                      {canManageIncidents && incidentStatus === 'OPEN' && (
+                      {isManageable && incidentStatus === 'OPEN' && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1062,7 +1070,7 @@ export default function IncidentsListTable({
                         </Button>
                       )}
 
-                      {canManageIncidents && incidentStatus === 'ACKNOWLEDGED' && (
+                      {isManageable && incidentStatus === 'ACKNOWLEDGED' && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1084,7 +1092,7 @@ export default function IncidentsListTable({
                         </Button>
                       )}
 
-                      {canManageIncidents && (
+                      {isManageable && (
                         <div data-no-row-nav="true" className="shrink-0">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

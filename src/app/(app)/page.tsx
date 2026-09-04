@@ -799,6 +799,7 @@ export default async function Dashboard({
               incidents={recentIncidentListItems}
               users={users}
               canManageIncidents={false}
+              readOnly={true}
               title="Latest incidents"
               showExport={false}
             />
