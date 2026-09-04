@@ -1,6 +1,6 @@
--- Durable Slack ChatOps inbox. Domain effects and response delivery have
--- separate states, so an HTTP acknowledgement or Slack response retry cannot
--- lose or repeat an incident mutation.
+-- Durable Slack ChatOps inbox. The JobType value intentionally lives in the
+-- preceding migration: PostgreSQL enum additions must be committed before any
+-- application code can use the value in a queue insert.
 CREATE TYPE "ChatOpsIntentKind" AS ENUM ('SLASH_COMMAND', 'INTERACTIVE_ACTION');
 CREATE TYPE "ChatOpsIntentStatus" AS ENUM ('PENDING', 'PROCESSING', 'EFFECT_COMPLETED', 'COMPLETED', 'FAILED');
 
@@ -28,5 +28,3 @@ CREATE TABLE "ChatOpsIntent" (
 CREATE UNIQUE INDEX "ChatOpsIntent_kind_deliveryHash_key" ON "ChatOpsIntent"("kind", "deliveryHash");
 CREATE INDEX "ChatOpsIntent_status_leaseExpiresAt_idx" ON "ChatOpsIntent"("status", "leaseExpiresAt");
 CREATE INDEX "ChatOpsIntent_workspaceId_channelId_idx" ON "ChatOpsIntent"("workspaceId", "channelId");
-
-ALTER TYPE "JobType" ADD VALUE IF NOT EXISTS 'CHATOPS_INTENT';

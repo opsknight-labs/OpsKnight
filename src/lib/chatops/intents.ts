@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import { decrypt, encrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';
-import { scheduleJob } from '@/lib/jobs/queue';
 import { toSlackResponseUrl } from '@/lib/slack-signature';
 
 const LEASE_MS = 5 * 60 * 1000;
@@ -29,17 +28,29 @@ function deliveryHash(kind: ChatOpsIntentInput['kind'], signature: string): stri
 export async function enqueueChatOpsIntent(input: ChatOpsIntentInput): Promise<{ id: string; duplicate: boolean }> {
   const hash = deliveryHash(input.kind, input.signature);
   try {
-    const intent = await prisma.chatOpsIntent.create({
-      data: {
-        kind: input.kind,
-        deliveryHash: hash,
-        workspaceId: input.workspaceId,
-        channelId: input.channelId || null,
-        slackUserId: input.slackUserId || null,
-        encryptedPayload: await encrypt(JSON.stringify(input.payload)),
-      },
+    const encryptedPayload = await encrypt(JSON.stringify(input.payload));
+    const intent = await prisma.$transaction(async tx => {
+      const created = await tx.chatOpsIntent.create({
+        data: {
+          kind: input.kind,
+          deliveryHash: hash,
+          workspaceId: input.workspaceId,
+          channelId: input.channelId || null,
+          slackUserId: input.slackUserId || null,
+          encryptedPayload,
+        },
+      });
+      await tx.backgroundJob.create({
+        data: {
+          type: 'CHATOPS_INTENT',
+          status: 'PENDING',
+          scheduledAt: new Date(),
+          payload: { intentId: created.id },
+          maxAttempts: 8,
+        },
+      });
+      return created;
     });
-    await scheduleJob('CHATOPS_INTENT', new Date(), { intentId: intent.id }, 8);
     return { id: intent.id, duplicate: false };
   } catch (error) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
@@ -50,6 +61,31 @@ export async function enqueueChatOpsIntent(input: ChatOpsIntentInput): Promise<{
       select: { id: true },
     });
     if (!existing) throw error;
+    // A prior crash or an old partially-deployed release could leave an
+    // intent without a runnable executor. Repair that invariant transactionally
+    // on the duplicate path without creating a second job when one is leased.
+    await prisma.$transaction(async tx => {
+      const runnable = await tx.backgroundJob.findFirst({
+        where: {
+          type: 'CHATOPS_INTENT',
+          status: { in: ['PENDING', 'PROCESSING'] },
+          payload: { path: ['intentId'], equals: existing.id },
+        },
+        select: { id: true },
+      });
+      const intent = await tx.chatOpsIntent.findUnique({
+        where: { id: existing.id },
+        select: { status: true },
+      });
+      if (!runnable && intent && ['PENDING', 'FAILED', 'EFFECT_COMPLETED'].includes(intent.status)) {
+        await tx.backgroundJob.create({
+          data: {
+            type: 'CHATOPS_INTENT', status: 'PENDING', scheduledAt: new Date(),
+            payload: { intentId: existing.id }, maxAttempts: 8,
+          },
+        });
+      }
+    });
     return { id: existing.id, duplicate: true };
   }
 }
