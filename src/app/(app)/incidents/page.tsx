@@ -11,7 +11,6 @@ import {
   normalizeIncidentSort,
   normalizeIncidentStatus,
 } from '@/lib/incidents-query';
-import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/shadcn/card';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from 'lucide-react';
 
@@ -151,8 +150,6 @@ export default async function IncidentsPage({
       })
     : [];
 
-  const showingFrom = totalCount === 0 ? 0 : skip + 1;
-  const showingTo = Math.min(skip + ITEMS_PER_PAGE, totalCount);
   const drilldownScope = [
     currentStatus
       ? `Status: ${currentStatus === 'OPEN' ? 'Triggered' : currentStatus.toLowerCase()}`
@@ -255,26 +252,17 @@ export default async function IncidentsPage({
         />
 
         {/* List */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardDescription>
-              Showing {showingFrom}-{showingTo} of {totalCount} incidents
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <IncidentsListTable
-              incidents={incidents}
-              users={users}
-              canManageIncidents={permissions.isResponderOrAbove}
-              pagination={{
-                currentPage,
-                totalPages,
-                totalItems: totalCount,
-                itemsPerPage: ITEMS_PER_PAGE,
-              }}
-            />
-          </CardContent>
-        </Card>
+        <IncidentsListTable
+          incidents={incidents}
+          users={users}
+          canManageIncidents={permissions.isResponderOrAbove}
+          pagination={{
+            currentPage,
+            totalPages,
+            totalItems: totalCount,
+            itemsPerPage: ITEMS_PER_PAGE,
+          }}
+        />
       </div>
     </div>
   );

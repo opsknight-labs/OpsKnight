@@ -1,7 +1,6 @@
 'use client';
 
 import { memo, useMemo } from 'react';
-import { Incident, Service } from '@prisma/client';
 import { AlertCircle, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { getPrioritySLATarget } from '@/lib/sla-priority';
@@ -13,15 +12,34 @@ import { cn } from '@/lib/utils';
  * Displays a warning indicator for incidents nearing SLA breach.
  */
 
-type SLABreachWarningBadgeProps = {
-  incident: Incident;
-  service: Service;
+export type SLABreachIncident = {
+  id: string;
+  status: string;
+  createdAt: Date;
+  priority?: string | null;
+  acknowledgedAt?: Date | null;
+};
+
+export type SLABreachService = {
+  id: string;
+  targetAckMinutes?: number | null;
+  targetResolveMinutes?: number | null;
+};
+
+export type SLABreachWarningBadgeProps = {
+  incident: SLABreachIncident;
+  service: SLABreachService;
   /** Warning threshold in minutes before breach */
   ackWarningMinutes?: number;
   resolveWarningMinutes?: number;
 };
 
-type BreachStatus = 'none' | 'ack-warning' | 'resolve-warning' | 'ack-breached' | 'resolve-breached';
+type BreachStatus =
+  | 'none'
+  | 'ack-warning'
+  | 'resolve-warning'
+  | 'ack-breached'
+  | 'resolve-breached';
 
 function SLABreachWarningBadge({
   incident,
@@ -50,7 +68,11 @@ function SLABreachWarningBadge({
       const ackRemainingMinutes = ackRemainingMs / (60 * 1000);
 
       if (ackRemainingMs <= 0) {
-        return { status: 'ack-breached' as BreachStatus, timeRemainingMinutes: 0, targetType: 'ack' };
+        return {
+          status: 'ack-breached' as BreachStatus,
+          timeRemainingMinutes: 0,
+          targetType: 'ack',
+        };
       }
       if (ackRemainingMinutes <= ackWarningMinutes) {
         return {
@@ -66,7 +88,11 @@ function SLABreachWarningBadge({
     const resolveRemainingMinutes = resolveRemainingMs / (60 * 1000);
 
     if (resolveRemainingMs <= 0) {
-      return { status: 'resolve-breached' as BreachStatus, timeRemainingMinutes: 0, targetType: 'resolve' };
+      return {
+        status: 'resolve-breached' as BreachStatus,
+        timeRemainingMinutes: 0,
+        targetType: 'resolve',
+      };
     }
     if (resolveRemainingMinutes <= resolveWarningMinutes) {
       return {
@@ -109,11 +135,23 @@ function SLABreachWarningBadge({
 }
 
 export default memo(SLABreachWarningBadge, (prevProps, nextProps) => {
+  const prevAck = prevProps.incident.acknowledgedAt
+    ? new Date(prevProps.incident.acknowledgedAt).getTime()
+    : null;
+  const nextAck = nextProps.incident.acknowledgedAt
+    ? new Date(nextProps.incident.acknowledgedAt).getTime()
+    : null;
+  const prevCreated = new Date(prevProps.incident.createdAt).getTime();
+  const nextCreated = new Date(nextProps.incident.createdAt).getTime();
+
   return (
     prevProps.incident.id === nextProps.incident.id &&
     prevProps.incident.status === nextProps.incident.status &&
-    prevProps.incident.acknowledgedAt?.getTime() === nextProps.incident.acknowledgedAt?.getTime() &&
-    prevProps.incident.createdAt.getTime() === nextProps.incident.createdAt.getTime() &&
-    prevProps.service.id === nextProps.service.id
+    prevProps.incident.priority === nextProps.incident.priority &&
+    prevAck === nextAck &&
+    prevCreated === nextCreated &&
+    prevProps.service.id === nextProps.service.id &&
+    prevProps.service.targetAckMinutes === nextProps.service.targetAckMinutes &&
+    prevProps.service.targetResolveMinutes === nextProps.service.targetResolveMinutes
   );
 });

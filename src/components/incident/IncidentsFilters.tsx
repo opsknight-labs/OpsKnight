@@ -2,6 +2,7 @@
 
 import { useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -13,7 +14,6 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Card,
   CardContent,
@@ -106,14 +106,14 @@ export default function IncidentsFilters({
 
   return (
     <Card>
-      <CardHeader className="pb-2 pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <CardHeader className="pb-3 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Filter className="h-4 w-4" /> Filter Incidents
+            <CardTitle className="flex items-center gap-2 text-base font-bold">
+              <Filter className="h-4 w-4 text-primary" /> Filter Incidents
             </CardTitle>
-            <CardDescription className="text-xs">
-              Quick filters and sorting for the incident list
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+              Quick filters and sorting for real-time incident triage
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -121,18 +121,18 @@ export default function IncidentsFilters({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer"
                 onClick={clearFilters}
                 disabled={isPending}
               >
-                <X className="mr-1 h-3 w-3" /> Clear All
+                <X className="mr-1 h-3.5 w-3.5" /> Clear All
               </Button>
             )}
             {canCreateIncident && (
               <Button
                 variant="default"
                 size="sm"
-                className="h-7 px-3 text-xs"
+                className="h-8 px-3.5 text-xs font-semibold shadow-xs cursor-pointer"
                 onClick={() => {
                   openCreateIncident();
                 }}
@@ -144,82 +144,117 @@ export default function IncidentsFilters({
         </div>
       </CardHeader>
       <CardContent className="space-y-3 pt-0">
-        <div className="flex flex-wrap gap-1.5">
-          <Badge
-            variant={currentFilter === 'all' && currentTeamId === 'all' ? 'default' : 'outline'}
-            size="sm"
-            className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-primary/90 hover:text-primary-foreground transition-colors"
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <button
+            type="button"
             onClick={() => updateParams({ filter: 'all', teamId: 'all' })}
+            className={cn(
+              'h-7 px-3 text-xs font-medium rounded-full border transition-all cursor-pointer shadow-2xs',
+              currentFilter === 'all' && currentTeamId === 'all'
+                ? 'bg-primary text-primary-foreground border-primary font-semibold shadow-xs'
+                : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+            )}
           >
             All incidents
-          </Badge>
-          <Badge
-            variant={currentFilter === 'mine' ? 'info' : 'outline'}
-            size="sm"
-            className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-blue-100 hover:text-blue-800 transition-colors"
+          </button>
+          <button
+            type="button"
             onClick={() =>
               updateParams({ filter: currentFilter === 'mine' ? 'all' : 'mine', teamId: 'all' })
             }
+            className={cn(
+              'h-7 px-3 text-xs font-medium rounded-full border transition-all cursor-pointer shadow-2xs',
+              currentFilter === 'mine'
+                ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-300/80 dark:border-blue-700/60 font-semibold shadow-xs'
+                : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+            )}
           >
             Mine
-          </Badge>
-          <Badge
-            variant={currentFilter === 'acknowledged' ? 'warning' : 'outline'}
-            size="sm"
-            className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-amber-100 hover:text-amber-800 transition-colors"
+          </button>
+          <button
+            type="button"
             onClick={() =>
               updateParams({
                 filter: currentFilter === 'acknowledged' ? 'all' : 'acknowledged',
                 teamId: 'all',
               })
             }
+            className={cn(
+              'h-7 px-3 text-xs font-medium rounded-full border transition-all cursor-pointer shadow-2xs',
+              currentFilter === 'acknowledged'
+                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-300/80 dark:border-amber-700/60 font-semibold shadow-xs'
+                : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+            )}
           >
             Acknowledged
-          </Badge>
+          </button>
           {teams.length > 0 && (
-            <Badge
-              variant={currentTeamId === 'mine' ? 'info' : 'outline'}
-              size="sm"
-              className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-indigo-100 hover:text-indigo-800 transition-colors"
+            <button
+              type="button"
               onClick={() => updateParams({ teamId: currentTeamId === 'mine' ? 'all' : 'mine' })}
+              className={cn(
+                'h-7 px-3 text-xs font-medium rounded-full border transition-all cursor-pointer shadow-2xs',
+                currentTeamId === 'mine'
+                  ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-300/80 dark:border-indigo-700/60 font-semibold shadow-xs'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+              )}
             >
               My teams
-            </Badge>
+            </button>
           )}
-          <Badge
-            variant={currentUrgency === 'all' ? 'default' : 'outline'}
-            size="sm"
-            className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-primary/90 hover:text-primary-foreground transition-colors"
+
+          <div className="h-4 w-px bg-border/60 mx-1 hidden sm:block" />
+
+          <button
+            type="button"
             onClick={() => updateParams({ urgency: 'all' })}
+            className={cn(
+              'h-7 px-3 text-xs font-medium rounded-full border transition-all cursor-pointer shadow-2xs',
+              currentUrgency === 'all'
+                ? 'bg-primary text-primary-foreground border-primary font-semibold shadow-xs'
+                : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+            )}
           >
             All urgency
-          </Badge>
-          <Badge
-            variant={currentUrgency === 'HIGH' ? 'danger' : 'outline'}
-            size="sm"
-            className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-red-100 hover:text-red-800 transition-colors"
+          </button>
+          <button
+            type="button"
             onClick={() => updateParams({ urgency: currentUrgency === 'HIGH' ? 'all' : 'HIGH' })}
+            className={cn(
+              'h-7 px-3 text-xs font-medium rounded-full border transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1',
+              currentUrgency === 'HIGH'
+                ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-300/80 dark:border-rose-700/60 font-semibold shadow-xs'
+                : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+            )}
           >
-            <Flame className="mr-1 h-3 w-3" /> High urgency
-          </Badge>
-          <Badge
-            variant={currentUrgency === 'MEDIUM' ? 'warning' : 'outline'}
-            size="sm"
-            className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-amber-100 hover:text-amber-800 transition-colors"
+            <Flame className="h-3 w-3" /> High urgency
+          </button>
+          <button
+            type="button"
             onClick={() =>
               updateParams({ urgency: currentUrgency === 'MEDIUM' ? 'all' : 'MEDIUM' })
             }
+            className={cn(
+              'h-7 px-3 text-xs font-medium rounded-full border transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1',
+              currentUrgency === 'MEDIUM'
+                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-300/80 dark:border-amber-700/60 font-semibold shadow-xs'
+                : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+            )}
           >
-            <AlertCircle className="mr-1 h-3 w-3" /> Medium urgency
-          </Badge>
-          <Badge
-            variant={currentUrgency === 'LOW' ? 'success' : 'outline'}
-            size="sm"
-            className="h-7 px-2 text-[11px] cursor-pointer rounded-md hover:bg-emerald-100 hover:text-emerald-800 transition-colors"
+            <AlertCircle className="h-3 w-3" /> Medium urgency
+          </button>
+          <button
+            type="button"
             onClick={() => updateParams({ urgency: currentUrgency === 'LOW' ? 'all' : 'LOW' })}
+            className={cn(
+              'h-7 px-3 text-xs font-medium rounded-full border transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1',
+              currentUrgency === 'LOW'
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-300/80 dark:border-emerald-700/60 font-semibold shadow-xs'
+                : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+            )}
           >
-            <MinusCircle className="mr-1 h-3 w-3" /> Low urgency
-          </Badge>
+            <MinusCircle className="h-3 w-3" /> Low urgency
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">

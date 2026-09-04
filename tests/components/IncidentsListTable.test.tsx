@@ -23,6 +23,13 @@ vi.mock('@/components/ToastProvider', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useRealtime', () => ({
+  useRealtime: () => ({
+    recentIncidents: [],
+    isConnected: true,
+  }),
+}));
+
 vi.mock('@/app/(app)/incidents/actions', () => ({
   updateIncidentStatus: vi.fn().mockResolvedValue({ replayed: false }),
 }));
@@ -78,5 +85,100 @@ describe('IncidentsListTable', () => {
     expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Resolve' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'More' })).toBeDefined();
+  });
+
+  it('renders quick action buttons visible for OPEN incidents and relative time with tooltip', () => {
+    const incidents: IncidentListItem[] = [
+      {
+        id: 'inc-open-1',
+        title: 'Database connection issue',
+        status: 'OPEN',
+        escalationStatus: null,
+        currentEscalationStep: null,
+        nextEscalationAt: null,
+        priority: 'P1',
+        urgency: 'HIGH',
+        createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+        assigneeId: null,
+        teamId: null,
+        service: {
+          id: 'svc-1',
+          name: 'PostgreSQL Primary',
+          targetAckMinutes: 15,
+          targetResolveMinutes: 60,
+        },
+        team: null,
+        assignee: null,
+      },
+    ];
+
+    render(
+      <IncidentsListTable
+        incidents={incidents}
+        users={[{ id: 'user-1', name: 'Alex Doe', email: 'alex@example.com' }]}
+        canManageIncidents
+      />
+    );
+
+    // Ack button is visible for OPEN incident
+    const ackBtn = screen.getByTitle('Acknowledge Incident');
+    expect(ackBtn).toBeDefined();
+
+    // Relative timestamp is rendered
+    expect(screen.getByText(/minutes ago/i)).toBeDefined();
+
+    // Keyboard shortcuts guide is rendered
+    expect(screen.getByText('Shortcuts:')).toBeDefined();
+  });
+
+  it('supports keyboard navigation via J and selection via X', () => {
+    const incidents: IncidentListItem[] = [
+      {
+        id: 'inc-nav-1',
+        title: 'Incident Nav 1',
+        status: 'OPEN',
+        escalationStatus: null,
+        currentEscalationStep: null,
+        nextEscalationAt: null,
+        priority: 'P2',
+        urgency: 'LOW',
+        createdAt: new Date(),
+        assigneeId: null,
+        teamId: null,
+        service: { id: 'svc-1', name: 'Service 1' },
+        team: null,
+        assignee: null,
+      },
+      {
+        id: 'inc-nav-2',
+        title: 'Incident Nav 2',
+        status: 'OPEN',
+        escalationStatus: null,
+        currentEscalationStep: null,
+        nextEscalationAt: null,
+        priority: 'P3',
+        urgency: 'LOW',
+        createdAt: new Date(),
+        assigneeId: null,
+        teamId: null,
+        service: { id: 'svc-2', name: 'Service 2' },
+        team: null,
+        assignee: null,
+      },
+    ];
+
+    render(<IncidentsListTable incidents={incidents} users={[]} canManageIncidents />);
+
+    // Press 'j' to focus first incident
+    fireEvent.keyDown(window, { key: 'j' });
+    // Press 'x' to select focused incident
+    fireEvent.keyDown(window, { key: 'x' });
+
+    // One incident should now be selected, showing bulk action toolbar
+    expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeDefined();
+
+    // Press 'Escape' to deselect
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull();
   });
 });

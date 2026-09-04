@@ -101,15 +101,10 @@ export function IncidentHeatmapWidget({
         className={cn(
           'group relative overflow-hidden p-4 sm:p-6',
           variant === 'dashboard'
-            ? 'rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-white to-primary/5 shadow-sm'
+            ? 'rounded-2xl border border-border bg-card shadow-xs'
             : 'rounded-xl border border-border/50 bg-background/50 shadow-none'
         )}
       >
-        {/* Accent bar - Only for dashboard variant */}
-        {variant === 'dashboard' && (
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/60" />
-        )}
-
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">

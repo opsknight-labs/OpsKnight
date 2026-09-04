@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/shadcn/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { Button } from '@/components/ui/shadcn/button';
-import { Check, ChevronsUpDown, Users as UsersIcon, User, Search, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Users as UsersIcon, User, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type AssigneeSectionProps = {
@@ -58,7 +58,7 @@ export default function AssigneeSection({
   const router = useRouter();
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [_isPending, startTransition] = useTransition();
 
   const handleReassign = async (value: string) => {
     // Value format: "user:id", "team:id", or ""
@@ -209,8 +209,8 @@ export default function AssigneeSection({
           data-no-row-nav="true"
           onClick={e => e.stopPropagation()}
           className={cn(
-            'flex items-center gap-2 px-2 py-1 -ml-2 rounded-md transition-colors',
-            canManage ? 'cursor-pointer hover:bg-slate-100/50' : 'cursor-default'
+            'flex items-center gap-2 px-2 py-1 -ml-2 rounded-lg transition-colors',
+            canManage ? 'cursor-pointer hover:bg-muted/60' : 'cursor-default'
           )}
           role="button"
           tabIndex={canManage ? 0 : -1}
@@ -223,27 +223,27 @@ export default function AssigneeSection({
                 gender={assignee.gender}
                 avatarUrl={assignee.avatarUrl}
                 size="xs"
-                className="border-slate-200"
+                className="border-border/80"
               />
-              <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">
+              <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
                 {assignee.name.split(' ')[0]}
               </span>
             </>
           ) : team ? (
             <>
-              <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center border border-indigo-200">
-                <UsersIcon className="h-3 w-3 text-indigo-600" />
+              <div className="w-6 h-6 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-200/80 dark:border-indigo-800/60">
+                <UsersIcon className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">
+              <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
                 {team.name}
               </span>
             </>
           ) : (
             <>
-              <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 text-slate-400">
+              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center border border-border/80 text-muted-foreground">
                 <User className="h-3 w-3" />
               </div>
-              <span className="text-sm italic text-slate-500">Unassigned</span>
+              <span className="text-sm italic text-muted-foreground">Unassigned</span>
             </>
           )}
         </div>

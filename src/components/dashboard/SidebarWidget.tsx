@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,48 +37,63 @@ export const WIDGET_ICON_BG = {
   cyan: 'cyan',
 };
 
-// Map basic color names to comprehensive theme objects
-const THEME_MAP: Record<string, {
+function getWidgetTheme(color?: string): {
   iconBg: string;
   iconText: string;
   border: string;
-}> = {
-  emerald: {
-    iconBg: 'bg-emerald-100',
-    iconText: 'text-emerald-600',
-    border: 'border-emerald-200/50',
-  },
-  blue: {
-    iconBg: 'bg-blue-100',
-    iconText: 'text-blue-600',
-    border: 'border-blue-200/50',
-  },
-  amber: {
-    iconBg: 'bg-amber-100',
-    iconText: 'text-amber-600',
-    border: 'border-amber-200/50',
-  },
-  violet: {
-    iconBg: 'bg-violet-100',
-    iconText: 'text-violet-600',
-    border: 'border-violet-200/50',
-  },
-  red: {
-    iconBg: 'bg-rose-100',
-    iconText: 'text-rose-600',
-    border: 'border-rose-200/50',
-  },
-  slate: {
-    iconBg: 'bg-slate-100',
-    iconText: 'text-slate-600',
-    border: 'border-slate-200/50',
-  },
-  cyan: {
-    iconBg: 'bg-cyan-100',
-    iconText: 'text-cyan-600',
-    border: 'border-cyan-200/50',
+} | null {
+  switch (color) {
+    case 'emerald':
+    case 'green':
+      return {
+        iconBg: 'bg-emerald-100',
+        iconText: 'text-emerald-600',
+        border: 'border-emerald-200/50',
+      };
+    case 'blue':
+      return {
+        iconBg: 'bg-blue-100',
+        iconText: 'text-blue-600',
+        border: 'border-blue-200/50',
+      };
+    case 'amber':
+    case 'orange':
+      return {
+        iconBg: 'bg-amber-100',
+        iconText: 'text-amber-600',
+        border: 'border-amber-200/50',
+      };
+    case 'violet':
+    case 'purple':
+      return {
+        iconBg: 'bg-violet-100',
+        iconText: 'text-violet-600',
+        border: 'border-violet-200/50',
+      };
+    case 'red':
+      return {
+        iconBg: 'bg-rose-100',
+        iconText: 'text-rose-600',
+        border: 'border-rose-200/50',
+      };
+    case 'slate':
+      return {
+        iconBg: 'bg-slate-100',
+        iconText: 'text-slate-600',
+        border: 'border-slate-200/50',
+      };
+    case 'cyan':
+      return {
+        iconBg: 'bg-cyan-100',
+        iconText: 'text-cyan-600',
+        border: 'border-cyan-200/50',
+      };
+    default:
+      return null;
   }
-};
+}
+
+const subscribeEmpty = () => () => {};
 
 /**
  * Widget Component - Minimal Modern Design (Matching Ops Pulse / Heatmap)
@@ -94,36 +109,36 @@ export default function SidebarWidget({
   onRefresh,
   subtitle,
 }: SidebarWidgetProps) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    subscribeEmpty,
+    () => true,
+    () => false
+  );
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Determine theme based on input
-  const themeKey = Object.values(WIDGET_ICON_BG).includes(iconBg) ? iconBg : 'slate';
-  const theme = THEME_MAP[themeKey] || THEME_MAP.slate;
+  const iconTheme = getWidgetTheme(iconBg);
 
   return (
-    <div className={cn(
-      "group relative rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-white to-primary/5 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden"
-    )}>
-      {/* Accent bar - matching Command Center */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/60" />
-
+    <div
+      className={cn(
+        'rounded-2xl border border-border bg-card shadow-xs transition-all duration-200 overflow-hidden'
+      )}
+    >
       {/* Header */}
-      <div className="p-4 pb-3 border-b border-primary/10">
+      <div className="p-4 pb-3 border-b border-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10 text-primary"
-            )}>
+            <div
+              className={cn(
+                'w-10 h-10 rounded-xl flex items-center justify-center',
+                iconTheme ? cn(iconTheme.iconBg, iconTheme.iconText) : 'bg-primary/10 text-primary'
+              )}
+            >
               {icon}
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+              <h3 className="text-sm font-bold text-foreground">{title}</h3>
               {subtitle && (
-                <p className="text-[10px] text-slate-500 font-medium">{subtitle}</p>
+                <p className="text-[10px] text-muted-foreground font-medium">{subtitle}</p>
               )}
               {/* Last Updated Indicator */}
               {mounted && lastUpdated && (
@@ -157,12 +172,16 @@ export default function SidebarWidget({
                 );
 
                 const buttonClasses = cn(
-                  "h-7 gap-1.5 px-2.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors",
+                  'h-7 gap-1.5 px-2.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
                 );
 
                 if (action.href) {
                   return (
-                    <Link key={idx} href={action.href} className={cn("flex items-center", buttonClasses)}>
+                    <Link
+                      key={idx}
+                      href={action.href}
+                      className={cn('flex items-center', buttonClasses)}
+                    >
                       {buttonContent}
                     </Link>
                   );
@@ -172,7 +191,7 @@ export default function SidebarWidget({
                   <button
                     key={idx}
                     onClick={action.onClick}
-                    className={cn("flex items-center", buttonClasses)}
+                    className={cn('flex items-center', buttonClasses)}
                   >
                     {buttonContent}
                   </button>

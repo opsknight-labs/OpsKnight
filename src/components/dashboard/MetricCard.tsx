@@ -145,7 +145,7 @@ const MetricCard = memo(function MetricCard({
         'relative h-full overflow-hidden text-center transition-all duration-300',
         isHero
           ? 'rounded-lg'
-          : 'group rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-white to-primary/5 shadow-sm hover:shadow-md',
+          : 'group rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm',
         isHero ? 'transform-gpu' : 'transform-gpu',
         isDark
           ? 'bg-white/[0.03] border border-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-white/[0.08] hover:border-white/20'
@@ -158,10 +158,6 @@ const MetricCard = memo(function MetricCard({
       aria-label={`${label}: ${formattedDisplay}${description ? `. ${description}` : ''}${rangeLabel ? ` ${rangeLabel}` : ''}`}
       title={tooltip}
     >
-      {/* Accent bar for default variant */}
-      {!isDark && !isHero && (
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/60" />
-      )}
       {/* Hover glow effect for dark mode */}
       {isDark && (
         <div className="absolute top-0 -left-full w-3/5 h-full bg-gradient-to-r from-transparent via-white/[0.08] to-transparent skew-x-[-20deg] transition-[left] duration-600 pointer-events-none z-0 hover:left-[200%] hover:duration-800" />
