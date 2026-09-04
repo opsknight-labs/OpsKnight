@@ -16,7 +16,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       position="top-right"
       visibleToasts={4}
       gap={10}
-      offset="16px"
+      offset="20px"
       mobileOffset="12px"
       closeButton
       richColors
@@ -30,7 +30,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            'group !w-[min(400px,calc(100vw-24px))] !rounded-xl !border !px-4 !py-3.5 !shadow-[0_12px_32px_-12px_rgba(15,23,42,0.35)] !backdrop-blur-xl',
+            'group relative data-[styled=true]:!w-[min(400px,calc(100vw-24px))] data-[styled=true]:!rounded-xl data-[styled=true]:!border data-[styled=true]:!pl-4 data-[styled=true]:!pr-10 data-[styled=true]:!py-3.5 data-[styled=true]:!shadow-[0_12px_32px_-12px_rgba(15,23,42,0.35)] data-[styled=true]:!backdrop-blur-xl data-[styled=false]:!p-0 data-[styled=false]:!border-0 data-[styled=false]:!bg-transparent data-[styled=false]:!shadow-none data-[styled=false]:!w-auto data-[styled=false]:!overflow-visible',
           success: '!border-emerald-200 !bg-emerald-50/95 !text-emerald-950',
           error: '!border-rose-200 !bg-rose-50/95 !text-rose-950',
           warning: '!border-amber-200 !bg-amber-50/95 !text-amber-950',
@@ -39,7 +39,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           description: '!mt-0.5 !text-sm !leading-5 !text-current !opacity-75',
           icon: '!self-start !mt-0.5',
           closeButton:
-            '!right-2 !top-2 !left-auto !translate-x-0 !translate-y-0 !border-0 !bg-transparent !text-current !opacity-60 hover:!opacity-100',
+            '!right-2.5 !top-2.5 !left-auto !translate-x-0 !translate-y-0 !h-6 !w-6 !rounded-md !border !border-border/70 !bg-background/90 !text-muted-foreground !opacity-100 hover:!text-foreground hover:!bg-muted !pointer-events-auto flex items-center justify-center cursor-pointer shadow-2xs transition-all',
           actionButton: '!rounded-md !bg-slate-900 !text-white hover:!bg-slate-700',
           cancelButton: '!rounded-md !bg-white/70 !text-slate-700 hover:!bg-white',
         },
