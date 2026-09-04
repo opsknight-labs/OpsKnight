@@ -9,7 +9,8 @@ import ProfileDetailTabs from '@/components/settings/ProfileDetailTabs';
 import ProfileHeroBanner from '@/components/settings/ProfileHeroBanner';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
-import { calculateSLAMetrics } from '@/lib/sla-server';
+import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { Users, Calendar, Flame, ShieldCheck } from 'lucide-react';
 
 export const revalidate = 0;
@@ -116,8 +117,9 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
   const localTimeStr = formatLocalTimeInTz(timeZone);
 
   // Centralized SLA Metrics Calculation for Current User (Last 30 Days)
-  const slaMetrics = user?.id
-    ? await calculateSLAMetrics({
+  const actor = user?.id ? await getCurrentAuthorizationActor() : null;
+  const slaMetrics = user?.id && actor
+    ? await calculateActorSLAMetrics(actor, {
         assigneeId: user.id,
         userTimeZone: timeZone,
         windowDays: 30,

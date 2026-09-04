@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
-import { calculateSLAMetrics } from '@/lib/sla-server';
+import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { serializeSlaMetrics } from '@/lib/sla';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { assertCanReadServiceMetrics } from '@/lib/rbac';
+import { assertCanReadServiceMetrics, getCurrentAuthorizationActor } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -85,7 +85,8 @@ export async function GET(request: NextRequest) {
       includeDescription && hasCapability(user.role, CAPABILITIES.INCIDENT_SENSITIVE_READ);
 
     // Calculate metrics using the centralized SLA server
-    const metrics = await calculateSLAMetrics({
+    const actor = await getCurrentAuthorizationActor();
+    const metrics = await calculateActorSLAMetrics(actor, {
       windowDays,
       teamId,
       serviceId,

@@ -16,6 +16,8 @@ import { UserAvatarProvider } from '@/contexts/UserAvatarContext';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import MobileBiometricGuard from '@/components/mobile/MobileBiometricGuard';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 
 // Force all app routes to be dynamic
 export const dynamic = 'force-dynamic';
@@ -51,10 +53,11 @@ export default async function MobileLayout({ children }: { children: React.React
   let systemStatus: 'ok' | 'warning' | 'danger' = 'ok';
 
   try {
+    const actor = await getCurrentAuthorizationActor();
     const openUrgencyCounts = await prisma.incident.groupBy({
       by: ['urgency'],
       where: {
-        status: { in: activeIncidentStatuses() },
+        AND: [incidentReadWhere(actor), { status: { in: activeIncidentStatuses() } }],
       },
       _count: { _all: true },
     });

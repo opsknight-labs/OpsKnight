@@ -1,6 +1,11 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import { getUserPermissions } from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
+import {
+  dashboardUserReadWhere,
+  incidentReadWhere,
+  teamReadWhere,
+} from '@/lib/authorization-filters';
 import IncidentsListTable from '@/components/incident/IncidentsListTable';
 import IncidentsFilters from '@/components/incident/IncidentsFilters';
 import {
@@ -55,25 +60,18 @@ export default async function IncidentsPage({
   const currentPage = parseInt(params.page || '1', 10);
   const skip = (currentPage - 1) * ITEMS_PER_PAGE;
 
-  const permissions = await getUserPermissions();
+  const [permissions, actor] = await Promise.all([
+    getUserPermissions(),
+    getCurrentAuthorizationActor(),
+  ]);
   const canCreateIncident = permissions.capabilities.some(
     capability => capability === 'incident.create.all' || capability === 'incident.create.scoped'
   );
 
-  const currentUser = await prisma.user.findUnique({
-    where: { id: permissions.id },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      teamMemberships: { select: { teamId: true } },
-    },
-  });
+  const userTeamIds = [...actor.teamIds];
 
-  const userTeamIds = currentUser?.teamMemberships.map(t => t.teamId) || [];
-
-  // FIX: Fetch ALL teams for the filter dropdown, not just teams the user is in
   const allTeams = await prisma.team.findMany({
+    where: teamReadWhere(actor),
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   });
@@ -83,7 +81,7 @@ export default async function IncidentsPage({
     search: currentSearch,
     priority: currentPriority,
     urgency: currentUrgency,
-    assigneeId: currentUser?.id ?? permissions.id,
+    assigneeId: actor.id,
     assignee: currentAssignee,
     serviceId: currentServiceId,
     status: currentStatus,
@@ -94,6 +92,7 @@ export default async function IncidentsPage({
   if (currentTeamId !== 'all') {
     where.teamId = currentTeamId === 'mine' ? { in: userTeamIds } : currentTeamId;
   }
+  const effectiveWhere = { AND: [incidentReadWhere(actor), where] };
 
   const orderBy = buildIncidentOrderBy(currentSort);
 
@@ -101,7 +100,7 @@ export default async function IncidentsPage({
     search: currentSearch,
     priority: currentPriority,
     urgency: currentUrgency,
-    assigneeId: currentUser?.id ?? permissions.id,
+    assigneeId: actor.id,
     assignee: currentAssignee,
     serviceId: currentServiceId,
     createdAfter: validCreatedAfter,
@@ -113,15 +112,20 @@ export default async function IncidentsPage({
   if (currentTeamId !== 'all') {
     baseWhere.teamId = currentTeamId === 'mine' ? { in: userTeamIds } : currentTeamId;
   }
+  const effectiveBaseWhere = { AND: [incidentReadWhere(actor), baseWhere] };
+  const mineWhere = buildIncidentWhere({ filter: 'mine', ...statsBase });
+  if (currentTeamId !== 'all') {
+    mineWhere.teamId = currentTeamId === 'mine' ? { in: userTeamIds } : currentTeamId;
+  }
   const [statusCounts, mineCount] = await Promise.all([
     // Single groupBy query for all status counts
     prisma.incident.groupBy({
       by: ['status'],
-      where: baseWhere,
+      where: effectiveBaseWhere,
       _count: { _all: true },
     }),
     // Separate query for "mine" since it has additional assigneeId filter
-    prisma.incident.count({ where: buildIncidentWhere({ filter: 'mine', ...statsBase }) }),
+    prisma.incident.count({ where: { AND: [incidentReadWhere(actor), mineWhere] } }),
   ]);
 
   // Aggregate status counts from groupBy result
@@ -131,11 +135,11 @@ export default async function IncidentsPage({
   const snoozedCount = statusCountMap.get('SNOOZED') || 0;
   const suppressedCount = statusCountMap.get('SUPPRESSED') || 0;
 
-  const totalCount = await prisma.incident.count({ where });
+  const totalCount = await prisma.incident.count({ where: effectiveWhere });
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   const incidents = await prisma.incident.findMany({
-    where,
+    where: effectiveWhere,
     select: incidentListSelect,
     orderBy,
     skip,
@@ -144,7 +148,7 @@ export default async function IncidentsPage({
 
   const users = canCreateIncident
     ? await prisma.user.findMany({
-        where: { status: 'ACTIVE' },
+        where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
         select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
         orderBy: { name: 'asc' },
       })

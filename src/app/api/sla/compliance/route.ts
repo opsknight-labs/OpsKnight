@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { calculateSLAMetrics, calculateMultiServiceUptime } from '@/lib/sla-server';
+import { calculateActorMultiServiceUptime, calculateActorSLAMetrics } from '@/lib/actor-metrics';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -60,6 +61,7 @@ export async function GET(_request: NextRequest) {
     }
 
     const whereClause = await getDefinitionWhereForUser(sessionUser.id, sessionUser.role);
+    const actor = await getCurrentAuthorizationActor();
 
     const definitions = await prisma.sLADefinition.findMany({
       where: whereClause,
@@ -94,7 +96,7 @@ export async function GET(_request: NextRequest) {
           }
 
           // Get SLA metrics for this service
-          const metrics = await calculateSLAMetrics({
+          const metrics = await calculateActorSLAMetrics(actor, {
             serviceId: def.serviceId || undefined,
             priority: (def as any).priority || undefined,
             windowDays,
@@ -111,14 +113,16 @@ export async function GET(_request: NextRequest) {
               if (def.serviceId) {
                 const now = new Date();
                 const startDate = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
-                const uptimeMap = await calculateMultiServiceUptime(
+                const uptimeMap = await calculateActorMultiServiceUptime(
+                  actor,
                   [def.serviceId],
                   startDate,
                   now
                 );
                 currentValue = uptimeMap[def.serviceId] ?? null;
                 const previousStart = new Date(startDate.getTime() - windowDays * 86400000);
-                const previousMap = await calculateMultiServiceUptime(
+                const previousMap = await calculateActorMultiServiceUptime(
+                  actor,
                   [def.serviceId],
                   previousStart,
                   startDate

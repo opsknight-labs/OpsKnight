@@ -2,7 +2,7 @@ import Link from 'next/link';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { calculateSLAMetrics } from '@/lib/sla-server';
+import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import DashboardRealtimeWrapper from '@/components/DashboardRealtimeWrapper';
 import DashboardCommandCenter from '@/components/dashboard/DashboardCommandCenter';
 import DashboardIncidentFilters from '@/components/dashboard/DashboardIncidentFilters';
@@ -42,7 +42,7 @@ import { IncidentHeatmapWidget } from '@/components/dashboard/widgets/IncidentHe
 import { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import {
-  dashboardMetricsScope,
+  actorMetricReadScope,
   dashboardUserReadWhere,
   incidentReadWhere,
   serviceReadWhere,
@@ -133,7 +133,7 @@ export default async function Dashboard({
   const incidentAccess = incidentReadWhere(actor);
   const serviceAccess = serviceReadWhere(actor);
   const userAccess = dashboardUserReadWhere(actor);
-  const metricsScope = dashboardMetricsScope(actor);
+  const metricsScope = actorMetricReadScope(actor);
 
   // Build filters using utility functions
   const filterParams: DashboardFilterParams = {
@@ -227,7 +227,7 @@ export default async function Dashboard({
       orderBy: { name: 'asc' },
     }),
     // Fail-safe wrapper for SLA metrics
-    calculateSLAMetrics({
+    calculateActorSLAMetrics(actor, {
       serviceId: service,
       assigneeId: assigneeFilter,
       urgency: urgency as 'HIGH' | 'MEDIUM' | 'LOW' | undefined,
@@ -238,7 +238,6 @@ export default async function Dashboard({
       includeIncidents: true,
       includeActiveIncidents: true,
       incidentLimit: 5,
-      ...metricsScope,
     }).catch(err => {
       console.error('Failed to load SLA metrics:', err);
       // Return safe default object matching return type

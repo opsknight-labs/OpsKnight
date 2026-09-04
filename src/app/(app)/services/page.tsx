@@ -3,7 +3,12 @@ import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { logAudit } from '@/lib/audit';
-import { getUserPermissions, assertAdminOrResponder } from '@/lib/rbac';
+import {
+  getCurrentAuthorizationActor,
+  getUserPermissions,
+  assertAdminOrResponder,
+} from '@/lib/rbac';
+import { incidentReadWhere, serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import ServicesListTable from '@/components/service/ServicesListTable';
 import ServicesFilters from '@/components/service/ServicesFilters';
@@ -92,43 +97,63 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     parseInt(typeof params?.page === 'string' ? params.page : '1', 10)
   );
 
+  const [permissions, actor] = await Promise.all([
+    getUserPermissions(),
+    getCurrentAuthorizationActor(),
+  ]);
+  const serviceAccess = serviceReadWhere(actor);
+  const incidentAccess = incidentReadWhere(actor);
+  const canCreateService = permissions.isAdminOrResponder;
+
   const [teams, policies] = await Promise.all([
-    prisma.team.findMany({ orderBy: { name: 'asc' } }),
-    prisma.escalationPolicy.findMany({
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    }),
+    prisma.team.findMany({ where: teamReadWhere(actor), orderBy: { name: 'asc' } }),
+    canCreateService
+      ? prisma.escalationPolicy.findMany({
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
   ]);
 
   // Build where clause for filtering
-  const andConditions: Prisma.ServiceWhereInput[] = [];
+  const nonStatusConditions: Prisma.ServiceWhereInput[] = [];
   if (searchQuery) {
-    andConditions.push({
+    nonStatusConditions.push({
       OR: [
         { name: { contains: searchQuery, mode: 'insensitive' as const } },
         { description: { contains: searchQuery, mode: 'insensitive' as const } },
       ],
     });
   }
-  if (teamFilter) andConditions.push({ teamId: teamFilter });
+  if (teamFilter) nonStatusConditions.push({ teamId: teamFilter });
+  const selectedNonStatusWhere: Prisma.ServiceWhereInput =
+    nonStatusConditions.length > 0 ? { AND: nonStatusConditions } : {};
+  const baseWhere: Prisma.ServiceWhereInput = {
+    AND: [serviceAccess, selectedNonStatusWhere],
+  };
+  const statusConditions: Prisma.ServiceWhereInput[] = [];
   if (statusFilter !== 'all') {
     const active = {
       status: { in: activeIncidentStatuses() },
     };
     if (statusFilter === 'CRITICAL') {
-      andConditions.push({ incidents: { some: { ...active, urgency: 'HIGH' } } });
+      statusConditions.push({
+        incidents: { some: { AND: [incidentAccess, { ...active, urgency: 'HIGH' }] } },
+      });
     } else if (statusFilter === 'DEGRADED') {
-      andConditions.push({
+      statusConditions.push({
         AND: [
-          { incidents: { some: active } },
-          { incidents: { none: { ...active, urgency: 'HIGH' } } },
+          { incidents: { some: { AND: [incidentAccess, active] } } },
+          { incidents: { none: { AND: [incidentAccess, { ...active, urgency: 'HIGH' }] } } },
         ],
       });
     } else if (statusFilter === 'OPERATIONAL') {
-      andConditions.push({ incidents: { none: active } });
+      statusConditions.push({ incidents: { none: { AND: [incidentAccess, active] } } });
     }
   }
-  const where: Prisma.ServiceWhereInput = andConditions.length > 0 ? { AND: andConditions } : {};
+  const selectedWhere: Prisma.ServiceWhereInput =
+    statusConditions.length > 0 ? { AND: [selectedNonStatusWhere, ...statusConditions] } : selectedNonStatusWhere;
+  const where: Prisma.ServiceWhereInput = { AND: [serviceAccess, selectedWhere] };
 
   // Build orderBy clause
   let orderBy: Prisma.ServiceOrderByWithRelationInput = { name: 'asc' };
@@ -136,39 +161,71 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     orderBy = { name: 'desc' };
   } else if (sortBy === 'status') {
     orderBy = { status: 'asc' };
-  } else if (sortBy === 'incidents_desc') {
-    orderBy = { incidents: { _count: 'desc' } };
-  } else if (sortBy === 'incidents_asc') {
-    orderBy = { incidents: { _count: 'asc' } };
   }
 
-  const totalFilteredItems = await prisma.service.count({ where });
+  const isIncidentCountSort = sortBy === 'incidents_desc' || sortBy === 'incidents_asc';
+  const [totalFilteredItems, countSortServices] = await Promise.all([
+    prisma.service.count({ where }),
+    isIncidentCountSort
+      ? prisma.service.findMany({ where, select: { id: true, name: true } })
+      : Promise.resolve([]),
+  ]);
   const totalPages = Math.ceil(totalFilteredItems / ITEMS_PER_PAGE);
   const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
 
-  const services = await prisma.service.findMany({
-    where,
-    skip: startIdx,
-    take: ITEMS_PER_PAGE,
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      region: true,
-      slaTier: true,
-      status: true,
-      team: true,
-      policy: {
-        select: { id: true, name: true },
-      },
-    },
-    orderBy,
-  });
+  const serviceSelect = {
+    id: true,
+    name: true,
+    description: true,
+    region: true,
+    slaTier: true,
+    status: true,
+    team: true,
+    policy: { select: { id: true, name: true } },
+  } as const;
+  const countSortActiveCounts = isIncidentCountSort
+    ? await prisma.incident.groupBy({
+        by: ['serviceId'],
+        where: {
+          AND: [
+            incidentAccess,
+            { status: { in: activeIncidentStatuses() } },
+            { serviceId: { in: countSortServices.map(service => service.id) } },
+          ],
+        },
+        _count: { _all: true },
+      })
+    : [];
+  const countByServiceId = new Map(
+    countSortActiveCounts.map(count => [count.serviceId, count._count._all])
+  );
+  const orderedCountSortIds = isIncidentCountSort
+    ? countSortServices
+        .sort((left, right) => {
+          const difference = (countByServiceId.get(left.id) ?? 0) - (countByServiceId.get(right.id) ?? 0);
+          return (sortBy === 'incidents_desc' ? -difference : difference) || left.name.localeCompare(right.name);
+        })
+        .map(service => service.id)
+    : [];
+  const pageServiceIds = orderedCountSortIds.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  const services = isIncidentCountSort
+    ? await prisma.service.findMany({ where: { id: { in: pageServiceIds } }, select: serviceSelect })
+    : await prisma.service.findMany({
+        where,
+        skip: startIdx,
+        take: ITEMS_PER_PAGE,
+        select: serviceSelect,
+        orderBy,
+      });
+  if (isIncidentCountSort) {
+    const position = new Map(pageServiceIds.map((id, index) => [id, index]));
+    services.sort((left, right) => (position.get(left.id) ?? 0) - (position.get(right.id) ?? 0));
+  }
 
-  const { calculateSLAMetrics } = await import('@/lib/sla-server');
+  const { calculateActorSLAMetrics } = await import('@/lib/actor-metrics');
   const slaWindowDays = 30;
   // SLA server is the source of truth for service metrics/status
-  const slaMetrics = await calculateSLAMetrics({
+  const slaMetrics = await calculateActorSLAMetrics(actor, {
     windowDays: slaWindowDays,
     includeActiveIncidents: true,
     serviceId: services.map(s => s.id),
@@ -199,29 +256,32 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     };
   });
 
-  // Calculate high-level stats (just for the page, or maybe we need total stats?)
-  // If we need total stats, we can't get it without fetching all. Let's just keep stats based on what we have, or leave it. Wait, the user didn't mention stats, but they said "Remove the in-memory .filter(), .sort(), .slice() operations".
   const totalServices = totalFilteredItems;
   const active = {
     status: { in: activeIncidentStatuses() },
   };
   const [operationalCount, degradedCount, criticalCount] = await Promise.all([
-    prisma.service.count({ where: { incidents: { none: active } } }),
+    prisma.service.count({
+      where: { AND: [baseWhere, { incidents: { none: { AND: [incidentAccess, active] } } }] },
+    }),
     prisma.service.count({
       where: {
         AND: [
-          { incidents: { some: active } },
-          { incidents: { none: { ...active, urgency: 'HIGH' } } },
+          baseWhere,
+          { incidents: { some: { AND: [incidentAccess, active] } } },
+          { incidents: { none: { AND: [incidentAccess, { ...active, urgency: 'HIGH' }] } } },
         ],
       },
     }),
     prisma.service.count({
-      where: { incidents: { some: { ...active, urgency: 'HIGH' } } },
+      where: {
+        AND: [
+          baseWhere,
+          { incidents: { some: { AND: [incidentAccess, { ...active, urgency: 'HIGH' }] } } },
+        ],
+      },
     }),
   ]);
-
-  const permissions = await getUserPermissions();
-  const canCreateService = permissions.isAdminOrResponder;
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">

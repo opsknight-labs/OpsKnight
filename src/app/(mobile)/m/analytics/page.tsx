@@ -12,10 +12,14 @@ import { INCIDENT_METRIC_DEFINITIONS, metricDefinitionTooltip } from '@/lib/metr
 export const dynamic = 'force-dynamic';
 
 export default async function MobileAnalyticsPage() {
-  const { calculateSLAMetrics } = await import('@/lib/sla-server');
+  const [{ calculateActorSLAMetrics }, { getCurrentAuthorizationActor }] = await Promise.all([
+    import('@/lib/actor-metrics'),
+    import('@/lib/rbac'),
+  ]);
+  const actor = await getCurrentAuthorizationActor();
   const metricsWindowDays = 90;
   const lastUpdated = new Date();
-  const slaMetrics = await calculateSLAMetrics({
+  const slaMetrics = await calculateActorSLAMetrics(actor, {
     windowDays: metricsWindowDays,
     includeAllTime: false,
     includeIncidents: true,
