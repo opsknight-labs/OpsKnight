@@ -462,12 +462,18 @@ export default async function Dashboard({
     .sort((a, b) => b.count - a.count)
     .slice(0, 4);
 
+  const canManageIncidents = user.role === 'ADMIN' || user.role === 'RESPONDER';
+  const myActiveShift = activeShifts.find(shift => shift.userId === user.id);
+  const myActiveShiftData = myActiveShift
+    ? {
+        scheduleName: myActiveShift.schedule.name,
+        end: myActiveShift.end,
+      }
+    : null;
+
   return (
     <DashboardRealtimeWrapper>
-      <div
-        className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 min-h-screen space-y-4 sm:space-y-6"
-        style={{ zoom: 0.95 }}
-      >
+      <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 min-h-screen space-y-4 sm:space-y-6">
         <DashboardCommandCenter
           systemStatus={systemStatus}
           allActiveIncidentsCount={allActiveIncidentsCount}
@@ -502,6 +508,7 @@ export default async function Dashboard({
           mutedHref={mutedHref}
           resolvedHref={resolvedHref}
           unassignedHref={unassignedHref}
+          myActiveShift={myActiveShiftData}
         />
 
         {/* Smart Insights Banner - Auto-generated alerts */}
@@ -797,7 +804,7 @@ export default async function Dashboard({
             <IncidentsListTable
               incidents={recentIncidentListItems}
               users={users}
-              canManageIncidents={false}
+              canManageIncidents={canManageIncidents}
               title="Latest incidents"
               showExport={false}
             />

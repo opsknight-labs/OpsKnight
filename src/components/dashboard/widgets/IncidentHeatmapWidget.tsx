@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Activity } from 'lucide-react';
 import {
@@ -26,6 +27,20 @@ export function IncidentHeatmapWidget({
   year = new Date().getFullYear(),
   variant = 'dashboard',
 }: IncidentHeatmapWidgetProps) {
+  const router = useRouter();
+
+  const handleDayClick = useCallback(
+    (dayDate: Date) => {
+      if (variant !== 'dashboard') return;
+      const y = dayDate.getFullYear();
+      const m = String(dayDate.getMonth() + 1).padStart(2, '0');
+      const d = String(dayDate.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+      router.push(`/?startDate=${dateStr}&endDate=${dateStr}&range=custom`, { scroll: false });
+    },
+    [router, variant]
+  );
+
   const { weeks, monthLabels, totalCount, maxCount } = useMemo(() => {
     const map = new Map<string, number>();
     let total = 0;
@@ -146,21 +161,45 @@ export function IncidentHeatmapWidget({
               <Tooltip key={`${w}-${d}`} delayDuration={0}>
                 <TooltipTrigger asChild>
                   <div
-                    className={cn('rounded-sm', getColor(day.count))}
+                    role={variant === 'dashboard' ? 'button' : undefined}
+                    tabIndex={variant === 'dashboard' ? 0 : undefined}
+                    onClick={() => handleDayClick(day.date)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleDayClick(day.date);
+                      }
+                    }}
+                    className={cn(
+                      'rounded-sm transition-all',
+                      getColor(day.count),
+                      variant === 'dashboard' &&
+                        'cursor-pointer hover:ring-2 hover:ring-primary/60 hover:scale-125 focus:outline-none focus:ring-2 focus:ring-primary'
+                    )}
                     style={{
                       aspectRatio: '1 / 1',
                       minWidth: '6px',
                       minHeight: '6px',
                     }}
+                    aria-label={`${day.count} incidents on ${day.date.toLocaleDateString()}`}
                   />
                 </TooltipTrigger>
-                <TooltipContent className="text-xs">
-                  {day.count} incidents ·{' '}
-                  {day.date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
+                <TooltipContent className="text-xs space-y-0.5">
+                  <div className="font-semibold">
+                    {day.count} {day.count === 1 ? 'incident' : 'incidents'}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {day.date.toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </div>
+                  {variant === 'dashboard' && (
+                    <div className="text-[10px] text-primary font-semibold pt-0.5">
+                      Click to view date &rarr;
+                    </div>
+                  )}
                 </TooltipContent>
               </Tooltip>
             ))

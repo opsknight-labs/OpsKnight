@@ -142,7 +142,7 @@ export default function SidebarWidget({
               )}
               {/* Last Updated Indicator */}
               {mounted && lastUpdated && (
-                <p className="text-[10px] text-slate-400 font-medium">
+                <p className="text-[10px] text-muted-foreground font-medium">
                   Updated {getTimeAgo(lastUpdated)}
                 </p>
               )}
@@ -157,7 +157,7 @@ export default function SidebarWidget({
                   onClick={onRefresh}
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600"
+                  className="h-7 w-7 hover:bg-accent rounded-lg text-muted-foreground hover:text-foreground"
                   title="Refresh data"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -172,7 +172,7 @@ export default function SidebarWidget({
                 );
 
                 const buttonClasses = cn(
-                  'h-7 gap-1.5 px-2.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
+                  'h-7 gap-1.5 px-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors'
                 );
 
                 if (action.href) {
@@ -206,8 +206,8 @@ export default function SidebarWidget({
         {/* Loading State */}
         {isLoading ? (
           <div className="py-6 text-center text-muted-foreground">
-            <Loader2 className="h-5 w-5 mx-auto mb-2 animate-spin text-slate-400" />
-            <p className="text-xs text-slate-400">Loading...</p>
+            <Loader2 className="h-5 w-5 mx-auto mb-2 animate-spin text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">Loading...</p>
           </div>
         ) : (
           children

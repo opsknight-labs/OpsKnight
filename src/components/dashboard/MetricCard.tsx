@@ -142,17 +142,15 @@ const MetricCard = memo(function MetricCard({
   const card = (
     <div
       className={cn(
-        'relative h-full overflow-hidden text-center transition-all duration-300',
+        'relative h-full overflow-hidden text-center transition-all duration-200',
         isHero
-          ? 'rounded-lg'
+          ? 'rounded-xl border border-border/70 bg-card hover:border-border hover:bg-accent/30 shadow-2xs'
           : 'group rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm',
-        isHero ? 'transform-gpu' : 'transform-gpu',
+        'transform-gpu',
         isDark
           ? 'bg-white/[0.03] border border-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-white/[0.08] hover:border-white/20'
-          : isHero
-            ? 'bg-white/10 border border-white/20 backdrop-blur text-primary-foreground shadow-sm hover:bg-white/15'
-            : '',
-        isHero ? 'flex min-h-32 flex-col justify-center p-3 md:p-4' : 'p-6 sm:p-4'
+          : '',
+        isHero ? 'flex min-h-28 flex-col justify-center p-3 md:p-4' : 'p-6 sm:p-4'
       )}
       role="figure"
       aria-label={`${label}: ${formattedDisplay}${description ? `. ${description}` : ''}${rangeLabel ? ` ${rangeLabel}` : ''}`}
@@ -165,8 +163,8 @@ const MetricCard = memo(function MetricCard({
 
       <div
         className={cn(
-          'text-3xl sm:text-2xl font-bold mb-1.5 leading-tight tabular-nums relative z-10',
-          isDark ? 'text-white' : isHero ? 'text-primary-foreground' : 'text-foreground'
+          'text-2xl md:text-3xl font-extrabold mb-1 leading-tight tabular-nums relative z-10 text-foreground',
+          isDark && 'text-white'
         )}
         aria-live="polite"
       >
@@ -174,17 +172,20 @@ const MetricCard = memo(function MetricCard({
       </div>
       <div
         className={cn(
-          'text-xs font-medium uppercase tracking-wide relative z-10',
-          isDark ? 'text-white/70' : isHero ? 'text-primary-foreground/80' : 'text-muted-foreground'
+          'text-[11px] font-bold uppercase tracking-wider relative z-10 text-muted-foreground',
+          isDark && 'text-white/70'
         )}
       >
-        {label} {rangeLabel && <span className="opacity-80 text-[0.7rem]">{rangeLabel}</span>}
+        {label}{' '}
+        {rangeLabel && (
+          <span className="opacity-80 text-[10px] font-medium lowercase">({rangeLabel})</span>
+        )}
       </div>
       {description && (
         <div
           className={cn(
-            'mt-1 text-[0.7rem] leading-tight relative z-10',
-            isDark || isHero ? 'text-white/75' : 'text-muted-foreground'
+            'mt-1 text-[11px] leading-tight relative z-10 text-muted-foreground/80 font-medium',
+            isDark && 'text-white/75'
           )}
         >
           {description}
@@ -193,8 +194,7 @@ const MetricCard = memo(function MetricCard({
       {dataState !== 'available' && (
         <div
           className={cn(
-            'mt-1 text-[0.65rem] font-semibold uppercase tracking-wide relative z-10',
-            isDark || isHero ? 'text-amber-100' : 'text-amber-700'
+            'mt-1 text-[10px] font-semibold uppercase tracking-wide relative z-10 text-amber-600 dark:text-amber-400'
           )}
           role="status"
         >
@@ -216,7 +216,7 @@ const MetricCard = memo(function MetricCard({
   return (
     <Link
       href={href}
-      className="block h-full rounded-lg no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+      className="block h-full rounded-xl no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-transform active:scale-[0.98]"
       aria-label={`View ${label.toLowerCase()} incidents`}
     >
       {card}

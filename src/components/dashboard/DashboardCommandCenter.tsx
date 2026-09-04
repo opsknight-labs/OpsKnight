@@ -6,7 +6,7 @@ import DashboardExport from '../DashboardExport';
 import MetricCard from './MetricCard';
 import LiveClock from './LiveClock';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   INCIDENT_METRIC_DEFINITIONS,
@@ -47,7 +47,21 @@ type DashboardCommandCenterProps = {
   mutedHref?: string;
   resolvedHref?: string;
   unassignedHref?: string;
+  myActiveShift?: {
+    scheduleName: string;
+    end: Date | string;
+  } | null;
 };
+
+function formatShiftRemaining(end: Date | string): string {
+  const endDate = new Date(end);
+  const diffMs = endDate.getTime() - Date.now();
+  if (diffMs <= 0) return 'Ending soon';
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
 
 export default function DashboardCommandCenter({
   systemStatus,
@@ -74,6 +88,7 @@ export default function DashboardCommandCenter({
   mutedHref,
   resolvedHref,
   unassignedHref,
+  myActiveShift,
 }: DashboardCommandCenterProps) {
   // Determine status badge color
   const statusVariant =
@@ -95,56 +110,70 @@ export default function DashboardCommandCenter({
     : null;
 
   return (
-    <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-4 md:p-6 mb-6 shadow-lg">
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-card text-foreground p-4 md:p-6 mb-6 shadow-xs transition-colors">
       {/* Header */}
-      <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-6 mb-6">
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-primary-foreground">
+      <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-6 mb-5">
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">
               Command Center
             </h1>
             <LiveClock timeZone={userTimeZone} />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-2xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live
+            </span>
           </div>
 
-          {/* System Status */}
-          <div className="flex flex-wrap items-center gap-2 text-sm text-primary-foreground/80">
-            <span className="font-medium">System Status:</span>
+          {/* System Status and Personalized On-Call Shift */}
+          <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">System:</span>
             <Badge
               variant={statusVariant}
               size="xs"
               className={cn('font-bold uppercase tracking-wide border')}
-              style={
-                {
-                  '--status-color-rgb':
-                    systemStatus.label === 'CRITICAL'
-                      ? '239, 68, 68'
-                      : systemStatus.label === 'DEGRADED'
-                        ? '245, 158, 11'
-                        : '34, 197, 94',
-                } as React.CSSProperties
-              }
             >
               {systemStatus.label}
             </Badge>
-            {allActiveIncidentsCount > 0 && (
-              <span className="text-xs text-primary-foreground/80">
-                ({allActiveIncidentsCount} active)
-              </span>
+
+            {allActiveIncidentsCount > 0 ? (
+              <Badge variant="danger" size="xs" className="gap-1 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                {allActiveIncidentsCount} active
+              </Badge>
+            ) : (
+              <Badge variant="success" size="xs" className="gap-1 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                All healthy
+              </Badge>
             )}
-            <Badge
-              variant="outline"
-              size="xs"
-              className="text-xs text-primary-foreground/80 border-white/30"
-            >
-              Range {rangeLabel}
+
+            <Badge variant="outline" size="xs" className="text-muted-foreground border-border/80">
+              Period: {rangeLabel}
             </Badge>
+
+            {myActiveShift && (
+              <Badge
+                variant="neutral"
+                size="xs"
+                className="bg-primary/10 text-primary border-primary/30 font-semibold gap-1.5 py-0.5"
+              >
+                <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span>
+                  You&apos;re On-Call: {myActiveShift.scheduleName} (
+                  {formatShiftRemaining(myActiveShift.end)} left)
+                </span>
+              </Badge>
+            )}
+
             {metricDataState === 'unavailable' ? (
               <Badge variant="warning" size="xs" className="text-xs">
                 Metric data unavailable
               </Badge>
             ) : dataAsOfLabel ? (
-              <span className="text-xs text-primary-foreground/70">Updated {dataAsOfLabel}</span>
+              <span className="text-xs text-muted-foreground/80">Updated {dataAsOfLabel}</span>
             ) : null}
+
             {/* Retention Warning */}
             {isClipped && (
               <Badge
@@ -161,11 +190,11 @@ export default function DashboardCommandCenter({
         </div>
 
         {/* Actions */}
-        <div className="flex gap-2">
-          <Suspense fallback={<div className="h-9 w-20 bg-white/20 rounded-md animate-pulse" />}>
+        <div className="flex gap-2 shrink-0">
+          <Suspense fallback={<div className="h-9 w-20 bg-muted rounded-md animate-pulse" />}>
             <DashboardRefresh />
           </Suspense>
-          <Suspense fallback={<div className="h-9 w-24 bg-white/20 rounded-md animate-pulse" />}>
+          <Suspense fallback={<div className="h-9 w-24 bg-muted rounded-md animate-pulse" />}>
             <DashboardExport
               incidents={incidents}
               filters={filters}

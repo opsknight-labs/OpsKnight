@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useTransition } from 'react';
+import { useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/shadcn/input';
 import {
@@ -21,10 +21,8 @@ import {
   ArrowUpDown,
   Activity,
   X,
-  ChevronRight,
 } from 'lucide-react';
 import DashboardTimeRange from '@/components/DashboardTimeRange';
-import { cn } from '@/lib/utils';
 
 type DashboardIncidentFiltersProps = {
   services: Array<{ id: string; name: string }>;
@@ -51,7 +49,7 @@ const sortOptions = [
 
 export default function DashboardIncidentFilters({
   services,
-  users,
+  users: _users,
   currentStatus,
   currentUrgency,
   currentService,
@@ -150,7 +148,7 @@ export default function DashboardIncidentFilters({
               <button
                 onClick={clearFilters}
                 disabled={isPending}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors"
               >
                 <X className="w-3 h-3" />
                 Clear
@@ -164,15 +162,19 @@ export default function DashboardIncidentFilters({
       <div className="p-4 space-y-4">
         {/* Quick Filters */}
         <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+          <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">
             Quick Filters
           </p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Badge
-              variant={currentStatus === 'all' && currentAssignee === 'all' ? 'default' : 'outline'}
+              variant={
+                currentStatus === 'all' && currentAssignee === 'all' && currentUrgency === 'all'
+                  ? 'default'
+                  : 'outline'
+              }
               size="xs"
               className="cursor-pointer transition-colors"
-              onClick={() => updateParams({ status: 'all', assignee: 'all' })}
+              onClick={() => updateParams({ status: 'all', assignee: 'all', urgency: 'all' })}
             >
               All
             </Badge>
@@ -192,6 +194,26 @@ export default function DashboardIncidentFilters({
               Mine
             </Badge>
             <Badge
+              variant={
+                currentStatus === 'ACTIVE' &&
+                currentAssignee !== 'unassigned' &&
+                currentUrgency !== 'HIGH'
+                  ? 'info'
+                  : 'outline'
+              }
+              size="xs"
+              className="cursor-pointer transition-colors"
+              onClick={() => {
+                if (currentStatus === 'ACTIVE') {
+                  updateParams({ status: 'all' });
+                  return;
+                }
+                updateParams({ status: 'ACTIVE' });
+              }}
+            >
+              <Activity className="mr-0.5 h-3 w-3" /> Active Only
+            </Badge>
+            <Badge
               variant={currentAssignee === 'unassigned' ? 'info' : 'outline'}
               size="xs"
               className="cursor-pointer transition-colors"
@@ -205,14 +227,14 @@ export default function DashboardIncidentFilters({
             >
               Unassigned
             </Badge>
-            <div className="h-5 w-px bg-slate-200 mx-0.5" />
+            <div className="h-5 w-px bg-border mx-0.5" />
             <Badge
               variant={currentUrgency === 'HIGH' ? 'danger' : 'outline'}
               size="xs"
               className="cursor-pointer transition-colors"
               onClick={() => updateParams({ urgency: currentUrgency === 'HIGH' ? 'all' : 'HIGH' })}
             >
-              <Flame className="mr-0.5 h-3 w-3" /> High
+              <Flame className="mr-0.5 h-3 w-3" /> Critical / High
             </Badge>
             <Badge
               variant={currentUrgency === 'MEDIUM' ? 'warning' : 'outline'}
@@ -237,7 +259,9 @@ export default function DashboardIncidentFilters({
 
         {/* Advanced Filters Grid */}
         <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Advanced</p>
+          <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">
+            Advanced
+          </p>
 
           {/* Time Range - Full Width */}
           <div className="mb-3">
@@ -247,11 +271,11 @@ export default function DashboardIncidentFilters({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 id="dashboard-incident-search"
                 placeholder="Search..."
-                className="h-9 pl-8 text-xs bg-white border-slate-200 focus:border-blue-300 rounded-lg"
+                className="h-9 pl-8 text-xs bg-background border-border focus:border-primary/40 rounded-lg"
                 value={currentSearch}
                 onChange={e => updateParams({ search: e.target.value })}
               />
@@ -262,9 +286,9 @@ export default function DashboardIncidentFilters({
               value={currentService}
               onValueChange={val => updateParams({ service: val === 'all' ? 'all' : val })}
             >
-              <SelectTrigger className="h-9 text-xs bg-white border-slate-200 focus:border-blue-300 rounded-lg">
+              <SelectTrigger className="h-9 text-xs bg-background border-border focus:border-primary/40 rounded-lg">
                 <div className="flex items-center gap-1.5">
-                  <Briefcase className="h-3.5 w-3.5 text-blue-500" />
+                  <Briefcase className="h-3.5 w-3.5 text-primary" />
                   <SelectValue placeholder="Service" />
                 </div>
               </SelectTrigger>
@@ -280,7 +304,7 @@ export default function DashboardIncidentFilters({
 
             {/* Status */}
             <Select value={currentStatus} onValueChange={val => updateParams({ status: val })}>
-              <SelectTrigger className="h-9 text-xs bg-white border-slate-200 focus:border-blue-300 rounded-lg">
+              <SelectTrigger className="h-9 text-xs bg-background border-border focus:border-primary/40 rounded-lg">
                 <div className="flex items-center gap-1.5">
                   <Activity className="h-3.5 w-3.5 text-emerald-500" />
                   <SelectValue placeholder="Status" />
@@ -322,7 +346,7 @@ export default function DashboardIncidentFilters({
                 updateParams({ sortBy: 'all', sortOrder: 'all' });
               }}
             >
-              <SelectTrigger className="h-9 text-xs bg-white border-slate-200 focus:border-blue-300 rounded-lg">
+              <SelectTrigger className="h-9 text-xs bg-background border-border focus:border-primary/40 rounded-lg">
                 <div className="flex items-center gap-1.5">
                   <ArrowUpDown className="h-3.5 w-3.5 text-violet-500" />
                   <SelectValue placeholder="Sort" />
@@ -339,7 +363,9 @@ export default function DashboardIncidentFilters({
           </div>
         </div>
 
-        {isPending && <div className="text-[10px] text-slate-400 animate-pulse">Updating...</div>}
+        {isPending && (
+          <div className="text-[10px] text-muted-foreground animate-pulse">Updating...</div>
+        )}
       </div>
     </div>
   );

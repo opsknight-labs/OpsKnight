@@ -49,15 +49,17 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
           const classes = cn(
             'group flex items-center gap-3 p-2.5 rounded-lg border transition-colors w-full',
             action.variant === 'primary'
-              ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
-              : 'bg-white border-slate-100 text-slate-700 hover:border-slate-200 hover:bg-slate-50/50'
+              ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90 shadow-2xs'
+              : 'bg-card border-border/80 text-foreground hover:border-border hover:bg-accent/50'
           );
           const content = (
             <>
               <div
                 className={cn(
                   'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                  action.variant === 'primary' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'
+                  action.variant === 'primary'
+                    ? 'bg-primary-foreground/20'
+                    : 'bg-muted text-muted-foreground'
                 )}
               >
                 {action.icon}
@@ -67,8 +69,8 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
                 className={cn(
                   'w-3.5 h-3.5 shrink-0 transition-colors',
                   action.variant === 'primary'
-                    ? 'text-white/50 group-hover:text-white/80'
-                    : 'text-slate-300 group-hover:text-slate-500'
+                    ? 'text-primary-foreground/60 group-hover:text-primary-foreground'
+                    : 'text-muted-foreground/60 group-hover:text-muted-foreground'
                 )}
               />
             </>
