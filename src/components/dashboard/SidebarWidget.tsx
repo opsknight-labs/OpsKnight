@@ -37,51 +37,61 @@ export const WIDGET_ICON_BG = {
   cyan: 'cyan',
 };
 
-// Map basic color names to comprehensive theme objects
-const THEME_MAP: Record<
-  string,
-  {
-    iconBg: string;
-    iconText: string;
-    border: string;
+function getWidgetTheme(color?: string): {
+  iconBg: string;
+  iconText: string;
+  border: string;
+} | null {
+  switch (color) {
+    case 'emerald':
+    case 'green':
+      return {
+        iconBg: 'bg-emerald-100',
+        iconText: 'text-emerald-600',
+        border: 'border-emerald-200/50',
+      };
+    case 'blue':
+      return {
+        iconBg: 'bg-blue-100',
+        iconText: 'text-blue-600',
+        border: 'border-blue-200/50',
+      };
+    case 'amber':
+    case 'orange':
+      return {
+        iconBg: 'bg-amber-100',
+        iconText: 'text-amber-600',
+        border: 'border-amber-200/50',
+      };
+    case 'violet':
+    case 'purple':
+      return {
+        iconBg: 'bg-violet-100',
+        iconText: 'text-violet-600',
+        border: 'border-violet-200/50',
+      };
+    case 'red':
+      return {
+        iconBg: 'bg-rose-100',
+        iconText: 'text-rose-600',
+        border: 'border-rose-200/50',
+      };
+    case 'slate':
+      return {
+        iconBg: 'bg-slate-100',
+        iconText: 'text-slate-600',
+        border: 'border-slate-200/50',
+      };
+    case 'cyan':
+      return {
+        iconBg: 'bg-cyan-100',
+        iconText: 'text-cyan-600',
+        border: 'border-cyan-200/50',
+      };
+    default:
+      return null;
   }
-> = {
-  emerald: {
-    iconBg: 'bg-emerald-100',
-    iconText: 'text-emerald-600',
-    border: 'border-emerald-200/50',
-  },
-  blue: {
-    iconBg: 'bg-blue-100',
-    iconText: 'text-blue-600',
-    border: 'border-blue-200/50',
-  },
-  amber: {
-    iconBg: 'bg-amber-100',
-    iconText: 'text-amber-600',
-    border: 'border-amber-200/50',
-  },
-  violet: {
-    iconBg: 'bg-violet-100',
-    iconText: 'text-violet-600',
-    border: 'border-violet-200/50',
-  },
-  red: {
-    iconBg: 'bg-rose-100',
-    iconText: 'text-rose-600',
-    border: 'border-rose-200/50',
-  },
-  slate: {
-    iconBg: 'bg-slate-100',
-    iconText: 'text-slate-600',
-    border: 'border-slate-200/50',
-  },
-  cyan: {
-    iconBg: 'bg-cyan-100',
-    iconText: 'text-cyan-600',
-    border: 'border-cyan-200/50',
-  },
-};
+}
 
 /**
  * Widget Component - Minimal Modern Design (Matching Ops Pulse / Heatmap)
@@ -103,7 +113,7 @@ export default function SidebarWidget({
     setMounted(true);
   }, []);
 
-  const iconTheme = iconBg && THEME_MAP[iconBg] ? THEME_MAP[iconBg] : null;
+  const iconTheme = getWidgetTheme(iconBg);
 
   return (
     <div

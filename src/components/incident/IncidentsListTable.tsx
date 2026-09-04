@@ -80,21 +80,35 @@ type IncidentsListTableProps = {
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 type BulkActionMode = 'reassign' | 'priority' | 'snooze' | 'urgency' | 'status' | null;
 
-const statusAccentBar: Record<IncidentStatus, string> = {
-  OPEN: 'bg-rose-500',
-  ACKNOWLEDGED: 'bg-blue-600',
-  RESOLVED: 'bg-emerald-500',
-  SNOOZED: 'bg-slate-400',
-  SUPPRESSED: 'bg-slate-400',
-};
+function getStatusAccentBar(status: IncidentStatus): string {
+  switch (status) {
+    case 'OPEN':
+      return 'bg-rose-500';
+    case 'ACKNOWLEDGED':
+      return 'bg-blue-600';
+    case 'RESOLVED':
+      return 'bg-emerald-500';
+    case 'SNOOZED':
+    case 'SUPPRESSED':
+    default:
+      return 'bg-slate-400';
+  }
+}
 
-const statusHoverBorder: Record<IncidentStatus, string> = {
-  OPEN: 'hover:border-rose-300/80 dark:hover:border-rose-800/60',
-  ACKNOWLEDGED: 'hover:border-blue-300/80 dark:hover:border-blue-800/60',
-  RESOLVED: 'hover:border-emerald-300/80 dark:hover:border-emerald-800/60',
-  SNOOZED: 'hover:border-slate-300/80 dark:hover:border-slate-700/60',
-  SUPPRESSED: 'hover:border-slate-300/80 dark:hover:border-slate-700/60',
-};
+function getStatusHoverBorder(status: IncidentStatus): string {
+  switch (status) {
+    case 'OPEN':
+      return 'hover:border-rose-300/80 dark:hover:border-rose-800/60';
+    case 'ACKNOWLEDGED':
+      return 'hover:border-blue-300/80 dark:hover:border-blue-800/60';
+    case 'RESOLVED':
+      return 'hover:border-emerald-300/80 dark:hover:border-emerald-800/60';
+    case 'SNOOZED':
+    case 'SUPPRESSED':
+    default:
+      return 'hover:border-slate-300/80 dark:hover:border-slate-700/60';
+  }
+}
 
 export default function IncidentsListTable({
   incidents,
@@ -123,7 +137,7 @@ export default function IncidentsListTable({
 
   // Keyboard navigation focus index & global G sequence coordination
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const lastGTimeRef = useRef<number>(0);
 
   useEffect(() => {
@@ -160,8 +174,9 @@ export default function IncidentsListTable({
   }, [recentIncidents, router]);
 
   useEffect(() => {
-    if (focusedIndex !== null && rowRefs.current[focusedIndex]) {
-      rowRefs.current[focusedIndex]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (focusedIndex !== null) {
+      const el = rowRefs.current.get(focusedIndex);
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }, [focusedIndex]);
 
@@ -284,10 +299,11 @@ export default function IncidentsListTable({
         return;
       }
 
+      const focused = focusedIndex !== null ? incidents.at(focusedIndex) : null;
+
       // Open focused incident
       if (e.key === 'Enter' || key === 'o') {
-        if (focusedIndex !== null && incidents[focusedIndex]) {
-          const focused = incidents[focusedIndex];
+        if (focused) {
           e.preventDefault();
           setNavigatingId(focused.id);
           startTransition(() => {
@@ -318,35 +334,29 @@ export default function IncidentsListTable({
       }
 
       if (key === 'x') {
-        if (focusedIndex !== null && incidents[focusedIndex]) {
+        if (focused && focusedIndex !== null) {
           e.preventDefault();
-          toggleSelectWithRange(incidents[focusedIndex].id, focusedIndex, false);
+          toggleSelectWithRange(focused.id, focusedIndex, false);
         }
         return;
       }
 
       if (key === 'a') {
-        if (focusedIndex !== null && incidents[focusedIndex] && canManageIncidents) {
-          const focused = incidents[focusedIndex];
-          if (focused.status === 'OPEN') {
-            e.preventDefault();
-            handleStatusChange(focused.id, 'ACKNOWLEDGED');
-          }
+        if (focused && canManageIncidents && focused.status === 'OPEN') {
+          e.preventDefault();
+          handleStatusChange(focused.id, 'ACKNOWLEDGED');
         }
         return;
       }
 
       if (key === 'r' || key === 'e') {
-        if (focusedIndex !== null && incidents[focusedIndex] && canManageIncidents) {
-          const focused = incidents[focusedIndex];
-          if (focused.status !== 'RESOLVED') {
-            e.preventDefault();
-            setResolvingIncident({
-              id: focused.id,
-              title: focused.title,
-              service: focused.service,
-            });
-          }
+        if (focused && canManageIncidents && focused.status !== 'RESOLVED') {
+          e.preventDefault();
+          setResolvingIncident({
+            id: focused.id,
+            title: focused.title,
+            service: focused.service,
+          });
         }
         return;
       }
@@ -867,14 +877,18 @@ export default function IncidentsListTable({
                 <div
                   key={incident.id}
                   ref={el => {
-                    rowRefs.current[idx] = el;
+                    if (el) {
+                      rowRefs.current.set(idx, el);
+                    } else {
+                      rowRefs.current.delete(idx);
+                    }
                   }}
                   className={cn(
                     'group relative rounded-2xl border bg-card transition-all duration-200 overflow-hidden',
                     'hover:shadow-md hover:border-border',
                     'focus-within:ring-2 focus-within:ring-primary/20',
                     'border-border/75',
-                    statusHoverBorder[incidentStatus],
+                    getStatusHoverBorder(incidentStatus),
                     isSelected && 'ring-1 ring-primary/30 border-primary/50 bg-primary/5',
                     isFocused && 'ring-2 ring-primary/60 border-primary/70 shadow-sm bg-accent/25',
                     isNewlyIncoming &&
@@ -905,7 +919,7 @@ export default function IncidentsListTable({
                   <div
                     className={cn(
                       'absolute left-0 top-3 bottom-3 w-1 rounded-r-full transition-all duration-200',
-                      statusAccentBar[incidentStatus] ?? 'bg-slate-400',
+                      getStatusAccentBar(incidentStatus),
                       isSelected
                         ? 'w-1.5 opacity-100'
                         : 'opacity-80 group-hover:opacity-100 group-hover:w-1.25'
