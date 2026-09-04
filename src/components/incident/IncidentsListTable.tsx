@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
@@ -205,30 +205,33 @@ export default function IncidentsListTable({
     return { hasSnoozed, hasSuppressed };
   }, [selectedIds, incidents]);
 
-  const handleStatusChange = async (incidentId: string, status: IncidentStatus) => {
-    if (status === 'RESOLVED') {
-      const inc = incidents.find(i => i.id === incidentId);
-      if (inc) {
-        setResolvingIncident({
-          id: inc.id,
-          title: inc.title,
-          service: inc.service,
-        });
+  const handleStatusChange = useCallback(
+    async (incidentId: string, status: IncidentStatus) => {
+      if (status === 'RESOLVED') {
+        const inc = incidents.find(i => i.id === incidentId);
+        if (inc) {
+          setResolvingIncident({
+            id: inc.id,
+            title: inc.title,
+            service: inc.service,
+          });
+        }
+        return;
       }
-      return;
-    }
 
-    startTransition(async () => {
-      try {
-        await updateIncidentStatus(incidentId, status);
-        showToast(`Incident ${status.toLowerCase()} successfully`, 'success');
-        router.refresh();
-      } catch (error) {
-        const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
-        showToast(getUserFacingErrorMessage(error) || 'Failed to update status', 'error');
-      }
-    });
-  };
+      startTransition(async () => {
+        try {
+          await updateIncidentStatus(incidentId, status);
+          showToast(`Incident ${status.toLowerCase()} successfully`, 'success');
+          router.refresh();
+        } catch (error) {
+          const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
+          showToast(getUserFacingErrorMessage(error) || 'Failed to update status', 'error');
+        }
+      });
+    },
+    [incidents, router, showToast]
+  );
 
   const toggleSelectAllOnPage = () => {
     if (selectedIds.size === incidents.length) {
@@ -240,29 +243,34 @@ export default function IncidentsListTable({
     setLastSelectedIndex(incidents.length - 1);
   };
 
-  const toggleSelectWithRange = (id: string, index: number, shiftKey: boolean) => {
-    const next = new Set(selectedIds);
+  const toggleSelectWithRange = useCallback(
+    (id: string, index: number, shiftKey: boolean) => {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
 
-    // If shift pressed and we have a prior index, select a range
-    if (shiftKey && lastSelectedIndex !== null) {
-      const [from, to] =
-        index > lastSelectedIndex ? [lastSelectedIndex, index] : [index, lastSelectedIndex];
-      const rangeIds = incidents.slice(from, to + 1).map(i => i.id);
+        // If shift pressed and we have a prior index, select a range
+        if (shiftKey && lastSelectedIndex !== null) {
+          const [from, to] =
+            index > lastSelectedIndex ? [lastSelectedIndex, index] : [index, lastSelectedIndex];
+          const rangeIds = incidents.slice(from, to + 1).map(i => i.id);
 
-      // If the clicked one is already selected, interpret as "remove range", else "add range"
-      const shouldRemove = next.has(id);
-      for (const rid of rangeIds) {
-        if (shouldRemove) next.delete(rid);
-        else next.add(rid);
-      }
-    } else {
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-    }
+          // If the clicked one is already selected, interpret as "remove range", else "add range"
+          const shouldRemove = next.has(id);
+          for (const rid of rangeIds) {
+            if (shouldRemove) next.delete(rid);
+            else next.add(rid);
+          }
+        } else {
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+        }
+        return next;
+      });
 
-    setSelectedIds(next);
-    setLastSelectedIndex(index);
-  };
+      setLastSelectedIndex(index);
+    },
+    [incidents, lastSelectedIndex]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -384,7 +392,15 @@ export default function IncidentsListTable({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [incidents, focusedIndex, canManageIncidents, selectedIds]);
+  }, [
+    incidents,
+    focusedIndex,
+    canManageIncidents,
+    selectedIds,
+    handleStatusChange,
+    router,
+    toggleSelectWithRange,
+  ]);
 
   const handleBulkAction = async (
     action:
@@ -966,12 +982,9 @@ export default function IncidentsListTable({
                         </Link>
 
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                          <StatusBadge status={incidentStatus as any} size="sm" showDot />
+                          <StatusBadge status={incidentStatus} size="sm" showDot />
                           <PriorityBadge priority={incident.priority} size="sm" />
-                          <SLABreachWarningBadge
-                            incident={incident as any}
-                            service={incident.service as any}
-                          />
+                          <SLABreachWarningBadge incident={incident} service={incident.service} />
                           {urgencyChip}
                           {incident.escalationStatus && (
                             <EscalationStatusBadge

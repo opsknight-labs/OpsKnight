@@ -23,6 +23,13 @@ vi.mock('@/components/ToastProvider', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useRealtime', () => ({
+  useRealtime: () => ({
+    recentIncidents: [],
+    isConnected: true,
+  }),
+}));
+
 vi.mock('@/app/(app)/incidents/actions', () => ({
   updateIncidentStatus: vi.fn().mockResolvedValue({ replayed: false }),
 }));

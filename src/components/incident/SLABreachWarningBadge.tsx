@@ -1,7 +1,6 @@
 'use client';
 
 import { memo, useMemo } from 'react';
-import { Incident, Service } from '@prisma/client';
 import { AlertCircle, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { getPrioritySLATarget } from '@/lib/sla-priority';
@@ -13,9 +12,23 @@ import { cn } from '@/lib/utils';
  * Displays a warning indicator for incidents nearing SLA breach.
  */
 
-type SLABreachWarningBadgeProps = {
-  incident: Incident;
-  service: Service;
+export type SLABreachIncident = {
+  id: string;
+  status: string;
+  createdAt: Date;
+  priority?: string | null;
+  acknowledgedAt?: Date | null;
+};
+
+export type SLABreachService = {
+  id: string;
+  targetAckMinutes?: number | null;
+  targetResolveMinutes?: number | null;
+};
+
+export type SLABreachWarningBadgeProps = {
+  incident: SLABreachIncident;
+  service: SLABreachService;
   /** Warning threshold in minutes before breach */
   ackWarningMinutes?: number;
   resolveWarningMinutes?: number;

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -93,6 +93,8 @@ function getWidgetTheme(color?: string): {
   }
 }
 
+const subscribeEmpty = () => () => {};
+
 /**
  * Widget Component - Minimal Modern Design (Matching Ops Pulse / Heatmap)
  */
@@ -107,11 +109,11 @@ export default function SidebarWidget({
   onRefresh,
   subtitle,
 }: SidebarWidgetProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    subscribeEmpty,
+    () => true,
+    () => false
+  );
 
   const iconTheme = getWidgetTheme(iconBg);
 
