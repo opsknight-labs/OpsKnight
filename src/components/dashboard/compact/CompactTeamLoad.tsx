@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useMemo } from 'react';
+import { cn } from '@/lib/utils';
 
 /**
  * Compact Team Load Widget
@@ -18,13 +19,32 @@ interface CompactTeamLoadProps {
 }
 
 /**
- * Gets the load indicator color based on incident count
+ * Gets the load indicator styling based on incident count
  */
-function getLoadColor(count: number): string {
-  if (!Number.isFinite(count) || count < 0) return 'var(--text-muted)';
-  if (count >= 5) return 'var(--color-error)';
-  if (count >= 3) return 'var(--color-warning)';
-  return 'var(--color-success)';
+function getLoadConfig(count: number): {
+  badgeClass: string;
+  barClass: string;
+  label: string;
+} {
+  if (count >= 5) {
+    return {
+      badgeClass: 'bg-rose-100 text-rose-800 border-rose-200',
+      barClass: 'bg-rose-500',
+      label: 'overloaded',
+    };
+  }
+  if (count >= 3) {
+    return {
+      badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
+      barClass: 'bg-amber-500',
+      label: 'busy',
+    };
+  }
+  return {
+    badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    barClass: 'bg-emerald-500',
+    label: 'normal',
+  };
 }
 
 /**
@@ -71,11 +91,11 @@ const CompactTeamLoad = memo(function CompactTeamLoad({ assigneeLoad }: CompactT
   if (activeAssignees.length === 0) {
     return (
       <div
-        className="p-3.5 rounded-sm bg-neutral-50 border border-border text-center"
+        className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center"
         role="status"
         aria-label="No active assignments"
       >
-        <div className="text-sm text-muted-foreground font-medium">No active assignments</div>
+        <div className="text-xs text-slate-500 font-medium">No active assignments</div>
       </div>
     );
   }
@@ -85,29 +105,27 @@ const CompactTeamLoad = memo(function CompactTeamLoad({ assigneeLoad }: CompactT
       {activeAssignees.map(assignee => {
         const displayName = getDisplayName(assignee.name);
         const initials = getInitials(assignee.name);
-        const loadColor = getLoadColor(assignee.count);
-        const loadLabel =
-          assignee.count >= 5 ? 'overloaded' : assignee.count >= 3 ? 'busy' : 'normal';
+        const config = getLoadConfig(assignee.count);
 
         return (
           <div
             key={assignee.id}
-            className="flex flex-col gap-1.5 p-2.5 rounded-md bg-muted/40 border border-border"
+            className="flex flex-col gap-1.5 p-2 rounded-lg bg-slate-50/60 border border-slate-200 shadow-2xs"
             role="listitem"
-            aria-label={`${displayName}: ${assignee.count} incidents, ${loadLabel}`}
+            aria-label={`${displayName}: ${assignee.count} incidents, ${config.label}`}
           >
             <div className="flex items-center justify-between">
               {/* Name */}
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 {/* Avatar placeholder */}
                 <div
-                  className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0"
+                  className="w-5.5 h-5.5 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700 shrink-0"
                   aria-hidden="true"
                 >
                   {initials}
                 </div>
                 <span
-                  className="text-sm font-medium text-foreground whitespace-nowrap overflow-hidden overflow-ellipsis"
+                  className="text-xs font-semibold text-slate-800 whitespace-nowrap overflow-hidden overflow-ellipsis"
                   title={displayName}
                 >
                   {displayName}
@@ -115,20 +133,21 @@ const CompactTeamLoad = memo(function CompactTeamLoad({ assigneeLoad }: CompactT
               </div>
               {/* Count badge */}
               <div
-                className="py-0.5 px-2 rounded-full text-white text-xs font-semibold min-w-[20px] text-center tabular-nums"
-                style={{ background: loadColor }}
+                className={cn(
+                  'py-0.5 px-1.5 rounded text-[10px] font-bold border tabular-nums',
+                  config.badgeClass
+                )}
                 aria-label={`${assignee.count} incidents`}
               >
                 {assignee.count}
               </div>
             </div>
             {/* Progress bar */}
-            <div className="h-1 w-full bg-slate-200 rounded-full overflow-hidden">
+            <div className="h-1 w-full bg-slate-200/80 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-300"
+                className={cn('h-full rounded-full transition-all duration-300', config.barClass)}
                 style={{
                   width: `${Math.min(100, (assignee.count / 5) * 100)}%`,
-                  background: loadColor,
                 }}
               />
             </div>
