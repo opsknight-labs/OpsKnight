@@ -8,7 +8,6 @@ import {
   X,
   AlertTriangle,
   Zap,
-  Clock,
   CheckCircle2,
   ArrowRight,
 } from 'lucide-react';
@@ -22,7 +21,6 @@ type Insight = {
   tag: string;
   icon: React.ReactNode;
   headline: string;
-  subtext?: string;
   action?: {
     label: string;
     href: string;
@@ -38,7 +36,6 @@ type SmartInsightsBannerProps = {
   topServiceName?: string;
   topServiceId?: string;
   topServiceCount?: number;
-  resolveCompliance?: number | null;
 };
 
 function getInsightTheme(type: Insight['type']) {
@@ -91,14 +88,28 @@ export default function SmartInsightsBanner({
   topServiceName,
   topServiceId,
   topServiceCount = 0,
-  resolveCompliance,
 }: SmartInsightsBannerProps) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
   const insights = useMemo(() => {
     const results: Insight[] = [];
 
-    // High unassigned ratio
+    // 1. Critical incidents spike (Top priority)
+    if (criticalIncidents >= 3) {
+      results.push({
+        id: 'critical-spike',
+        type: 'critical',
+        tag: 'CRITICAL',
+        icon: <Zap className="h-4 w-4" />,
+        headline: `${criticalIncidents} critical incidents active${activeIncidents > 0 ? ` (out of ${activeIncidents} active incidents)` : ''}.`,
+        action: {
+          label: 'View Critical Feed',
+          href: '/?status=ACTIVE&urgency=HIGH',
+        },
+      });
+    }
+
+    // 2. High unassigned ratio (Second priority)
     if (activeIncidents > 0 && unassignedIncidents / activeIncidents > 0.3) {
       const unassignedPct = Math.min(
         100,
@@ -117,42 +128,7 @@ export default function SmartInsightsBanner({
       });
     }
 
-    // Critical incidents spike
-    if (criticalIncidents >= 3) {
-      results.push({
-        id: 'critical-spike',
-        type: 'critical',
-        tag: 'CRITICAL',
-        icon: <Zap className="h-4 w-4" />,
-        headline: `${criticalIncidents} critical incidents active${activeIncidents > 0 ? ` (out of ${activeIncidents} active incidents)` : ''}.`,
-        action: {
-          label: 'View Critical Feed',
-          href: '/?status=ACTIVE&urgency=HIGH',
-        },
-      });
-    }
-
-    // SLA compliance risk
-    if (
-      resolveCompliance !== undefined &&
-      resolveCompliance !== null &&
-      resolveCompliance < 85 &&
-      totalIncidents > 0
-    ) {
-      results.push({
-        id: 'sla-risk',
-        type: 'warning',
-        tag: 'SLA RISK',
-        icon: <Clock className="h-4 w-4" />,
-        headline: `Resolution SLA compliance is ${resolveCompliance.toFixed(0)}% (target ≥ 85%).`,
-        action: {
-          label: 'View SLA Analytics',
-          href: '/analytics',
-        },
-      });
-    }
-
-    // Service concentration
+    // 3. Service concentration (Fallback insight if space allows)
     if (topServiceName && topServiceCount >= 3 && totalIncidents > 0) {
       const concentration = Math.min(
         100,
@@ -175,7 +151,7 @@ export default function SmartInsightsBanner({
       }
     }
 
-    // High volume day
+    // 4. High volume day (Fallback insight if space allows)
     if (avgIncidentsPerDay > 0 && totalIncidents > avgIncidentsPerDay * 1.5) {
       const volumePct = Math.max(0, Math.round((totalIncidents / avgIncidentsPerDay - 1) * 100));
       results.push({
@@ -191,7 +167,7 @@ export default function SmartInsightsBanner({
       });
     }
 
-    // All clear
+    // 5. All clear (Only when 0 active incidents)
     if (results.length === 0 && activeIncidents === 0) {
       results.push({
         id: 'all-clear',
@@ -206,7 +182,8 @@ export default function SmartInsightsBanner({
       });
     }
 
-    return results.filter(insight => !dismissedIds.has(insight.id));
+    // Keep at most two insights to keep the banner sleek and compact
+    return results.filter(insight => !dismissedIds.has(insight.id)).slice(0, 2);
   }, [
     totalIncidents,
     activeIncidents,
@@ -216,7 +193,6 @@ export default function SmartInsightsBanner({
     topServiceName,
     topServiceId,
     topServiceCount,
-    resolveCompliance,
     dismissedIds,
   ]);
 

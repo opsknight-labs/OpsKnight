@@ -514,7 +514,6 @@ export default async function Dashboard({
             topServiceName={topServiceByVolume?.name}
             topServiceId={topServiceByVolume?.id}
             topServiceCount={topServiceByVolume?.count}
-            resolveCompliance={slaMetrics.resolveCompliance}
           />
         ) : (
           <div

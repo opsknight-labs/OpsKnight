@@ -107,7 +107,7 @@ describe('SmartInsightsBanner', () => {
     ).toBeNull();
   });
 
-  it('should render 1-click action links for active alerts', () => {
+  it('should render 1-click action links and cap display at two insights', () => {
     render(
       <SmartInsightsBanner
         totalIncidents={50}
@@ -117,26 +117,39 @@ describe('SmartInsightsBanner', () => {
         topServiceName="Checkout API"
         topServiceId="svc-123"
         topServiceCount={25}
-        resolveCompliance={78}
       />
     );
 
-    // Unassigned triage action
-    const unassignedAction = screen.getByRole('link', { name: /Triage Unassigned/i });
-    expect(unassignedAction.getAttribute('href')).toBe('/?status=ACTIVE&assignee=unassigned');
+    // Exactly two insights are displayed
+    expect(screen.getAllByRole('button', { name: /dismiss insight/i })).toHaveLength(2);
 
-    // Critical feed action
+    // Critical feed action (Priority #1)
     const criticalAction = screen.getByRole('link', { name: /View Critical Feed/i });
     expect(criticalAction.getAttribute('href')).toBe('/?status=ACTIVE&urgency=HIGH');
 
-    // Service inspection action
+    // Unassigned triage action (Priority #2)
+    const unassignedAction = screen.getByRole('link', { name: /Triage Unassigned/i });
+    expect(unassignedAction.getAttribute('href')).toBe('/?status=ACTIVE&assignee=unassigned');
+
+    // Third insight is omitted to keep display compact
+    expect(screen.queryByRole('link', { name: /Inspect Checkout API/i })).toBeNull();
+  });
+
+  it('should render service inspection action when higher-priority alerts are clear', () => {
+    render(
+      <SmartInsightsBanner
+        totalIncidents={50}
+        activeIncidents={20}
+        criticalIncidents={0}
+        unassignedIncidents={0}
+        topServiceName="Checkout API"
+        topServiceId="svc-123"
+        topServiceCount={25}
+      />
+    );
+
     const serviceAction = screen.getByRole('link', { name: /Inspect Checkout API/i });
     expect(serviceAction.getAttribute('href')).toBe('/services/svc-123');
-
-    // SLA risk action
-    const slaAction = screen.getByRole('link', { name: /View SLA Analytics/i });
-    expect(slaAction.getAttribute('href')).toBe('/analytics');
-    expect(screen.getByText(/Resolution SLA compliance is 78% \(target ≥ 85%\)/i)).toBeDefined();
   });
 
   it('should render public status action on all clear banner', () => {
