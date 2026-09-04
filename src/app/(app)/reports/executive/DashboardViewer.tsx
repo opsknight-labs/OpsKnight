@@ -195,20 +195,20 @@ export default function DashboardViewer({
   return (
     <div className="w-full px-4 py-6 space-y-6 [zoom:0.8]">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 text-slate-100 shadow-xl ring-1 ring-white/5 md:p-6">
+      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
         <div className="relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
             <Link
               href="/reports"
-              className="mt-1 p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700/80 transition-colors"
+              className="mt-1 p-2 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-700/80 transition-colors"
             >
               <ChevronLeft className="h-5 w-5" />
             </Link>
             <div>
               <div className="flex items-center gap-2 mb-1">
                 {isTemplate && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800/90 text-amber-400 border border-slate-700/80">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-800/90 text-amber-400 border border-zinc-700/80">
                     <Sparkles className="h-3 w-3" />
                     Template
                   </span>
@@ -217,7 +217,7 @@ export default function DashboardViewer({
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
                 {dashboardName}
               </h1>
-              <p className="text-xs md:text-sm text-slate-300 mt-1">{dashboardDescription}</p>
+              <p className="text-xs md:text-sm text-zinc-300 mt-1">{dashboardDescription}</p>
             </div>
           </div>
 
@@ -225,7 +225,7 @@ export default function DashboardViewer({
             {isTemplate && (
               <Button
                 variant="secondary"
-                className="bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white font-semibold gap-2 shadow-xs transition-all"
+                className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white font-semibold gap-2 shadow-xs transition-all"
                 onClick={handleCloneDashboard}
                 disabled={isCloning}
               >
@@ -239,7 +239,7 @@ export default function DashboardViewer({
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white"
+                  className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white"
                 >
                   <Settings className="h-4 w-4" />
                 </Button>

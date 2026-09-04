@@ -5,7 +5,6 @@ import { buildIncidentListHref } from '@/lib/incident-links';
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import SidebarWidget, { WIDGET_ICON_BG } from '@/components/dashboard/SidebarWidget';
 import { useWidgetData } from '@/components/dashboard/WidgetProvider';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { AlertTriangle, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -195,8 +194,8 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                 className={cn(
                   'group flex items-center gap-3 p-2.5 rounded-lg border text-left w-full transition-colors',
                   isUrgent
-                    ? 'bg-rose-50/50 border-rose-200 hover:border-rose-300'
-                    : 'bg-amber-50/50 border-amber-200 hover:border-amber-300'
+                    ? 'bg-rose-50/50 border-rose-200 hover:border-rose-300 border-l-4 border-l-rose-500'
+                    : 'bg-amber-50/50 border-amber-200 hover:border-amber-300 border-l-4 border-l-amber-500'
                 )}
                 role="listitem"
                 aria-label={`${incident.title} - ${actionLabel} deadline in ${timeStr}`}

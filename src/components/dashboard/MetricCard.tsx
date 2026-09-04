@@ -11,6 +11,7 @@ type MetricCardProps = {
   rangeLabel?: string;
   isDark?: boolean;
   variant?: 'default' | 'hero';
+  tone?: 'default' | 'rose' | 'amber' | 'emerald';
   description?: string;
   href?: string;
   tooltip?: string;
@@ -92,6 +93,7 @@ const MetricCard = memo(function MetricCard({
   rangeLabel,
   isDark = false,
   variant = 'default',
+  tone = 'default',
   description,
   href,
   tooltip,
@@ -139,12 +141,33 @@ const MetricCard = memo(function MetricCard({
 
   const isHero = variant === 'hero';
 
+  const heroToneClass =
+    tone === 'rose'
+      ? 'border-rose-500/30 bg-rose-950/20 hover:border-rose-500/50 hover:bg-rose-950/30'
+      : tone === 'amber'
+        ? 'border-amber-500/30 bg-amber-950/20 hover:border-amber-500/50 hover:bg-amber-950/30'
+        : tone === 'emerald'
+          ? 'border-emerald-500/30 bg-emerald-950/20 hover:border-emerald-500/50 hover:bg-emerald-950/30'
+          : 'border-zinc-800/80 bg-zinc-900/60 hover:border-zinc-700/80 hover:bg-zinc-800/60';
+
+  const heroValueClass =
+    tone === 'rose'
+      ? 'text-rose-400 font-extrabold'
+      : tone === 'amber'
+        ? 'text-amber-400 font-extrabold'
+        : tone === 'emerald'
+          ? 'text-emerald-400 font-extrabold'
+          : 'text-white font-extrabold';
+
   const card = (
     <div
       className={cn(
         'relative h-full overflow-hidden text-center transition-all duration-300',
         isHero
-          ? 'rounded-xl border border-slate-800/90 bg-slate-900/80 shadow-xs hover:border-slate-700/90 hover:bg-slate-800/80 transition-all text-slate-100 backdrop-blur-xs'
+          ? cn(
+              'rounded-xl border shadow-xs transition-all text-slate-100 backdrop-blur-xs',
+              heroToneClass
+            )
           : 'group rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm',
         'transform-gpu',
         isDark && !isHero
@@ -164,7 +187,7 @@ const MetricCard = memo(function MetricCard({
       <div
         className={cn(
           'text-3xl sm:text-2xl font-bold mb-1.5 leading-tight tabular-nums relative z-10',
-          isDark ? 'text-white' : isHero ? 'text-white font-extrabold' : 'text-foreground'
+          isDark ? 'text-white' : isHero ? heroValueClass : 'text-foreground'
         )}
         aria-live="polite"
       >

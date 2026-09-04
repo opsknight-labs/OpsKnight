@@ -42,39 +42,39 @@ function getInsightTheme(type: Insight['type']) {
   switch (type) {
     case 'critical':
       return {
-        card: 'border border-rose-200/90 dark:border-rose-900/40 bg-white dark:bg-slate-900/90 shadow-xs border-l-4 border-l-rose-600 text-slate-800 dark:text-slate-100',
+        card: 'border border-rose-300/80 dark:border-rose-900/40 bg-rose-50/90 dark:bg-rose-950/40 shadow-xs border-l-4 border-l-rose-600 text-rose-950 dark:text-rose-100',
         icon: 'text-rose-600 dark:text-rose-400',
         badge:
-          'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 font-bold text-[10px] tracking-wider uppercase',
+          'bg-white/90 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800/60 font-bold text-[10px] tracking-wider uppercase',
         actionButton:
-          'text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-100 bg-rose-50 hover:bg-rose-100/80 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/60 shadow-xs',
+          'text-rose-700 dark:text-rose-200 hover:text-rose-900 dark:hover:text-white bg-white hover:bg-rose-100/60 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-rose-300/80 dark:border-rose-800/60 shadow-xs',
       };
     case 'warning':
       return {
-        card: 'border border-amber-200/90 dark:border-amber-900/40 bg-white dark:bg-slate-900/90 shadow-xs border-l-4 border-l-amber-500 text-slate-800 dark:text-slate-100',
+        card: 'border border-amber-300/80 dark:border-amber-900/40 bg-amber-50/90 dark:bg-amber-950/40 shadow-xs border-l-4 border-l-amber-500 text-amber-950 dark:text-amber-100',
         icon: 'text-amber-600 dark:text-amber-400',
         badge:
-          'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold text-[10px] tracking-wider uppercase',
+          'bg-white/90 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60 font-bold text-[10px] tracking-wider uppercase',
         actionButton:
-          'text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800/60 shadow-xs',
+          'text-amber-700 dark:text-amber-200 hover:text-amber-900 dark:hover:text-white bg-white hover:bg-amber-100/60 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-amber-300/80 dark:border-amber-800/60 shadow-xs',
       };
     case 'info':
       return {
-        card: 'border border-sky-200/90 dark:border-sky-900/40 bg-white dark:bg-slate-900/90 shadow-xs border-l-4 border-l-sky-500 text-slate-800 dark:text-slate-100',
+        card: 'border border-sky-300/80 dark:border-sky-900/40 bg-sky-50/90 dark:bg-sky-950/40 shadow-xs border-l-4 border-l-sky-500 text-sky-950 dark:text-sky-100',
         icon: 'text-sky-600 dark:text-sky-400',
         badge:
-          'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60 font-bold text-[10px] tracking-wider uppercase',
+          'bg-white/90 dark:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800/60 font-bold text-[10px] tracking-wider uppercase',
         actionButton:
-          'text-sky-700 dark:text-sky-300 hover:text-sky-900 dark:hover:text-sky-100 bg-sky-50 hover:bg-sky-100/80 dark:bg-sky-950/50 dark:hover:bg-sky-900/60 border border-sky-200 dark:border-sky-800/60 shadow-xs',
+          'text-sky-700 dark:text-sky-200 hover:text-sky-900 dark:hover:text-white bg-white hover:bg-sky-100/60 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-sky-300/80 dark:border-sky-800/60 shadow-xs',
       };
     case 'success':
       return {
-        card: 'border border-emerald-200/90 dark:border-emerald-900/40 bg-white dark:bg-slate-900/90 shadow-xs border-l-4 border-l-emerald-500 text-slate-800 dark:text-slate-100',
+        card: 'border border-emerald-300/80 dark:border-emerald-900/40 bg-emerald-50/90 dark:bg-emerald-950/40 shadow-xs border-l-4 border-l-emerald-500 text-emerald-950 dark:text-emerald-100',
         icon: 'text-emerald-600 dark:text-emerald-400',
         badge:
-          'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-bold text-[10px] tracking-wider uppercase',
+          'bg-white/90 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 font-bold text-[10px] tracking-wider uppercase',
         actionButton:
-          'text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800/60 shadow-xs',
+          'text-emerald-700 dark:text-emerald-200 hover:text-emerald-900 dark:hover:text-white bg-white hover:bg-emerald-100/60 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-emerald-300/80 dark:border-emerald-800/60 shadow-xs',
       };
   }
 }
