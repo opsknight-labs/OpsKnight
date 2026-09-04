@@ -90,32 +90,32 @@ export default function OperationalStatus({
   // Dynamic Theme Configuration
   const theme: Record<'danger' | 'warning' | 'ok', ThemeConfig> = {
     danger: {
-      bg: 'bg-red-50/70',
-      border: 'border-red-200/80',
-      text: 'text-red-700',
-      dot: 'bg-red-500',
-      dotBg: 'bg-red-600',
-      icon: <AlertTriangle className="h-4 w-4 text-red-600" />,
+      bg: 'bg-rose-500/15',
+      border: 'border-rose-500/30',
+      text: 'text-rose-300',
+      dot: 'bg-rose-500',
+      dotBg: 'bg-rose-500',
+      icon: <AlertTriangle className="h-4 w-4 text-rose-400" />,
       title: 'Critical Alert',
       desc: 'Critical incidents detected. Immediate resolution required.',
     },
     warning: {
-      bg: 'bg-amber-50/70',
-      border: 'border-amber-200/80',
-      text: 'text-amber-700',
+      bg: 'bg-amber-500/15',
+      border: 'border-amber-500/30',
+      text: 'text-amber-300',
       dot: 'bg-amber-500',
-      dotBg: 'bg-amber-600',
-      icon: <AlertCircle className="h-4 w-4 text-amber-600" />,
+      dotBg: 'bg-amber-500',
+      icon: <AlertCircle className="h-4 w-4 text-amber-400" />,
       title: 'Yellow Alert',
       desc: 'Non-critical issues reported. Monitoring medium and low urgency alerts.',
     },
     ok: {
-      bg: 'bg-emerald-50/70',
-      border: 'border-emerald-200/80',
-      text: 'text-emerald-700',
+      bg: 'bg-emerald-500/15',
+      border: 'border-emerald-500/30',
+      text: 'text-emerald-300',
       dot: 'bg-emerald-500',
-      dotBg: 'bg-emerald-600',
-      icon: <ShieldCheck className="h-4 w-4 text-emerald-600" />,
+      dotBg: 'bg-emerald-500',
+      icon: <ShieldCheck className="h-4 w-4 text-emerald-400" />,
       title: 'Green Corridor',
       desc: 'All systems fully operational. No active anomalies.',
     },
@@ -181,8 +181,8 @@ export default function OperationalStatus({
           <span className="text-[10.5px] sm:text-[11px] font-semibold tracking-wide uppercase">
             {label}
           </span>
-          <span className="hidden sm:inline text-[11px] text-muted-foreground">|</span>
-          <span className="hidden sm:inline text-[11px] font-semibold text-slate-700">
+          <span className="hidden sm:inline text-[11px] text-slate-500">|</span>
+          <span className="hidden sm:inline text-[11px] font-semibold text-slate-200">
             {summary}
           </span>
         </button>

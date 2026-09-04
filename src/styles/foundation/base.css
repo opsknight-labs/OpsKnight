@@ -314,7 +314,7 @@ select option {
     min-width: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    height: 100dvh;
+    height: calc(100dvh - var(--header-height, 56px));
     /* Position content to start exactly where sidebar ends */
     margin-left: var(--sidebar-width);
     width: calc(100% - var(--sidebar-width));
@@ -328,12 +328,10 @@ select option {
     width: calc(100% - var(--sidebar-width-collapsed));
 }
 
-@media (min-width: 769px) {
-    .app-shell:has(.sidebar-collapsed) .app-header,
-    .app-shell:has(.sidebar-collapsed) header,
-    .app-shell:has(.sidebar[data-collapsed='true']) .app-header,
-    .app-shell:has(.sidebar[data-collapsed='true']) header {
-        left: var(--sidebar-width-collapsed) !important;
+@media (max-width: 768px) {
+    .content-shell {
+        margin-left: 0 !important;
+        width: 100% !important;
     }
 }
 
