@@ -512,7 +512,9 @@ export default async function Dashboard({
             criticalIncidents={currentCriticalActive}
             unassignedIncidents={unassignedCount}
             topServiceName={topServiceByVolume?.name}
+            topServiceId={topServiceByVolume?.id}
             topServiceCount={topServiceByVolume?.count}
+            resolveCompliance={slaMetrics.resolveCompliance}
           />
         ) : (
           <div
