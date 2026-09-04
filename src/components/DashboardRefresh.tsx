@@ -73,12 +73,14 @@ export default function DashboardRefresh({ autoRefreshInterval = 60 }: Dashboard
 
   return (
     <div className="flex items-center gap-3 flex-wrap">
-      <div className="text-sm font-medium text-white/90">
+      <div className="text-sm font-medium text-slate-300">
         {mounted && lastUpdated ? (
           <>
             Updated: {formatDateTime(lastUpdated, userTimeZone, { format: 'time' })}
             {autoRefreshEnabled && (
-              <span className="ml-2 text-xs opacity-80 font-mono">(Auto: {timeUntilRefresh}s)</span>
+              <span className="ml-2 text-xs font-mono text-slate-400">
+                (Auto: {timeUntilRefresh}s)
+              </span>
             )}
           </>
         ) : (
@@ -92,7 +94,7 @@ export default function DashboardRefresh({ autoRefreshInterval = 60 }: Dashboard
           disabled={isRefreshing}
           variant="secondary"
           size="sm"
-          className="h-8 gap-2 bg-white text-slate-800 hover:bg-white/90 font-semibold shadow-sm"
+          className="h-8 gap-2 bg-slate-800/90 hover:bg-slate-700 text-slate-100 border border-slate-700/80 font-semibold shadow-xs transition-all"
           title="Refresh dashboard data"
         >
           <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
@@ -104,8 +106,8 @@ export default function DashboardRefresh({ autoRefreshInterval = 60 }: Dashboard
           variant="outline"
           size="sm"
           className={cn(
-            'h-8 gap-1.5 border-white/20 text-white hover:bg-white/10 hover:text-white transition-all',
-            autoRefreshEnabled ? 'bg-white/20' : 'bg-transparent'
+            'h-8 gap-1.5 border-slate-700/80 text-slate-300 hover:bg-slate-800 hover:text-white transition-all',
+            autoRefreshEnabled ? 'bg-slate-800/90 border-slate-600 text-white' : 'bg-transparent'
           )}
           title={autoRefreshEnabled ? 'Disable auto-refresh' : 'Enable auto-refresh'}
         >

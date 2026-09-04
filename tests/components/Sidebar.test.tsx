@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionProvider } from 'next-auth/react';
 import Sidebar from '@/components/Sidebar';
 import { SidebarProvider } from '@/contexts/SidebarContext';
+import BrandLockup from '@/components/layout/BrandLockup';
+import SidebarTrigger from '@/components/layout/SidebarTrigger';
 
 const mockMatchMedia = (matches: boolean) => {
   Object.defineProperty(window, 'matchMedia', {
@@ -30,7 +32,13 @@ const mockFetch = () => {
 const renderWithProvider = (ui: React.ReactElement) => {
   return render(
     <SessionProvider session={null}>
-      <SidebarProvider>{ui}</SidebarProvider>
+      <SidebarProvider>
+        <header>
+          <BrandLockup />
+          <SidebarTrigger />
+        </header>
+        {ui}
+      </SidebarProvider>
     </SessionProvider>
   );
 };

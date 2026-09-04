@@ -24,7 +24,8 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
 import { IncidentCreationModalProvider } from '@/contexts/IncidentCreationModalContext';
 import CreateIncidentModal from '@/components/incident/CreateIncidentModal';
-import SidebarMobileTrigger from '@/components/SidebarMobileTrigger';
+import BrandLockup from '@/components/layout/BrandLockup';
+import SidebarTrigger from '@/components/layout/SidebarTrigger';
 import AppHeader from '@/components/layout/AppHeader';
 
 const isNextRedirectError = (error: unknown) => {
@@ -232,19 +233,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <IncidentCreationModalProvider>
               <GlobalKeyboardHandlerWrapper />
               <SkipLinks />
-              <div className="app-shell">
-                <Sidebar
-                  userName={userName}
-                  userEmail={userEmail}
-                  userRole={userRole}
-                  userAvatar={userAvatar}
-                  userGender={userGender}
-                  userId={userId}
-                />
-                <div className="content-shell">
-                  <AppHeader>
-                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
-                      <SidebarMobileTrigger />
+              <div className="app-shell flex flex-col min-h-screen">
+                <AppHeader>
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                    <BrandLockup variant="header" />
+                    <div className="h-4 w-px bg-slate-800 mx-0.5 sm:mx-1" />
+                    <SidebarTrigger />
+                    <div className="hidden sm:block">
                       <OperationalStatus
                         tone={statusTone}
                         label={statusLabel}
@@ -253,29 +248,41 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                         mediumCount={mediumOpenCount}
                         lowCount={lowOpenCount}
                       />
-                      <div className="hidden xl:block">
-                        <TopbarBreadcrumbs />
-                      </div>
                     </div>
-                    <div className="hidden md:flex flex-1 items-center justify-center max-w-md mx-auto px-2">
-                      <SidebarSearch />
+                    <div className="hidden xl:block">
+                      <TopbarBreadcrumbs />
                     </div>
-                    <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">
-                      <TopbarNotifications />
-                      <QuickActions canCreate={canCreate} />
-                      <TopbarUserMenu
-                        name={userName}
-                        email={userEmail}
-                        role={userRole}
-                        avatarUrl={userAvatar}
-                        gender={userGender}
-                        userId={userId}
-                      />
-                    </div>
-                  </AppHeader>
-                  <main id="main-content" className="page-shell pt-14">
-                    {children}
-                  </main>
+                  </div>
+                  <div className="hidden md:flex flex-1 items-center justify-center max-w-md mx-auto px-2">
+                    <SidebarSearch />
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">
+                    <TopbarNotifications />
+                    <QuickActions canCreate={canCreate} />
+                    <TopbarUserMenu
+                      name={userName}
+                      email={userEmail}
+                      role={userRole}
+                      avatarUrl={userAvatar}
+                      gender={userGender}
+                      userId={userId}
+                    />
+                  </div>
+                </AppHeader>
+                <div className="flex flex-1 min-h-0 relative pt-14">
+                  <Sidebar
+                    userName={userName}
+                    userEmail={userEmail}
+                    userRole={userRole}
+                    userAvatar={userAvatar}
+                    userGender={userGender}
+                    userId={userId}
+                  />
+                  <div className="content-shell flex-1">
+                    <main id="main-content" className="page-shell">
+                      {children}
+                    </main>
+                  </div>
                 </div>
               </div>
               <CreateIncidentModal />

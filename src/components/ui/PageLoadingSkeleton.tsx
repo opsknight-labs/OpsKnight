@@ -140,18 +140,21 @@ export default function PageLoadingSkeleton({
   return (
     <div className={cn('w-full px-4 md:px-6 lg:px-8 py-6 space-y-6', className)}>
       {/* Header section with gradient */}
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/80 p-6">
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+      <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] p-6 shadow-xl ring-1 ring-white/5">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer" />
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="space-y-2">
-            <Skeleton className="h-8 w-48 bg-white/20" />
-            <Skeleton className="h-4 w-64 bg-white/15" />
+            <Skeleton className="h-8 w-48 bg-slate-800/80" />
+            <Skeleton className="h-4 w-64 bg-slate-800/60" />
           </div>
           <div className="flex gap-3">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
-                <Skeleton className="h-6 w-12 bg-white/30 mb-1" />
-                <Skeleton className="h-3 w-10 bg-white/20" />
+              <div
+                key={i}
+                className="bg-slate-900/80 border border-slate-800/90 rounded-xl p-3 shadow-xs"
+              >
+                <Skeleton className="h-6 w-12 bg-slate-800/90 mb-1" />
+                <Skeleton className="h-3 w-10 bg-slate-800/70" />
               </div>
             ))}
           </div>

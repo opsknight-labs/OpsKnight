@@ -516,7 +516,7 @@ export default async function Dashboard({
           />
         ) : (
           <div
-            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-900 dark:text-amber-100 mb-6 shadow-xs border-l-4 border-l-amber-500"
             role="alert"
           >
             Incident metrics could not be calculated. Counts and automated insights are hidden to

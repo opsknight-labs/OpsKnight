@@ -278,8 +278,8 @@ export default function SidebarSearch() {
               Redesign: Flex container mimicking the input style. 
               The actual input is transparent and sits next to the icon.
             */}
-            <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 focus-within:ring-2 focus-within:ring-ring focus-within:bg-background transition-all">
-              <SearchIcon className="mr-2 h-4 w-4 shrink-0 opacity-50 text-muted-foreground" />
+            <div className="flex h-9 w-full items-center rounded-md border border-slate-800/90 bg-slate-900/80 px-3 focus-within:ring-1 focus-within:ring-blue-500/50 focus-within:border-slate-700 transition-all">
+              <SearchIcon className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
               <CommandPrimitive.Input
                 ref={inputRef}
                 placeholder="Search..."
@@ -294,7 +294,7 @@ export default function SidebarSearch() {
                     setOpen(true);
                   }
                 }}
-                className="flex h-full w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-full w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
               />
               {query.length > 0 && (
                 <button
@@ -305,17 +305,17 @@ export default function SidebarSearch() {
                     setResults([]);
                     setOpen(false);
                   }}
-                  className="mr-1 p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  className="mr-1 p-0.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
                   aria-label="Clear search"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
               {isLoading ? (
-                <Loader2 className="ml-2 h-3 w-3 animate-spin text-muted-foreground" />
+                <Loader2 className="ml-2 h-3 w-3 animate-spin text-slate-400" />
               ) : (
-                <div className="ml-2 hidden sm:flex items-center gap-1 opacity-50">
-                  <kbd className="pointer-events-none h-5 select-none items-center gap-1 rounded bg-background px-1.5 font-mono text-[10px] font-medium shadow-sm border flex">
+                <div className="ml-2 hidden sm:flex items-center gap-1 opacity-70">
+                  <kbd className="pointer-events-none h-5 select-none items-center gap-1 rounded bg-slate-800 border border-slate-700/80 px-1.5 font-mono text-[10px] font-medium text-slate-300 shadow-xs flex">
                     <span className="text-xs">{shortcutKey}</span>K
                   </kbd>
                 </div>

@@ -42,39 +42,39 @@ function getInsightTheme(type: Insight['type']) {
   switch (type) {
     case 'critical':
       return {
-        card: 'border-rose-500/25 bg-rose-500/8 dark:bg-rose-950/25 text-rose-950 dark:text-rose-100',
+        card: 'border border-rose-200/90 dark:border-rose-900/40 bg-white dark:bg-slate-900/90 shadow-xs border-l-4 border-l-rose-600 text-slate-800 dark:text-slate-100',
         icon: 'text-rose-600 dark:text-rose-400',
         badge:
-          'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/25 font-semibold text-[9px] tracking-wider uppercase',
+          'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 font-bold text-[10px] tracking-wider uppercase',
         actionButton:
-          'text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-100 bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/20',
+          'text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-100 bg-rose-50 hover:bg-rose-100/80 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/60 shadow-xs',
       };
     case 'warning':
       return {
-        card: 'border-amber-500/25 bg-amber-500/8 dark:bg-amber-950/25 text-amber-950 dark:text-amber-100',
+        card: 'border border-amber-200/90 dark:border-amber-900/40 bg-white dark:bg-slate-900/90 shadow-xs border-l-4 border-l-amber-500 text-slate-800 dark:text-slate-100',
         icon: 'text-amber-600 dark:text-amber-400',
         badge:
-          'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25 font-semibold text-[9px] tracking-wider uppercase',
+          'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold text-[10px] tracking-wider uppercase',
         actionButton:
-          'text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/20',
+          'text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800/60 shadow-xs',
       };
     case 'info':
       return {
-        card: 'border-sky-500/25 bg-sky-500/8 dark:bg-sky-950/25 text-sky-950 dark:text-sky-100',
+        card: 'border border-sky-200/90 dark:border-sky-900/40 bg-white dark:bg-slate-900/90 shadow-xs border-l-4 border-l-sky-500 text-slate-800 dark:text-slate-100',
         icon: 'text-sky-600 dark:text-sky-400',
         badge:
-          'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/25 font-semibold text-[9px] tracking-wider uppercase',
+          'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60 font-bold text-[10px] tracking-wider uppercase',
         actionButton:
-          'text-sky-700 dark:text-sky-300 hover:text-sky-900 dark:hover:text-sky-100 bg-sky-500/10 hover:bg-sky-500/20 border-sky-500/20',
+          'text-sky-700 dark:text-sky-300 hover:text-sky-900 dark:hover:text-sky-100 bg-sky-50 hover:bg-sky-100/80 dark:bg-sky-950/50 dark:hover:bg-sky-900/60 border border-sky-200 dark:border-sky-800/60 shadow-xs',
       };
     case 'success':
       return {
-        card: 'border-emerald-500/25 bg-emerald-500/8 dark:bg-emerald-950/25 text-emerald-950 dark:text-emerald-100',
+        card: 'border border-emerald-200/90 dark:border-emerald-900/40 bg-white dark:bg-slate-900/90 shadow-xs border-l-4 border-l-emerald-500 text-slate-800 dark:text-slate-100',
         icon: 'text-emerald-600 dark:text-emerald-400',
         badge:
-          'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 font-semibold text-[9px] tracking-wider uppercase',
+          'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-bold text-[10px] tracking-wider uppercase',
         actionButton:
-          'text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/20',
+          'text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800/60 shadow-xs',
       };
   }
 }
@@ -203,26 +203,29 @@ export default function SmartInsightsBanner({
   if (insights.length === 0) return null;
 
   return (
-    <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+    <div className="space-y-2 mb-6 animate-in fade-in slide-in-from-top-1 duration-200">
       {insights.map(insight => {
         const theme = getInsightTheme(insight.type);
         return (
           <div
             key={insight.id}
             className={cn(
-              'flex items-center justify-between gap-3 px-3.5 py-2 rounded-lg border transition-all',
+              'flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border transition-all',
               theme.card
             )}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
               <span className={cn('shrink-0', theme.icon)}>{insight.icon}</span>
               <Badge
                 variant="outline"
-                className={cn('h-4 px-1.5 py-0 shrink-0 text-[9px]', theme.badge)}
+                className={cn(
+                  'h-5 px-2 py-0 shrink-0 text-[10px] rounded-md font-bold',
+                  theme.badge
+                )}
               >
                 {insight.tag}
               </Badge>
-              <span className="text-xs sm:text-sm font-medium tracking-tight truncate">
+              <span className="text-xs sm:text-sm font-semibold tracking-tight truncate">
                 {insight.headline}
               </span>
             </div>
@@ -231,7 +234,7 @@ export default function SmartInsightsBanner({
                 <Link
                   href={insight.action.href}
                   className={cn(
-                    'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold border transition-all hover:opacity-85 active:scale-95',
+                    'inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all hover:opacity-90 active:scale-95 shadow-2xs',
                     theme.actionButton
                   )}
                 >
@@ -243,10 +246,10 @@ export default function SmartInsightsBanner({
                 variant="ghost"
                 size="sm"
                 aria-label="Dismiss insight"
-                className="h-6 w-6 p-0 text-current opacity-50 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 rounded-md"
+                className="h-7 w-7 p-0 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                 onClick={() => dismissInsight(insight.id)}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>

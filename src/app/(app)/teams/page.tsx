@@ -64,21 +64,21 @@ export default async function TeamsPage() {
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
       {/* Header Banner with Glassmorphic Stats Capsule */}
-      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
+      <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 text-slate-100 shadow-xl ring-1 ring-white/5 md:p-6">
+        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
         <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800/80 text-white border border-slate-700/80 shadow-xs">
               <Users className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-foreground/75">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                 Organization &amp; Ownership
               </p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary-foreground md:text-3xl">
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
                 Teams
               </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-300">
                 Manage team ownership, lead assignments, responder rosters, and service coverage.
               </p>
             </div>

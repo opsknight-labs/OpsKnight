@@ -4,25 +4,48 @@
    ======================================== */
 .sidebar {
   width: var(--sidebar-width);
-  /* Animated cinematic gradient matching Command Center */
-  background: linear-gradient(-45deg, #0f172a, #1e293b, #0f172a, #172554);
-  background-size: 400% 400%;
-  animation: sidebar-ambient 15s ease infinite;
+  /* Dark executive command surface matching Command Center */
+  background: #0b1120;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  /* Fixed position prevents any scroll movement */
+  /* Fixed position below top header on desktop */
   position: fixed;
-  top: 0;
+  top: var(--header-height, 56px);
   left: 0;
-  height: 100vh;
-  height: 100dvh;
-  color: white;
-  box-shadow: 2px 0 25px rgba(0, 0, 0, 0.15), inset -1px 0 0 rgba(255, 255, 255, 0.05);
-  z-index: 1000;
+  height: calc(100vh - var(--header-height, 56px));
+  height: calc(100dvh - var(--header-height, 56px));
+  color: #f8fafc;
+  box-shadow: none;
+  z-index: 30;
   transition: width var(--transition-base), transform var(--transition-slow);
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
+}
+
+[data-theme='dark'] .sidebar,
+.dark .sidebar {
+  background: #0b1120;
+  border-right-color: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    top: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 50 !important;
+    width: min(288px, 85vw) !important;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    background: #0b1120 !important;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .sidebar.sidebar-mobile-open {
+    transform: translateX(0) !important;
+  }
 }
 
 /* Sidebar resilience (zoom/overflow/accessibility) */
@@ -37,27 +60,6 @@
 
 .sidebar.sidebar-collapsed {
   width: var(--sidebar-width-collapsed);
-}
-
-/* Edge hover indicator - subtle hint for toggle */
-.sidebar::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2px;
-  height: 70px;
-  border-radius: 2px 0 0 2px;
-  background: linear-gradient(180deg, transparent 5%, rgba(255,255,255,0.12) 50%, transparent 95%);
-  opacity: 0;
-  transition: opacity 0.3s ease, height 0.3s ease;
-  pointer-events: none;
-}
-
-.sidebar:hover::after {
-  opacity: 1;
-  height: 90px;
 }
 
 /* Legacy toggle styles - kept for reference */
@@ -378,36 +380,42 @@
   transition: opacity 0.2s ease;
 }
 
-/* Sidebar Scrollbar Styling */
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 1.25rem 0.75rem 1.5rem 0.75rem;
-  gap: 0.5rem;
+/* Sidebar Scrollbar (Up/Down Slider) Styling */
+.sidebar-nav,
+.sidebar nav {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
 }
 
-.sidebar-nav::-webkit-scrollbar {
-  width: 6px;
+.sidebar-nav::-webkit-scrollbar,
+.sidebar nav::-webkit-scrollbar {
+  width: 5px;
 }
 
-.sidebar-nav::-webkit-scrollbar-track {
+.sidebar-nav::-webkit-scrollbar-track,
+.sidebar nav::-webkit-scrollbar-track {
   background: transparent;
-  margin: 0.5rem 0;
+  margin: 4px 0;
 }
 
-.sidebar-nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.sidebar-nav::-webkit-scrollbar-thumb,
+.sidebar nav::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-.sidebar-nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
+.sidebar-nav::-webkit-scrollbar-thumb:hover,
+.sidebar nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.75);
+  box-shadow: 0 0 6px rgba(244, 63, 94, 0.35);
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:active,
+.sidebar nav::-webkit-scrollbar-thumb:active {
+  background: #f43f5e;
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.6);
 }
 
 /* ========================================

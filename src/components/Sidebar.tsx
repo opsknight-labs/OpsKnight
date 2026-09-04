@@ -1,138 +1,30 @@
 'use client';
 
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useMemo, useState } from 'react';
-import { useModalState } from '@/hooks/useModalState';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
-  ChevronsLeft,
-  ChevronsRight,
-  X,
-  HelpCircle,
-  Settings,
-  LogOut,
-  Keyboard,
-  LayoutDashboard,
-  AlertTriangle,
-  Server,
-  Users,
-  User,
-  Calendar,
-  ShieldAlert,
-  FileClock,
-  ClipboardList,
-  PieChart,
-  FileWarning,
-  Activity,
-  ListTodo,
-  BarChart,
-} from 'lucide-react';
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/shadcn/tooltip';
+import { X, HelpCircle, Settings, LogOut, Keyboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import UserAvatar from '@/components/UserAvatar';
+import BrandLockup from '@/components/layout/BrandLockup';
 import { APP_VERSION } from '@/lib/constants';
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-  section?: string;
-  requiresRole?: string[];
-};
-
-const navigationItems: NavItem[] = [
-  // Main Navigation
-  {
-    href: '/',
-    label: 'Dashboard',
-    icon: <LayoutDashboard />,
-  },
-  {
-    href: '/incidents',
-    label: 'Incidents',
-    icon: <AlertTriangle />,
-  },
-  {
-    href: '/services',
-    label: 'Services',
-    icon: <Server />,
-  },
-
-  // Operations Section
-  {
-    href: '/teams',
-    label: 'Teams',
-    icon: <Users />,
-    section: 'OPERATIONS',
-  },
-  {
-    href: '/users',
-    label: 'Users',
-    icon: <User />,
-  },
-  {
-    href: '/schedules',
-    label: 'Schedules',
-    icon: <Calendar />,
-    section: 'OPERATIONS',
-  },
-  {
-    href: '/policies',
-    label: 'Escalation Policies',
-    icon: <ShieldAlert />,
-    section: 'OPERATIONS',
-  },
-
-  // Insights Section
-  {
-    href: '/analytics',
-    label: 'Analytics',
-    icon: <PieChart />,
-    section: 'INSIGHTS',
-  },
-  {
-    href: '/postmortems',
-    label: 'Postmortems',
-    icon: <FileWarning />,
-    section: 'INSIGHTS',
-  },
-  {
-    href: '/status',
-    label: 'Status Page',
-    icon: <Activity />,
-    section: 'INSIGHTS',
-  },
-  {
-    href: '/action-items',
-    label: 'Action Items',
-    icon: <ListTodo />,
-    section: 'INSIGHTS',
-  },
-  {
-    href: '/events',
-    label: 'Event Logs',
-    icon: <FileClock />,
-    section: 'INSIGHTS',
-    requiresRole: ['ADMIN'],
-  },
-  {
-    href: '/audit',
-    label: 'Audit Log',
-    icon: <ClipboardList />,
-    section: 'INSIGHTS',
-    requiresRole: ['ADMIN', 'AUDITOR'],
-  },
-  {
-    href: '/reports',
-    label: 'Reports & Dashboards',
-    icon: <BarChart />,
-    section: 'INSIGHTS',
-  },
-];
+import {
+  NavItemConfig,
+  getNavSectionConfig,
+  NavSectionKey,
+  getAuthorizedNavItems,
+  groupNavItemsBySection,
+} from '@/config/navigation';
 
 type SidebarProps = {
   userName?: string | null;
@@ -143,21 +35,19 @@ type SidebarProps = {
   userId?: string;
 };
 
-export default function Sidebar(
-  { userName, userEmail, userRole, userAvatar, userGender, userId }: SidebarProps = {
-    userName: null,
-    userEmail: null,
-    userRole: null,
-    userAvatar: null,
-    userGender: null,
-    userId: 'user',
-  }
-) {
+export default function Sidebar({
+  userName = null,
+  userEmail = null,
+  userRole = null,
+  userAvatar = null,
+  userGender = null,
+  userId = 'user',
+}: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { isCollapsed, isMobile, toggleSidebar } = useSidebar();
+  const { isCollapsed, isMobile, isMobileOpen, closeMobile } = useSidebar();
 
-  // Prefer client-side session data for immediate updates
+  // Prefer client session data for reactive updates
   const currentName = session?.user?.name || userName;
   const currentEmail = session?.user?.email || userEmail;
   const currentRole = (session?.user as { role?: string } | undefined)?.role || userRole;
@@ -165,37 +55,43 @@ export default function Sidebar(
 
   const [stats, setStats] = useState<{ count: number; calculatedAt?: string } | null>(null);
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useModalState('sidebarMobileMenu');
-
-  const sidebarId = 'app-sidebar';
   const isDesktopCollapsed = !isMobile && isCollapsed;
+  const sidebarId = 'app-sidebar';
 
+  // Fetch real-time active incident counts
   useEffect(() => {
+    let isMounted = true;
     fetch('/api/sidebar-stats')
       .then(async res => {
-        if (!res.ok) throw new Error('Sidebar statistics unavailable');
+        if (!res.ok) throw new Error('Stats unavailable');
         return res.json();
       })
       .then(data => {
-        if (!Number.isFinite(data.activeIncidentsCount)) {
-          throw new Error('Sidebar statistics response is invalid');
+        if (!isMounted) return;
+        if (typeof data?.activeIncidentsCount === 'number') {
+          setStats({
+            count: data.activeIncidentsCount,
+            calculatedAt: data.calculatedAt,
+          });
         }
-        setStats({
-          count: data.activeIncidentsCount,
-          calculatedAt: data.calculatedAt,
-        });
       })
-      .catch(() => setStats(null));
-  }, []);
+      .catch(() => {
+        if (isMounted) setStats(null);
+      });
 
-  useEffect(() => {
-    if (isMobileMenuOpen) setIsMobileMenuOpen(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      isMounted = false;
+    };
   }, [pathname]);
 
+  // Close mobile drawer on route change
+  const prevPathnameRef = useRef(pathname);
   useEffect(() => {
-    if (!isMobile && isMobileMenuOpen) setIsMobileMenuOpen(false);
-  }, [isMobile, isMobileMenuOpen, setIsMobileMenuOpen]);
+    if (prevPathnameRef.current !== pathname) {
+      prevPathnameRef.current = pathname;
+      closeMobile();
+    }
+  }, [pathname, closeMobile]);
 
   const isActive = (path: string) => {
     if (path === '/' && pathname === '/') return true;
@@ -203,116 +99,130 @@ export default function Sidebar(
     return false;
   };
 
+  // Centralized filtered and grouped items
   const groupedItems = useMemo(() => {
-    return navigationItems.reduce(
-      (acc, item) => {
-        if (item.requiresRole) {
-          if (!currentRole || !item.requiresRole.includes(currentRole)) return acc;
-        }
-        const section = item.section || 'MAIN';
-        // eslint-disable-next-line security/detect-object-injection
-        if (!acc[section]) acc[section] = [];
-        // eslint-disable-next-line security/detect-object-injection
-        acc[section].push(item);
-        return acc;
-      },
-      {} as Record<string, NavItem[]>
-    );
+    const authorized = getAuthorizedNavItems(currentRole);
+    return groupNavItemsBySection(authorized);
   }, [currentRole]);
 
-  const renderNavItem = (item: NavItem) => {
+  // Render a single navigation link (with tooltips when collapsed)
+  const renderNavItem = (item: NavItemConfig) => {
     const active = isActive(item.href);
-    const showBadge = item.href === '/incidents' && stats !== null && stats.count > 0;
+    const hasIncidents = item.badgeKey === 'incidents' && stats !== null && stats.count > 0;
+    const badgeText = stats?.count && stats.count > 99 ? '99+' : `${stats?.count ?? 0}`;
+    const IconComponent = item.icon;
 
-    return (
+    const linkContent = (
       <Link
-        key={item.href}
         href={item.href}
         aria-current={active ? 'page' : undefined}
-        aria-label={isDesktopCollapsed ? item.label : undefined}
-        title={isDesktopCollapsed ? item.label : undefined}
+        aria-label={
+          isDesktopCollapsed ? `${item.label}${hasIncidents ? ` (${badgeText})` : ''}` : undefined
+        }
         className={cn(
-          'group relative flex items-center rounded-lg font-medium',
-          'text-sm',
-          'transition-all duration-200 ease-out motion-reduce:transition-none',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-foreground/0',
-          'text-white/85 hover:text-white hover:bg-white/12 hover:shadow-[0_0_12px_rgba(255,255,255,0.05)]',
-          'hover:translate-x-0.5',
-          active &&
-            'bg-white/15 text-white ring-1 ring-white/10 shadow-[0_0_15px_rgba(255,255,255,0.08)]',
-          active &&
-            'after:absolute after:left-0 after:top-2 after:bottom-2 after:w-[3px] after:rounded-r-full after:bg-white/70',
-          isDesktopCollapsed ? 'h-9 w-9 justify-center px-0' : 'px-2.5 py-1.5 gap-2.5 text-[13px]'
+          'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
+          // Hover and active states
+          'text-slate-400 hover:text-white hover:bg-slate-800/60',
+          active
+            ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
+            : 'text-slate-400',
+          // Sizing
+          isDesktopCollapsed
+            ? 'h-10 w-10 justify-center p-0 mx-auto'
+            : 'px-2.5 py-2 gap-2.5 text-[13px] w-full'
         )}
       >
-        <span
-          className={cn(
-            'shrink-0 flex items-center justify-center opacity-85 group-hover:opacity-100',
-            'transition-transform duration-200 group-hover:scale-110',
-            '[&_svg]:h-[16px] [&_svg]:w-[16px] [&_svg]:shrink-0'
-          )}
-        >
-          {item.icon}
-        </span>
-
-        {!isDesktopCollapsed && (
-          <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
+        {/* Active edge indicator line (expanded only) */}
+        {active && !isDesktopCollapsed && (
+          <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
         )}
 
-        {showBadge &&
+        {/* Icon */}
+        <span
+          className={cn(
+            'shrink-0 flex items-center justify-center transition-transform duration-150',
+            active ? 'text-rose-400' : 'text-slate-400 group-hover:text-white',
+            'group-hover:scale-105'
+          )}
+        >
+          <IconComponent className="h-[18px] w-[18px]" />
+        </span>
+
+        {/* Label (expanded only) */}
+        {!isDesktopCollapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+
+        {/* Incident Badge */}
+        {hasIncidents &&
           (isDesktopCollapsed ? (
-            <Badge
-              variant="sidebar-danger"
-              size="xs"
+            <span
               aria-label={`${stats!.count} active incidents`}
-              title={stats?.calculatedAt ? `Current as of ${stats.calculatedAt}` : 'Current'}
-              className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full p-0"
+              className="absolute top-1 right-1 flex h-2.5 w-2.5"
             >
-              <span className="sr-only">{stats!.count > 99 ? '99+' : stats!.count}</span>
-            </Badge>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
+            </span>
           ) : (
             <Badge
               variant="sidebar-danger"
               size="xs"
               aria-label={`${stats!.count} active incidents`}
-              title={stats?.calculatedAt ? `Current as of ${stats.calculatedAt}` : 'Current'}
-              className="ml-auto h-4.5 min-w-4.5 rounded-full px-1 text-[10px]"
+              title={stats?.calculatedAt ? `Updated ${stats.calculatedAt}` : undefined}
+              className="ml-auto h-4.5 min-w-4.5 px-1.5 rounded-full text-[10.5px] font-bold bg-rose-500 text-white border-0 shadow-xs"
             >
-              {stats!.count > 99 ? '99+' : stats!.count}
+              {badgeText}
             </Badge>
           ))}
       </Link>
     );
+
+    // If collapsed on desktop, wrap with Tooltip
+    if (isDesktopCollapsed) {
+      return (
+        <Tooltip key={item.href} delayDuration={150}>
+          <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+          <TooltipContent
+            side="right"
+            sideOffset={12}
+            className="text-xs py-1 px-2.5 flex items-center gap-2 bg-slate-900 text-white border-slate-700 shadow-xl"
+          >
+            <span className="font-medium">{item.label}</span>
+            {hasIncidents && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white">
+                {badgeText}
+              </span>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return <div key={item.href}>{linkContent}</div>;
   };
 
-  const renderSection = (sectionName: string, items: NavItem[]) => {
-    const sectionColors: Record<string, { dotClass: string; textClass: string }> = {
-      OPERATIONS: { dotClass: 'bg-blue-500/80', textClass: 'text-white/75' },
-      INSIGHTS: { dotClass: 'bg-purple-500/80', textClass: 'text-white/75' },
-    };
-
-    // eslint-disable-next-line security/detect-object-injection
-    const colors = sectionColors[sectionName] || {
-      dotClass: 'bg-white/50',
-      textClass: 'text-white/75',
-    };
+  // Render a navigation section
+  const renderSection = (sectionKey: NavSectionKey, items: NavItemConfig[]) => {
+    if (!items || items.length === 0) return null;
+    const sectionConfig = getNavSectionConfig(sectionKey);
 
     return (
       <div
-        key={sectionName}
-        className={cn('w-full', isDesktopCollapsed ? 'mb-2' : 'mb-2.5')}
-        data-section={sectionName}
+        key={sectionKey}
+        className={cn('w-full', isDesktopCollapsed ? 'mb-2.5' : 'mb-3')}
+        data-section={sectionKey}
       >
-        {!isDesktopCollapsed && sectionName !== 'MAIN' && (
-          <div className="flex items-center gap-1.5 mb-1.5 px-1">
-            <div className={cn('h-1.5 w-1.5 rounded-full', colors.dotClass)} />
-            <span className={cn('text-[10px] font-bold tracking-wide uppercase', colors.textClass)}>
-              {sectionName}
+        {!isDesktopCollapsed && sectionConfig?.label && (
+          <div className="flex items-center gap-1.5 mb-1.5 px-2">
+            {sectionConfig.dotClass && (
+              <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', sectionConfig.dotClass)} />
+            )}
+            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">
+              {sectionConfig.label}
             </span>
           </div>
         )}
 
-        <div className={cn('flex flex-col gap-0.5', isDesktopCollapsed && 'items-center')}>
+        <div className={cn('flex flex-col gap-1', isDesktopCollapsed && 'items-center')}>
           {items.map(renderNavItem)}
         </div>
       </div>
@@ -320,168 +230,151 @@ export default function Sidebar(
   };
 
   return (
-    <>
-      <MobileBackdrop
-        isMobile={isMobile}
-        isMobileMenuOpen={isMobileMenuOpen}
-        setIsMobileMenuOpen={setIsMobileMenuOpen}
-      />
+    <TooltipProvider delayDuration={200}>
+      {/* Mobile Backdrop Overlay */}
+      {isMobile && isMobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in-0 duration-200"
+          onClick={closeMobile}
+          aria-hidden="true"
+        />
+      )}
 
+      {/* Main Sidebar Shell */}
       <aside
         id={sidebarId}
         aria-label="Main navigation"
-        aria-hidden={isMobile && !isMobileMenuOpen}
+        aria-hidden={isMobile && !isMobileOpen}
         data-collapsed={isDesktopCollapsed ? 'true' : 'false'}
         className={cn(
-          'sidebar',
-          isDesktopCollapsed && 'sidebar-collapsed',
-          isMobile && 'sidebar-mobile',
-          isMobileMenuOpen && 'sidebar-mobile-open'
+          // Base styles
+          'sidebar flex flex-col select-none transition-all duration-200 ease-in-out',
+          // Desktop positioning: Flush below top header
+          !isMobile && [
+            'fixed top-14 left-0 bottom-0 z-30',
+            'h-[calc(100vh-3.5rem)] h-[calc(100dvh-3.5rem)]',
+            isDesktopCollapsed
+              ? 'sidebar-collapsed w-[var(--sidebar-width-collapsed,64px)]'
+              : 'w-[var(--sidebar-width,240px)]',
+          ],
+          // Mobile positioning: Drawer slide-in
+          isMobile && [
+            'sidebar-mobile',
+            'fixed top-0 left-0 bottom-0 z-50 w-72 h-full shadow-2xl',
+            'transform transition-transform duration-250 ease-out',
+            isMobileOpen
+              ? 'sidebar-mobile-open translate-x-0'
+              : '-translate-x-full pointer-events-none',
+          ]
         )}
       >
-        {/* Enhanced Header with Branding */}
-        <div
-          className={cn(
-            'relative shrink-0 border-b border-white/10',
-            'bg-gradient-to-b from-white/5 to-transparent',
-            isDesktopCollapsed ? 'p-2.5' : 'px-3 py-3'
-          )}
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.05)_0%,transparent_55%)] pointer-events-none" />
-
-          <Link
-            href="/"
-            className={cn(
-              'relative z-10 flex items-center no-underline transition-transform hover:translate-x-0.5',
-              isDesktopCollapsed
-                ? 'flex-col justify-center gap-1.5 w-full'
-                : 'flex-row justify-start gap-2.5 w-full'
-            )}
-          >
-            <div
-              className={cn(
-                'relative shrink-0 rounded-xl border border-white/12 bg-white/8',
-                'shadow-md flex items-center justify-center overflow-hidden',
-                'transition-transform hover:scale-105',
-                isDesktopCollapsed ? 'h-8 w-8' : 'h-9 w-9'
-              )}
-            >
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.2)_0%,transparent_70%)] pointer-events-none" />
-              <Image
-                src="/logo.svg"
-                alt="OpsKnight logo"
-                width={36}
-                height={36}
-                className={cn(
-                  'relative z-10 object-contain',
-                  isDesktopCollapsed ? 'h-5 w-5' : 'h-6 w-6'
-                )}
-              />
-            </div>
-
-            {!isDesktopCollapsed && (
-              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                <h1 className="text-[1.15rem] font-extrabold text-white m-0 leading-none tracking-tight font-display drop-shadow-sm">
-                  OpsKnight
-                </h1>
-                <span className="text-[0.6rem] text-white/60 font-bold uppercase tracking-widest">
-                  Incident Response
-                </span>
-              </div>
-            )}
-          </Link>
-
-          {/* Removed - Toggle moved to sidebar edge */}
-
-          {/* Mobile Close Button */}
-          {isMobile && isMobileMenuOpen && (
+        {/* Mobile Header (Shown ONLY in mobile drawer) */}
+        {isMobile && (
+          <div className="flex items-center justify-between px-4 h-14 border-b border-border/70 shrink-0 bg-background">
+            <BrandLockup variant="mobile" />
             <Button
-              onClick={() => setIsMobileMenuOpen(false)}
+              onClick={closeMobile}
               aria-label="Close navigation menu"
               variant="ghost"
               size="icon"
-              className="absolute right-3 top-3 h-9 w-9 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20"
+              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               <X className="h-5 w-5" />
             </Button>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Enhanced Scrollable Nav */}
+        {/* Scrollable Navigation Area */}
         <nav
           className={cn(
-            'flex-1 min-h-0 overflow-y-auto overflow-x-hidden',
-            'overscroll-contain',
-            // Enhanced scrollbar styling
-            '[scrollbar-width:thin]',
-            '[scrollbar-color:rgba(255,255,255,0.2)_transparent]',
-            // Webkit scrollbar
+            'sidebar-nav flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain',
+            '[scrollbar-width:thin] [scrollbar-color:rgba(100,116,139,0.45)_transparent]',
             '[&::-webkit-scrollbar]:w-1.5',
             '[&::-webkit-scrollbar-track]:bg-transparent',
-            '[&::-webkit-scrollbar-thumb]:bg-white/20',
-            '[&::-webkit-scrollbar-thumb]:rounded-full',
-            '[&::-webkit-scrollbar-thumb:hover]:bg-white/35',
-            // Standard padding
+            '[&::-webkit-scrollbar-thumb]:bg-slate-600/50 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/80 active:[&::-webkit-scrollbar-thumb]:bg-rose-500/90 [&::-webkit-scrollbar-thumb]:rounded-full transition-colors',
+            isDesktopCollapsed ? 'py-3 px-2' : 'p-3'
+          )}
+        >
+          {renderSection('MAIN', groupedItems.MAIN)}
+          {renderSection('OPERATIONS', groupedItems.OPERATIONS)}
+          {renderSection('INSIGHTS', groupedItems.INSIGHTS)}
+        </nav>
+
+        {/* Sidebar Footer Section */}
+        <div
+          className={cn(
+            'mt-auto shrink-0 border-t border-white/10 bg-slate-950/60',
             isDesktopCollapsed ? 'p-2' : 'p-3'
           )}
         >
-          {Object.entries(groupedItems).map(([section, items]) => renderSection(section, items))}
-        </nav>
-
-        {/* Compact Footer Redesign */}
-        <div
-          className={cn(
-            'mt-auto shrink-0 border-t border-white/5',
-            isDesktopCollapsed ? 'p-2' : 'px-3 py-2.5'
-          )}
-        >
-          {/* User Profile Row */}
+          {/* User Info Row */}
           <div
-            className={cn(
-              'flex items-center gap-2.5 group',
-              isDesktopCollapsed ? 'justify-center' : ''
-            )}
+            className={cn('flex items-center gap-2.5', isDesktopCollapsed ? 'justify-center' : '')}
           >
-            <UserAvatar
-              userId={userId || 'user'}
-              name={currentName}
-              gender={currentGender}
-              avatarUrl={userAvatar}
-              size="sm"
-              showOnlineStatus={true}
-              className={cn(
-                'border-white/10 transition-transform group-hover:scale-105 shrink-0',
-                !isDesktopCollapsed && 'h-8 w-8'
-              )}
-              fallbackClassName="bg-indigo-500/20 text-indigo-200 backdrop-blur-md text-xs"
-            />
-
-            {!isDesktopCollapsed && (
-              <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <div className="text-[13px] font-semibold text-white truncate group-hover:text-indigo-200 transition-colors">
-                  {currentName || 'User'}
+            {isDesktopCollapsed ? (
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <div className="cursor-pointer">
+                    <UserAvatar
+                      userId={userId || 'user'}
+                      name={currentName}
+                      gender={currentGender}
+                      avatarUrl={userAvatar}
+                      size="sm"
+                      showOnlineStatus={true}
+                      className="border-white/10 h-8 w-8 shrink-0 hover:scale-105 transition-transform"
+                      fallbackClassName="bg-indigo-500/20 text-indigo-200 text-xs"
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="right"
+                  sideOffset={12}
+                  className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+                >
+                  <p className="font-semibold">{currentName || 'User'}</p>
+                  <p className="text-slate-400 text-[10px]">{currentEmail}</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <>
+                <UserAvatar
+                  userId={userId || 'user'}
+                  name={currentName}
+                  gender={currentGender}
+                  avatarUrl={userAvatar}
+                  size="sm"
+                  showOnlineStatus={true}
+                  className="border-white/10 h-8 w-8 shrink-0"
+                  fallbackClassName="bg-indigo-500/20 text-indigo-200 text-xs"
+                />
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <div className="text-[13px] font-semibold text-white truncate">
+                    {currentName || 'User'}
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-medium truncate">
+                    {currentEmail || 'user@example.com'}
+                  </div>
                 </div>
-                <div className="text-[11px] text-white/40 font-medium truncate">
-                  {currentEmail || 'user@example.com'}
-                </div>
-              </div>
+              </>
             )}
           </div>
 
-          {/* Action Bar */}
+          {/* Quick Action Bar (Expanded) */}
           {!isDesktopCollapsed && (
-            <div className="grid grid-cols-4 gap-1 mt-2">
+            <div className="grid grid-cols-4 gap-1 mt-2.5 pt-2 border-t border-white/5">
               <Link
                 href="/help"
-                className="flex items-center justify-center h-7 rounded-md hover:bg-white/5 text-white/40 hover:text-white transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                 title="Help & Support"
+                aria-label="Help & Support"
               >
                 <HelpCircle className="h-3.5 w-3.5" />
               </Link>
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
-                className="flex items-center justify-center h-7 rounded-md hover:bg-white/5 text-white/40 hover:text-white transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                 title="Keyboard Shortcuts (?)"
                 aria-label="Keyboard Shortcuts"
               >
@@ -489,112 +382,75 @@ export default function Sidebar(
               </button>
               <Link
                 href="/settings"
-                className="flex items-center justify-center h-7 rounded-md hover:bg-white/5 text-white/40 hover:text-white transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                 title="Settings"
+                aria-label="Settings"
               >
                 <Settings className="h-3.5 w-3.5" />
               </Link>
               <Link
                 href="/auth/signout"
-                className="flex items-center justify-center h-7 rounded-md hover:bg-rose-500/10 text-white/40 hover:text-rose-400 transition-colors"
+                className="flex items-center justify-center h-7 rounded-md hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
                 title="Sign Out"
+                aria-label="Sign Out"
               >
                 <LogOut className="h-3.5 w-3.5" />
               </Link>
             </div>
           )}
 
-          {/* Collapsed Sign Out */}
+          {/* Quick Action Bar (Collapsed) */}
           {isDesktopCollapsed && (
-            <div className="mt-1.5 flex flex-col gap-1 items-center">
-              <div className="h-px w-4 bg-white/10 my-1" />
-              <Link
-                href="/auth/signout"
-                className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-rose-500/10 text-white/40 hover:text-rose-400 transition-colors"
-                title="Sign Out"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </Link>
+            <div className="mt-2 flex flex-col gap-1.5 items-center pt-2 border-t border-white/10">
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <Link
+                    href="/settings"
+                    className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                    aria-label="Settings"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="right"
+                  sideOffset={12}
+                  className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+                >
+                  Settings
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip delayDuration={150}>
+                <TooltipTrigger asChild>
+                  <Link
+                    href="/auth/signout"
+                    className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                    aria-label="Sign Out"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="right"
+                  sideOffset={12}
+                  className="text-xs bg-slate-900 text-white border-slate-700 shadow-xl"
+                >
+                  Sign Out
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
 
-          {/* Footer Metadata */}
+          {/* Metadata version info */}
           {!isDesktopCollapsed && (
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
-              <span className="text-[10.5px] text-white/20 font-medium hover:text-white/40 transition-colors cursor-default">
-                opsknight.com
-              </span>
-              <span className="text-[10.5px] text-white/10 font-mono">{APP_VERSION}</span>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-[10px] text-slate-500">
+              <span>opsknight.com</span>
+              <span className="font-mono">{APP_VERSION}</span>
             </div>
           )}
         </div>
-
-        {/* Edge Collapse Toggle - Sleek vertical handle */}
-        {!isMobile && (
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            aria-label={isDesktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={cn(
-              'absolute top-1/2 -translate-y-1/2 z-30',
-              'flex items-center justify-center',
-              'transition-all duration-300 ease-out',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900',
-              // Positioning - at the right edge
-              isDesktopCollapsed ? '-right-[14px]' : '-right-[11px]',
-              // Size and shape - vertical pill
-              'w-[18px] h-14 rounded-full',
-              // Colors and effects
-              'bg-gradient-to-b from-slate-700/95 to-slate-800/95 backdrop-blur-md',
-              'border border-white/10',
-              'shadow-[0_2px_10px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.08)]',
-              // Hover state
-              'hover:w-[22px] hover:from-slate-600/95 hover:to-slate-700/95',
-              'hover:border-white/20',
-              'hover:shadow-[0_4px_16px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.12)]',
-              // Active state
-              'active:scale-[0.97]',
-              // Group for icon animation
-              'group'
-            )}
-          >
-            {/* Chevron icon with resonance */}
-            <span className="transition-all duration-200 group-hover:scale-110 animate-[pulse-subtle_2s_ease-in-out_infinite]">
-              {isDesktopCollapsed ? (
-                <ChevronsRight className="h-3.5 w-3.5 text-white/70 group-hover:text-white stroke-[2.5] transition-colors duration-200" />
-              ) : (
-                <ChevronsLeft className="h-3.5 w-3.5 text-white/70 group-hover:text-white stroke-[2.5] transition-colors duration-200" />
-              )}
-            </span>
-            {/* Resonance ring */}
-            <span
-              className="absolute inset-0 rounded-full border border-white/20 animate-ping opacity-20 pointer-events-none"
-              style={{ animationDuration: '2.5s' }}
-            />
-            {/* Top shine */}
-            <span className="absolute inset-x-0 top-0 h-1/2 rounded-t-full bg-gradient-to-b from-white/[0.07] to-transparent pointer-events-none" />
-          </button>
-        )}
       </aside>
-    </>
+    </TooltipProvider>
   );
 }
-
-interface MobileBackdropProps {
-  isMobile: boolean;
-  isMobileMenuOpen: boolean;
-  setIsMobileMenuOpen: (open: boolean) => void;
-}
-
-const MobileBackdrop = ({
-  isMobile,
-  isMobileMenuOpen,
-  setIsMobileMenuOpen,
-}: MobileBackdropProps) =>
-  isMobile && isMobileMenuOpen ? (
-    <div
-      className="fixed inset-0 z-[999] bg-black/50 backdrop-blur-sm"
-      onClick={() => setIsMobileMenuOpen(false)}
-      aria-hidden="true"
-    />
-  ) : null;

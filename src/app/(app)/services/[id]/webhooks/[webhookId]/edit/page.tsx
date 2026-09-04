@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
-import { ChevronLeft, AlertCircle, Save } from 'lucide-react';
+import { ChevronLeft, AlertCircle, Save, Webhook } from 'lucide-react';
 
 export default async function EditWebhookPage({
   params,
@@ -64,14 +64,23 @@ export default async function EditWebhookPage({
         <span className="font-medium text-foreground">Edit Webhook</span>
       </div>
 
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-lg p-4 md:p-6 shadow-lg">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-            Edit Webhook Integration
-          </h1>
-          <p className="text-xs md:text-sm opacity-90 mt-1">
-            Update configuration for {webhook.name}
-          </p>
+      <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 text-slate-100 shadow-xl ring-1 ring-white/5 md:p-6">
+        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
+        <div className="relative flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800/80 text-white border border-slate-700/80 shadow-xs">
+            <Webhook className="h-5 w-5 text-rose-500" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Inbound Integration
+            </p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+              Edit Webhook Integration
+            </h1>
+            <p className="mt-1 text-xs md:text-sm text-slate-300">
+              Update configuration for {webhook.name}
+            </p>
+          </div>
         </div>
       </div>
 

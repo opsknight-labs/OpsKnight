@@ -61,51 +61,51 @@ export default async function SchedulesPage() {
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
       {/* Header with Glassmorphic Stats Capsule */}
-      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 p-4 text-primary-foreground shadow-lg md:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-primary-foreground/[0.08] blur-3xl" />
+      <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 text-slate-100 shadow-xl ring-1 ring-white/5 md:p-6">
+        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
         <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800/80 text-white border border-slate-700/80 shadow-xs">
               <Calendar className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-foreground/75">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                 On-call schedules
               </p>
-              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-primary-foreground md:text-3xl">
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
                 Schedules
               </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-primary-foreground/85">
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-300">
                 Manage rotation layers, shifts, on-call responders, and coverage calendars.
               </p>
             </div>
           </div>
 
           {/* Frosted Glassmorphism 3-column stats capsule */}
-          <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 p-1.5 backdrop-blur-sm lg:min-w-[340px]">
-            <div className="min-w-0 rounded-md px-3 py-2 text-center">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-1.5 backdrop-blur-xs shadow-xs lg:min-w-[340px]">
+            <div className="min-w-0 rounded-lg px-3 py-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 Responders
               </p>
-              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground">
+              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
                 <Users className="h-3.5 w-3.5" /> {totalUniqueResponders}
               </p>
             </div>
-            <div className="min-w-0 rounded-md border-x border-primary-foreground/20 px-3 py-2 text-center">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+            <div className="min-w-0 rounded-lg border-x border-slate-800/90 px-3 py-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 Layers
               </p>
-              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground">
+              <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
                 <Layers3 className="h-3.5 w-3.5" /> {totalLayers}
               </p>
             </div>
-            <div className="min-w-0 rounded-md px-3 py-2 text-center">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+            <div className="min-w-0 rounded-lg px-3 py-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 Status
               </p>
               <p
-                className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary-foreground ${
-                  hasConfiguredResponders ? 'text-emerald-100' : 'text-amber-100'
+                className={`mt-1 flex items-center justify-center gap-1.5 text-sm font-bold ${
+                  hasConfiguredResponders ? 'text-emerald-400' : 'text-amber-400'
                 }`}
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
