@@ -2,7 +2,7 @@
 -- preceding migration: PostgreSQL enum additions must be committed before any
 -- application code can use the value in a queue insert.
 CREATE TYPE "ChatOpsIntentKind" AS ENUM ('SLASH_COMMAND', 'INTERACTIVE_ACTION');
-CREATE TYPE "ChatOpsIntentStatus" AS ENUM ('PENDING', 'PROCESSING', 'EFFECT_COMPLETED', 'COMPLETED', 'FAILED');
+CREATE TYPE "ChatOpsIntentStatus" AS ENUM ('PENDING', 'EFFECT_PROCESSING', 'EFFECT_COMPLETED', 'RESPONSE_PENDING', 'RESPONSE_PROCESSING', 'COMPLETED', 'FAILED');
 
 CREATE TABLE "ChatOpsIntent" (
   "id" TEXT NOT NULL,
