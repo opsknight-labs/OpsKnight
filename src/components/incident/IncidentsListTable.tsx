@@ -35,6 +35,7 @@ import StatusBadge from './StatusBadge';
 import EscalationStatusBadge from './EscalationStatusBadge';
 import PriorityBadge from './PriorityBadge';
 import AssigneeSection from './AssigneeSection';
+import ResolveIncidentModal, { type ResolvingIncidentData } from './ResolveIncidentModal';
 import { Badge } from '@/components/ui/shadcn/badge';
 import EmptyState from '@/components/ui/EmptyState';
 import {
@@ -111,6 +112,7 @@ export default function IncidentsListTable({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
+  const [resolvingIncident, setResolvingIncident] = useState<ResolvingIncidentData | null>(null);
 
   const totalItems = pagination?.totalItems ?? incidents.length;
   const showingFrom =
@@ -126,12 +128,10 @@ export default function IncidentsListTable({
   const selectedCount = selectedIds.size;
 
   const selectedMeta = useMemo(() => {
-    const ids = Array.from(selectedIds);
     let hasSnoozed = false;
     let hasSuppressed = false;
-    for (const id of ids) {
-      const inc = incidents.find(i => i.id === id);
-      if (!inc) continue;
+    for (const inc of incidents) {
+      if (!selectedIds.has(inc.id)) continue;
       if (inc.status === 'SNOOZED') hasSnoozed = true;
       if (inc.status === 'SUPPRESSED') hasSuppressed = true;
       if (hasSnoozed && hasSuppressed) break;
@@ -140,6 +140,18 @@ export default function IncidentsListTable({
   }, [selectedIds, incidents]);
 
   const handleStatusChange = async (incidentId: string, status: IncidentStatus) => {
+    if (status === 'RESOLVED') {
+      const inc = incidents.find(i => i.id === incidentId);
+      if (inc) {
+        setResolvingIncident({
+          id: inc.id,
+          title: inc.title,
+          service: inc.service,
+        });
+      }
+      return;
+    }
+
     startTransition(async () => {
       try {
         await updateIncidentStatus(incidentId, status);
@@ -766,7 +778,7 @@ export default function IncidentsListTable({
                         teamId={incident.teamId}
                       />
 
-                      {/* Quick triage hover action */}
+                      {/* Quick triage actions */}
                       {canManageIncidents && incidentStatus === 'OPEN' && (
                         <Button
                           size="sm"
@@ -777,8 +789,8 @@ export default function IncidentsListTable({
                             handleStatusChange(incident.id, 'ACKNOWLEDGED');
                           }}
                           disabled={isPending}
-                          className="hidden sm:inline-flex opacity-0 group-hover:opacity-100 transition-all duration-150 h-7 px-2 text-xs font-semibold gap-1 border-blue-500/40 text-blue-700 hover:bg-blue-500/10 dark:text-blue-300 cursor-pointer shadow-2xs shrink-0"
-                          title="Quick Acknowledge"
+                          className="inline-flex h-7 px-2.5 text-xs font-semibold gap-1 border-blue-500/40 text-blue-700 hover:bg-blue-500/10 dark:text-blue-300 cursor-pointer shadow-2xs shrink-0"
+                          title="Acknowledge Incident"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           <span>Ack</span>
@@ -792,11 +804,15 @@ export default function IncidentsListTable({
                           data-no-row-nav="true"
                           onClick={e => {
                             e.stopPropagation();
-                            handleStatusChange(incident.id, 'RESOLVED');
+                            setResolvingIncident({
+                              id: incident.id,
+                              title: incident.title,
+                              service: incident.service,
+                            });
                           }}
                           disabled={isPending}
-                          className="hidden sm:inline-flex opacity-0 group-hover:opacity-100 transition-all duration-150 h-7 px-2 text-xs font-semibold gap-1 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300 cursor-pointer shadow-2xs shrink-0"
-                          title="Quick Resolve"
+                          className="inline-flex h-7 px-2.5 text-xs font-semibold gap-1 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300 cursor-pointer shadow-2xs shrink-0"
+                          title="Resolve Incident"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           <span>Resolve</span>
@@ -836,7 +852,11 @@ export default function IncidentsListTable({
                                 <DropdownMenuItem
                                   onSelect={e => {
                                     e.preventDefault();
-                                    handleStatusChange(incident.id, 'RESOLVED');
+                                    setResolvingIncident({
+                                      id: incident.id,
+                                      title: incident.title,
+                                      service: incident.service,
+                                    });
                                   }}
                                   className="flex items-center gap-2"
                                 >
@@ -947,6 +967,15 @@ export default function IncidentsListTable({
           itemsPerPage={pagination.itemsPerPage}
         />
       )}
+
+      {/* Centralized Resolve Incident Modal */}
+      <ResolveIncidentModal
+        incident={resolvingIncident}
+        open={!!resolvingIncident}
+        onOpenChange={open => {
+          if (!open) setResolvingIncident(null);
+        }}
+      />
     </div>
   );
 }
