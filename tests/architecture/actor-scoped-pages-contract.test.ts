@@ -12,6 +12,13 @@ const pages = {
   dashboard: readFileSync('src/app/(app)/page.tsx', 'utf8'),
   mobileAnalytics: readFileSync('src/app/(mobile)/m/analytics/page.tsx', 'utf8'),
   mobileDashboard: readFileSync('src/app/(mobile)/m/page.tsx', 'utf8'),
+  mobileIncidents: readFileSync('src/app/(mobile)/m/incidents/page.tsx', 'utf8'),
+  mobileIncidentDetail: readFileSync('src/app/(mobile)/m/incidents/[id]/page.tsx', 'utf8'),
+  mobileServices: readFileSync('src/app/(mobile)/m/services/page.tsx', 'utf8'),
+  mobileServiceDetail: readFileSync('src/app/(mobile)/m/services/[id]/page.tsx', 'utf8'),
+  mobileTeams: readFileSync('src/app/(mobile)/m/teams/page.tsx', 'utf8'),
+  mobileLayout: readFileSync('src/app/(mobile)/m/layout.tsx', 'utf8'),
+  serviceDetail: readFileSync('src/app/(app)/services/[id]/page.tsx', 'utf8'),
   executiveReport: readFileSync('src/app/(app)/reports/executive/page.tsx', 'utf8'),
 };
 
@@ -38,5 +45,22 @@ describe('actor-scoped page read contract', () => {
     ]) {
       expect(page).toContain('calculateActorSLAMetrics(');
     }
+  });
+
+  it.each([
+    ['mobile incidents', pages.mobileIncidents, ['incidentReadWhere(actor)']],
+    ['mobile incident detail', pages.mobileIncidentDetail, ['incidentReadWhere(actor)']],
+    ['mobile services', pages.mobileServices, ['serviceReadWhere(actor)', 'incidentReadWhere(actor)']],
+    ['mobile service detail', pages.mobileServiceDetail, ['serviceReadWhere(actor)', 'incidentReadWhere(actor)']],
+    ['mobile teams', pages.mobileTeams, ['teamReadWhere(actor)', 'incidentReadWhere(actor)']],
+    ['mobile layout', pages.mobileLayout, ['incidentReadWhere(actor)']],
+    ['service detail', pages.serviceDetail, ['serviceReadWhere(actor)', 'incidentReadWhere(actor)']],
+  ])('%s uses centralized actor scope for rows and counts', (_name, page, predicates) => {
+    expect(page).toContain('getCurrentAuthorizationActor()');
+    for (const predicate of predicates) expect(page).toContain(predicate);
+  });
+
+  it('keeps authenticated uptime behind the actor-aware boundary', () => {
+    expect(pages.serviceDetail).toContain('calculateActorMultiServiceUptime(');
   });
 });

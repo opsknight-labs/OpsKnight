@@ -7,7 +7,7 @@ import {
   assertCanViewService,
   getCurrentAuthorizationActor,
 } from '@/lib/rbac';
-import { incidentReadWhere } from '@/lib/authorization-filters';
+import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { deleteService, updateService, deleteIntegration } from '../actions';
 
 // UI Components
@@ -169,10 +169,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     // The service is viewable but this user cannot change its configuration.
   }
 
-  const [{ calculateActorSLAMetrics }, { calculateMultiServiceUptime }] = await Promise.all([
-    import('@/lib/actor-metrics'),
-    import('@/lib/sla-server'),
-  ]);
+  const { calculateActorSLAMetrics, calculateActorMultiServiceUptime } = await import(
+    '@/lib/actor-metrics'
+  );
   const slaWindowDays = 30;
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - slaWindowDays * 24 * 60 * 60 * 1000);
@@ -188,8 +187,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     jiraConfig,
     chatOpsConfig,
   ] = await Promise.all([
-    prisma.service.findUnique({
-      where: { id },
+    prisma.service.findFirst({
+      where: { AND: [serviceReadWhere(actor), { id }] },
       include: {
         team: {
           select: { id: true, name: true, description: true },
@@ -229,12 +228,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           skip,
           take: INCIDENTS_PER_PAGE,
         },
-        _count: {
-          select: {
-            incidents: true,
-            integrations: true,
-          },
-        },
+        _count: { select: { integrations: true } },
       },
     }),
     prisma.incident.count({ where: { AND: [incidentAccess, { serviceId: id }] } }),
@@ -243,7 +237,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       windowDays: slaWindowDays,
       includeActiveIncidents: true,
     }),
-    calculateMultiServiceUptime([id], thirtyDaysAgo, now),
+    calculateActorMultiServiceUptime(actor, [id], thirtyDaysAgo, now),
     canManageService ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
     canManageService
       ? prisma.escalationPolicy.findMany({
@@ -293,7 +287,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     effectiveDurationDays > 0 ? (windowTotalIncidents / effectiveDurationDays) * 30 : 0;
   const availability = Math.max(0, Math.min(100, uptimeByService[id] ?? 100));
 
-  const totalIncidents = service._count.incidents;
+  const totalIncidents = totalIncidentCount;
   const totalPages = Math.ceil(totalIncidents / INCIDENTS_PER_PAGE);
 
   const boundUpdateService = updateService.bind(null, service.id);

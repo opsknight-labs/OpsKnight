@@ -105,6 +105,26 @@ describe('calculateMultiServiceUptime visibility', () => {
       })
     );
   });
+
+  it('composes an authenticated incident predicate with uptime dates', async () => {
+    prismaMock.incident.findMany.mockResolvedValueOnce([]);
+    const incidentWhere = { assigneeId: 'user-1' };
+
+    await calculateMultiServiceUptime(
+      ['service-1'],
+      new Date('2026-01-01T00:00:00.000Z'),
+      new Date('2026-01-02T00:00:00.000Z'),
+      { incidentWhere }
+    );
+
+    expect(prismaMock.incident.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([incidentWhere]),
+        }),
+      })
+    );
+  });
 });
 
 // Initialize the new mock functions

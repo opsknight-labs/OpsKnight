@@ -1,6 +1,8 @@
 import prisma from '@/lib/prisma';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import MobileTeamsClient from '@/components/mobile/MobileTeamsClient';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { incidentReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,20 +13,23 @@ export default async function MobileTeamsPage({
 }) {
   const params = await searchParams;
   const query = params.q || '';
+  const actor = await getCurrentAuthorizationActor();
+  const incidentAccess = incidentReadWhere(actor);
+  const selectedWhere = query
+    ? { name: { contains: query, mode: 'insensitive' as const } }
+    : {};
 
   const teams = await prisma.team.findMany({
-    where: query
-      ? {
-          name: { contains: query, mode: 'insensitive' },
-        }
-      : undefined,
+    where: { AND: [teamReadWhere(actor), selectedWhere] },
     orderBy: { name: 'asc' },
     include: {
       _count: {
         select: {
           members: true,
           incidents: {
-            where: { status: { in: activeIncidentStatuses() } },
+            where: {
+              AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }],
+            },
           },
         },
       },

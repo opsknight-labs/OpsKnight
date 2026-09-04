@@ -2707,7 +2707,10 @@ export async function calculateMultiServiceUptime(
   serviceIds: string[],
   startDate: Date,
   endDate: Date = new Date(),
-  visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL'
+  options: 'PUBLIC' | 'PRIVATE' | 'ALL' | {
+    visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
+    incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
+  } = {}
 ): Promise<Record<string, number>> {
   const { default: prisma } = await import('./prisma');
 
@@ -2717,13 +2720,20 @@ export async function calculateMultiServiceUptime(
     'incident'
   );
 
-  const visibilityFilter = visibility && visibility !== 'ALL' ? { visibility } : {};
+  // Keep the legacy visibility argument for public-status callers while allowing
+  // authenticated callers to add their actor-derived incident read predicate.
+  const normalizedOptions = typeof options === 'string' ? { visibility: options } : options;
+  const visibilityFilter =
+    normalizedOptions.visibility && normalizedOptions.visibility !== 'ALL'
+      ? { visibility: normalizedOptions.visibility }
+      : {};
 
   const incidents = await prisma.incident.findMany({
     where: {
       serviceId: { in: serviceIds },
       ...visibilityFilter,
       AND: [
+        normalizedOptions.incidentWhere ?? {},
         { createdAt: { lt: effectiveEnd } },
         {
           OR: [

@@ -2,8 +2,7 @@ import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { calculateMultiServiceUptime } from '@/lib/sla-server';
-import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
+import { calculateActorMultiServiceUptime, calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
@@ -114,14 +113,16 @@ export async function GET(_request: NextRequest) {
               if (def.serviceId) {
                 const now = new Date();
                 const startDate = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
-                const uptimeMap = await calculateMultiServiceUptime(
+                const uptimeMap = await calculateActorMultiServiceUptime(
+                  actor,
                   [def.serviceId],
                   startDate,
                   now
                 );
                 currentValue = uptimeMap[def.serviceId] ?? null;
                 const previousStart = new Date(startDate.getTime() - windowDays * 86400000);
-                const previousMap = await calculateMultiServiceUptime(
+                const previousMap = await calculateActorMultiServiceUptime(
+                  actor,
                   [def.serviceId],
                   previousStart,
                   startDate
