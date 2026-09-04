@@ -188,7 +188,9 @@ export async function createIncidentWarRoom(
     const incident = await prisma.incident.findUnique({
       where: { id: incidentId },
       include: {
-        service: true,
+        service: {
+          include: { slackIntegration: { select: { workspaceId: true } } },
+        },
         assignee: { select: { id: true, name: true, email: true } },
       },
     });
@@ -237,6 +239,10 @@ export async function createIncidentWarRoom(
     const botToken = await getSlackBotToken(incident.serviceId);
     if (!botToken) {
       return { success: false, error: 'No Slack bot token configured' };
+    }
+    const slackWorkspaceId = incident.service.slackIntegration?.workspaceId;
+    if (!slackWorkspaceId) {
+      return { success: false, error: 'No Slack workspace installation configured for this service' };
     }
 
     // Generate channel name
@@ -472,6 +478,7 @@ export async function createIncidentWarRoom(
       data: {
         slackChannelId: channelId,
         slackChannelName: channelName,
+        slackWorkspaceId,
         warRoomUrl,
         warRoomArchivedAt: null,
       },

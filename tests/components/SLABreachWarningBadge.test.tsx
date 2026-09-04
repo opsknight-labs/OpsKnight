@@ -66,6 +66,7 @@ describe('SLABreachWarningBadge', () => {
     dedupKey: null,
     escalationProcessingAt: null,
     visibility: 'PUBLIC',
+    slackWorkspaceId: null,
     slackChannelId: null,
     slackChannelName: null,
     warRoomUrl: null,

@@ -30,7 +30,7 @@ export async function createWebhookIntegration(serviceId: string, formData: Form
 
   let normalizedName = name;
   try {
-    normalizedName = await assertWebhookIntegrationNameAvailable(name);
+    normalizedName = await assertWebhookIntegrationNameAvailable(name, { serviceId });
   } catch (error) {
     if (error instanceof UniqueNameConflictError) {
       redirect(`/services/${serviceId}/webhooks/new?error=duplicate-webhook`);
@@ -99,6 +99,7 @@ export async function updateWebhookIntegration(
   try {
     normalizedName = await assertWebhookIntegrationNameAvailable(name, {
       excludeId: integrationId,
+      serviceId: ownedServiceId,
     });
   } catch (error) {
     if (error instanceof UniqueNameConflictError) {

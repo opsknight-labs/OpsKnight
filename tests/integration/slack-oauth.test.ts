@@ -17,6 +17,11 @@ vi.mock('@/lib/prisma', () => ({
     slackIntegration: {
       findUnique: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
+    },
+    service: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
     },
   },
 }));
@@ -215,6 +220,41 @@ describe('Slack OAuth Integration', () => {
 
       const location = response.headers.get('Location');
       expect(location).toContain('https://db-config-url.com');
+    });
+
+    it('rebinds only the selected service when reconnecting to a different workspace', async () => {
+      const state = 'valid-state';
+      const req = new NextRequest(
+        `http://localhost:3000/api/slack/oauth/callback?code=valid-code&state=${state}`
+      );
+      req.cookies.set('slack_oauth_state', state);
+      req.cookies.set('slack_oauth_service_id', 'service-a');
+      global.fetch = vi.fn().mockResolvedValue({
+        json: async () => ({
+          ok: true,
+          access_token: 'xoxb-new-workspace',
+          team: { id: 'workspace-y', name: 'Workspace Y' },
+          scope: 'chat:write',
+        }),
+      });
+      vi.mocked(prisma.service.findUnique).mockResolvedValue({
+        id: 'service-a',
+        slackIntegration: { id: 'shared-workspace-x', workspaceId: 'workspace-x' },
+      } as unknown as Awaited<ReturnType<typeof prisma.service.findUnique>>);
+      vi.mocked(prisma.slackIntegration.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.slackIntegration.create).mockResolvedValue(
+        { id: 'workspace-y-row' } as unknown as Awaited<ReturnType<typeof prisma.slackIntegration.create>>
+      );
+
+      await callbackHandler(req);
+
+      expect(prisma.slackIntegration.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'shared-workspace-x' } })
+      );
+      expect(prisma.service.update).toHaveBeenCalledWith({
+        where: { id: 'service-a' },
+        data: { slackIntegrationId: 'workspace-y-row' },
+      });
     });
   });
 });

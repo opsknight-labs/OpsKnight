@@ -128,7 +128,12 @@ describe('ChatOps War-Room Engine', () => {
         slackChannelId: 'C-OLD-ARCHIVED',
         warRoomArchivedAt: new Date('2026-08-15T10:00:00Z'),
         serviceId: 'srv-1',
-        service: { id: 'srv-1', name: 'Payments API', autoCreateWarRoom: true },
+        service: {
+          id: 'srv-1',
+          name: 'Payments API',
+          autoCreateWarRoom: true,
+          slackIntegration: { workspaceId: 'workspace-1' },
+        },
         assignee: null,
       } as any);
       vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
@@ -227,6 +232,7 @@ describe('ChatOps War-Room Engine', () => {
           name: 'Payments API',
           autoCreateWarRoom: false, // per-service auto-creation off
           warRoomVideoBridge: 'JITSI',
+          slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: null,
       } as any);
@@ -297,6 +303,7 @@ describe('ChatOps War-Room Engine', () => {
           name: 'Database Cluster',
           autoCreateWarRoom: true,
           warRoomVideoBridge: 'JITSI',
+          slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: { id: 'usr-1', name: 'Dev', email: 'dev@test.com' },
       } as any);
@@ -360,6 +367,7 @@ describe('ChatOps War-Room Engine', () => {
           name: 'Database Cluster',
           autoCreateWarRoom: true,
           warRoomVideoBridge: 'JITSI',
+          slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: { id: 'usr-1', name: 'Dev', email: 'dev@test.com' },
       } as any);

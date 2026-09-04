@@ -71,6 +71,12 @@ enum NotificationStatus {
   SKIPPED
 }
 
+enum InboundDeliveryStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum NotificationChannel {
   EMAIL
   SMS
@@ -417,10 +423,31 @@ model Integration {
   @@index([serviceId])
 }
 
+/// Provider delivery inbox. This is deliberately independent of rate limiting:
+/// a transport delivery is only completed after canonical event processing and
+/// its lease prevents two replicas from executing the same nonce concurrently.
+model InboundDelivery {
+  id             String                @id @default(cuid())
+  integrationId  String
+  provider       String
+  deliveryHash   String
+  status         InboundDeliveryStatus @default(PROCESSING)
+  attempt        Int                   @default(1)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  lastError      String?
+  completedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([integrationId, deliveryHash])
+  @@index([status, leaseExpiresAt])
+}
+
 model WebhookIntegration {
   id        String   @id @default(cuid())
   serviceId String
-  name      String   @unique // "Google Chat", "Microsoft Teams", etc.
+  name      String // "Google Chat", "Microsoft Teams", etc.
   type      String // "GOOGLE_CHAT", "TEAMS", "DISCORD", "GENERIC"
   url       String
   secret    String? // For HMAC signature
@@ -431,6 +458,7 @@ model WebhookIntegration {
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
+  @@unique([serviceId, name])
   @@index([serviceId])
 }
 
@@ -541,6 +569,7 @@ model Incident {
   slaTargetSource        String? // Provenance for the frozen target (priority/service/default/backfill)
   slaTargetCapturedAt    DateTime? // When the immutable target contract was captured
   // ChatOps War-Room fields
+  slackWorkspaceId       String? // Immutable workspace that owns this war-room instance
   slackChannelId         String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
   slackChannelName       String? // Channel name (e.g. "inc-104-payments-api")
   warRoomUrl             String? // Video bridge URL (Jitsi/Zoom/Meet)
@@ -590,6 +619,7 @@ model Incident {
   @@index([assigneeId, createdAt, status], name: "idx_incident_assignee_load") // For assignee workload queries
   // ChatOps War-Room: Channel lookup from slash commands
   @@index([slackChannelId], name: "idx_incident_war_room_channel") // For slash command channel→incident resolution
+  @@index([slackWorkspaceId, slackChannelId], name: "idx_incident_war_room_workspace_channel")
   // Realtime SSE polling: updatedAt queries on every active browser connection (every 3-5s)
   @@index([updatedAt], name: "idx_incident_updated_at") // Prevents full table scan on realtime polling
   @@index([serviceId, updatedAt], name: "idx_incident_service_updated_at") // Per-service realtime updates
@@ -1661,6 +1691,7 @@ model RateLimit {
 model SlackPinnedMessage {
   id         String   @id @default(cuid())
   incidentId String
+  workspaceId String?
   channelId  String // Slack channel the message lives in
   messageTs  String // Slack message timestamp — unique within a channel
   pinnedBy   String? // Display name of whoever reacted
@@ -1668,8 +1699,9 @@ model SlackPinnedMessage {
 
   incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
-  @@unique([channelId, messageTs])
+  @@unique([workspaceId, channelId, messageTs])
   @@index([incidentId])
+  @@index([workspaceId, channelId])
 }
 
 model ChatOpsConfig {

@@ -12,6 +12,7 @@ export class UniqueNameConflictError extends Error {
 
 type NameOptions = {
     excludeId?: string;
+    serviceId?: string;
 };
 
 async function assertNameAvailable(
@@ -96,9 +97,13 @@ export async function assertIncidentTemplateNameAvailable(name: string, options:
 }
 
 export async function assertWebhookIntegrationNameAvailable(name: string, options: NameOptions = {}) {
+    if (!options.serviceId) {
+        throw new Error('Webhook integration serviceId is required.');
+    }
     return assertNameAvailable('Webhook integration', name, options, (value, excludeId) =>
         prisma.webhookIntegration.findFirst({
             where: {
+                serviceId: options.serviceId,
                 name: value,
                 ...(excludeId ? { NOT: { id: excludeId } } : {})
             },
