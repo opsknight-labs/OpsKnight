@@ -12,6 +12,8 @@ import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
 } from '@/lib/incidents/chatops-lifecycle';
+import { executeIdempotentOperation } from '@/lib/idempotency';
+import { runSerializableTransaction } from '@/lib/db-utils';
 
 export interface SlashCommandPayload {
   command: string;
@@ -22,6 +24,7 @@ export interface SlashCommandPayload {
   user_name: string;
   team_id: string;
   response_url: string;
+  __opsknightIntentId?: string;
 }
 
 interface SlackResponse {
@@ -78,6 +81,9 @@ async function resolveOpsKnightUser(slackUserId: string, botToken: string) {
  */
 export async function handleSlashCommand(payload: SlashCommandPayload): Promise<SlackResponse> {
   const { text, channel_id, user_id } = payload;
+  const idempotency = payload.__opsknightIntentId
+    ? { key: payload.__opsknightIntentId, principalId: `chatops:${user_id}` }
+    : undefined;
 
   // Parse subcommand and preserve raw argument formatting (including newlines and tabs)
   const trimmed = text.trim();
@@ -179,6 +185,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
           incidentId: incident.id,
           command: 'ACKNOWLEDGE',
           actor: { id: actor!.id, name: actor!.name },
+          idempotency,
           eventMessage: `Acknowledged via Slack ChatOps by ${actor!.name}`,
         });
       } catch (error) {
@@ -221,6 +228,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
           incidentId: incident.id,
           command: 'RESOLVE',
           actor: { id: actor!.id, name: actor!.name },
+          idempotency,
           resolutionNote: resolution,
           eventMessage: `Resolved via Slack ChatOps by ${actor!.name}: ${resolution}`,
         });
@@ -272,20 +280,25 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         };
       }
 
-      await prisma.incidentNote.create({
-        data: {
-          incidentId: incident.id,
-          userId: noteUserId,
-          content: args,
-        },
-      });
-
-      await prisma.incidentEvent.create({
-        data: {
-          incidentId: incident.id,
-          type: 'COMMENT',
-          message: `Note added via Slack ChatOps by @${payload.user_name}`,
-        },
+      await runSerializableTransaction(async tx => {
+        await executeIdempotentOperation(tx, {
+          scope: 'chatops-note',
+          context: idempotency,
+          payload: { incidentId: incident.id, userId: noteUserId, content: args },
+          execute: async () => {
+            await tx.incidentNote.create({
+              data: { incidentId: incident.id, userId: noteUserId, content: args },
+            });
+            await tx.incidentEvent.create({
+              data: {
+                incidentId: incident.id,
+                type: 'COMMENT',
+                message: `Note added via Slack ChatOps by @${payload.user_name}`,
+              },
+            });
+            return { created: true };
+          },
+        });
       });
 
       logger.info('[ChatOps] Note added via slash command', {

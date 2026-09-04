@@ -85,6 +85,7 @@ type SlackActionPayload = {
   container?: { channel_id?: string };
   channel?: { id?: string };
   team?: { id?: string };
+  __opsknightIntentId?: string;
   [key: string]: unknown;
 };
 
@@ -113,6 +114,9 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       const { action: actionType, incidentId } = actionValue;
       const slackUserId = payload.user?.id;
       const slackUserName = payload.user?.name || payload.user?.username;
+      const idempotency = payload.__opsknightIntentId
+        ? { key: payload.__opsknightIntentId, principalId: `chatops:${slackUserId || 'unknown'}` }
+        : undefined;
 
       if (!incidentId || !actionType) {
         return NextResponse.json({ error: 'Invalid action data' }, { status: 400 });
@@ -164,6 +168,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             incidentId,
             command: 'ACKNOWLEDGE',
             actor: { id: actorUser.id, name: actorName },
+            idempotency,
             eventMessage: `Acknowledged via Slack button by ${actorName}`,
           });
         } catch (error) {
@@ -189,6 +194,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             incidentId,
             command: 'RESOLVE',
             actor: { id: actorUser.id, name: actorName },
+            idempotency,
             eventMessage: `Resolved via Slack button by ${actorName}`,
           });
         } catch (error) {
@@ -297,6 +303,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             incidentId,
             command: 'SNOOZE',
             actor: { id: actorUser.id, name: actorName },
+            idempotency,
             snoozedUntil,
             eventMessage: `Snoozed for ${snoozeMinutes}m via Slack button by ${actorName}`,
           });

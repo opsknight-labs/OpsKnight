@@ -177,7 +177,10 @@ export async function processChatOpsIntent(intentId: string): Promise<void> {
   const claim = await claimChatOpsIntent(intentId);
   if (!claim) return;
   try {
-    const payload = JSON.parse(await decrypt(claim.encryptedPayload)) as Record<string, unknown>;
+    const payload: Record<string, unknown> = {
+      ...(JSON.parse(await decrypt(claim.encryptedPayload)) as Record<string, unknown>),
+      __opsknightIntentId: claim.id,
+    };
     let response = claim.responsePayload;
     if (claim.status === 'PROCESSING') {
       if (payload.__kind === 'SLASH_COMMAND') {

@@ -8,6 +8,7 @@ import {
   type AuthorizationResource,
 } from '@/lib/authorization-policy';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import { executeIdempotentOperation, type IdempotencyContext } from '@/lib/idempotency';
 import { AppError, toPublicAppError } from '@/lib/errors';
 import {
   applyIncidentLifecycleCommand,
@@ -33,6 +34,7 @@ export type ChatOpsLifecycleInput = {
   snoozedUntil?: Date | null;
   snoozeReason?: string | null;
   eventMessage?: string;
+  idempotency?: IdempotencyContext;
 };
 
 function actionForCommand(command: ChatOpsLifecycleCommand) {
@@ -136,16 +138,28 @@ export async function executeChatOpsLifecycleCommand(
       });
     }
 
-    return applyIncidentLifecycleCommand(tx, {
-      incidentId: input.incidentId,
-      command: input.command,
-      source: 'CHATOPS',
-      actor: input.actor,
-      resolutionNote: input.resolutionNote,
-      snoozedUntil: input.snoozedUntil,
-      snoozeReason: input.snoozeReason,
-      eventMessage: input.eventMessage,
+    const execution = await executeIdempotentOperation(tx, {
+      scope: `chatops-lifecycle:${input.command.toLowerCase()}`,
+      context: input.idempotency,
+      payload: {
+        incidentId: input.incidentId,
+        command: input.command,
+        resolutionNote: input.resolutionNote,
+        snoozedUntil: input.snoozedUntil?.toISOString() ?? null,
+      },
+      execute: () =>
+        applyIncidentLifecycleCommand(tx, {
+          incidentId: input.incidentId,
+          command: input.command,
+          source: 'CHATOPS',
+          actor: input.actor,
+          resolutionNote: input.resolutionNote,
+          snoozedUntil: input.snoozedUntil,
+          snoozeReason: input.snoozeReason,
+          eventMessage: input.eventMessage,
+        }),
     });
+    return execution.value;
   });
 }
 
