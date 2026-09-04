@@ -12,7 +12,7 @@ function isNonRetryableBackgroundJobError(error: string): boolean {
   return /message_limit_exceeded|user has not enabled any notification channels/i.test(error);
 }
 
-export type JobType = 'ESCALATION' | 'NOTIFICATION' | 'AUTO_UNSNOOZE' | 'SCHEDULED_TASK' | 'STATUS_PAGE_NOTIFICATION';
+export type JobType = 'ESCALATION' | 'NOTIFICATION' | 'AUTO_UNSNOOZE' | 'SCHEDULED_TASK' | 'STATUS_PAGE_NOTIFICATION' | 'CHATOPS_INTENT';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 interface JobPayload { incidentId?: string; stepIndex?: number; eventType?: string; task?: string; [key:string]:unknown; }
 
@@ -75,6 +75,12 @@ export async function processJob(job:any):Promise<boolean>{
       }
       case'NOTIFICATION':
         await prisma.backgroundJob.update({where:{id:job.id},data:{status:'CANCELLED',completedAt:new Date(),error:'Superseded by durable per-channel notification intents'}});return true;
+      case'CHATOPS_INTENT':{
+        if(typeof job.payload.intentId!=='string') throw new Error('ChatOps intent job is missing intentId');
+        const {processChatOpsIntent}=await import('../chatops/intents');
+        await processChatOpsIntent(job.payload.intentId);
+        await markJobCompleted(job.id);return true;
+      }
       case'STATUS_PAGE_NOTIFICATION':{
         const {notifyStatusPageSubscribers}=await import('../status-page-notifications');const subscriberResult=await notifyStatusPageSubscribers(job.payload.incidentId,job.payload.eventType);if(!subscriberResult.success)throw new Error(`Status page subscriber delivery failed (${subscriberResult.failed})`);
         const incidentForWebhook=await prisma.incident.findUnique({where:{id:job.payload.incidentId},select:{id:true,title:true,status:true,urgency:true,priority:true,visibility:true,serviceId:true,createdAt:true,acknowledgedAt:true,resolvedAt:true,service:{select:{id:true,name:true}}}});

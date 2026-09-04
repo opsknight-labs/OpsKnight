@@ -90,6 +90,16 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
   const incident = await prisma.incident.findFirst({
     where: {
       slackChannelId: channel_id,
+      // Channel IDs are only unique inside a Slack workspace. Legacy rows did
+      // not retain the workspace, so they may be used only when their service
+      // is explicitly bound to the signed workspace.
+      OR: [
+        { slackWorkspaceId: payload.team_id },
+        {
+          slackWorkspaceId: null,
+          service: { OR: [{ slackWorkspaceId: payload.team_id }, { slackIntegration: { workspaceId: payload.team_id } }] },
+        },
+      ],
     },
     include: {
       service: { select: { id: true, name: true, escalationPolicyId: true } },

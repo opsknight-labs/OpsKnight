@@ -574,6 +574,9 @@ model Incident {
   slackChannelName       String? // Channel name (e.g. "inc-104-payments-api")
   warRoomUrl             String? // Video bridge URL (Jitsi/Zoom/Meet)
   warRoomArchivedAt      DateTime? // Set when the Slack channel is archived; the channel id is kept for history
+  warRoomProvisioningStatus WarRoomProvisioningStatus @default(NONE)
+  warRoomProvisioningToken  String?
+  warRoomProvisioningAt     DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
@@ -620,6 +623,7 @@ model Incident {
   // ChatOps War-Room: Channel lookup from slash commands
   @@index([slackChannelId], name: "idx_incident_war_room_channel") // For slash command channel→incident resolution
   @@index([slackWorkspaceId, slackChannelId], name: "idx_incident_war_room_workspace_channel")
+  @@index([warRoomProvisioningStatus, warRoomProvisioningAt])
   // Realtime SSE polling: updatedAt queries on every active browser connection (every 3-5s)
   @@index([updatedAt], name: "idx_incident_updated_at") // Prevents full table scan on realtime polling
   @@index([serviceId, updatedAt], name: "idx_incident_service_updated_at") // Per-service realtime updates
@@ -1138,6 +1142,7 @@ enum JobType {
   AUTO_UNSNOOZE
   SCHEDULED_TASK
   STATUS_PAGE_NOTIFICATION
+  CHATOPS_INTENT
 }
 
 enum JobStatus {
@@ -1166,6 +1171,53 @@ model BackgroundJob {
   @@index([type, status, scheduledAt]) // For efficient job polling
   @@index([status, scheduledAt]) // For finding pending jobs
   @@index([scheduledAt]) // For time-based queries
+}
+
+/// A signed Slack request is first persisted, then executed by the durable
+/// worker. `EFFECT_COMPLETED` intentionally precedes response delivery: Slack
+/// may retry a response URL request, but that must never repeat a mutation.
+enum ChatOpsIntentKind {
+  SLASH_COMMAND
+  INTERACTIVE_ACTION
+}
+
+enum ChatOpsIntentStatus {
+  PENDING
+  PROCESSING
+  EFFECT_COMPLETED
+  COMPLETED
+  FAILED
+}
+
+enum WarRoomProvisioningStatus {
+  NONE
+  PROVISIONING
+  READY
+  FAILED
+}
+
+model ChatOpsIntent {
+  id                String             @id @default(cuid())
+  kind              ChatOpsIntentKind
+  deliveryHash      String
+  workspaceId       String
+  channelId         String?
+  slackUserId       String?
+  encryptedPayload  String
+  status            ChatOpsIntentStatus @default(PENDING)
+  attempt           Int                @default(0)
+  leaseToken        String?
+  leaseExpiresAt    DateTime?
+  effectCompletedAt DateTime?
+  responseCompletedAt DateTime?
+  responsePayload   Json?
+  lastError         String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([kind, deliveryHash])
+  @@index([status, leaseExpiresAt])
+  @@index([workspaceId, channelId])
 }
 
 // Status Page Configuration

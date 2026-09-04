@@ -11,6 +11,9 @@ import { getSlackBotToken } from '@/lib/slack';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { getBaseUrl } from '@/lib/env-validation';
 import { retryFetch } from '@/lib/retry';
+import crypto from 'crypto';
+
+const PROVISIONING_LEASE_MS = 5 * 60 * 1000;
 
 type WarRoomResult = {
   success: boolean;
@@ -97,6 +100,7 @@ export async function slackApiCall(
   ok: boolean;
   error?: string;
   channel?: { id: string; name: string };
+  channels?: Array<{ id: string; name: string }>;
   user?: { profile?: { email?: string } };
 }> {
   try {
@@ -136,6 +140,18 @@ export async function slackApiCall(
     logger.warn('[ChatOps] Slack API call failed', { method, error: message });
     return { ok: false, error: message };
   }
+}
+
+async function findExistingChannel(
+  botToken: string,
+  channelName: string
+): Promise<{ id: string; name: string } | null> {
+  const result = await slackApiCall('conversations.list', botToken, {
+    exclude_archived: true,
+    limit: 1000,
+    types: 'public_channel,private_channel',
+  });
+  return result.channels?.find(channel => channel.name === channelName) || null;
 }
 
 /**
@@ -257,6 +273,50 @@ export async function createIncidentWarRoom(
         .replace(/^[-_]+|[-_]+$/g, '') || 'incident';
     const channelName = `${safePrefix}-${idSuffix}-${serviceSlug}`.slice(0, 80);
 
+    // Claim before making an external call. A failed worker may be reclaimed
+    // after its lease expires, but stale workers can never attach their result.
+    const provisioningToken = crypto.randomUUID();
+    const claimed = await prisma.incident.updateMany({
+      where: {
+        id: incidentId,
+        slackChannelId: null,
+        OR: [
+          { warRoomProvisioningStatus: { in: ['NONE', 'FAILED'] } },
+          {
+            warRoomProvisioningStatus: 'PROVISIONING',
+            warRoomProvisioningAt: { lt: new Date(Date.now() - PROVISIONING_LEASE_MS) },
+          },
+        ],
+      },
+      data: {
+        warRoomProvisioningStatus: 'PROVISIONING',
+        warRoomProvisioningToken: provisioningToken,
+        warRoomProvisioningAt: new Date(),
+      },
+    });
+    if (claimed.count !== 1) {
+      const current = await prisma.incident.findUnique({
+        where: { id: incidentId },
+        select: { slackChannelId: true, slackChannelName: true, warRoomUrl: true },
+      });
+      if (current?.slackChannelId) {
+        return {
+          success: true,
+          channelId: current.slackChannelId,
+          channelName: current.slackChannelName || undefined,
+          warRoomUrl: current.warRoomUrl,
+        };
+      }
+      return { success: false, error: 'War-room provisioning is already in progress' };
+    }
+    const failProvisioning = async (error: string) => {
+      await prisma.incident.updateMany({
+        where: { id: incidentId, warRoomProvisioningToken: provisioningToken },
+        data: { warRoomProvisioningStatus: 'FAILED', warRoomProvisioningToken: null },
+      });
+      return { success: false, error } satisfies WarRoomResult;
+    };
+
     // Create channel via Slack API
     let effectiveChannelName = channelName;
     let createResult = await slackApiCall('conversations.create', botToken, {
@@ -264,13 +324,22 @@ export async function createIncidentWarRoom(
       is_private: false,
     });
 
-    if (!createResult.ok && createResult.error === 'name_taken') {
-      const suffix = Math.floor(Math.random() * 8999 + 1000).toString();
-      effectiveChannelName = `${channelName.slice(0, 74)}-${suffix}`;
-      createResult = await slackApiCall('conversations.create', botToken, {
-        name: effectiveChannelName,
-        is_private: false,
-      });
+    if (!createResult.ok) {
+      // A timeout can mean Slack created the channel but the response was
+      // lost. Reconcile the deterministic name before any second create.
+      const existing = await findExistingChannel(botToken, channelName);
+      if (existing) {
+        createResult = { ok: true, channel: existing };
+      } else if (createResult.error === 'name_taken') {
+        // Name collisions are only given a random suffix after reconciliation
+        // proves that the deterministic channel belongs to somebody else.
+        const suffix = Math.floor(Math.random() * 8999 + 1000).toString();
+        effectiveChannelName = `${channelName.slice(0, 74)}-${suffix}`;
+        createResult = await slackApiCall('conversations.create', botToken, {
+          name: effectiveChannelName,
+          is_private: false,
+        });
+      }
     }
 
     if (!createResult.ok) {
@@ -283,12 +352,12 @@ export async function createIncidentWarRoom(
         createResult.error === 'missing_scope'
           ? "Slack app is missing the 'channels:manage' scope. Please re-authorize Slack in Settings > Slack to grant channel creation permissions."
           : `Slack API error: ${createResult.error}`;
-      return { success: false, error: errorMsg };
+      return failProvisioning(errorMsg);
     }
 
     const channelId = createResult.channel?.id;
     if (!channelId) {
-      return { success: false, error: 'No channel ID returned from Slack' };
+      return failProvisioning('No channel ID returned from Slack');
     }
 
     // Set channel topic
@@ -473,33 +542,39 @@ export async function createIncidentWarRoom(
     );
 
     // Update incident with war-room metadata
-    await prisma.incident.update({
-      where: { id: incidentId },
+    const attached = await prisma.incident.updateMany({
+      where: { id: incidentId, warRoomProvisioningToken: provisioningToken },
       data: {
         slackChannelId: channelId,
-        slackChannelName: channelName,
+        slackChannelName: effectiveChannelName,
         slackWorkspaceId,
         warRoomUrl,
         warRoomArchivedAt: null,
+        warRoomProvisioningStatus: 'READY',
+        warRoomProvisioningToken: null,
       },
     });
+    if (attached.count !== 1) {
+      logger.warn('[ChatOps] War-room completion lease was lost', { incidentId, channelId });
+      return { success: false, error: 'War-room provisioning lease was lost; reconciliation will adopt the channel' };
+    }
 
     // Log timeline event
     await prisma.incidentEvent.create({
       data: {
         incidentId,
-        message: `War-room channel #${channelName} created${warRoomUrl ? ` with video bridge` : ''}`,
+        message: `War-room channel #${effectiveChannelName} created${warRoomUrl ? ` with video bridge` : ''}`,
       },
     });
 
     logger.info('[ChatOps] War-room created successfully', {
       incidentId,
       channelId,
-      channelName,
+      channelName: effectiveChannelName,
       warRoomUrl,
     });
 
-    return { success: true, channelId, channelName, warRoomUrl };
+    return { success: true, channelId, channelName: effectiveChannelName, warRoomUrl };
   } catch (error) {
     const err = error instanceof Error ? error.message : String(error);
     logger.error('[ChatOps] War-room creation failed', { incidentId, error: err });

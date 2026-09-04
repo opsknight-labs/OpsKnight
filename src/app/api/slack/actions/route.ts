@@ -3,10 +3,11 @@
  * Handles Slack button clicks for incident lifecycle actions
  */
 
-import { after, NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { enqueueChatOpsIntent } from '@/lib/chatops/intents';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { toSlackResponseUrl, verifySlackSignature } from '@/lib/slack-signature';
+import { verifySlackSignature } from '@/lib/slack-signature';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
@@ -83,6 +84,7 @@ type SlackActionPayload = {
   response_url?: string;
   container?: { channel_id?: string };
   channel?: { id?: string };
+  team?: { id?: string };
   [key: string]: unknown;
 };
 
@@ -119,9 +121,20 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       // Get incident context needed for Slack identity resolution and non-lifecycle actions.
       const incident = await prisma.incident.findUnique({
         where: { id: incidentId },
+        include: { service: { select: { slackWorkspaceId: true, slackIntegration: { select: { workspaceId: true } } } } },
       });
 
       if (!incident) {
+        return NextResponse.json({ error: 'Incident not found' }, { status: 404 });
+      }
+      const workspaceId = payload.team?.id;
+      const incidentWorkspaceId = incident.slackWorkspaceId || incident.service.slackIntegration?.workspaceId || incident.service.slackWorkspaceId;
+      if (!workspaceId || !incidentWorkspaceId || workspaceId !== incidentWorkspaceId) {
+        logger.warn('[Slack Actions] Rejected action from a different Slack workspace', {
+          incidentId,
+          workspaceId,
+          incidentWorkspaceId,
+        });
         return NextResponse.json({ error: 'Incident not found' }, { status: 404 });
       }
 
@@ -378,23 +391,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ challenge: payload.challenge });
   }
 
-  const responseUrl = toSlackResponseUrl(payload.response_url);
-  after(async () => {
-    const result = await handleSlackActionRequest(payload);
-    if (!responseUrl) return;
-    try {
-      const responsePayload = await result.json();
-      await fetch(responseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(responsePayload),
-      });
-    } catch (error) {
-      logger.error('[Slack] Failed to deliver deferred action response', { error });
-    }
-  });
+  const workspaceId = typeof payload.team?.id === 'string' ? payload.team.id : '';
+  const channelId =
+    typeof payload.channel?.id === 'string'
+      ? payload.channel.id
+      : typeof payload.container?.channel_id === 'string'
+        ? payload.container.channel_id
+        : '';
+  const slackUserId = typeof payload.user?.id === 'string' ? payload.user.id : '';
+  if (!workspaceId) return NextResponse.json({ error: 'Missing Slack workspace' }, { status: 400 });
 
-  // Slack requires acknowledgement within three seconds. All mutations and
-  // follow-up delivery run in Next.js `after`, which survives this response.
-  return new Response(null, { status: 200 });
+  try {
+    await enqueueChatOpsIntent({
+      kind: 'INTERACTIVE_ACTION',
+      signature,
+      workspaceId,
+      channelId,
+      slackUserId,
+      payload: { ...payload, __kind: 'INTERACTIVE_ACTION' },
+    });
+    // Slack requires acknowledgement within three seconds. The persisted
+    // intent owns both execution and deferred response delivery.
+    return new Response(null, { status: 200 });
+  } catch (error) {
+    logger.error('[Slack] Actions API persistence error', { error });
+    return NextResponse.json({ error: 'Unable to queue action' }, { status: 503 });
+  }
 }

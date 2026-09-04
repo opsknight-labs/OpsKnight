@@ -15,6 +15,7 @@ vi.mock('@/lib/prisma', () => ({
     incident: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     chatOpsConfig: {
       findUnique: vi.fn(),
@@ -147,7 +148,7 @@ describe('ChatOps War-Room Engine', () => {
         id: 'srv-1',
         policy: { steps: [] },
       } as any);
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
+      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
       vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
       vi.mocked(retryModule.retryFetch).mockReset();
       vi.mocked(retryModule.retryFetch).mockImplementation((async (url: any) => {
@@ -161,7 +162,7 @@ describe('ChatOps War-Room Engine', () => {
 
       expect(result.success).toBe(true);
       expect(result.channelId).toBe('C-NEW');
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ slackChannelId: 'C-NEW', warRoomArchivedAt: null }),
         })
@@ -249,7 +250,7 @@ describe('ChatOps War-Room Engine', () => {
         id: 'srv-1',
         policy: { steps: [] },
       } as any);
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
+      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
       vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
 
       vi.mocked(retryModule.retryFetch).mockReset();
@@ -340,9 +341,9 @@ describe('ChatOps War-Room Engine', () => {
       expect(result.success).toBe(true);
       expect(result.channelId).toBe('C999888');
       expect(result.warRoomUrl).toBe('https://meet.jit.si/opsknight-inc-ef123456');
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          where: { id: 'inc-abcdef123456' },
+          where: expect.objectContaining({ id: 'inc-abcdef123456' }),
           data: expect.objectContaining({
             slackChannelId: 'C999888',
           }),
