@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
@@ -85,10 +85,13 @@ export default function Sidebar({
   }, [pathname]);
 
   // Close mobile drawer on route change
+  const prevPathnameRef = useRef(pathname);
   useEffect(() => {
-    if (isMobileOpen) closeMobile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+    if (prevPathnameRef.current !== pathname) {
+      prevPathnameRef.current = pathname;
+      closeMobile();
+    }
+  }, [pathname, closeMobile]);
 
   const isActive = (path: string) => {
     if (path === '/' && pathname === '/') return true;
