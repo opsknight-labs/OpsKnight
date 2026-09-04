@@ -123,31 +123,31 @@ const CompactPerformanceMetrics = memo(function CompactPerformanceMetrics({
   );
 
   return (
-    <div className="space-y-2.5" role="list" aria-label="Performance metrics">
+    <div className="space-y-3" role="list" aria-label="Performance metrics">
       {/* Time Metrics Row */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2.5">
         {timeMetrics.map((metric, idx) => (
           <div
             key={idx}
-            className="p-2.5 rounded-lg bg-slate-50/60 border border-slate-200 overflow-hidden shadow-2xs"
+            className="p-2.5 px-3 rounded-md bg-muted/40 border border-border overflow-hidden"
             role="listitem"
             aria-label={`${metric.description}: ${metric.value}`}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
                 {metric.label}
               </span>
               {metric.history && metric.history.length >= 2 && (
                 <SparklineChart
                   data={metric.history}
-                  width={46}
-                  height={15}
+                  width={50}
+                  height={16}
                   color={metric.color}
                   strokeWidth={1.5}
                 />
               )}
             </div>
-            <div className="text-base font-bold leading-tight tabular-nums text-slate-900">
+            <div className="text-lg font-bold leading-tight tabular-nums text-foreground">
               {metric.value}
             </div>
           </div>
@@ -155,24 +155,24 @@ const CompactPerformanceMetrics = memo(function CompactPerformanceMetrics({
       </div>
 
       {/* SLA Metrics with Progress Bars */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {slaMetrics.map((metric, idx) => (
           <div
             key={idx}
-            className="p-2 rounded-lg bg-slate-50/60 border border-slate-200 shadow-2xs"
+            className="p-2.5 px-3 rounded-md bg-muted/40 border border-border"
             role="listitem"
             aria-label={`${metric.description}: ${metric.value}`}
           >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
                 {metric.label}
               </span>
-              <span className={cn('text-xs font-bold tabular-nums', metric.className)}>
+              <span className={cn('text-sm font-bold tabular-nums', metric.className)}>
                 {metric.value}
               </span>
             </div>
             {/* Progress Bar */}
-            <div className="h-1 w-full bg-slate-200/80 rounded-full overflow-hidden">
+            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
               <div
                 className={cn('h-full rounded-full transition-all duration-500', metric.barClass)}
                 style={{

@@ -46,47 +46,47 @@ function getWidgetTheme(color?: string): {
     case 'emerald':
     case 'green':
       return {
-        iconBg: 'bg-emerald-50',
+        iconBg: 'bg-emerald-100',
         iconText: 'text-emerald-600',
-        border: 'border-emerald-100',
+        border: 'border-emerald-200/50',
       };
     case 'blue':
       return {
-        iconBg: 'bg-blue-50',
+        iconBg: 'bg-blue-100',
         iconText: 'text-blue-600',
-        border: 'border-blue-100',
+        border: 'border-blue-200/50',
       };
     case 'amber':
     case 'orange':
       return {
-        iconBg: 'bg-amber-50',
+        iconBg: 'bg-amber-100',
         iconText: 'text-amber-600',
-        border: 'border-amber-100',
+        border: 'border-amber-200/50',
       };
     case 'violet':
     case 'purple':
       return {
-        iconBg: 'bg-violet-50',
+        iconBg: 'bg-violet-100',
         iconText: 'text-violet-600',
-        border: 'border-violet-100',
+        border: 'border-violet-200/50',
       };
     case 'red':
       return {
-        iconBg: 'bg-rose-50',
+        iconBg: 'bg-rose-100',
         iconText: 'text-rose-600',
-        border: 'border-rose-100',
+        border: 'border-rose-200/50',
       };
     case 'slate':
       return {
         iconBg: 'bg-slate-100',
         iconText: 'text-slate-600',
-        border: 'border-slate-200',
+        border: 'border-slate-200/50',
       };
     case 'cyan':
       return {
-        iconBg: 'bg-cyan-50',
+        iconBg: 'bg-cyan-100',
         iconText: 'text-cyan-600',
-        border: 'border-cyan-100',
+        border: 'border-cyan-200/50',
       };
     default:
       return null;
@@ -120,26 +120,26 @@ export default function SidebarWidget({
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200 bg-white shadow-xs transition-all duration-200 overflow-hidden'
+        'rounded-2xl border border-border bg-card shadow-xs transition-all duration-200 overflow-hidden'
       )}
     >
       {/* Header */}
-      <div className="p-3.5 pb-2.5 border-b border-slate-100">
+      <div className="p-4 pb-3 border-b border-border">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <div
               className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center border',
-                iconTheme
-                  ? cn(iconTheme.iconBg, iconTheme.iconText, iconTheme.border)
-                  : 'bg-blue-50 text-blue-600 border-blue-100'
+                'w-10 h-10 rounded-xl flex items-center justify-center',
+                iconTheme ? cn(iconTheme.iconBg, iconTheme.iconText) : 'bg-primary/10 text-primary'
               )}
             >
               {icon}
             </div>
             <div>
-              <h3 className="text-xs font-bold text-slate-900">{title}</h3>
-              {subtitle && <p className="text-[10px] text-slate-500 font-medium">{subtitle}</p>}
+              <h3 className="text-sm font-bold text-foreground">{title}</h3>
+              {subtitle && (
+                <p className="text-[10px] text-muted-foreground font-medium">{subtitle}</p>
+              )}
               {/* Last Updated Indicator */}
               {mounted && lastUpdated && (
                 <p className="text-[10px] text-slate-400 font-medium">
@@ -151,16 +151,16 @@ export default function SidebarWidget({
 
           {/* Actions */}
           {(actions || onRefresh) && (
-            <div className="flex gap-1.5 items-center">
+            <div className="flex gap-2 items-center">
               {onRefresh && (
                 <Button
                   onClick={onRefresh}
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600"
+                  className="h-7 w-7 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600"
                   title="Refresh data"
                 >
-                  <RefreshCw className="h-3 w-3" />
+                  <RefreshCw className="h-3.5 w-3.5" />
                 </Button>
               )}
               {actions?.map((action, idx) => {
@@ -172,7 +172,7 @@ export default function SidebarWidget({
                 );
 
                 const buttonClasses = cn(
-                  'h-6 gap-1 px-2 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors'
+                  'h-7 gap-1.5 px-2.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors'
                 );
 
                 if (action.href) {
@@ -202,11 +202,11 @@ export default function SidebarWidget({
         </div>
       </div>
 
-      <div className="p-3.5">
+      <div className="p-4">
         {/* Loading State */}
         {isLoading ? (
-          <div className="py-5 text-center text-muted-foreground">
-            <Loader2 className="h-4 w-4 mx-auto mb-1.5 animate-spin text-slate-400" />
+          <div className="py-6 text-center text-muted-foreground">
+            <Loader2 className="h-5 w-5 mx-auto mb-2 animate-spin text-slate-400" />
             <p className="text-xs text-slate-400">Loading...</p>
           </div>
         ) : (

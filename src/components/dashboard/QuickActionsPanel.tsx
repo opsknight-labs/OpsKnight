@@ -40,26 +40,24 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
   return (
     <SidebarWidget
       title={`${greeting}, ${userName}`}
-      iconBg={WIDGET_ICON_BG.orange}
+      iconBg={WIDGET_ICON_BG.slate}
       icon={<Zap className="w-4 h-4" />}
       subtitle="Quick actions"
     >
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {actions.map((action, idx) => {
           const classes = cn(
-            'group flex items-center gap-2.5 p-2 rounded-lg border transition-all w-full',
+            'group flex items-center gap-3 p-2.5 rounded-lg border transition-colors w-full',
             action.variant === 'primary'
-              ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 shadow-2xs'
-              : 'bg-slate-50/60 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 shadow-2xs'
+              ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
+              : 'bg-white border-slate-100 text-slate-700 hover:border-slate-200 hover:bg-slate-50/50'
           );
           const content = (
             <>
               <div
                 className={cn(
-                  'w-7 h-7 rounded-md flex items-center justify-center shrink-0',
-                  action.variant === 'primary'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-white border border-slate-200/80 text-slate-600'
+                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                  action.variant === 'primary' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'
                 )}
               >
                 {action.icon}
@@ -67,10 +65,10 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
               <span className="flex-1 text-xs font-semibold text-left">{action.label}</span>
               <ChevronRight
                 className={cn(
-                  'w-3.5 h-3.5 shrink-0 transition-transform group-hover:translate-x-0.5',
+                  'w-3.5 h-3.5 shrink-0 transition-colors',
                   action.variant === 'primary'
-                    ? 'text-white/70 group-hover:text-white'
-                    : 'text-slate-400 group-hover:text-slate-600'
+                    ? 'text-white/50 group-hover:text-white/80'
+                    : 'text-slate-300 group-hover:text-slate-500'
                 )}
               />
             </>

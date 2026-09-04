@@ -1231,7 +1231,7 @@ export default function IncidentsListTable({
         )}
       </div>
 
-      {/* Pagination or ReadOnly Feed Footer */}
+      {/* Pagination */}
       {pagination && (
         <Pagination
           currentPage={pagination.currentPage}
@@ -1239,18 +1239,6 @@ export default function IncidentsListTable({
           totalItems={pagination.totalItems}
           itemsPerPage={pagination.itemsPerPage}
         />
-      )}
-
-      {readOnly && (
-        <div className="px-4 py-2.5 bg-slate-50/80 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-          <span className="font-medium">Showing latest incidents feed</span>
-          <Link
-            href="/incidents"
-            className="font-semibold text-primary hover:underline inline-flex items-center gap-1"
-          >
-            Open Full Incident Triage &rarr;
-          </Link>
-        </div>
       )}
 
       {/* Centralized Resolve Incident Modal */}

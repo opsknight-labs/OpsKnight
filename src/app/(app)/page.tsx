@@ -545,80 +545,86 @@ export default async function Dashboard({
               userId={user?.id ?? null}
             />
 
-            {/* Ops Pulse Signal Deck */}
-            <div className="space-y-3">
-              {/* Section Header */}
-              <div className="flex items-center justify-between gap-4 px-1">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-                    <Activity className="w-4 h-4" />
+            {/* Ops Pulse Panel - Unified Container */}
+            <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
+              {/* Header */}
+              <div className="p-4 pb-3 border-b border-border">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <Activity className="w-5 h-5 text-primary" />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground">Ops Pulse</h3>
+                      <p className="text-[10px] text-muted-foreground font-medium">
+                        Signals that need attention right now
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Ops Pulse</h3>
-                    <p className="text-[11px] text-slate-500 font-medium">
-                      Signals that need attention right now
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" size="xs">
+                      {rangeBadgeLabel}
+                    </Badge>
                   </div>
                 </div>
-                <Badge
-                  variant="outline"
-                  size="xs"
-                  className="bg-white border-slate-200 text-slate-600 font-medium"
-                >
-                  {rangeBadgeLabel}
-                </Badge>
               </div>
 
-              {/* 3-Card Deck */}
-              <div className="grid gap-4 md:grid-cols-3 items-stretch">
-                {/* My Queue Card */}
-                <div className="relative rounded-xl border border-slate-200 border-t-2 border-t-blue-500 bg-white shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col justify-between">
-                  <div>
+              {/* Content Grid */}
+              <div className="p-4">
+                <div className="grid gap-5 md:grid-cols-3">
+                  {/* My Queue Card */}
+                  <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
                     {/* Header */}
-                    <div className="p-3.5 pb-2">
-                      <div className="flex items-center gap-2.5">
+                    <div className="p-4 pb-2">
+                      <div className="flex items-center gap-3">
                         <div className="relative">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-border/80 flex items-center justify-center text-primary">
                             <UserRound className="w-4 h-4" />
                           </div>
                           {myQueueItems.length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-xs">
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm">
                               {myQueueItems.length}
                             </span>
                           )}
                         </div>
                         <div>
-                          <h4 className="text-xs font-bold text-slate-900">My Queue</h4>
-                          <p className="text-[10px] text-slate-500 font-medium">Assigned to you</p>
+                          <h4 className="text-sm font-bold text-foreground">My Queue</h4>
+                          <p className="text-[10px] text-muted-foreground font-medium">
+                            Assigned to you
+                          </p>
                         </div>
                       </div>
                     </div>
 
                     {/* Content */}
-                    <div className="px-3.5 pb-2">
+                    <div className="px-4 pb-4 flex-1 flex flex-col">
                       {metricDataState === 'unavailable' ? (
-                        <div className="py-5 text-center">
-                          <AlertTriangle className="w-5 h-5 mx-auto text-amber-500 mb-1.5" />
-                          <p className="text-xs text-slate-500 font-medium">
+                        <div className="py-6 text-center">
+                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
                             Queue metrics unavailable
                           </p>
                         </div>
                       ) : myQueueItems.length === 0 ? (
-                        <div className="py-5 text-center">
-                          <CheckCircle2 className="w-5 h-5 mx-auto text-emerald-500 mb-1.5" />
-                          <p className="text-xs text-slate-500 font-medium">Queue is clear!</p>
+                        <div className="py-6 text-center">
+                          <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-500 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
+                            Queue is clear!
+                          </p>
                         </div>
                       ) : (
-                        <div className="space-y-1.5">
+                        <div className="space-y-2">
                           {myQueueItems.slice(0, 3).map(item => (
                             <Link
                               key={item.id}
                               href={`/incidents/${item.id}`}
-                              className="block p-2 rounded-lg bg-slate-50/70 border border-slate-200/70 hover:border-slate-300 hover:bg-slate-100/60 transition-all duration-150"
+                              className="block p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
                             >
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                                <p className="text-xs font-semibold text-slate-800 truncate">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-2 h-2 rounded-full bg-primary shrink-0 shadow-sm" />
+                                <p className="text-xs font-semibold text-foreground truncate">
                                   {item.title}
                                 </p>
                               </div>
@@ -626,42 +632,37 @@ export default async function Dashboard({
                           ))}
                         </div>
                       )}
+                      <Link
+                        href={
+                          user
+                            ? `/?status=ACTIVE&assignee=${user.id}`
+                            : buildIncidentListHref({ filter: 'all_open' })
+                        }
+                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
+                      >
+                        View my queue &rarr;
+                      </Link>
                     </div>
                   </div>
 
-                  <div className="p-3.5 pt-0">
-                    <Link
-                      href={
-                        user
-                          ? `/?status=ACTIVE&assignee=${user.id}`
-                          : buildIncidentListHref({ filter: 'all_open' })
-                      }
-                      className="flex items-center justify-center gap-1.5 w-full py-1.5 text-[11px] font-semibold text-slate-700 hover:text-blue-600 bg-slate-50 hover:bg-slate-100/80 rounded-lg border border-slate-200/80 transition-colors"
-                    >
-                      View my queue &rarr;
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Critical Focus Card */}
-                <div className="relative rounded-xl border border-slate-200 border-t-2 border-t-rose-500 bg-white shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col justify-between">
-                  <div>
+                  {/* Critical Focus Card */}
+                  <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
                     {/* Header */}
-                    <div className="p-3.5 pb-2">
-                      <div className="flex items-center gap-2.5">
+                    <div className="p-4 pb-2">
+                      <div className="flex items-center gap-3">
                         <div className="relative">
-                          <div className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
+                          <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-200/50 flex items-center justify-center text-rose-600">
                             <Siren className="w-4 h-4" />
                           </div>
                           {currentCriticalActive > 0 && (
-                            <span className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-rose-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm animate-pulse">
                               {currentCriticalActive}
                             </span>
                           )}
                         </div>
                         <div>
-                          <h4 className="text-xs font-bold text-slate-900">Critical Focus</h4>
-                          <p className="text-[10px] text-slate-500 font-medium">
+                          <h4 className="text-sm font-bold text-foreground">Critical Focus</h4>
+                          <p className="text-[10px] text-muted-foreground font-medium">
                             Immediate attention
                           </p>
                         </div>
@@ -669,30 +670,32 @@ export default async function Dashboard({
                     </div>
 
                     {/* Content */}
-                    <div className="px-3.5 pb-2">
+                    <div className="px-4 pb-4 flex-1 flex flex-col">
                       {metricDataState === 'unavailable' ? (
-                        <div className="py-5 text-center">
-                          <AlertTriangle className="w-5 h-5 mx-auto text-amber-500 mb-1.5" />
-                          <p className="text-xs text-slate-500 font-medium">
+                        <div className="py-6 text-center">
+                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
                             Critical metrics unavailable
                           </p>
                         </div>
                       ) : criticalFocus.length === 0 ? (
-                        <div className="py-5 text-center">
-                          <ShieldAlert className="w-5 h-5 mx-auto text-rose-400 mb-1.5" />
-                          <p className="text-xs text-slate-500 font-medium">All systems stable</p>
+                        <div className="py-6 text-center">
+                          <ShieldAlert className="w-6 h-6 mx-auto text-rose-400 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
+                            All systems stable
+                          </p>
                         </div>
                       ) : (
-                        <div className="space-y-1.5">
+                        <div className="space-y-2">
                           {criticalFocus.slice(0, 3).map(incident => (
                             <Link
                               key={incident.id}
                               href={`/incidents/${incident.id}`}
-                              className="block p-2 rounded-lg bg-rose-50/40 border border-rose-200/60 hover:border-rose-300 hover:bg-rose-50/80 transition-all duration-150"
+                              className="block p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
                             >
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-rose-500 shrink-0 animate-pulse" />
-                                <p className="text-xs font-semibold text-slate-800 truncate">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-2 h-2 rounded-full bg-rose-500 shrink-0 shadow-sm animate-pulse" />
+                                <p className="text-xs font-semibold text-foreground truncate">
                                   {incident.title}
                                 </p>
                               </div>
@@ -700,38 +703,33 @@ export default async function Dashboard({
                           ))}
                         </div>
                       )}
+                      <Link
+                        href={buildIncidentListHref({ filter: 'all_open', urgency: 'HIGH' })}
+                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
+                      >
+                        View critical &rarr;
+                      </Link>
                     </div>
                   </div>
 
-                  <div className="p-3.5 pt-0">
-                    <Link
-                      href={buildIncidentListHref({ filter: 'all_open', urgency: 'HIGH' })}
-                      className="flex items-center justify-center gap-1.5 w-full py-1.5 text-[11px] font-semibold text-rose-700 hover:text-rose-800 bg-rose-50/70 hover:bg-rose-100/80 rounded-lg border border-rose-200 transition-colors"
-                    >
-                      View critical &rarr;
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Services at Risk Card */}
-                <div className="relative rounded-xl border border-slate-200 border-t-2 border-t-indigo-500 bg-white shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col justify-between">
-                  <div>
+                  {/* Services at Risk Card */}
+                  <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
                     {/* Header */}
-                    <div className="p-3.5 pb-2">
-                      <div className="flex items-center gap-2.5">
+                    <div className="p-4 pb-2">
+                      <div className="flex items-center gap-3">
                         <div className="relative">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-border/80 flex items-center justify-center text-primary">
                             <AlertTriangle className="w-4 h-4" />
                           </div>
                           {servicesAtRisk.length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-xs">
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm">
                               {servicesAtRisk.length}
                             </span>
                           )}
                         </div>
                         <div>
-                          <h4 className="text-xs font-bold text-slate-900">Services at Risk</h4>
-                          <p className="text-[10px] text-slate-500 font-medium">
+                          <h4 className="text-sm font-bold text-foreground">Services at Risk</h4>
+                          <p className="text-[10px] text-muted-foreground font-medium">
                             Active by service
                           </p>
                         </div>
@@ -739,40 +737,42 @@ export default async function Dashboard({
                     </div>
 
                     {/* Content */}
-                    <div className="px-3.5 pb-2">
+                    <div className="px-4 pb-4 flex-1 flex flex-col">
                       {metricDataState === 'unavailable' ? (
-                        <div className="py-5 text-center">
-                          <AlertTriangle className="w-5 h-5 mx-auto text-amber-500 mb-1.5" />
-                          <p className="text-xs text-slate-500 font-medium">
+                        <div className="py-6 text-center">
+                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
                             Service risk unavailable
                           </p>
                         </div>
                       ) : servicesAtRisk.length === 0 ? (
-                        <div className="py-5 text-center">
-                          <List className="w-5 h-5 mx-auto text-slate-400 mb-1.5" />
-                          <p className="text-xs text-slate-500 font-medium">All services healthy</p>
+                        <div className="py-6 text-center">
+                          <List className="w-6 h-6 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-xs text-muted-foreground font-medium">
+                            All services healthy
+                          </p>
                         </div>
                       ) : (
-                        <div className="space-y-1.5">
-                          {servicesAtRisk.slice(0, 3).map(serviceItem => (
+                        <div className="space-y-2">
+                          {servicesAtRisk.slice(0, 4).map(serviceItem => (
                             <Link
                               key={serviceItem.id}
                               href={`/services/${serviceItem.id}`}
-                              className="flex items-center justify-between p-2 rounded-lg bg-slate-50/70 border border-slate-200/70 hover:border-slate-300 hover:bg-slate-100/60 transition-all duration-150"
+                              className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
                             >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-                                <p className="text-xs font-semibold text-slate-800 truncate">
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <div className="w-2 h-2 rounded-full bg-primary shrink-0 shadow-sm" />
+                                <p className="text-xs font-semibold text-foreground truncate">
                                   {serviceItem.name}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-1.5 shrink-0 pl-1.5">
-                                <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/80">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/60">
                                   {serviceItem.activeCount}
                                 </span>
                                 {serviceItem.criticalCount > 0 && (
-                                  <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
-                                    {serviceItem.criticalCount} crit
+                                  <span className="text-[10px] font-bold text-white bg-rose-500 px-1.5 py-0.5 rounded animate-pulse">
+                                    {serviceItem.criticalCount}!
                                   </span>
                                 )}
                               </div>
@@ -780,16 +780,13 @@ export default async function Dashboard({
                           ))}
                         </div>
                       )}
+                      <Link
+                        href="/services"
+                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
+                      >
+                        View services &rarr;
+                      </Link>
                     </div>
-                  </div>
-
-                  <div className="p-3.5 pt-0">
-                    <Link
-                      href="/services"
-                      className="flex items-center justify-center gap-1.5 w-full py-1.5 text-[11px] font-semibold text-indigo-700 hover:text-indigo-800 bg-indigo-50/60 hover:bg-indigo-100/70 rounded-lg border border-indigo-200 transition-colors"
-                    >
-                      View services &rarr;
-                    </Link>
                   </div>
                 </div>
               </div>

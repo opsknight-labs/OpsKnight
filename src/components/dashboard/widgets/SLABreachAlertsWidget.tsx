@@ -5,6 +5,7 @@ import { buildIncidentListHref } from '@/lib/incident-links';
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import SidebarWidget, { WIDGET_ICON_BG } from '@/components/dashboard/SidebarWidget';
 import { useWidgetData } from '@/components/dashboard/WidgetProvider';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { AlertTriangle, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -173,15 +174,15 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
       ]}
     >
       {sortedAlerts.length === 0 ? (
-        <div className="py-5 text-center">
-          <div className="w-9 h-9 mx-auto mb-1.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+        <div className="py-6 text-center">
+          <div className="w-10 h-10 mx-auto mb-2 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
           </div>
-          <p className="text-xs font-semibold text-slate-800 mb-0.5">All Clear</p>
-          <p className="text-[10px] text-slate-500 font-medium">No SLA breaches imminent</p>
+          <p className="text-xs font-semibold text-slate-700 mb-0.5">All Clear</p>
+          <p className="text-[10px] text-slate-400">No SLA breaches imminent</p>
         </div>
       ) : (
-        <div className="space-y-1.5" role="list" aria-label="SLA breach alerts">
+        <div className="space-y-2" role="list" aria-label="SLA breach alerts">
           {sortedAlerts.slice(0, 3).map(({ incident, alertType, timeRemaining, severity }) => {
             const isUrgent = severity === 'critical';
             const actionLabel = alertType === 'ack' ? 'ACK' : 'RESOLVE';
@@ -192,10 +193,10 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                 key={incident.id}
                 onClick={() => handleIncidentClick(incident.id)}
                 className={cn(
-                  'group flex items-center gap-2.5 p-2 rounded-lg border text-left w-full transition-all shadow-2xs',
+                  'group flex items-center gap-3 p-2.5 rounded-lg border text-left w-full transition-colors',
                   isUrgent
-                    ? 'bg-rose-50/70 border-rose-200 hover:border-rose-300 hover:bg-rose-50'
-                    : 'bg-amber-50/70 border-amber-200 hover:border-amber-300 hover:bg-amber-50'
+                    ? 'bg-rose-50/50 border-rose-200 hover:border-rose-300'
+                    : 'bg-amber-50/50 border-amber-200 hover:border-amber-300'
                 )}
                 role="listitem"
                 aria-label={`${incident.title} - ${actionLabel} deadline in ${timeStr}`}
@@ -203,10 +204,8 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                 {/* Icon */}
                 <div
                   className={cn(
-                    'w-7 h-7 rounded-md flex items-center justify-center shrink-0 border',
-                    isUrgent
-                      ? 'bg-rose-100/80 text-rose-700 border-rose-200'
-                      : 'bg-amber-100/80 text-amber-700 border-amber-200'
+                    'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                    isUrgent ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'
                   )}
                   aria-hidden="true"
                 >
@@ -214,26 +213,26 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-slate-800 truncate">
+                  <div className="text-xs font-semibold text-slate-700 truncate mb-0.5">
                     {incident.title}
                   </div>
-                  <div className="text-[10px] text-slate-500 font-medium truncate">
-                    {incident.serviceName}
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="text-slate-400 truncate max-w-[80px]">
+                      {incident.serviceName}
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span
+                      className={cn(
+                        'font-bold tabular-nums',
+                        isUrgent ? 'text-rose-600' : 'text-amber-600'
+                      )}
+                    >
+                      {actionLabel} {timeStr}
+                    </span>
                   </div>
                 </div>
 
-                <span
-                  className={cn(
-                    'font-mono text-[10px] font-bold px-1.5 py-0.5 rounded border shadow-2xs shrink-0',
-                    isUrgent
-                      ? 'bg-white text-rose-700 border-rose-200'
-                      : 'bg-white text-amber-700 border-amber-200'
-                  )}
-                >
-                  {actionLabel} {timeStr}
-                </span>
-
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" />
               </button>
             );
           })}
