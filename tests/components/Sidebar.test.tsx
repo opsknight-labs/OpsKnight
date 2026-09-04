@@ -140,4 +140,19 @@ describe('Sidebar', () => {
       expect(screen.queryByText('Audit Log')).not.toBeInTheDocument();
     });
   });
+
+  it('renders initial active incident count badge immediately without waiting for fetch', () => {
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+    renderWithProvider(
+      <Sidebar
+        userName="Alex Doe"
+        userEmail="alex@example.com"
+        userRole="ADMIN"
+        initialActiveCount={42}
+      />
+    );
+
+    expect(screen.getByText('42')).toBeInTheDocument();
+  });
 });

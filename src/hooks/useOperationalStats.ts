@@ -53,5 +53,6 @@ export function useOperationalStats() {
     lowCount: stats?.lowIncidentsCount ?? 0,
     loading,
     error,
+    hasLiveStats: stats !== null,
   };
 }

@@ -219,6 +219,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const userTimeZone = dbUser?.timeZone || 'UTC';
+  const initialActiveIncidentsCount = criticalOpenCount + mediumOpenCount + lowOpenCount;
 
   return (
     <AppErrorBoundary>
@@ -277,6 +278,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                     userAvatar={userAvatar}
                     userGender={userGender}
                     userId={userId}
+                    initialActiveCount={initialActiveIncidentsCount}
                   />
                   <div className="content-shell flex-1">
                     <main id="main-content" className="page-shell">

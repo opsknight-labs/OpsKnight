@@ -3,7 +3,6 @@
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/shadcn/hover-card';
 import { AlertTriangle, ShieldCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useOperationalStats } from '@/hooks/useOperationalStats';
 
@@ -25,33 +24,31 @@ export default function OperationalStatus({
   mediumCount = 0,
   lowCount = 0,
 }: Props) {
-  const [mounted, setMounted] = useState(false);
   const {
-    activeCount,
-    criticalCount,
+    activeCount: activeCountLive,
+    criticalCount: criticalCountLive,
     mediumCount: mediumCountLive,
     lowCount: lowCountLive,
     loading,
+    hasLiveStats,
   } = useOperationalStats();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) return null;
-
-  const hasOverrides =
+  const hasInitialProps =
     typeof criticalCountOverride === 'number' ||
     typeof mediumCount === 'number' ||
     typeof lowCount === 'number';
 
-  const critical =
-    typeof criticalCountOverride === 'number' ? criticalCountOverride : criticalCount;
-  const medium = hasOverrides ? mediumCount : mediumCountLive;
-  const low = hasOverrides ? lowCount : lowCountLive;
-  const active = hasOverrides ? critical + medium + low : activeCount;
+  // Use live stats once loaded; otherwise use server-rendered props
+  const critical = hasLiveStats
+    ? criticalCountLive
+    : typeof criticalCountOverride === 'number'
+      ? criticalCountOverride
+      : 0;
+  const medium = hasLiveStats ? mediumCountLive : (mediumCount ?? 0);
+  const low = hasLiveStats ? lowCountLive : (lowCount ?? 0);
+  const active = hasLiveStats ? activeCountLive : critical + medium + low;
 
-  // Determine state from backend data
+  // Determine state from data
   const nonCriticalCount = Math.max(0, active - critical);
 
   // Logic:
@@ -64,17 +61,27 @@ export default function OperationalStatus({
   const isWarning = !isDanger && (medium > 0 || nonCriticalCount > 0);
   const _isOk = !isDanger && !isWarning;
 
-  // Derived Label/Detail
-  const label =
-    initialLabel || (isDanger ? 'Critical Alert' : isWarning ? 'Yellow Alert' : 'Green Corridor');
+  // Derived Label/Detail: prioritize live stats if fetched, otherwise initial props
+  const label = hasLiveStats
+    ? isDanger
+      ? 'Critical Alert'
+      : isWarning
+        ? 'Yellow Alert'
+        : 'Green Corridor'
+    : initialLabel || (isDanger ? 'Critical Alert' : isWarning ? 'Yellow Alert' : 'Green Corridor');
 
-  const detail =
-    initialDetail ||
-    (isDanger
+  const detail = hasLiveStats
+    ? isDanger
       ? `${critical} critical incidents active`
       : isWarning
         ? `${medium} warning signs detected`
-        : 'Systems Normal');
+        : 'Systems Normal'
+    : initialDetail ||
+      (isDanger
+        ? `${critical} critical incidents active`
+        : isWarning
+          ? `${medium} warning signs detected`
+          : 'Systems Normal');
 
   interface ThemeConfig {
     bg: string;
@@ -121,20 +128,18 @@ export default function OperationalStatus({
     },
   };
 
-  const currentTheme =
-    initialTone === 'danger'
-      ? theme.danger
-      : initialTone === 'warning'
-        ? theme.warning
-        : initialTone === 'ok'
-          ? theme.ok
-          : isDanger
-            ? theme.danger
-            : isWarning
-              ? theme.warning
-              : theme.ok;
+  const currentTone = hasLiveStats
+    ? isDanger
+      ? 'danger'
+      : isWarning
+        ? 'warning'
+        : 'ok'
+    : initialTone || (isDanger ? 'danger' : isWarning ? 'warning' : 'ok');
 
-  if (loading && !initialTone && !hasOverrides) {
+  const currentTheme =
+    currentTone === 'danger' ? theme.danger : currentTone === 'warning' ? theme.warning : theme.ok;
+
+  if (loading && !initialTone && !hasInitialProps) {
     // Show loading only if no fallback
     return (
       <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-muted/20 animate-pulse">
