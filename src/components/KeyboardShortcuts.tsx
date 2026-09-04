@@ -24,6 +24,12 @@ const shortcuts: Shortcut[] = [
   { keys: ['⌘', 'R'], description: 'Refresh Dashboard', category: 'Actions' },
   { keys: ['⌘', 'E'], description: 'Export CSV', category: 'Actions' },
   { keys: ['Esc'], description: 'Close modal/dialog', category: 'Actions' },
+  { keys: ['J'], description: 'Next incident in list', category: 'Incident Triage' },
+  { keys: ['K'], description: 'Previous incident in list', category: 'Incident Triage' },
+  { keys: ['X'], description: 'Select / deselect incident', category: 'Incident Triage' },
+  { keys: ['A'], description: 'Acknowledge focused incident', category: 'Incident Triage' },
+  { keys: ['R'], description: 'Resolve focused incident (with note)', category: 'Incident Triage' },
+  { keys: ['/'], description: 'Focus search bar', category: 'Incident Triage' },
 ];
 
 export default function KeyboardShortcuts({

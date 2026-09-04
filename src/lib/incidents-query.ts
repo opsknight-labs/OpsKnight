@@ -167,12 +167,16 @@ export const incidentListSelect = {
   priority: true,
   urgency: true,
   createdAt: true,
+  acknowledgedAt: true,
+  resolvedAt: true,
   assigneeId: true,
   teamId: true,
   service: {
     select: {
       id: true,
       name: true,
+      targetAckMinutes: true,
+      targetResolveMinutes: true,
     },
   },
   team: {

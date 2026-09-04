@@ -10,11 +10,15 @@ export interface IncidentListItem {
   priority: string | null;
   urgency: IncidentUrgency;
   createdAt: Date;
+  acknowledgedAt?: Date | null;
+  resolvedAt?: Date | null;
   assigneeId: string | null;
   teamId: string | null;
   service: {
     id: string;
     name: string;
+    targetAckMinutes?: number | null;
+    targetResolveMinutes?: number | null;
   };
   team: {
     id: string;

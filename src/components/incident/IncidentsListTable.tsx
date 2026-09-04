@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
@@ -36,6 +36,8 @@ import EscalationStatusBadge from './EscalationStatusBadge';
 import PriorityBadge from './PriorityBadge';
 import AssigneeSection from './AssigneeSection';
 import ResolveIncidentModal, { type ResolvingIncidentData } from './ResolveIncidentModal';
+import SLABreachWarningBadge from './SLABreachWarningBadge';
+import { useRealtime } from '@/hooks/useRealtime';
 import { Badge } from '@/components/ui/shadcn/badge';
 import EmptyState from '@/components/ui/EmptyState';
 import {
@@ -113,6 +115,55 @@ export default function IncidentsListTable({
   const [isPending, startTransition] = useTransition();
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
   const [resolvingIncident, setResolvingIncident] = useState<ResolvingIncidentData | null>(null);
+
+  // Real-time updates & newly incoming pulse tracking
+  const { recentIncidents, isConnected } = useRealtime();
+  const [highlightedIncidentIds, setHighlightedIncidentIds] = useState<Set<string>>(new Set());
+  const prevIncidentIdsRef = useRef<Set<string>>(new Set(incidents.map(i => i.id)));
+
+  // Keyboard navigation focus index & global G sequence coordination
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const lastGTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!recentIncidents || recentIncidents.length === 0) return;
+
+    const newIds: string[] = [];
+    for (const item of recentIncidents) {
+      const id = typeof item.id === 'string' ? item.id : null;
+      if (id && !prevIncidentIdsRef.current.has(id)) {
+        newIds.push(id);
+        prevIncidentIdsRef.current.add(id);
+      }
+    }
+
+    if (newIds.length > 0) {
+      setHighlightedIncidentIds(prev => {
+        const next = new Set(prev);
+        newIds.forEach(id => next.add(id));
+        return next;
+      });
+
+      router.refresh();
+
+      const timer = setTimeout(() => {
+        setHighlightedIncidentIds(prev => {
+          const next = new Set(prev);
+          newIds.forEach(id => next.delete(id));
+          return next;
+        });
+      }, 4000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [recentIncidents, router]);
+
+  useEffect(() => {
+    if (focusedIndex !== null && rowRefs.current[focusedIndex]) {
+      rowRefs.current[focusedIndex]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [focusedIndex]);
 
   const totalItems = pagination?.totalItems ?? incidents.length;
   const showingFrom =
@@ -197,6 +248,133 @@ export default function IncidentsListTable({
     setSelectedIds(next);
     setLastSelectedIndex(index);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input, textarea, contentEditable, or inside a modal dialog
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          (typeof target.closest === 'function' && target.closest('[role="dialog"]')))
+      ) {
+        return;
+      }
+
+      // Preserve keyboard shortcuts with modifiers (Cmd+C, Cmd+N, etc.)
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const key = e.key.toLowerCase();
+
+      // Track G key for global navigation (G+D, G+I, G+S, G+T, G+U, G+C, G+P, G+A)
+      if (key === 'g') {
+        lastGTimeRef.current = Date.now();
+        return;
+      }
+
+      // If G was recently pressed (< 1000ms), let GlobalKeyboardHandler handle it without interference
+      if (Date.now() - lastGTimeRef.current < 1000) {
+        return;
+      }
+
+      // Preserve global navigation (N for new incident, C for quick create, ? for help)
+      if (key === 'n' || key === 'c' || e.key === '?') {
+        return;
+      }
+
+      // Open focused incident
+      if (e.key === 'Enter' || key === 'o') {
+        if (focusedIndex !== null && incidents[focusedIndex]) {
+          const focused = incidents[focusedIndex];
+          e.preventDefault();
+          setNavigatingId(focused.id);
+          startTransition(() => {
+            router.push(`/incidents/${focused.id}`);
+          });
+        }
+        return;
+      }
+
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setFocusedIndex(prev => {
+          if (incidents.length === 0) return null;
+          if (prev === null) return 0;
+          return Math.min(prev + 1, incidents.length - 1);
+        });
+        return;
+      }
+
+      if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setFocusedIndex(prev => {
+          if (incidents.length === 0) return null;
+          if (prev === null) return 0;
+          return Math.max(prev - 1, 0);
+        });
+        return;
+      }
+
+      if (key === 'x') {
+        if (focusedIndex !== null && incidents[focusedIndex]) {
+          e.preventDefault();
+          toggleSelectWithRange(incidents[focusedIndex].id, focusedIndex, false);
+        }
+        return;
+      }
+
+      if (key === 'a') {
+        if (focusedIndex !== null && incidents[focusedIndex] && canManageIncidents) {
+          const focused = incidents[focusedIndex];
+          if (focused.status === 'OPEN') {
+            e.preventDefault();
+            handleStatusChange(focused.id, 'ACKNOWLEDGED');
+          }
+        }
+        return;
+      }
+
+      if (key === 'r' || key === 'e') {
+        if (focusedIndex !== null && incidents[focusedIndex] && canManageIncidents) {
+          const focused = incidents[focusedIndex];
+          if (focused.status !== 'RESOLVED') {
+            e.preventDefault();
+            setResolvingIncident({
+              id: focused.id,
+              title: focused.title,
+              service: focused.service,
+            });
+          }
+        }
+        return;
+      }
+
+      if (e.key === '/') {
+        const searchInput = document.getElementById('incident-search');
+        if (searchInput) {
+          e.preventDefault();
+          searchInput.focus();
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (selectedIds.size > 0) {
+          e.preventDefault();
+          setSelectedIds(new Set());
+        } else if (focusedIndex !== null) {
+          e.preventDefault();
+          setFocusedIndex(null);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [incidents, focusedIndex, canManageIncidents, selectedIds]);
 
   const handleBulkAction = async (
     action:
@@ -551,8 +729,19 @@ export default function IncidentsListTable({
       {/* Header */}
       <div className="px-4 md:px-5 py-3.5 border-b border-border/60 flex flex-wrap justify-between items-center gap-3">
         <div className="min-w-[220px]">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">
-            {headerTitle}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">
+              {headerTitle}
+            </span>
+            {isConnected && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                Live
+              </span>
+            )}
           </div>
           <div className="text-sm text-muted-foreground mt-0.5">
             Showing{' '}
@@ -564,6 +753,37 @@ export default function IncidentsListTable({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Subtle keyboard shortcuts guide */}
+          <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-muted-foreground/70 mr-1 select-none">
+            <span>Shortcuts:</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+              J
+            </kbd>
+            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+              K
+            </kbd>
+            <span>nav</span>
+            <span className="opacity-40">&middot;</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+              X
+            </kbd>
+            <span>select</span>
+            <span className="opacity-40">&middot;</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+              A
+            </kbd>
+            <span>ack</span>
+            <span className="opacity-40">&middot;</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+              R
+            </kbd>
+            <span>resolve</span>
+            <span className="opacity-40">&middot;</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono border border-border/60">
+              /
+            </kbd>
+            <span>search</span>
+          </div>
           {canManageIncidents && (
             <Button
               type="button"
@@ -640,10 +860,15 @@ export default function IncidentsListTable({
               const incidentStatus = incident.status as IncidentStatus;
               const isSelected = selectedIds.has(incident.id);
               const urgencyChip = buildUrgencyChip(incident.urgency);
+              const isFocused = focusedIndex === idx;
+              const isNewlyIncoming = highlightedIncidentIds.has(incident.id);
 
               return (
                 <div
                   key={incident.id}
+                  ref={el => {
+                    rowRefs.current[idx] = el;
+                  }}
                   className={cn(
                     'group relative rounded-2xl border bg-card transition-all duration-200 overflow-hidden',
                     'hover:shadow-md hover:border-border',
@@ -651,6 +876,9 @@ export default function IncidentsListTable({
                     'border-border/75',
                     statusHoverBorder[incidentStatus],
                     isSelected && 'ring-1 ring-primary/30 border-primary/50 bg-primary/5',
+                    isFocused && 'ring-2 ring-primary/60 border-primary/70 shadow-sm bg-accent/25',
+                    isNewlyIncoming &&
+                      'ring-2 ring-emerald-500/60 bg-emerald-500/[0.06] animate-pulse',
                     navigatingId === incident.id && 'opacity-70 pointer-events-none'
                   )}
                   onClick={e => {
@@ -726,6 +954,10 @@ export default function IncidentsListTable({
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           <StatusBadge status={incidentStatus as any} size="sm" showDot />
                           <PriorityBadge priority={incident.priority} size="sm" />
+                          <SLABreachWarningBadge
+                            incident={incident as any}
+                            service={incident.service as any}
+                          />
                           {urgencyChip}
                           {incident.escalationStatus && (
                             <EscalationStatusBadge
@@ -757,9 +989,15 @@ export default function IncidentsListTable({
 
                           <span className="opacity-40">&middot;</span>
 
-                          <span>
+                          <span
+                            className="cursor-help transition-colors hover:text-foreground underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
+                            title={formatDateTime(incident.createdAt, userTimeZone, {
+                              format: 'datetime',
+                              includeTimeZone: true,
+                            })}
+                          >
                             {formatDateTime(incident.createdAt, userTimeZone, {
-                              format: 'short',
+                              format: 'relative',
                             })}
                           </span>
                         </div>
