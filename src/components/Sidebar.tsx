@@ -33,6 +33,7 @@ type SidebarProps = {
   userAvatar?: string | null;
   userGender?: string | null;
   userId?: string;
+  initialActiveCount?: number;
 };
 
 export default function Sidebar({
@@ -42,6 +43,7 @@ export default function Sidebar({
   userAvatar = null,
   userGender = null,
   userId = 'user',
+  initialActiveCount,
 }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -53,7 +55,9 @@ export default function Sidebar({
   const currentRole = (session?.user as { role?: string } | undefined)?.role || userRole;
   const currentGender = (session?.user as { gender?: string } | undefined)?.gender || userGender;
 
-  const [stats, setStats] = useState<{ count: number; calculatedAt?: string } | null>(null);
+  const [stats, setStats] = useState<{ count: number; calculatedAt?: string } | null>(() => {
+    return typeof initialActiveCount === 'number' ? { count: initialActiveCount } : null;
+  });
 
   const isDesktopCollapsed = !isMobile && isCollapsed;
   const sidebarId = 'app-sidebar';
@@ -76,7 +80,7 @@ export default function Sidebar({
         }
       })
       .catch(() => {
-        if (isMounted) setStats(null);
+        // Keep current stats on error to avoid UI flicker
       });
 
     return () => {
@@ -248,10 +252,10 @@ export default function Sidebar({
         data-collapsed={isDesktopCollapsed ? 'true' : 'false'}
         className={cn(
           // Base styles
-          'sidebar flex flex-col select-none transition-all duration-200 ease-in-out',
+          'sidebar flex flex-col select-none',
           // Desktop positioning: Flush below top header
           !isMobile && [
-            'fixed top-14 left-0 bottom-0 z-30',
+            'fixed top-14 left-0 bottom-0 z-30 transition-[width] duration-200 ease-in-out',
             'h-[calc(100vh-3.5rem)] h-[calc(100dvh-3.5rem)]',
             isDesktopCollapsed
               ? 'sidebar-collapsed w-[var(--sidebar-width-collapsed,64px)]'
