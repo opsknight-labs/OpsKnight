@@ -53,6 +53,14 @@ The desktop inbox receives live updates through a server-sent-events connection.
 
 The mobile **Alerts** route provides its own all/unread list and read-state actions. See [Mobile](../mobile/README.md) for the exact route and offline-queue boundary.
 
+## Real-time incident alert toasts
+
+In addition to the top-bar notification inbox (bell), OpsKnight displays real-time floating toast cards in the top-right corner of the desktop view whenever new incidents arrive:
+
+- **Single-incident alert**: Renders a compact (~65px height) card with a left-edge priority indicator, live pulsing beacon, priority pill (`P1`–`P3`), affected service, incident `#ID`, truncated title, inline `View ↗` link, inline `Acknowledge` action (when permitted by role), and a prominent dismiss button (`X`).
+- **Multi-incident batch alert**: When multiple alerts trigger concurrently or across multiple services (e.g. during a cascade storm from Datadog, CloudWatch, Prometheus, Sentry, or Grafana), the alerts are consolidated into a single card showing `{N} New Incidents`, a preview of the top 2 items with priority and service labels, a `+{N} more on board` overflow count, a direct `View board ↗` link, and a `Dismiss all` action.
+- **Dismissibility**: Individual alerts and batch cards can be dismissed immediately via the top-right `X` button without affecting the underlying incident status.
+
 ## Inbox versus paging
 
 An in-app notification requires the user to be signed in and looking at OpsKnight. It is not a substitute for an external on-call channel.

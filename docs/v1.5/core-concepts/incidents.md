@@ -48,7 +48,7 @@ OpsKnight uses the event deduplication key for integration-created incidents. A 
 
 ## Find and triage incidents
 
-The Incidents page displays 50 records per page and provides counts for Mine, Active, Resolved, Snoozed, and Suppressed. Active is exactly Triggered (`OPEN`) plus Acknowledged; Snoozed and Suppressed are muted and excluded.
+The Incidents page displays 50 records per page and provides counts for Mine, Active, Resolved, Snoozed, and Suppressed. Active is exactly Triggered (`OPEN`) plus Acknowledged; Snoozed and Suppressed are muted and excluded. Newly triggered incidents broadcast over the real-time stream are optimistically prepended to the top of the feed with an animated emerald `LIVE` indicator and an interactive alert toast.
 
 Use the controls to:
 
