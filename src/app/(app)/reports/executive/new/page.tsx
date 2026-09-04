@@ -46,19 +46,23 @@ export default async function NewDashboardPage() {
   return (
     <div className="w-full px-4 py-6 space-y-6 [zoom:0.8]">
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg p-4 md:p-6 shadow-lg">
-        <div className="flex items-start gap-4">
+      <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 text-slate-100 shadow-xl ring-1 ring-white/5 md:p-6">
+        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
+        <div className="relative flex items-start gap-4">
           <Link
             href="/reports"
-            className="mt-1 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+            className="mt-1 p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700/80 transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Executive Dashboards
+            </p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
               Create New Dashboard
             </h1>
-            <p className="text-xs md:text-sm opacity-90 mt-1 text-white">
+            <p className="mt-1 text-xs md:text-sm text-slate-300">
               Start from a template or build from scratch
             </p>
           </div>

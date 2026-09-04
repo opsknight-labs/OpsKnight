@@ -1,10 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/shadcn/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/shadcn/card';
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import { UserListSkeleton } from '@/components/users/UserCardSkeleton';
 
@@ -12,7 +6,7 @@ export default function UsersLoading() {
   return (
     <div className="w-full px-4 py-6 space-y-6">
       {/* Header Skeleton */}
-      <div className="bg-gradient-to-r from-muted to-muted/80 rounded-lg p-4 md:p-6 shadow-sm border animate-pulse h-[140px] md:h-[100px]" />
+      <div className="rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 md:p-6 shadow-xl ring-1 ring-white/5 animate-pulse h-[140px] md:h-[100px]" />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
         {/* Main Content */}
