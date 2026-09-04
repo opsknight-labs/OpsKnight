@@ -185,7 +185,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
           incidentId: incident.id,
           command: 'ACKNOWLEDGE',
           actor: { id: actor!.id, name: actor!.name },
-          idempotency,
+          ...(idempotency ? { idempotency } : {}),
           eventMessage: `Acknowledged via Slack ChatOps by ${actor!.name}`,
         });
       } catch (error) {
@@ -228,7 +228,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
           incidentId: incident.id,
           command: 'RESOLVE',
           actor: { id: actor!.id, name: actor!.name },
-          idempotency,
+          ...(idempotency ? { idempotency } : {}),
           resolutionNote: resolution,
           eventMessage: `Resolved via Slack ChatOps by ${actor!.name}: ${resolution}`,
         });

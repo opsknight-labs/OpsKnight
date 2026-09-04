@@ -17,6 +17,7 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    $transaction: vi.fn(),
     incidentEvent: {
       create: vi.fn(),
     },
@@ -78,6 +79,8 @@ describe('Slack interactive lifecycle actions', () => {
       id: 'inc-1',
       serviceId: 'svc-1',
       slackChannelId: 'C123',
+      slackWorkspaceId: 'T123',
+      service: { slackWorkspaceId: 'T123', slackIntegration: null },
     } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
     vi.mocked(prisma.user.findFirst).mockResolvedValue({
       id: 'user-1',
@@ -105,6 +108,7 @@ describe('Slack interactive lifecycle actions', () => {
       type: 'block_actions',
       actions: [{ value: JSON.stringify({ action, incidentId: 'inc-1', ...extra }) }],
       user: { id: 'U123', name: 'alice' },
+      team: { id: 'T123' },
     };
   }
 
@@ -220,6 +224,8 @@ describe('Slack interactive lifecycle actions', () => {
         id: 'inc-1',
         serviceId: 'svc-1',
         slackChannelId: 'C123',
+        slackWorkspaceId: 'T123',
+        service: { slackWorkspaceId: 'T123', slackIntegration: null },
       } as never)
       .mockResolvedValueOnce({ assigneeId: 'user-1', teamId: null } as never);
 

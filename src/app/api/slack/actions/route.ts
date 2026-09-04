@@ -168,7 +168,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             incidentId,
             command: 'ACKNOWLEDGE',
             actor: { id: actorUser.id, name: actorName },
-            idempotency,
+            ...(idempotency ? { idempotency } : {}),
             eventMessage: `Acknowledged via Slack button by ${actorName}`,
           });
         } catch (error) {
@@ -194,7 +194,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             incidentId,
             command: 'RESOLVE',
             actor: { id: actorUser.id, name: actorName },
-            idempotency,
+            ...(idempotency ? { idempotency } : {}),
             eventMessage: `Resolved via Slack button by ${actorName}`,
           });
         } catch (error) {
@@ -303,7 +303,7 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
             incidentId,
             command: 'SNOOZE',
             actor: { id: actorUser.id, name: actorName },
-            idempotency,
+            ...(idempotency ? { idempotency } : {}),
             snoozedUntil,
             eventMessage: `Snoozed for ${snoozeMinutes}m via Slack button by ${actorName}`,
           });

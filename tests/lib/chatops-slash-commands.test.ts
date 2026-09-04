@@ -10,6 +10,7 @@ import { sendIncidentNotifications } from '@/lib/user-notifications';
 
 vi.mock('@/lib/prisma', () => ({
   default: {
+    $transaction: vi.fn(),
     incident: {
       findFirst: vi.fn(),
     },
@@ -86,6 +87,7 @@ describe('ChatOps Slash Command Dispatcher', () => {
       status: input.command === 'ACKNOWLEDGE' ? 'ACKNOWLEDGED' : 'RESOLVED',
       changed: true,
     }));
+    vi.mocked(prisma.$transaction).mockImplementation(async operation => operation(prisma as never));
   });
 
   const basePayload: SlashCommandPayload = {

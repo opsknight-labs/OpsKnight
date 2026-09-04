@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { getJiraIssue, addJiraComment, type JiraIssueSummary } from '@/lib/jira';
+import { getJiraIssue, addJiraComment } from '@/lib/jira';
 import { enqueueJiraCreateOperation, processExternalOperation } from '@/lib/external-operations';
 import { isValidJiraKey, extractJiraKey } from '@/lib/jira-validation';
 import { logAudit, getDefaultActorId } from '@/lib/audit';

@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { decrypt, encrypt } from '@/lib/encryption';
-import { logger } from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import { toSlackResponseUrl } from '@/lib/slack-signature';
 
