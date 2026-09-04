@@ -84,13 +84,13 @@ export function IncidentHeatmapWidget({
 
   const getColor = useCallback(
     (count: number) => {
-      if (count === 0) return 'bg-slate-200 dark:bg-slate-800';
+      if (count === 0) return 'bg-slate-100 hover:bg-slate-200 border border-slate-200/60';
       const scale = Math.max(maxCount, 4);
       const v = count / scale;
-      if (v <= 0.25) return 'bg-green-300 dark:bg-green-900';
-      if (v <= 0.5) return 'bg-yellow-300 dark:bg-yellow-800';
-      if (v <= 0.75) return 'bg-orange-400 dark:bg-orange-700';
-      return 'bg-red-500 dark:bg-red-800';
+      if (v <= 0.25) return 'bg-emerald-100 hover:bg-emerald-200 border border-emerald-200/70';
+      if (v <= 0.5) return 'bg-emerald-300 hover:bg-emerald-400 border border-emerald-400/70';
+      if (v <= 0.75) return 'bg-amber-300 hover:bg-amber-400 border border-amber-400/70';
+      return 'bg-rose-500 hover:bg-rose-600 shadow-2xs';
     },
     [maxCount]
   );
@@ -99,30 +99,33 @@ export function IncidentHeatmapWidget({
     <TooltipProvider>
       <div
         className={cn(
-          'group relative overflow-hidden p-4 sm:p-6',
+          'group relative overflow-hidden p-4 sm:p-5',
           variant === 'dashboard'
-            ? 'rounded-2xl border border-border bg-card shadow-xs'
-            : 'rounded-xl border border-border/50 bg-background/50 shadow-none'
+            ? 'rounded-xl border border-slate-200 bg-white shadow-xs'
+            : 'rounded-xl border border-slate-200 bg-slate-50 shadow-none'
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Activity className="w-4 h-4 text-primary" />
+        <div className="flex items-center justify-between mb-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+              <Activity className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold">Incident Activity</h3>
-              <p className="text-xs text-muted-foreground">
+              <h3 className="text-sm font-bold text-slate-900">Incident Activity</h3>
+              <p className="text-[11px] text-slate-500 font-medium">
                 {totalCount.toLocaleString()} incidents in {year}
               </p>
             </div>
+          </div>
+          <div className="text-[11px] text-slate-500 font-medium bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200/80">
+            Peak: <span className="font-bold text-slate-800">{maxCount} / day</span>
           </div>
         </div>
 
         {/* Month labels */}
         <div
-          className="grid mb-2 text-xs font-medium text-muted-foreground"
+          className="grid mb-2 text-xs font-medium text-slate-500"
           style={{
             gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`,
           }}
@@ -136,7 +139,7 @@ export function IncidentHeatmapWidget({
 
         {/* Heatmap */}
         <div
-          className="grid grid-rows-7 grid-flow-col gap-[1px] sm:gap-[2px]"
+          className="grid grid-rows-7 grid-flow-col gap-[1.5px] sm:gap-[2px]"
           style={{
             gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`,
           }}
@@ -146,7 +149,10 @@ export function IncidentHeatmapWidget({
               <Tooltip key={`${w}-${d}`} delayDuration={0}>
                 <TooltipTrigger asChild>
                   <div
-                    className={cn('rounded-sm', getColor(day.count))}
+                    className={cn(
+                      'rounded-[2px] transition-transform hover:scale-125 cursor-pointer',
+                      getColor(day.count)
+                    )}
                     style={{
                       aspectRatio: '1 / 1',
                       minWidth: '6px',
@@ -154,8 +160,9 @@ export function IncidentHeatmapWidget({
                     }}
                   />
                 </TooltipTrigger>
-                <TooltipContent className="text-xs">
-                  {day.count} incidents ·{' '}
+                <TooltipContent className="text-xs font-medium bg-slate-900 text-white shadow-lg border-slate-800">
+                  <span className="font-bold">{day.count}</span> incident
+                  {day.count === 1 ? '' : 's'} ·{' '}
                   {day.date.toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
@@ -168,19 +175,19 @@ export function IncidentHeatmapWidget({
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-end gap-2 mt-4 text-[10px] text-muted-foreground font-medium">
-          <span>Less</span>
-          <div className="flex gap-[3px]">
+        <div className="flex items-center justify-end gap-2 mt-3.5 text-[10px] text-slate-500 font-medium">
+          <span>Fewer</span>
+          <div className="flex gap-1 items-center">
             {/* 0 incidents */}
-            <div className={cn('w-3 h-3 rounded-[2px]', 'bg-slate-200 dark:bg-slate-800')} />
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-slate-100 border border-slate-200/60" />
             {/* Low intensity (<25%) */}
-            <div className={cn('w-3 h-3 rounded-[2px]', 'bg-green-300 dark:bg-green-900')} />
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-emerald-100 border border-emerald-200/70" />
             {/* Medium intensity (<50%) */}
-            <div className={cn('w-3 h-3 rounded-[2px]', 'bg-yellow-300 dark:bg-yellow-800')} />
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-emerald-300 border border-emerald-400/70" />
             {/* High intensity (<75%) */}
-            <div className={cn('w-3 h-3 rounded-[2px]', 'bg-orange-400 dark:bg-orange-700')} />
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-amber-300 border border-amber-400/70" />
             {/* Critical intensity (>75%) */}
-            <div className={cn('w-3 h-3 rounded-[2px]', 'bg-red-500 dark:bg-red-800')} />
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-rose-500 shadow-2xs" />
           </div>
           <span>More</span>
         </div>

@@ -511,6 +511,7 @@ export default async function Dashboard({
             criticalIncidents={currentCriticalActive}
             unassignedIncidents={unassignedCount}
             topServiceName={topServiceByVolume?.name}
+            topServiceId={topServiceByVolume?.id}
             topServiceCount={topServiceByVolume?.count}
           />
         ) : (
@@ -797,6 +798,7 @@ export default async function Dashboard({
               incidents={recentIncidentListItems}
               users={users}
               canManageIncidents={false}
+              readOnly={true}
               title="Latest incidents"
               showExport={false}
             />

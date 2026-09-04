@@ -1,7 +1,14 @@
 'use client';
 
+import React from 'react';
 import { toast as sonnerToast, type ExternalToast } from 'sonner';
 import { toUserFacingError } from '@/lib/user-facing-error';
+import {
+  IncidentAlertToast,
+  type IncidentAlertItem,
+} from '@/components/incident/IncidentAlertToast';
+
+export type { IncidentAlertItem };
 
 type NotifyOptions = Omit<ExternalToast, 'description'> & {
   description?: string;
@@ -56,6 +63,36 @@ export const notify = {
 
   loading(title: string, options?: NotifyOptions) {
     return sonnerToast.loading(title, optionsFor('loading', title, options));
+  },
+
+  incident(
+    incidents: IncidentAlertItem | IncidentAlertItem[],
+    options?: {
+      onAcknowledge?: (id: string) => Promise<void> | void;
+      duration?: number;
+    }
+  ) {
+    const list = Array.isArray(incidents) ? incidents : [incidents];
+    if (list.length === 0) return;
+
+    const toastId = `incident-alert:${list
+      .map(i => i.id)
+      .sort()
+      .join(',')}`;
+
+    return sonnerToast.custom(
+      t =>
+        React.createElement(IncidentAlertToast, {
+          toastId: t,
+          incidents: list,
+          onAcknowledge: options?.onAcknowledge,
+        }),
+      {
+        id: toastId,
+        duration: options?.duration ?? 8000,
+        position: 'top-right',
+      }
+    );
   },
 
   dismiss(id?: string | number) {

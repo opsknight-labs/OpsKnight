@@ -181,4 +181,51 @@ describe('IncidentsListTable', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull();
   });
+
+  it('renders in readOnly mode without selection checkboxes, shortcuts guide, or triage actions', () => {
+    const incidents: IncidentListItem[] = [
+      {
+        id: 'inc-ro-1',
+        title: 'Incident ReadOnly 1',
+        status: 'OPEN',
+        escalationStatus: null,
+        currentEscalationStep: null,
+        nextEscalationAt: null,
+        priority: 'P1',
+        urgency: 'HIGH',
+        createdAt: new Date(),
+        assigneeId: null,
+        teamId: null,
+        service: { id: 'svc-1', name: 'Service 1' },
+        team: null,
+        assignee: null,
+      },
+    ];
+
+    render(
+      <IncidentsListTable
+        incidents={incidents}
+        users={[]}
+        canManageIncidents={true}
+        readOnly={true}
+      />
+    );
+
+    // No selection checkboxes
+    expect(screen.queryByRole('checkbox', { name: /select incident/i })).toBeNull();
+
+    // No shortcuts legend
+    expect(screen.queryByText('Shortcuts:')).toBeNull();
+
+    // No select page button
+    expect(screen.queryByRole('button', { name: /select all incidents/i })).toBeNull();
+
+    // No quick Ack button
+    expect(screen.queryByTitle('Acknowledge Incident')).toBeNull();
+
+    // Key presses have no effect in readOnly mode
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'x' });
+    expect(screen.queryByRole('button', { name: 'Acknowledge' })).toBeNull();
+  });
 });
