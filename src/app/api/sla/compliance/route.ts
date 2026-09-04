@@ -2,7 +2,9 @@ import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { calculateSLAMetrics, calculateMultiServiceUptime } from '@/lib/sla-server';
+import { calculateMultiServiceUptime } from '@/lib/sla-server';
+import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { CAPABILITIES, hasCapability, isAppRole } from '@/lib/authorization';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -60,6 +62,7 @@ export async function GET(_request: NextRequest) {
     }
 
     const whereClause = await getDefinitionWhereForUser(sessionUser.id, sessionUser.role);
+    const actor = await getCurrentAuthorizationActor();
 
     const definitions = await prisma.sLADefinition.findMany({
       where: whereClause,
@@ -94,7 +97,7 @@ export async function GET(_request: NextRequest) {
           }
 
           // Get SLA metrics for this service
-          const metrics = await calculateSLAMetrics({
+          const metrics = await calculateActorSLAMetrics(actor, {
             serviceId: def.serviceId || undefined,
             priority: (def as any).priority || undefined,
             windowDays,

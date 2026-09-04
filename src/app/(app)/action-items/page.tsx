@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
+import { dashboardUserReadWhere, postmortemReadWhere } from '@/lib/authorization-filters';
 import ActionItemsBoard from '@/components/action-items/ActionItemsBoard';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
@@ -31,20 +32,29 @@ export default async function ActionItemsPage({
   const owner = params.owner;
   const priority = params.priority as 'HIGH' | 'MEDIUM' | 'LOW' | undefined;
   const view = params.view || 'board';
+  const [permissions, actor] = await Promise.all([
+    getUserPermissions(),
+    getCurrentAuthorizationActor(),
+  ]);
 
   // Get all postmortems with action items
   const postmortems = await prisma.postmortem.findMany({
     where: {
-      OR: [
+      AND: [
+        postmortemReadWhere(actor),
         {
-          actionItems: {
-            not: Prisma.JsonNull,
-          },
-        },
-        {
-          actionItemRecords: {
-            some: {},
-          },
+          OR: [
+            {
+              actionItems: {
+                not: Prisma.JsonNull,
+              },
+            },
+            {
+              actionItemRecords: {
+                some: {},
+              },
+            },
+          ],
         },
       ],
     },
@@ -160,12 +170,11 @@ export default async function ActionItemsPage({
 
   // Get all users for owner filter
   const users = await prisma.user.findMany({
-    where: { status: 'ACTIVE' },
+    where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
     select: { id: true, name: true, email: true },
     orderBy: { name: 'asc' },
   });
 
-  const permissions = await getUserPermissions();
   const canManage = permissions.isResponderOrAbove;
 
   return (

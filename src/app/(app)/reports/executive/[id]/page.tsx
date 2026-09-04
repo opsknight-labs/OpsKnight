@@ -3,7 +3,9 @@ import { redirect, notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { calculateSLAMetrics } from '@/lib/sla-server';
+import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { serviceReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import { serializeSlaMetrics } from '@/lib/sla';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
@@ -55,6 +57,7 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
   }
 
   const userTimeZone = getUserTimeZone(user);
+  const actor = await getCurrentAuthorizationActor();
 
   // Parse filters
   const windowDays = Number(queryParams?.window || 7);
@@ -62,7 +65,7 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
   const serviceId = queryParams?.serviceId || undefined;
 
   // Fetch metrics
-  const metrics = await calculateSLAMetrics({
+  const metrics = await calculateActorSLAMetrics(actor, {
     windowDays,
     teamId,
     serviceId,
@@ -74,8 +77,13 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
 
   // Fetch filter options
   const [teams, services] = await Promise.all([
-    prisma.team.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.team.findMany({
+      where: teamReadWhere(actor),
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
     prisma.service.findMany({
+      where: serviceReadWhere(actor),
       select: { id: true, name: true, teamId: true },
       orderBy: { name: 'asc' },
     }),

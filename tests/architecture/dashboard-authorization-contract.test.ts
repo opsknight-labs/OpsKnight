@@ -10,7 +10,7 @@ describe('dashboard authorization contract', () => {
     expect(page).toContain('incidentReadWhere(actor)');
     expect(page).toContain('serviceReadWhere(actor)');
     expect(page).toContain('dashboardUserReadWhere(actor)');
-    expect(page).toContain('dashboardMetricsScope(actor)');
+    expect(page).toContain('calculateActorSLAMetrics(actor');
     expect(dataRoute).toContain('dashboardMetricsScope(actor)');
     expect(streamRoute).toContain('dashboardMetricsScope(actor)');
   });

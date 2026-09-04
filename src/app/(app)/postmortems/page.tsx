@@ -2,7 +2,12 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getAllPostmortems } from './actions';
-import { getUserPermissions } from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
+import {
+  incidentReadWhere,
+  postmortemReadWhere,
+  serviceReadWhere,
+} from '@/lib/authorization-filters';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
@@ -29,15 +34,19 @@ export default async function PostmortemsPage({
   const search = params.search;
   const serviceId = params.serviceId;
   const page = params.page ? parseInt(params.page) : 1;
+  const [permissions, actor] = await Promise.all([
+    getUserPermissions(),
+    getCurrentAuthorizationActor(),
+  ]);
 
   const [{ postmortems, pagination }, services] = await Promise.all([
     getAllPostmortems({ status, search, serviceId, page }),
     prisma.service.findMany({
+      where: serviceReadWhere(actor),
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
   ]);
-  const permissions = await getUserPermissions();
   const canCreate = permissions.isResponderOrAbove;
 
   // Get user timezone for date formatting
@@ -54,8 +63,7 @@ export default async function PostmortemsPage({
   const resolvedIncidentsWithoutPostmortems = canCreate
     ? await prisma.incident.findMany({
         where: {
-          status: 'RESOLVED',
-          postmortem: null,
+          AND: [incidentReadWhere(actor), { status: 'RESOLVED', postmortem: null }],
         },
         select: {
           id: true,
@@ -68,11 +76,12 @@ export default async function PostmortemsPage({
     : [];
 
   // Fetch counts for metrics
+  const postmortemAccess = postmortemReadWhere(actor);
   const [totalCount, publishedCount, draftCount, archivedCount] = await Promise.all([
-    prisma.postmortem.count(),
-    prisma.postmortem.count({ where: { status: 'PUBLISHED' } }),
-    prisma.postmortem.count({ where: { status: 'DRAFT' } }),
-    prisma.postmortem.count({ where: { status: 'ARCHIVED' } }),
+    prisma.postmortem.count({ where: postmortemAccess }),
+    prisma.postmortem.count({ where: { AND: [postmortemAccess, { status: 'PUBLISHED' }] } }),
+    prisma.postmortem.count({ where: { AND: [postmortemAccess, { status: 'DRAFT' }] } }),
+    prisma.postmortem.count({ where: { AND: [postmortemAccess, { status: 'ARCHIVED' }] } }),
   ]);
 
   return (

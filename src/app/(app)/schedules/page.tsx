@@ -1,5 +1,6 @@
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
+import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { createSchedule } from './actions';
 import ScheduleDirectoryList from '@/components/schedules/ScheduleDirectoryList';
 import ScheduleCreateForm from '@/components/ScheduleCreateForm';
@@ -17,9 +18,13 @@ import {
 import Link from 'next/link';
 
 export default async function SchedulesPage() {
-  const permissions = await getUserPermissions();
+  const [permissions, actor] = await Promise.all([
+    getUserPermissions(),
+    getCurrentAuthorizationActor(),
+  ]);
 
   const schedules = await prisma.onCallSchedule.findMany({
+    where: scheduleReadWhere(actor),
     include: {
       layers: {
         include: {

@@ -122,33 +122,10 @@ const allowedStatus = ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED', 'RESOLVE
 
 async function getCurrentIncidentSnapshot(filters: SLAMetricsFilter) {
   const { default: prisma } = await import('./prisma');
-  const scopeWhere: Prisma.IncidentWhereInput = {};
-
-  if (filters.serviceId) {
-    scopeWhere.serviceId = Array.isArray(filters.serviceId)
-      ? { in: filters.serviceId }
-      : filters.serviceId;
-  }
-  if (filters.teamId) {
-    const teamIds = Array.isArray(filters.teamId) ? filters.teamId : [filters.teamId];
-    if (filters.useOrScope) {
-      scopeWhere.OR = [{ teamId: { in: teamIds } }, { service: { teamId: { in: teamIds } } }];
-    } else {
-      scopeWhere.service = { teamId: { in: teamIds } };
-    }
-  }
-  if (filters.priority) {
-    scopeWhere.priority = Array.isArray(filters.priority)
-      ? { in: filters.priority }
-      : filters.priority;
-  }
-  if (filters.visibility && filters.visibility !== 'ALL') {
-    scopeWhere.visibility = filters.visibility;
-  }
+  const scopeWhere = compileIncidentMetricFilter({ ...filters, status: undefined }).prisma;
 
   const activeWhere: Prisma.IncidentWhereInput = {
-    ...scopeWhere,
-    status: { in: activeIncidentStatuses() },
+    AND: [scopeWhere, { status: { in: activeIncidentStatuses() } }],
   };
   const [statusCounts, urgencyCounts, unassignedActive, mutedCounts] = await Promise.all([
     prisma.incident.groupBy({
@@ -161,10 +138,10 @@ async function getCurrentIncidentSnapshot(filters: SLAMetricsFilter) {
       where: activeWhere,
       _count: { _all: true },
     }),
-    prisma.incident.count({ where: { ...activeWhere, assigneeId: null } }),
+    prisma.incident.count({ where: { AND: [activeWhere, { assigneeId: null }] } }),
     prisma.incident.groupBy({
       by: ['status'],
-      where: { ...scopeWhere, status: { in: ['SNOOZED', 'SUPPRESSED'] } },
+      where: { AND: [scopeWhere, { status: { in: ['SNOOZED', 'SUPPRESSED'] } }] },
       _count: { _all: true },
     }),
   ]);
@@ -874,107 +851,47 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   const pageSize = filters.pageSize || DEFAULT_PAGE_SIZE;
   const page = Math.max(1, filters.page || 1);
 
-  // 2. Build Where Clauses
-  const serviceWhere = filters.serviceId
-    ? {
-        serviceId: Array.isArray(filters.serviceId) ? { in: filters.serviceId } : filters.serviceId,
-      }
-    : {};
-
-  const teamWhere = filters.teamId
-    ? filters.useOrScope
-      ? {
-          OR: [
-            { teamId: Array.isArray(filters.teamId) ? { in: filters.teamId } : filters.teamId },
-            {
-              service: {
-                teamId: Array.isArray(filters.teamId) ? { in: filters.teamId } : filters.teamId,
-              },
-            },
-          ],
-        }
-      : { teamId: Array.isArray(filters.teamId) ? { in: filters.teamId } : filters.teamId }
-    : {};
-
-  const assigneeWhere =
-    filters.assigneeId !== undefined ? { assigneeId: filters.assigneeId } : null;
-  const statusWhere = filters.status
-    ? filters.status === 'ACTIVE'
-      ? { status: { in: activeIncidentStatuses() } }
-      : { status: filters.status }
-    : null;
-  const urgencyWhere = filters.urgency ? { urgency: filters.urgency } : null;
-  const priorityWhere = filters.priority
-    ? {
-        priority: Array.isArray(filters.priority) ? { in: filters.priority } : filters.priority,
-      }
-    : {};
-  const visibilityWhere =
-    filters.visibility && filters.visibility !== 'ALL'
-      ? { visibility: filters.visibility as any } // Cast to any to avoid type errors until client updates
-      : {};
-
+  // 2. Build Where Clauses. Selection and authorization are compiled once,
+  // then ANDed with snapshot-specific status predicates.
   const mutedStatusList = ['SNOOZED', 'SUPPRESSED'] as const;
   const activeStatusWhere = { status: { in: activeIncidentStatusesForFilter(filters.status) } };
-
-  let activeWhere: Prisma.IncidentWhereInput = {
-    ...activeStatusWhere,
-    ...(urgencyWhere ?? {}),
-    ...priorityWhere,
-    ...(visibilityWhere ?? {}),
-  } as any;
-
-  const hasServiceFilter = Object.keys(serviceWhere).length > 0;
-  const hasTeamFilter = Object.keys(teamWhere).length > 0;
-
-  if (filters.useOrScope && (hasServiceFilter || hasTeamFilter || assigneeWhere)) {
-    activeWhere.OR = [
-      ...(hasServiceFilter ? [serviceWhere] : []),
-      ...(hasTeamFilter ? [{ service: teamWhere }] : []),
-      ...(assigneeWhere ? [assigneeWhere] : []),
-    ];
-  } else {
-    activeWhere = {
-      ...activeWhere,
-      ...(hasServiceFilter ? serviceWhere : {}),
-      ...(hasTeamFilter ? { service: teamWhere } : {}),
-      ...(assigneeWhere ?? {}),
-    };
-  }
+  const snapshotScope = compileIncidentMetricFilter({ ...filters, status: undefined }).prisma;
+  const activeWhere: Prisma.IncidentWhereInput = { AND: [snapshotScope, activeStatusWhere] };
 
   const shouldIncludeMutedCounts =
-    !filters.status || mutedStatusList.includes(filters.status as any);
+    !filters.status || filters.status === 'SNOOZED' || filters.status === 'SUPPRESSED';
   const mutedStatusFilter =
-    filters.status && mutedStatusList.includes(filters.status as any)
+    filters.status === 'SNOOZED' || filters.status === 'SUPPRESSED'
       ? [filters.status]
-      : mutedStatusList;
-  let mutedWhere: Prisma.IncidentWhereInput = {
-    status: { in: mutedStatusFilter },
-    ...(urgencyWhere ?? {}),
-    ...priorityWhere,
-    ...(visibilityWhere ?? {}),
-  } as any;
-
-  if (filters.useOrScope && (hasServiceFilter || hasTeamFilter || assigneeWhere)) {
-    mutedWhere.OR = [
-      ...(hasServiceFilter ? [serviceWhere] : []),
-      ...(hasTeamFilter ? [{ service: teamWhere }] : []),
-      ...(assigneeWhere ? [assigneeWhere] : []),
-    ];
-  } else {
-    mutedWhere = {
-      ...mutedWhere,
-      ...(hasServiceFilter ? serviceWhere : {}),
-      ...(hasTeamFilter ? { service: teamWhere } : {}),
-      ...(assigneeWhere ?? {}),
-    };
-  }
+      : [...mutedStatusList];
+  const mutedWhere: Prisma.IncidentWhereInput = {
+    AND: [snapshotScope, { status: { in: mutedStatusFilter } }],
+  };
 
   const compiledMetricFilter = compileIncidentMetricFilter(filters);
   const recentIncidentWhere: Prisma.IncidentWhereInput = {
     ...compiledMetricFilter.prisma,
     createdAt: { gte: finalStart, lte: finalEnd },
   };
+  const selectedServiceWhere: Prisma.ServiceWhereInput = filters.serviceId
+    ? { id: Array.isArray(filters.serviceId) ? { in: filters.serviceId } : filters.serviceId }
+    : filters.teamId
+      ? { teamId: Array.isArray(filters.teamId) ? { in: filters.teamId } : filters.teamId }
+      : {};
+  const serviceTargetWhere: Prisma.ServiceWhereInput = filters.authorizationScope
+    ? {
+        AND: [
+          selectedServiceWhere,
+          {
+            incidents: {
+              some: compileIncidentMetricFilter({
+                authorizationScope: filters.authorizationScope,
+              }).prisma,
+            },
+          },
+        ],
+      }
+    : selectedServiceWhere;
 
   // Heatmap query (last 365 days, clipped to retention policy).
   // Filter set is applied via `fullIncidentFilterSql` in the raw SQL below
@@ -1126,11 +1043,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     // instead of the configured per-service targets, silently producing
     // wrong SLA compliance numbers for team-scoped dashboards.
     prisma.service.findMany({
-      where: filters.serviceId
-        ? { id: Array.isArray(filters.serviceId) ? { in: filters.serviceId } : filters.serviceId }
-        : filters.teamId
-          ? { teamId: Array.isArray(filters.teamId) ? { in: filters.teamId } : filters.teamId }
-          : {},
+      where: serviceTargetWhere,
       select: { id: true, name: true, targetAckMinutes: true, targetResolveMinutes: true },
     }),
     prisma.incident.groupBy({

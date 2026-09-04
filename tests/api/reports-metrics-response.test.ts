@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/reports/metrics/route';
 
 const mocks = vi.hoisted(() => ({
-  calculateSLAMetrics: vi.fn(),
+  calculateActorSLAMetrics: vi.fn(),
   serializeSlaMetrics: vi.fn(),
 }));
 
@@ -13,12 +13,20 @@ vi.mock('next-auth', () => ({
 vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/lib/rbac', () => ({
   assertCanReadServiceMetrics: vi.fn().mockResolvedValue({ role: 'ADMIN' }),
+  getCurrentAuthorizationActor: vi.fn().mockResolvedValue({
+    id: 'admin-1',
+    role: 'ADMIN',
+    status: 'ACTIVE',
+    teamIds: [],
+  }),
 }));
 vi.mock('@/lib/authorization', () => ({
   CAPABILITIES: { INCIDENT_SENSITIVE_READ: 'incident.sensitive.read' },
   hasCapability: vi.fn().mockReturnValue(true),
 }));
-vi.mock('@/lib/sla-server', () => ({ calculateSLAMetrics: mocks.calculateSLAMetrics }));
+vi.mock('@/lib/actor-metrics', () => ({
+  calculateActorSLAMetrics: mocks.calculateActorSLAMetrics,
+}));
 vi.mock('@/lib/sla', () => ({ serializeSlaMetrics: mocks.serializeSlaMetrics }));
 vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -27,7 +35,7 @@ vi.mock('@/lib/logger', () => ({
 describe('GET /api/reports/metrics response contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.calculateSLAMetrics.mockResolvedValue({ dataSource: 'live' });
+    mocks.calculateActorSLAMetrics.mockResolvedValue({ dataSource: 'live' });
     mocks.serializeSlaMetrics.mockReturnValue({ mtta: 12, mttr: 34 });
   });
 
@@ -45,5 +53,9 @@ describe('GET /api/reports/metrics response contract', () => {
     expect(body).toMatchObject({ success: true, dataState: 'available' });
     expect(body.requestId).toBeTypeOf('string');
     expect(body.timestamp).toBeTypeOf('string');
+    expect(mocks.calculateActorSLAMetrics).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'admin-1' }),
+      expect.objectContaining({ serviceId: 'svc-1', windowDays: 7 })
+    );
   });
 });

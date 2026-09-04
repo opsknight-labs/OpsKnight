@@ -2,7 +2,12 @@ import prisma from '@/lib/prisma';
 import type { WebhookIntegration } from '@prisma/client';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { assertCanModifyService, assertCanViewService } from '@/lib/rbac';
+import {
+  assertCanModifyService,
+  assertCanViewService,
+  getCurrentAuthorizationActor,
+} from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import { deleteService, updateService, deleteIntegration } from '../actions';
 
 // UI Components
@@ -153,6 +158,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   } catch {
     notFound();
   }
+  const actor = await getCurrentAuthorizationActor();
+  const incidentAccess = incidentReadWhere(actor);
 
   let canManageService = false;
   try {
@@ -162,7 +169,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     // The service is viewable but this user cannot change its configuration.
   }
 
-  const { calculateSLAMetrics, calculateMultiServiceUptime } = await import('@/lib/sla-server');
+  const [{ calculateActorSLAMetrics }, { calculateMultiServiceUptime }] = await Promise.all([
+    import('@/lib/actor-metrics'),
+    import('@/lib/sla-server'),
+  ]);
   const slaWindowDays = 30;
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - slaWindowDays * 24 * 60 * 60 * 1000);
@@ -206,6 +216,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         },
         jiraServiceMapping: true,
         incidents: {
+          where: incidentAccess,
           include: {
             assignee: {
               select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
@@ -226,8 +237,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         },
       },
     }),
-    prisma.incident.count({ where: { serviceId: id } }),
-    calculateSLAMetrics({
+    prisma.incident.count({ where: { AND: [incidentAccess, { serviceId: id }] } }),
+    calculateActorSLAMetrics(actor, {
       serviceId: id,
       windowDays: slaWindowDays,
       includeActiveIncidents: true,

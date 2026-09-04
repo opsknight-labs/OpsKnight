@@ -17,8 +17,12 @@ export default async function MobileDashboard() {
 
   // Fetch key metrics and on-call status
   const metricsWindowDays = 90;
-  const { calculateSLAMetrics } = await import('@/lib/sla-server');
-  const slaMetrics = await calculateSLAMetrics({
+  const [{ calculateActorSLAMetrics }, { getCurrentAuthorizationActor }] = await Promise.all([
+    import('@/lib/actor-metrics'),
+    import('@/lib/rbac'),
+  ]);
+  const actor = await getCurrentAuthorizationActor();
+  const slaMetrics = await calculateActorSLAMetrics(actor, {
     windowDays: metricsWindowDays,
     includeAllTime: false,
     includeActiveIncidents: true,

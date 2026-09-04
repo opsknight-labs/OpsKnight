@@ -10,11 +10,12 @@ import {
   CAPABILITIES,
   getRoleCapabilities,
   hasCapability,
+  isAppRole,
   type AppRole,
   type Capability,
 } from '@/lib/authorization';
 import { resolveUserActor } from '@/lib/authorization-actors';
-import { serviceReadWhere } from '@/lib/authorization-filters';
+import { scheduleReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import {
   deriveScheduleUICapabilities,
@@ -82,6 +83,15 @@ export async function getCurrentUser() {
     });
   }
   return user;
+}
+
+export async function getCurrentAuthorizationActor() {
+  const user = await getCurrentUser();
+  const actor = await resolveUserActor(user.id);
+  if (!actor || !isAppRole(user.role) || actor.status !== 'ACTIVE') {
+    throw appError('AUTHORIZATION_DENIED', 'Unauthorized. Invalid application role.');
+  }
+  return actor;
 }
 
 export async function assertAdmin() {
@@ -482,26 +492,7 @@ export async function assertCanViewSchedule(scheduleId: string) {
 }
 
 export async function getViewableScheduleWhere(): Promise<Prisma.OnCallScheduleWhereInput> {
-  const user = await getCurrentUser();
-  if (hasCapability(user.role as AppRole, CAPABILITIES.SCHEDULE_READ_ALL)) return {};
-
-  return {
-    OR: [
-      { layers: { some: { users: { some: { userId: user.id } } } } },
-      { overrides: { some: { OR: [{ userId: user.id }, { replacesUserId: user.id }] } } },
-      {
-        escalationRules: {
-          some: {
-            policy: {
-              services: {
-                some: { team: { members: { some: { userId: user.id, role: 'OWNER' } } } },
-              },
-            },
-          },
-        },
-      },
-    ],
-  };
+  return scheduleReadWhere(await getCurrentAuthorizationActor());
 }
 
 async function resolveScheduleUICapabilities(

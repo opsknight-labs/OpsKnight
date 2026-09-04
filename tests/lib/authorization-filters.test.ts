@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
+import {
+  actionItemReadWhere,
+  actorMetricReadScope,
+  incidentReadWhere,
+  postmortemReadWhere,
+  scheduleReadWhere,
+  serviceReadWhere,
+  teamReadWhere,
+} from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getScheduleApiScope } from '@/lib/schedule-api-auth';
 
@@ -33,6 +41,26 @@ describe('authorization query filters', () => {
     expect(serviceReadWhere({ ...user, role: 'RESPONDER', teamIds: [] })).toEqual({});
   });
 
+  it('scopes every related directory through the same actor policy', () => {
+    expect(serviceReadWhere(user)).toEqual({ teamId: { in: ['team-1'] } });
+    expect(teamReadWhere(user)).toEqual({ id: { in: ['team-1'] } });
+    expect(actionItemReadWhere(user)).toEqual({ incident: incidentReadWhere(user) });
+    expect(postmortemReadWhere(user)).toEqual({ incident: incidentReadWhere(user) });
+    expect(scheduleReadWhere(user)).toMatchObject({
+      OR: expect.arrayContaining([
+        { layers: { some: { users: { some: { userId: 'user-1' } } } } },
+        { overrides: { some: { OR: [{ userId: 'user-1' }, { replacesUserId: 'user-1' }] } } },
+      ]),
+    });
+  });
+
+  it('creates an explicit metrics authorization scope for scoped readers', () => {
+    expect(actorMetricReadScope(user)).toEqual({
+      authorizationScope: { actorId: 'user-1', teamIds: ['team-1'] },
+    });
+    expect(actorMetricReadScope({ ...user, role: 'ADMIN' })).toEqual({});
+  });
+
   it('fails closed when an API key lacks its required scope', () => {
     expect(() =>
       serviceReadWhere({ ...user, apiKey: { id: 'key-1', scopes: ['incidents:read'] } })
@@ -48,11 +76,18 @@ describe('authorization query filters', () => {
       OR: [
         { layers: { some: { users: { some: { userId: 'user-1' } } } } },
         {
+          overrides: {
+            some: { OR: [{ userId: 'user-1' }, { replacesUserId: 'user-1' }] },
+          },
+        },
+        {
           escalationRules: {
             some: {
               policy: {
                 services: {
-                  some: { team: { members: { some: { userId: 'user-1' } } } },
+                  some: {
+                    team: { members: { some: { userId: 'user-1', role: 'OWNER' } } },
+                  },
                 },
               },
             },
