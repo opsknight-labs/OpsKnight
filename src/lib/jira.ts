@@ -34,6 +34,8 @@ type JiraCreateIssueResponse = {
   self: string;
 };
 
+type JiraSearchResponse = { issues?: JiraIssueResponse[] };
+
 type CreateJiraIssueInput = {
   projectKey: string;
   issueType: string;
@@ -185,6 +187,31 @@ export async function getJiraIssue(issueKeyOrId: string): Promise<JiraIssueSumma
     `/rest/api/3/issue/${encodeURIComponent(issueKeyOrId)}?fields=status,assignee`
   );
 
+  return {
+    id: issue.id,
+    key: issue.key,
+    url: jiraIssueUrl(config.baseUrl, issue.key),
+    status: issue.fields?.status?.name,
+    assignee: issue.fields?.assignee?.displayName ?? issue.fields?.assignee?.emailAddress,
+  };
+}
+
+/** Reconcile an ambiguous create using a machine-generated, exact label. */
+export async function findJiraIssueByCorrelationLabel(
+  label: string
+): Promise<JiraIssueSummary | null> {
+  if (!/^[A-Za-z0-9_-]{1,255}$/.test(label)) {
+    throw new Error('Invalid Jira correlation label');
+  }
+  const config = await getDecryptedJiraConfig();
+  if (!config) throw jiraNotConfigured();
+  const jql = encodeURIComponent(`labels = "${label}" ORDER BY created DESC`);
+  const result = await jiraRequest<JiraSearchResponse>(
+    config,
+    `/rest/api/3/search/jql?jql=${jql}&fields=status,assignee&maxResults=2`
+  );
+  const issue = result.issues?.[0];
+  if (!issue) return null;
   return {
     id: issue.id,
     key: issue.key,

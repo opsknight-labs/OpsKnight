@@ -188,6 +188,40 @@ enum ExternalIssueSyncState {
   FAILED
 }
 
+enum ExternalOperationStatus {
+  PENDING
+  PROCESSING
+  AMBIGUOUS
+  COMPLETED
+  FAILED
+}
+
+model ExternalOperation {
+  id             String                  @id @default(cuid())
+  provider       ExternalIssueProvider
+  operation      String
+  idempotencyKey String
+  incidentId     String?
+  actionItemId   String?
+  status         ExternalOperationStatus @default(PENDING)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  externalId     String?
+  externalKey    String?
+  requestPayload Json?
+  resultPayload  Json?
+  lastError      String?
+  attempts       Int                     @default(0)
+  nextAttemptAt  DateTime                @default(now())
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@unique([provider, idempotencyKey])
+  @@index([status, nextAttemptAt, leaseExpiresAt])
+  @@index([incidentId, operation])
+  @@index([actionItemId, operation])
+}
+
 model User {
   id                           String     @id @default(cuid())
   name                         String
@@ -1143,6 +1177,7 @@ enum JobType {
   SCHEDULED_TASK
   STATUS_PAGE_NOTIFICATION
   CHATOPS_INTENT
+  EXTERNAL_OPERATION
 }
 
 enum JobStatus {

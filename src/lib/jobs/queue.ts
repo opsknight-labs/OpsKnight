@@ -12,7 +12,7 @@ function isNonRetryableBackgroundJobError(error: string): boolean {
   return /message_limit_exceeded|user has not enabled any notification channels/i.test(error);
 }
 
-export type JobType = 'ESCALATION' | 'NOTIFICATION' | 'AUTO_UNSNOOZE' | 'SCHEDULED_TASK' | 'STATUS_PAGE_NOTIFICATION' | 'CHATOPS_INTENT';
+export type JobType = 'ESCALATION' | 'NOTIFICATION' | 'AUTO_UNSNOOZE' | 'SCHEDULED_TASK' | 'STATUS_PAGE_NOTIFICATION' | 'CHATOPS_INTENT' | 'EXTERNAL_OPERATION';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 interface JobPayload { incidentId?: string; stepIndex?: number; eventType?: string; task?: string; [key:string]:unknown; }
 
@@ -79,6 +79,12 @@ export async function processJob(job:any):Promise<boolean>{
         if(typeof job.payload.intentId!=='string') throw new Error('ChatOps intent job is missing intentId');
         const {processChatOpsIntent}=await import('../chatops/intents');
         await processChatOpsIntent(job.payload.intentId);
+        await markJobCompleted(job.id);return true;
+      }
+      case'EXTERNAL_OPERATION':{
+        if(typeof job.payload.operationId!=='string') throw new Error('External operation job is missing operationId');
+        const {processExternalOperation}=await import('../external-operations');
+        await processExternalOperation(job.payload.operationId);
         await markJobCompleted(job.id);return true;
       }
       case'STATUS_PAGE_NOTIFICATION':{

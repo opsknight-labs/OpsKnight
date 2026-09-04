@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { createJiraIssue, getJiraIssue, addJiraComment, type JiraIssueSummary } from '@/lib/jira';
+import { getJiraIssue, addJiraComment, type JiraIssueSummary } from '@/lib/jira';
+import { enqueueJiraCreateOperation, processExternalOperation } from '@/lib/external-operations';
 import { isValidJiraKey, extractJiraKey } from '@/lib/jira-validation';
 import { logAudit, getDefaultActorId } from '@/lib/audit';
 import { logger } from '@/lib/logger';
@@ -29,45 +30,13 @@ export type LinkExistingParams = {
  * Used by both incident and action-item linking flows.
  */
 export async function createJiraIssueAndLink(params: CreateAndLinkParams) {
-  const issue = await createJiraIssue({
-    projectKey: params.projectKey,
-    issueType: params.issueType,
-    summary: params.summary,
-    description: params.description,
-    labels: params.labels,
-    component: params.component,
+  const operationId = await enqueueJiraCreateOperation(params);
+  const issue = await processExternalOperation(operationId);
+  if (!issue) throw new Error('Jira issue creation is already being processed');
+  const link = await prisma.externalIssueLink.findUnique({
+    where: { provider_externalId: { provider: params.provider ?? 'JIRA', externalId: issue.id } },
   });
-
-  const link = await prisma.externalIssueLink.upsert({
-    where: {
-      provider_externalId: {
-        provider: params.provider ?? 'JIRA',
-        externalId: issue.id,
-      },
-    },
-    create: {
-      provider: params.provider ?? 'JIRA',
-      incidentId: params.incidentId ?? null,
-      actionItemId: params.actionItemId ?? null,
-      externalId: issue.id,
-      externalKey: issue.key,
-      externalUrl: issue.url,
-      externalStatus: issue.status ?? null,
-      externalAssignee: issue.assignee ?? null,
-      syncState: 'SYNCED',
-      lastSyncedAt: new Date(),
-    },
-    update: {
-      incidentId: params.incidentId ?? undefined,
-      actionItemId: params.actionItemId ?? undefined,
-      externalKey: issue.key,
-      externalUrl: issue.url,
-      externalStatus: issue.status ?? null,
-      externalAssignee: issue.assignee ?? null,
-      syncState: 'SYNCED',
-      lastSyncedAt: new Date(),
-    },
-  });
+  if (!link) throw new Error('Jira issue was created but its durable link is not available yet');
 
   await logAudit({
     action: 'jira.issue.created',
