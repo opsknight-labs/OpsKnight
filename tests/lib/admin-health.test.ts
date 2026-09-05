@@ -246,6 +246,24 @@ describe('calculateOperationalScore and weighted health logic', () => {
     expect(result.warningIssues).toHaveLength(0);
   });
 
+  it('treats informational deployment topology as known non-degrading evidence', () => {
+    const result = calculateOperationalScore([
+      ...mockBaseChecks,
+      {
+        id: 'worker-replica',
+        label: 'Local durable-job worker',
+        category: 'workers',
+        status: 'informational',
+        summary: 'Dedicated workers own durable jobs.',
+        details: [],
+      },
+    ]);
+
+    expect(result.scorePercent).toBe(100);
+    expect(result.overall).toBe('healthy');
+    expect(result.warningIssues).toHaveLength(0);
+  });
+
   it('assigns higher weight to database, migrations, encryption, and scheduler than auxiliary checks', () => {
     expect(CHECK_WEIGHTS.database).toBe(10);
     expect(CHECK_WEIGHTS.migrations).toBe(10);

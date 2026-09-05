@@ -107,6 +107,14 @@ const STATUS_CONFIG: Record<
     iconBg: 'bg-muted',
     iconText: 'text-muted-foreground',
   },
+  informational: {
+    label: 'Informational',
+    badgeClass: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30',
+    cardBorder: 'hover:border-sky-500/30 focus-within:border-sky-500/30',
+    icon: Info,
+    iconBg: 'bg-sky-500/10 dark:bg-sky-500/20',
+    iconText: 'text-sky-600 dark:text-sky-400',
+  },
 };
 
 const CATEGORY_META: Record<
@@ -255,7 +263,12 @@ export default function SystemHealthCenter({ initialReport }: Props) {
       if (activeTab !== 'all' && check.category !== activeTab) {
         return false;
       }
-      if (onlyAttention && check.status === 'healthy') {
+      if (
+        onlyAttention &&
+        check.status !== 'degraded' &&
+        check.status !== 'unhealthy' &&
+        check.status !== 'unknown'
+      ) {
         return false;
       }
       return true;
@@ -562,10 +575,14 @@ function OperationalBrief({ checks }: { checks: AdminHealthCheck[] }) {
       unhealthy: 0,
       degraded: 1,
       unknown: 2,
-      healthy: 3,
+      informational: 3,
+      healthy: 4,
     };
     return checks
-      .filter(check => check.status !== 'healthy' && check.required !== false)
+      .filter(
+        check =>
+          check.status !== 'healthy' && check.status !== 'informational' && check.required !== false
+      )
       .sort((left, right) => rank[left.status] - rank[right.status])
       .slice(0, 5);
   }, [checks]);
@@ -654,6 +671,7 @@ function HealthHistoryRibbon({
     degraded: 'Degraded',
     unhealthy: 'Action Required',
     unknown: 'Not Reported',
+    informational: 'Informational',
   };
 
   return (

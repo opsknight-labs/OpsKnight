@@ -8,7 +8,7 @@ import { getMetricsByIntegration, getMetricsSummary } from '@/lib/integrations/m
 import { getJobWorkerStatus } from '@/lib/job-worker';
 import { getRealtimeControlPlaneStatus } from '@/lib/realtime-change-control-plane';
 
-export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown' | 'informational';
 export type HealthCategory = 'database' | 'workers' | 'alerting' | 'security' | 'platform';
 
 /** Stable documentation channel; never pin health remediation to an aging release. */
@@ -268,7 +268,7 @@ export function calculateOperationalScore(checks: AdminHealthCheck[]): Operation
     } else if (check.status === 'degraded') {
       warningIssues.push(check);
       weightedScore += weight * 0.75;
-    } else if (check.status === 'healthy') {
+    } else if (check.status === 'healthy' || check.status === 'informational') {
       weightedScore += weight * 1.0;
     } else {
       // Unknown evidence must never inflate health. It is uncertainty, not success.
@@ -1324,7 +1324,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
     required: false,
     observedAt: now.toISOString(),
     status: !worker.running
-      ? 'unknown'
+      ? 'informational'
       : worker.lastError || workerSuccessAgeMs === null || workerSuccessAgeMs > 5 * MINUTE
         ? 'degraded'
         : 'healthy',
