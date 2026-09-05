@@ -441,6 +441,28 @@ export async function getIncidentCreationContext() {
   const [services, users, customFields, teams, templates] = await Promise.all([
     prisma.service.findMany({
       where: canCreateAll ? undefined : { team: teamScope },
+      select: {
+        id: true,
+        name: true,
+        autoCreateWarRoom: true,
+        slackChannel: true,
+        team: { select: { id: true, name: true } },
+        policy: {
+          select: {
+            id: true,
+            name: true,
+            steps: {
+              take: 1,
+              orderBy: { stepOrder: 'asc' },
+              include: {
+                targetUser: { select: { id: true, name: true, email: true, avatarUrl: true } },
+                targetTeam: { select: { id: true, name: true } },
+                targetSchedule: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
       orderBy: { name: 'asc' },
     }),
     prisma.user.findMany({

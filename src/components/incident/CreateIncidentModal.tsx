@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
+import { useActionState, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
@@ -16,18 +16,32 @@ import {
   Check,
   ChevronDown,
   ChevronsUpDown,
+  Eye,
+  FileText,
+  Globe,
   Hash,
   Info,
   LayoutTemplate,
   Loader2,
+  Lock,
+  MessageSquare,
+  PenLine,
+  Radio,
+  Search,
   Users,
+  User as UserIcon,
+  ShieldAlert,
+  Sparkles,
   X,
   Zap,
 } from 'lucide-react';
 
 import { createIncident, getIncidentCreationContext } from '@/app/(app)/incidents/actions';
 import CustomFieldInput from '@/components/CustomFieldInput';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
+import UserAvatar from '@/components/UserAvatar';
+import StatusBadge from '@/components/incident/StatusBadge';
+import PriorityBadge from '@/components/incident/PriorityBadge';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Command,
@@ -47,20 +61,46 @@ import {
 } from '@/components/ui/shadcn/form';
 import { Input } from '@/components/ui/shadcn/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/shadcn/select';
+import { Switch } from '@/components/ui/shadcn/switch';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { cn } from '@/lib/utils';
 
-type Service = { id: string; name: string };
-type UserRecord = { id: string; name: string; email: string; avatarUrl?: string | null };
+type EscalationStep = {
+  id: string;
+  stepOrder: number;
+  delayMinutes: number;
+  targetType: string;
+  targetUser?: { id: string; name: string; email: string; avatarUrl?: string | null } | null;
+  targetTeam?: { id: string; name: string } | null;
+  targetSchedule?: { id: string; name: string } | null;
+};
+
+type EscalationPolicy = {
+  id: string;
+  name: string;
+  steps: EscalationStep[];
+};
+
+type Service = {
+  id: string;
+  name: string;
+  team?: { id: string; name: string } | null;
+  policy?: EscalationPolicy | null;
+  autoCreateWarRoom?: boolean;
+  slackChannel?: string | null;
+};
+
+type UserRecord = {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+  gender?: string | null;
+};
+
 type Team = { id: string; name: string };
+
 type Template = {
   id: string;
   name: string;
@@ -71,6 +111,7 @@ type Template = {
   defaultPriority?: string | null;
   defaultService?: { id: string; name: string } | null;
 };
+
 type CustomField = {
   id: string;
   name: string;
@@ -94,84 +135,258 @@ const formSchema = z.object({
   title: z.string().min(5, { message: 'Title must be at least 5 characters.' }).max(255),
   description: z.string().optional(),
   serviceId: z
-    .string({ required_error: 'Please select a service.' })
-    .min(1, 'Please select a service.'),
+    .string({ required_error: 'Please select an affected service.' })
+    .min(1, 'Please select an affected service.'),
   urgency: z.enum(['HIGH', 'MEDIUM', 'LOW']),
   priority: z.string().optional(),
   assigneeId: z.string().optional(),
+  visibility: z.enum(['PUBLIC', 'PRIVATE']),
   dedupKey: z.string().max(200).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
-
 type OpenOptions = { serviceId?: string; templateId?: string } | null;
 
-const FIELD_LABEL_CLASS = 'text-xs font-semibold text-foreground';
+const FIELD_LABEL_CLASS = 'text-xs font-semibold text-foreground flex items-center justify-between';
 const CONTROL_CLASS =
-  'h-10 rounded-lg border-border/70 bg-background shadow-sm transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-primary/20';
+  'h-10 rounded-xl border-border/80 bg-background shadow-2xs transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-primary/20';
 
 const URGENCY_OPTIONS = [
   {
-    value: 'LOW' as const,
-    label: 'Low',
-    icon: Info,
+    value: 'HIGH' as const,
+    label: 'High',
+    sublabel: 'Immediate Paging',
+    desc: 'Alerts on-call responders immediately via their configured notification channels',
+    icon: Zap,
     selectedClass:
-      'border-emerald-500/60 bg-emerald-500/12 text-emerald-700 shadow-sm ring-1 ring-emerald-500/20 dark:text-emerald-300',
+      'border-rose-500/50 bg-rose-500/10 text-rose-700 ring-1 ring-rose-500/30 shadow-2xs dark:text-rose-300',
     idleClass:
-      'border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-700/80 hover:border-emerald-500/40 hover:bg-emerald-500/[0.08] dark:text-emerald-300/80',
+      'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground',
+    iconClass: 'text-rose-500',
+    badgeVariant: 'danger' as const,
   },
   {
     value: 'MEDIUM' as const,
     label: 'Medium',
+    sublabel: 'Standard Triage',
+    desc: 'Pages on-call responders via their configured notification preferences',
     icon: AlertCircle,
     selectedClass:
-      'border-amber-500/60 bg-amber-500/12 text-amber-700 shadow-sm ring-1 ring-amber-500/20 dark:text-amber-300',
+      'border-amber-500/50 bg-amber-500/10 text-amber-700 ring-1 ring-amber-500/30 shadow-2xs dark:text-amber-300',
     idleClass:
-      'border-amber-500/20 bg-amber-500/[0.04] text-amber-700/80 hover:border-amber-500/40 hover:bg-amber-500/[0.08] dark:text-amber-300/80',
+      'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground',
+    iconClass: 'text-amber-500',
+    badgeVariant: 'warning' as const,
   },
   {
-    value: 'HIGH' as const,
-    label: 'High',
-    icon: AlertTriangle,
+    value: 'LOW' as const,
+    label: 'Low',
+    sublabel: 'Non-Urgent',
+    desc: 'Queued for standard triage review without active paging alerts',
+    icon: Info,
     selectedClass:
-      'border-rose-500/60 bg-rose-500/12 text-rose-700 shadow-sm ring-1 ring-rose-500/20 dark:text-rose-300',
+      'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/30 shadow-2xs dark:text-emerald-300',
     idleClass:
-      'border-rose-500/20 bg-rose-500/[0.04] text-rose-700/80 hover:border-rose-500/40 hover:bg-rose-500/[0.08] dark:text-rose-300/80',
+      'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground',
+    iconClass: 'text-emerald-500',
+    badgeVariant: 'neutral' as const,
   },
 ];
 
 const PRIORITY_OPTIONS = [
   {
     value: 'P1',
+    label: 'Crisis',
+    description: 'Critical service outage affecting all customers',
     selectedClass:
-      'bg-rose-500/12 text-rose-700 ring-1 ring-rose-500/30 shadow-sm dark:text-rose-300',
+      'bg-rose-500/15 text-rose-700 border-rose-500/40 ring-1 ring-rose-500/30 shadow-2xs dark:text-rose-300',
     dotClass: 'bg-rose-500',
   },
   {
     value: 'P2',
+    label: 'High',
+    description: 'Major functionality degraded with significant impact',
     selectedClass:
-      'bg-orange-500/12 text-orange-700 ring-1 ring-orange-500/30 shadow-sm dark:text-orange-300',
+      'bg-orange-500/15 text-orange-700 border-orange-500/40 ring-1 ring-orange-500/30 shadow-2xs dark:text-orange-300',
     dotClass: 'bg-orange-500',
   },
   {
     value: 'P3',
+    label: 'Medium',
+    description: 'Partial degradation or non-critical feature impaired',
     selectedClass:
-      'bg-amber-500/12 text-amber-700 ring-1 ring-amber-500/30 shadow-sm dark:text-amber-300',
+      'bg-amber-500/15 text-amber-700 border-amber-500/40 ring-1 ring-amber-500/30 shadow-2xs dark:text-amber-300',
     dotClass: 'bg-amber-500',
   },
   {
     value: 'P4',
+    label: 'Low',
+    description: 'Minor issue with reasonable workaround available',
     selectedClass:
-      'bg-sky-500/12 text-sky-700 ring-1 ring-sky-500/30 shadow-sm dark:text-sky-300',
+      'bg-sky-500/15 text-sky-700 border-sky-500/40 ring-1 ring-sky-500/30 shadow-2xs dark:text-sky-300',
     dotClass: 'bg-sky-500',
   },
   {
     value: 'P5',
+    label: 'Info',
+    description: 'Planned maintenance or informational operational notice',
     selectedClass:
-      'bg-slate-500/12 text-slate-700 ring-1 ring-slate-500/30 shadow-sm dark:text-slate-300',
+      'bg-slate-500/15 text-slate-700 border-slate-500/40 ring-1 ring-slate-500/30 shadow-2xs dark:text-slate-300',
     dotClass: 'bg-slate-400',
   },
 ];
+
+const QUICK_SNIPPETS = [
+  { label: '+ Symptoms', snippet: '\n\n**Symptoms:**\n- ' },
+  { label: '+ Impact', snippet: '\n\n**Customer Impact:**\n- ' },
+  { label: '+ Mitigation', snippet: '\n\n**Mitigation Steps:**\n- ' },
+];
+
+function slugifyChannel(title: string): string {
+  if (!title.trim()) return 'incident-title';
+  const clean = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24);
+  return clean || 'incident-title';
+}
+
+function parseInlineMarkdown(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^\)]+\))/g;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(text.slice(lastIdx, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('**') && token.endsWith('**')) {
+      parts.push(
+        <strong key={match.index} className="font-semibold text-foreground">
+          {token.slice(2, -2)}
+        </strong>
+      );
+    } else if (token.startsWith('`') && token.endsWith('`')) {
+      parts.push(
+        <code
+          key={match.index}
+          className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground border border-border/60"
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
+    } else if (token.startsWith('[') && token.includes('](')) {
+      const closeBracket = token.indexOf('](');
+      const label = token.slice(1, closeBracket);
+      parts.push(
+        <span key={match.index} className="text-primary underline font-medium">
+          {label}
+        </span>
+      );
+    }
+    lastIdx = regex.lastIndex;
+  }
+  if (lastIdx < text.length) {
+    parts.push(text.slice(lastIdx));
+  }
+  return parts.length > 0 ? parts : text;
+}
+
+function renderMarkdown(content: string): React.ReactNode {
+  if (!content.trim()) {
+    return (
+      <div className="flex flex-col items-center justify-center py-6 text-center text-xs text-muted-foreground">
+        <FileText className="h-5 w-5 mb-1.5 opacity-40" />
+        <p className="font-medium">No description provided</p>
+        <p className="text-[11px] opacity-75 mt-0.5">
+          Switch to the Write tab to add incident context and details.
+        </p>
+      </div>
+    );
+  }
+
+  const lines = content.split('\n');
+  const elements: React.ReactNode[] = [];
+  let inCodeBlock = false;
+  let codeBlockLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.startsWith('```')) {
+      if (inCodeBlock) {
+        elements.push(
+          <pre
+            key={`code-${i}`}
+            className="my-2 rounded-lg bg-muted/70 p-3 font-mono text-xs overflow-x-auto border border-border/70 text-foreground"
+          >
+            <code>{codeBlockLines.join('\n')}</code>
+          </pre>
+        );
+        codeBlockLines = [];
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.push(line);
+      continue;
+    }
+
+    if (line.startsWith('### ')) {
+      elements.push(
+        <h4 key={i} className="text-xs font-bold text-foreground mt-2 mb-1">
+          {parseInlineMarkdown(line.slice(4))}
+        </h4>
+      );
+    } else if (line.startsWith('## ')) {
+      elements.push(
+        <h3 key={i} className="text-sm font-bold text-foreground mt-2.5 mb-1">
+          {parseInlineMarkdown(line.slice(3))}
+        </h3>
+      );
+    } else if (line.startsWith('# ')) {
+      elements.push(
+        <h2 key={i} className="text-base font-bold text-foreground mt-3 mb-1.5">
+          {parseInlineMarkdown(line.slice(2))}
+        </h2>
+      );
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      elements.push(
+        <li key={i} className="ml-4 list-disc text-xs text-foreground/90 leading-relaxed">
+          {parseInlineMarkdown(line.slice(2))}
+        </li>
+      );
+    } else if (line.trim() === '') {
+      elements.push(<div key={i} className="h-1.5" />);
+    } else {
+      elements.push(
+        <p key={i} className="text-xs text-foreground/90 leading-relaxed">
+          {parseInlineMarkdown(line)}
+        </p>
+      );
+    }
+  }
+
+  if (inCodeBlock && codeBlockLines.length > 0) {
+    elements.push(
+      <pre
+        key="code-end"
+        className="my-2 rounded-lg bg-muted/70 p-3 font-mono text-xs overflow-x-auto border border-border/70 text-foreground"
+      >
+        <code>{codeBlockLines.join('\n')}</code>
+      </pre>
+    );
+  }
+
+  return <div className="space-y-1">{elements}</div>;
+}
 
 function CreateIncidentModalContent({
   onClose,
@@ -187,9 +402,13 @@ function CreateIncidentModalContent({
   const [loading, setLoading] = useState(true);
   const [contextError, setContextError] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState(openOptions?.templateId || '');
+  const [templateSearchOpen, setTemplateSearchOpen] = useState(false);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [serviceOpen, setServiceOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+  const [descTab, setDescTab] = useState<'write' | 'preview'>('write');
+  const [createWarRoom, setCreateWarRoom] = useState(true);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -200,9 +419,17 @@ function CreateIncidentModalContent({
       urgency: 'HIGH',
       priority: '',
       assigneeId: 'unassigned',
+      visibility: 'PUBLIC',
       dedupKey: '',
     },
   });
+
+  const watchedTitle = form.watch('title');
+  const watchedServiceId = form.watch('serviceId');
+  const watchedUrgency = form.watch('urgency');
+  const watchedPriority = form.watch('priority');
+  const watchedAssigneeId = form.watch('assigneeId');
+  const watchedVisibility = form.watch('visibility');
 
   const resetForm = useCallback(() => {
     form.reset({
@@ -212,6 +439,7 @@ function CreateIncidentModalContent({
       urgency: 'HIGH',
       priority: '',
       assigneeId: 'unassigned',
+      visibility: 'PUBLIC',
       dedupKey: '',
     });
   }, [form, openOptions?.serviceId]);
@@ -225,6 +453,7 @@ function CreateIncidentModalContent({
         urgency: template.defaultUrgency,
         priority: template.defaultPriority || '',
         assigneeId: 'unassigned',
+        visibility: 'PUBLIC',
         dedupKey: '',
       });
     },
@@ -243,7 +472,10 @@ function CreateIncidentModalContent({
 
         if (openOptions?.templateId) {
           const matched = ctx.templates.find(template => template.id === openOptions.templateId);
-          if (matched) applyTemplate(matched);
+          if (matched) {
+            setSelectedTemplateId(matched.id);
+            applyTemplate(matched);
+          }
         }
       })
       .catch(() => {
@@ -259,7 +491,7 @@ function CreateIncidentModalContent({
 
   useEffect(() => {
     if (contextData && !loading) {
-      const timer = setTimeout(() => titleInputRef.current?.focus(), 100);
+      const timer = setTimeout(() => titleInputRef.current?.focus(), 60);
       return () => clearTimeout(timer);
     }
   }, [contextData, loading]);
@@ -285,7 +517,9 @@ function CreateIncidentModalContent({
       formData.append('description', data.description || '');
       formData.append('serviceId', data.serviceId);
       formData.append('urgency', data.urgency);
+      formData.append('visibility', data.visibility);
       if (data.priority) formData.append('priority', data.priority);
+      if (createWarRoom) formData.append('createWarRoom', 'true');
 
       if (data.assigneeId && data.assigneeId !== 'unassigned') {
         if (data.assigneeId.startsWith('team:')) {
@@ -307,7 +541,7 @@ function CreateIncidentModalContent({
         formAction(formData);
       });
     },
-    [customFieldValues, formAction]
+    [customFieldValues, formAction, createWarRoom]
   );
 
   const handleKeyDown = useCallback(
@@ -320,199 +554,309 @@ function CreateIncidentModalContent({
     [form, onSubmit]
   );
 
-  const getInitials = (name: string) =>
-    name
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .substring(0, 2)
-      .toUpperCase();
+  const services = useMemo(() => contextData?.services || [], [contextData?.services]);
+  const users = useMemo(() => contextData?.users || [], [contextData?.users]);
+  const teams = useMemo(() => contextData?.teams || [], [contextData?.teams]);
+  const templates = useMemo(() => contextData?.templates || [], [contextData?.templates]);
+  const customFields = useMemo(() => contextData?.customFields || [], [contextData?.customFields]);
 
-  const services = contextData?.services || [];
-  const users = contextData?.users || [];
-  const teams = contextData?.teams || [];
-  const templates = contextData?.templates || [];
-  const customFields = contextData?.customFields || [];
-  const activeTemplate = templates.find(template => template.id === selectedTemplateId);
+  const selectedService = useMemo(
+    () => services.find(s => s.id === watchedServiceId),
+    [services, watchedServiceId]
+  );
+
+  const selectedAssigneeUser = useMemo(
+    () => users.find(u => watchedAssigneeId === `user:${u.id}` || watchedAssigneeId === u.id),
+    [users, watchedAssigneeId]
+  );
+
+  const selectedAssigneeTeam = useMemo(
+    () => teams.find(t => watchedAssigneeId === `team:${t.id}` || watchedAssigneeId === t.id),
+    [teams, watchedAssigneeId]
+  );
+
+  const selectedPriorityConfig = useMemo(
+    () => PRIORITY_OPTIONS.find(p => p.value === watchedPriority),
+    [watchedPriority]
+  );
+
+  const selectedTemplate = useMemo(
+    () => templates.find(t => t.id === selectedTemplateId),
+    [templates, selectedTemplateId]
+  );
+
+  const appendSnippet = (snippet: string) => {
+    const current = form.getValues('description') || '';
+    form.setValue('description', current + snippet, { shouldValidate: true });
+  };
 
   return (
     <DialogPrimitive.Content
-      className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[94vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-primary/15 bg-card shadow-2xl outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+      className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[95vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xl outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
       onKeyDown={handleKeyDown}
     >
-      <div className="h-1 w-full shrink-0 bg-gradient-to-r from-primary to-primary/60" />
-
-      <div className="relative shrink-0 overflow-hidden border-b border-border/70 bg-gradient-to-br from-primary/[0.07] via-card to-card px-6 py-5">
-        <div className="relative flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 shadow-sm">
-              <Zap className="h-4 w-4 text-primary" />
+      {/* Header */}
+      <div className="relative shrink-0 border-b border-zinc-800/80 bg-gradient-to-b from-[#18181b] via-[#121216] to-[#09090b] px-5 sm:px-6 py-4 text-white shadow-2xs">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.06),transparent_60%)] pointer-events-none" />
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-700/60 bg-white/10 shadow-xs backdrop-blur-md">
+              <Zap className="h-4.5 w-4.5 text-white" />
             </div>
             <div className="min-w-0">
-              <DialogPrimitive.Title className="text-lg font-bold tracking-tight text-foreground">
-                Create Incident
-              </DialogPrimitive.Title>
-              <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
-                Log an incident and start the response workflow.
+              <div className="flex items-center gap-2">
+                <DialogPrimitive.Title className="text-base sm:text-lg font-bold tracking-tight text-white">
+                  Declare Incident
+                </DialogPrimitive.Title>
+                <Badge
+                  variant="neutral"
+                  size="xs"
+                  className="text-[10px] font-semibold uppercase bg-white/10 border-zinc-700/60 text-zinc-300"
+                >
+                  Triage Mode
+                </Badge>
+              </div>
+              <DialogPrimitive.Description className="text-xs text-zinc-400 truncate">
+                Notify on-call responders and initiate structured incident resolution.
               </DialogPrimitive.Description>
             </div>
           </div>
 
-          <DialogPrimitive.Close
-            aria-label="Close create incident dialog"
-            title="Close"
-            className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/80 bg-background/85 text-muted-foreground shadow-sm backdrop-blur-sm transition-all hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-600 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:ring-offset-2 focus:ring-offset-card dark:hover:text-rose-300"
-          >
-            <X className="h-4 w-4 transition-transform group-hover:rotate-90" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-zinc-500 bg-white/5 border border-zinc-700/60 px-1.5 py-0.5 rounded">
+              Esc
+            </span>
+            <DialogPrimitive.Close asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                aria-label="Close create incident dialog"
+                title="Close (Esc)"
+              >
+                <X size={16} className="h-4 w-4 shrink-0" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </DialogPrimitive.Close>
+          </div>
         </div>
       </div>
 
+      {/* Skeleton / Zero Layout Shift Loader */}
       {loading && (
-        <div className="flex min-h-72 flex-1 items-center justify-center px-6 py-16">
-          <div className="flex flex-col items-center gap-3 text-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/5">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">Preparing incident form</p>
-              <p className="mt-1 text-xs text-muted-foreground">Loading services and responders...</p>
-            </div>
+        <div className="flex-1 space-y-6 overflow-y-auto px-5 sm:px-6 py-6 animate-pulse">
+          <div className="h-14 rounded-xl bg-muted/50 border border-border/60" />
+          <div className="space-y-2">
+            <div className="h-4 w-28 bg-muted rounded" />
+            <div className="h-10 rounded-xl bg-muted/60" />
           </div>
+          <div className="space-y-2">
+            <div className="h-4 w-32 bg-muted rounded" />
+            <div className="h-24 rounded-xl bg-muted/60" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="h-10 rounded-xl bg-muted/60" />
+            <div className="h-10 rounded-xl bg-muted/60" />
+          </div>
+          <div className="h-10 rounded-xl bg-muted/60" />
         </div>
       )}
 
+      {/* Error state */}
       {!loading && (contextError || !contextData) && (
         <div className="flex min-h-72 flex-1 items-center justify-center px-6 py-16">
           <div className="max-w-sm text-center">
-            <AlertTriangle className="mx-auto h-6 w-6 text-muted-foreground" />
-            <p className="mt-3 text-sm font-semibold text-foreground">Unable to load incident context</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Close this dialog and try again. No incident has been created.
+            <AlertTriangle className="mx-auto h-7 w-7 text-amber-500" />
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              Unable to load incident context
             </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Could not retrieve workspace services or responder details. Please close and try
+              again.
+            </p>
+            <Button variant="outline" size="sm" onClick={onClose} className="mt-4">
+              Dismiss
+            </Button>
           </div>
         </div>
       )}
 
+      {/* Permission denied */}
       {!loading && contextData && !contextData.canCreateIncident && (
         <div className="flex min-h-72 flex-1 items-center justify-center px-6 py-16">
           <div className="max-w-sm text-center">
-            <AlertTriangle className="mx-auto h-6 w-6 text-muted-foreground" />
-            <p className="mt-3 text-sm font-semibold text-foreground">Incident creation unavailable</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Your current permissions do not allow incident creation.
+            <ShieldAlert className="mx-auto h-7 w-7 text-rose-500" />
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              Incident creation restricted
             </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Your current account role does not have operational permissions to declare incidents.
+            </p>
+            <Button variant="outline" size="sm" onClick={onClose} className="mt-4">
+              Close
+            </Button>
           </div>
         </div>
       )}
 
+      {/* Form Content */}
       {!loading && contextData?.canCreateIncident && (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
-            <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
-              <section className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.05] via-background to-background p-4 shadow-sm">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <LayoutTemplate className="h-4 w-4 text-primary" />
+            <div className="flex-1 space-y-5 overflow-y-auto px-5 sm:px-6 py-5">
+              {/* Revamped Incident Template Area: No Scroller, Clear Wrap & Search */}
+              {templates.length > 0 && (
+                <div className="rounded-xl border border-border/80 bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2 px-1">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <LayoutTemplate className="h-3.5 w-3.5 text-primary" />
+                      <span>Incident Templates</span>
+                      {selectedTemplate && (
+                        <span className="text-[10px] font-normal text-muted-foreground ml-1">
+                          (Active:{' '}
+                          <span className="font-semibold text-primary">
+                            {selectedTemplate.name}
+                          </span>
+                          )
+                        </span>
+                      )}
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-foreground">Incident template</p>
-                      <p className="text-[11px] text-muted-foreground">Optional · prefill common incident details</p>
+                    <div className="flex items-center gap-2">
+                      {templates.length > 4 && (
+                        <Popover open={templateSearchOpen} onOpenChange={setTemplateSearchOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[11px] font-medium gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                            >
+                              <Search className="h-3 w-3" />
+                              Browse All ({templates.length})
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-0" align="end">
+                            <Command>
+                              <CommandInput placeholder="Search templates..." className="h-9" />
+                              <CommandList>
+                                <CommandEmpty>No template found.</CommandEmpty>
+                                <CommandGroup heading="Available Templates">
+                                  {templates.map(tpl => (
+                                    <CommandItem
+                                      key={tpl.id}
+                                      value={tpl.name}
+                                      onSelect={() => {
+                                        setSelectedTemplateId(tpl.id);
+                                        applyTemplate(tpl);
+                                        setTemplateSearchOpen(false);
+                                      }}
+                                      className="cursor-pointer flex items-center justify-between"
+                                    >
+                                      <div className="flex flex-col min-w-0 pr-2">
+                                        <span className="font-semibold text-xs truncate">
+                                          {tpl.name}
+                                        </span>
+                                        {tpl.description && (
+                                          <span className="text-[10px] text-muted-foreground truncate">
+                                            {tpl.description}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {tpl.id === selectedTemplateId && (
+                                        <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                                      )}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                      <Link
+                        href="/incidents/templates"
+                        onClick={onClose}
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                      >
+                        Manage
+                        <ArrowUpRight className="h-3 w-3" />
+                      </Link>
                     </div>
                   </div>
-                  <Link
-                    href="/incidents/templates"
-                    onClick={onClose}
-                    className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-primary transition-opacity hover:opacity-80"
-                  >
-                    Manage
-                    <ArrowUpRight className="h-3 w-3" />
-                  </Link>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={selectedTemplateId || 'none'}
-                    onValueChange={value => {
-                      if (value === 'none') {
-                        setSelectedTemplateId('');
-                        resetForm();
-                        return;
-                      }
-
-                      setSelectedTemplateId(value);
-                      const template = templates.find(item => item.id === value);
-                      if (template) applyTemplate(template);
-                    }}
-                  >
-                    <SelectTrigger className={cn('flex-1 text-sm', CONTROL_CLASS)}>
-                      <SelectValue placeholder="Start from scratch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Start from scratch</SelectItem>
-                      {templates.map(template => (
-                        <SelectItem key={template.id} value={template.id}>
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="truncate font-medium">{template.name}</span>
-                            {template.defaultService && (
-                              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                {template.defaultService.name}
-                              </span>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {selectedTemplateId && (
-                    <Button
+                  {/* Wrapped Quick Template Pills (No horizontal cutoffs) */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
                       type="button"
-                      variant="outline"
-                      className="h-10 rounded-lg px-3 text-xs"
                       onClick={() => {
                         setSelectedTemplateId('');
                         resetForm();
                       }}
+                      className={cn(
+                        'text-xs font-medium px-3 py-1.5 rounded-lg border transition-all cursor-pointer',
+                        !selectedTemplateId
+                          ? 'bg-primary/10 border-primary/40 text-primary font-semibold shadow-2xs'
+                          : 'bg-background border-border/70 text-muted-foreground hover:text-foreground'
+                      )}
                     >
-                      Clear
-                    </Button>
-                  )}
-                </div>
+                      Start from scratch
+                    </button>
 
-                {activeTemplate && (
-                  <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-primary/10 bg-primary/[0.04] px-3 py-2">
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                    <p className="text-[11px] leading-relaxed text-muted-foreground">
-                      <span className="font-semibold text-foreground">{activeTemplate.name}</span> applied
-                      {activeTemplate.description ? ` · ${activeTemplate.description}` : ''}
-                    </p>
+                    {templates.slice(0, 6).map(tpl => {
+                      const isActive = selectedTemplateId === tpl.id;
+                      return (
+                        <button
+                          key={tpl.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTemplateId(tpl.id);
+                            applyTemplate(tpl);
+                          }}
+                          className={cn(
+                            'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all cursor-pointer',
+                            isActive
+                              ? 'bg-primary/10 border-primary/40 text-primary font-semibold shadow-2xs'
+                              : 'bg-background border-border/70 text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
+                          <span>{tpl.name}</span>
+                          {tpl.defaultService && (
+                            <span className="text-[10px] opacity-75 bg-muted px-1 py-0.5 rounded">
+                              {tpl.defaultService.name}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
-              </section>
-
-              <section className="space-y-4">
-                <div>
-                  <p className="text-xs font-semibold text-foreground">Incident details</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Describe what is happening and the current impact.</p>
                 </div>
+              )}
 
+              {/* Title & Quick Impact Tagging (Feature 6) */}
+              <div className="space-y-3.5">
                 <FormField
                   control={form.control}
                   name="title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className={FIELD_LABEL_CLASS}>Title</FormLabel>
+                      <FormLabel className={FIELD_LABEL_CLASS}>
+                        <span>
+                          Incident Title <span className="text-rose-500">*</span>
+                        </span>
+                        <span className="text-[10px] font-normal text-muted-foreground tabular-nums">
+                          {field.value?.length || 0}/255
+                        </span>
+                      </FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="API latency spike in EU"
+                          placeholder="e.g. Primary database connection pool exhausted in EU-West"
                           className={cn(CONTROL_CLASS, 'px-3.5 text-sm font-medium')}
                           {...field}
                           ref={element => {
                             field.ref(element);
-                            (titleInputRef as React.MutableRefObject<HTMLInputElement | null>).current = element;
+                            (
+                              titleInputRef as React.MutableRefObject<HTMLInputElement | null>
+                            ).current = element;
                           }}
                         />
                       </FormControl>
@@ -521,38 +865,208 @@ function CreateIncidentModalContent({
                   )}
                 />
 
+                {/* Feature 6: Quick Impact Tagging (Customer-Facing vs Internal) */}
                 <FormField
                   control={form.control}
-                  name="description"
+                  name="visibility"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={FIELD_LABEL_CLASS}>Description</FormLabel>
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className={FIELD_LABEL_CLASS}>
+                        <span>Impact Scope & Visibility</span>
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          {field.value === 'PUBLIC'
+                            ? 'Visible on Public Status Pages'
+                            : 'Internal Response Teams Only'}
+                        </span>
+                      </FormLabel>
                       <FormControl>
-                        <Textarea
-                          placeholder="Add impact, symptoms, alerts, or any context responders should know..."
-                          className="min-h-[88px] resize-y rounded-lg border-border/70 bg-background px-3.5 py-3 text-sm leading-relaxed shadow-sm transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-primary/20"
-                          {...field}
-                        />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            aria-pressed={field.value === 'PUBLIC'}
+                            onClick={() => field.onChange('PUBLIC')}
+                            className={cn(
+                              'flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer',
+                              field.value === 'PUBLIC'
+                                ? 'border-sky-500/50 bg-sky-500/10 ring-1 ring-sky-500/30 shadow-2xs'
+                                : 'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
+                                field.value === 'PUBLIC'
+                                  ? 'border-sky-500/40 bg-sky-500/20 text-sky-600 dark:text-sky-400'
+                                  : 'border-border/80 bg-muted/50 text-muted-foreground'
+                              )}
+                            >
+                              <Globe className="h-4 w-4 shrink-0" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-bold text-foreground">
+                                  Customer-Facing Outage
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  size="xs"
+                                  className={cn(
+                                    'text-[9px] font-semibold',
+                                    field.value === 'PUBLIC'
+                                      ? 'border-sky-500/40 text-sky-600 dark:text-sky-400 bg-sky-500/10'
+                                      : 'opacity-60'
+                                  )}
+                                >
+                                  PUBLIC
+                                </Badge>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
+                                Visible on public status pages & client notification broadcasts.
+                              </p>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            aria-pressed={field.value === 'PRIVATE'}
+                            onClick={() => field.onChange('PRIVATE')}
+                            className={cn(
+                              'flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer',
+                              field.value === 'PRIVATE'
+                                ? 'border-slate-500/50 bg-slate-500/10 ring-1 ring-slate-500/30 shadow-2xs'
+                                : 'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
+                                field.value === 'PRIVATE'
+                                  ? 'border-slate-500/40 bg-slate-500/20 text-slate-700 dark:text-slate-300'
+                                  : 'border-border/80 bg-muted/50 text-muted-foreground'
+                              )}
+                            >
+                              <Lock className="h-4 w-4 shrink-0" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-bold text-foreground">
+                                  Internal System Only
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  size="xs"
+                                  className={cn(
+                                    'text-[9px] font-semibold',
+                                    field.value === 'PRIVATE'
+                                      ? 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
+                                      : 'opacity-60'
+                                  )}
+                                >
+                                  INTERNAL
+                                </Badge>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
+                                Restricted to internal response teams; hidden from status pages.
+                              </p>
+                            </div>
+                          </button>
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </section>
 
-              <section className="space-y-4 border-t border-border/70 pt-5">
-                <div>
-                  <p className="text-xs font-semibold text-foreground">Routing & impact</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Choose the affected service and how the incident should be routed.</p>
-                </div>
+                {/* Feature 4: Description with Write & Preview Tabs */}
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <FormLabel className={FIELD_LABEL_CLASS}>
+                            <span>Summary & Context</span>
+                          </FormLabel>
+                          <div className="flex items-center rounded-lg border border-border/70 bg-muted/40 p-0.5 text-[11px]">
+                            <button
+                              type="button"
+                              onClick={() => setDescTab('write')}
+                              className={cn(
+                                'flex items-center gap-1 px-2 py-0.5 rounded-md font-medium transition-all cursor-pointer',
+                                descTab === 'write'
+                                  ? 'bg-background text-foreground shadow-2xs font-semibold'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              )}
+                            >
+                              <PenLine className="h-3 w-3" />
+                              Write
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDescTab('preview')}
+                              className={cn(
+                                'flex items-center gap-1 px-2 py-0.5 rounded-md font-medium transition-all cursor-pointer',
+                                descTab === 'preview'
+                                  ? 'bg-background text-foreground shadow-2xs font-semibold'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              )}
+                            >
+                              <Eye className="h-3 w-3" />
+                              Preview
+                            </button>
+                          </div>
+                        </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {descTab === 'write' && (
+                          <div className="flex items-center gap-1.5">
+                            {QUICK_SNIPPETS.map(snip => (
+                              <button
+                                key={snip.label}
+                                type="button"
+                                onClick={() => appendSnippet(snip.snippet)}
+                                className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-border/70 bg-background text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors cursor-pointer"
+                              >
+                                {snip.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <FormControl>
+                        {descTab === 'write' ? (
+                          <Textarea
+                            placeholder="Provide details on user impact, active symptoms, error rates, and initial hypotheses... (Markdown supported)"
+                            className="min-h-[88px] resize-y rounded-xl border-border/80 bg-background px-3.5 py-2.5 text-sm leading-relaxed shadow-2xs transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-primary/20"
+                            {...field}
+                          />
+                        ) : (
+                          <div className="min-h-[88px] rounded-xl border border-border/80 bg-background/50 px-3.5 py-2.5 shadow-2xs">
+                            {renderMarkdown(field.value || '')}
+                          </div>
+                        )}
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Service and Assignee Routing */}
+              <div className="space-y-3 pt-1 border-t border-border/60">
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  {/* Affected Service */}
                   <FormField
                     control={form.control}
                     name="serviceId"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel className={FIELD_LABEL_CLASS}>Service</FormLabel>
+                        <FormLabel className={FIELD_LABEL_CLASS}>
+                          <span>
+                            Affected Service <span className="text-rose-500">*</span>
+                          </span>
+                        </FormLabel>
                         <Popover open={serviceOpen} onOpenChange={setServiceOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -560,23 +1074,32 @@ function CreateIncidentModalContent({
                                 type="button"
                                 variant="outline"
                                 role="combobox"
-                                className={cn(CONTROL_CLASS, 'w-full justify-between px-3 text-sm font-normal')}
+                                className={cn(
+                                  CONTROL_CLASS,
+                                  'w-full justify-between px-3 text-sm font-normal'
+                                )}
                               >
                                 {field.value ? (
                                   <span className="flex min-w-0 items-center gap-2">
                                     <Activity className="h-3.5 w-3.5 shrink-0 text-primary" />
-                                    <span className="truncate font-medium">
-                                      {services.find(service => service.id === field.value)?.name}
+                                    <span className="truncate font-semibold text-foreground">
+                                      {selectedService?.name || 'Selected'}
                                     </span>
                                   </span>
                                 ) : (
-                                  <span className="text-muted-foreground">Select service...</span>
+                                  <span className="text-muted-foreground flex items-center gap-1.5">
+                                    <Activity className="h-3.5 w-3.5 opacity-50" />
+                                    Select affected service...
+                                  </span>
                                 )}
                                 <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <PopoverContent
+                            className="w-[var(--radix-popover-trigger-width)] p-0"
+                            align="start"
+                          >
                             <Command>
                               <CommandInput placeholder="Search services..." className="h-9" />
                               <CommandList>
@@ -587,157 +1110,19 @@ function CreateIncidentModalContent({
                                       key={service.id}
                                       value={service.name}
                                       onSelect={() => {
-                                        form.setValue('serviceId', service.id, { shouldValidate: true });
+                                        form.setValue('serviceId', service.id, {
+                                          shouldValidate: true,
+                                        });
                                         setServiceOpen(false);
                                       }}
-                                      className="cursor-pointer"
+                                      className="cursor-pointer flex items-center justify-between"
                                     >
-                                      <Check
-                                        className={cn(
-                                          'mr-2 h-3.5 w-3.5',
-                                          service.id === field.value ? 'opacity-100' : 'opacity-0'
-                                        )}
-                                      />
-                                      <Activity className="mr-2 h-3.5 w-3.5 text-primary" />
-                                      <span>{service.name}</span>
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="assigneeId"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel className={FIELD_LABEL_CLASS}>Assignee</FormLabel>
-                        <Popover open={assigneeOpen} onOpenChange={setAssigneeOpen}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                role="combobox"
-                                className={cn(CONTROL_CLASS, 'w-full justify-between px-3 text-sm font-normal')}
-                              >
-                                {field.value && field.value !== 'unassigned' ? (
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    {field.value.startsWith('team:') ? (
-                                      <>
-                                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                                          <Users className="h-3 w-3" />
-                                        </span>
-                                        <span className="truncate font-medium">
-                                          {teams.find(team => `team:${team.id}` === field.value)?.name}
-                                        </span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Avatar className="h-5 w-5 shrink-0 border border-border">
-                                          <AvatarImage
-                                            src={
-                                              users.find(
-                                                user => `user:${user.id}` === field.value || user.id === field.value
-                                              )?.avatarUrl || undefined
-                                            }
-                                          />
-                                          <AvatarFallback className="bg-primary/10 text-[9px] text-primary">
-                                            {getInitials(
-                                              users.find(
-                                                user => `user:${user.id}` === field.value || user.id === field.value
-                                              )?.name || '?'
-                                            )}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                        <span className="truncate font-medium">
-                                          {
-                                            users.find(
-                                              user => `user:${user.id}` === field.value || user.id === field.value
-                                            )?.name
-                                          }
-                                        </span>
-                                      </>
-                                    )}
-                                  </span>
-                                ) : (
-                                  <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                                    <Users className="h-3.5 w-3.5 shrink-0" />
-                                    <span className="truncate">Auto-assign via escalation policy</span>
-                                  </span>
-                                )}
-                                <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[320px] p-0" align="start">
-                            <Command>
-                              <CommandInput placeholder="Search users or teams..." className="h-9" />
-                              <CommandList>
-                                <CommandEmpty>No assignee found.</CommandEmpty>
-                                <CommandGroup heading="Automatic">
-                                  <CommandItem
-                                    value="unassigned"
-                                    onSelect={() => {
-                                      form.setValue('assigneeId', 'unassigned');
-                                      setAssigneeOpen(false);
-                                    }}
-                                    className="cursor-pointer"
-                                  >
-                                    <Users className="mr-2 h-4 w-4 text-muted-foreground" />
-                                    <span>Auto-assign via escalation policy</span>
-                                    {field.value === 'unassigned' && <Check className="ml-auto h-3.5 w-3.5" />}
-                                  </CommandItem>
-                                </CommandGroup>
-
-                                {teams.length > 0 && (
-                                  <CommandGroup heading="Teams">
-                                    {teams.map(team => (
-                                      <CommandItem
-                                        key={team.id}
-                                        value={team.name}
-                                        onSelect={() => {
-                                          form.setValue('assigneeId', `team:${team.id}`);
-                                          setAssigneeOpen(false);
-                                        }}
-                                        className="cursor-pointer"
-                                      >
-                                        <span className="mr-2 flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
-                                          <Users className="h-3.5 w-3.5" />
-                                        </span>
-                                        <span>{team.name}</span>
-                                        {field.value === `team:${team.id}` && <Check className="ml-auto h-3.5 w-3.5" />}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                )}
-
-                                <CommandGroup heading="Users">
-                                  {users.map(user => (
-                                    <CommandItem
-                                      key={user.id}
-                                      value={user.name}
-                                      onSelect={() => {
-                                        form.setValue('assigneeId', `user:${user.id}`);
-                                        setAssigneeOpen(false);
-                                      }}
-                                      className="cursor-pointer"
-                                    >
-                                      <Avatar className="mr-2 h-6 w-6 border border-border">
-                                        <AvatarImage src={user.avatarUrl || undefined} />
-                                        <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
-                                          {getInitials(user.name)}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                      <span>{user.name}</span>
-                                      {(field.value === `user:${user.id}` || field.value === user.id) && (
-                                        <Check className="ml-auto h-3.5 w-3.5" />
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <Activity className="h-3.5 w-3.5 text-primary shrink-0" />
+                                        <span className="truncate font-medium">{service.name}</span>
+                                      </div>
+                                      {service.id === field.value && (
+                                        <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
                                       )}
                                     </CommandItem>
                                   ))}
@@ -750,17 +1135,343 @@ function CreateIncidentModalContent({
                       </FormItem>
                     )}
                   />
+
+                  {/* Assignee / Responder */}
+                  <FormField
+                    control={form.control}
+                    name="assigneeId"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel className={FIELD_LABEL_CLASS}>
+                          <span>Responder Assignment</span>
+                        </FormLabel>
+                        <Popover open={assigneeOpen} onOpenChange={setAssigneeOpen}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  CONTROL_CLASS,
+                                  'w-full justify-between px-3 text-sm font-normal'
+                                )}
+                              >
+                                {field.value && field.value !== 'unassigned' ? (
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    {selectedAssigneeTeam ? (
+                                      <>
+                                        <div className="h-5 w-5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                          <Users className="h-2.5 w-2.5" />
+                                        </div>
+                                        <span className="truncate font-medium text-foreground">
+                                          {selectedAssigneeTeam.name}
+                                        </span>
+                                      </>
+                                    ) : selectedAssigneeUser ? (
+                                      <>
+                                        <UserAvatar
+                                          userId={selectedAssigneeUser.id}
+                                          name={selectedAssigneeUser.name}
+                                          gender={selectedAssigneeUser.gender}
+                                          avatarUrl={selectedAssigneeUser.avatarUrl}
+                                          size="xs"
+                                          className="border-border"
+                                        />
+                                        <span className="truncate font-medium text-foreground">
+                                          {selectedAssigneeUser.name}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <span className="truncate font-medium">Assigned</span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                                    <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                    <span className="truncate">
+                                      Auto-assign (Escalation Policy)
+                                    </span>
+                                  </span>
+                                )}
+                                <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[320px] p-0" align="start">
+                            <Command>
+                              <CommandInput
+                                placeholder="Search responders or teams..."
+                                className="h-9"
+                              />
+                              <CommandList>
+                                <CommandEmpty>No responder found.</CommandEmpty>
+                                <CommandGroup heading="Automatic Routing">
+                                  <CommandItem
+                                    value="unassigned auto-assign escalation policy"
+                                    onSelect={() => {
+                                      form.setValue('assigneeId', 'unassigned');
+                                      setAssigneeOpen(false);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    <ShieldAlert className="mr-2 h-4 w-4 text-primary" />
+                                    <div className="flex flex-col">
+                                      <span className="font-semibold text-xs">
+                                        Auto-assign via Policy
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground">
+                                        Pages on-call responders bound to service
+                                      </span>
+                                    </div>
+                                    {field.value === 'unassigned' && (
+                                      <Check className="ml-auto h-3.5 w-3.5 text-primary" />
+                                    )}
+                                  </CommandItem>
+                                </CommandGroup>
+
+                                {teams.length > 0 && (
+                                  <CommandGroup heading="Teams">
+                                    {teams.map(team => (
+                                      <CommandItem
+                                        key={team.id}
+                                        value={`team ${team.name}`}
+                                        onSelect={() => {
+                                          form.setValue('assigneeId', `team:${team.id}`);
+                                          setAssigneeOpen(false);
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        <span className="mr-2 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                          <Users className="h-3 w-3" />
+                                        </span>
+                                        <span className="font-medium text-xs">{team.name}</span>
+                                        {field.value === `team:${team.id}` && (
+                                          <Check className="ml-auto h-3.5 w-3.5 text-primary" />
+                                        )}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                )}
+
+                                {users.length > 0 && (
+                                  <CommandGroup heading="Direct Responders">
+                                    {users.map(user => (
+                                      <CommandItem
+                                        key={user.id}
+                                        value={`user ${user.name} ${user.email}`}
+                                        onSelect={() => {
+                                          form.setValue('assigneeId', `user:${user.id}`);
+                                          setAssigneeOpen(false);
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        <UserAvatar
+                                          userId={user.id}
+                                          name={user.name}
+                                          gender={user.gender}
+                                          avatarUrl={user.avatarUrl}
+                                          size="xs"
+                                          className="mr-2 border-border"
+                                        />
+                                        <div className="flex flex-col min-w-0">
+                                          <span className="font-medium text-xs truncate">
+                                            {user.name}
+                                          </span>
+                                          <span className="text-[10px] text-muted-foreground truncate">
+                                            {user.email}
+                                          </span>
+                                        </div>
+                                        {(field.value === `user:${user.id}` ||
+                                          field.value === user.id) && (
+                                          <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />
+                                        )}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1.4fr_1fr]">
+                {/* Feature 2: Live On-Call Responder Preview ("Who Gets Paged?") */}
+                <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary mt-0.5">
+                      <Radio className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-foreground">
+                          Who Gets Paged?
+                        </span>
+                        <Badge
+                          variant="neutral"
+                          size="xs"
+                          className="text-[9px] font-semibold uppercase"
+                        >
+                          Live Escalation Route
+                        </Badge>
+                      </div>
+
+                      {watchedAssigneeId && watchedAssigneeId !== 'unassigned' ? (
+                        <div className="text-xs text-foreground/90">
+                          {selectedAssigneeUser ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium text-muted-foreground">
+                                Direct Responder:
+                              </span>
+                              <span className="font-semibold text-foreground">
+                                {selectedAssigneeUser.name}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                ({selectedAssigneeUser.email})
+                              </span>
+                              <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                                &bull; Escalation policy rotation will be bypassed
+                              </span>
+                            </div>
+                          ) : selectedAssigneeTeam ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium text-muted-foreground">
+                                Direct Team:
+                              </span>
+                              <span className="font-semibold text-foreground">
+                                {selectedAssigneeTeam.name}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                &bull; Broadcasts to all team members
+                              </span>
+                            </div>
+                          ) : (
+                            <span>Explicitly assigned responder</span>
+                          )}
+                        </div>
+                      ) : selectedService ? (
+                        selectedService.policy ? (
+                          <div className="space-y-1 text-xs">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-muted-foreground">Policy:</span>
+                              <span className="font-semibold text-foreground">
+                                {selectedService.policy.name ||
+                                  (selectedService.team
+                                    ? `${selectedService.team.name} Escalation Policy`
+                                    : 'Default Workspace Policy')}
+                              </span>
+                              <span className="opacity-40">&bull;</span>
+                              <span className="text-muted-foreground">Step 1:</span>
+                              <span className="font-semibold text-primary">
+                                {selectedService.policy?.steps?.[0]?.targetSchedule?.name
+                                  ? `On-Call Schedule (${selectedService.policy.steps[0].targetSchedule.name})`
+                                  : selectedService.policy?.steps?.[0]?.targetUser?.name
+                                    ? `Direct (${selectedService.policy.steps[0].targetUser.name})`
+                                    : selectedService.policy?.steps?.[0]?.targetTeam?.name
+                                      ? `Team (${selectedService.policy.steps[0].targetTeam.name})`
+                                      : selectedService.team?.name
+                                        ? `${selectedService.team.name} Primary Shift`
+                                        : 'Primary On-Call Schedule'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              {watchedUrgency === 'HIGH'
+                                ? '⚡ Urgent: Primary on-call will be paged immediately via their configured notification preferences (Push, SMS, WhatsApp, Email).'
+                                : watchedUrgency === 'MEDIUM'
+                                  ? '📣 Standard: Pages on-call responders via their configured notification preferences.'
+                                  : '📋 Non-urgent: Queued for triage backlog without active paging alerts.'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2">
+                            <span className="mt-0.5 shrink-0 text-amber-500">⚠</span>
+                            <div className="min-w-0 space-y-0.5">
+                              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                                No escalation policy attached
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                Assign an escalation policy to{' '}
+                                <span className="font-semibold">{selectedService.name}</span> in
+                                Service Settings so on-call responders are paged automatically.
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Select an affected service above to preview active on-call responders and
+                          escalation policies.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature 5: ChatOps & War Room Provisioning Card */}
+                <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-foreground">
+                            Incident War Room
+                          </span>
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                            #inc-
+                            <span className="opacity-50" title="Auto-assigned incident ID">
+                              {'{id}'}
+                            </span>
+                            -{slugifyChannel(watchedTitle)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          Auto-provisions a dedicated Slack triage channel with responder invites.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label
+                        htmlFor="warroom-toggle"
+                        className="text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                      >
+                        {createWarRoom ? 'Enabled' : 'Disabled'}
+                      </label>
+                      <Switch
+                        id="warroom-toggle"
+                        checked={createWarRoom}
+                        onCheckedChange={setCreateWarRoom}
+                        aria-label="Auto-provision Slack war room channel"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Urgency & Priority */}
+              <div className="space-y-3 pt-1 border-t border-border/60">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {/* Urgency */}
                   <FormField
                     control={form.control}
                     name="urgency"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className={FIELD_LABEL_CLASS}>Urgency</FormLabel>
+                        <FormLabel className={FIELD_LABEL_CLASS}>
+                          <span>Urgency (Paging Speed)</span>
+                        </FormLabel>
                         <FormControl>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-3 gap-1.5">
                             {URGENCY_OPTIONS.map(option => {
                               const selected = field.value === option.value;
                               const Icon = option.icon;
@@ -772,12 +1483,18 @@ function CreateIncidentModalContent({
                                   aria-pressed={selected}
                                   onClick={() => field.onChange(option.value)}
                                   className={cn(
-                                    'flex h-10 items-center justify-center gap-1.5 rounded-lg border text-xs font-semibold transition-all',
+                                    'flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer',
                                     selected ? option.selectedClass : option.idleClass
                                   )}
+                                  title={option.desc}
                                 >
-                                  <Icon className="h-3.5 w-3.5" />
-                                  {option.label}
+                                  <Icon className={cn('h-3.5 w-3.5 mb-1', option.iconClass)} />
+                                  <span className="text-xs font-bold leading-tight">
+                                    {option.label}
+                                  </span>
+                                  <span className="text-[9px] opacity-75 font-normal leading-tight mt-0.5">
+                                    {option.sublabel}
+                                  </span>
                                 </button>
                               );
                             })}
@@ -788,31 +1505,45 @@ function CreateIncidentModalContent({
                     )}
                   />
 
+                  {/* Priority */}
                   <FormField
                     control={form.control}
                     name="priority"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className={FIELD_LABEL_CLASS}>Priority</FormLabel>
+                        <FormLabel className={FIELD_LABEL_CLASS}>
+                          <span>Priority (Severity)</span>
+                          {selectedPriorityConfig && (
+                            <span className="text-[10px] font-normal text-muted-foreground">
+                              {selectedPriorityConfig.label}
+                            </span>
+                          )}
+                        </FormLabel>
                         <FormControl>
-                          <div className="flex h-10 items-center gap-1 rounded-lg border border-border/70 bg-muted/30 p-1">
-                            {PRIORITY_OPTIONS.map(priority => {
-                              const selected = field.value === priority.value;
+                          <div className="grid grid-cols-5 gap-1.5">
+                            {PRIORITY_OPTIONS.map(p => {
+                              const selected = field.value === p.value;
                               return (
                                 <button
-                                  key={priority.value}
+                                  key={p.value}
                                   type="button"
                                   aria-pressed={selected}
-                                  onClick={() => field.onChange(selected ? '' : priority.value)}
+                                  onClick={() => field.onChange(selected ? '' : p.value)}
                                   className={cn(
-                                    'flex h-full flex-1 items-center justify-center gap-1 rounded-md text-[11px] font-semibold transition-all',
+                                    'flex flex-col items-center justify-center p-2 rounded-xl border transition-all cursor-pointer',
                                     selected
-                                      ? priority.selectedClass
-                                      : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                                      ? p.selectedClass
+                                      : 'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground'
                                   )}
+                                  title={`${p.value} (${p.label}): ${p.description}`}
                                 >
-                                  <span className={cn('h-1.5 w-1.5 rounded-full', priority.dotClass)} />
-                                  {priority.value}
+                                  <span
+                                    className={cn('h-1.5 w-1.5 rounded-full mb-1', p.dotClass)}
+                                  />
+                                  <span className="text-xs font-bold leading-tight">{p.value}</span>
+                                  <span className="text-[9px] opacity-75 font-normal leading-tight mt-0.5">
+                                    {p.label}
+                                  </span>
                                 </button>
                               );
                             })}
@@ -823,78 +1554,201 @@ function CreateIncidentModalContent({
                     )}
                   />
                 </div>
-              </section>
+              </div>
 
-              <details className="group rounded-xl border border-border/70 bg-muted/20">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 [&::-webkit-details-marker]:hidden">
+              {/* Live Incident Card Preview */}
+              <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    <span>Live Incident Card Preview</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(prev => !prev)}
+                    className="text-[11px] font-medium text-primary hover:underline cursor-pointer"
+                  >
+                    {showPreview ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+
+                {showPreview && (
+                  <div className="group relative rounded-2xl border bg-card transition-all duration-150 overflow-hidden shadow-2xs border-border">
+                    {/* Status accent bar matching IncidentsListTable */}
+                    <div className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full bg-rose-500 opacity-80" />
+
+                    <div className="flex gap-3 items-center pl-4 pr-3.5 py-3 md:py-3.5">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-bold text-sm text-foreground leading-snug truncate block">
+                            {watchedTitle || 'Untitled Incident'}
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <StatusBadge status="OPEN" size="sm" showDot />
+                            {watchedPriority && (
+                              <PriorityBadge priority={watchedPriority} size="sm" />
+                            )}
+                            <Badge
+                              variant={
+                                watchedUrgency === 'HIGH'
+                                  ? 'danger'
+                                  : watchedUrgency === 'MEDIUM'
+                                    ? 'warning'
+                                    : 'neutral'
+                              }
+                              size="xs"
+                              className="uppercase"
+                            >
+                              {watchedUrgency}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              size="xs"
+                              className={cn(
+                                'text-[10px] gap-1',
+                                watchedVisibility === 'PUBLIC'
+                                  ? 'border-sky-500/30 text-sky-600 dark:text-sky-400'
+                                  : 'border-border text-muted-foreground'
+                              )}
+                            >
+                              {watchedVisibility === 'PUBLIC' ? (
+                                <>
+                                  <Globe className="h-2.5 w-2.5" />
+                                  Public
+                                </>
+                              ) : (
+                                <>
+                                  <Lock className="h-2.5 w-2.5" />
+                                  Internal
+                                </>
+                              )}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span className="font-semibold text-primary">
+                            {selectedService?.name || 'No service selected'}
+                          </span>
+                          <span className="opacity-40">&middot;</span>
+                          <span className="font-mono text-muted-foreground/80">#PREVIEW</span>
+                          <span className="opacity-40">&middot;</span>
+                          <span>Just now</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 pl-1">
+                        {selectedAssigneeUser ? (
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/40 border border-border/70 text-[11px] font-medium text-foreground">
+                            <UserAvatar
+                              userId={selectedAssigneeUser.id}
+                              name={selectedAssigneeUser.name}
+                              gender={selectedAssigneeUser.gender}
+                              avatarUrl={selectedAssigneeUser.avatarUrl}
+                              size="xs"
+                              className="border-border"
+                            />
+                            <span className="truncate max-w-[90px]">
+                              {selectedAssigneeUser.name.split(' ')[0]}
+                            </span>
+                          </div>
+                        ) : selectedAssigneeTeam ? (
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200/50 dark:border-indigo-800/40 text-[11px] font-medium text-indigo-700 dark:text-indigo-300">
+                            <Users className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                            <span className="truncate max-w-[90px]">
+                              {selectedAssigneeTeam.name}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground/70 px-1">
+                            <UserIcon className="h-3 w-3 opacity-60" />
+                            <span>Auto-routed</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Advanced Accordion: Dedup Key & Custom Fields */}
+              <details className="group rounded-xl border border-border/80 bg-muted/20">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
                   <div>
-                    <p className="text-xs font-semibold text-foreground">Advanced details</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">Deduplication and routing metadata</p>
+                    <p className="text-xs font-semibold text-foreground">Advanced Options</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Alert deduplication key & workspace custom fields
+                    </p>
                   </div>
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
                 </summary>
 
-                <div className="border-t border-border/60 px-4 py-4">
+                <div className="border-t border-border/70 px-4 py-3.5 space-y-4">
                   <FormField
                     control={form.control}
                     name="dedupKey"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className={cn(FIELD_LABEL_CLASS, 'flex items-center gap-1.5')}>
-                          <Hash className="h-3.5 w-3.5 text-muted-foreground" />
-                          Deduplication key
+                          <span className="flex items-center gap-1.5">
+                            <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                            Deduplication Key
+                          </span>
                         </FormLabel>
                         <FormControl>
                           <Input
                             {...field}
-                            placeholder="Leave empty to create without a manual key"
+                            placeholder="Optional: e.g. billing-checkout-db-high-latency"
                             className={cn(CONTROL_CLASS, 'font-mono text-xs')}
                           />
                         </FormControl>
                         <p className="text-[11px] leading-relaxed text-muted-foreground">
-                          A matching open incident is merged. A matching incident resolved within 30 minutes may be reopened.
+                          Matching open incidents will be merged. Resolved incidents within 30
+                          minutes may be automatically reopened.
                         </p>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-border/60 bg-background/70 px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                    Notifications, escalation, and service routing are applied automatically after creation.
-                  </div>
+                  {customFields.length > 0 && (
+                    <div className="space-y-3 pt-2 border-t border-border/60">
+                      <p className="text-xs font-semibold text-foreground">
+                        Workspace Custom Fields
+                      </p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {customFields.map(field => (
+                          <CustomFieldInput
+                            key={field.id}
+                            field={field}
+                            value={customFieldValues[field.id] || ''}
+                            onChange={value =>
+                              setCustomFieldValues(previous => ({
+                                ...previous,
+                                [field.id]: value,
+                              }))
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </details>
-
-              {customFields.length > 0 && (
-                <section className="space-y-4 border-t border-border/70 pt-5">
-                  <div>
-                    <p className="text-xs font-semibold text-foreground">Custom fields</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">Additional incident metadata configured for your workspace.</p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {customFields.map(field => (
-                      <CustomFieldInput
-                        key={field.id}
-                        field={field}
-                        value={customFieldValues[field.id] || ''}
-                        onChange={value =>
-                          setCustomFieldValues(previous => ({
-                            ...previous,
-                            [field.id]: value,
-                          }))
-                        }
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
             </div>
 
-            <div className="flex shrink-0 items-center justify-between gap-4 border-t border-border/70 bg-muted/25 px-6 py-4">
-              <div className="hidden items-center gap-1.5 text-[10px] text-muted-foreground sm:flex">
-                <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono shadow-sm">Esc</kbd>
-                <span>close</span>
+            {/* Sticky Action Footer */}
+            <div className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-4 border-t border-border/80 bg-card/95 backdrop-blur-sm px-5 sm:px-6 py-3.5">
+              <div className="hidden sm:flex items-center gap-2 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] shadow-2xs">
+                    ⌘
+                  </kbd>
+                  <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] shadow-2xs">
+                    Enter
+                  </kbd>
+                </span>
+                <span>to create</span>
               </div>
 
               <div className="ml-auto flex items-center gap-2.5">
@@ -903,7 +1757,7 @@ function CreateIncidentModalContent({
                   variant="ghost"
                   size="sm"
                   onClick={onClose}
-                  className="h-9 px-4 text-muted-foreground hover:text-foreground"
+                  className="h-9 px-4 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   Cancel
                 </Button>
@@ -911,24 +1765,20 @@ function CreateIncidentModalContent({
                   type="submit"
                   size="sm"
                   disabled={isPending}
-                  className="h-9 min-w-36 bg-primary px-5 font-semibold shadow-sm transition-all hover:bg-primary/90 hover:shadow-md"
+                  className="h-9 min-w-36 bg-primary px-5 font-semibold text-xs shadow-sm transition-all hover:bg-primary/90 hover:shadow-md cursor-pointer"
                 >
                   {isPending ? (
                     <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Creating...
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Publishing Incident...
                     </span>
                   ) : (
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-1.5">
                       <Zap className="h-3.5 w-3.5" />
                       Create Incident
                     </span>
                   )}
                 </Button>
-                <span className="hidden text-[10px] text-muted-foreground md:inline">
-                  <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono shadow-sm">⌘</kbd>
-                  <kbd className="ml-0.5 rounded border border-border bg-background px-1 py-0.5 font-mono shadow-sm">Enter</kbd>
-                </span>
               </div>
             </div>
           </form>
@@ -949,7 +1799,7 @@ export default function CreateIncidentModal() {
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         {isOpen && (
           <CreateIncidentModalContent onClose={closeCreateIncident} openOptions={openOptions} />
         )}
