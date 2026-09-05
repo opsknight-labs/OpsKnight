@@ -61,38 +61,38 @@ export default async function SchedulesPage() {
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
       {/* Header with Glassmorphic Stats Capsule */}
-      <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 text-slate-100 shadow-xl ring-1 ring-white/5 md:p-6">
+      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
         <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800/80 text-white border border-slate-700/80 shadow-xs">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
               <Calendar className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                 On-call schedules
               </p>
               <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
                 Schedules
               </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-300">
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-300">
                 Manage rotation layers, shifts, on-call responders, and coverage calendars.
               </p>
             </div>
           </div>
 
           {/* Frosted Glassmorphism 3-column stats capsule */}
-          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-1.5 backdrop-blur-xs shadow-xs lg:min-w-[340px]">
+          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 backdrop-blur-xs shadow-xs lg:min-w-[340px]">
             <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                 Responders
               </p>
               <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
                 <Users className="h-3.5 w-3.5" /> {totalUniqueResponders}
               </p>
             </div>
-            <div className="min-w-0 rounded-lg border-x border-slate-800/90 px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <div className="min-w-0 rounded-lg border-x border-zinc-800/80 px-3 py-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                 Layers
               </p>
               <p className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white">
@@ -100,7 +100,7 @@ export default async function SchedulesPage() {
               </p>
             </div>
             <div className="min-w-0 rounded-lg px-3 py-2 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                 Status
               </p>
               <p

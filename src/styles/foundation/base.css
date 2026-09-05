@@ -315,6 +315,7 @@ select option {
     overflow-y: auto;
     overflow-x: hidden;
     height: calc(100dvh - var(--header-height, 56px));
+    background-color: var(--bg-primary);
     /* Position content to start exactly where sidebar ends */
     margin-left: var(--sidebar-width);
     width: calc(100% - var(--sidebar-width));

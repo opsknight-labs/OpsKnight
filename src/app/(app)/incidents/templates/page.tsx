@@ -44,28 +44,28 @@ export default async function TemplatesPage() {
   return (
     <main className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
       {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 text-slate-100 shadow-xl ring-1 ring-white/5 md:p-6">
+      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
         <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-800/80 text-white border border-slate-700/80 shadow-xs">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
               <LayoutTemplate className="h-6 w-6 text-rose-500" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                 Standard Operating Procedures
               </p>
               <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
                 Incident Templates
               </h1>
-              <p className="mt-1 text-xs md:text-sm text-slate-300 max-w-xl">
+              <p className="mt-1 text-xs md:text-sm text-zinc-300 max-w-xl">
                 Standardize your incident response with pre-configured templates.
               </p>
             </div>
           </div>
           {canManageTemplates && (
             <Link href="/incidents/templates/create">
-              <Button className="bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white font-semibold shadow-xs transition-all">
+              <Button className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white font-semibold shadow-xs transition-all">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Template
               </Button>

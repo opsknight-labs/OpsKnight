@@ -6,7 +6,7 @@ export default function UsersLoading() {
   return (
     <div className="w-full px-4 py-6 space-y-6">
       {/* Header Skeleton */}
-      <div className="rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 md:p-6 shadow-xl ring-1 ring-white/5 animate-pulse h-[140px] md:h-[100px]" />
+      <div className="rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 md:p-6 shadow-xl ring-1 ring-white/5 animate-pulse h-[140px] md:h-[100px]" />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
         {/* Main Content */}
