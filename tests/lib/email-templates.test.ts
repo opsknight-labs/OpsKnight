@@ -83,6 +83,61 @@ describe('Dynamic Colorful Incident Email Templates', () => {
     expect(html).toContain('linear-gradient(135deg, #1e3a8a 0%, #2563eb 45%, #3b82f6 100%)');
     expect(html).toContain('UPDATED');
   });
+
+  it('renders a dynamic fluid container with responsive viewport and styling', () => {
+    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+
+    // Fluid container with max-width 640px
+    expect(html).toContain('max-width: 640px');
+    expect(html).toContain('viewport');
+    expect(html).toContain('mobile-container');
+    expect(html).toContain('mobile-outer-padding');
+    expect(html).toContain('mobile-table-cell');
+    expect(html).toContain('mobile-table-label');
+  });
+
+  it('renders a dedicated Incident Description card instead of unstyled Overview header', () => {
+    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+
+    // Must NOT contain ambiguous unstyled Overview heading
+    expect(html).not.toContain('<h3 style="font-size:14px">Overview</h3>');
+    // Must contain structured Incident Description header
+    expect(html).toContain('Incident Description');
+    expect(html).toContain('PostgreSQL connection pool exhausted on ap-south-1 cluster.');
+  });
+
+  it('includes dedicated OpsKnightPromoCard with open-source branding and GitHub/docs links', () => {
+    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+
+    expect(html).toContain('OpsKnight');
+    expect(html).toContain('Open-Source');
+    expect(html).toContain('https://github.com/opsknight-labs/OpsKnight');
+    expect(html).toContain('⭐ Star on GitHub');
+    expect(html).toContain('https://docs.opsknight.com');
+  });
+
+  it('deduplicates eventMessage if it echoes incident title or [Service] title', () => {
+    // Case 1: eventMessage duplicates [Checkout & Payments] Payment Gateway Connection Timeout
+    const duplicateHtml = generateIncidentEmailHTML(
+      baseIncident,
+      'UTC',
+      'triggered',
+      `[Checkout & Payments] ${baseIncident.title}`
+    );
+    // Should NOT render a standalone duplicate box for the echo
+    expect(duplicateHtml).not.toContain(
+      `padding:12px 16px;margin:16px 0;color:#334155;font-size:13px;line-height:1.5;">[Checkout &amp; Payments]`
+    );
+
+    // Case 2: Distinct eventMessage provides unique escalation info
+    const distinctHtml = generateIncidentEmailHTML(
+      baseIncident,
+      'UTC',
+      'triggered',
+      'Escalation Level 2: Paged Secondary On-Call'
+    );
+    expect(distinctHtml).toContain('Escalation Level 2: Paged Secondary On-Call');
+  });
 });
 
 describe('Shift Reminder & Handoff Email Templates', () => {
