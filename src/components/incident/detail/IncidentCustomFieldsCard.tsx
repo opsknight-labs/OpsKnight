@@ -28,7 +28,7 @@ export type CustomFieldValue = {
     type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'BOOLEAN' | 'URL' | 'EMAIL';
     required: boolean;
     defaultValue?: string | null;
-    options?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    options?: unknown;
   };
 };
 
@@ -42,7 +42,7 @@ export type IncidentCustomFieldsCardProps = {
     type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'BOOLEAN' | 'URL' | 'EMAIL';
     required: boolean;
     defaultValue?: string | null;
-    options?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    options?: unknown;
   }>;
   canManage: boolean;
   className?: string;
@@ -190,7 +190,9 @@ export default function IncidentCustomFieldsCard({
               const currentValue = formValues.get(field.id) ?? '';
               const isSaving = savingFieldId === field.id;
               const isSaved = savedFieldId === field.id;
-              const options = Array.isArray(field.options) ? field.options : [];
+              const options: string[] = Array.isArray(field.options)
+                ? (field.options as string[])
+                : [];
 
               return (
                 <div

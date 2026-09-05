@@ -310,7 +310,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
 
       {/* Incident Details Card — single unified card for all metadata */}
       <IncidentHeader
-        incident={incident as any} // eslint-disable-line @typescript-eslint/no-explicit-any
+        incident={incident}
         users={users}
         teams={teams}
         canManage={canManageIncident}

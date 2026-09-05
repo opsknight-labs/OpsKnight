@@ -89,7 +89,7 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
     });
   };
 
-  const currentVisibility = (incident as any).visibility || 'PUBLIC'; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const currentVisibility = incident.visibility || 'PUBLIC';
   const isPrivate = currentVisibility === 'PRIVATE';
 
   // Status-adaptive card accent

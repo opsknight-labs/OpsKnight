@@ -12,31 +12,46 @@ type StatusBadgeProps = {
   className?: string;
 };
 
+function getStatusVariant(status: string): 'success' | 'warning' | 'danger' | 'neutral' | 'info' {
+  switch (status) {
+    case 'RESOLVED':
+    case 'OPERATIONAL':
+    case 'PUBLISHED':
+      return 'success';
+    case 'ACKNOWLEDGED':
+    case 'DEGRADED':
+    case 'ARCHIVED':
+      return 'warning';
+    case 'OPEN':
+    case 'CRITICAL':
+      return 'danger';
+    case 'SNOOZED':
+    case 'SUPPRESSED':
+    case 'DRAFT':
+      return 'neutral';
+    default:
+      return 'info';
+  }
+}
+
+function getBadgeSize(size: 'sm' | 'md' | 'lg'): 'xs' | 'sm' | 'md' {
+  switch (size) {
+    case 'sm':
+      return 'xs';
+    case 'lg':
+      return 'md';
+    case 'md':
+    default:
+      return 'sm';
+  }
+}
+
 function StatusBadge({ status, size = 'md', showDot = false, className }: StatusBadgeProps) {
-  const sizeMap: Record<NonNullable<StatusBadgeProps['size']>, 'xs' | 'sm' | 'md'> = {
-    sm: 'xs',
-    md: 'sm',
-    lg: 'md',
-  };
+  const variant = getStatusVariant(status);
+  const badgeSize = getBadgeSize(size);
 
-  const statusVariantMap: Record<string, 'success' | 'warning' | 'danger' | 'neutral' | 'info'> = {
-    OPEN: 'danger',
-    ACKNOWLEDGED: 'warning',
-    RESOLVED: 'success',
-    SNOOZED: 'neutral',
-    SUPPRESSED: 'neutral',
-    OPERATIONAL: 'success',
-    DEGRADED: 'warning',
-    CRITICAL: 'danger',
-    // Postmortem statuses
-    DRAFT: 'neutral',
-    PUBLISHED: 'success',
-    ARCHIVED: 'warning',
-  };
-
-  const variant = statusVariantMap[status] ?? 'info';
   return (
-    <Badge variant={variant} size={sizeMap[size]} className={cn('uppercase', className)}>
+    <Badge variant={variant} size={badgeSize} className={cn('uppercase', className)}>
       {showDot && <span className="h-2 w-2 rounded-full bg-white/80" />}
       {status}
     </Badge>
