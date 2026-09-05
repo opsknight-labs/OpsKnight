@@ -133,15 +133,15 @@ export function EmailHeader(title: string, subtitle?: string, styles: EmailStyle
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
-        <td class="mobile-header-padding" style="background: ${headerGradient}; padding: 36px 32px; text-align: left; position: relative;">
+        <td class="mobile-header-padding" style="background: ${headerGradient}; padding: 38px 36px; text-align: left; position: relative;">
             <!-- Brand Bar -->
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 0 20px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 0 22px 0;">
                 <tr>
-                    <td style="padding-right: 12px; vertical-align: middle;">
-                        ${getOpsKnightLogo(36, styles)}
+                    <td style="padding-right: 14px; vertical-align: middle;">
+                        ${getOpsKnightLogo(44, styles)}
                     </td>
                     <td style="vertical-align: middle;">
-                        <span class="mobile-logo-name" style="font-size: 20px; font-weight: 700; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">${brandName}</span>
+                        <span class="mobile-logo-name" style="font-size: 22px; font-weight: 700; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">${brandName}</span>
                     </td>
                 </tr>
             </table>
@@ -340,57 +340,15 @@ export function AlertBox(
 
 /**
  * Dedicated OpsKnight product promotion card
- * Beautifully highlights the open-source platform without cluttering the incident alert.
+ * @deprecated Dedicated promo card is removed to keep transactional alert emails clean, subtle, and focused.
  */
 export function OpsKnightPromoCard(): string {
-  return `
-<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
-    <div style="background: linear-gradient(135deg, #0b0f19 0%, #1e293b 100%); border-radius: 12px; padding: 20px 22px; border: 1px solid #334155; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.15);">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-            <tr>
-                <td style="vertical-align: middle;">
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 8px;">
-                        <tr>
-                            <td style="padding-right: 10px; vertical-align: middle;">
-                                ${getOpsKnightLogo(26)}
-                            </td>
-                            <td style="vertical-align: middle;">
-                                <span style="color: #ffffff; font-size: 15px; font-weight: 700; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: -0.01em;">OpsKnight</span>
-                                <span style="display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.35); padding: 2px 7px; border-radius: 999px; vertical-align: middle;">Open-Source</span>
-                            </td>
-                        </tr>
-                    </table>
-                    <p style="margin: 0 0 12px 0; color: #cbd5e1; font-size: 13px; line-height: 1.5;">
-                        Modern incident response, on-call schedules, and status pages. Self-hosted, extensible, and built for SRE &amp; DevOps teams.
-                    </p>
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                        <tr>
-                            <td style="padding-right: 16px;">
-                                <a href="https://github.com/opsknight-labs/OpsKnight" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; text-decoration: none; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center;">
-                                    ⭐ Star on GitHub &rarr;
-                                </a>
-                            </td>
-                            <td style="padding-right: 16px;">
-                                <a href="https://docs.opsknight.com" target="_blank" rel="noopener noreferrer" style="color: #94a3b8; text-decoration: none; font-size: 12px; font-weight: 500;">
-                                    Documentation
-                                </a>
-                            </td>
-                            <td>
-                                <a href="https://opsknight.com" target="_blank" rel="noopener noreferrer" style="color: #94a3b8; text-decoration: none; font-size: 12px; font-weight: 500;">
-                                    Website
-                                </a>
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-    </div>
-</div>`.trim();
+  return '';
 }
 
 /**
  * Footer with OpsKnight branding and notification context
+ * Subtle, minimalist, and elegant.
  */
 export function EmailFooter(unsubscribeUrl?: string, settingsUrl?: string): string {
   const safeUnsubscribe = unsubscribeUrl ? sanitizeUrl(unsubscribeUrl) : undefined;
@@ -400,8 +358,11 @@ export function EmailFooter(unsubscribeUrl?: string, settingsUrl?: string): stri
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
         <td style="padding: 24px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-            <p style="margin: 0 0 8px 0; color: #64748b; font-size: 13px; line-height: 1.5;">
+            <p style="margin: 0 0 6px 0; color: #64748b; font-size: 13px; line-height: 1.5;">
                 This is an automated notification from <strong style="color: #0f172a;">OpsKnight</strong> Incident Management.
+            </p>
+            <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px; line-height: 1.5;">
+                OpsKnight &bull; Open-Source Incident Response
             </p>
             <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">
                 ${
@@ -548,27 +509,45 @@ export function SubscriberEmailFooter(unsubscribeUrl: string, pageName: string):
 function getOpsKnightLogo(width: number, styles: EmailStyles = {}): string {
   const logoUrl = styles.logoUrl || getDefaultLogoUrl();
   const logoAlt = escapeHtml(styles.logoAlt || 'OpsKnight');
+  const innerSize = Math.max(16, Math.round(width * 0.75));
+
   if (logoUrl) {
     const safeLogoUrl = sanitizeUrl(logoUrl);
     if (safeLogoUrl !== '#') {
-      return `<img src="${safeLogoUrl}" width="${width}" height="${width}" alt="${logoAlt}" style="display: block; border-radius: 12px;" />`;
+      return `
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: ${width}px; height: ${width}px; background: #0f172a; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.16); table-layout: fixed;">
+    <tr>
+        <td align="center" valign="middle" style="padding: 0; text-align: center;">
+            <img src="${safeLogoUrl}" width="${innerSize}" height="${innerSize}" alt="${logoAlt}" style="display: block; margin: 0 auto; border-radius: 4px;" />
+        </td>
+    </tr>
+</table>`.trim();
     }
   }
 
-  // Inline SVG logo fallback for email compatibility
-  return `<svg width="${width}" height="${width}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="display: block;">
-        <!-- Shield background -->
-        <path d="M50 5 L85 20 L85 45 Q85 75 50 95 Q15 75 15 45 L15 20 Z" fill="url(#grad)" stroke="#0f172a" stroke-width="2"/>
-        <!-- Gradient definition -->
-        <defs>
-            <linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style="stop-color:#334155;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
-            </linearGradient>
-        </defs>
-        <!-- OS Text -->
-        <text x="50" y="58" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle">OS</text>
-    </svg>`;
+  // Authentic OpsKnight shield & headset knight vector fallback
+  return `
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: ${width}px; height: ${width}px; background: #0f172a; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.16); table-layout: fixed;">
+    <tr>
+        <td align="center" valign="middle" style="padding: 0; text-align: center;">
+            <svg width="${innerSize}" height="${innerSize}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block; margin: 0 auto;">
+                <defs>
+                    <linearGradient id="shieldGrad" x1="50" y1="5" x2="50" y2="95" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stop-color="#ef4444"/>
+                        <stop offset="100%" stop-color="#b91c1c"/>
+                    </linearGradient>
+                </defs>
+                <path d="M50 6 C68 15 84 18 86 28 C88 52 74 76 50 94 C26 76 12 52 14 28 C16 18 32 15 50 6 Z" fill="url(#shieldGrad)" stroke="#ffffff" stroke-width="3"/>
+                <path d="M34 46 C34 32 40 24 50 24 C60 24 66 32 66 46" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round"/>
+                <rect x="29" y="42" width="9" height="18" rx="4.5" fill="#ffffff"/>
+                <rect x="62" y="42" width="9" height="18" rx="4.5" fill="#ffffff"/>
+                <path d="M66 54 C66 62 58 65 52 65" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+                <path d="M38 73 L50 64 L62 73" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M50 64 L50 82" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+            </svg>
+        </td>
+    </tr>
+</table>`.trim();
 }
 
 function getDefaultLogoUrl(): string | null {

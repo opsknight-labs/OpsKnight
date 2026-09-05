@@ -484,8 +484,8 @@ export function generateIncidentEmailHTML(
 
   // Structured Incident Description (replaces raw uncontained "Overview" header)
   const description = incident.description
-    ? `<div style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #64748b;border-radius:8px;padding:16px 18px;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:8px;">
+    ? `<div style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${presentation.accentColor};border-radius:8px;padding:14px 18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;">
           Incident Description
         </div>
         <div style="white-space:pre-wrap;font-size:14px;color:#334155;line-height:1.6;word-break:break-word;">
@@ -498,7 +498,10 @@ export function generateIncidentEmailHTML(
     EmailHeader(
       presentation.header,
       `Service: ${escapeHtml(incident.service?.name || 'Service')}`,
-      { headerGradient: presentation.headerGradient }
+      {
+        headerGradient: presentation.headerGradient,
+        logoUrl: `${getBaseUrl()}/logo-compressed.png`,
+      }
     ) +
       EmailContent(`
         <div style="margin-bottom:16px">${StatusBadge(presentation.label.toUpperCase(), presentation.badge)}</div>
@@ -515,7 +518,6 @@ export function generateIncidentEmailHTML(
             buttonShadow: presentation.buttonShadow,
           }
         )}</div>
-        ${OpsKnightPromoCard()}
       `) +
       EmailFooter()
   );
@@ -647,6 +649,7 @@ export function generateShiftReminderEmailHTML(data: ShiftReminderData): string 
   return EmailContainer(
     EmailHeader('Upcoming On-Call Shift', `Schedule: ${escapeHtml(data.scheduleName)}`, {
       headerGradient,
+      logoUrl: `${getBaseUrl()}/logo-compressed.png`,
     }) +
       EmailContent(`
         <div style="margin-bottom:18px">${StatusBadge('UPCOMING ON-CALL', 'schedule')}</div>
@@ -665,7 +668,6 @@ export function generateShiftReminderEmailHTML(data: ShiftReminderData): string 
           </ul>
         </div>
         <div style="margin-top:28px;text-align:center;">${EmailButton('View On-Call Schedule', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
-        ${OpsKnightPromoCard()}
       `) +
       EmailFooter()
   );
@@ -718,6 +720,7 @@ export function generateShiftHandoffEmailHTML(data: ShiftHandoffData): string {
   return EmailContainer(
     EmailHeader('Shift Rotation Handoff', `Schedule: ${escapeHtml(data.scheduleName)}`, {
       headerGradient,
+      logoUrl: `${getBaseUrl()}/logo-compressed.png`,
     }) +
       EmailContent(`
         <div style="margin-bottom:18px">${StatusBadge('SHIFT HANDOFF', 'schedule')}</div>
@@ -728,7 +731,6 @@ export function generateShiftHandoffEmailHTML(data: ShiftHandoffData): string {
         </p>
         ${incidentListHtml}
         <div style="margin-top:28px;text-align:center;">${EmailButton('View Schedule & Incidents', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
-        ${OpsKnightPromoCard()}
       `) +
       EmailFooter()
   );

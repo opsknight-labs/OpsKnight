@@ -106,14 +106,15 @@ describe('Dynamic Colorful Incident Email Templates', () => {
     expect(html).toContain('PostgreSQL connection pool exhausted on ap-south-1 cluster.');
   });
 
-  it('includes dedicated OpsKnightPromoCard with open-source branding and GitHub/docs links', () => {
+  it('includes subtle, elegant branding in the footer without intrusive promotional blocks', () => {
     const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
 
     expect(html).toContain('OpsKnight');
-    expect(html).toContain('Open-Source');
-    expect(html).toContain('https://github.com/opsknight-labs/OpsKnight');
-    expect(html).toContain('⭐ Star on GitHub');
-    expect(html).toContain('https://docs.opsknight.com');
+    expect(html).toContain('Open-Source Incident Response');
+    expect(html).toContain('automated notification');
+    // Must NOT contain loud promotional cards or star buttons
+    expect(html).not.toContain('⭐ Star on GitHub');
+    expect(html).not.toContain('https://docs.opsknight.com');
   });
 
   it('deduplicates eventMessage if it echoes incident title or [Service] title', () => {
