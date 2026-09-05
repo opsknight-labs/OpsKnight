@@ -188,7 +188,6 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
             avatarUrl={user.avatarUrl}
             gender={user.gender}
             size="xl"
-            showOnlineStatus={user.status === 'ACTIVE'}
             className="shrink-0 ring-2 ring-primary-foreground/20 rounded-full"
           />
         }

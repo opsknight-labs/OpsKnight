@@ -325,7 +325,6 @@ export default function Sidebar({
                       gender={currentGender}
                       avatarUrl={userAvatar}
                       size="sm"
-                      showOnlineStatus={true}
                       className="border-white/10 h-8 w-8 shrink-0 hover:scale-105 transition-transform"
                       fallbackClassName="bg-indigo-500/20 text-indigo-200 text-xs"
                     />
@@ -348,7 +347,6 @@ export default function Sidebar({
                   gender={currentGender}
                   avatarUrl={userAvatar}
                   size="sm"
-                  showOnlineStatus={true}
                   className="border-white/10 h-8 w-8 shrink-0"
                   fallbackClassName="bg-indigo-500/20 text-indigo-200 text-xs"
                 />

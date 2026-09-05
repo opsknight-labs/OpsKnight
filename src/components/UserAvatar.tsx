@@ -17,36 +17,30 @@ type UserAvatarProps = {
   fallbackClassName?: string;
 };
 
-const sizeClasses: Record<AvatarSize, { container: string; text: string; statusDot: string }> = {
+const sizeClasses: Record<AvatarSize, { container: string; text: string }> = {
   xs: {
     container: 'h-6 w-6',
     text: 'text-[9px]',
-    statusDot: 'h-1.5 w-1.5 -bottom-0 -right-0 border',
   },
   sm: {
     container: 'h-8 w-8',
     text: 'text-[10px]',
-    statusDot: 'h-2 w-2 -bottom-0.5 -right-0.5 border-[1.5px]',
   },
   md: {
     container: 'h-10 w-10',
     text: 'text-xs',
-    statusDot: 'h-2.5 w-2.5 -bottom-0.5 -right-0.5 border-[1.5px]',
   },
   lg: {
     container: 'h-12 w-12',
     text: 'text-sm',
-    statusDot: 'h-3 w-3 -bottom-0.5 -right-0.5 border-2',
   },
   xl: {
     container: 'h-16 w-16',
     text: 'text-base',
-    statusDot: 'h-3.5 w-3.5 -bottom-0.5 -right-0.5 border-2',
   },
   '2xl': {
     container: 'h-24 w-24',
     text: 'text-xl',
-    statusDot: 'h-4 w-4 bottom-0.5 right-0.5 border-2',
   },
 };
 
@@ -121,7 +115,6 @@ export default function UserAvatar({
   name,
   gender,
   size = 'md',
-  showOnlineStatus = false,
   className,
   fallbackClassName,
 }: UserAvatarProps) {
@@ -160,16 +153,6 @@ export default function UserAvatar({
           {initials}
         </AvatarFallback>
       </Avatar>
-
-      {showOnlineStatus && (
-        <span
-          className={cn(
-            'absolute rounded-full bg-emerald-500 border-background',
-            sizeConfig.statusDot
-          )}
-          aria-label="Online"
-        />
-      )}
     </div>
   );
 }
@@ -183,7 +166,6 @@ export function DirectUserAvatar({
   avatarUrl,
   name,
   size = 'md',
-  showOnlineStatus = false,
   className,
   fallbackClassName,
 }: DirectUserAvatarProps) {
@@ -220,16 +202,6 @@ export function DirectUserAvatar({
           {initials}
         </AvatarFallback>
       </Avatar>
-
-      {showOnlineStatus && (
-        <span
-          className={cn(
-            'absolute rounded-full bg-emerald-500 border-background',
-            sizeConfig.statusDot
-          )}
-          aria-label="Online"
-        />
-      )}
     </div>
   );
 }
