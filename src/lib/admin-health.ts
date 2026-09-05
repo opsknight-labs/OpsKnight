@@ -147,14 +147,84 @@ async function latestRelease(): Promise<string | null> {
   }
 }
 
-function overallStatus(checks: AdminHealthCheck[]): HealthLevel {
-  if (checks.some(c => c.status === 'unhealthy')) return 'unhealthy';
-  if (checks.some(c => c.status === 'degraded')) return 'degraded';
-  if (checks.some(c => c.status === 'healthy')) return 'healthy';
-  return 'unknown';
+export const CHECK_WEIGHTS: Record<string, number> = {
+  // Critical Infrastructure (Weight 10)
+  database: 10,
+  migrations: 10,
+  encryption: 10,
+  scheduler: 10,
+  // Core Operational Services (Weight 5)
+  jobs: 5,
+  escalations: 5,
+  'database-capacity': 5,
+  // Auxiliary & Delivery Services (Weight 3)
+  notifications: 3,
+  integrations: 3,
+  'public-url': 3,
+  // Advisory & Telemetry (Weight 1)
+  'sla-performance': 1,
+  'paging-configuration': 1,
+  version: 1,
+};
+
+export type OperationalScoreResult = {
+  scorePercent: number;
+  overall: HealthLevel;
+  criticalIssues: AdminHealthCheck[];
+  warningIssues: AdminHealthCheck[];
+};
+
+export function calculateOperationalScore(checks: AdminHealthCheck[]): OperationalScoreResult {
+  if (checks.length === 0) {
+    return { scorePercent: 100, overall: 'unknown', criticalIssues: [], warningIssues: [] };
+  }
+
+  let totalWeight = 0;
+  let weightedScore = 0;
+  const criticalIssues: AdminHealthCheck[] = [];
+  const warningIssues: AdminHealthCheck[] = [];
+
+  for (const check of checks) {
+    const weight = CHECK_WEIGHTS[check.id] ?? 3;
+    const isCritical = weight >= 10;
+
+    totalWeight += weight;
+
+    if (check.status === 'unhealthy') {
+      if (isCritical) {
+        criticalIssues.push(check);
+      } else {
+        warningIssues.push(check);
+      }
+    } else if (check.status === 'degraded') {
+      warningIssues.push(check);
+      weightedScore += weight * 0.75;
+    } else if (check.status === 'healthy') {
+      weightedScore += weight * 1.0;
+    } else {
+      // 'unknown' is neutral, treated as passing
+      weightedScore += weight * 1.0;
+    }
+  }
+
+  const scorePercent =
+    totalWeight > 0 ? Math.round((weightedScore / totalWeight) * 1000) / 10 : 100;
+
+  let overall: HealthLevel = 'healthy';
+  if (criticalIssues.length > 0 || scorePercent < 80) {
+    overall = 'unhealthy';
+  } else if (warningIssues.length > 0 || scorePercent < 98) {
+    overall = 'degraded';
+  }
+
+  return { scorePercent, overall, criticalIssues, warningIssues };
 }
 
-async function generate24HourHistory(
+export function overallStatus(checks: AdminHealthCheck[]): HealthLevel {
+  return calculateOperationalScore(checks).overall;
+}
+
+export async function generate24HourHistory(
   checks: AdminHealthCheck[],
   overall: HealthLevel,
   now: Date
@@ -252,16 +322,11 @@ async function generate24HourHistory(
     // Graceful fallback
   }
 
-  const degradedChecks = checks.filter(c => c.status === 'degraded');
-  const unhealthyChecks = checks.filter(c => c.status === 'unhealthy');
+  const { scorePercent: liveScorePercent, criticalIssues, warningIssues } =
+    calculateOperationalScore(checks);
 
-  // Pick top diagnostic summary if system has persistent issues
-  const diagnosticSummary =
-    unhealthyChecks.length > 0
-      ? unhealthyChecks[0].summary
-      : degradedChecks.length > 0
-        ? degradedChecks[0].summary
-        : undefined;
+  const topCriticalIssue = criticalIssues[0]?.summary;
+  const topWarningIssue = warningIssues[0]?.summary;
 
   const samples: HealthHistorySample[] = [];
   for (let i = 23; i >= 0; i--) {
@@ -303,8 +368,12 @@ async function generate24HourHistory(
     let scorePercent = 100;
     let reason = 'All systems operating normally';
 
-    const criticalInc = activeIncidents.find(inc => inc.priority === 'P1' || inc.priority === 'P2');
-    const warningInc = activeIncidents.find(inc => inc.priority === 'P3' || inc.priority === 'P4');
+    const criticalInc = activeIncidents.find(
+      inc => inc.priority === 'P1' || inc.priority === 'P2'
+    );
+    const warningInc = activeIncidents.find(
+      inc => inc.priority === 'P3' || inc.priority === 'P4'
+    );
 
     if (criticalInc) {
       status = 'unhealthy';
@@ -316,33 +385,35 @@ async function generate24HourHistory(
       reason = `Active incident (${warningInc.priority || 'P3'}): ${warningInc.title}`;
     } else if (hourlyFailedJobs.length > 0) {
       status = 'degraded';
-      scorePercent = 80;
+      scorePercent = Math.max(70, 100 - hourlyFailedJobs.length * 10);
       reason = `${hourlyFailedJobs.length} background job failure(s)`;
     } else if (hourlyFailedDeliveries.length > 0 || hourlyFailedNotifications.length > 0) {
       status = 'degraded';
-      scorePercent = 85;
-      reason = `${hourlyFailedDeliveries.length + hourlyFailedNotifications.length} delivery error(s)`;
+      const totalErrors = hourlyFailedDeliveries.length + hourlyFailedNotifications.length;
+      scorePercent = Math.max(75, 100 - totalErrors * 5);
+      reason = `${totalErrors} delivery error(s)`;
     } else if (i === 0) {
-      // Current live hour reflects active diagnostic check health
+      // Current live hour reflects live weighted diagnostic score
       status = overall;
-      scorePercent = overall === 'healthy' ? 100 : overall === 'degraded' ? 85 : 40;
+      scorePercent = liveScorePercent;
       reason =
         overall === 'healthy'
           ? 'All diagnostic signals passing'
-          : diagnosticSummary ||
+          : topCriticalIssue ||
+            topWarningIssue ||
             (overall === 'degraded'
-              ? 'Sub-optimal telemetry or retries'
+              ? 'Operational with warnings'
               : 'Critical diagnostic error');
-    } else if (overall === 'unhealthy' && unhealthyChecks.length > 0) {
-      // If critical persistent check is failing, prior hours reflect this baseline
+    } else if (criticalIssues.length > 0) {
+      // ONLY if persistent CRITICAL infrastructure is failing (e.g. DB connection broken)
       status = 'unhealthy';
-      scorePercent = 45;
-      reason = diagnosticSummary || 'Critical diagnostic error';
-    } else if (overall === 'degraded' && degradedChecks.length > 0) {
-      // If persistent check is degraded (e.g. SLA p95 latency over 24h, unconfigured key)
-      status = 'degraded';
-      scorePercent = 85;
-      reason = diagnosticSummary || 'Sub-optimal telemetry or retries';
+      scorePercent = Math.min(50, liveScorePercent);
+      reason = topCriticalIssue || 'Critical diagnostic error';
+    } else {
+      // Normal peaceful historical hour
+      status = 'healthy';
+      scorePercent = 100;
+      reason = 'All systems operating normally';
     }
 
     samples.push({
