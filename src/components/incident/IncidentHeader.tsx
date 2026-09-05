@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Incident, Service } from '@prisma/client';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
-import UserAvatar from '@/components/UserAvatar';
 import CopyButton from '@/components/common/CopyButton';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/shadcn/select';
 import { updateIncidentUrgency, updateIncidentVisibility } from '@/app/(app)/incidents/actions';
@@ -18,7 +17,6 @@ import {
   Server,
   Shield,
   Users,
-  User,
   AlertTriangle,
   Activity,
   ArrowUpRight,
@@ -117,12 +115,8 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
         ? 'bg-amber-500'
         : 'bg-emerald-500';
 
-  const urgencyTone =
-    incident.urgency === 'HIGH'
-      ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
-      : incident.urgency === 'MEDIUM'
-        ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
+  const SELECTOR_BASE_CLASS =
+    'inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200 shadow-2xs transition-all max-w-full select-none';
 
   const durationText = incident.resolvedAt
     ? `Resolved in ${formatDuration(incident.createdAt, incident.resolvedAt)}`
@@ -166,47 +160,42 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
               onValueChange={handleUrgencyChange}
               disabled={isPending}
             >
-              <SelectTrigger className="h-8 w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
+              <SelectTrigger className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
                 <div
                   className={cn(
-                    'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-sm font-semibold transition-all shadow-2xs group-hover:brightness-95 cursor-pointer',
-                    urgencyTone
+                    SELECTOR_BASE_CLASS,
+                    'hover:bg-slate-50 dark:hover:bg-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 cursor-pointer group'
                   )}
                 >
-                  <span className={cn('h-1.5 w-1.5 rounded-full', urgencyDot)} />
+                  <span className={cn('h-2 w-2 rounded-full shrink-0', urgencyDot)} />
                   <span>{incident.urgency}</span>
-                  <ChevronDown className="h-3.5 w-3.5 opacity-60 ml-0.5" />
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 transition-colors shrink-0 ml-auto" />
                 </div>
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="HIGH">
-                  <div className="flex items-center gap-2 font-semibold text-rose-700">
-                    <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                    HIGH
+              <SelectContent align="start" className="min-w-[150px]">
+                <SelectItem value="HIGH" className="cursor-pointer">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-rose-700 dark:text-rose-400">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                    <span>HIGH</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="MEDIUM">
-                  <div className="flex items-center gap-2 font-semibold text-amber-700">
-                    <div className="w-2 h-2 rounded-full bg-amber-500" />
-                    MEDIUM
+                <SelectItem value="MEDIUM" className="cursor-pointer">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                    <span>MEDIUM</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="LOW">
-                  <div className="flex items-center gap-2 font-semibold text-emerald-700">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    LOW
+                <SelectItem value="LOW" className="cursor-pointer">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    <span>LOW</span>
                   </div>
                 </SelectItem>
               </SelectContent>
             </Select>
           ) : (
-            <div
-              className={cn(
-                'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-sm font-semibold w-fit shadow-2xs',
-                urgencyTone
-              )}
-            >
-              <span className={cn('h-1.5 w-1.5 rounded-full', urgencyDot)} />
+            <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+              <span className={cn('h-2 w-2 rounded-full shrink-0', urgencyDot)} />
               <span>{incident.urgency}</span>
             </div>
           )}
@@ -230,44 +219,43 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
               onValueChange={val => handleVisibilityChange(val as 'PUBLIC' | 'PRIVATE')}
               disabled={isPending}
             >
-              <SelectTrigger className="h-8 w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-800 text-sm font-semibold shadow-2xs group-hover:bg-slate-100 group-hover:border-slate-300 transition-all cursor-pointer">
+              <SelectTrigger className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
+                <div
+                  className={cn(
+                    SELECTOR_BASE_CLASS,
+                    'hover:bg-slate-50 dark:hover:bg-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 cursor-pointer group'
+                  )}
+                >
                   {isPrivate ? (
-                    <EyeOff className="h-3.5 w-3.5 text-slate-500" />
+                    <EyeOff className="h-3.5 w-3.5 text-slate-500 shrink-0" />
                   ) : (
-                    <Eye className="h-3.5 w-3.5 text-slate-500" />
+                    <Eye className="h-3.5 w-3.5 text-slate-500 shrink-0" />
                   )}
                   <span>{isPrivate ? 'Private' : 'Public'}</span>
-                  <ChevronDown className="h-3.5 w-3.5 opacity-60 ml-0.5" />
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 transition-colors shrink-0 ml-auto" />
                 </div>
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PUBLIC">
-                  <div className="flex items-center gap-2">
-                    <Eye className="h-3.5 w-3.5 text-slate-500" />
-                    <div className="flex flex-col text-left">
-                      <span className="font-semibold text-slate-900">Public</span>
-                      <span className="text-[10px] text-slate-500">Visible on Status Page</span>
-                    </div>
+              <SelectContent align="start" className="min-w-[150px]">
+                <SelectItem value="PUBLIC" className="cursor-pointer">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    <Eye className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <span>Public</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="PRIVATE">
-                  <div className="flex items-center gap-2">
-                    <EyeOff className="h-3.5 w-3.5 text-slate-500" />
-                    <div className="flex flex-col text-left">
-                      <span className="font-semibold text-slate-900">Private</span>
-                      <span className="text-[10px] text-slate-500">Internal Dashboard Only</span>
-                    </div>
+                <SelectItem value="PRIVATE" className="cursor-pointer">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    <EyeOff className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <span>Private</span>
                   </div>
                 </SelectItem>
               </SelectContent>
             </Select>
           ) : (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-800 text-sm font-semibold w-fit shadow-2xs">
+            <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
               {isPrivate ? (
-                <EyeOff className="h-3.5 w-3.5 text-slate-500" />
+                <EyeOff className="h-3.5 w-3.5 text-slate-500 shrink-0" />
               ) : (
-                <Eye className="h-3.5 w-3.5 text-slate-500" />
+                <Eye className="h-3.5 w-3.5 text-slate-500 shrink-0" />
               )}
               <span>{isPrivate ? 'Private' : 'Public'}</span>
             </div>
@@ -295,55 +283,24 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
         </Link>
 
         {/* Assignee */}
-        <div className="flex flex-col justify-center p-3.5 min-h-[74px] relative">
+        <div className="flex flex-col justify-center p-3.5 min-h-[74px]">
           <div className="flex items-center gap-1.5 mb-1.5">
             <Users className="h-3 w-3 text-slate-400 shrink-0" />
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Assignee
             </span>
           </div>
-          <div className="flex items-center gap-2 min-w-0 pr-6">
-            {incident.team ? (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 text-sm font-semibold shadow-2xs truncate">
-                <Users className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-                <span className="truncate">{incident.team.name}</span>
-              </div>
-            ) : incident.assignee ? (
-              <div className="inline-flex items-center gap-1.5 min-w-0">
-                <UserAvatar
-                  userId={incident.assignee.id}
-                  name={incident.assignee.name}
-                  gender={incident.assignee.gender}
-                  avatarUrl={incident.assignee.avatarUrl}
-                  size="xs"
-                  className="border-slate-200 shrink-0"
-                />
-                <span className="text-sm font-semibold text-slate-900 truncate">
-                  {incident.assignee.name}
-                </span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-50 border border-dashed border-slate-300 text-slate-500 text-sm font-semibold">
-                <User className="h-3.5 w-3.5" />
-                <span>Unassigned</span>
-              </div>
-            )}
-          </div>
-          {canManage && (
-            <div className="absolute right-2 top-1/2 -translate-y-1/2">
-              <AssigneeSection
-                assignee={incident.assignee}
-                team={incident.team || null}
-                assigneeId={incident.assigneeId}
-                teamId={incident.teamId}
-                users={users}
-                teams={teams}
-                incidentId={incident.id}
-                canManage={canManage}
-                variant="header"
-              />
-            </div>
-          )}
+          <AssigneeSection
+            assignee={incident.assignee}
+            team={incident.team || null}
+            assigneeId={incident.assigneeId}
+            teamId={incident.teamId}
+            users={users}
+            teams={teams}
+            incidentId={incident.id}
+            canManage={canManage}
+            variant="header"
+          />
         </div>
 
         {/* Policy */}
@@ -391,7 +348,10 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
             if (incident.status === 'RESOLVED') {
               return (
                 <div
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600 text-xs font-semibold w-fit shadow-2xs"
+                  className={cn(
+                    SELECTOR_BASE_CLASS,
+                    'cursor-default text-slate-700 dark:text-zinc-300'
+                  )}
                   title="Escalation ended upon resolution"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
@@ -404,7 +364,10 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
             if (incident.status === 'SNOOZED' || incident.status === 'SUPPRESSED') {
               return (
                 <div
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold w-fit shadow-2xs"
+                  className={cn(
+                    SELECTOR_BASE_CLASS,
+                    'cursor-default text-indigo-700 dark:text-indigo-400'
+                  )}
                   title="Escalation paused while incident is snoozed/suppressed"
                 >
                   <Pause className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
@@ -422,7 +385,10 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
                   : 'Stopped (Acked)';
               return (
                 <div
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold w-fit shadow-2xs"
+                  className={cn(
+                    SELECTOR_BASE_CLASS,
+                    'cursor-default text-emerald-800 dark:text-emerald-400'
+                  )}
                   title="Escalation stopped because incident was acknowledged"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
@@ -439,6 +405,7 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
                   currentStep={incident.currentEscalationStep}
                   nextEscalationAt={incident.nextEscalationAt}
                   size="sm"
+                  className="h-8"
                 />
               );
             }
@@ -447,7 +414,10 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
             if (incident.escalationStatus === 'COMPLETED') {
               return (
                 <div
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold w-fit shadow-2xs"
+                  className={cn(
+                    SELECTOR_BASE_CLASS,
+                    'cursor-default text-rose-800 dark:text-rose-400'
+                  )}
                   title="All escalation policy steps have been exhausted"
                 >
                   <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />

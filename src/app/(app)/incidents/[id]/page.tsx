@@ -6,7 +6,6 @@ import { addNote, addWatcher, removeWatcher, updateIncidentStatus } from '../act
 import { getPostmortem } from '@/app/(app)/postmortems/actions';
 import IncidentHeader from '@/components/incident/IncidentHeader';
 import IncidentWatchers from '@/components/incident/detail/IncidentWatchers';
-import IncidentJiraCard from '@/components/incident/detail/IncidentJiraCard';
 import IncidentCommandBar from '@/components/incident/detail/IncidentCommandBar';
 import IncidentDetailTabs from '@/components/incident/IncidentDetailTabs';
 import IncidentNotes from '@/components/incident/detail/IncidentNotes';
@@ -38,6 +37,13 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
           policy: true,
           jiraServiceMapping: {
             select: { projectKey: true },
+          },
+          slackIntegration: {
+            select: {
+              id: true,
+              enabled: true,
+              workspaceId: true,
+            },
           },
         },
       },
@@ -79,8 +85,8 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   // Check if postmortem exists for this incident
   const postmortem = incident.status === 'RESOLVED' ? await getPostmortem(id) : null;
 
-  // Fetch Jira data for the incident sidebar
-  const [jiraLinks, jiraConfig] = await Promise.all([
+  // Fetch Jira, ChatOps, and Slack data for the incident collaboration bar
+  const [jiraLinks, jiraConfig, chatOpsConfig, globalSlackIntegration] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
@@ -89,7 +95,23 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       where: { id: 'default' },
       select: { enabled: true },
     }),
+    prisma.chatOpsConfig.findUnique({
+      where: { id: 'default' },
+      select: { enabled: true },
+    }),
+    prisma.slackIntegration.findFirst({
+      where: { enabled: true, services: { none: {} } },
+      select: { workspaceId: true },
+    }),
   ]);
+
+  const hasSlackWorkspace = Boolean(
+    (incident.service.slackIntegration?.workspaceId &&
+      incident.service.slackIntegration?.enabled !== false) ||
+    globalSlackIntegration?.workspaceId
+  );
+
+  const isWarRoomEnabled = Boolean(chatOpsConfig?.enabled && hasSlackWorkspace);
 
   // The resolution note is stored as a regular Note prefixed with "Resolution:" —
   // there's no separate resolution-summary column on Incident.
@@ -294,6 +316,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
           slackChannelName: incident.slackChannelName,
           warRoomUrl: incident.warRoomUrl,
           warRoomArchivedAt: incident.warRoomArchivedAt,
+          enabled: isWarRoomEnabled,
         }}
         jira={{
           links: jiraLinks,
@@ -373,24 +396,6 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
               })) || []
             }
             allCustomFields={customFields}
-            canManage={canManageIncident}
-          />
-
-          {/* Jira Integration */}
-          <IncidentJiraCard
-            incidentId={incident.id}
-            serviceSettingsHref={`/services/${incident.serviceId}/settings`}
-            jiraLinks={jiraLinks.map(l => ({
-              id: l.id,
-              externalKey: l.externalKey,
-              externalUrl: l.externalUrl,
-              externalStatus: l.externalStatus,
-              externalAssignee: l.externalAssignee,
-              syncState: l.syncState,
-              lastSyncedAt: l.lastSyncedAt,
-            }))}
-            jiraEnabled={jiraConfig?.enabled ?? false}
-            serviceJiraMapped={Boolean(incident.service.jiraServiceMapping?.projectKey)}
             canManage={canManageIncident}
           />
 

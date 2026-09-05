@@ -8,6 +8,7 @@ type EscalationStatusBadgeProps = {
   currentStep: number | null | undefined;
   nextEscalationAt: Date | null | undefined;
   size?: 'sm' | 'md';
+  className?: string;
 };
 
 function EscalationStatusBadge({
@@ -15,6 +16,7 @@ function EscalationStatusBadge({
   currentStep,
   nextEscalationAt,
   size = 'md',
+  className,
 }: EscalationStatusBadgeProps) {
   if (!status || status === 'COMPLETED') {
     return null;
@@ -57,10 +59,11 @@ function EscalationStatusBadge({
   return (
     <div
       className={cn(
-        'gap-1.5 font-semibold rounded-md border transition-colors inline-flex items-center text-sm px-2.5 py-0.5 shadow-2xs leading-normal',
+        'gap-1.5 font-semibold rounded-md border transition-colors inline-flex items-center text-xs px-2.5 py-0.5 shadow-2xs leading-normal',
         isEscalating
           ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'
+          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700',
+        className
       )}
       title={titleParts.join(' - ')}
     >
