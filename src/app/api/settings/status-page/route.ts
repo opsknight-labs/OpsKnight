@@ -76,7 +76,10 @@ export async function POST(req: NextRequest) {
     }
 
     const {
+      id,
       name,
+      slug,
+      isDefault,
       organizationName,
       subdomain,
       customDomain,
@@ -91,7 +94,7 @@ export async function POST(req: NextRequest) {
       contactEmail,
       contactUrl,
       branding,
-      serviceIds = [],
+      serviceIds,
       serviceConfigs = {},
       privacyMode,
       showIncidentDetails,
@@ -128,12 +131,18 @@ export async function POST(req: NextRequest) {
       statusApiRateLimitWindowSec,
     } = parsed.data;
 
-    let statusPage = await prisma.statusPage.findFirst({});
+    let statusPage = id
+      ? await prisma.statusPage.findUnique({ where: { id } })
+      : await prisma.statusPage.findFirst({
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        });
 
     if (!statusPage) {
       statusPage = await prisma.statusPage.create({
         data: {
           name: name?.trim() || 'Status Page',
+          slug: slug || null,
+          isDefault: true,
           organizationName: organizationName || null,
           enabled: enabled !== false,
           showServices: showServices !== false,
@@ -144,7 +153,28 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const effectiveExcellent = uptimeExcellentThreshold ?? statusPage.uptimeExcellentThreshold;
+    const effectiveGood = uptimeGoodThreshold ?? statusPage.uptimeGoodThreshold;
+    if (effectiveExcellent < effectiveGood) {
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage:
+            'Excellent uptime threshold must be greater than or equal to the good threshold.',
+          fields: [
+            {
+              field: 'uptimeExcellentThreshold',
+              code: 'invalid',
+              message: 'Must be greater than or equal to the good threshold.',
+            },
+          ],
+        })
+      );
+    }
+
     const updateData: Prisma.StatusPageUpdateInput = {
+      slug: slug !== undefined ? slug || null : undefined,
+      isDefault: isDefault ?? undefined,
       organizationName:
         organizationName !== undefined
           ? organizationName && organizationName.trim()
@@ -254,29 +284,34 @@ export async function POST(req: NextRequest) {
     if (statusApiRateLimitWindowSec !== undefined)
       updateData.statusApiRateLimitWindowSec = statusApiRateLimitWindowSec;
 
-    await prisma.statusPage.update({
-      where: { id: statusPage.id },
-      data: updateData,
-    });
-
-    if (Array.isArray(serviceIds)) {
-      await prisma.statusPageService.deleteMany({ where: { statusPageId: statusPage.id } });
-
-      if (serviceIds.length > 0) {
-        await prisma.statusPageService.createMany({
-          data: serviceIds.map((serviceId: string) => {
-            const config = serviceConfigs[serviceId] || {};
-            return {
-              statusPageId: statusPage.id,
-              serviceId,
-              displayName: config.displayName || null,
-              order: config.order || 0,
-              showOnPage: config.showOnPage !== false,
-            };
-          }),
+    await prisma.$transaction(async tx => {
+      if (isDefault === true) {
+        await tx.statusPage.updateMany({
+          where: { isDefault: true, id: { not: statusPage.id } },
+          data: { isDefault: false },
         });
       }
-    }
+      await tx.statusPage.update({ where: { id: statusPage.id }, data: updateData });
+
+      // Omitted means leave mappings unchanged; an explicit empty array removes all mappings.
+      if (serviceIds !== undefined) {
+        await tx.statusPageService.deleteMany({ where: { statusPageId: statusPage.id } });
+        if (serviceIds.length > 0) {
+          await tx.statusPageService.createMany({
+            data: serviceIds.map((serviceId: string) => {
+              const config = Reflect.get(serviceConfigs, serviceId) || {};
+              return {
+                statusPageId: statusPage.id,
+                serviceId,
+                displayName: config.displayName || null,
+                order: config.order || 0,
+                showOnPage: config.showOnPage !== false,
+              };
+            }),
+          });
+        }
+      }
+    });
 
     revalidatePath('/status');
     revalidatePath('/');

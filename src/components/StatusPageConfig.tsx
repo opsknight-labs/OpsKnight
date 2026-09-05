@@ -965,6 +965,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            id: statusPage.id,
             name: formData.name,
             organizationName: formData.organizationName || null,
             subdomain: formData.subdomain || null,

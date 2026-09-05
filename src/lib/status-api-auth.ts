@@ -23,11 +23,15 @@ function extractToken(req: NextRequest) {
   return null;
 }
 
-function getRateLimitKey(req: NextRequest, tokenHash?: string | null) {
-  if (tokenHash) {
-    return `status-api:token:${tokenHash}`;
-  }
-  return `status-api:ip:${getClientIp(req.headers)}`;
+async function enforceRateLimit(key: string, limit: number, windowMs: number) {
+  const rate = await checkRateLimit(key, limit, windowMs);
+  if (rate.allowed) return null;
+  return {
+    allowed: false,
+    error: 'Rate limit exceeded',
+    status: 429,
+    retryAfter: Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000)),
+  } satisfies StatusApiAuthResult;
 }
 
 export async function authorizeStatusApiRequest(
@@ -40,6 +44,17 @@ export async function authorizeStatusApiRequest(
     rateLimitWindowSec?: number | null;
   }
 ): Promise<StatusApiAuthResult> {
+  const limit = options.rateLimitMax ?? DEFAULT_RATE_LIMIT_MAX;
+  const windowMs = (options.rateLimitWindowSec ?? DEFAULT_RATE_LIMIT_WINDOW_SEC) * 1000;
+  if (options.rateLimitEnabled) {
+    const preAuthLimit = await enforceRateLimit(
+      `status-api:ip:${getClientIp(req.headers)}`,
+      limit,
+      windowMs
+    );
+    if (preAuthLimit) return preAuthLimit;
+  }
+
   const token = extractToken(req);
   let tokenHash: string | null = null;
   let tokenRecord: { id: string } | null = null;
@@ -94,13 +109,13 @@ export async function authorizeStatusApiRequest(
   }
 
   if (options.rateLimitEnabled) {
-    const limit = options.rateLimitMax ?? DEFAULT_RATE_LIMIT_MAX;
-    const windowMs = (options.rateLimitWindowSec ?? DEFAULT_RATE_LIMIT_WINDOW_SEC) * 1000;
-    const rateKey = getRateLimitKey(req, tokenHash);
-    const rate = await checkRateLimit(rateKey, limit, windowMs);
-    if (!rate.allowed) {
-      const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
-      return { allowed: false, error: 'Rate limit exceeded', status: 429, retryAfter };
+    if (tokenRecord) {
+      const tokenLimit = await enforceRateLimit(
+        `status-api:token:${tokenRecord.id}`,
+        limit,
+        windowMs
+      );
+      if (tokenLimit) return tokenLimit;
     }
   }
 

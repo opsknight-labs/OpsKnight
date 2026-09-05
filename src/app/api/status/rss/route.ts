@@ -8,6 +8,7 @@ import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { publicStatusVisibility } from '@/lib/status-page-public-data';
 import { createHash } from 'node:crypto';
 import { getReportingWindowForDays } from '@/lib/retention-policy';
+import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 
 export function opaqueRssIncidentGuid(
   baseUrl: string,
@@ -23,9 +24,14 @@ export function opaqueRssIncidentGuid(
  * GET /api/status/rss
  */
 export async function GET(req: NextRequest) {
+  return getStatusRssResponse(req);
+}
+
+export async function getStatusRssResponse(req: NextRequest, slug?: string) {
   try {
     const statusPage = await prisma.statusPage.findFirst({
-      where: { enabled: true },
+      where: { enabled: true, ...(slug ? { slug } : {}) },
+      orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
       include: {
         services: {
           include: {
@@ -71,6 +77,10 @@ export async function GET(req: NextRequest) {
     const serviceIds = statusPage.services.map(sp => sp.serviceId);
 
     const baseUrl = getBaseUrl();
+    const pageUrl = getStatusPagePublicUrl(statusPage, baseUrl);
+    const rssUrl = slug
+      ? `${baseUrl}/api/status/${encodeURIComponent(slug)}/rss`
+      : `${baseUrl}/api/status/rss`;
 
     const window = await getReportingWindowForDays(30, 'incident');
     const incidents =
@@ -103,10 +113,10 @@ export async function GET(req: NextRequest) {
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
     <channel>
         <title>${escapeXml(statusPage.name)} - Status Updates</title>
-        <link>${baseUrl}/status</link>
+        <link>${pageUrl}</link>
         <description>${escapeXml(description)}</description>
         <language>en</language>
-        <atom:link href="${baseUrl}/api/status/rss" rel="self" type="application/rss+xml" />
+        <atom:link href="${rssUrl}" rel="self" type="application/rss+xml" />
         ${incidents
           .map(incident => {
             const status =
@@ -119,8 +129,8 @@ export async function GET(req: NextRequest) {
               ? new Date(incident.createdAt).toUTCString()
               : null;
             const guid = visibility.showIncidentId
-              ? `${baseUrl}/status#incident-${incident.id}`
-              : opaqueRssIncidentGuid(baseUrl, statusPage.id, incident.id);
+              ? `${pageUrl}#incident-${incident.id}`
+              : opaqueRssIncidentGuid(pageUrl, statusPage.id, incident.id);
             const serviceName = visibility.showAffectedService
               ? incident.service?.name || 'General'
               : null;

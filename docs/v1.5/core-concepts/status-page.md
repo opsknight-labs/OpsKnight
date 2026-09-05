@@ -6,9 +6,23 @@ order: 9
 
 # Status page
 
-OpsKnight provides one workspace status page at `/status`. Administrators choose which services and incident data are shown, configure branding and access, publish announcements, manage subscribers, expose a status feed/API, and send signed outbound webhooks.
+OpsKnight provides independently configured workspace status pages. `/status` resolves the designated default page, while `/status/<slug>` resolves a specific page. Administrators choose which services and incident data are shown, configure branding and access, publish announcements, manage subscribers, expose a status feed/API, and send signed outbound webhooks.
 
 Only an application **Admin** can configure the status page and its integrations. Public or authenticated readers see the rendered page according to privacy settings.
+
+## Multiple status pages
+
+Each page has its own slug, domains, services, privacy rules, subscribers, API tokens, webhooks, branding, and announcements. A service may appear on multiple pages without duplicating incident processing. Page-specific APIs use `/api/status/<slug>`; legacy `/api/status` resolves the default page. Tokens remain page-scoped.
+
+Public publication is fail-closed. An incident must be public, its service must be mapped and visible on the selected enabled page, and the relevant page content setting must permit the surface. These restrictions also protect post-incident reviews and uptime calculations.
+
+## Reliability and caching
+
+Incident and announcement delivery uses durable background work and centralized idempotent notification intents. Subscriber enumeration uses keyset pagination, avoiding an unbounded recipient list in application memory. Terminal job failures remain visible in queue health.
+
+Public JSON uses short shared-cache lifetimes, stale-while-revalidate, and ETags. Authenticated or token-protected responses remain `private, no-store`. Logo responses are size/type bounded and content-addressed with ETags. Use an external CDN or reverse proxy for outage traffic.
+
+Before a large rollout, certify cross-page isolation, private incidents, disabled mappings, maintenance parity, worker retry, database failover, invalid-token floods, conditional requests, and expected peak public traffic against the production topology.
 
 ## Before enabling the page
 

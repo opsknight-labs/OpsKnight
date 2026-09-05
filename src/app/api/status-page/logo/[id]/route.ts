@@ -1,16 +1,25 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { createHash } from 'node:crypto';
+
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+const ALLOWED_LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
 function parseDataImage(dataUrl: string): { mime: string; buffer: Buffer } | null {
-  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+)(;base64)?,(.*)$/);
-  if (!match) return null;
-  const mime = match[1];
-  const isBase64 = Boolean(match[2]);
-  const payload = match[3] || '';
+  if (!dataUrl.startsWith('data:')) return null;
+  const comma = dataUrl.indexOf(',');
+  if (comma < 6) return null;
+  const metadata = dataUrl.slice(5, comma).split(';');
+  const mime = metadata[0]?.toLowerCase() ?? '';
+  if (!ALLOWED_LOGO_TYPES.has(mime)) return null;
+  const isBase64 = metadata.includes('base64');
+  const payload = dataUrl.slice(comma + 1);
+  if (payload.length > MAX_LOGO_BYTES * 2) return null;
   try {
     if (isBase64) {
-      return { mime, buffer: Buffer.from(payload, 'base64') };
+      const buffer = Buffer.from(payload, 'base64');
+      return buffer.length <= MAX_LOGO_BYTES ? { mime, buffer } : null;
     }
     const decoded = decodeURIComponent(payload);
     return { mime, buffer: Buffer.from(decoded, 'utf8') };
@@ -47,30 +56,21 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
       return NextResponse.json({ error: 'Invalid logo data.' }, { status: 400 });
     }
 
-    let buffer = parsed.buffer;
-    const isSvg = parsed.mime.includes('svg');
-
-    if (isSvg) {
-      const svgText = buffer.toString('utf8');
-      // Basic SVG sanitization against stored XSS
-      const sanitizedSvg = svgText
-        .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
-        .replace(/on\w+\s*=\s*(["']).*?\1/gi, '')
-        .replace(/on\w+\s*=\s*[^>\s]+/gi, '')
-        .replace(/javascript:/gi, '');
-      buffer = Buffer.from(sanitizedSvg, 'utf8');
-    }
+    const buffer = parsed.buffer;
 
     const body = new Uint8Array(buffer);
+    const etag = `"${createHash('sha256').update(buffer).digest('base64url')}"`;
+    if (_req.headers.get('if-none-match') === etag) {
+      return new NextResponse(null, { status: 304, headers: { ETag: etag } });
+    }
     return new NextResponse(body, {
       status: 200,
       headers: {
         'Content-Type': parsed.mime,
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
+        ETag: etag,
         'X-Content-Type-Options': 'nosniff',
-        ...(isSvg
-          ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" }
-          : {}),
+        'Content-Security-Policy': "default-src 'none'",
       },
     });
   } catch (error) {

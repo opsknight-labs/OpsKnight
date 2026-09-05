@@ -16,6 +16,10 @@ import {
  * GET /api/status/history?serviceId=xxx&days=90
  */
 export async function GET(req: NextRequest) {
+  return getStatusHistoryResponse(req);
+}
+
+export async function getStatusHistoryResponse(req: NextRequest, slug?: string) {
   try {
     const { searchParams } = new URL(req.url);
     const serviceId = searchParams.get('serviceId');
@@ -24,7 +28,8 @@ export async function GET(req: NextRequest) {
     const days = Number.isFinite(parsedDays) ? Math.min(Math.max(parsedDays, 1), 730) : 90;
 
     const statusPage = await prisma.statusPage.findFirst({
-      where: { enabled: true },
+      where: { enabled: true, ...(slug ? { slug } : {}) },
+      orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
       include: {
         services: {
           include: {

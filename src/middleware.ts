@@ -118,8 +118,13 @@ const INTERNAL_API_BASE =
 
 type StatusDomainConfig = {
   enabled: boolean;
-  subdomain?: string | null;
-  customDomain?: string | null;
+  pages?: Array<{
+    id: string;
+    slug?: string | null;
+    isDefault?: boolean;
+    subdomain?: string | null;
+    customDomain?: string | null;
+  }>;
   appHost?: string | null;
 };
 
@@ -259,22 +264,18 @@ export default async function middleware(req: NextRequest) {
         .filter(Boolean)
         .at(-1);
       const hostname = normalizeHostname(forwardedHost || req.headers.get('host'));
-      const allowedHosts = new Set<string>();
-      if (statusConfig.subdomain && statusConfig.appHost) {
-        const subdomainHost = buildSubdomainHost(statusConfig.subdomain, statusConfig.appHost);
-        if (subdomainHost) {
-          allowedHosts.add(subdomainHost);
-        }
-      }
-      if (statusConfig.customDomain) {
-        const customHost = parseHostname(statusConfig.customDomain);
-        if (customHost) {
-          allowedHosts.add(customHost);
-        }
-      }
-      if (hostname && allowedHosts.has(hostname) && isStatusDomainPath(pathname)) {
+      const matchedPage = statusConfig.pages?.find(page => {
+        const subdomainHost =
+          page.subdomain && statusConfig.appHost
+            ? buildSubdomainHost(page.subdomain, statusConfig.appHost)
+            : '';
+        const customHost = parseHostname(page.customDomain);
+        return hostname === subdomainHost || hostname === customHost;
+      });
+      if (hostname && matchedPage && isStatusDomainPath(pathname)) {
         const url = req.nextUrl.clone();
-        url.pathname = pathname === '/' || pathname === '' ? '/status' : `/status${pathname}`;
+        const pageRoot = matchedPage.slug ? `/status/${matchedPage.slug}` : '/status';
+        url.pathname = pathname === '/' || pathname === '' ? pageRoot : `${pageRoot}${pathname}`;
         const rewriteResponse = NextResponse.rewrite(url);
         Object.entries(securityHeaders).forEach(([key, value]) => {
           rewriteResponse.headers.set(key, value);

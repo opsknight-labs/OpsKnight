@@ -4,6 +4,8 @@ import PostmortemDetailView from '@/components/postmortem/PostmortemDetailView';
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { resolveStatusPage } from '@/lib/status-page-resolver';
+import { canPublishIncidentToStatusPage } from '@/lib/status-page-publication';
 
 export default async function PublicPostmortemPage({
   params,
@@ -11,19 +13,30 @@ export default async function PublicPostmortemPage({
   params: Promise<{ incidentId: string }>;
 }) {
   const { incidentId } = await params;
+  return renderPublicPostmortem(incidentId);
+}
 
-  const statusPage = await prisma.statusPage.findFirst({
-    where: { enabled: true },
-    select: { requireAuth: true },
-  });
+export async function renderPublicPostmortem(incidentId: string, slug?: string) {
+  const statusPage = await resolveStatusPage(slug ? { slug } : { default: true });
+  if (!statusPage) notFound();
   if (statusPage?.requireAuth) {
     const session = await getServerSession(await getAuthOptions());
-    if (!session) redirect(`/login?callbackUrl=/status/postmortems/${incidentId}`);
+    if (!session) {
+      const callbackUrl = slug
+        ? `/status/${encodeURIComponent(slug)}/postmortems/${incidentId}`
+        : `/status/postmortems/${incidentId}`;
+      redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    }
+  }
+
+  if (!(await canPublishIncidentToStatusPage(statusPage.id, incidentId, 'postmortem'))) {
+    notFound();
   }
 
   const postmortem = await prisma.postmortem.findFirst({
     where: {
       incidentId,
+      incident: { visibility: 'PUBLIC' },
       status: 'PUBLISHED',
       isPublic: true,
     },
@@ -62,7 +75,7 @@ export default async function PublicPostmortemPage({
     <main style={{ padding: 'var(--spacing-6)' }}>
       <div style={{ marginBottom: 'var(--spacing-6)' }}>
         <Link
-          href="/status"
+          href={slug ? `/status/${encodeURIComponent(slug)}` : '/status'}
           style={{
             color: 'var(--text-muted)',
             textDecoration: 'none',

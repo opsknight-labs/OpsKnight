@@ -12,7 +12,7 @@ function isNonRetryableBackgroundJobError(error: string): boolean {
   return /message_limit_exceeded|user has not enabled any notification channels/i.test(error);
 }
 
-export type JobType = 'ESCALATION' | 'NOTIFICATION' | 'AUTO_UNSNOOZE' | 'SCHEDULED_TASK' | 'STATUS_PAGE_NOTIFICATION' | 'CHATOPS_INTENT' | 'EXTERNAL_OPERATION';
+export type JobType = 'ESCALATION' | 'NOTIFICATION' | 'AUTO_UNSNOOZE' | 'SCHEDULED_TASK' | 'STATUS_PAGE_NOTIFICATION' | 'STATUS_PAGE_ANNOUNCEMENT_FANOUT' | 'CHATOPS_INTENT' | 'EXTERNAL_OPERATION';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 interface JobPayload { incidentId?: string; stepIndex?: number; eventType?: string; task?: string; [key:string]:unknown; }
 
@@ -20,6 +20,7 @@ export async function scheduleJob(type:JobType,scheduledAt:Date,payload:JobPaylo
   const job=await prisma.backgroundJob.create({data:{type,status:'PENDING',scheduledAt,payload:payload as Prisma.InputJsonObject,maxAttempts}});return job.id;
 }
 export async function scheduleStatusPageNotification(incidentId:string,eventType:string):Promise<string>{return scheduleJob('STATUS_PAGE_NOTIFICATION',new Date(),{incidentId,eventType},5);}
+export async function scheduleStatusPageAnnouncementFanout(announcementId:string,statusPageId:string):Promise<string>{return scheduleJob('STATUS_PAGE_ANNOUNCEMENT_FANOUT',new Date(),{announcementId,statusPageId},5);}
 export async function scheduleAutoUnsnooze(incidentId:string,snoozedUntil:Date):Promise<string>{return scheduleJob('AUTO_UNSNOOZE',snoozedUntil,{incidentId});}
 export async function getPendingJobs(limit:number=50):Promise<unknown[]>{return prisma.backgroundJob.findMany({where:{status:'PENDING',scheduledAt:{lte:new Date()}},orderBy:{scheduledAt:'asc'},take:limit});}
 
@@ -104,6 +105,13 @@ export async function processJob(job:any):Promise<boolean>{
           const webhookResult=await triggerWebhooksForService(incidentForWebhook.serviceId,eventMap[job.payload.eventType]||'incident.updated',{id:incidentForWebhook.id,title:incidentForWebhook.title,status:incidentForWebhook.status,urgency:incidentForWebhook.urgency,priority:incidentForWebhook.priority,visibility:incidentForWebhook.visibility,service:incidentForWebhook.service,createdAt:incidentForWebhook.createdAt.toISOString(),acknowledgedAt:incidentForWebhook.acknowledgedAt?.toISOString()||null,resolvedAt:incidentForWebhook.resolvedAt?.toISOString()||null});
           if(webhookResult.failed>0)throw new Error(`Status page webhook delivery failed (${webhookResult.failed})`);
         }
+        await markJobCompleted(job.id);return true;
+      }
+      case'STATUS_PAGE_ANNOUNCEMENT_FANOUT':{
+        if(typeof job.payload.announcementId!=='string'||typeof job.payload.statusPageId!=='string')throw new Error('Status page announcement fan-out job payload is invalid');
+        const {notifyStatusPageSubscribersAnnouncement}=await import('../status-page-notifications');
+        const result=await notifyStatusPageSubscribersAnnouncement(job.payload.announcementId,job.payload.statusPageId);
+        if(result.failed>0)throw new Error(`Status page announcement fan-out failed (${result.failed})`);
         await markJobCompleted(job.id);return true;
       }
       case'SCHEDULED_TASK':{

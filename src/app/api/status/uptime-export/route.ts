@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { buildCsv } from '@/lib/csv';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { resolveStatusPage } from '@/lib/status-page-resolver';
 
 function escapePdf(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
@@ -84,6 +85,12 @@ function buildSimplePdf(lines: string[]): Buffer {
 }
 
 export async function GET(req: NextRequest) {
+  return getUptimeExportResponse(req);
+}
+
+export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
+  const resolvedPage = await resolveStatusPage(slug ? { slug } : { default: true });
+  if (!resolvedPage) return new NextResponse('Status page not found', { status: 404 });
   let isAdmin = false;
   try {
     await assertAdmin();
@@ -93,14 +100,10 @@ export async function GET(req: NextRequest) {
   }
 
   if (!isAdmin) {
-    const publicPage = await prisma.statusPage.findFirst({
-      where: { enabled: true, enableUptimeExports: true },
-      select: { requireAuth: true, privacyMode: true },
-    });
-    if (!publicPage) {
+    if (!resolvedPage.enableUptimeExports) {
       return new NextResponse('Unauthorized', { status: 403 });
     }
-    if (publicPage.requireAuth || publicPage.privacyMode === 'PRIVATE') {
+    if (resolvedPage.requireAuth || resolvedPage.privacyMode === 'PRIVATE') {
       const session = await getServerSession(await getAuthOptions());
       if (!session) {
         return new NextResponse('Authentication required', {
@@ -130,8 +133,8 @@ export async function GET(req: NextRequest) {
     const periodStart = new Date(Date.UTC(year, monthIndex, 1));
     const periodEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
 
-    const statusPage = await prisma.statusPage.findFirst({
-      where: { enabled: true },
+    const statusPage = await prisma.statusPage.findUnique({
+      where: { id: resolvedPage.id },
       include: {
         services: {
           include: { service: true },
@@ -154,7 +157,12 @@ export async function GET(req: NextRequest) {
     }
 
     const { calculateMultiServiceUptime } = await import('@/lib/sla-server');
-    const uptimeMap = await calculateMultiServiceUptime(serviceIds, periodStart, periodEnd);
+    const uptimeMap = await calculateMultiServiceUptime(
+      serviceIds,
+      periodStart,
+      periodEnd,
+      'PUBLIC'
+    );
 
     const uptimeRows = statusPage.services.map(sp => {
       return {

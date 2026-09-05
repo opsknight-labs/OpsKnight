@@ -11,6 +11,12 @@ import {
   publicStatusVisibility,
   serializePublicStatusApiIncident,
 } from '@/lib/status-page-public-data';
+import { createHash } from 'node:crypto';
+import {
+  activeMaintenanceServiceIds,
+  projectOverallStatus,
+  projectServiceStatus,
+} from '@/lib/status-page-projection';
 
 /**
  * Status Page API
@@ -19,11 +25,17 @@ import {
  * GET /api/status
  */
 export async function GET(req: NextRequest) {
+  return getStatusResponse(req);
+}
+
+export async function getStatusResponse(req: NextRequest, slug?: string) {
   try {
     const statusPage = await prisma.statusPage.findFirst({
-      where: { enabled: true },
+      where: { enabled: true, ...(slug ? { slug } : {}) },
+      orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
       select: {
         id: true,
+        updatedAt: true,
         enabled: true,
         requireAuth: true,
         statusApiRequireToken: true,
@@ -53,6 +65,15 @@ export async function GET(req: NextRequest) {
             order: true,
           },
           orderBy: { order: 'asc' },
+        },
+        announcements: {
+          where: {
+            isActive: true,
+            type: 'MAINTENANCE',
+            startDate: { lte: new Date() },
+            OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+          },
+          select: { affectedServiceIds: true, updatedAt: true },
         },
       },
     });
@@ -186,11 +207,23 @@ export async function GET(req: NextRequest) {
       serviceActiveCountMap.set(serviceId, activeCount);
     }
 
-    const overallStatus = activeGroups.some(group => group.urgency === 'HIGH')
-      ? 'outage'
-      : activeGroups.length > 0
-        ? 'degraded'
-        : 'operational';
+    const maintenanceServiceIds = activeMaintenanceServiceIds(statusPage.announcements, new Date());
+    for (const serviceId of serviceIds) {
+      serviceStatusMap.set(
+        serviceId,
+        projectServiceStatus(
+          serviceId,
+          serviceStatusMap.get(serviceId) ?? 'OPERATIONAL',
+          maintenanceServiceIds
+        )
+      );
+    }
+
+    const overallStatus = projectOverallStatus(
+      activeGroups.some(group => group.urgency === 'HIGH'),
+      activeGroups.length > 0,
+      maintenanceServiceIds
+    );
 
     const servicesData = visibility.showServices
       ? services.map(service => ({
@@ -233,27 +266,39 @@ export async function GET(req: NextRequest) {
           : 'public, s-maxage=15, stale-while-revalidate=120',
       Expires: '0',
     };
-
-    return jsonOk(
-      {
-        status: overallStatus,
-        services: servicesData,
-        incidents: visibility.showIncidents
-          ? recentIncidents.map(inc => serializePublicStatusApiIncident(inc, statusPage))
-          : [],
-        metrics: {
-          uptime: uptimeMetrics,
-        },
-        retention: {
-          effectiveStart: uptimeWindow.start.toISOString(),
-          effectiveEnd: uptimeWindow.end.toISOString(),
-          isClipped: uptimeWindow.isClipped,
-        },
-        updatedAt: new Date().toISOString(),
-      },
-      200,
-      headers
+    const snapshotUpdatedAt = [
+      statusPage.updatedAt,
+      ...statusPage.announcements.map(item => item.updatedAt),
+      ...recentIncidents.flatMap(
+        item => [item.createdAt, item.resolvedAt].filter(Boolean) as Date[]
+      ),
+    ].reduce(
+      (latest, candidate) => (candidate > latest ? candidate : latest),
+      statusPage.updatedAt
     );
+
+    const responseData = {
+      status: overallStatus,
+      services: servicesData,
+      incidents: visibility.showIncidents
+        ? recentIncidents.map(inc => serializePublicStatusApiIncident(inc, statusPage))
+        : [],
+      metrics: { uptime: uptimeMetrics },
+      retention: {
+        effectiveStart: uptimeWindow.start.toISOString(),
+        effectiveEnd: uptimeWindow.end.toISOString(),
+        isClipped: uptimeWindow.isClipped,
+      },
+      updatedAt: snapshotUpdatedAt.toISOString(),
+    };
+    if (!statusPage.requireAuth && !statusPage.statusApiRequireToken) {
+      const etag = `"${createHash('sha256').update(JSON.stringify(responseData)).digest('base64url')}"`;
+      if (req.headers.get('if-none-match') === etag) {
+        return new NextResponse(null, { status: 304, headers: { ...headers, ETag: etag } });
+      }
+      headers.ETag = etag;
+    }
+    return jsonOk(responseData, 200, headers);
   } catch (error: any) {
     logger.error('api.status.error', {
       error: error instanceof Error ? error.message : String(error),

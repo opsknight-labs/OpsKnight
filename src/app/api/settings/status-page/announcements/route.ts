@@ -58,30 +58,32 @@ export async function POST(req: NextRequest) {
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
 
-    const announcement = await prisma.statusPageAnnouncement.create({
-      data: {
-        statusPageId,
-        title: title.trim(),
-        message: message.trim(),
-        type: type || 'INFO',
-        startDate: parseDate(startDate, 'startDate'),
-        endDate: endDate ? parseDate(endDate, 'endDate') : null,
-        isActive: isActive !== false,
-        affectedServiceIds: normalizedAffectedServiceIds as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-      },
+    const announcement = await prisma.$transaction(async tx => {
+      const created = await tx.statusPageAnnouncement.create({
+        data: {
+          statusPageId,
+          title: title.trim(),
+          message: message.trim(),
+          type: type || 'INFO',
+          startDate: parseDate(startDate, 'startDate'),
+          endDate: endDate ? parseDate(endDate, 'endDate') : null,
+          isActive: isActive !== false,
+          affectedServiceIds: normalizedAffectedServiceIds as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        },
+      });
+      if (notifySubscribers) {
+        await tx.backgroundJob.create({
+          data: {
+            type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            maxAttempts: 5,
+            payload: { announcementId: created.id, statusPageId },
+          },
+        });
+      }
+      return created;
     });
-
-    if (notifySubscribers) {
-      // Trigger notifications asynchronously
-      const { notifyStatusPageSubscribersAnnouncement } =
-        await import('@/lib/status-page-notifications');
-      // Don't await strictly to ensure fast API response, but in Vercel functions this might need await or execution context.
-      // For safety in this environment, we await it or trust the runtime to handle background promises if not awaited.
-      // Given the importance, let's await it to ensure it runs before lambda freezes,
-      // OR use `waitUntil` if available (Next.js 15+ has `after` or similar).
-      // For now, simple await is safest.
-      await notifyStatusPageSubscribersAnnouncement(announcement.id, statusPageId);
-    }
 
     logger.info('api.status_page.announcement.created', {
       announcementId: announcement.id,
@@ -118,6 +120,17 @@ export async function PATCH(req: NextRequest) {
     const { id, title, message, type, startDate, endDate, isActive, affectedServiceIds } =
       parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
+    const existing = await prisma.statusPageAnnouncement.findUnique({
+      where: { id },
+      select: { startDate: true, endDate: true },
+    });
+    if (!existing) return jsonError('Announcement not found.', 404);
+    const effectiveStart = startDate ? parseDate(startDate, 'startDate') : existing.startDate;
+    const effectiveEnd =
+      endDate === undefined ? existing.endDate : endDate ? parseDate(endDate, 'endDate') : null;
+    if (effectiveEnd && effectiveEnd <= effectiveStart) {
+      return jsonError('End date must be after start date.', 400);
+    }
 
     const updated = await prisma.statusPageAnnouncement.update({
       where: { id },
@@ -125,10 +138,8 @@ export async function PATCH(req: NextRequest) {
         ...(title !== undefined ? { title: title.trim() } : {}),
         ...(message !== undefined ? { message: message.trim() } : {}),
         ...(type !== undefined ? { type } : {}),
-        ...(startDate ? { startDate: parseDate(startDate, 'startDate') } : {}),
-        ...(endDate !== undefined
-          ? { endDate: endDate ? parseDate(endDate, 'endDate') : null }
-          : {}),
+        ...(startDate ? { startDate: effectiveStart } : {}),
+        ...(endDate !== undefined ? { endDate: effectiveEnd } : {}),
         ...(isActive !== undefined ? { isActive: Boolean(isActive) } : {}),
         ...(affectedServiceIds !== undefined
           ? { affectedServiceIds: normalizedAffectedServiceIds as any }

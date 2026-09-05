@@ -17,13 +17,23 @@ import { getReportingWindowForDays } from '@/lib/retention-policy';
 import { serializeJsonForHtml, toSafeStyleTagContent } from '@/lib/status-page-content';
 import { publicStatusVisibility } from '@/lib/status-page-public-data';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
+import {
+  activeMaintenanceServiceIds as getActiveMaintenanceServiceIds,
+  projectServiceStatus,
+} from '@/lib/status-page-projection';
+import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function generateMetadata(): Promise<Metadata> {
+  return getPublicStatusMetadata();
+}
+
+export async function getPublicStatusMetadata(slug?: string): Promise<Metadata> {
   const statusPage = await prisma.statusPage.findFirst({
-    where: { enabled: true },
+    where: { enabled: true, ...(slug ? { slug } : {}) },
+    orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
   });
 
   if (!statusPage) {
@@ -43,6 +53,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const metaDescription =
     (branding.metaDescription as string) || `Status page for ${statusPage.name}`;
   const baseUrl = getBaseUrl();
+  const pageUrl = getStatusPagePublicUrl(statusPage, baseUrl);
+  const rssUrl = slug
+    ? `${baseUrl}/api/status/${encodeURIComponent(slug)}/rss`
+    : `${baseUrl}/api/status/rss`;
 
   return {
     title: metaTitle,
@@ -50,7 +64,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: metaTitle,
       description: metaDescription,
-      url: `${baseUrl}/status`,
+      url: pageUrl,
       siteName: statusPage.name,
       type: 'website',
     },
@@ -61,15 +75,21 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     alternates: {
       types: {
-        'application/rss+xml': `${baseUrl}/api/status/rss`,
+        'application/rss+xml': rssUrl,
       },
     },
   };
 }
 
 export default async function PublicStatusPage() {
+  return renderPublicStatusPage();
+}
+
+export async function renderPublicStatusPage(slug?: string) {
   // Get the status page configuration
   const statusPage = await prisma.statusPage.findFirst({
+    where: slug ? { slug } : undefined,
+    orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
     include: {
       services: {
         include: {
@@ -108,7 +128,8 @@ export default async function PublicStatusPage() {
   if (statusPage?.requireAuth) {
     const session = await getServerSession(await getAuthOptions());
     if (!session) {
-      redirect('/login?callbackUrl=/status');
+      const callbackUrl = slug ? `/status/${encodeURIComponent(slug)}` : '/status';
+      redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
     }
   }
 
@@ -134,6 +155,10 @@ export default async function PublicStatusPage() {
 }
 
 async function renderStatusPage(statusPage: any) {
+  const statusPagePath =
+    statusPage.slug && !statusPage.isDefault ? `/status/${statusPage.slug}` : '/status';
+  const statusApiPath =
+    statusPage.slug && !statusPage.isDefault ? `/api/status/${statusPage.slug}` : '/api/status';
   const visibility = publicStatusVisibility(statusPage);
   // Active maintenance must never be displaced by newer informational
   // announcements because it directly affects calculated service health.
@@ -347,24 +372,11 @@ async function renderStatusPage(statusPage: any) {
       })
     : [];
 
-  const activeMaintenanceServiceIds = new Set<string>();
-  statusPage.announcements.forEach((announcement: any) => {
-    if (announcement.type !== 'MAINTENANCE' || !announcement.isActive) return;
-    const startDate = new Date(announcement.startDate);
-    const endDate = announcement.endDate ? new Date(announcement.endDate) : null;
-    if (startDate > now || (endDate && endDate < now)) return;
-    const ids = Array.isArray(announcement.affectedServiceIds)
-      ? announcement.affectedServiceIds
-      : [];
-    ids.forEach((serviceId: unknown) => {
-      if (typeof serviceId === 'string') activeMaintenanceServiceIds.add(serviceId);
-    });
-  });
-  services = services.map(service =>
-    activeMaintenanceServiceIds.has(service.id) && service.status === 'OPERATIONAL'
-      ? { ...service, status: 'MAINTENANCE' }
-      : service
-  );
+  const activeMaintenanceServiceIds = getActiveMaintenanceServiceIds(statusPage.announcements, now);
+  services = services.map(service => ({
+    ...service,
+    status: projectServiceStatus(service.id, service.status, activeMaintenanceServiceIds),
+  }));
 
   // Derive the headline from the unbounded aggregate, not the bounded history
   // projection. A busy status page must not look healthy because older active
@@ -1038,6 +1050,7 @@ async function renderStatusPage(statusPage: any) {
                       showIncidentDetails: visibility.showIncidentId,
                     }}
                     showPostIncidentReview={statusPage.showPostIncidentReview === true}
+                    statusPagePath={statusPagePath}
                   />
                 </div>
               ) : (
@@ -1331,7 +1344,7 @@ async function renderStatusPage(statusPage: any) {
                   >
                     {showRssLink && (
                       <a
-                        href="/api/status/rss"
+                        href={`${statusApiPath}/rss`}
                         className="status-footer-link"
                         style={{
                           color: 'var(--status-text-muted, #6b7280)',
@@ -1347,7 +1360,7 @@ async function renderStatusPage(statusPage: any) {
                     )}
                     {showApiLink && (
                       <a
-                        href="/api/status"
+                        href={statusApiPath}
                         className="status-footer-link"
                         style={{
                           color: 'var(--status-text-muted, #6b7280)',
@@ -1364,7 +1377,7 @@ async function renderStatusPage(statusPage: any) {
                           <span style={{ color: 'var(--status-text-subtle, #94a3b8)' }}>�</span>
                         )}
                         <a
-                          href="/api/status/uptime-export?format=csv"
+                          href={`${statusApiPath}/uptime-export?format=csv`}
                           className="status-footer-link"
                           style={{
                             color: 'var(--status-text-muted, #6b7280)',
@@ -1375,7 +1388,7 @@ async function renderStatusPage(statusPage: any) {
                           Uptime CSV
                         </a>
                         <a
-                          href="/api/status/uptime-export?format=pdf"
+                          href={`${statusApiPath}/uptime-export?format=pdf`}
                           className="status-footer-link"
                           style={{
                             color: 'var(--status-text-muted, #6b7280)',
