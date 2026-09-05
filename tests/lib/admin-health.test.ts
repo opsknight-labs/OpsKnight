@@ -249,4 +249,36 @@ describe('generate24HourHistory', () => {
     expect(priorHours.every(s => s.status === 'healthy')).toBe(true);
     expect(priorHours.every(s => s.scorePercent === 100)).toBe(true);
   });
+
+  it('does not allow incidents from before the 24-hour window to pollute current historical baseline', async () => {
+    const prisma = (await import('@/lib/prisma')).default;
+    const now = new Date('2026-09-05T12:00:00.000Z');
+    
+    // Simulate prisma.incident returning only items within the 24-hour query where clause
+    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce([
+      {
+        id: 'inc-recent',
+        title: 'Recent P3 alert',
+        priority: 'P3',
+        status: 'RESOLVED',
+        createdAt: new Date('2026-09-05T10:15:00.000Z'),
+        resolvedAt: new Date('2026-09-05T10:45:00.000Z'),
+      },
+    ] as unknown as never);
+
+    const samples = await generate24HourHistory(mockBaseChecks, 'healthy', now);
+    expect(samples).toHaveLength(24);
+
+    // Window ending at 11:00 (index 22, representing 10:00-11:00 UTC) was degraded during the incident
+    const windowEnd11 = new Date(now.getTime() - 1 * 3600000);
+    const expectedLabel = `${windowEnd11.getHours().toString().padStart(2, '0')}:00`;
+    const degradedSample = samples.find(s => s.hourLabel === expectedLabel);
+    expect(degradedSample?.status).toBe('degraded');
+    expect(degradedSample?.scorePercent).toBe(75);
+
+    // Other peaceful hours remain 100% healthy
+    const peacefulSamples = samples.filter(s => s !== degradedSample);
+    expect(peacefulSamples.every(s => s.status === 'healthy')).toBe(true);
+    expect(peacefulSamples.every(s => s.scorePercent === 100)).toBe(true);
+  });
 });

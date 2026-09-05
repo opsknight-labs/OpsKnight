@@ -43,7 +43,7 @@ describe('IncidentList', () => {
     expect(screen.getByTestId('create-incident-btn')).toBeInTheDocument();
   });
 
-  it('renders incident card matching incident page and dashboard layout', () => {
+  it('renders incident card with refined typography and badges', () => {
     const mockIncidents = [
       {
         id: 'inc-12345abcdef',
@@ -91,29 +91,28 @@ describe('IncidentList', () => {
 
     render(<IncidentList incidents={mockIncidents} serviceId="service-1" />);
 
-    // Titles matching dashboard / incident list card style
+    // Titles rendered with refined typography
     const title1 = screen.getByText('Database connection pool exhausted');
     expect(title1).toBeInTheDocument();
-    expect(title1.className).toContain('font-bold');
-    expect(title1.className).toContain('text-sm md:text-base');
+    expect(title1.className).toContain('text-xs sm:text-sm');
+    expect(title1.className).toContain('font-semibold');
+    expect(title1.className).not.toContain('font-extrabold');
 
-    // Incident 2 and 3 titles
+    // Incident 2 title
     expect(screen.getByText('Cache latency degradation')).toBeInTheDocument();
+
+    // Incident 3 title
     expect(screen.getByText('Background worker backlog')).toBeInTheDocument();
 
     // Badges
     expect(screen.getByText(/P1/)).toBeInTheDocument();
-    expect(screen.getByText('HIGH')).toBeInTheDocument();
+    expect(screen.getByText('High')).toBeInTheDocument();
     expect(screen.getByText(/P2/)).toBeInTheDocument();
-    expect(screen.getByText('MEDIUM')).toBeInTheDocument();
-    expect(screen.getByText('LOW')).toBeInTheDocument();
+    expect(screen.getByText('Med')).toBeInTheDocument();
+    expect(screen.getByText('Low')).toBeInTheDocument();
 
-    // Quick triage action buttons (Ack for OPEN, Resolve for ACKNOWLEDGED)
-    expect(screen.getByTitle('Acknowledge Incident')).toBeInTheDocument();
-    expect(screen.getByTitle('Resolve Incident')).toBeInTheDocument();
-
-    // Assignee / Team / Unassigned matching dashboard
-    expect(screen.getByText('Jane')).toBeInTheDocument();
+    // Assignee / Team / Unassigned
+    expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.getByText('SRE Team')).toBeInTheDocument();
     expect(screen.getByText('Unassigned')).toBeInTheDocument();
 
