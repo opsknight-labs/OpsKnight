@@ -58,11 +58,13 @@ const NotificationList = memo(function NotificationList({
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-        <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-3">
-          <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+        <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-center mb-3">
+          <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
         </div>
-        <p className="text-sm font-semibold text-zinc-200 mb-0.5">{emptyMessage}</p>
-        <p className="text-xs text-zinc-500">{emptySub}</p>
+        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-0.5">
+          {emptyMessage}
+        </p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">{emptySub}</p>
       </div>
     );
   }
@@ -81,11 +83,11 @@ const NotificationList = memo(function NotificationList({
               'group relative flex items-start gap-3 p-3 rounded-xl border text-left transition-all duration-150 shadow-2xs cursor-pointer',
               notification.unread
                 ? isIncident
-                  ? 'bg-[#141215] hover:bg-[#181419] border-rose-500/30 border-l-[3.5px] border-l-rose-500 hover:border-rose-500/50 hover:shadow-xs'
+                  ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-rose-200 dark:border-rose-900/40 border-l-[3.5px] border-l-rose-500 hover:border-rose-300 dark:hover:border-rose-800/60 hover:shadow-xs'
                   : isService
-                    ? 'bg-[#10131b] hover:bg-[#131825] border-blue-500/30 border-l-[3.5px] border-l-blue-500 hover:border-blue-500/50 hover:shadow-xs'
-                    : 'bg-[#13111b] hover:bg-[#171424] border-purple-500/30 border-l-[3.5px] border-l-purple-500 hover:border-purple-500/50 hover:shadow-xs'
-                : 'bg-[#101013]/90 hover:bg-[#141418] border-zinc-800/80 border-l-[3.5px] border-l-zinc-700/80 opacity-80 hover:opacity-100'
+                    ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-blue-200 dark:border-blue-900/40 border-l-[3.5px] border-l-blue-500 hover:border-blue-300 dark:hover:border-blue-800/60 hover:shadow-xs'
+                    : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-purple-200 dark:border-purple-900/40 border-l-[3.5px] border-l-purple-500 hover:border-purple-300 dark:hover:border-purple-800/60 hover:shadow-xs'
+                : 'bg-white/80 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-800/80 border-zinc-200/80 dark:border-zinc-800/80 border-l-[3.5px] border-l-zinc-300 dark:border-l-zinc-700 opacity-85 hover:opacity-100'
             )}
             onClick={() => {
               if (notification.incidentId) {
@@ -103,17 +105,17 @@ const NotificationList = memo(function NotificationList({
             {/* Type Icon */}
             <div className="mt-0.5 shrink-0">
               {isIncident && (
-                <div className="w-8 h-8 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shadow-2xs">
+                <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shadow-2xs">
                   <AlertTriangle className="h-4 w-4" />
                 </div>
               )}
               {isService && (
-                <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center shadow-2xs">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-2xs">
                   <Server className="h-4 w-4" />
                 </div>
               )}
               {isSchedule && (
-                <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center shadow-2xs">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-2xs">
                   <CalendarClock className="h-4 w-4" />
                 </div>
               )}
@@ -127,10 +129,10 @@ const NotificationList = memo(function NotificationList({
                     className={cn(
                       'text-[9px] font-mono font-bold tracking-wider uppercase px-1.5 py-0.5 rounded border leading-none shrink-0',
                       isIncident
-                        ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-400 dark:border-rose-500/30'
                         : isService
-                          ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-                          : 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30'
+                          : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/15 dark:text-purple-400 dark:border-purple-500/30'
                     )}
                   >
                     {isIncident ? 'Incident' : isService ? 'Service' : 'Shift'}
@@ -138,7 +140,9 @@ const NotificationList = memo(function NotificationList({
                   <p
                     className={cn(
                       'text-xs font-semibold leading-snug truncate',
-                      notification.unread ? 'text-zinc-100' : 'text-zinc-400'
+                      notification.unread
+                        ? 'text-zinc-900 dark:text-zinc-100'
+                        : 'text-zinc-700 dark:text-zinc-300'
                     )}
                   >
                     {notification.title}
@@ -154,22 +158,26 @@ const NotificationList = memo(function NotificationList({
               <p
                 className={cn(
                   'text-xs line-clamp-2 leading-relaxed',
-                  notification.unread ? 'text-zinc-300' : 'text-zinc-500'
+                  notification.unread
+                    ? 'text-zinc-600 dark:text-zinc-400'
+                    : 'text-zinc-500 dark:text-zinc-500'
                 )}
               >
                 {notification.message}
               </p>
               <div className="flex items-center justify-between pt-1">
-                <span className="text-[10.5px] text-zinc-500 font-mono">{notification.time}</span>
+                <span className="text-[10.5px] text-zinc-400 dark:text-zinc-500 font-mono">
+                  {notification.time}
+                </span>
                 {notification.incidentId && (
                   <span
                     className={cn(
                       'text-[11px] font-medium inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform',
                       isIncident
-                        ? 'text-rose-400 hover:text-rose-300'
+                        ? 'text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300'
                         : isService
-                          ? 'text-blue-400 hover:text-blue-300'
-                          : 'text-purple-400 hover:text-purple-300'
+                          ? 'text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300'
+                          : 'text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
                     )}
                   >
                     View incident <ArrowRight className="h-3 w-3" />
@@ -184,7 +192,7 @@ const NotificationList = memo(function NotificationList({
                 type="button"
                 title="Mark as read"
                 onClick={e => onMarkAsRead(notification.id, e)}
-                className="opacity-0 group-hover:opacity-100 absolute top-2.5 right-2.5 p-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 shadow-xs text-zinc-400 hover:text-white transition-all duration-150 cursor-pointer"
+                className="opacity-0 group-hover:opacity-100 absolute top-2.5 right-2.5 p-1 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 shadow-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-all duration-150 cursor-pointer"
               >
                 <Check className="h-3.5 w-3.5" />
               </button>
@@ -359,12 +367,12 @@ export default function TopbarNotifications() {
           <span className="sr-only">Notifications</span>
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-[#0c0c0e] text-zinc-100 border-l border-zinc-800/90 shadow-2xl [&>button]:text-zinc-400 [&>button]:hover:text-white [&>button]:top-4 [&>button]:right-4.5 [&>button]:rounded-md [&>button]:p-1.5 [&>button]:hover:bg-white/10 [&>button]:transition-colors overflow-hidden">
-        <div className="relative px-5 pt-4 pb-3 bg-gradient-to-b from-[#18181b] via-[#121216] to-[#0c0c0e] text-white border-b border-zinc-800/80 shadow-2xs">
+      <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-zinc-50 dark:bg-zinc-950 text-foreground border-l border-zinc-200 dark:border-zinc-800 shadow-2xl [&>button]:z-50 [&>button]:cursor-pointer [&>button]:text-zinc-400 [&>button]:hover:text-white [&>button]:top-4 [&>button]:right-4.5 [&>button]:rounded-md [&>button]:p-1.5 [&>button]:hover:bg-white/10 [&>button]:transition-colors overflow-hidden">
+        <div className="relative px-5 pt-4 pb-3 bg-gradient-to-b from-[#18181b] via-[#121216] to-[#09090b] text-white border-b border-zinc-800/80 shadow-2xs">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.06),transparent_60%)] pointer-events-none" />
           <SheetHeader className="p-0 space-y-0 text-left">
             {/* Top row: Bell Icon + Title + Live badge. Leaves right side completely clear for X button */}
-            <div className="relative z-10 flex items-center justify-between pr-10">
+            <div className="flex items-center justify-between pr-12">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 border border-zinc-700/60 shadow-xs backdrop-blur-md shrink-0">
                   <Bell className="h-4 w-4 text-white" />
@@ -421,44 +429,47 @@ export default function TopbarNotifications() {
           </SheetHeader>
         </div>
 
-        <Tabs defaultValue="all" className="flex-1 flex flex-col overflow-hidden bg-[#0c0c0e]">
-          <div className="px-4 py-2.5 bg-[#0e0e11] border-b border-zinc-800/80">
-            <TabsList className="w-full grid grid-cols-4 h-8 p-0.5 bg-zinc-900/90 border border-zinc-800/80 rounded-lg">
+        <Tabs
+          defaultValue="all"
+          className="flex-1 flex flex-col overflow-hidden bg-zinc-50/50 dark:bg-zinc-950"
+        >
+          <div className="px-4 py-2.5 bg-white dark:bg-zinc-900 border-b border-zinc-200/80 dark:border-zinc-800/80">
+            <TabsList className="w-full grid grid-cols-4 h-8 p-0.5 bg-zinc-100 dark:bg-zinc-950 border border-zinc-200/80 dark:border-zinc-800/80 rounded-lg">
               <TabsTrigger
                 value="all"
-                className="text-[11px] font-semibold py-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
+                className="text-[11px] font-semibold py-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
               >
                 All
               </TabsTrigger>
               <TabsTrigger
                 value="unread"
-                className="text-[11px] font-semibold py-1 gap-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
+                className="text-[11px] font-semibold py-1 gap-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
               >
                 Unread
                 {unreadCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[10px] font-bold">
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/30 text-[10px] font-bold">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </TabsTrigger>
               <TabsTrigger
                 value="incident"
-                className="text-[11px] font-semibold py-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
+                className="text-[11px] font-semibold py-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
               >
                 Incidents
               </TabsTrigger>
               <TabsTrigger
                 value="schedule"
-                className="text-[11px] font-semibold py-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
+                className="text-[11px] font-semibold py-1 text-zinc-600 dark:text-zinc-400 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:text-zinc-900 dark:data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
               >
                 Shifts
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-[#0c0c0e]">
+          <div className="flex-1 overflow-y-auto bg-zinc-50/50 dark:bg-zinc-950">
             {loading ? (
-              <div className="flex h-48 items-center justify-center text-xs text-zinc-400">
+              <div className="flex h-48 items-center justify-center text-xs text-muted-foreground">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mr-2" />
                 Loading notifications...
               </div>
@@ -503,30 +514,30 @@ export default function TopbarNotifications() {
           </div>
         </Tabs>
 
-        <div className="p-3 border-t border-zinc-800/80 bg-[#0e0e11] flex items-center justify-between gap-2 shadow-xs">
+        <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between gap-2 shadow-xs">
           <Button
             variant="ghost"
             size="sm"
-            className="flex-1 justify-start text-xs text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/70 h-8 cursor-pointer"
+            className="flex-1 justify-start text-xs text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 h-8 cursor-pointer"
             onClick={() => {
               setOpen(false);
               router.push('/settings/notifications/history');
             }}
           >
-            <Archive className="mr-1.5 h-3.5 w-3.5 text-zinc-400" />
+            <Archive className="mr-1.5 h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
             History Log
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className="text-xs text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/70 h-8 px-2.5 cursor-pointer"
+            className="text-xs text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 h-8 px-2.5 cursor-pointer"
             onClick={() => {
               setOpen(false);
               router.push('/settings/notifications');
             }}
             title="Notification Preferences"
           >
-            <Settings2 className="h-3.5 w-3.5 mr-1 text-zinc-400" />
+            <Settings2 className="h-3.5 w-3.5 mr-1 text-zinc-500 dark:text-zinc-400" />
             Preferences
           </Button>
         </div>
