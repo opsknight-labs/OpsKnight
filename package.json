@@ -40,7 +40,7 @@
     "test:ci": "npx vitest run --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit.xml",
     "test:unit": "vitest run -c vitest.unit.config.ts",
     "test:int": "vitest run -c vitest.int.config.ts --no-file-parallelism",
-    "test:ci:unit": "npx vitest run -c vitest.unit.config.ts --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit-unit.xml",
+    "test:ci:unit": "npx vitest run -c vitest.unit.config.ts --reporter=default --reporter=junit --outputFile=reports/junit-unit.xml",
     "test:ci:db": "npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit-db.xml",
     "test:all": "npm run lint:check && npm run test:run",
     "OpsKnight": "node ./scripts/OpsKnight.mjs",
