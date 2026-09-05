@@ -37,6 +37,7 @@ interface StorageStats {
   incidents: { total: number; byStatus: Record<string, number>; oldest: string | null };
   alerts: { total: number; oldest: string | null };
   logs: { total: number; oldest: string | null };
+  auditLogs?: { total: number; oldest: string | null };
   rollups: { total: number; oldest: string | null };
 }
 
@@ -199,7 +200,7 @@ export default function RetentionPolicySettings() {
       const res = await fetch('/api/settings/retention', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun }),
+        body: JSON.stringify({ dryRun, policy }),
       });
 
       if (!res.ok) {
@@ -353,8 +354,8 @@ export default function RetentionPolicySettings() {
             <CompactStatRowItem
               icon={<FileText className="w-4 h-4 text-violet-500" />}
               label="Audit Logs"
-              value={stats.logs.total}
-              oldest={stats.logs.oldest}
+              value={stats.auditLogs?.total ?? stats.logs.total}
+              oldest={stats.auditLogs?.oldest ?? stats.logs.oldest}
               subtext="Administrative changes"
             />
             <CompactStatRowItem

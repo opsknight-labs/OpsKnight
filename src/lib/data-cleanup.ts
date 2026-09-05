@@ -1,6 +1,6 @@
 import 'server-only';
 import { logger } from './logger';
-import { getRetentionPolicy } from './retention-policy';
+import { getRetentionPolicy, type RetentionPolicy } from './retention-policy';
 import { cleanupOldRollups } from './metric-rollup';
 
 /**
@@ -30,11 +30,18 @@ export interface CleanupResult {
  * Performs data cleanup based on retention policy
  *
  * @param dryRun - If true, only logs what would be deleted without actually deleting
+ * @param policyOverride - Optional retention policy overrides (useful for previewing unsaved form settings)
  */
-export async function performDataCleanup(dryRun: boolean = false): Promise<CleanupResult> {
+export async function performDataCleanup(
+  dryRun: boolean = false,
+  policyOverride?: Partial<RetentionPolicy>
+): Promise<CleanupResult> {
   const startTime = Date.now();
   const { default: prisma } = await import('./prisma');
-  const policy = await getRetentionPolicy();
+  const basePolicy = await getRetentionPolicy();
+  const policy: RetentionPolicy = policyOverride
+    ? { ...basePolicy, ...policyOverride }
+    : basePolicy;
 
   logger.info('[DataCleanup] Starting cleanup', {
     dryRun,
@@ -55,13 +62,13 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
   const metricsCutoff = new Date(now);
   metricsCutoff.setDate(metricsCutoff.getDate() - policy.metricsRetentionDays);
 
-  // Incident events are deleted with their parent incident. Do not let a
-  // shorter incident-retention period silently remove event history that is
-  // still inside the separately configured audit/event retention period.
+  // Resolved incidents older than incidentCutoff that have had no event activity
+  // since the incident retention cutoff. Also guard resolvedAt if set.
   const resolvedIncidentCleanupWhere = {
     createdAt: { lt: incidentCutoff },
     status: 'RESOLVED' as const,
-    events: { none: { createdAt: { gte: logCutoff } } },
+    OR: [{ resolvedAt: { lt: incidentCutoff } }, { resolvedAt: null }],
+    events: { none: { createdAt: { gte: incidentCutoff } } },
   };
 
   let incidentCount = 0;
@@ -75,8 +82,17 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
 
   try {
     // 1. Count what would be deleted
-    const [incidentsToDelete, alertsToDelete, logsToDelete, eventsToDelete, auditLogsToDelete] =
-      await Promise.all([
+    const [
+      incidentsToDelete,
+      alertsToDelete,
+      logsToDelete,
+      eventsToDelete,
+      auditLogsToDelete,
+      metricsToDelete,
+      inAppNotificationsToDelete,
+      slaPerformanceLogsToDelete,
+      incidentEventsFromIncidents,
+    ] = await Promise.all([
       prisma.incident.count({
         where: resolvedIncidentCleanupWhere,
       }),
@@ -88,18 +104,37 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
       }),
       prisma.incidentEvent.count({ where: { createdAt: { lt: logCutoff } } }),
       prisma.auditLog.count({ where: { createdAt: { lt: logCutoff } } }),
+      prisma.incidentMetricRollup?.count
+        ? prisma.incidentMetricRollup.count({ where: { date: { lt: metricsCutoff } } })
+        : Promise.resolve(0),
+      prisma.inAppNotification?.count
+        ? prisma.inAppNotification.count({ where: { createdAt: { lt: logCutoff } } })
+        : Promise.resolve(0),
+      prisma.sLAPerformanceLog?.count
+        ? prisma.sLAPerformanceLog.count({ where: { timestamp: { lt: metricsCutoff } } })
+        : Promise.resolve(0),
+      prisma.incidentEvent.count({
+        where: {
+          incident: resolvedIncidentCleanupWhere,
+          createdAt: { gte: logCutoff },
+        },
+      }),
     ]);
 
     logger.info('[DataCleanup] Records to cleanup', {
       incidents: incidentsToDelete,
       alerts: alertsToDelete,
       logs: logsToDelete,
-      events: eventsToDelete,
+      events: eventsToDelete + incidentEventsFromIncidents,
       auditLogs: auditLogsToDelete,
+      metrics: metricsToDelete,
+      inAppNotifications: inAppNotificationsToDelete,
+      slaPerformanceLogs: slaPerformanceLogsToDelete,
       cutoffs: {
         incident: incidentCutoff.toISOString(),
         alert: alertCutoff.toISOString(),
         log: logCutoff.toISOString(),
+        metrics: metricsCutoff.toISOString(),
       },
     });
 
@@ -108,11 +143,11 @@ export async function performDataCleanup(dryRun: boolean = false): Promise<Clean
         incidents: incidentsToDelete,
         alerts: alertsToDelete,
         logs: logsToDelete,
-        metrics: 0,
-        events: eventsToDelete,
+        metrics: metricsToDelete,
+        events: eventsToDelete + incidentEventsFromIncidents,
         auditLogs: auditLogsToDelete,
-        inAppNotifications: 0,
-        slaPerformanceLogs: 0,
+        inAppNotifications: inAppNotificationsToDelete,
+        slaPerformanceLogs: slaPerformanceLogsToDelete,
         executionTimeMs: Date.now() - startTime,
         dryRun: true,
       };
@@ -314,6 +349,7 @@ export async function getStorageStats(): Promise<{
   incidents: { total: number; byStatus: Record<string, number>; oldest: Date | null };
   alerts: { total: number; oldest: Date | null };
   logs: { total: number; oldest: Date | null };
+  auditLogs: { total: number; oldest: Date | null };
   rollups: { total: number; oldest: Date | null };
 }> {
   const { default: prisma } = await import('./prisma');
@@ -326,6 +362,8 @@ export async function getStorageStats(): Promise<{
     oldestAlert,
     logTotal,
     oldestLog,
+    auditLogTotal,
+    oldestAuditLog,
     rollupTotal,
     oldestRollup,
   ] = await Promise.all([
@@ -347,6 +385,11 @@ export async function getStorageStats(): Promise<{
     prisma.logEntry.findFirst({
       select: { timestamp: true },
       orderBy: { timestamp: 'asc' },
+    }),
+    prisma.auditLog.count(),
+    prisma.auditLog.findFirst({
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' },
     }),
     prisma.incidentMetricRollup.count(),
     prisma.incidentMetricRollup.findFirst({
@@ -373,6 +416,10 @@ export async function getStorageStats(): Promise<{
     logs: {
       total: logTotal,
       oldest: oldestLog?.timestamp || null,
+    },
+    auditLogs: {
+      total: auditLogTotal,
+      oldest: oldestAuditLog?.createdAt || null,
     },
     rollups: {
       total: rollupTotal,

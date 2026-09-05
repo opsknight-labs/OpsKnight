@@ -156,7 +156,15 @@ export async function POST(request: NextRequest) {
     const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
     const dryRun = payload.dryRun !== false;
 
-    const result = await performDataCleanup(dryRun);
+    let policyOverride: Partial<RetentionPolicy> | undefined;
+    if (payload.policy && typeof payload.policy === 'object') {
+      const parsed = RetentionUpdateSchema.safeParse(payload.policy);
+      if (parsed.success) {
+        policyOverride = parsed.data;
+      }
+    }
+
+    const result = await performDataCleanup(dryRun, policyOverride);
 
     if (!dryRun) {
       await logAudit({
@@ -168,7 +176,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    logger.info('[API] Data cleanup executed', { userId: admin.id, dryRun, result });
+    logger.info('[API] Data cleanup executed', {
+      userId: admin.id,
+      dryRun,
+      result,
+      policyOverride,
+    });
     return jsonOk({ success: true, dryRun, result });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
