@@ -43,7 +43,6 @@ function providerLimit(scope: ProviderAdmissionScope): {
       return DEFAULT_LIMITS.WEBHOOK;
   }
 }
-
 const PROVIDER_LEASE_MS = 10 * 60_000;
 
 function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
@@ -152,4 +151,63 @@ export async function acquireProviderConcurrency(
 
 export async function releaseProviderConcurrency(leaseKey: string): Promise<void> {
   await prisma.rateLimit.deleteMany({ where: { key: leaseKey } });
+}
+
+export class ProviderCooldownError extends Error {
+  constructor(
+    readonly providerKey: string,
+    readonly retryAt: Date
+  ) {
+    super(`Provider ${providerKey} is in cooldown until ${retryAt.toISOString()}`);
+    this.name = 'ProviderCooldownError';
+  }
+}
+
+export async function assertProviderAdmitted(key: string, now = new Date()): Promise<void> {
+  const admission = await prisma.providerAdmission.findUnique({ where: { key } });
+  if (admission?.blockedUntil && admission.blockedUntil > now) {
+    throw new ProviderCooldownError(key, admission.blockedUntil);
+  }
+}
+
+export async function recordProviderSuccess(key: string): Promise<void> {
+  await prisma.providerAdmission.upsert({
+    where: { key },
+    create: { key, state: 'CLOSED', lastSuccessAt: new Date() },
+    update: {
+      state: 'CLOSED',
+      blockedUntil: null,
+      consecutiveFails: 0,
+      lastSuccessAt: new Date(),
+      lastStatusCode: null,
+    },
+  });
+}
+
+export async function recordProviderFailure(
+  key: string,
+  options: { statusCode?: number; retryAfterMs?: number } = {}
+): Promise<void> {
+  const now = new Date();
+  const blockedUntil = options.retryAfterMs
+    ? new Date(now.getTime() + Math.min(Math.max(options.retryAfterMs, 1_000), 24 * 60 * 60_000))
+    : undefined;
+  await prisma.providerAdmission.upsert({
+    where: { key },
+    create: {
+      key,
+      state: blockedUntil ? 'OPEN' : 'DEGRADED',
+      blockedUntil,
+      consecutiveFails: 1,
+      lastFailureAt: now,
+      lastStatusCode: options.statusCode,
+    },
+    update: {
+      state: blockedUntil ? 'OPEN' : 'DEGRADED',
+      blockedUntil,
+      consecutiveFails: { increment: 1 },
+      lastFailureAt: now,
+      lastStatusCode: options.statusCode,
+    },
+  });
 }

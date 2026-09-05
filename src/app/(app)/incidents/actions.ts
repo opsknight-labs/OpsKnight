@@ -10,14 +10,13 @@ import {
   assertCanAddIncidentNote,
 } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
-import { logger } from '@/lib/logger';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import {
   updateIncidentStatus as updateIncidentStatusWithLifecycle,
   resolveIncidentWithNote as resolveIncidentWithLifecycleNote,
 } from '@/lib/incidents/operator-lifecycle';
 import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
-import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
+import { enqueueIncidentUpdateSideEffects, enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 
 const LEGACY_NOT_FOUND_MESSAGE =
   'The requested item could not be found. It may have been deleted or you may not have access to it.';
@@ -51,32 +50,23 @@ export async function resolveIncidentWithNote(id: string, resolution: string) {
 export async function updateIncidentUrgency(id: string, urgency: string) {
   await assertResponderOrAbove();
   const parsedUrgency = parseIncidentUrgency(urgency);
-  await prisma.incident.update({
-    where: { id },
-    data: {
-      urgency: parsedUrgency,
-      events: {
-        create: {
-          type: 'STATUS_CHANGE',
-          message: `Urgency updated to ${parsedUrgency}`,
+  await prisma.$transaction(async tx => {
+    await tx.incident.update({
+      where: { id },
+      data: {
+        urgency: parsedUrgency,
+        events: {
+          create: {
+            type: 'STATUS_CHANGE',
+            message: `Urgency updated to ${parsedUrgency}`,
+          },
         },
       },
-    },
+    });
+    await enqueueWarRoomSideEffects(tx, id, [
+      { effect: 'WAR_ROOM_MESSAGE', message: `🔔 *Urgency updated to ${parsedUrgency}*` },
+    ]);
   });
-
-  // ChatOps: Sync urgency change to war-room (best-effort)
-  try {
-    const { postWarRoomUpdate } = await import('@/lib/chatops/war-room');
-    postWarRoomUpdate(id, `🔔 *Urgency updated to ${parsedUrgency}*`).catch(err =>
-      logger.error('ChatOps urgency sync failed', {
-        component: 'incidents-actions',
-        error: err,
-        incidentId: id,
-      })
-    );
-  } catch (e) {
-    logger.error('Failed to load chatops/war-room', { error: e });
-  }
 
   revalidatePath(`/incidents/${id}`);
   revalidatePath('/incidents');
@@ -86,32 +76,26 @@ export async function updateIncidentUrgency(id: string, urgency: string) {
 export async function updateIncidentPriority(id: string, priority: string | null) {
   await assertResponderOrAbove();
 
-  await prisma.incident.update({
-    where: { id },
-    data: {
-      priority,
-      events: {
-        create: {
-          type: 'STATUS_CHANGE',
-          message: priority ? `Priority updated to ${priority}` : 'Priority cleared (Unassigned)',
+  await prisma.$transaction(async tx => {
+    await tx.incident.update({
+      where: { id },
+      data: {
+        priority,
+        events: {
+          create: {
+            type: 'STATUS_CHANGE',
+            message: priority ? `Priority updated to ${priority}` : 'Priority cleared (Unassigned)',
+          },
         },
       },
-    },
+    });
+    await enqueueWarRoomSideEffects(tx, id, [
+      {
+        effect: 'WAR_ROOM_MESSAGE',
+        message: `🎯 *Priority updated to ${priority || 'Unassigned'}*`,
+      },
+    ]);
   });
-
-  // ChatOps: Sync priority change to war-room (best-effort)
-  try {
-    const { postWarRoomUpdate } = await import('@/lib/chatops/war-room');
-    postWarRoomUpdate(id, `🎯 *Priority updated to ${priority || 'Unassigned'}*`).catch(err =>
-      logger.error('ChatOps priority sync failed', {
-        component: 'incidents-actions',
-        error: err,
-        incidentId: id,
-      })
-    );
-  } catch (e) {
-    logger.error('Failed to load chatops/war-room', { error: e });
-  }
 
   revalidatePath(`/incidents/${id}`);
   revalidatePath('/incidents');
@@ -179,7 +163,7 @@ export async function addNote(incidentId: string, content: string) {
   const user = await getCurrentUser();
 
   await prisma.$transaction(async tx => {
-    await tx.incidentNote.create({
+    const note = await tx.incidentNote.create({
       data: {
         incidentId,
         userId: user.id,
@@ -194,29 +178,30 @@ export async function addNote(incidentId: string, content: string) {
         message: `Note added by ${user.name}`,
       },
     });
+
+    const links = await tx.externalIssueLink.findMany({
+      where: { incidentId, provider: 'JIRA' },
+      select: { externalKey: true },
+    });
+    if (links.length > 0) {
+      const { enqueueJiraCommentOperationsInTransaction } =
+        await import('@/lib/external-operations');
+      await enqueueJiraCommentOperationsInTransaction(
+        tx,
+        links.map(link => ({
+          incidentId,
+          externalKey: link.externalKey,
+          eventId: `note:${note.id}`,
+          comment: `[OpsKnight Note by ${user.name}]:\n${content}`,
+        }))
+      );
+    }
+    await enqueueWarRoomSideEffects(tx, incidentId, [
+      { effect: 'WAR_ROOM_MESSAGE', message: `📝 *Note by ${user.name}:*\n> ${content}` },
+    ]);
   });
 
   revalidatePath(`/incidents/${incidentId}`);
-
-  // Best-effort sync note to any linked Jira tickets
-  try {
-    const { syncIncidentNoteToJira } = await import('@/lib/jira-sync');
-    await syncIncidentNoteToJira(incidentId, user.name, content);
-  } catch (e) {
-    logger.error('Jira note sync failed', { component: 'incidents-actions', error: e, incidentId });
-  }
-
-  // Best-effort sync note to war-room channel
-  try {
-    const { postWarRoomUpdate } = await import('@/lib/chatops/war-room');
-    await postWarRoomUpdate(incidentId, `📝 *Note by ${user.name}:*\n> ${content}`);
-  } catch (e) {
-    logger.error('ChatOps note sync failed', {
-      component: 'incidents-actions',
-      error: e,
-      incidentId,
-    });
-  }
 }
 
 export async function reassignIncident(incidentId: string, assigneeId: string, teamId?: string) {
@@ -241,16 +226,13 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
             message: 'Incident unassigned',
           },
         });
+        await enqueueWarRoomSideEffects(tx, incidentId, [
+          { effect: 'WAR_ROOM_MESSAGE', message: '👤 *Incident unassigned*' },
+          { effect: 'WAR_ROOM_TOPIC' },
+        ]);
       },
       { isolationLevel: 'Serializable' }
     );
-
-    // ChatOps: Sync unassignment & update topic in war-room
-    try {
-      const { postWarRoomUpdate, updateWarRoomTopic } = await import('@/lib/chatops/war-room');
-      postWarRoomUpdate(incidentId, '👤 *Incident unassigned*').catch(() => {});
-      updateWarRoomTopic(incidentId).catch(() => {});
-    } catch {} // Best-effort
 
     revalidatePath(`/incidents/${incidentId}`);
     revalidatePath('/incidents');
@@ -290,23 +272,15 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
       await enqueueIncidentUpdateSideEffects(tx, incidentId, [
         'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION',
       ]);
+      await enqueueWarRoomSideEffects(tx, incidentId, [
+        {
+          effect: 'WAR_ROOM_MESSAGE',
+          message: `👥 *Incident assigned to team: ${teamRecord.name}*`,
+        },
+        { effect: 'WAR_ROOM_INVITE_TEAM', teamId },
+        { effect: 'WAR_ROOM_TOPIC' },
+      ]);
     });
-
-    // ChatOps: Sync team assignment, auto-invite members & update topic in war-room
-    try {
-      const { postWarRoomUpdate, inviteTeamToWarRoom, updateWarRoomTopic } =
-        await import('@/lib/chatops/war-room');
-      const teamRecord = await prisma.team.findUnique({
-        where: { id: teamId },
-        select: { name: true },
-      });
-      postWarRoomUpdate(
-        incidentId,
-        `👥 *Incident assigned to team: ${teamRecord?.name || 'Unknown'}*`
-      ).catch(() => {});
-      inviteTeamToWarRoom(incidentId, teamId).catch(() => {});
-      updateWarRoomTopic(incidentId).catch(() => {});
-    } catch {} // Best-effort
 
     revalidatePath(`/incidents/${incidentId}`);
     revalidatePath('/incidents');
@@ -346,25 +320,17 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
         await enqueueIncidentUpdateSideEffects(tx, incidentId, [
           'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
         ]);
+        await enqueueWarRoomSideEffects(tx, incidentId, [
+          {
+            effect: 'WAR_ROOM_MESSAGE',
+            message: `👤 *Incident reassigned to ${assigneeRecord.name}*`,
+          },
+          { effect: 'WAR_ROOM_INVITE_USER', userId: assigneeId },
+          { effect: 'WAR_ROOM_TOPIC' },
+        ]);
       },
       { isolationLevel: 'Serializable' }
     );
-
-    // ChatOps: Sync user assignment, auto-invite user & update topic in war-room
-    try {
-      const { postWarRoomUpdate, inviteUserToWarRoom, updateWarRoomTopic } =
-        await import('@/lib/chatops/war-room');
-      const assignee = await prisma.user.findUnique({
-        where: { id: assigneeId },
-        select: { name: true },
-      });
-      postWarRoomUpdate(
-        incidentId,
-        `👤 *Incident reassigned to ${assignee?.name || 'Unknown'}*`
-      ).catch(() => {});
-      inviteUserToWarRoom(incidentId, assigneeId).catch(() => {});
-      updateWarRoomTopic(incidentId).catch(() => {});
-    } catch {} // Best-effort
 
     revalidatePath(`/incidents/${incidentId}`);
     revalidatePath('/incidents');

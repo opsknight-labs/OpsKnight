@@ -66,10 +66,11 @@ export async function POST(req: NextRequest) {
           where: {
             key: providedKey || '',
             enabled: true,
+            type: 'PAGERDUTY',
           },
         });
 
-    if (!integration || !integration.enabled) {
+    if (!integration || !integration.enabled || integration.type !== 'PAGERDUTY') {
       return new Response(
         JSON.stringify({ status: 'error', message: 'Integration not found or disabled' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }

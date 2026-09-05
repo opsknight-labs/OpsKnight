@@ -79,7 +79,7 @@ export class CircuitBreaker {
   /**
    * Execute a function with circuit breaker protection
    */
-  async execute<T>(fn: () => Promise<T>, options: CircuitExecutionOptions<T> = {}): Promise<T> {
+  async execute<T>(fn: (signal: AbortSignal) => Promise<T>, options: CircuitExecutionOptions<T> = {}): Promise<T> {
     if (this.state.state === 'OPEN') {
       const now = Date.now();
       if (now - this.state.lastFailureTime >= this.config.resetTimeout) {
@@ -139,13 +139,15 @@ export class CircuitBreaker {
   /**
    * Execute function with timeout wrapper
    */
-  private async executeWithTimeout<T>(fn: () => Promise<T>): Promise<T> {
+  private async executeWithTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
     return new Promise<T>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
+        controller.abort(new CircuitBreakerTimeoutError(this.config.name, this.config.timeout));
         reject(new CircuitBreakerTimeoutError(this.config.name, this.config.timeout));
       }, this.config.timeout);
 
-      fn()
+      fn(controller.signal)
         .then(result => {
           clearTimeout(timeoutId);
           resolve(result);

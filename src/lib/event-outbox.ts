@@ -22,6 +22,10 @@ export type EventSideEffect =
   | 'LIFECYCLE_WAR_ROOM_ENSURE'
   | 'LIFECYCLE_WAR_ROOM_TOPIC'
   | 'LIFECYCLE_WAR_ROOM_ARCHIVE'
+  | 'WAR_ROOM_MESSAGE'
+  | 'WAR_ROOM_TOPIC'
+  | 'WAR_ROOM_INVITE_USER'
+  | 'WAR_ROOM_INVITE_TEAM'
   | 'INCIDENT_UPDATE_USER_NOTIFICATION'
   | 'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION'
   | 'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION'
@@ -57,6 +61,7 @@ export interface EventSideEffectPayload {
   escalationGeneration?: number;
   incidentStatus?: IncidentStatus;
   lifecycle?: LifecycleSideEffectContext;
+  warRoom?: { message?: string; userId?: string; teamId?: string };
 }
 export interface LifecycleOutboxInput {
   incidentId: string;
@@ -150,6 +155,10 @@ function getEventSideEffectLane(effect: EventSideEffect): EventSideEffectLane {
     case 'LIFECYCLE_WAR_ROOM_ENSURE':
     case 'LIFECYCLE_WAR_ROOM_TOPIC':
     case 'LIFECYCLE_WAR_ROOM_ARCHIVE':
+    case 'WAR_ROOM_MESSAGE':
+    case 'WAR_ROOM_TOPIC':
+    case 'WAR_ROOM_INVITE_USER':
+    case 'WAR_ROOM_INVITE_TEAM':
       return 'WAR_ROOM';
     case 'RESOLVE_SLACK':
     case 'ACK_SLACK':
@@ -179,7 +188,8 @@ async function enqueueSideEffects(
   tx: Prisma.TransactionClient,
   incidentId: string,
   effects: readonly EventSideEffect[],
-  lifecycle?: LifecycleSideEffectContext
+  lifecycle?: LifecycleSideEffectContext,
+  warRoom?: EventSideEffectPayload['warRoom']
 ): Promise<void> {
   if (effects.length === 0) return;
   const [eventOrderAt, incidentSnapshot] = await Promise.all([
@@ -216,9 +226,32 @@ async function enqueueSideEffects(
               },
             }
           : {}),
+        ...(warRoom ? { warRoom } : {}),
       } satisfies EventSideEffectPayload & Prisma.InputJsonObject,
     })),
   });
+}
+
+export async function enqueueWarRoomSideEffects(
+  tx: Prisma.TransactionClient,
+  incidentId: string,
+  effects: readonly {
+    effect: Extract<
+      EventSideEffect,
+      'WAR_ROOM_MESSAGE' | 'WAR_ROOM_TOPIC' | 'WAR_ROOM_INVITE_USER' | 'WAR_ROOM_INVITE_TEAM'
+    >;
+    message?: string;
+    userId?: string;
+    teamId?: string;
+  }[]
+): Promise<void> {
+  for (const item of effects) {
+    await enqueueSideEffects(tx, incidentId, [item.effect], undefined, {
+      ...(item.message ? { message: item.message } : {}),
+      ...(item.userId ? { userId: item.userId } : {}),
+      ...(item.teamId ? { teamId: item.teamId } : {}),
+    });
+  }
 }
 
 async function enqueueEscalationResume(

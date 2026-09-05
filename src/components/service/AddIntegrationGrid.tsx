@@ -229,6 +229,25 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
                 />
               </div>
 
+              {selectedTypeInfo.value === 'CLOUDWATCH' && (
+                <div className="space-y-2">
+                  <Label htmlFor="snsTopicArn">
+                    SNS Topic ARN <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="snsTopicArn"
+                    name="snsTopicArn"
+                    placeholder="arn:aws:sns:us-east-1:123456789012:opsknight-alerts"
+                    required
+                    autoComplete="off"
+                    className="bg-slate-50 font-mono text-xs focus:bg-white"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Only signed messages from this exact topic are accepted.
+                  </p>
+                </div>
+              )}
+
               <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100 text-xs text-blue-700 flex gap-3">
                 <Info className="h-5 w-5 shrink-0 text-blue-500" />
                 <div className="leading-relaxed">

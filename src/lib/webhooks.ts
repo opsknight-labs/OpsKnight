@@ -26,6 +26,8 @@ export type WebhookOptions = {
   timeout?: number; // Timeout in milliseconds
   maxAttempts?: number;
   circuitBreaker?: boolean;
+  /** Stable across retries so receivers can safely deduplicate delivery. */
+  deliveryId?: string;
 };
 
 export type WebhookResult = {
@@ -52,6 +54,37 @@ function safeWebhookTarget(url: string): string {
   }
 }
 
+const MAX_RESPONSE_BODY_BYTES = 64 * 1024;
+
+async function readBoundedResponseBody(response: Response): Promise<string> {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_RESPONSE_BODY_BYTES) {
+        await reader.cancel('Webhook response body exceeded limit');
+        throw new Error(`Webhook response body exceeds ${MAX_RESPONSE_BODY_BYTES} bytes`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new TextDecoder().decode(
+    chunks.reduce((combined, chunk) => {
+      const next = new Uint8Array(combined.length + chunk.length);
+      next.set(combined);
+      next.set(chunk, combined.length);
+      return next;
+    }, new Uint8Array())
+  );
+}
+
 /**
  * Generate HMAC signature for webhook payload
  */
@@ -73,6 +106,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
       timeout = 10000, // 10 seconds default
       maxAttempts = 3,
       circuitBreaker = true,
+      deliveryId,
     } = options;
 
     if (!url) {
@@ -89,12 +123,15 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
 
     // Stringify payload
     const payloadString = JSON.stringify(payload);
+    const stableDeliveryId =
+      deliveryId || crypto.createHash('sha256').update(`${url}\n${payloadString}`).digest('hex');
 
     // Prepare headers
     const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       'User-Agent': 'OpsKnight/1.0',
       ...headers,
+      'X-OpsKnight-Delivery-Id': stableDeliveryId,
     };
 
     // Add signature if secret provided
@@ -129,6 +166,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
 
               if (!response.ok && isRetryableHttpError(response.status)) {
                 const retryAfter = response.headers.get('Retry-After');
+                await response.body?.cancel();
                 const error = new Error(
                   `HTTP ${response.status}: ${response.statusText}`
                 ) as Error & {
@@ -140,7 +178,9 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
                 throw error;
               }
 
-              return response;
+              // Keep the attempt timer active through response consumption;
+              // a peer that streams forever must not occupy a worker forever.
+              return { response, responseText: await readBoundedResponseBody(response) };
             };
             const res = circuitBreaker
               ? await CircuitBreakers.webhook(url).execute(request)
@@ -174,7 +214,8 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
       if (!retryResult.success || !retryResult.data) {
         logger.error('Webhook delivery failed permanently', {
           target: safeWebhookTarget(url),
-          payload,
+          payloadHash: crypto.createHash('sha256').update(payloadString).digest('hex'),
+          deliveryId: stableDeliveryId,
           error: retryResult.error instanceof Error ? retryResult.error.message : 'Unknown error',
           attempts,
           firstAttempt,
@@ -183,8 +224,7 @@ export async function sendWebhook(options: WebhookOptions): Promise<WebhookResul
         throw retryResult.error || new Error('Webhook request failed after retries');
       }
 
-      const response = retryResult.data;
-      const responseText = await response.text();
+      const { response, responseText } = retryResult.data;
 
       // Check for non-retryable client errors (4xx)
       if (!response.ok && !isRetryableHttpError(response.status)) {
@@ -838,6 +878,7 @@ export async function sendIncidentWebhook(
       url: webhookUrl,
       payload,
       secret,
+      deliveryId: `incident:${incident.id}:${eventType}:${incident.updatedAt.toISOString()}`,
     });
 
     if (!result.success) {

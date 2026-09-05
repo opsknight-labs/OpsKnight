@@ -71,6 +71,12 @@ enum NotificationStatus {
   SKIPPED
 }
 
+enum InboundDeliveryStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum NotificationChannel {
   EMAIL
   SMS
@@ -180,6 +186,56 @@ enum ExternalIssueSyncState {
   PENDING
   SYNCED
   FAILED
+}
+
+enum ExternalOperationStatus {
+  PENDING
+  PROCESSING
+  AMBIGUOUS
+  COMPLETED
+  FAILED
+}
+
+model ExternalOperation {
+  id             String                  @id @default(cuid())
+  provider       ExternalIssueProvider
+  operation      String
+  idempotencyKey String
+  incidentId     String?
+  actionItemId   String?
+  status         ExternalOperationStatus @default(PENDING)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  externalId     String?
+  externalKey    String?
+  requestPayload Json?
+  resultPayload  Json?
+  lastError      String?
+  attempts       Int                     @default(0)
+  nextAttemptAt  DateTime                @default(now())
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@unique([provider, idempotencyKey])
+  @@index([status, nextAttemptAt, leaseExpiresAt])
+  @@index([incidentId, operation])
+  @@index([actionItemId, operation])
+}
+
+/// Cluster-wide provider admission/cooldown state. Local circuit breakers are
+/// only fast-fail hints; this row is the shared source of truth for replicas.
+model ProviderAdmission {
+  key              String   @id
+  state            String   @default("CLOSED")
+  blockedUntil     DateTime?
+  consecutiveFails Int      @default(0)
+  lastSuccessAt    DateTime?
+  lastFailureAt    DateTime?
+  lastStatusCode   Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([state, blockedUntil])
 }
 
 model User {
@@ -407,6 +463,7 @@ model Integration {
   type            String   @default("EVENTS_API_V2") // EVENTS_API_V2, EMAIL, etc.
   key             String   @unique // The routing key used in API calls
   signatureSecret String? // HMAC secret for webhook signature verification
+  snsTopicArn     String? // Expected, tenant-bound AWS SNS topic for CloudWatch deliveries
   enabled         Boolean  @default(true) // Enable/disable integration
   serviceId       String
   createdAt       DateTime @default(now())
@@ -415,12 +472,34 @@ model Integration {
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@index([serviceId])
+  @@index([type, snsTopicArn])
+}
+
+/// Provider delivery inbox. This is deliberately independent of rate limiting:
+/// a transport delivery is only completed after canonical event processing and
+/// its lease prevents two replicas from executing the same nonce concurrently.
+model InboundDelivery {
+  id             String                @id @default(cuid())
+  integrationId  String
+  provider       String
+  deliveryHash   String
+  status         InboundDeliveryStatus @default(PROCESSING)
+  attempt        Int                   @default(1)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  lastError      String?
+  completedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([integrationId, deliveryHash])
+  @@index([status, leaseExpiresAt])
 }
 
 model WebhookIntegration {
   id        String   @id @default(cuid())
   serviceId String
-  name      String   @unique // "Google Chat", "Microsoft Teams", etc.
+  name      String // "Google Chat", "Microsoft Teams", etc.
   type      String // "GOOGLE_CHAT", "TEAMS", "DISCORD", "GENERIC"
   url       String
   secret    String? // For HMAC signature
@@ -431,6 +510,7 @@ model WebhookIntegration {
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
+  @@unique([serviceId, name])
   @@index([serviceId])
 }
 
@@ -541,10 +621,14 @@ model Incident {
   slaTargetSource        String? // Provenance for the frozen target (priority/service/default/backfill)
   slaTargetCapturedAt    DateTime? // When the immutable target contract was captured
   // ChatOps War-Room fields
+  slackWorkspaceId       String? // Immutable workspace that owns this war-room instance
   slackChannelId         String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
   slackChannelName       String? // Channel name (e.g. "inc-104-payments-api")
   warRoomUrl             String? // Video bridge URL (Jitsi/Zoom/Meet)
   warRoomArchivedAt      DateTime? // Set when the Slack channel is archived; the channel id is kept for history
+  warRoomProvisioningStatus WarRoomProvisioningStatus @default(NONE)
+  warRoomProvisioningToken  String?
+  warRoomProvisioningAt     DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
@@ -590,6 +674,8 @@ model Incident {
   @@index([assigneeId, createdAt, status], name: "idx_incident_assignee_load") // For assignee workload queries
   // ChatOps War-Room: Channel lookup from slash commands
   @@index([slackChannelId], name: "idx_incident_war_room_channel") // For slash command channel→incident resolution
+  @@index([slackWorkspaceId, slackChannelId], name: "idx_incident_war_room_workspace_channel")
+  @@index([warRoomProvisioningStatus, warRoomProvisioningAt])
   // Realtime SSE polling: updatedAt queries on every active browser connection (every 3-5s)
   @@index([updatedAt], name: "idx_incident_updated_at") // Prevents full table scan on realtime polling
   @@index([serviceId, updatedAt], name: "idx_incident_service_updated_at") // Per-service realtime updates
@@ -1108,6 +1194,8 @@ enum JobType {
   AUTO_UNSNOOZE
   SCHEDULED_TASK
   STATUS_PAGE_NOTIFICATION
+  CHATOPS_INTENT
+  EXTERNAL_OPERATION
 }
 
 enum JobStatus {
@@ -1136,6 +1224,55 @@ model BackgroundJob {
   @@index([type, status, scheduledAt]) // For efficient job polling
   @@index([status, scheduledAt]) // For finding pending jobs
   @@index([scheduledAt]) // For time-based queries
+}
+
+/// A signed Slack request is first persisted, then executed by the durable
+/// worker. `EFFECT_COMPLETED` intentionally precedes response delivery: Slack
+/// may retry a response URL request, but that must never repeat a mutation.
+enum ChatOpsIntentKind {
+  SLASH_COMMAND
+  INTERACTIVE_ACTION
+}
+
+enum ChatOpsIntentStatus {
+  PENDING
+  EFFECT_PROCESSING
+  EFFECT_COMPLETED
+  RESPONSE_PENDING
+  RESPONSE_PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum WarRoomProvisioningStatus {
+  NONE
+  PROVISIONING
+  READY
+  FAILED
+}
+
+model ChatOpsIntent {
+  id                String             @id @default(cuid())
+  kind              ChatOpsIntentKind
+  deliveryHash      String
+  workspaceId       String
+  channelId         String?
+  slackUserId       String?
+  encryptedPayload  String
+  status            ChatOpsIntentStatus @default(PENDING)
+  attempt           Int                @default(0)
+  leaseToken        String?
+  leaseExpiresAt    DateTime?
+  effectCompletedAt DateTime?
+  responseCompletedAt DateTime?
+  responsePayload   Json?
+  lastError         String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([kind, deliveryHash])
+  @@index([status, leaseExpiresAt])
+  @@index([workspaceId, channelId])
 }
 
 // Status Page Configuration
@@ -1661,6 +1798,7 @@ model RateLimit {
 model SlackPinnedMessage {
   id         String   @id @default(cuid())
   incidentId String
+  workspaceId String?
   channelId  String // Slack channel the message lives in
   messageTs  String // Slack message timestamp — unique within a channel
   pinnedBy   String? // Display name of whoever reacted
@@ -1668,8 +1806,9 @@ model SlackPinnedMessage {
 
   incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
-  @@unique([channelId, messageTs])
+  @@unique([workspaceId, channelId, messageTs])
   @@index([incidentId])
+  @@index([workspaceId, channelId])
 }
 
 model ChatOpsConfig {

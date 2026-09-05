@@ -27,7 +27,24 @@ describe('webhook delivery boundary', () => {
     expect(assertSafeOutboundUrl).toHaveBeenCalledTimes(2);
     expect(safeOutboundFetch).toHaveBeenCalledWith(
       'https://hooks.example.com',
-      expect.objectContaining({ method: 'POST' })
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'X-OpsKnight-Delivery-Id': expect.any(String) }),
+      })
+    );
+  });
+
+  it('uses the supplied delivery id across retries', async () => {
+    await sendWebhook({
+      url: 'https://hooks.example.com',
+      payload: { ok: true },
+      deliveryId: 'delivery-123',
+    });
+    expect(safeOutboundFetch).toHaveBeenCalledWith(
+      'https://hooks.example.com',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-OpsKnight-Delivery-Id': 'delivery-123' }),
+      })
     );
   });
 });

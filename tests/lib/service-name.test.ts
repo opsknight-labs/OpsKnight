@@ -135,9 +135,13 @@ describe('assertWebhookIntegrationNameAvailable', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(prisma.webhookIntegration.findFirst).mockResolvedValue({ id: 'wh-1' } as any);
 
-    await expect(assertWebhookIntegrationNameAvailable('Slack')).rejects.toBeInstanceOf(
+    await expect(assertWebhookIntegrationNameAvailable('Slack', { serviceId: 'service-1' })).rejects.toBeInstanceOf(
       UniqueNameConflictError
     );
+    expect(prisma.webhookIntegration.findFirst).toHaveBeenCalledWith({
+      where: { serviceId: 'service-1', name: 'Slack' },
+      select: { id: true },
+    });
   });
 });
 
