@@ -8,23 +8,10 @@ import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { getDefaultAvatar } from '@/lib/avatar';
 import StatusBadge from '../incident/StatusBadge';
+import PriorityBadge from '@/components/incident/PriorityBadge';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
-import {
-  AlertCircle,
-  Clock,
-  CheckCircle2,
-  User as UserIcon,
-  Users as UsersIcon,
-  Search,
-  ArrowRight,
-  MoreHorizontal,
-  Eye,
-  Circle,
-  PauseCircle,
-  ShieldOff,
-  ShieldCheck,
-} from 'lucide-react';
+import { Clock, CheckCircle2, Users as UsersIcon, MoreHorizontal, Eye, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 import CreateIncidentButton from '@/components/incident/CreateIncidentButton';
@@ -83,49 +70,42 @@ const statusAccentClass: Record<string, string> = {
   OPEN: 'border-l-red-500',
   ACKNOWLEDGED: 'border-l-amber-500',
   RESOLVED: 'border-l-emerald-500',
-  SNOOZED: 'border-l-slate-400',
-  SUPPRESSED: 'border-l-slate-400',
+  SNOOZED: 'border-l-muted-foreground',
+  SUPPRESSED: 'border-l-muted-foreground',
 };
 
 // Urgency Badge Component
 function UrgencyBadge({ urgency }: { urgency: string }) {
-  if (urgency === 'HIGH') {
+  const normalized = urgency?.toUpperCase();
+  if (normalized === 'HIGH') {
     return (
-      <Badge variant="danger" size="xs" className="uppercase">
+      <Badge
+        variant="danger"
+        size="xs"
+        className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider"
+      >
         High
       </Badge>
     );
   }
-  if (urgency === 'MEDIUM') {
+  if (normalized === 'MEDIUM') {
     return (
-      <Badge variant="warning" size="xs" className="uppercase">
+      <Badge
+        variant="warning"
+        size="xs"
+        className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider"
+      >
         Med
       </Badge>
     );
   }
   return (
-    <Badge variant="neutral" size="xs" className="uppercase">
+    <Badge
+      variant="neutral"
+      size="xs"
+      className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider"
+    >
       Low
-    </Badge>
-  );
-}
-
-// Priority Badge Component
-function PriorityBadge({ priority }: { priority: string | null }) {
-  if (!priority) return null;
-
-  const colors = {
-    P1: 'danger',
-    P2: 'warning',
-    P3: 'warning',
-    P4: 'info',
-  };
-
-  const badgeVariant = (colors[priority as keyof typeof colors] || 'neutral') as any;
-
-  return (
-    <Badge variant={badgeVariant} size="xs" className="tracking-tight">
-      {priority}
     </Badge>
   );
 }
@@ -133,7 +113,7 @@ function PriorityBadge({ priority }: { priority: string | null }) {
 function IncidentList({ incidents, serviceId }: IncidentListProps) {
   const { userTimeZone } = useTimezone();
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [_isPending, startTransition] = useTransition();
   const { showToast } = useToast();
 
   const handleStatusChange = (incidentId: string, newStatus: IncidentStatus) => {
@@ -142,7 +122,7 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
         await updateIncidentStatus(incidentId, newStatus);
         showToast(`Incident ${newStatus.toLowerCase()} successfully`, 'success');
         router.refresh();
-      } catch (error) {
+      } catch {
         showToast('Failed to update status', 'error');
       }
     });
@@ -150,12 +130,12 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
 
   if (incidents.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white">
-        <div className="bg-slate-50 p-4 rounded-full mb-4 ring-1 ring-slate-100">
+      <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-card text-card-foreground">
+        <div className="bg-muted/60 p-4 rounded-full mb-4 ring-1 ring-border">
           <CheckCircle2 className="h-8 w-8 text-emerald-500" />
         </div>
-        <h3 className="text-lg font-semibold text-slate-900 mb-1">No incidents recorded</h3>
-        <p className="text-slate-500 max-w-sm mb-6">
+        <h3 className="text-sm font-semibold text-foreground mb-1">No incidents recorded</h3>
+        <p className="text-xs text-muted-foreground max-w-sm mb-6">
           This service is running smoothly with no recorded incidents.
         </p>
         <CreateIncidentButton serviceId={serviceId} />
@@ -164,8 +144,8 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
   }
 
   return (
-    <div className="p-3 md:p-4 bg-white">
-      <div className="flex flex-col gap-3">
+    <div className="p-3 md:p-4 bg-transparent">
+      <div className="flex flex-col gap-2.5">
         {incidents.map(incident => {
           const incidentStatus = incident.status;
 
@@ -173,11 +153,11 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
             <div
               key={incident.id}
               className={cn(
-                'group relative rounded-xl border bg-white shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-all',
-                'hover:shadow-md hover:-translate-y-[1px]',
-                'border-slate-200',
-                statusAccentClass[incidentStatus] ?? 'border-l-slate-300',
-                'border-l-4'
+                'group relative rounded-lg border bg-card text-card-foreground shadow-2xs transition-all',
+                'hover:shadow-sm hover:-translate-y-[0.5px]',
+                'border-border',
+                statusAccentClass[incidentStatus] ?? 'border-l-muted-foreground',
+                'border-l-[3px]'
               )}
             >
               <Link
@@ -186,39 +166,41 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
                 aria-label={`View incident ${incident.title}`}
               />
 
-              <div className="relative z-10 p-3 md:p-3.5 flex items-start gap-3 md:gap-4">
-                <div className="min-w-0 flex-1 space-y-2">
+              <div className="relative z-10 p-2.5 sm:p-3 flex items-start gap-3">
+                <div className="min-w-0 flex-1 space-y-1.5">
                   {/* Header Row: Title & Badges */}
-                  <div className="flex flex-wrap items-start justify-between gap-y-2 gap-x-4">
-                    <h3 className="text-sm font-extrabold text-slate-900 leading-tight group-hover:text-primary transition-colors pr-2">
+                  <div className="flex flex-wrap items-start justify-between gap-y-1.5 gap-x-3">
+                    <h3 className="text-xs sm:text-sm font-semibold text-foreground leading-snug group-hover:text-primary transition-colors pr-2 min-w-0">
                       {incident.title}
                     </h3>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <StatusBadge status={incidentStatus} size="sm" showDot />
-                      <PriorityBadge priority={incident.priority} />
+                      <PriorityBadge priority={incident.priority} size="sm" />
                       <UrgencyBadge urgency={incident.urgency} />
                     </div>
                   </div>
 
                   {/* Meta Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                    <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                      <span className="font-mono text-slate-400">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                    <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground font-medium">
+                      <span className="font-mono text-muted-foreground/70 text-[10px] sm:text-[11px]">
                         #{incident.id.slice(-5).toUpperCase()}
                       </span>
-                      <span className="opacity-30">&middot;</span>
+                      <span className="opacity-40">&middot;</span>
                       <div className="flex items-center gap-1.5">
                         <Clock className="h-3 w-3 opacity-70" />
-                        {formatDistanceToNow(new Date(incident.createdAt), userTimeZone)}
+                        <span>
+                          {formatDistanceToNow(new Date(incident.createdAt), userTimeZone)}
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {/* Assignee */}
                       {incident.assignee ? (
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-50 border border-slate-100">
-                          <Avatar className="h-4 w-4">
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/40 border border-border/70 text-[11px] text-foreground font-medium">
+                          <Avatar className="h-3.5 w-3.5">
                             <AvatarImage
                               src={
                                 incident.assignee.avatarUrl ||
@@ -228,25 +210,23 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
                                 )
                               }
                             />
-                            <AvatarFallback className="text-[9px]">
+                            <AvatarFallback className="text-[8px]">
                               {incident.assignee.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="text-xs text-slate-700 font-medium max-w-[100px] truncate">
-                            {incident.assignee.name}
-                          </span>
+                          <span className="max-w-[100px] truncate">{incident.assignee.name}</span>
                         </div>
                       ) : incident.team ? (
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-indigo-50 border border-indigo-100">
-                          <div className="h-4 w-4 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                            <UsersIcon className="h-2.5 w-2.5" />
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200/50 dark:border-indigo-800/40 text-[11px] text-indigo-700 dark:text-indigo-300 font-medium">
+                          <div className="h-3.5 w-3.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                            <UsersIcon className="h-2 w-2" />
                           </div>
-                          <span className="text-xs text-indigo-700 font-medium max-w-[100px] truncate">
-                            {incident.team.name}
-                          </span>
+                          <span className="max-w-[100px] truncate">{incident.team.name}</span>
                         </div>
                       ) : (
-                        <span className="text-xs text-slate-400 italic px-2">Unassigned</span>
+                        <span className="text-[11px] text-muted-foreground/60 italic px-1">
+                          Unassigned
+                        </span>
                       )}
 
                       {/* Actions Menu */}
@@ -256,12 +236,12 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 rounded-full hover:bg-slate-100 -mr-2 focus:ring-1 focus:ring-slate-300"
+                              className="h-6 w-6 rounded-full hover:bg-muted -mr-1 focus:ring-1 focus:ring-ring"
                               onClick={e => {
                                 e.stopPropagation(); // Stop link navigation
                               }}
                             >
-                              <MoreHorizontal className="h-4 w-4 text-slate-400" />
+                              <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
                               <span className="sr-only">Actions</span>
                             </Button>
                           </DropdownMenuTrigger>
@@ -271,7 +251,7 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
                                 href={`/incidents/${incident.id}`}
                                 className="flex items-center gap-2"
                               >
-                                <Eye className="h-4 w-4 text-slate-500" />
+                                <Eye className="h-4 w-4 text-muted-foreground" />
                                 View details
                               </Link>
                             </DropdownMenuItem>
@@ -304,7 +284,7 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
                                 onSelect={() => handleStatusChange(incident.id, 'OPEN')}
                                 className="flex items-center gap-2"
                               >
-                                <Circle className="h-4 w-4 text-slate-500" />
+                                <Circle className="h-4 w-4 text-muted-foreground" />
                                 Unacknowledge
                               </DropdownMenuItem>
                             )}
