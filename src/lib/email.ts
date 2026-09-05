@@ -12,7 +12,6 @@ import {
   EmailFooter,
   EmailHeader,
   InfoCard,
-  OpsKnightPromoCard,
   StatusBadge,
   escapeHtml,
 } from './email-components';
