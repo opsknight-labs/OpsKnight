@@ -178,8 +178,17 @@ export default function OperationalStatus({
           <span className="text-[10.5px] sm:text-[11px] font-bold tracking-wider uppercase">
             {label}
           </span>
-          <span className="hidden sm:inline text-[11px] text-zinc-500/60 font-mono">|</span>
-          <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-mono font-medium tabular-nums text-zinc-300">
+          <span className="sr-only">{`H ${critical} · M ${medium} · L ${low}`}</span>
+          <span
+            aria-hidden="true"
+            className="hidden sm:inline text-[11px] text-zinc-500/60 font-mono"
+          >
+            |
+          </span>
+          <span
+            aria-hidden="true"
+            className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-mono font-medium tabular-nums text-zinc-300"
+          >
             <span>
               H <span className="font-bold text-rose-300">{critical}</span>
             </span>
