@@ -26,8 +26,30 @@ vi.mock('@/contexts/IncidentCreationModalContext', () => ({
 const mockContextData = {
   canCreateIncident: true,
   services: [
-    { id: 'srv-checkout', name: 'Checkout API' },
-    { id: 'srv-auth', name: 'Authentication Service' },
+    {
+      id: 'srv-checkout',
+      name: 'Checkout API',
+      team: { id: 'team-sre', name: 'SRE Core' },
+      policy: {
+        id: 'pol-1',
+        name: 'Checkout Critical Escalation',
+        steps: [
+          {
+            id: 'stp-1',
+            stepOrder: 0,
+            delayMinutes: 0,
+            targetType: 'SCHEDULE',
+            targetSchedule: { id: 'sch-1', name: 'Tier-1 SRE Rotation' },
+          },
+        ],
+      },
+    },
+    {
+      id: 'srv-auth',
+      name: 'Authentication Service',
+      team: { id: 'team-sre', name: 'SRE Core' },
+      policy: null,
+    },
   ],
   users: [
     { id: 'usr-1', name: 'Alice Smith', email: 'alice@example.com', avatarUrl: null },
@@ -70,7 +92,7 @@ describe('CreateIncidentModal', () => {
     expect(await screen.findByText('Declare Incident')).toBeInTheDocument();
     expect(screen.getByText('Triage Mode')).toBeInTheDocument();
 
-    // Template Bar
+    // Template Area
     expect(screen.getByText('Incident Templates')).toBeInTheDocument();
     expect(screen.getByText('Start from scratch')).toBeInTheDocument();
     expect(screen.getByText('High Latency Advisory')).toBeInTheDocument();
@@ -82,6 +104,16 @@ describe('CreateIncidentModal', () => {
     expect(screen.getByText('Summary & Context')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /Affected Service/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /Responder Assignment/i })).toBeInTheDocument();
+
+    // Quick Impact Tagging
+    expect(screen.getByText('Customer-Facing Outage')).toBeInTheDocument();
+    expect(screen.getByText('Internal System Only')).toBeInTheDocument();
+
+    // ChatOps War Room
+    expect(screen.getByText('Incident War Room')).toBeInTheDocument();
+
+    // Who Gets Paged
+    expect(screen.getByText('Who Gets Paged?')).toBeInTheDocument();
 
     // Severity & Urgency
     expect(screen.getByText(/Urgency \(Paging Speed\)/i)).toBeInTheDocument();
@@ -133,7 +165,7 @@ describe('CreateIncidentModal', () => {
     await screen.findByText('Declare Incident');
 
     // Click Low Urgency button by title
-    const lowUrgencyBtn = screen.getByTitle(/No immediate page/i);
+    const lowUrgencyBtn = screen.getByTitle(/Queued for standard triage review/i);
     fireEvent.click(lowUrgencyBtn);
     expect(lowUrgencyBtn.getAttribute('aria-pressed')).toBe('true');
 
@@ -143,6 +175,62 @@ describe('CreateIncidentModal', () => {
     expect(p2Btn.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('toggles visibility between Customer-Facing Outage and Internal System Only', async () => {
+    render(<CreateIncidentModal />);
+
+    await screen.findByText('Declare Incident');
+
+    const internalBtn = screen.getByRole('button', { name: /Internal System Only/i });
+    fireEvent.click(internalBtn);
+    expect(internalBtn.getAttribute('aria-pressed')).toBe('true');
+
+    const customerBtn = screen.getByRole('button', { name: /Customer-Facing Outage/i });
+    fireEvent.click(customerBtn);
+    expect(customerBtn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('switches description between Write and Preview modes', async () => {
+    render(<CreateIncidentModal />);
+
+    await screen.findByText('Declare Incident');
+
+    const writeTab = screen.getByRole('button', { name: /^write$/i });
+    const previewTab = screen.getByRole('button', { name: /^preview$/i });
+
+    // Enter description
+    const textarea = screen.getByPlaceholderText(/Provide details on user impact/i);
+    fireEvent.change(textarea, { target: { value: '**High Impact** issue detected.' } });
+
+    // Switch to Preview
+    fireEvent.click(previewTab);
+    expect(screen.getByText('High Impact')).toBeInTheDocument();
+
+    // Switch back to Write
+    fireEvent.click(writeTab);
+    expect(screen.getByPlaceholderText(/Provide details on user impact/i)).toBeInTheDocument();
+  });
+
+  it('displays live on-call paging preview when template with service is selected', async () => {
+    render(<CreateIncidentModal />);
+
+    const templatePill = await screen.findByText('High Latency Advisory');
+    fireEvent.click(templatePill);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Checkout Critical Escalation/i)).toBeInTheDocument();
+      expect(screen.getByText(/Tier-1 SRE Rotation/i)).toBeInTheDocument();
+    });
+  });
+
+  it('calls closeCreateIncident when Close (X) button is clicked', async () => {
+    render(<CreateIncidentModal />);
+
+    const closeBtn = await screen.findByRole('button', { name: /Close create incident dialog/i });
+    fireEvent.click(closeBtn);
+
+    expect(mockCloseCreateIncident).toHaveBeenCalled();
+  });
+
   it('calls closeCreateIncident when Cancel is clicked', async () => {
     render(<CreateIncidentModal />);
 
@@ -150,5 +238,22 @@ describe('CreateIncidentModal', () => {
     fireEvent.click(cancelBtn);
 
     expect(mockCloseCreateIncident).toHaveBeenCalled();
+  });
+
+  it('shows no-escalation-policy warning when selected service has no policy', async () => {
+    render(<CreateIncidentModal />);
+
+    await screen.findByText('Declare Incident');
+
+    // Select the service with no policy (Authentication Service)
+    const serviceCombo = screen.getByRole('combobox', { name: /Affected Service/i });
+    fireEvent.click(serviceCombo);
+    const authOption = await screen.findByText('Authentication Service');
+    fireEvent.click(authOption);
+
+    await waitFor(() => {
+      expect(screen.getByText('No escalation policy attached')).toBeInTheDocument();
+      expect(screen.getByText(/Assign an escalation policy to/i)).toBeInTheDocument();
+    });
   });
 });

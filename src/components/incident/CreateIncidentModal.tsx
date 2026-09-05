@@ -16,10 +16,18 @@ import {
   Check,
   ChevronDown,
   ChevronsUpDown,
+  Eye,
+  FileText,
+  Globe,
   Hash,
   Info,
   LayoutTemplate,
   Loader2,
+  Lock,
+  MessageSquare,
+  PenLine,
+  Radio,
+  Search,
   Users,
   User as UserIcon,
   ShieldAlert,
@@ -53,11 +61,36 @@ import {
 } from '@/components/ui/shadcn/form';
 import { Input } from '@/components/ui/shadcn/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import { Switch } from '@/components/ui/shadcn/switch';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { cn } from '@/lib/utils';
 
-type Service = { id: string; name: string };
+type EscalationStep = {
+  id: string;
+  stepOrder: number;
+  delayMinutes: number;
+  targetType: string;
+  targetUser?: { id: string; name: string; email: string; avatarUrl?: string | null } | null;
+  targetTeam?: { id: string; name: string } | null;
+  targetSchedule?: { id: string; name: string } | null;
+};
+
+type EscalationPolicy = {
+  id: string;
+  name: string;
+  steps: EscalationStep[];
+};
+
+type Service = {
+  id: string;
+  name: string;
+  team?: { id: string; name: string } | null;
+  policy?: EscalationPolicy | null;
+  autoCreateWarRoom?: boolean;
+  slackChannel?: string | null;
+};
+
 type UserRecord = {
   id: string;
   name: string;
@@ -65,7 +98,9 @@ type UserRecord = {
   avatarUrl?: string | null;
   gender?: string | null;
 };
+
 type Team = { id: string; name: string };
+
 type Template = {
   id: string;
   name: string;
@@ -76,6 +111,7 @@ type Template = {
   defaultPriority?: string | null;
   defaultService?: { id: string; name: string } | null;
 };
+
 type CustomField = {
   id: string;
   name: string;
@@ -104,6 +140,7 @@ const formSchema = z.object({
   urgency: z.enum(['HIGH', 'MEDIUM', 'LOW']),
   priority: z.string().optional(),
   assigneeId: z.string().optional(),
+  visibility: z.enum(['PUBLIC', 'PRIVATE']),
   dedupKey: z.string().max(200).optional(),
 });
 
@@ -119,7 +156,7 @@ const URGENCY_OPTIONS = [
     value: 'HIGH' as const,
     label: 'High',
     sublabel: 'Immediate Paging',
-    desc: 'Alerts on-call responders immediately via phone, SMS, and push',
+    desc: 'Alerts on-call responders immediately via their configured notification channels',
     icon: Zap,
     selectedClass:
       'border-rose-500/50 bg-rose-500/10 text-rose-700 ring-1 ring-rose-500/30 shadow-2xs dark:text-rose-300',
@@ -132,7 +169,7 @@ const URGENCY_OPTIONS = [
     value: 'MEDIUM' as const,
     label: 'Medium',
     sublabel: 'Standard Triage',
-    desc: 'Notifies responders during active working hours',
+    desc: 'Pages on-call responders via their configured notification preferences',
     icon: AlertCircle,
     selectedClass:
       'border-amber-500/50 bg-amber-500/10 text-amber-700 ring-1 ring-amber-500/30 shadow-2xs dark:text-amber-300',
@@ -145,7 +182,7 @@ const URGENCY_OPTIONS = [
     value: 'LOW' as const,
     label: 'Low',
     sublabel: 'Non-Urgent',
-    desc: 'No immediate page. Queued for standard backlog review',
+    desc: 'Queued for standard triage review without active paging alerts',
     icon: Info,
     selectedClass:
       'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/30 shadow-2xs dark:text-emerald-300',
@@ -205,6 +242,152 @@ const QUICK_SNIPPETS = [
   { label: '+ Mitigation', snippet: '\n\n**Mitigation Steps:**\n- ' },
 ];
 
+function slugifyChannel(title: string): string {
+  if (!title.trim()) return 'incident-title';
+  const clean = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24);
+  return clean || 'incident-title';
+}
+
+function parseInlineMarkdown(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^\)]+\))/g;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(text.slice(lastIdx, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('**') && token.endsWith('**')) {
+      parts.push(
+        <strong key={match.index} className="font-semibold text-foreground">
+          {token.slice(2, -2)}
+        </strong>
+      );
+    } else if (token.startsWith('`') && token.endsWith('`')) {
+      parts.push(
+        <code
+          key={match.index}
+          className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground border border-border/60"
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
+    } else if (token.startsWith('[') && token.includes('](')) {
+      const closeBracket = token.indexOf('](');
+      const label = token.slice(1, closeBracket);
+      parts.push(
+        <span key={match.index} className="text-primary underline font-medium">
+          {label}
+        </span>
+      );
+    }
+    lastIdx = regex.lastIndex;
+  }
+  if (lastIdx < text.length) {
+    parts.push(text.slice(lastIdx));
+  }
+  return parts.length > 0 ? parts : text;
+}
+
+function renderMarkdown(content: string): React.ReactNode {
+  if (!content.trim()) {
+    return (
+      <div className="flex flex-col items-center justify-center py-6 text-center text-xs text-muted-foreground">
+        <FileText className="h-5 w-5 mb-1.5 opacity-40" />
+        <p className="font-medium">No description provided</p>
+        <p className="text-[11px] opacity-75 mt-0.5">
+          Switch to the Write tab to add incident context and details.
+        </p>
+      </div>
+    );
+  }
+
+  const lines = content.split('\n');
+  const elements: React.ReactNode[] = [];
+  let inCodeBlock = false;
+  let codeBlockLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.startsWith('```')) {
+      if (inCodeBlock) {
+        elements.push(
+          <pre
+            key={`code-${i}`}
+            className="my-2 rounded-lg bg-muted/70 p-3 font-mono text-xs overflow-x-auto border border-border/70 text-foreground"
+          >
+            <code>{codeBlockLines.join('\n')}</code>
+          </pre>
+        );
+        codeBlockLines = [];
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.push(line);
+      continue;
+    }
+
+    if (line.startsWith('### ')) {
+      elements.push(
+        <h4 key={i} className="text-xs font-bold text-foreground mt-2 mb-1">
+          {parseInlineMarkdown(line.slice(4))}
+        </h4>
+      );
+    } else if (line.startsWith('## ')) {
+      elements.push(
+        <h3 key={i} className="text-sm font-bold text-foreground mt-2.5 mb-1">
+          {parseInlineMarkdown(line.slice(3))}
+        </h3>
+      );
+    } else if (line.startsWith('# ')) {
+      elements.push(
+        <h2 key={i} className="text-base font-bold text-foreground mt-3 mb-1.5">
+          {parseInlineMarkdown(line.slice(2))}
+        </h2>
+      );
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      elements.push(
+        <li key={i} className="ml-4 list-disc text-xs text-foreground/90 leading-relaxed">
+          {parseInlineMarkdown(line.slice(2))}
+        </li>
+      );
+    } else if (line.trim() === '') {
+      elements.push(<div key={i} className="h-1.5" />);
+    } else {
+      elements.push(
+        <p key={i} className="text-xs text-foreground/90 leading-relaxed">
+          {parseInlineMarkdown(line)}
+        </p>
+      );
+    }
+  }
+
+  if (inCodeBlock && codeBlockLines.length > 0) {
+    elements.push(
+      <pre
+        key="code-end"
+        className="my-2 rounded-lg bg-muted/70 p-3 font-mono text-xs overflow-x-auto border border-border/70 text-foreground"
+      >
+        <code>{codeBlockLines.join('\n')}</code>
+      </pre>
+    );
+  }
+
+  return <div className="space-y-1">{elements}</div>;
+}
+
 function CreateIncidentModalContent({
   onClose,
   openOptions,
@@ -219,10 +402,13 @@ function CreateIncidentModalContent({
   const [loading, setLoading] = useState(true);
   const [contextError, setContextError] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState(openOptions?.templateId || '');
+  const [templateSearchOpen, setTemplateSearchOpen] = useState(false);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [serviceOpen, setServiceOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
+  const [descTab, setDescTab] = useState<'write' | 'preview'>('write');
+  const [createWarRoom, setCreateWarRoom] = useState(true);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -233,6 +419,7 @@ function CreateIncidentModalContent({
       urgency: 'HIGH',
       priority: '',
       assigneeId: 'unassigned',
+      visibility: 'PUBLIC',
       dedupKey: '',
     },
   });
@@ -242,6 +429,7 @@ function CreateIncidentModalContent({
   const watchedUrgency = form.watch('urgency');
   const watchedPriority = form.watch('priority');
   const watchedAssigneeId = form.watch('assigneeId');
+  const watchedVisibility = form.watch('visibility');
 
   const resetForm = useCallback(() => {
     form.reset({
@@ -251,6 +439,7 @@ function CreateIncidentModalContent({
       urgency: 'HIGH',
       priority: '',
       assigneeId: 'unassigned',
+      visibility: 'PUBLIC',
       dedupKey: '',
     });
   }, [form, openOptions?.serviceId]);
@@ -264,6 +453,7 @@ function CreateIncidentModalContent({
         urgency: template.defaultUrgency,
         priority: template.defaultPriority || '',
         assigneeId: 'unassigned',
+        visibility: 'PUBLIC',
         dedupKey: '',
       });
     },
@@ -327,7 +517,9 @@ function CreateIncidentModalContent({
       formData.append('description', data.description || '');
       formData.append('serviceId', data.serviceId);
       formData.append('urgency', data.urgency);
+      formData.append('visibility', data.visibility);
       if (data.priority) formData.append('priority', data.priority);
+      if (createWarRoom) formData.append('createWarRoom', 'true');
 
       if (data.assigneeId && data.assigneeId !== 'unassigned') {
         if (data.assigneeId.startsWith('team:')) {
@@ -349,7 +541,7 @@ function CreateIncidentModalContent({
         formAction(formData);
       });
     },
-    [customFieldValues, formAction]
+    [customFieldValues, formAction, createWarRoom]
   );
 
   const handleKeyDown = useCallback(
@@ -388,6 +580,11 @@ function CreateIncidentModalContent({
     [watchedPriority]
   );
 
+  const selectedTemplate = useMemo(
+    () => templates.find(t => t.id === selectedTemplateId),
+    [templates, selectedTemplateId]
+  );
+
   const appendSnippet = (snippet: string) => {
     const current = form.getValues('description') || '';
     form.setValue('description', current + snippet, { shouldValidate: true });
@@ -395,45 +592,51 @@ function CreateIncidentModalContent({
 
   return (
     <DialogPrimitive.Content
-      className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[95vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xl outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+      className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[95vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xl outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
       onKeyDown={handleKeyDown}
     >
-      {/* Top Accent Bar */}
-      <div className="h-1 w-full shrink-0 bg-gradient-to-r from-primary via-primary/80 to-primary/40" />
-
       {/* Header */}
-      <div className="relative shrink-0 border-b border-border/70 bg-gradient-to-b from-muted/30 to-background/50 px-5 sm:px-6 py-4">
+      <div className="relative shrink-0 border-b border-zinc-800/80 bg-gradient-to-b from-[#18181b] via-[#121216] to-[#09090b] px-5 sm:px-6 py-4 text-white shadow-2xs">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.06),transparent_60%)] pointer-events-none" />
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary shadow-2xs">
-              <Zap className="h-4.5 w-4.5" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-700/60 bg-white/10 shadow-xs backdrop-blur-md">
+              <Zap className="h-4.5 w-4.5 text-white" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <DialogPrimitive.Title className="text-base sm:text-lg font-bold tracking-tight text-foreground">
+                <DialogPrimitive.Title className="text-base sm:text-lg font-bold tracking-tight text-white">
                   Declare Incident
                 </DialogPrimitive.Title>
-                <Badge variant="neutral" size="xs" className="text-[10px] font-semibold uppercase">
+                <Badge
+                  variant="neutral"
+                  size="xs"
+                  className="text-[10px] font-semibold uppercase bg-white/10 border-zinc-700/60 text-zinc-300"
+                >
                   Triage Mode
                 </Badge>
               </div>
-              <DialogPrimitive.Description className="text-xs text-muted-foreground truncate">
+              <DialogPrimitive.Description className="text-xs text-zinc-400 truncate">
                 Notify on-call responders and initiate structured incident resolution.
               </DialogPrimitive.Description>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground/70 bg-muted/50 border border-border/60 px-1.5 py-0.5 rounded">
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-zinc-500 bg-white/5 border border-zinc-700/60 px-1.5 py-0.5 rounded">
               Esc
             </span>
-            <DialogPrimitive.Close
-              aria-label="Close create incident dialog"
-              title="Close (Esc)"
-              className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground transition-all hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <X className="h-4 w-4 transition-transform group-hover:rotate-90" />
-              <span className="sr-only">Close</span>
+            <DialogPrimitive.Close asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                aria-label="Close create incident dialog"
+                title="Close (Esc)"
+              >
+                <X size={16} className="h-4 w-4 shrink-0" />
+                <span className="sr-only">Close</span>
+              </Button>
             </DialogPrimitive.Close>
           </div>
         </div>
@@ -501,25 +704,87 @@ function CreateIncidentModalContent({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
             <div className="flex-1 space-y-5 overflow-y-auto px-5 sm:px-6 py-5">
-              {/* Template Switcher Bar */}
+              {/* Revamped Incident Template Area: No Scroller, Clear Wrap & Search */}
               {templates.length > 0 && (
-                <div className="rounded-xl border border-border/80 bg-muted/30 p-2.5">
+                <div className="rounded-xl border border-border/80 bg-muted/30 p-3">
                   <div className="flex items-center justify-between gap-2 mb-2 px-1">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                       <LayoutTemplate className="h-3.5 w-3.5 text-primary" />
                       <span>Incident Templates</span>
+                      {selectedTemplate && (
+                        <span className="text-[10px] font-normal text-muted-foreground ml-1">
+                          (Active:{' '}
+                          <span className="font-semibold text-primary">
+                            {selectedTemplate.name}
+                          </span>
+                          )
+                        </span>
+                      )}
                     </div>
-                    <Link
-                      href="/incidents/templates"
-                      onClick={onClose}
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                    >
-                      Manage
-                      <ArrowUpRight className="h-3 w-3" />
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      {templates.length > 4 && (
+                        <Popover open={templateSearchOpen} onOpenChange={setTemplateSearchOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[11px] font-medium gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                            >
+                              <Search className="h-3 w-3" />
+                              Browse All ({templates.length})
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-0" align="end">
+                            <Command>
+                              <CommandInput placeholder="Search templates..." className="h-9" />
+                              <CommandList>
+                                <CommandEmpty>No template found.</CommandEmpty>
+                                <CommandGroup heading="Available Templates">
+                                  {templates.map(tpl => (
+                                    <CommandItem
+                                      key={tpl.id}
+                                      value={tpl.name}
+                                      onSelect={() => {
+                                        setSelectedTemplateId(tpl.id);
+                                        applyTemplate(tpl);
+                                        setTemplateSearchOpen(false);
+                                      }}
+                                      className="cursor-pointer flex items-center justify-between"
+                                    >
+                                      <div className="flex flex-col min-w-0 pr-2">
+                                        <span className="font-semibold text-xs truncate">
+                                          {tpl.name}
+                                        </span>
+                                        {tpl.description && (
+                                          <span className="text-[10px] text-muted-foreground truncate">
+                                            {tpl.description}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {tpl.id === selectedTemplateId && (
+                                        <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                                      )}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                      <Link
+                        href="/incidents/templates"
+                        onClick={onClose}
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                      >
+                        Manage
+                        <ArrowUpRight className="h-3 w-3" />
+                      </Link>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  {/* Wrapped Quick Template Pills (No horizontal cutoffs) */}
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -527,7 +792,7 @@ function CreateIncidentModalContent({
                         resetForm();
                       }}
                       className={cn(
-                        'shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all',
+                        'text-xs font-medium px-3 py-1.5 rounded-lg border transition-all cursor-pointer',
                         !selectedTemplateId
                           ? 'bg-primary/10 border-primary/40 text-primary font-semibold shadow-2xs'
                           : 'bg-background border-border/70 text-muted-foreground hover:text-foreground'
@@ -536,7 +801,7 @@ function CreateIncidentModalContent({
                       Start from scratch
                     </button>
 
-                    {templates.map(tpl => {
+                    {templates.slice(0, 6).map(tpl => {
                       const isActive = selectedTemplateId === tpl.id;
                       return (
                         <button
@@ -547,7 +812,7 @@ function CreateIncidentModalContent({
                             applyTemplate(tpl);
                           }}
                           className={cn(
-                            'shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all',
+                            'flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all cursor-pointer',
                             isActive
                               ? 'bg-primary/10 border-primary/40 text-primary font-semibold shadow-2xs'
                               : 'bg-background border-border/70 text-muted-foreground hover:text-foreground'
@@ -556,7 +821,7 @@ function CreateIncidentModalContent({
                           {isActive && <Check className="h-3 w-3 text-primary shrink-0" />}
                           <span>{tpl.name}</span>
                           {tpl.defaultService && (
-                            <span className="text-[10px] opacity-70 bg-muted px-1 rounded">
+                            <span className="text-[10px] opacity-75 bg-muted px-1 py-0.5 rounded">
                               {tpl.defaultService.name}
                             </span>
                           )}
@@ -567,7 +832,7 @@ function CreateIncidentModalContent({
                 </div>
               )}
 
-              {/* Title & Description Section */}
+              {/* Title & Quick Impact Tagging (Feature 6) */}
               <div className="space-y-3.5">
                 <FormField
                   control={form.control}
@@ -600,34 +865,187 @@ function CreateIncidentModalContent({
                   )}
                 />
 
+                {/* Feature 6: Quick Impact Tagging (Customer-Facing vs Internal) */}
+                <FormField
+                  control={form.control}
+                  name="visibility"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className={FIELD_LABEL_CLASS}>
+                        <span>Impact Scope & Visibility</span>
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          {field.value === 'PUBLIC'
+                            ? 'Visible on Public Status Pages'
+                            : 'Internal Response Teams Only'}
+                        </span>
+                      </FormLabel>
+                      <FormControl>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            aria-pressed={field.value === 'PUBLIC'}
+                            onClick={() => field.onChange('PUBLIC')}
+                            className={cn(
+                              'flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer',
+                              field.value === 'PUBLIC'
+                                ? 'border-sky-500/50 bg-sky-500/10 ring-1 ring-sky-500/30 shadow-2xs'
+                                : 'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
+                                field.value === 'PUBLIC'
+                                  ? 'border-sky-500/40 bg-sky-500/20 text-sky-600 dark:text-sky-400'
+                                  : 'border-border/80 bg-muted/50 text-muted-foreground'
+                              )}
+                            >
+                              <Globe className="h-4 w-4 shrink-0" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-bold text-foreground">
+                                  Customer-Facing Outage
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  size="xs"
+                                  className={cn(
+                                    'text-[9px] font-semibold',
+                                    field.value === 'PUBLIC'
+                                      ? 'border-sky-500/40 text-sky-600 dark:text-sky-400 bg-sky-500/10'
+                                      : 'opacity-60'
+                                  )}
+                                >
+                                  PUBLIC
+                                </Badge>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
+                                Visible on public status pages & client notification broadcasts.
+                              </p>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            aria-pressed={field.value === 'PRIVATE'}
+                            onClick={() => field.onChange('PRIVATE')}
+                            className={cn(
+                              'flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer',
+                              field.value === 'PRIVATE'
+                                ? 'border-slate-500/50 bg-slate-500/10 ring-1 ring-slate-500/30 shadow-2xs'
+                                : 'border-border/80 bg-card hover:bg-muted/50 hover:border-border text-muted-foreground'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
+                                field.value === 'PRIVATE'
+                                  ? 'border-slate-500/40 bg-slate-500/20 text-slate-700 dark:text-slate-300'
+                                  : 'border-border/80 bg-muted/50 text-muted-foreground'
+                              )}
+                            >
+                              <Lock className="h-4 w-4 shrink-0" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-bold text-foreground">
+                                  Internal System Only
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  size="xs"
+                                  className={cn(
+                                    'text-[9px] font-semibold',
+                                    field.value === 'PRIVATE'
+                                      ? 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
+                                      : 'opacity-60'
+                                  )}
+                                >
+                                  INTERNAL
+                                </Badge>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
+                                Restricted to internal response teams; hidden from status pages.
+                              </p>
+                            </div>
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Feature 4: Description with Write & Preview Tabs */}
                 <FormField
                   control={form.control}
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <div className="flex items-center justify-between">
-                        <FormLabel className={FIELD_LABEL_CLASS}>
-                          <span>Summary & Context</span>
-                        </FormLabel>
-                        <div className="flex items-center gap-1.5">
-                          {QUICK_SNIPPETS.map(snip => (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <FormLabel className={FIELD_LABEL_CLASS}>
+                            <span>Summary & Context</span>
+                          </FormLabel>
+                          <div className="flex items-center rounded-lg border border-border/70 bg-muted/40 p-0.5 text-[11px]">
                             <button
-                              key={snip.label}
                               type="button"
-                              onClick={() => appendSnippet(snip.snippet)}
-                              className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-border/70 bg-background text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+                              onClick={() => setDescTab('write')}
+                              className={cn(
+                                'flex items-center gap-1 px-2 py-0.5 rounded-md font-medium transition-all cursor-pointer',
+                                descTab === 'write'
+                                  ? 'bg-background text-foreground shadow-2xs font-semibold'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              )}
                             >
-                              {snip.label}
+                              <PenLine className="h-3 w-3" />
+                              Write
                             </button>
-                          ))}
+                            <button
+                              type="button"
+                              onClick={() => setDescTab('preview')}
+                              className={cn(
+                                'flex items-center gap-1 px-2 py-0.5 rounded-md font-medium transition-all cursor-pointer',
+                                descTab === 'preview'
+                                  ? 'bg-background text-foreground shadow-2xs font-semibold'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              )}
+                            >
+                              <Eye className="h-3 w-3" />
+                              Preview
+                            </button>
+                          </div>
                         </div>
+
+                        {descTab === 'write' && (
+                          <div className="flex items-center gap-1.5">
+                            {QUICK_SNIPPETS.map(snip => (
+                              <button
+                                key={snip.label}
+                                type="button"
+                                onClick={() => appendSnippet(snip.snippet)}
+                                className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-border/70 bg-background text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors cursor-pointer"
+                              >
+                                {snip.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
+
                       <FormControl>
-                        <Textarea
-                          placeholder="Provide details on user impact, active symptoms, error rates, and initial hypotheses..."
-                          className="min-h-[80px] resize-y rounded-xl border-border/80 bg-background px-3.5 py-2.5 text-sm leading-relaxed shadow-2xs transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-primary/20"
-                          {...field}
-                        />
+                        {descTab === 'write' ? (
+                          <Textarea
+                            placeholder="Provide details on user impact, active symptoms, error rates, and initial hypotheses... (Markdown supported)"
+                            className="min-h-[88px] resize-y rounded-xl border-border/80 bg-background px-3.5 py-2.5 text-sm leading-relaxed shadow-2xs transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-primary/20"
+                            {...field}
+                          />
+                        ) : (
+                          <div className="min-h-[88px] rounded-xl border border-border/80 bg-background/50 px-3.5 py-2.5 shadow-2xs">
+                            {renderMarkdown(field.value || '')}
+                          </div>
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -636,245 +1054,408 @@ function CreateIncidentModalContent({
               </div>
 
               {/* Service and Assignee Routing */}
-              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 pt-1 border-t border-border/60">
-                {/* Affected Service */}
-                <FormField
-                  control={form.control}
-                  name="serviceId"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel className={FIELD_LABEL_CLASS}>
-                        <span>
-                          Affected Service <span className="text-rose-500">*</span>
-                        </span>
-                      </FormLabel>
-                      <Popover open={serviceOpen} onOpenChange={setServiceOpen}>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              role="combobox"
-                              className={cn(
-                                CONTROL_CLASS,
-                                'w-full justify-between px-3 text-sm font-normal'
-                              )}
-                            >
-                              {field.value ? (
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <Activity className="h-3.5 w-3.5 shrink-0 text-primary" />
-                                  <span className="truncate font-semibold text-foreground">
-                                    {selectedService?.name || 'Selected'}
+              <div className="space-y-3 pt-1 border-t border-border/60">
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  {/* Affected Service */}
+                  <FormField
+                    control={form.control}
+                    name="serviceId"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel className={FIELD_LABEL_CLASS}>
+                          <span>
+                            Affected Service <span className="text-rose-500">*</span>
+                          </span>
+                        </FormLabel>
+                        <Popover open={serviceOpen} onOpenChange={setServiceOpen}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  CONTROL_CLASS,
+                                  'w-full justify-between px-3 text-sm font-normal'
+                                )}
+                              >
+                                {field.value ? (
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <Activity className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                    <span className="truncate font-semibold text-foreground">
+                                      {selectedService?.name || 'Selected'}
+                                    </span>
                                   </span>
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground flex items-center gap-1.5">
-                                  <Activity className="h-3.5 w-3.5 opacity-50" />
-                                  Select affected service...
-                                </span>
-                              )}
-                              <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          className="w-[var(--radix-popover-trigger-width)] p-0"
-                          align="start"
-                        >
-                          <Command>
-                            <CommandInput placeholder="Search services..." className="h-9" />
-                            <CommandList>
-                              <CommandEmpty>No service found.</CommandEmpty>
-                              <CommandGroup>
-                                {services.map(service => (
-                                  <CommandItem
-                                    key={service.id}
-                                    value={service.name}
-                                    onSelect={() => {
-                                      form.setValue('serviceId', service.id, {
-                                        shouldValidate: true,
-                                      });
-                                      setServiceOpen(false);
-                                    }}
-                                    className="cursor-pointer flex items-center justify-between"
-                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <Activity className="h-3.5 w-3.5 text-primary shrink-0" />
-                                      <span className="truncate font-medium">{service.name}</span>
-                                    </div>
-                                    {service.id === field.value && (
-                                      <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
-                                    )}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Assignee / Responder */}
-                <FormField
-                  control={form.control}
-                  name="assigneeId"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel className={FIELD_LABEL_CLASS}>
-                        <span>Responder Assignment</span>
-                      </FormLabel>
-                      <Popover open={assigneeOpen} onOpenChange={setAssigneeOpen}>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              role="combobox"
-                              className={cn(
-                                CONTROL_CLASS,
-                                'w-full justify-between px-3 text-sm font-normal'
-                              )}
-                            >
-                              {field.value && field.value !== 'unassigned' ? (
-                                <span className="flex min-w-0 items-center gap-2">
-                                  {selectedAssigneeTeam ? (
-                                    <>
-                                      <div className="h-5 w-5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                                        <Users className="h-2.5 w-2.5" />
-                                      </div>
-                                      <span className="truncate font-medium text-foreground">
-                                        {selectedAssigneeTeam.name}
-                                      </span>
-                                    </>
-                                  ) : selectedAssigneeUser ? (
-                                    <>
-                                      <UserAvatar
-                                        userId={selectedAssigneeUser.id}
-                                        name={selectedAssigneeUser.name}
-                                        gender={selectedAssigneeUser.gender}
-                                        avatarUrl={selectedAssigneeUser.avatarUrl}
-                                        size="xs"
-                                        className="border-border"
-                                      />
-                                      <span className="truncate font-medium text-foreground">
-                                        {selectedAssigneeUser.name}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="truncate font-medium">Assigned</span>
-                                  )}
-                                </span>
-                              ) : (
-                                <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-                                  <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-primary" />
-                                  <span className="truncate">Auto-assign (Escalation Policy)</span>
-                                </span>
-                              )}
-                              <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[320px] p-0" align="start">
-                          <Command>
-                            <CommandInput
-                              placeholder="Search responders or teams..."
-                              className="h-9"
-                            />
-                            <CommandList>
-                              <CommandEmpty>No responder found.</CommandEmpty>
-                              <CommandGroup heading="Automatic Routing">
-                                <CommandItem
-                                  value="unassigned auto-assign escalation policy"
-                                  onSelect={() => {
-                                    form.setValue('assigneeId', 'unassigned');
-                                    setAssigneeOpen(false);
-                                  }}
-                                  className="cursor-pointer"
-                                >
-                                  <ShieldAlert className="mr-2 h-4 w-4 text-primary" />
-                                  <div className="flex flex-col">
-                                    <span className="font-semibold text-xs">
-                                      Auto-assign via Policy
-                                    </span>
-                                    <span className="text-[10px] text-muted-foreground">
-                                      Pages on-call responders bound to service
-                                    </span>
-                                  </div>
-                                  {field.value === 'unassigned' && (
-                                    <Check className="ml-auto h-3.5 w-3.5 text-primary" />
-                                  )}
-                                </CommandItem>
-                              </CommandGroup>
-
-                              {teams.length > 0 && (
-                                <CommandGroup heading="Teams">
-                                  {teams.map(team => (
+                                ) : (
+                                  <span className="text-muted-foreground flex items-center gap-1.5">
+                                    <Activity className="h-3.5 w-3.5 opacity-50" />
+                                    Select affected service...
+                                  </span>
+                                )}
+                                <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-[var(--radix-popover-trigger-width)] p-0"
+                            align="start"
+                          >
+                            <Command>
+                              <CommandInput placeholder="Search services..." className="h-9" />
+                              <CommandList>
+                                <CommandEmpty>No service found.</CommandEmpty>
+                                <CommandGroup>
+                                  {services.map(service => (
                                     <CommandItem
-                                      key={team.id}
-                                      value={`team ${team.name}`}
+                                      key={service.id}
+                                      value={service.name}
                                       onSelect={() => {
-                                        form.setValue('assigneeId', `team:${team.id}`);
-                                        setAssigneeOpen(false);
+                                        form.setValue('serviceId', service.id, {
+                                          shouldValidate: true,
+                                        });
+                                        setServiceOpen(false);
                                       }}
-                                      className="cursor-pointer"
+                                      className="cursor-pointer flex items-center justify-between"
                                     >
-                                      <span className="mr-2 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                                        <Users className="h-3 w-3" />
-                                      </span>
-                                      <span className="font-medium text-xs">{team.name}</span>
-                                      {field.value === `team:${team.id}` && (
-                                        <Check className="ml-auto h-3.5 w-3.5 text-primary" />
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <Activity className="h-3.5 w-3.5 text-primary shrink-0" />
+                                        <span className="truncate font-medium">{service.name}</span>
+                                      </div>
+                                      {service.id === field.value && (
+                                        <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
                                       )}
                                     </CommandItem>
                                   ))}
                                 </CommandGroup>
-                              )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                              <CommandGroup heading="Direct Responders">
-                                {users.map(user => (
+                  {/* Assignee / Responder */}
+                  <FormField
+                    control={form.control}
+                    name="assigneeId"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel className={FIELD_LABEL_CLASS}>
+                          <span>Responder Assignment</span>
+                        </FormLabel>
+                        <Popover open={assigneeOpen} onOpenChange={setAssigneeOpen}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  CONTROL_CLASS,
+                                  'w-full justify-between px-3 text-sm font-normal'
+                                )}
+                              >
+                                {field.value && field.value !== 'unassigned' ? (
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    {selectedAssigneeTeam ? (
+                                      <>
+                                        <div className="h-5 w-5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                          <Users className="h-2.5 w-2.5" />
+                                        </div>
+                                        <span className="truncate font-medium text-foreground">
+                                          {selectedAssigneeTeam.name}
+                                        </span>
+                                      </>
+                                    ) : selectedAssigneeUser ? (
+                                      <>
+                                        <UserAvatar
+                                          userId={selectedAssigneeUser.id}
+                                          name={selectedAssigneeUser.name}
+                                          gender={selectedAssigneeUser.gender}
+                                          avatarUrl={selectedAssigneeUser.avatarUrl}
+                                          size="xs"
+                                          className="border-border"
+                                        />
+                                        <span className="truncate font-medium text-foreground">
+                                          {selectedAssigneeUser.name}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <span className="truncate font-medium">Assigned</span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                                    <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                    <span className="truncate">
+                                      Auto-assign (Escalation Policy)
+                                    </span>
+                                  </span>
+                                )}
+                                <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[320px] p-0" align="start">
+                            <Command>
+                              <CommandInput
+                                placeholder="Search responders or teams..."
+                                className="h-9"
+                              />
+                              <CommandList>
+                                <CommandEmpty>No responder found.</CommandEmpty>
+                                <CommandGroup heading="Automatic Routing">
                                   <CommandItem
-                                    key={user.id}
-                                    value={`user ${user.name} ${user.email}`}
+                                    value="unassigned auto-assign escalation policy"
                                     onSelect={() => {
-                                      form.setValue('assigneeId', `user:${user.id}`);
+                                      form.setValue('assigneeId', 'unassigned');
                                       setAssigneeOpen(false);
                                     }}
                                     className="cursor-pointer"
                                   >
-                                    <UserAvatar
-                                      userId={user.id}
-                                      name={user.name}
-                                      gender={user.gender}
-                                      avatarUrl={user.avatarUrl}
-                                      size="xs"
-                                      className="mr-2 border-border"
-                                    />
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="font-medium text-xs truncate">
-                                        {user.name}
+                                    <ShieldAlert className="mr-2 h-4 w-4 text-primary" />
+                                    <div className="flex flex-col">
+                                      <span className="font-semibold text-xs">
+                                        Auto-assign via Policy
                                       </span>
-                                      <span className="text-[10px] text-muted-foreground truncate">
-                                        {user.email}
+                                      <span className="text-[10px] text-muted-foreground">
+                                        Pages on-call responders bound to service
                                       </span>
                                     </div>
-                                    {(field.value === `user:${user.id}` ||
-                                      field.value === user.id) && (
-                                      <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />
+                                    {field.value === 'unassigned' && (
+                                      <Check className="ml-auto h-3.5 w-3.5 text-primary" />
                                     )}
                                   </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                                </CommandGroup>
+
+                                {teams.length > 0 && (
+                                  <CommandGroup heading="Teams">
+                                    {teams.map(team => (
+                                      <CommandItem
+                                        key={team.id}
+                                        value={`team ${team.name}`}
+                                        onSelect={() => {
+                                          form.setValue('assigneeId', `team:${team.id}`);
+                                          setAssigneeOpen(false);
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        <span className="mr-2 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                          <Users className="h-3 w-3" />
+                                        </span>
+                                        <span className="font-medium text-xs">{team.name}</span>
+                                        {field.value === `team:${team.id}` && (
+                                          <Check className="ml-auto h-3.5 w-3.5 text-primary" />
+                                        )}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                )}
+
+                                {users.length > 0 && (
+                                  <CommandGroup heading="Direct Responders">
+                                    {users.map(user => (
+                                      <CommandItem
+                                        key={user.id}
+                                        value={`user ${user.name} ${user.email}`}
+                                        onSelect={() => {
+                                          form.setValue('assigneeId', `user:${user.id}`);
+                                          setAssigneeOpen(false);
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        <UserAvatar
+                                          userId={user.id}
+                                          name={user.name}
+                                          gender={user.gender}
+                                          avatarUrl={user.avatarUrl}
+                                          size="xs"
+                                          className="mr-2 border-border"
+                                        />
+                                        <div className="flex flex-col min-w-0">
+                                          <span className="font-medium text-xs truncate">
+                                            {user.name}
+                                          </span>
+                                          <span className="text-[10px] text-muted-foreground truncate">
+                                            {user.email}
+                                          </span>
+                                        </div>
+                                        {(field.value === `user:${user.id}` ||
+                                          field.value === user.id) && (
+                                          <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />
+                                        )}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Feature 2: Live On-Call Responder Preview ("Who Gets Paged?") */}
+                <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary mt-0.5">
+                      <Radio className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-foreground">
+                          Who Gets Paged?
+                        </span>
+                        <Badge
+                          variant="neutral"
+                          size="xs"
+                          className="text-[9px] font-semibold uppercase"
+                        >
+                          Live Escalation Route
+                        </Badge>
+                      </div>
+
+                      {watchedAssigneeId && watchedAssigneeId !== 'unassigned' ? (
+                        <div className="text-xs text-foreground/90">
+                          {selectedAssigneeUser ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium text-muted-foreground">
+                                Direct Responder:
+                              </span>
+                              <span className="font-semibold text-foreground">
+                                {selectedAssigneeUser.name}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                ({selectedAssigneeUser.email})
+                              </span>
+                              <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                                &bull; Escalation policy rotation will be bypassed
+                              </span>
+                            </div>
+                          ) : selectedAssigneeTeam ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium text-muted-foreground">
+                                Direct Team:
+                              </span>
+                              <span className="font-semibold text-foreground">
+                                {selectedAssigneeTeam.name}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                &bull; Broadcasts to all team members
+                              </span>
+                            </div>
+                          ) : (
+                            <span>Explicitly assigned responder</span>
+                          )}
+                        </div>
+                      ) : selectedService ? (
+                        selectedService.policy ? (
+                          <div className="space-y-1 text-xs">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-muted-foreground">Policy:</span>
+                              <span className="font-semibold text-foreground">
+                                {selectedService.policy.name ||
+                                  (selectedService.team
+                                    ? `${selectedService.team.name} Escalation Policy`
+                                    : 'Default Workspace Policy')}
+                              </span>
+                              <span className="opacity-40">&bull;</span>
+                              <span className="text-muted-foreground">Step 1:</span>
+                              <span className="font-semibold text-primary">
+                                {selectedService.policy?.steps?.[0]?.targetSchedule?.name
+                                  ? `On-Call Schedule (${selectedService.policy.steps[0].targetSchedule.name})`
+                                  : selectedService.policy?.steps?.[0]?.targetUser?.name
+                                    ? `Direct (${selectedService.policy.steps[0].targetUser.name})`
+                                    : selectedService.policy?.steps?.[0]?.targetTeam?.name
+                                      ? `Team (${selectedService.policy.steps[0].targetTeam.name})`
+                                      : selectedService.team?.name
+                                        ? `${selectedService.team.name} Primary Shift`
+                                        : 'Primary On-Call Schedule'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              {watchedUrgency === 'HIGH'
+                                ? '⚡ Urgent: Primary on-call will be paged immediately via their configured notification preferences (Push, SMS, WhatsApp, Email).'
+                                : watchedUrgency === 'MEDIUM'
+                                  ? '📣 Standard: Pages on-call responders via their configured notification preferences.'
+                                  : '📋 Non-urgent: Queued for triage backlog without active paging alerts.'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2">
+                            <span className="mt-0.5 shrink-0 text-amber-500">⚠</span>
+                            <div className="min-w-0 space-y-0.5">
+                              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                                No escalation policy attached
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                Assign an escalation policy to{' '}
+                                <span className="font-semibold">{selectedService.name}</span> in
+                                Service Settings so on-call responders are paged automatically.
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Select an affected service above to preview active on-call responders and
+                          escalation policies.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature 5: ChatOps & War Room Provisioning Card */}
+                <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-foreground">
+                            Incident War Room
+                          </span>
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                            #inc-
+                            <span className="opacity-50" title="Auto-assigned incident ID">
+                              {'{id}'}
+                            </span>
+                            -{slugifyChannel(watchedTitle)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          Auto-provisions a dedicated Slack triage channel with responder invites.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label
+                        htmlFor="warroom-toggle"
+                        className="text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                      >
+                        {createWarRoom ? 'Enabled' : 'Disabled'}
+                      </label>
+                      <Switch
+                        id="warroom-toggle"
+                        checked={createWarRoom}
+                        onCheckedChange={setCreateWarRoom}
+                        aria-label="Auto-provision Slack war room channel"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Urgency & Priority */}
@@ -985,7 +1566,7 @@ function CreateIncidentModalContent({
                   <button
                     type="button"
                     onClick={() => setShowPreview(prev => !prev)}
-                    className="text-[11px] font-medium text-primary hover:underline"
+                    className="text-[11px] font-medium text-primary hover:underline cursor-pointer"
                   >
                     {showPreview ? 'Hide' : 'Show'}
                   </button>
@@ -1019,6 +1600,28 @@ function CreateIncidentModalContent({
                               className="uppercase"
                             >
                               {watchedUrgency}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              size="xs"
+                              className={cn(
+                                'text-[10px] gap-1',
+                                watchedVisibility === 'PUBLIC'
+                                  ? 'border-sky-500/30 text-sky-600 dark:text-sky-400'
+                                  : 'border-border text-muted-foreground'
+                              )}
+                            >
+                              {watchedVisibility === 'PUBLIC' ? (
+                                <>
+                                  <Globe className="h-2.5 w-2.5" />
+                                  Public
+                                </>
+                              ) : (
+                                <>
+                                  <Lock className="h-2.5 w-2.5" />
+                                  Internal
+                                </>
+                              )}
                             </Badge>
                           </div>
                         </div>
@@ -1154,7 +1757,7 @@ function CreateIncidentModalContent({
                   variant="ghost"
                   size="sm"
                   onClick={onClose}
-                  className="h-9 px-4 text-xs font-medium text-muted-foreground hover:text-foreground"
+                  className="h-9 px-4 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   Cancel
                 </Button>
