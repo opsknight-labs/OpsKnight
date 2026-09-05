@@ -174,11 +174,11 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
     >
       {sortedAlerts.length === 0 ? (
         <div className="py-6 text-center">
-          <div className="w-10 h-10 mx-auto mb-2 rounded-lg bg-emerald-100 flex items-center justify-center">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+          <div className="w-10 h-10 mx-auto mb-2 rounded-lg bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/20 flex items-center justify-center">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <p className="text-xs font-semibold text-slate-700 mb-0.5">All Clear</p>
-          <p className="text-[10px] text-slate-400">No SLA breaches imminent</p>
+          <p className="text-xs font-semibold text-foreground mb-0.5">All Clear</p>
+          <p className="text-[10px] text-muted-foreground">No SLA breaches imminent</p>
         </div>
       ) : (
         <div className="space-y-2" role="list" aria-label="SLA breach alerts">
@@ -192,10 +192,10 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                 key={incident.id}
                 onClick={() => handleIncidentClick(incident.id)}
                 className={cn(
-                  'group flex items-center gap-3 p-2.5 rounded-lg border text-left w-full transition-colors',
+                  'group flex items-center gap-3 p-2.5 rounded-lg border text-left w-full transition-all duration-150 shadow-2xs cursor-pointer',
                   isUrgent
-                    ? 'bg-rose-50/50 border-rose-200 hover:border-rose-300 border-l-4 border-l-rose-500'
-                    : 'bg-amber-50/50 border-amber-200 hover:border-amber-300 border-l-4 border-l-amber-500'
+                    ? 'bg-card dark:bg-[#121216] border-rose-500/25 dark:border-rose-500/30 border-l-[3px] border-l-rose-500 hover:border-rose-500/50 hover:bg-rose-500/[0.03] dark:hover:bg-rose-500/[0.06]'
+                    : 'bg-card dark:bg-[#121216] border-amber-500/25 dark:border-amber-500/30 border-l-[3px] border-l-amber-500 hover:border-amber-500/50 hover:bg-amber-500/[0.03] dark:hover:bg-amber-500/[0.06]'
                 )}
                 role="listitem"
                 aria-label={`${incident.title} - ${actionLabel} deadline in ${timeStr}`}
@@ -203,8 +203,10 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                 {/* Icon */}
                 <div
                   className={cn(
-                    'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                    isUrgent ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'
+                    'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-150 group-hover:scale-105',
+                    isUrgent
+                      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                   )}
                   aria-hidden="true"
                 >
@@ -212,18 +214,20 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-slate-700 truncate mb-0.5">
+                  <div className="text-xs font-semibold text-foreground truncate mb-1">
                     {incident.title}
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px]">
-                    <span className="text-slate-400 truncate max-w-[80px]">
+                    <span className="text-muted-foreground truncate max-w-[85px]">
                       {incident.serviceName}
                     </span>
-                    <span className="text-slate-300">•</span>
+                    <span className="text-zinc-300 dark:text-zinc-700">•</span>
                     <span
                       className={cn(
-                        'font-bold tabular-nums',
-                        isUrgent ? 'text-rose-600' : 'text-amber-600'
+                        'font-mono font-bold text-[10px] px-1.5 py-0.5 rounded border tabular-nums',
+                        isUrgent
+                          ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
                       )}
                     >
                       {actionLabel} {timeStr}
@@ -231,7 +235,7 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                   </div>
                 </div>
 
-                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" />
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 group-hover:text-foreground group-hover:translate-x-0.5 transition-all duration-150 shrink-0" />
               </button>
             );
           })}

@@ -46,31 +46,34 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
     >
       <div className="space-y-2">
         {actions.map((action, idx) => {
+          const isPrimary = action.variant === 'primary';
           const classes = cn(
-            'group flex items-center gap-3 p-2.5 rounded-lg border transition-all w-full shadow-xs',
-            action.variant === 'primary'
-              ? 'bg-[#09090b] text-white border-zinc-800/80 hover:bg-[#18181b] hover:border-zinc-700/80'
-              : 'bg-white border-border text-slate-700 hover:border-slate-300 hover:bg-slate-50/50'
+            'group flex items-center gap-3 p-2.5 rounded-lg border transition-all duration-150 w-full shadow-2xs cursor-pointer',
+            isPrimary
+              ? 'bg-card dark:bg-[#121216] border-rose-500/30 dark:border-rose-500/30 border-l-[3px] border-l-rose-500 hover:border-rose-500/50 hover:bg-rose-500/[0.03] dark:hover:bg-rose-500/[0.06] text-foreground'
+              : 'bg-card dark:bg-[#121216] border-border dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-muted/40 dark:hover:bg-zinc-800/40 text-foreground'
           );
           const content = (
             <>
               <div
                 className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors',
-                  action.variant === 'primary'
-                    ? 'bg-white/10 text-white'
-                    : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200/70'
+                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150',
+                  isPrimary
+                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 group-hover:bg-rose-500/20 group-hover:scale-105'
+                    : 'bg-muted dark:bg-zinc-800/80 text-muted-foreground group-hover:text-foreground group-hover:bg-muted/90'
                 )}
               >
                 {action.icon}
               </div>
-              <span className="flex-1 text-xs font-semibold text-left">{action.label}</span>
+              <span className="flex-1 text-xs font-semibold text-left text-foreground">
+                {action.label}
+              </span>
               <ChevronRight
                 className={cn(
-                  'w-3.5 h-3.5 shrink-0 transition-colors',
-                  action.variant === 'primary'
-                    ? 'text-zinc-500 group-hover:text-zinc-300'
-                    : 'text-slate-400 group-hover:text-slate-600'
+                  'w-3.5 h-3.5 shrink-0 transition-all duration-150 group-hover:translate-x-0.5',
+                  isPrimary
+                    ? 'text-muted-foreground/60 group-hover:text-rose-600 dark:group-hover:text-rose-400'
+                    : 'text-muted-foreground/50 group-hover:text-foreground'
                 )}
               />
             </>
