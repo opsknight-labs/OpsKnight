@@ -57,6 +57,8 @@ export type HealthHistorySample = {
   hourLabel: string;
   status: HealthLevel;
   scorePercent: number;
+  reason?: string;
+  issues?: string[];
 };
 
 export type AdminHealthReport = {
@@ -152,22 +154,206 @@ function overallStatus(checks: AdminHealthCheck[]): HealthLevel {
   return 'unknown';
 }
 
-function generate24HourHistory(overall: HealthLevel, now: Date): HealthHistorySample[] {
+async function generate24HourHistory(
+  checks: AdminHealthCheck[],
+  overall: HealthLevel,
+  now: Date
+): Promise<HealthHistorySample[]> {
+  const since = new Date(now.getTime() - 24 * HOUR);
+
+  let incidents: Array<{
+    id: string;
+    title: string;
+    priority: string | null;
+    status: string;
+    createdAt: Date;
+    resolvedAt: Date | null;
+  }> = [];
+
+  let failedJobs: Array<{
+    id: string;
+    createdAt: Date;
+  }> = [];
+
+  let failedDeliveries: Array<{
+    id: string;
+    createdAt: Date;
+  }> = [];
+
+  let failedNotifications: Array<{
+    id: string;
+    startedAt: Date;
+  }> = [];
+
+  try {
+    incidents = await prisma.incident.findMany({
+      where: {
+        OR: [
+          { createdAt: { gte: since } },
+          { resolvedAt: { gte: since } },
+          { status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED'] } },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        priority: true,
+        status: true,
+        createdAt: true,
+        resolvedAt: true,
+      },
+    });
+  } catch {
+    // Graceful fallback if database query is restricted
+  }
+
+  try {
+    failedJobs = await prisma.backgroundJob.findMany({
+      where: {
+        createdAt: { gte: since },
+        status: 'FAILED',
+      },
+      select: {
+        id: true,
+        createdAt: true,
+      },
+    });
+  } catch {
+    // Graceful fallback
+  }
+
+  try {
+    failedDeliveries = await prisma.inboundDelivery.findMany({
+      where: {
+        createdAt: { gte: since },
+        status: 'FAILED',
+      },
+      select: {
+        id: true,
+        createdAt: true,
+      },
+    });
+  } catch {
+    // Graceful fallback
+  }
+
+  try {
+    failedNotifications = await prisma.notificationDeliveryAttempt.findMany({
+      where: {
+        startedAt: { gte: since },
+        outcome: 'FAILED',
+      },
+      select: {
+        id: true,
+        startedAt: true,
+      },
+    });
+  } catch {
+    // Graceful fallback
+  }
+
+  const degradedChecks = checks.filter(c => c.status === 'degraded');
+  const unhealthyChecks = checks.filter(c => c.status === 'unhealthy');
+
+  // Pick top diagnostic summary if system has persistent issues
+  const diagnosticSummary =
+    unhealthyChecks.length > 0
+      ? unhealthyChecks[0].summary
+      : degradedChecks.length > 0
+        ? degradedChecks[0].summary
+        : undefined;
+
   const samples: HealthHistorySample[] = [];
   for (let i = 23; i >= 0; i--) {
     const d = new Date(now.getTime() - i * HOUR);
+    const windowStart = new Date(d.getTime() - HOUR);
+    const windowEnd = d;
     const hour = d.getHours();
     const hourLabel = `${hour.toString().padStart(2, '0')}:00`;
-    // Last hour reflects live overall status; previous hours show healthy baseline
-    const status: HealthLevel = i === 0 ? overall : 'healthy';
-    const scorePercent = status === 'healthy' ? 100 : status === 'degraded' ? 85 : 40;
+
+    // 1. Incidents active in this hourly bucket
+    const activeIncidents = incidents.filter(inc => {
+      const incStart = inc.createdAt.getTime();
+      const incEnd = inc.resolvedAt ? inc.resolvedAt.getTime() : now.getTime();
+      return incStart <= windowEnd.getTime() && incEnd >= windowStart.getTime();
+    });
+
+    // 2. Failed jobs in this hourly bucket
+    const hourlyFailedJobs = failedJobs.filter(
+      j =>
+        j.createdAt.getTime() >= windowStart.getTime() &&
+        j.createdAt.getTime() < windowEnd.getTime()
+    );
+
+    // 3. Failed webhook deliveries in this hourly bucket
+    const hourlyFailedDeliveries = failedDeliveries.filter(
+      del =>
+        del.createdAt.getTime() >= windowStart.getTime() &&
+        del.createdAt.getTime() < windowEnd.getTime()
+    );
+
+    // 4. Failed notification attempts in this hourly bucket
+    const hourlyFailedNotifications = failedNotifications.filter(
+      notif =>
+        notif.startedAt.getTime() >= windowStart.getTime() &&
+        notif.startedAt.getTime() < windowEnd.getTime()
+    );
+
+    let status: HealthLevel = 'healthy';
+    let scorePercent = 100;
+    let reason = 'All systems operating normally';
+
+    const criticalInc = activeIncidents.find(inc => inc.priority === 'P1' || inc.priority === 'P2');
+    const warningInc = activeIncidents.find(inc => inc.priority === 'P3' || inc.priority === 'P4');
+
+    if (criticalInc) {
+      status = 'unhealthy';
+      scorePercent = 40;
+      reason = `Critical incident (${criticalInc.priority || 'P1'}): ${criticalInc.title}`;
+    } else if (warningInc) {
+      status = 'degraded';
+      scorePercent = 75;
+      reason = `Active incident (${warningInc.priority || 'P3'}): ${warningInc.title}`;
+    } else if (hourlyFailedJobs.length > 0) {
+      status = 'degraded';
+      scorePercent = 80;
+      reason = `${hourlyFailedJobs.length} background job failure(s)`;
+    } else if (hourlyFailedDeliveries.length > 0 || hourlyFailedNotifications.length > 0) {
+      status = 'degraded';
+      scorePercent = 85;
+      reason = `${hourlyFailedDeliveries.length + hourlyFailedNotifications.length} delivery error(s)`;
+    } else if (i === 0) {
+      // Current live hour reflects active diagnostic check health
+      status = overall;
+      scorePercent = overall === 'healthy' ? 100 : overall === 'degraded' ? 85 : 40;
+      reason =
+        overall === 'healthy'
+          ? 'All diagnostic signals passing'
+          : diagnosticSummary ||
+            (overall === 'degraded'
+              ? 'Sub-optimal telemetry or retries'
+              : 'Critical diagnostic error');
+    } else if (overall === 'unhealthy' && unhealthyChecks.length > 0) {
+      // If critical persistent check is failing, prior hours reflect this baseline
+      status = 'unhealthy';
+      scorePercent = 45;
+      reason = diagnosticSummary || 'Critical diagnostic error';
+    } else if (overall === 'degraded' && degradedChecks.length > 0) {
+      // If persistent check is degraded (e.g. SLA p95 latency over 24h, unconfigured key)
+      status = 'degraded';
+      scorePercent = 85;
+      reason = diagnosticSummary || 'Sub-optimal telemetry or retries';
+    }
+
     samples.push({
       timestamp: d.toISOString(),
       hourLabel,
       status,
       scorePercent,
+      reason,
     });
   }
+
   return samples;
 }
 
@@ -881,7 +1067,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
   });
 
   const overall = overallStatus(checks);
-  const history = generate24HourHistory(overall, now);
+  const history = await generate24HourHistory(checks, overall, now);
 
   return { generatedAt: now.toISOString(), overall, checks, history };
 }

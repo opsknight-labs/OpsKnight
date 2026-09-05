@@ -1,5 +1,7 @@
 import prisma from '@/lib/prisma';
-import { assertAdmin, getUserPermissions } from '@/lib/rbac';
+import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import { getServerSession } from 'next-auth';
+import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
@@ -17,11 +19,11 @@ export default async function PoliciesPage({
 }: {
   searchParams?: Promise<{ error?: string }>;
 }) {
-  try {
-    await assertAdmin();
-  } catch {
-    redirect('/');
+  const session = await getServerSession(await getAuthOptions());
+  if (!session?.user?.email) {
+    redirect('/login?callbackUrl=/policies');
   }
+  await getCurrentUser();
   const [policies, permissions] = await Promise.all([
     prisma.escalationPolicy.findMany({
       include: {

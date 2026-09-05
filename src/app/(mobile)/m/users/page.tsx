@@ -5,7 +5,7 @@ import { MobileAvatar, MobileEmptyState } from '@/components/mobile/MobileUtils'
 import { MobileSearchWithParams } from '@/components/mobile/MobileSearchParams';
 import { getDefaultAvatar } from '@/lib/avatar';
 import MobileCard from '@/components/mobile/MobileCard';
-import { assertAdmin } from '@/lib/rbac';
+import { getCurrentUser } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -17,9 +17,9 @@ export default async function MobileUsersPage({
 }): Promise<JSX.Element> {
   const params = await searchParams;
   try {
-    await assertAdmin();
+    await getCurrentUser();
   } catch {
-    redirect('/m');
+    redirect('/m/login');
   }
   const query = params.q || '';
 

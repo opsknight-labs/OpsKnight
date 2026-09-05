@@ -199,7 +199,34 @@ describe('SystemHealthCenter', () => {
     expect(screen.getByRole('heading', { name: 'System Health Center' })).toBeInTheDocument();
     expect(screen.getByText('Operational with Warnings')).toBeInTheDocument();
     expect(screen.getByText('24-Hour System Health Trend')).toBeInTheDocument();
+    expect(screen.getByText('• 92.5% Operational')).toBeInTheDocument();
+    expect(screen.getByText('24 hours ago')).toBeInTheDocument();
+    expect(screen.getByText('12 hours ago')).toBeInTheDocument();
+    expect(screen.getByText('Now')).toBeInTheDocument();
     expect(screen.getAllByText('13').length).toBeGreaterThanOrEqual(1); // Total signals
+  });
+
+  it('calculates dynamic uptime percentage and displays sample status in ribbon', () => {
+    const perfectReport: AdminHealthReport = {
+      ...mockReport,
+      overall: 'healthy',
+      history: [
+        {
+          timestamp: '2026-09-02T11:00:00.000Z',
+          hourLabel: '11:00',
+          status: 'healthy',
+          scorePercent: 100,
+        },
+        {
+          timestamp: '2026-09-02T12:00:00.000Z',
+          hourLabel: '12:00',
+          status: 'healthy',
+          scorePercent: 100,
+        },
+      ],
+    };
+    render(<SystemHealthCenter initialReport={perfectReport} />);
+    expect(screen.getByText('• 100% Operational')).toBeInTheDocument();
   });
 
   it('renders visual telemetry gauges, latency pills, and queue distribution bars', () => {

@@ -1,6 +1,8 @@
 import prisma from '@/lib/prisma';
-import { assertAdmin, getUserPermissions } from '@/lib/rbac';
-import { notFound } from 'next/navigation';
+import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import { notFound, redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { getAuthOptions } from '@/lib/auth';
 import Link from 'next/link';
 import StepsList from '@/components/policies/StepsList';
 import PolicyDeleteButton from '@/components/PolicyDeleteButton';
@@ -24,14 +26,12 @@ import {
 } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import {
-  ArrowLeft,
   ShieldAlert,
   ShieldCheck,
   Settings,
   AlertTriangle,
   Server,
   Activity,
-  ChevronRight,
   Plus,
   ExternalLink,
   Layers,
@@ -51,11 +51,12 @@ export default async function PolicyDetailPage({
 }) {
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
-  try {
-    await assertAdmin();
-  } catch {
-    notFound();
+
+  const session = await getServerSession(await getAuthOptions());
+  if (!session?.user?.email) {
+    redirect(`/login?callbackUrl=/policies/${id}`);
   }
+  await getCurrentUser();
   const errorCode = resolvedSearchParams?.error;
   const defaultTab = resolvedSearchParams?.tab;
 
