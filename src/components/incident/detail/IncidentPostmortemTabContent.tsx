@@ -14,7 +14,6 @@ import {
   CheckSquare,
   Globe,
   Lock,
-  Sparkles,
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
@@ -365,9 +364,9 @@ export default function IncidentPostmortemTabContent({
 
         {/* Readiness stats */}
         <div className="inline-flex items-center justify-center gap-3 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
-          <span className="flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-            AI Draft Ready
+          <span className="flex items-center gap-1.5 font-medium text-indigo-600 dark:text-indigo-400">
+            <FileText className="h-3.5 w-3.5" />
+            Auto-Draft Ready
           </span>
           <span className="text-slate-300 dark:text-slate-700">|</span>
           <span>{eventCount} Timeline Events</span>
