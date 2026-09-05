@@ -4,12 +4,17 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
+import { resolveStatusPage } from '@/lib/status-page-resolver';
 
 /**
  * Subscribe to Status Page Updates (Public API)
  * POST /api/status/subscribe
  */
 export async function POST(req: NextRequest) {
+  return subscribeToStatusPage(req);
+}
+
+export async function subscribeToStatusPage(req: NextRequest, slug?: string) {
   try {
     const ip = getClientIp(req.headers);
     const rate = await checkRateLimit(`api:status:subscribe:ip:${ip}`, 10, 60_000);
@@ -19,7 +24,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { statusPageId, email } = body;
+    const email = typeof body?.email === 'string' ? body.email.trim() : '';
+    const requestedPageId = typeof body?.statusPageId === 'string' ? body.statusPageId : '';
+    const resolvedPage = slug ? await resolveStatusPage({ slug }) : null;
+    const statusPageId = resolvedPage?.id ?? requestedPageId;
 
     if (!statusPageId || !email || !email.includes('@')) {
       return jsonError('Valid statusPageId and email are required', 400);

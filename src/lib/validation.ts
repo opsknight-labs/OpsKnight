@@ -88,6 +88,48 @@ export function isStatusPageSlug(value: string): boolean {
 
 const statusPageHostname = z.string().trim().max(253).refine(isHostname, 'Enter a valid hostname');
 
+const statusPageAssetUrl = z
+  .string()
+  .trim()
+  .max(2_800_000)
+  .refine(
+    value =>
+      value === '' ||
+      value.startsWith('/') ||
+      value.startsWith('https://') ||
+      value.startsWith('data:image/png;base64,') ||
+      value.startsWith('data:image/jpeg;base64,') ||
+      value.startsWith('data:image/webp;base64,') ||
+      value.startsWith('data:image/gif;base64,'),
+    'Use a relative path, HTTPS URL, or supported raster data image.'
+  );
+
+export const StatusPageBrandingSchema = z
+  .object({
+    version: z.literal(1).optional(),
+    logoUrl: statusPageAssetUrl.optional(),
+    logo: statusPageAssetUrl.optional(),
+    faviconUrl: statusPageAssetUrl.optional(),
+    primaryColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    primary: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    backgroundColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    background: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    textColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    text: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    fontFamily: z.string().trim().max(100).optional(),
+    customCss: z.string().max(200_000).optional(),
+    layout: z.enum(['default', 'compact', 'wide']).optional(),
+    showHeader: z.boolean().optional(),
+    showFooter: z.boolean().optional(),
+    metaTitle: z.string().trim().max(200).optional(),
+    metaDescription: z.string().trim().max(500).optional(),
+    autoRefresh: z.boolean().optional(),
+    refreshInterval: z.number().int().min(10).max(3600).optional(),
+    showRssLink: z.boolean().optional(),
+    showApiLink: z.boolean().optional(),
+  })
+  .passthrough();
+
 export const StatusPageSettingsSchema = z
   .object({
     id: z.string().min(1).optional(),
@@ -126,7 +168,7 @@ export const StatusPageSettingsSchema = z
       .pipe(z.string().url().optional().nullable())
       .optional()
       .nullable(),
-    branding: z.unknown().optional().nullable(),
+    branding: StatusPageBrandingSchema.optional().nullable(),
     serviceIds: z
       .array(z.string().min(1))
       .max(10000)

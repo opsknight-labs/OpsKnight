@@ -17,6 +17,7 @@ import {
   projectOverallStatus,
   projectServiceStatus,
 } from '@/lib/status-page-projection';
+import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
 
 /**
  * Status Page API
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function getStatusResponse(req: NextRequest, slug?: string) {
+  const projectionStartedAt = performance.now();
   try {
     const statusPage = await prisma.statusPage.findFirst({
       where: { enabled: true, ...(slug ? { slug } : {}) },
@@ -299,10 +301,16 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
       headers.ETag = etag;
     }
     return jsonOk(responseData, 200, headers);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('api.status.error', {
       error: error instanceof Error ? error.message : String(error),
     });
     return jsonError('Failed to fetch status', 500);
+  } finally {
+    observeOperationalHistogram(
+      'opsknight_status_page_projection_duration_seconds',
+      (performance.now() - projectionStartedAt) / 1000,
+      { surface: 'json' }
+    );
   }
 }

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { StatusAnnouncementCreateSchema, StatusPageSettingsSchema } from '@/lib/validation';
+import {
+  StatusAnnouncementCreateSchema,
+  StatusPageBrandingSchema,
+  StatusPageSettingsSchema,
+} from '@/lib/validation';
 
 const mocks = vi.hoisted(() => ({
   statusPageFindFirst: vi.fn(),
@@ -104,6 +108,25 @@ describe('enterprise status-page contracts', () => {
         endDate: '2026-09-06T11:00:00Z',
       }).success
     ).toBe(false);
+  });
+
+  it('bounds and validates the versioned branding contract without breaking legacy keys', () => {
+    expect(
+      StatusPageBrandingSchema.safeParse({
+        version: 1,
+        logoUrl: 'https://cdn.example/status.png',
+        primaryColor: '#123abc',
+        refreshInterval: 30,
+        legacyThemeKey: 'preserved',
+      }).success
+    ).toBe(true);
+    expect(StatusPageBrandingSchema.safeParse({ primaryColor: 'expression(alert(1))' }).success).toBe(
+      false
+    );
+    expect(StatusPageBrandingSchema.safeParse({ logoUrl: 'javascript:alert(1)' }).success).toBe(
+      false
+    );
+    expect(StatusPageBrandingSchema.safeParse({ refreshInterval: 1 }).success).toBe(false);
   });
 
   it('uses identical maintenance precedence for HTML and API projections', () => {

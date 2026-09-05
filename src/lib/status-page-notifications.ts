@@ -16,6 +16,7 @@ import {
   EmailButton,
   escapeHtml,
 } from '@/lib/email-components';
+import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 
 export async function notifyStatusPageSubscribers(
   incidentId: string,
@@ -85,10 +86,10 @@ export async function notifyStatusPageSubscribers(
     const appBaseUrl = getBaseUrl();
 
     // 3. Batch fetch all email configs upfront (avoids N+1 query pattern)
-    const emailConfigs = await Promise.all(
-      statusPages.map(page => getStatusPageEmailConfig(page.id))
+    const emailConfigEntries = await Promise.all(
+      statusPages.map(async page => [page.id, await getStatusPageEmailConfig(page.id)] as const)
     );
-    const emailConfigMap = new Map(statusPages.map((page, idx) => [page.id, emailConfigs[idx]]));
+    const emailConfigMap = new Map(emailConfigEntries);
 
     // 4. Send notifications for each status page
     for (const page of statusPages) {
@@ -197,6 +198,14 @@ export async function notifyStatusPageSubscribers(
       totalSent += sent;
       totalFailed += failed;
     }
+    addOperationalMetric('opsknight_status_page_fanout_total', totalSent, {
+      event: 'incident',
+      outcome: 'enqueued',
+    });
+    addOperationalMetric('opsknight_status_page_fanout_total', totalFailed, {
+      event: 'incident',
+      outcome: 'failed',
+    });
     return { success: totalFailed === 0, sent: totalSent, failed: totalFailed };
   } catch (error) {
     logger.error('Failed to notify status page subscribers', {
@@ -570,11 +579,23 @@ export async function notifyStatusPageSubscribersAnnouncement(
     }
 
     logger.info(`Status announcement notifications sent: ${sent} success, ${failed} failed`);
+    addOperationalMetric('opsknight_status_page_fanout_total', sent, {
+      event: 'announcement',
+      outcome: 'enqueued',
+    });
+    addOperationalMetric('opsknight_status_page_fanout_total', failed, {
+      event: 'announcement',
+      outcome: 'failed',
+    });
     return { sent, failed, skipped: sent === 0 && failed === 0 };
   } catch (error) {
     logger.error('Failed to notify status page subscribers about announcement', {
       error: error instanceof Error ? error.message : 'Unknown error',
       announcementId,
+    });
+    addOperationalMetric('opsknight_status_page_fanout_total', 1, {
+      event: 'announcement',
+      outcome: 'failed',
     });
     return { sent: 0, failed: 1 };
   }

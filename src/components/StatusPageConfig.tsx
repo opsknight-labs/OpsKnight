@@ -23,6 +23,8 @@ type StatusPageConfigProps = {
   statusPage: {
     id: string;
     name: string;
+    slug?: string | null;
+    isDefault?: boolean;
     organizationName?: string | null;
     subdomain?: string | null;
     customDomain?: string | null;
@@ -680,6 +682,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   const [templateCssMap, setTemplateCssMap] = useState<Record<string, string>>({});
   const templateFetchRef = useRef<Set<string>>(new Set());
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [deleteArmed, setDeleteArmed] = useState(false);
 
   // Parse branding JSON
   const branding =
@@ -687,6 +690,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
 
   const [formData, setFormData] = useState({
     name: statusPage.name,
+    slug: statusPage.slug || '',
+    isDefault: statusPage.isDefault ?? false,
     organizationName: statusPage.organizationName || '',
     subdomain: statusPage.subdomain || '',
     customDomain: statusPage.customDomain || '',
@@ -943,6 +948,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     startTransition(async () => {
       try {
         const brandingData = {
+          version: 1 as const,
           logoUrl: formData.logoUrl,
           faviconUrl: formData.faviconUrl,
           primaryColor: formData.primaryColor,
@@ -967,6 +973,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
           body: JSON.stringify({
             id: statusPage.id,
             name: formData.name,
+            slug: formData.slug || null,
+            isDefault: formData.isDefault,
             organizationName: formData.organizationName || null,
             subdomain: formData.subdomain || null,
             customDomain: formData.customDomain || null,
@@ -1028,11 +1036,30 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
         // Clear success message after 3 seconds
         setTimeout(() => setSuccessMessage(null), 3000);
         router.refresh();
-      } catch (err: any) {
+      } catch (err: unknown) {
         const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
         setError(getUserFacingErrorMessage(err) || 'Failed to save settings');
       }
     });
+  };
+
+  const handleDeletePage = async () => {
+    if (statusPage.isDefault) {
+      setError('Choose another default status page before deleting this page.');
+      return;
+    }
+    setError(null);
+    const response = await fetch(
+      `/api/settings/status-pages?id=${encodeURIComponent(statusPage.id)}`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(payload?.error || 'Unable to delete status page.');
+      return;
+    }
+    router.push('/settings/status-page');
+    router.refresh();
   };
 
   const updateServiceConfig = (
@@ -1564,6 +1591,34 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
 
                           <FormField
                             type="input"
+                            label="Public URL Slug"
+                            value={formData.slug}
+                            onChange={e =>
+                              setFormData({
+                                ...formData,
+                                slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+                              })
+                            }
+                            placeholder="public-status"
+                            helperText="Optional for the default page; required for a dedicated /status/your-slug URL."
+                          />
+
+                          <Switch
+                            checked={formData.isDefault}
+                            disabled={statusPage.isDefault}
+                            onChange={checked =>
+                              setFormData(prev => ({ ...prev, isDefault: checked }))
+                            }
+                            label="Default Status Page"
+                            helperText={
+                              statusPage.isDefault
+                                ? 'Make another page the default before changing or deleting this page.'
+                                : 'Serve this page from the backward-compatible /status and /api/status routes.'
+                            }
+                          />
+
+                          <FormField
+                            type="input"
                             label="Organization Name"
                             value={formData.organizationName}
                             onChange={e =>
@@ -1690,6 +1745,44 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                         </div>
                       </div>
                     </Card>
+
+                    {!statusPage.isDefault && (
+                      <Card>
+                        <div style={{ padding: 'var(--spacing-6)' }}>
+                          <h2 className="status-page-config-card-title">Delete Status Page</h2>
+                          <p className="status-page-config-card-desc">
+                            Permanently removes this page and its page-specific subscriptions,
+                            announcements, tokens, mappings, and webhooks. Shared services and
+                            incidents are not deleted.
+                          </p>
+                          {!deleteArmed ? (
+                            <Button
+                              type="button"
+                              variant="danger"
+                              onClick={() => setDeleteArmed(true)}
+                            >
+                              Delete status page
+                            </Button>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm text-red-700">
+                                This cannot be undone. Confirm deletion.
+                              </span>
+                              <Button type="button" variant="danger" onClick={handleDeletePage}>
+                                Confirm permanent deletion
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setDeleteArmed(false)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    )}
                   </div>
                 )}
 

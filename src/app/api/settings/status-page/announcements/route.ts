@@ -8,6 +8,7 @@ import {
   StatusAnnouncementPatchSchema,
 } from '@/lib/validation';
 import { logger } from '@/lib/logger';
+import { Prisma } from '@prisma/client';
 
 function parseDate(value: string, fieldName: string) {
   const parsed = new Date(value);
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let body: unknown;
     try {
       body = await req.json();
     } catch (_error) {
@@ -68,7 +69,10 @@ export async function POST(req: NextRequest) {
           startDate: parseDate(startDate, 'startDate'),
           endDate: endDate ? parseDate(endDate, 'endDate') : null,
           isActive: isActive !== false,
-          affectedServiceIds: normalizedAffectedServiceIds as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          affectedServiceIds:
+            normalizedAffectedServiceIds === null
+              ? Prisma.JsonNull
+              : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
         },
       });
       if (notifySubscribers) {
@@ -90,8 +94,7 @@ export async function POST(req: NextRequest) {
       notifySubscribers,
     });
     return jsonOk({ announcement }, 200);
-  } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('api.status_page.announcement.create_error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -107,7 +110,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let body: unknown;
     try {
       body = await req.json();
     } catch (_error) {
@@ -142,15 +145,19 @@ export async function PATCH(req: NextRequest) {
         ...(endDate !== undefined ? { endDate: effectiveEnd } : {}),
         ...(isActive !== undefined ? { isActive: Boolean(isActive) } : {}),
         ...(affectedServiceIds !== undefined
-          ? { affectedServiceIds: normalizedAffectedServiceIds as any }
-          : {}), // eslint-disable-line @typescript-eslint/no-explicit-any
+          ? {
+              affectedServiceIds:
+                normalizedAffectedServiceIds === null
+                  ? Prisma.JsonNull
+                  : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
+            }
+          : {}),
       },
     });
 
     logger.info('api.status_page.announcement.updated', { announcementId: updated.id });
     return jsonOk({ announcement: updated }, 200);
-  } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('api.status_page.announcement.update_error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -166,7 +173,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let body: unknown;
     try {
       body = await req.json();
     } catch (_error) {
@@ -182,8 +189,7 @@ export async function DELETE(req: NextRequest) {
 
     logger.info('api.status_page.announcement.deleted', { announcementId: id });
     return jsonOk({ success: true }, 200);
-  } catch (error: any) {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
+  } catch (error: unknown) {
     logger.error('api.status_page.announcement.delete_error', {
       error: error instanceof Error ? error.message : String(error),
     });

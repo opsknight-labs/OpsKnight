@@ -114,7 +114,7 @@ Expect `"status":"healthy"` (or `"degraded"` only if a non-database check failed
 | Next job                                          | Guide                                                        |
 | ------------------------------------------------- | ------------------------------------------------------------ |
 | Email / SMS / Slack so a real page leaves the box | [Notifications](../administration/notifications)             |
-| One public/private status page                    | [Status page](../core-concepts/status-page)                  |
+| Public/private status pages                      | [Status pages](../core-concepts/status-page)                 |
 | Slack war rooms (this version)                    | [Slack ChatOps](../integrations/communication/slack-chatops) |
 | Ingest from monitoring                            | [Integrations](../integrations)                              |
 | OIDC SSO (not SAML)                               | [OIDC](../security/oidc-setup)                               |

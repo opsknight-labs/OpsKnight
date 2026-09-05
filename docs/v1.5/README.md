@@ -25,7 +25,7 @@ This tree is **v1.5**. Switch versions in the sidebar for older releases.
 - [Teams](./core-concepts/teams)
 - [Slack ChatOps](./integrations/communication/slack-chatops) — war rooms in this version
 - [PagerDuty Events API v2 ingest](./integrations/custom/pagerduty-emulation)
-- [Status page](./core-concepts/status-page) — one public/private page per install
+- [Status pages](./core-concepts/status-page) — independently scoped public/private pages, APIs, domains, and subscribers
 - [OIDC SSO](./security/oidc-setup)
 - [Encryption](./security/encryption)
 - [API](./api)

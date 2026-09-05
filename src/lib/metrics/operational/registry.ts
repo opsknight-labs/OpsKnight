@@ -253,6 +253,23 @@ export const OPERATIONAL_METRICS = [
     scope: 'counter',
     estimatedMaxSeries: 1,
   },
+  {
+    name: 'opsknight_status_page_projection_duration_seconds',
+    help: 'Origin time spent building a public status projection by bounded surface',
+    kind: 'histogram',
+    labels: ['surface'],
+    scope: 'counter',
+    estimatedMaxSeries: 8,
+    buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  },
+  {
+    name: 'opsknight_status_page_fanout_total',
+    help: 'Status-page subscriber fanout outcomes by bounded event and outcome',
+    kind: 'counter',
+    labels: ['event', 'outcome'],
+    scope: 'counter',
+    estimatedMaxSeries: 12,
+  },
 ] as const satisfies readonly MetricDefinition[];
 
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];

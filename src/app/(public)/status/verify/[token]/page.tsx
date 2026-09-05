@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { logger } from '@/lib/logger';
+import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,7 +85,7 @@ export default async function VerifySubscriptionPage({
             updates.
           </p>
           <a
-            href="/status"
+            href={getStatusPagePublicUrl(subscription.statusPage)}
             style={{
               display: 'inline-block',
               marginTop: '1.5rem',
@@ -134,7 +135,7 @@ export default async function VerifySubscriptionPage({
             incidents and status changes for {subscription.statusPage.name}.
           </p>
           <a
-            href="/status"
+            href={getStatusPagePublicUrl(subscription.statusPage)}
             style={{
               display: 'inline-block',
               padding: '0.75rem 1.5rem',
