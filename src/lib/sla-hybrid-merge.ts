@@ -239,5 +239,6 @@ export function mergeHybridMetrics(
     insights: live.insights,
     currentShifts: live.currentShifts,
     recentIncidents: live.recentIncidents,
+    activeIncidentSummaries: live.activeIncidentSummaries,
   };
 }

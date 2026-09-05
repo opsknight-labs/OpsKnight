@@ -31,7 +31,6 @@ import {
   Activity,
   AlertTriangle,
   List,
-  ShieldAlert,
   Siren,
   UserRound,
   CheckCircle2,
@@ -192,7 +191,16 @@ export default async function Dashboard({
   };
 
   // Fetch Data in Parallel
-  const [incidents, recentIncidents, services, users, slaMetrics] = await Promise.all([
+  const [
+    incidents,
+    recentIncidents,
+    services,
+    users,
+    slaMetrics,
+    criticalFocusIncidents,
+    myQueueIncidents,
+    myQueueCount,
+  ] = await Promise.all([
     prisma.incident.findMany({
       where,
       select: incidentSelect,
@@ -270,6 +278,69 @@ export default async function Dashboard({
         _metricDataState: 'unavailable' as const,
       };
     }),
+    // Ops Pulse: Critical Focus active incidents (most recent critical active incidents)
+    prisma.incident.findMany({
+      where: {
+        AND: [
+          incidentAccess,
+          {
+            status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+            OR: [{ urgency: 'HIGH' }, { priority: 'P1' }],
+            ...(service ? { serviceId: service } : {}),
+          },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        urgency: true,
+        priority: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    }),
+    // Ops Pulse: My Queue active incidents
+    user
+      ? prisma.incident.findMany({
+          where: {
+            AND: [
+              incidentAccess,
+              {
+                status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+                assigneeId: user.id,
+                ...(service ? { serviceId: service } : {}),
+              },
+            ],
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            urgency: true,
+            priority: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        })
+      : Promise.resolve([]),
+    // Ops Pulse: My Queue active incident count
+    user
+      ? prisma.incident.count({
+          where: {
+            AND: [
+              incidentAccess,
+              {
+                status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+                assigneeId: user.id,
+                ...(service ? { serviceId: service } : {}),
+              },
+            ],
+          },
+        })
+      : Promise.resolve(0),
   ]);
 
   const metricDataState =
@@ -378,7 +449,10 @@ export default async function Dashboard({
     slaMetrics.activeIncidents ??
     slaMetrics.activeCount ??
     slaMetrics.openCount + slaMetrics.acknowledgedCount;
-  const currentCriticalActive = slaMetrics.criticalCount;
+  const currentCriticalActive = Math.max(
+    slaMetrics.criticalCount ?? 0,
+    criticalFocusIncidents.length
+  );
   const mttaMinutes = slaMetrics.mttd;
 
   // Calculate system status
@@ -406,43 +480,17 @@ export default async function Dashboard({
   // Use rawHeatmapData which comes from calculateSLAMetrics (which uses rollups for long ranges)
   const heatmapData = slaMetrics.heatmapData ?? [];
 
-  const activeIncidentSource = (slaMetrics.activeIncidentSummaries || []).map(incident => ({
-    id: incident.id,
-    title: incident.title,
-    status: incident.status as IncidentStatus,
-    urgency: incident.urgency as IncidentUrgency,
-    createdAt: incident.createdAt,
-    assigneeId: incident.assigneeId,
-  }));
+  const criticalFocusFallback = incidentListItems
+    .filter(
+      inc =>
+        (inc.status === 'OPEN' || inc.status === 'ACKNOWLEDGED') &&
+        (inc.urgency === 'HIGH' || inc.priority === 'P1')
+    )
+    .slice(0, 3);
 
-  const activeIncidentFallback = incidentListItems.map(incident => ({
-    id: incident.id,
-    title: incident.title,
-    status: incident.status,
-    urgency: incident.urgency,
-    createdAt: incident.createdAt,
-    assigneeId: incident.assigneeId,
-  }));
-
-  const activeIncidentCandidates =
-    activeIncidentSource.length > 0 ? activeIncidentSource : activeIncidentFallback;
-
-  const activeIncidents = activeIncidentCandidates.filter(
-    incident =>
-      incident.status !== 'RESOLVED' &&
-      incident.status !== 'SNOOZED' &&
-      incident.status !== 'SUPPRESSED'
-  );
-  const criticalIncidents = activeIncidents
-    .filter(incident => incident.urgency === 'HIGH')
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  const criticalFocus = criticalIncidents.slice(0, 3);
-  const myQueueItems = user
-    ? activeIncidents
-        .filter(incident => incident.assigneeId === user.id)
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-        .slice(0, 3)
-    : [];
+  const criticalFocus =
+    criticalFocusIncidents.length > 0 ? criticalFocusIncidents.slice(0, 3) : criticalFocusFallback;
+  const myQueueItems = myQueueIncidents.slice(0, 3);
   const servicesAtRisk = slaMetrics.serviceMetrics
     .filter(serviceMetric => (serviceMetric.activeCount ?? 0) > 0)
     .sort((a, b) => (b.activeCount ?? 0) - (a.activeCount ?? 0))
@@ -582,9 +630,9 @@ export default async function Dashboard({
                           <div className="w-9 h-9 rounded-xl bg-primary/10 border border-border/80 flex items-center justify-center text-primary">
                             <UserRound className="w-4 h-4" />
                           </div>
-                          {myQueueItems.length > 0 && (
+                          {myQueueCount > 0 && (
                             <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm">
-                              {myQueueItems.length}
+                              {myQueueCount}
                             </span>
                           )}
                         </div>
@@ -634,7 +682,11 @@ export default async function Dashboard({
                       <Link
                         href={
                           user
-                            ? `/?status=ACTIVE&assignee=${user.id}`
+                            ? buildIncidentListHref({
+                                filter: 'all_open',
+                                assignee: user.id,
+                                ...(service ? { serviceId: service } : {}),
+                              })
                             : buildIncidentListHref({ filter: 'all_open' })
                         }
                         className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
@@ -679,14 +731,26 @@ export default async function Dashboard({
                         </div>
                       ) : criticalFocus.length === 0 ? (
                         <div className="py-6 text-center">
-                          <ShieldAlert className="w-6 h-6 mx-auto text-rose-400 mb-2" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            All systems stable
-                          </p>
+                          {currentCriticalActive > 0 ? (
+                            <>
+                              <Siren className="w-6 h-6 mx-auto text-rose-500 mb-2 animate-pulse" />
+                              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                                {currentCriticalActive} active critical incident
+                                {currentCriticalActive === 1 ? '' : 's'}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-500 mb-2" />
+                              <p className="text-xs text-muted-foreground font-medium">
+                                All systems stable
+                              </p>
+                            </>
+                          )}
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          {criticalFocus.slice(0, 3).map(incident => (
+                          {criticalFocus.map(incident => (
                             <Link
                               key={incident.id}
                               href={`/incidents/${incident.id}`}
@@ -694,16 +758,25 @@ export default async function Dashboard({
                             >
                               <div className="flex items-center gap-2.5">
                                 <div className="w-2 h-2 rounded-full bg-rose-500 shrink-0 shadow-sm animate-pulse" />
-                                <p className="text-xs font-semibold text-foreground truncate">
+                                <p className="text-xs font-semibold text-foreground truncate flex-1">
                                   {incident.title}
                                 </p>
+                                {incident.priority && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0">
+                                    {incident.priority}
+                                  </span>
+                                )}
                               </div>
                             </Link>
                           ))}
                         </div>
                       )}
                       <Link
-                        href={buildIncidentListHref({ filter: 'all_open', urgency: 'HIGH' })}
+                        href={buildIncidentListHref({
+                          filter: 'all_open',
+                          urgency: 'HIGH',
+                          ...(service ? { serviceId: service } : {}),
+                        })}
                         className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
                       >
                         View critical &rarr;
