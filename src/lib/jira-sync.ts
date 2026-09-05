@@ -1,6 +1,11 @@
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { createJiraIssue, getJiraIssue, addJiraComment, type JiraIssueSummary } from '@/lib/jira';
+import { getJiraIssue } from '@/lib/jira';
+import {
+  enqueueJiraCommentOperations,
+  enqueueJiraCreateOperation,
+  processExternalOperation,
+} from '@/lib/external-operations';
 import { isValidJiraKey, extractJiraKey } from '@/lib/jira-validation';
 import { logAudit, getDefaultActorId } from '@/lib/audit';
 import { logger } from '@/lib/logger';
@@ -29,45 +34,13 @@ export type LinkExistingParams = {
  * Used by both incident and action-item linking flows.
  */
 export async function createJiraIssueAndLink(params: CreateAndLinkParams) {
-  const issue = await createJiraIssue({
-    projectKey: params.projectKey,
-    issueType: params.issueType,
-    summary: params.summary,
-    description: params.description,
-    labels: params.labels,
-    component: params.component,
+  const operationId = await enqueueJiraCreateOperation(params);
+  const issue = await processExternalOperation(operationId);
+  if (!issue) throw new Error('Jira issue creation is already being processed');
+  const link = await prisma.externalIssueLink.findUnique({
+    where: { provider_externalId: { provider: params.provider ?? 'JIRA', externalId: issue.id } },
   });
-
-  const link = await prisma.externalIssueLink.upsert({
-    where: {
-      provider_externalId: {
-        provider: params.provider ?? 'JIRA',
-        externalId: issue.id,
-      },
-    },
-    create: {
-      provider: params.provider ?? 'JIRA',
-      incidentId: params.incidentId ?? null,
-      actionItemId: params.actionItemId ?? null,
-      externalId: issue.id,
-      externalKey: issue.key,
-      externalUrl: issue.url,
-      externalStatus: issue.status ?? null,
-      externalAssignee: issue.assignee ?? null,
-      syncState: 'SYNCED',
-      lastSyncedAt: new Date(),
-    },
-    update: {
-      incidentId: params.incidentId ?? undefined,
-      actionItemId: params.actionItemId ?? undefined,
-      externalKey: issue.key,
-      externalUrl: issue.url,
-      externalStatus: issue.status ?? null,
-      externalAssignee: issue.assignee ?? null,
-      syncState: 'SYNCED',
-      lastSyncedAt: new Date(),
-    },
-  });
+  if (!link) throw new Error('Jira issue was created but its durable link is not available yet');
 
   await logAudit({
     action: 'jira.issue.created',
@@ -182,7 +155,7 @@ export async function syncExternalIssueLink(linkId: string) {
         lastSyncedAt: new Date(),
       },
     });
-  } catch (error) {
+  } catch (_error) {
     await prisma.externalIssueLink.update({
       where: { id: linkId },
       data: { syncState: 'FAILED' },
@@ -353,7 +326,8 @@ export async function processJiraWebhookEvent(
 export async function syncIncidentNoteToJira(
   incidentId: string,
   authorName: string,
-  noteContent: string
+  noteContent: string,
+  noteId: string
 ): Promise<number> {
   try {
     const links = await prisma.externalIssueLink.findMany({
@@ -365,13 +339,16 @@ export async function syncIncidentNoteToJira(
 
     const formattedComment = `[OpsKnight Note by ${authorName}]:\n${noteContent}`;
 
-    for (let i = 0; i < links.length; i += 5) {
-      await Promise.allSettled(
-        links.slice(i, i + 5).map(link => addJiraComment(link.externalKey, formattedComment))
-      );
-    }
-
-    return links.length;
+    const eventId = `note:${noteId}`;
+    const result = await enqueueJiraCommentOperations(
+      links.map(link => ({
+        incidentId,
+        externalKey: link.externalKey,
+        eventId,
+        comment: formattedComment,
+      }))
+    );
+    return result.pending;
   } catch (error) {
     logger.error('Failed to sync incident note to Jira', {
       component: 'jira-sync',
@@ -387,7 +364,8 @@ export async function syncIncidentNoteToJira(
  */
 export async function syncIncidentEventToJira(
   incidentId: string,
-  eventMessage: string
+  eventMessage: string,
+  incidentEventId: string
 ): Promise<number> {
   try {
     const links = await prisma.externalIssueLink.findMany({
@@ -399,13 +377,16 @@ export async function syncIncidentEventToJira(
 
     const formattedComment = `[OpsKnight Update]: ${eventMessage}`;
 
-    for (let i = 0; i < links.length; i += 5) {
-      await Promise.allSettled(
-        links.slice(i, i + 5).map(link => addJiraComment(link.externalKey, formattedComment))
-      );
-    }
-
-    return links.length;
+    const eventId = `event:${incidentEventId}`;
+    const result = await enqueueJiraCommentOperations(
+      links.map(link => ({
+        incidentId,
+        externalKey: link.externalKey,
+        eventId,
+        comment: formattedComment,
+      }))
+    );
+    return result.pending;
   } catch (error) {
     logger.error('Failed to sync incident event to Jira', {
       component: 'jira-sync',

@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getSlackBotToken } from '@/lib/slack';
@@ -107,15 +108,31 @@ export async function POST(request: NextRequest) {
         const channelId = event.item?.channel;
         const messageTs = event.item?.ts;
         const slackUserId = event.user;
+        const workspaceId = payload.team_id || event.team_id;
 
-        if (!channelId || !messageTs) {
+        if (!channelId || !messageTs || !workspaceId) {
           return NextResponse.json({ ok: true });
         }
 
-        // Find incident linked to this channel
+        // Channel IDs are not an authorization boundary. Bind the event to the
+        // workspace installation, while retaining legacy rows that predate the
+        // explicit Incident.slackWorkspaceId field.
         const incident = await prisma.incident.findFirst({
-          where: { slackChannelId: channelId },
-          select: { id: true, title: true, serviceId: true, assigneeId: true },
+          where: {
+            AND: [
+              { slackChannelId: channelId },
+              {
+                OR: [
+                  { slackWorkspaceId: workspaceId },
+                  {
+                    slackWorkspaceId: null,
+                    service: { slackIntegration: { workspaceId } },
+                  },
+                ],
+              },
+            ],
+          },
+          select: { id: true, title: true, serviceId: true },
         });
 
         if (!incident) {
@@ -126,7 +143,7 @@ export async function POST(request: NextRequest) {
         // (channelId, messageTs) makes pinning idempotent, so re-reacting or a
         // second person reacting to the same message cannot duplicate the note.
         const alreadyPinned = await prisma.slackPinnedMessage.findUnique({
-          where: { channelId_messageTs: { channelId, messageTs } },
+          where: { workspaceId_channelId_messageTs: { workspaceId, channelId, messageTs } },
           select: { id: true },
         });
 
@@ -237,39 +254,29 @@ export async function POST(request: NextRequest) {
         }
 
         if (messageText) {
-          // Resolve to OpsKnight user by email first, then name, then fallback to assignee
+          // Only a verified Slack-email match may be attributed to an
+          // OpsKnight account. A name match or incident-assignee fallback can
+          // corrupt the audit trail; unknown actors are recorded truthfully.
           let resolvedUser: { id: string } | null = null;
           if (reactorEmail) {
             resolvedUser = await prisma.user.findFirst({
-              where: { email: { equals: reactorEmail, mode: 'insensitive' } },
+              where: {
+                email: { equals: reactorEmail, mode: 'insensitive' },
+                status: 'ACTIVE',
+              },
               select: { id: true },
             });
           }
-          if (!resolvedUser && authorName) {
-            resolvedUser = await prisma.user.findFirst({
-              where: { name: { contains: authorName, mode: 'insensitive' } },
-              select: { id: true },
-            });
-          }
-          // No arbitrary-user fallback: crediting a pin to whoever happens to be
-          // first in the table is worse than not recording an owner for it.
-          const noteUserId = resolvedUser?.id || incident.assigneeId;
+          const noteUserId = resolvedUser?.id ?? null;
+          const actorLabel = noteUserId ? authorName : `${authorName} (external Slack user)`;
 
-          // The note is now the only record of a pin, so a missing author means
-          // the pin captured nothing — say so rather than reporting success.
-          if (!noteUserId) {
-            logger.warn('[Slack Events] No OpsKnight user available to attribute pinned note to', {
-              incidentId: incident.id,
-              authorName,
-            });
-            return NextResponse.json({ ok: true });
-          }
-
-          const created = await prisma
-            .$transaction(async tx => {
+          let created: boolean;
+          try {
+            created = await prisma.$transaction(async tx => {
               const existingClaim = await tx.slackPinnedMessage.findUnique({
                 where: {
-                  channelId_messageTs: {
+                  workspaceId_channelId_messageTs: {
+                    workspaceId,
                     channelId,
                     messageTs,
                   },
@@ -278,19 +285,31 @@ export async function POST(request: NextRequest) {
               if (existingClaim) return false;
 
               await tx.slackPinnedMessage.create({
-                data: { incidentId: incident.id, channelId, messageTs, pinnedBy: authorName },
+                data: {
+                  incidentId: incident.id,
+                  workspaceId,
+                  channelId,
+                  messageTs,
+                  pinnedBy: authorName,
+                },
               });
 
               await tx.incidentNote.create({
                 data: {
                   incidentId: incident.id,
                   userId: noteUserId,
-                  content: `📌 [Slack Pin by ${authorName}]: ${messageText}`,
+                  content: `📌 [Slack Pin by ${actorLabel}]: ${messageText}`,
                 },
               });
               return true;
-            })
-            .catch(() => false);
+            });
+          } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+              created = false;
+            } else {
+              throw error;
+            }
+          }
 
           if (!created) {
             return NextResponse.json({ ok: true });

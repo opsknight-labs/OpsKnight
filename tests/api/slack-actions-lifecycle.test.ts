@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
+  executeChatOpsAssignment,
 } from '@/lib/incidents/chatops-lifecycle';
 
 const { runSerializableTransaction, enqueueIncidentUpdateSideEffects } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    $transaction: vi.fn(),
     incidentEvent: {
       create: vi.fn(),
     },
@@ -45,6 +47,7 @@ vi.mock('@/lib/slack-signature', () => ({
 
 vi.mock('@/lib/incidents/chatops-lifecycle', () => ({
   executeChatOpsLifecycleCommand: vi.fn(),
+  executeChatOpsAssignment: vi.fn().mockResolvedValue({ changed: true }),
   chatOpsLifecycleErrorMessage: vi.fn(error =>
     error instanceof Error ? error.message : 'Unable to update incident.'
   ),
@@ -78,6 +81,8 @@ describe('Slack interactive lifecycle actions', () => {
       id: 'inc-1',
       serviceId: 'svc-1',
       slackChannelId: 'C123',
+      slackWorkspaceId: 'T123',
+      service: { slackWorkspaceId: 'T123', slackIntegration: null },
     } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
     vi.mocked(prisma.user.findFirst).mockResolvedValue({
       id: 'user-1',
@@ -98,6 +103,7 @@ describe('Slack interactive lifecycle actions', () => {
     }));
     runSerializableTransaction.mockImplementation(operation => operation(prisma));
     enqueueIncidentUpdateSideEffects.mockResolvedValue(undefined);
+    vi.mocked(executeChatOpsAssignment).mockResolvedValue({ changed: true });
   });
 
   function payload(action: string, extra: Record<string, unknown> = {}) {
@@ -105,6 +111,7 @@ describe('Slack interactive lifecycle actions', () => {
       type: 'block_actions',
       actions: [{ value: JSON.stringify({ action, incidentId: 'inc-1', ...extra }) }],
       user: { id: 'U123', name: 'alice' },
+      team: { id: 'T123' },
     };
   }
 
@@ -199,35 +206,18 @@ describe('Slack interactive lifecycle actions', () => {
     const body = await response.json();
 
     expect(body.text).toContain('assigned to');
-    expect(prisma.incident.update).toHaveBeenCalledWith({
-      where: { id: 'inc-1' },
-      data: { assigneeId: 'user-1', teamId: null },
-    });
-    expect(prisma.incidentEvent.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        incidentId: 'inc-1',
-        type: 'ASSIGNMENT',
-      }),
-    });
-    expect(enqueueIncidentUpdateSideEffects).toHaveBeenCalledWith(prisma, 'inc-1', [
-      'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
-    ]);
+    expect(executeChatOpsAssignment).toHaveBeenCalledWith(
+      expect.objectContaining({ incidentId: 'inc-1', targetUserId: 'user-1' })
+    );
   });
 
   it('does not enqueue a duplicate assign-me notification when already assigned', async () => {
-    vi.mocked(prisma.incident.findUnique)
-      .mockResolvedValueOnce({
-        id: 'inc-1',
-        serviceId: 'svc-1',
-        slackChannelId: 'C123',
-      } as never)
-      .mockResolvedValueOnce({ assigneeId: 'user-1', teamId: null } as never);
+    vi.mocked(executeChatOpsAssignment).mockResolvedValue({ changed: false });
 
     const response = await handleSlackActionRequest(payload('assign_me'));
     const body = await response.json();
 
     expect(body.text).toContain('already assigned');
-    expect(prisma.incident.update).not.toHaveBeenCalled();
-    expect(enqueueIncidentUpdateSideEffects).not.toHaveBeenCalled();
+    expect(executeChatOpsAssignment).toHaveBeenCalledTimes(1);
   });
 });

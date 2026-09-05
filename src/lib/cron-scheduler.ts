@@ -369,11 +369,14 @@ async function runOnce() {
     // is idempotent, so both callers running is harmless.
     const { reconcileEscalations } = await import('./escalation/recovery');
     const reconciliation = await reconcileEscalations();
+    const { reconcileIntegrationControlPlane } = await import('./integrations/reconciliation');
+    const integrationReconciliation = await reconcileIntegrationControlPlane();
 
     logger.info('[Cron] Critical tasks processed', {
       escalations: { processed: escalationResult.processed, total: escalationResult.total },
       jobs: { processed: jobResult.processed, failed: jobResult.failed, total: jobResult.total },
       escalationRecovery: reconciliation,
+      integrationRecovery: integrationReconciliation,
     });
 
     // Group 2: Secondary tasks (can run in parallel)

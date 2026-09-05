@@ -12,7 +12,10 @@ import { validatePayload, SentryEventSchema } from '@/lib/integrations/schemas';
 import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
-  rejectWebhookReplay,
+  claimInboundDelivery,
+  completeInboundDelivery,
+  failInboundDelivery,
+  type InboundDeliveryClaim,
 } from '@/lib/integrations/request-security';
 
 const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
@@ -23,7 +26,8 @@ const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
  */
 export async function POST(req: NextRequest) {
   return withIntegrationMiddleware(req, 'SENTRY', async () => {
-    const startTime = Date.now();
+  const startTime = Date.now();
+  let deliveryClaim: Extract<InboundDeliveryClaim, { disposition: 'CLAIMED' }> | null = null;
 
     try {
       const { searchParams } = new URL(req.url);
@@ -47,9 +51,14 @@ export async function POST(req: NextRequest) {
       if (!integration.enabled) {
         return jsonError('Integration is disabled', 403);
       }
+      const sentrySignature = req.headers.get('sentry-hook-signature');
+      const sentryTimestamp = req.headers.get('sentry-hook-timestamp');
+      const sentryDeliveryId =
+        req.headers.get('sentry-hook-id') ||
+        (sentryTimestamp && sentrySignature ? `${sentryTimestamp}:${sentrySignature}` : null);
 
       if (VERIFY_SIGNATURES && integration.signatureSecret) {
-        const signature = req.headers.get('sentry-hook-signature');
+        const signature = sentrySignature;
         if (!signature) {
           logger.warn('api.integration.sentry_missing_signature', { integrationId });
           return jsonError('Missing Sentry-Hook-Signature header', 401);
@@ -59,15 +68,10 @@ export async function POST(req: NextRequest) {
           logger.warn('api.integration.sentry_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }
-        const timestamp = req.headers.get('sentry-hook-timestamp');
-        if (
-          await rejectWebhookReplay(
-            integration.id,
-            req.headers.get('sentry-hook-id') || (timestamp ? `${timestamp}:${signature}` : null)
-          )
-        ) {
-          return jsonError('Duplicate webhook delivery', 409);
-        }
+        const claim = await claimInboundDelivery(integration.id, 'SENTRY', sentryDeliveryId);
+        if (claim?.disposition === 'COMPLETED') return jsonOk({ status: 'duplicate' }, 200);
+        if (claim?.disposition === 'BUSY') return jsonError('Webhook delivery is in progress', 503);
+        if (claim?.disposition === 'CLAIMED') deliveryClaim = claim;
       }
 
       let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -88,6 +92,7 @@ export async function POST(req: NextRequest) {
 
       const event = transformSentryToEvent(validation.data as SentryEvent);
       const result = await processEvent(event, integration.serviceId, integration.id);
+      if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
 
       logger.info('api.integration.sentry_success', {
         integrationId,
@@ -96,6 +101,7 @@ export async function POST(req: NextRequest) {
       });
       return jsonOk({ status: 'success', result }, 202);
     } catch (error: unknown) {
+      if (deliveryClaim) await failInboundDelivery(deliveryClaim, error).catch(() => undefined);
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(error.message, 413);
       }

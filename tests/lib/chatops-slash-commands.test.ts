@@ -10,6 +10,7 @@ import { sendIncidentNotifications } from '@/lib/user-notifications';
 
 vi.mock('@/lib/prisma', () => ({
   default: {
+    $transaction: vi.fn(),
     incident: {
       findFirst: vi.fn(),
     },
@@ -53,6 +54,7 @@ vi.mock('@/lib/retry', () => ({
 
 vi.mock('@/lib/incidents/chatops-lifecycle', () => ({
   executeChatOpsLifecycleCommand: vi.fn(),
+  authorizeChatOpsIncident: vi.fn().mockResolvedValue(undefined),
   chatOpsLifecycleErrorMessage: vi.fn(error =>
     error instanceof Error ? error.message : 'Unable to update incident.'
   ),
@@ -86,6 +88,7 @@ describe('ChatOps Slash Command Dispatcher', () => {
       status: input.command === 'ACKNOWLEDGE' ? 'ACKNOWLEDGED' : 'RESOLVED',
       changed: true,
     }));
+    vi.mocked(prisma.$transaction).mockImplementation(async operation => operation(prisma as never));
   });
 
   const basePayload: SlashCommandPayload = {

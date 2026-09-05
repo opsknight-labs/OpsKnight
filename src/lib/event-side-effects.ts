@@ -539,6 +539,38 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
     case 'LIFECYCLE_WAR_ROOM_ARCHIVE':
       await archiveWarRoomIfStillResolved(payload);
       return;
+    case 'WAR_ROOM_MESSAGE': {
+      if (!payload.warRoom?.message) throw new Error('War-room message payload is missing');
+      const { postWarRoomUpdate } = await import('./chatops/war-room');
+      requireWarRoomDelivery(
+        await postWarRoomUpdate(payload.incidentId, payload.warRoom.message),
+        'war-room message'
+      );
+      return;
+    }
+    case 'WAR_ROOM_TOPIC': {
+      const { updateWarRoomTopic } = await import('./chatops/war-room');
+      requireWarRoomDelivery(await updateWarRoomTopic(payload.incidentId), 'war-room topic');
+      return;
+    }
+    case 'WAR_ROOM_INVITE_USER': {
+      if (!payload.warRoom?.userId) throw new Error('War-room user payload is missing');
+      const { inviteUserToWarRoom } = await import('./chatops/war-room');
+      requireWarRoomDelivery(
+        await inviteUserToWarRoom(payload.incidentId, payload.warRoom.userId),
+        'war-room user invite'
+      );
+      return;
+    }
+    case 'WAR_ROOM_INVITE_TEAM': {
+      if (!payload.warRoom?.teamId) throw new Error('War-room team payload is missing');
+      const { inviteTeamToWarRoom } = await import('./chatops/war-room');
+      requireWarRoomDelivery(
+        await inviteTeamToWarRoom(payload.incidentId, payload.warRoom.teamId),
+        'war-room team invite'
+      );
+      return;
+    }
   }
   throw new Error(
     `Unknown EVENT_SIDE_EFFECT effect: ${String((payload as { effect?: unknown }).effect)}`
