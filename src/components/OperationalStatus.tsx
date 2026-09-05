@@ -97,32 +97,32 @@ export default function OperationalStatus({
   // Dynamic Theme Configuration
   const theme: Record<'danger' | 'warning' | 'ok', ThemeConfig> = {
     danger: {
-      bg: 'bg-rose-500/15',
-      border: 'border-rose-500/30',
-      text: 'text-rose-300',
+      bg: 'bg-rose-500/10 dark:bg-rose-950/40 hover:bg-rose-500/15 dark:hover:bg-rose-950/60',
+      border: 'border-rose-500/30 dark:border-rose-500/40',
+      text: 'text-rose-400',
       dot: 'bg-rose-500',
       dotBg: 'bg-rose-500',
-      icon: <AlertTriangle className="h-4 w-4 text-rose-400" />,
+      icon: <AlertTriangle className="h-4 w-4 text-rose-500 dark:text-rose-400" />,
       title: 'Critical Alert',
       desc: 'Critical incidents detected. Immediate resolution required.',
     },
     warning: {
-      bg: 'bg-amber-500/15',
-      border: 'border-amber-500/30',
-      text: 'text-amber-300',
+      bg: 'bg-amber-500/10 dark:bg-amber-950/40 hover:bg-amber-500/15 dark:hover:bg-amber-950/60',
+      border: 'border-amber-500/30 dark:border-amber-500/40',
+      text: 'text-amber-400',
       dot: 'bg-amber-500',
       dotBg: 'bg-amber-500',
-      icon: <AlertCircle className="h-4 w-4 text-amber-400" />,
+      icon: <AlertCircle className="h-4 w-4 text-amber-500 dark:text-amber-400" />,
       title: 'Yellow Alert',
       desc: 'Non-critical issues reported. Monitoring medium and low urgency alerts.',
     },
     ok: {
-      bg: 'bg-emerald-500/15',
-      border: 'border-emerald-500/30',
-      text: 'text-emerald-300',
+      bg: 'bg-emerald-500/10 dark:bg-emerald-950/40 hover:bg-emerald-500/15 dark:hover:bg-emerald-950/60',
+      border: 'border-emerald-500/30 dark:border-emerald-500/40',
+      text: 'text-emerald-400',
       dot: 'bg-emerald-500',
       dotBg: 'bg-emerald-500',
-      icon: <ShieldCheck className="h-4 w-4 text-emerald-400" />,
+      icon: <ShieldCheck className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />,
       title: 'Green Corridor',
       desc: 'All systems fully operational. No active anomalies.',
     },
@@ -142,27 +142,25 @@ export default function OperationalStatus({
   if (loading && !initialTone && !hasInitialProps) {
     // Show loading only if no fallback
     return (
-      <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-muted/20 animate-pulse">
+      <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-border/60 bg-muted/20 animate-pulse">
         <div className="h-2 w-2 rounded-full bg-muted-foreground/50" />
         <span className="text-[10px] uppercase font-semibold text-muted-foreground">Checking</span>
       </div>
     );
   }
 
-  const summary = `H ${critical} · M ${medium} · L ${low}`;
-
   return (
     <HoverCard openDelay={0} closeDelay={150}>
       <HoverCardTrigger asChild>
         <button
           className={cn(
-            'flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-full select-none border shrink-0 whitespace-nowrap',
+            'flex items-center gap-2 px-2.5 py-1 rounded-lg select-none border shrink-0 whitespace-nowrap transition-all duration-150 shadow-2xs cursor-pointer',
             currentTheme.bg,
             currentTheme.border,
             currentTheme.text
           )}
         >
-          <span className="relative flex h-2.5 w-2.5 shrink-0">
+          <span className="relative flex h-2 w-2 shrink-0">
             <span
               className={cn(
                 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-60',
@@ -171,66 +169,97 @@ export default function OperationalStatus({
             />
             <span
               className={cn(
-                'animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] absolute inline-flex h-full w-full rounded-full opacity-30 animation-delay-500',
-                currentTheme.dot
-              )}
-            />
-            <span
-              className={cn(
-                'relative inline-flex rounded-full h-2.5 w-2.5 shadow-sm',
+                'relative inline-flex rounded-full h-2 w-2 shadow-xs',
                 currentTheme.dotBg
               )}
             />
           </span>
 
-          <span className="text-[10.5px] sm:text-[11px] font-semibold tracking-wide uppercase">
+          <span className="text-[10.5px] sm:text-[11px] font-bold tracking-wider uppercase">
             {label}
           </span>
-          <span className="hidden sm:inline text-[11px] text-slate-500">|</span>
-          <span className="hidden sm:inline text-[11px] font-semibold text-slate-200">
-            {summary}
+          <span className="sr-only">{`H ${critical} · M ${medium} · L ${low}`}</span>
+          <span
+            aria-hidden="true"
+            className="hidden sm:inline text-[11px] text-zinc-500/60 font-mono"
+          >
+            |
+          </span>
+          <span
+            aria-hidden="true"
+            className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-mono font-medium tabular-nums text-zinc-300"
+          >
+            <span>
+              H <span className="font-bold text-rose-300">{critical}</span>
+            </span>
+            <span className="text-zinc-600">·</span>
+            <span>
+              M <span className="font-bold text-amber-300">{medium}</span>
+            </span>
+            <span className="text-zinc-600">·</span>
+            <span>
+              L <span className="font-bold text-zinc-400">{low}</span>
+            </span>
           </span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent
-        sideOffset={10}
+        sideOffset={8}
         align="start"
-        className={cn('w-72 p-4 border shadow-md bg-white text-slate-900 z-[1050]')}
+        className={cn(
+          'w-72 p-4 border border-border dark:border-zinc-800 shadow-xl bg-popover dark:bg-[#121216] text-popover-foreground dark:text-zinc-100 z-[1050] rounded-xl'
+        )}
       >
-        <div className="flex items-center gap-2 mb-2">
-          {currentTheme.icon}
+        <div className="flex items-center gap-2.5 mb-3">
+          <div
+            className={cn('p-1.5 rounded-lg shrink-0 border', currentTheme.bg, currentTheme.border)}
+          >
+            {currentTheme.icon}
+          </div>
           <div>
-            <div className="text-sm font-semibold">{currentTheme.title}</div>
-            <div className="text-xs text-muted-foreground">{currentTheme.desc}</div>
+            <div className="text-xs font-bold text-foreground dark:text-zinc-100">
+              {currentTheme.title}
+            </div>
+            <div className="text-[11px] text-muted-foreground leading-tight">
+              {currentTheme.desc}
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-xs">
-          <div className="rounded-md border bg-slate-50 p-2 text-center">
-            <div className="text-[10px] uppercase text-muted-foreground">High</div>
-            <div className="text-sm font-semibold text-slate-900">{critical}</div>
+          <div className="rounded-lg border border-border/80 dark:border-zinc-800 bg-muted/40 dark:bg-zinc-900/60 p-2 text-center">
+            <div className="text-[10px] uppercase font-semibold text-muted-foreground">High</div>
+            <div className="text-sm font-bold tabular-nums text-rose-600 dark:text-rose-400">
+              {critical}
+            </div>
           </div>
-          <div className="rounded-md border bg-slate-50 p-2 text-center">
-            <div className="text-[10px] uppercase text-muted-foreground">Medium</div>
-            <div className="text-sm font-semibold text-slate-900">{medium}</div>
+          <div className="rounded-lg border border-border/80 dark:border-zinc-800 bg-muted/40 dark:bg-zinc-900/60 p-2 text-center">
+            <div className="text-[10px] uppercase font-semibold text-muted-foreground">Medium</div>
+            <div className="text-sm font-bold tabular-nums text-amber-600 dark:text-amber-400">
+              {medium}
+            </div>
           </div>
-          <div className="rounded-md border bg-slate-50 p-2 text-center">
-            <div className="text-[10px] uppercase text-muted-foreground">Low</div>
-            <div className="text-sm font-semibold text-slate-900">{low}</div>
+          <div className="rounded-lg border border-border/80 dark:border-zinc-800 bg-muted/40 dark:bg-zinc-900/60 p-2 text-center">
+            <div className="text-[10px] uppercase font-semibold text-muted-foreground">Low</div>
+            <div className="text-sm font-bold tabular-nums text-foreground dark:text-zinc-200">
+              {low}
+            </div>
           </div>
         </div>
-        <div className="mt-3 text-[11px] text-muted-foreground">
+        <div className="mt-2.5 text-[10px] text-muted-foreground">
           Active counts exclude snoozed and suppressed incidents.
         </div>
         <Link
           href="/incidents"
-          className="mt-3 group/btn flex items-center justify-between w-full p-2 rounded-md bg-muted/40 hover:bg-muted/70 transition-all border border-transparent hover:border-border"
+          className="mt-3 group/btn flex items-center justify-between w-full p-2 rounded-lg bg-muted/30 dark:bg-zinc-900/40 hover:bg-muted/70 dark:hover:bg-zinc-800/60 transition-all border border-border/60 dark:border-zinc-800/80"
         >
-          <div className="flex items-center gap-2">
-            <Info className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-medium text-foreground">{detail}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <Info className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-xs font-medium text-foreground dark:text-zinc-200 truncate">
+              {detail}
+            </span>
           </div>
-          <div className="flex items-center justify-center h-6 w-6 rounded bg-background shadow-sm border">
-            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+          <div className="flex items-center justify-center h-5 w-5 rounded bg-background dark:bg-zinc-800 shadow-2xs border border-border/60 dark:border-zinc-700 shrink-0">
+            <ArrowRight className="h-3 w-3 text-muted-foreground group-hover/btn:text-foreground group-hover/btn:translate-x-0.5 transition-all" />
           </div>
         </Link>
       </HoverCardContent>

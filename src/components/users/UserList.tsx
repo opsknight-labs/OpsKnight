@@ -248,7 +248,9 @@ export default function UserList({
       )}
 
       <div
-        className={cn(viewMode === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-3')}
+        className={cn(
+          viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-3'
+        )}
       >
         {users.map(user => {
           const handleUpdateRole = async (role: string) => {
@@ -274,7 +276,10 @@ export default function UserList({
           const handleDelete = async () => {
             const result = await deleteUser(user.id);
             if (result?.error) toast.error(result.error);
-            else toast.success('User permanently deleted');
+            else
+              toast.success(
+                user.status === 'INVITED' ? 'Invitation deleted' : 'User permanently deleted'
+              );
           };
 
           const handleGenerateInvite = async () => {
