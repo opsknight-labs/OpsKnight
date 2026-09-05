@@ -462,6 +462,9 @@ export default async function middleware(req: NextRequest) {
   url.pathname = isMobile && !preferDesktop ? '/m/login' : '/login';
   url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search);
   const redirectResponse = NextResponse.redirect(url);
+  // Ensure redirects are never cached by browser or service worker
+  redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  redirectResponse.headers.set('Pragma', 'no-cache');
   // Apply security headers to redirect
   Object.entries(securityHeaders).forEach(([key, value]) => {
     redirectResponse.headers.set(key, value);
