@@ -5,7 +5,6 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
-import { serializeRecentIncidents } from '@/lib/sla';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { getReportingWindowForDays } from '@/lib/retention-policy';
 import {
@@ -136,33 +135,57 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const { calculateSLAMetrics, calculateMultiServiceUptime, getExternalStatusLabel } =
+    const { calculateMultiServiceUptime, getExternalStatusLabel } =
       await import('@/lib/sla-server');
-
-    // Optimized: Single call to get metrics and incidents for all services in scope
-    const metrics = await calculateSLAMetrics({
-      serviceId: serviceIds,
-      includeIncidents: true,
-      incidentLimit: 20,
-      visibility: 'PUBLIC',
-    });
-
-    const recentIncidents = metrics.recentIncidents || [];
+    const [activeGroups, recentIncidents] = await Promise.all([
+      prisma.incident.groupBy({
+        by: ['serviceId', 'urgency'],
+        where: {
+          serviceId: { in: serviceIds },
+          visibility: 'PUBLIC',
+          status: { in: activeIncidentStatuses() },
+        },
+        _count: { _all: true },
+      }),
+      visibility.showIncidents
+        ? prisma.incident.findMany({
+            where: { serviceId: { in: serviceIds }, visibility: 'PUBLIC' },
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              status: true,
+              urgency: true,
+              createdAt: true,
+              resolvedAt: true,
+              service: { select: { name: true, region: true } },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
     const serviceStatusMap = new Map<string, string>();
     const serviceActiveCountMap = new Map<string, number>();
 
-    metrics.serviceMetrics.forEach(m => {
-      serviceStatusMap.set(m.id, getExternalStatusLabel(m.dynamicStatus));
-      serviceActiveCountMap.set(m.id, m.activeCount);
-    });
+    for (const serviceId of serviceIds) {
+      const groups = activeGroups.filter(group => group.serviceId === serviceId);
+      const activeCount = groups.reduce((sum, group) => sum + group._count._all, 0);
+      const dynamicStatus = groups.some(group => group.urgency === 'HIGH')
+        ? 'CRITICAL'
+        : activeCount > 0
+          ? 'DEGRADED'
+          : 'OPERATIONAL';
+      serviceStatusMap.set(serviceId, getExternalStatusLabel(dynamicStatus));
+      serviceActiveCountMap.set(serviceId, activeCount);
+    }
 
-    const overallStatus =
-      metrics.dynamicStatus === 'CRITICAL'
-        ? 'outage'
-        : metrics.dynamicStatus === 'DEGRADED'
-          ? 'degraded'
-          : 'operational';
+    const overallStatus = activeGroups.some(group => group.urgency === 'HIGH')
+      ? 'outage'
+      : activeGroups.length > 0
+        ? 'degraded'
+        : 'operational';
 
     const servicesData = visibility.showServices
       ? services.map(service => ({
@@ -212,17 +235,15 @@ export async function GET(req: NextRequest) {
         status: overallStatus,
         services: servicesData,
         incidents: visibility.showIncidents
-          ? serializeRecentIncidents(recentIncidents).map(inc =>
-              serializePublicStatusApiIncident(inc, statusPage)
-            )
+          ? recentIncidents.map(inc => serializePublicStatusApiIncident(inc, statusPage))
           : [],
         metrics: {
           uptime: uptimeMetrics,
         },
         retention: {
-          effectiveStart: metrics.effectiveStart.toISOString(),
-          effectiveEnd: metrics.effectiveEnd.toISOString(),
-          isClipped: uptimeWindow.isClipped || metrics.isClipped,
+          effectiveStart: uptimeWindow.start.toISOString(),
+          effectiveEnd: uptimeWindow.end.toISOString(),
+          isClipped: uptimeWindow.isClipped,
         },
         updatedAt: new Date().toISOString(),
       },

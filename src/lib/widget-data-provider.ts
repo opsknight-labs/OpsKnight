@@ -4,7 +4,7 @@ import type { SLAMetrics as SLAServerMetrics } from '@/lib/sla';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import type { Prisma } from '@prisma/client';
 import { compileIncidentMetricFilter } from '@/lib/metrics/domain/filter';
-import { activeIncidentStatuses } from '@/lib/incident-status';
+import { activeIncidentStatusesForFilter } from '@/lib/incident-status';
 import { resolveSlaTarget } from '@/lib/metrics/domain/sla-target';
 import { effectiveElapsedMs } from '@/lib/metrics/domain/sla-clock';
 
@@ -103,7 +103,7 @@ export async function getWidgetRealtimeProjection(
   const now = new Date();
   const where = compileIncidentMetricFilter({ ...filters, status: undefined }).prisma;
   const incidents = await prisma.incident.findMany({
-    where: { AND: [where, { status: { in: activeIncidentStatuses() } }] },
+    where: { AND: [where, { status: { in: activeIncidentStatusesForFilter(filters.status) } }] },
     orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
     take: 100,
     select: {

@@ -4,7 +4,7 @@ import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
-import { getNotificationChangeVersion } from '@/lib/notification-change-clock';
+import { getNotificationUserChangeVersion } from '@/lib/notification-change-clock';
 
 /**
  * Server-Sent Events endpoint for real-time notification updates
@@ -75,17 +75,17 @@ export async function GET(req: NextRequest) {
       let lastCheck = new Date();
       let lastCheckId = '';
       let pollCount = 0;
-      let notificationVersion = await getNotificationChangeVersion();
+      let notificationVersion = await getNotificationUserChangeVersion(user.id);
 
       pollInterval = setInterval(async () => {
         if (isClosed || isPolling) return;
         isPolling = true;
         pollCount++;
         try {
-          const nextVersion = await getNotificationChangeVersion();
-          const globallyChanged = nextVersion !== notificationVersion;
+          const nextVersion = await getNotificationUserChangeVersion(user.id);
+          const userChanged = nextVersion !== notificationVersion;
           notificationVersion = nextVersion;
-          if (!globallyChanged && pollCount % 6 !== 0) {
+          if (!userChanged && pollCount % 6 !== 0) {
             send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
             return;
           }
