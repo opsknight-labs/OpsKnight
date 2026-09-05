@@ -8,7 +8,9 @@ if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollIntoView)
 
 // Cleanup after each test
 afterEach(() => {
-  cleanup();
+  if (typeof document !== 'undefined') {
+    cleanup();
+  }
 });
 
 // Mock Next.js router
