@@ -4,9 +4,23 @@ import {
   calculateOperationalScore,
   overallStatus,
   generate24HourHistory,
+  healthDurationLabel,
   CHECK_WEIGHTS,
   type AdminHealthCheck,
 } from '@/lib/admin-health';
+
+describe('health duration labels', () => {
+  it('distinguishes missing evidence from a real zero-duration sample', () => {
+    expect(healthDurationLabel(null)).toBe('no samples');
+    expect(healthDurationLabel(undefined)).toBe('no samples');
+    expect(healthDurationLabel(0)).toBe('0 ms');
+  });
+
+  it('makes severe latency readable without discarding precision', () => {
+    expect(healthDurationLabel(26_989)).toBe('27.0 s');
+    expect(healthDurationLabel(313_559)).toBe('5m 14s');
+  });
+});
 
 describe('admin health guide links', () => {
   it('uses stable latest-channel routes that exist in both published v1.4 and v1.5 docs', () => {
@@ -228,6 +242,24 @@ describe('calculateOperationalScore and weighted health logic', () => {
       },
     ]);
 
+    expect(result.overall).toBe('healthy');
+    expect(result.warningIssues).toHaveLength(0);
+  });
+
+  it('treats informational deployment topology as known non-degrading evidence', () => {
+    const result = calculateOperationalScore([
+      ...mockBaseChecks,
+      {
+        id: 'worker-replica',
+        label: 'Local durable-job worker',
+        category: 'workers',
+        status: 'informational',
+        summary: 'Dedicated workers own durable jobs.',
+        details: [],
+      },
+    ]);
+
+    expect(result.scorePercent).toBe(100);
     expect(result.overall).toBe('healthy');
     expect(result.warningIssues).toHaveLength(0);
   });

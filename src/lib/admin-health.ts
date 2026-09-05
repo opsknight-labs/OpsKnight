@@ -8,7 +8,7 @@ import { getMetricsByIntegration, getMetricsSummary } from '@/lib/integrations/m
 import { getJobWorkerStatus } from '@/lib/job-worker';
 import { getRealtimeControlPlaneStatus } from '@/lib/realtime-change-control-plane';
 
-export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown' | 'informational';
 export type HealthCategory = 'database' | 'workers' | 'alerting' | 'security' | 'platform';
 
 /** Stable documentation channel; never pin health remediation to an aging release. */
@@ -50,6 +50,7 @@ export type CheckTelemetry = {
     sampleCount24h?: number;
     maxMs?: number | null;
     slowCount?: number;
+    slowRate24h?: number;
     trend?: 'improving' | 'stable' | 'regressing' | 'insufficient-data';
   };
   rawPayload?: Record<string, unknown>;
@@ -176,6 +177,15 @@ function byteLabel(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GiB`;
 }
 
+export function healthDurationLabel(milliseconds: number | null | undefined): string {
+  if (milliseconds === null || milliseconds === undefined) return 'no samples';
+  if (milliseconds < 1000) return `${Math.round(milliseconds)} ms`;
+  if (milliseconds < MINUTE) return `${(milliseconds / 1000).toFixed(1)} s`;
+  const minutes = Math.floor(milliseconds / MINUTE);
+  const seconds = Math.round((milliseconds % MINUTE) / 1000);
+  return `${minutes}m ${seconds}s`;
+}
+
 /** Keep diagnostics actionable without reflecting credentials, URLs, or driver internals. */
 function safeErrorKind(error: unknown): string {
   if (!(error instanceof Error)) return 'Unexpected database error';
@@ -258,7 +268,7 @@ export function calculateOperationalScore(checks: AdminHealthCheck[]): Operation
     } else if (check.status === 'degraded') {
       warningIssues.push(check);
       weightedScore += weight * 0.75;
-    } else if (check.status === 'healthy') {
+    } else if (check.status === 'healthy' || check.status === 'informational') {
       weightedScore += weight * 1.0;
     } else {
       // Unknown evidence must never inflate health. It is uncertainty, not success.
@@ -797,6 +807,10 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
       const displayedP50 = metrics?.p50Ms1h ?? metrics?.p50Ms24h ?? null;
       const displayedAverage = metrics?.avgMs1h ?? metrics?.avgMs24h ?? null;
       const displayWindow = sampleCount1h > 0 ? '1h' : '24h';
+      const slowRate24h =
+        sampleCount24h > 0
+          ? Math.round(((metrics?.slowCount24h ?? 0) / sampleCount24h) * 1000) / 10
+          : 0;
 
       checks.push({
         id: 'sla-performance',
@@ -812,17 +826,24 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
           sampleCount24h === 0
             ? 'No recent SLA query timing data.'
             : sampleCount1h > 0
-              ? `${sampleCount1h} queries in the last hour; p95 ${Math.round(displayedP95 ?? 0)} ms (${trend} vs prior 23h).`
-              : `${sampleCount24h} queries in 24 hours; no executions last hour; 24h p95 ${Math.round(dailyP95 ?? 0)} ms.`,
+              ? `${sampleCount1h} queries in the last hour; p95 ${healthDurationLabel(displayedP95)} (${trend} vs prior 23h).`
+              : `No executions in the last hour; historical 24h p95 was ${healthDurationLabel(dailyP95)}.`,
         details:
           sampleCount24h === 0
             ? ['SLA performance metrics require recorded calculation events.']
             : [
-                `24 hours: ${sampleCount24h} queries, p95 ${Math.round(dailyP95 ?? 0)} ms, max ${metrics?.maxMs24h ?? 0} ms`,
-                `Last hour: p50 ${Math.round(metrics?.p50Ms1h ?? 0)} ms, average ${Math.round(metrics?.avgMs1h ?? 0)} ms, max ${metrics?.maxMs1h ?? 0} ms`,
-                `Queries exceeding 10s: ${metrics?.slowCount1h ?? 0} in 1h / ${metrics?.slowCount24h ?? 0} in 24h`,
-                `Execution rate: ${(sampleCount1h / 60).toFixed(1)} per minute in the last hour`,
-                `Average incidents scanned: ${Math.round(metrics?.avgIncidents1h ?? 0)} in 1h / ${Math.round(metrics?.avgIncidents24h ?? 0)} in 24h`,
+                `24 hours: ${sampleCount24h} queries, p50 ${healthDurationLabel(metrics?.p50Ms24h)}, p95 ${healthDurationLabel(dailyP95)}, max ${healthDurationLabel(metrics?.maxMs24h)}`,
+                `Slow queries over 10s: ${metrics?.slowCount24h ?? 0} (${slowRate24h}%) in 24h`,
+                ...(sampleCount1h > 0
+                  ? [
+                      `Last hour: p50 ${healthDurationLabel(metrics?.p50Ms1h)}, average ${healthDurationLabel(metrics?.avgMs1h)}, max ${healthDurationLabel(metrics?.maxMs1h)}`,
+                      `Last-hour slow queries: ${metrics?.slowCount1h ?? 0}; execution rate: ${(sampleCount1h / 60).toFixed(1)} per minute`,
+                      `Average incidents scanned: ${Math.round(metrics?.avgIncidents1h ?? 0)} in 1h / ${Math.round(metrics?.avgIncidents24h ?? 0)} in 24h`,
+                    ]
+                  : [
+                      'Last hour: no timing samples; current SLA-query performance is not established.',
+                      `Average incidents scanned per historical run: ${Math.round(metrics?.avgIncidents24h ?? 0)}`,
+                    ]),
               ],
         telemetry: {
           slaMetrics: {
@@ -837,6 +858,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
             slowCount:
               displayWindow === '1h' ? (metrics?.slowCount1h ?? 0) : (metrics?.slowCount24h ?? 0),
             trend,
+            slowRate24h,
           },
           rawPayload: {
             window1h: {
@@ -1302,7 +1324,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
     required: false,
     observedAt: now.toISOString(),
     status: !worker.running
-      ? 'unknown'
+      ? 'informational'
       : worker.lastError || workerSuccessAgeMs === null || workerSuccessAgeMs > 5 * MINUTE
         ? 'degraded'
         : 'healthy',
