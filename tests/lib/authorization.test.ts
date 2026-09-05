@@ -48,11 +48,16 @@ describe('central authorization contract', () => {
     expect(hasCapability('USER', CAPABILITIES.METRICS_READ_ALL)).toBe(false);
   });
 
-  it('allows all roles to view user directory and profiles', () => {
+  it('allows all roles to view user directory, profiles, and escalation policies', () => {
     expect(hasCapability('ADMIN', CAPABILITIES.USER_READ_ALL)).toBe(true);
     expect(hasCapability('RESPONDER', CAPABILITIES.USER_READ_ALL)).toBe(true);
     expect(hasCapability('AUDITOR', CAPABILITIES.USER_READ_ALL)).toBe(true);
     expect(hasCapability('USER', CAPABILITIES.USER_READ_ALL)).toBe(true);
+
+    expect(hasCapability('ADMIN', CAPABILITIES.POLICY_READ_ALL)).toBe(true);
+    expect(hasCapability('RESPONDER', CAPABILITIES.POLICY_READ_ALL)).toBe(true);
+    expect(hasCapability('AUDITOR', CAPABILITIES.POLICY_READ_ALL)).toBe(true);
+    expect(hasCapability('USER', CAPABILITIES.POLICY_READ_ALL)).toBe(true);
   });
 
   it('returns immutable copies of role grants', () => {
