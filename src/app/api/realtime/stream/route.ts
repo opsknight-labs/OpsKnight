@@ -8,6 +8,10 @@ import {
   type StreamAuthorization,
 } from '@/lib/realtime-stream-authorization';
 import { recordSessionHeartbeat } from '@/lib/active-sessions';
+import {
+  getRealtimeChangeGeneration,
+  subscribeToRealtimeChanges,
+} from '@/lib/realtime-change-control-plane';
 
 /**
  * Server-Sent Events (SSE) endpoint for real-time updates
@@ -40,14 +44,17 @@ export async function GET(req: NextRequest) {
         const encoder = new TextEncoder();
         let isClosed = false;
 
-        let pollInterval: NodeJS.Timeout | null = null;
+        let heartbeatInterval: NodeJS.Timeout | null = null;
+        let unsubscribeChanges: () => void = () => {};
         let isPolling = false;
+        let pendingGeneration: string | null | undefined;
 
         cleanup = () => {
           isClosed = true;
-          if (pollInterval) {
-            clearInterval(pollInterval);
-            pollInterval = null;
+          unsubscribeChanges();
+          if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
           }
           try {
             controller.close();
@@ -59,7 +66,6 @@ export async function GET(req: NextRequest) {
         // Track last sent metrics for change detection to reduce bandwidth
         let lastMetricsHash = '';
         let lastIncidentHash = '';
-        let heartbeatCounter = 0;
         let authorizationCounter = 0;
 
         // Send initial connection message
@@ -77,47 +83,33 @@ export async function GET(req: NextRequest) {
         // Send initial connection confirmation
         send(JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() }));
 
-        // Set up polling interval (every 5 seconds)
-        // Uses caching layer to reduce database load by ~10x
-        pollInterval = setInterval(async () => {
-          if (isClosed || isPolling) return;
+        const refreshProjection = async (generation: string | null, emitIncidentUpdates = true) => {
+          if (isClosed) return;
+          if (isPolling) {
+            pendingGeneration = generation;
+            return;
+          }
           isPolling = true;
           try {
-            authorizationCounter++;
-            if (authorizationCounter >= 12) {
-              authorizationCounter = 0;
-              const nextAuthorization = await resolveStreamAuthorization(
-                user.id,
-                expectedTokenVersion
-              );
-              if (
-                !nextAuthorization ||
-                !hasSameStreamAuthorizationScope(streamAuthorization, nextAuthorization)
-              ) {
-                send(JSON.stringify({ type: 'authorization_revoked' }));
-                cleanup();
-                return;
-              }
-              streamAuthorization = nextAuthorization;
-            }
-            // Get recent incident updates using cached query
             const incidentResult = await getCachedRecentIncidents(
               user.id,
               streamAuthorization.role,
               [...streamAuthorization.teamIds],
-              lastIncidentHash || undefined
+              lastIncidentHash || undefined,
+              generation
             );
 
-            // Only send incident updates if there are actual changes
-            if (incidentResult && incidentResult.data.length > 0) {
+            if (incidentResult) {
               lastIncidentHash = incidentResult.hash;
-              send(
-                JSON.stringify({
-                  type: 'incidents_updated',
-                  incidents: incidentResult.data,
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              if (emitIncidentUpdates && incidentResult.data.length > 0) {
+                send(
+                  JSON.stringify({
+                    type: 'incidents_updated',
+                    incidents: incidentResult.data,
+                    timestamp: new Date().toISOString(),
+                  })
+                );
+              }
             }
 
             // Get dashboard metrics using cached query (reduces DB load by 80%)
@@ -125,7 +117,8 @@ export async function GET(req: NextRequest) {
               user.id,
               streamAuthorization.role,
               [...streamAuthorization.teamIds],
-              lastMetricsHash
+              lastMetricsHash,
+              generation
             );
 
             // Only send metrics if they've changed (cache handles change detection)
@@ -147,16 +140,8 @@ export async function GET(req: NextRequest) {
                 })
               );
             }
-
-            // Send heartbeat every 6th poll (30 seconds) instead of every poll
-            heartbeatCounter++;
-            if (heartbeatCounter >= 6) {
-              heartbeatCounter = 0;
-              send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
-              void recordSessionHeartbeat({ userId: user.id, userAgent, ip }).catch(() => {});
-            }
           } catch (error) {
-            logger.error('SSE polling error', { component: 'api-realtime-stream', error });
+            logger.error('SSE projection error', { component: 'api-realtime-stream', error });
             send(
               JSON.stringify({
                 type: 'error',
@@ -166,13 +151,61 @@ export async function GET(req: NextRequest) {
             );
           } finally {
             isPolling = false;
+            const pending = pendingGeneration;
+            pendingGeneration = undefined;
+            if (pending !== undefined && !isClosed) void refreshProjection(pending);
           }
-        }, 5000); // Poll every 5 seconds
+        };
+
+        req.signal.addEventListener('abort', cleanup, { once: true });
+        if (req.signal.aborted) {
+          cleanup();
+          return;
+        }
+
+        // Establish a durable generation baseline, load the initial projection,
+        // then subscribe this connection to the process-wide change fanout.
+        const initialGeneration = await getRealtimeChangeGeneration();
+        await refreshProjection(initialGeneration, false);
+        if (isClosed) return;
+        unsubscribeChanges = subscribeToRealtimeChanges(
+          'dashboard',
+          initialGeneration,
+          generation => refreshProjection(generation, true)
+        );
+
+        // Heartbeats keep proxies and session presence alive. Authorization is
+        // independently revalidated every minute even when no incidents change.
+        heartbeatInterval = setInterval(async () => {
+          if (isClosed) return;
+          send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
+          void recordSessionHeartbeat({ userId: user.id, userAgent, ip }).catch(() => {});
+          authorizationCounter += 1;
+          if (authorizationCounter < 2) return;
+          authorizationCounter = 0;
+          try {
+            const nextAuthorization = await resolveStreamAuthorization(
+              user.id,
+              expectedTokenVersion
+            );
+            if (
+              !nextAuthorization ||
+              !hasSameStreamAuthorizationScope(streamAuthorization, nextAuthorization)
+            ) {
+              send(JSON.stringify({ type: 'authorization_revoked' }));
+              cleanup();
+              return;
+            }
+            streamAuthorization = nextAuthorization;
+          } catch (error) {
+            logger.warn('realtime.authorization_recheck_failed', {
+              userId: user.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }, 30_000);
 
         // Clean up on client disconnect
-        req.signal.addEventListener('abort', () => {
-          cleanup();
-        });
       },
       cancel() {
         cleanup();

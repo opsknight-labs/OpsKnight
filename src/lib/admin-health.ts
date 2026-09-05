@@ -5,9 +5,22 @@ import path from 'node:path';
 import prisma from '@/lib/prisma';
 import { APP_VERSION } from '@/lib/version';
 import { getMetricsByIntegration, getMetricsSummary } from '@/lib/integrations/metrics';
+import { getJobWorkerStatus } from '@/lib/job-worker';
+import { getRealtimeControlPlaneStatus } from '@/lib/realtime-change-control-plane';
 
-export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown' | 'informational';
 export type HealthCategory = 'database' | 'workers' | 'alerting' | 'security' | 'platform';
+
+/** Stable documentation channel; never pin health remediation to an aging release. */
+export const ADMIN_HEALTH_GUIDES = {
+  monitoring: 'https://opsknight.com/docs/latest/deployment/monitoring/',
+  scalability: 'https://opsknight.com/docs/latest/core-concepts/scalability/',
+  migrations: 'https://opsknight.com/docs/latest/deployment/database-migrations/',
+  maintenance: 'https://opsknight.com/docs/latest/deployment/maintenance/',
+  sla: 'https://opsknight.com/docs/latest/core-concepts/analytics/',
+  encryption: 'https://opsknight.com/docs/latest/security/encryption/',
+  upgrades: 'https://opsknight.com/docs/latest/deployment/upgrade-rollback/',
+} as const;
 
 export type CheckTelemetry = {
   latencyMs?: number;
@@ -32,6 +45,22 @@ export type CheckTelemetry = {
     p50Ms: number | null;
     avgMs: number | null;
     sampleCount: number;
+    windowLabel?: '1h' | '24h';
+    p95Ms24h?: number | null;
+    sampleCount24h?: number;
+    maxMs?: number | null;
+    slowCount?: number;
+    slowRate24h?: number;
+    trend?: 'improving' | 'stable' | 'regressing' | 'insufficient-data';
+    byDataSource?: Record<
+      'live' | 'rollup' | 'hybrid',
+      {
+        sampleCount1h: number;
+        sampleCount24h: number;
+        p95Ms1h: number | null;
+        p95Ms24h: number | null;
+      }
+    >;
   };
   rawPayload?: Record<string, unknown>;
 };
@@ -50,6 +79,12 @@ export type AdminHealthCheck = {
     steps?: string[];
   };
   telemetry?: CheckTelemetry;
+  /** Where the evidence originates. Prevents replica-local state being mistaken for cluster truth. */
+  scope?: 'cluster' | 'replica' | 'configuration' | 'external';
+  observedAt?: string;
+  impact?: string;
+  /** False for informative signals that are not expected on every deployment role. */
+  required?: boolean;
 };
 
 export type HealthHistorySample = {
@@ -63,7 +98,10 @@ export type HealthHistorySample = {
 
 export type AdminHealthReport = {
   generatedAt: string;
+  durationMs?: number;
   overall: HealthLevel;
+  scorePercent?: number;
+  knownSignalPercent?: number;
   checks: AdminHealthCheck[];
   history?: HealthHistorySample[];
 };
@@ -82,6 +120,25 @@ type DatabaseCapacityRow = {
   usedConnections: number;
   activeConnections: number;
   longTransactions: number;
+};
+
+type SlaPerformanceSummaryRow = {
+  dataSource: string | null;
+  sampleCount24h: number;
+  sampleCount1h: number;
+  p50Ms24h: number | null;
+  p95Ms24h: number | null;
+  avgMs24h: number | null;
+  maxMs24h: number | null;
+  slowCount24h: number;
+  avgIncidents24h: number | null;
+  p50Ms1h: number | null;
+  p95Ms1h: number | null;
+  p95MsPrior23h: number | null;
+  avgMs1h: number | null;
+  maxMs1h: number | null;
+  slowCount1h: number;
+  avgIncidents1h: number | null;
 };
 
 const MINUTE = 60_000;
@@ -130,6 +187,24 @@ function byteLabel(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GiB`;
 }
 
+export function healthDurationLabel(milliseconds: number | null | undefined): string {
+  if (milliseconds === null || milliseconds === undefined) return 'no samples';
+  if (milliseconds < 1000) return `${Math.round(milliseconds)} ms`;
+  if (milliseconds < MINUTE) return `${(milliseconds / 1000).toFixed(1)} s`;
+  const minutes = Math.floor(milliseconds / MINUTE);
+  const seconds = Math.round((milliseconds % MINUTE) / 1000);
+  return `${minutes}m ${seconds}s`;
+}
+
+/** Keep diagnostics actionable without reflecting credentials, URLs, or driver internals. */
+function safeErrorKind(error: unknown): string {
+  if (!(error instanceof Error)) return 'Unexpected database error';
+  const name = error.name.replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 80);
+  return name
+    ? `${name} (see restricted server logs)`
+    : 'Database error (see restricted server logs)';
+}
+
 async function latestRelease(): Promise<string | null> {
   try {
     const response = await fetch(
@@ -157,6 +232,10 @@ export const CHECK_WEIGHTS: Record<string, number> = {
   jobs: 5,
   escalations: 5,
   'database-capacity': 5,
+  rollups: 5,
+  'integration-control-plane': 5,
+  'worker-replica': 3,
+  realtime: 3,
   // Auxiliary & Delivery Services (Weight 3)
   notifications: 3,
   integrations: 3,
@@ -199,11 +278,16 @@ export function calculateOperationalScore(checks: AdminHealthCheck[]): Operation
     } else if (check.status === 'degraded') {
       warningIssues.push(check);
       weightedScore += weight * 0.75;
-    } else if (check.status === 'healthy') {
+    } else if (check.status === 'healthy' || check.status === 'informational') {
       weightedScore += weight * 1.0;
     } else {
-      // 'unknown' is neutral, treated as passing
-      weightedScore += weight * 1.0;
+      // Unknown evidence must never inflate health. It is uncertainty, not success.
+      if (check.required === false) {
+        weightedScore += weight;
+      } else {
+        warningIssues.push(check);
+        weightedScore += weight * 0.5;
+      }
     }
   }
 
@@ -231,95 +315,55 @@ export async function generate24HourHistory(
 ): Promise<HealthHistorySample[]> {
   const since = new Date(now.getTime() - 24 * HOUR);
 
-  let incidents: Array<{
-    id: string;
-    title: string;
-    priority: string | null;
-    status: string;
-    createdAt: Date;
-    resolvedAt: Date | null;
-  }> = [];
-
-  let failedJobs: Array<{
+  type FailedJob = {
     id: string;
     createdAt: Date;
-  }> = [];
-
-  let failedDeliveries: Array<{
+  };
+  type FailedDelivery = {
     id: string;
     createdAt: Date;
-  }> = [];
-
-  let failedNotifications: Array<{
+  };
+  type FailedNotification = {
     id: string;
     startedAt: Date;
-  }> = [];
+  };
 
-  try {
-    incidents = await prisma.incident.findMany({
-      where: {
-        createdAt: { gte: since },
-      },
-      select: {
-        id: true,
-        title: true,
-        priority: true,
-        status: true,
-        createdAt: true,
-        resolvedAt: true,
-      },
-    });
-  } catch {
-    // Graceful fallback if database query is restricted
-  }
-
-  try {
-    failedJobs = await prisma.backgroundJob.findMany({
+  const historyResults = await Promise.allSettled([
+    prisma.backgroundJob.findMany({
       where: {
         createdAt: { gte: since },
         status: 'FAILED',
       },
-      select: {
-        id: true,
-        createdAt: true,
-      },
-    });
-  } catch {
-    // Graceful fallback
-  }
-
-  try {
-    failedDeliveries = await prisma.inboundDelivery.findMany({
+      select: { id: true, createdAt: true },
+    }),
+    prisma.inboundDelivery.findMany({
       where: {
         createdAt: { gte: since },
         status: 'FAILED',
       },
-      select: {
-        id: true,
-        createdAt: true,
-      },
-    });
-  } catch {
-    // Graceful fallback
-  }
-
-  try {
-    failedNotifications = await prisma.notificationDeliveryAttempt.findMany({
+      select: { id: true, createdAt: true },
+    }),
+    prisma.notificationDeliveryAttempt.findMany({
       where: {
         startedAt: { gte: since },
         outcome: 'FAILED',
       },
-      select: {
-        id: true,
-        startedAt: true,
-      },
-    });
-  } catch {
-    // Graceful fallback
-  }
+      select: { id: true, startedAt: true },
+    }),
+  ]);
+  const [jobResult, deliveryResult, notificationResult] = historyResults;
+  const failedJobs: FailedJob[] = jobResult.status === 'fulfilled' ? jobResult.value : [];
+  const failedDeliveries: FailedDelivery[] =
+    deliveryResult.status === 'fulfilled' ? deliveryResult.value : [];
+  const failedNotifications: FailedNotification[] =
+    notificationResult.status === 'fulfilled' ? notificationResult.value : [];
+  const unavailableSources = historyResults.filter(result => result.status === 'rejected').length;
 
-  const { scorePercent: liveScorePercent, criticalIssues, warningIssues } =
-    calculateOperationalScore(checks);
+  const {
+    scorePercent: liveScorePercent,
+    criticalIssues,
+    warningIssues,
+  } = calculateOperationalScore(checks);
 
   const topCriticalIssue = criticalIssues[0]?.summary;
   const topWarningIssue = warningIssues[0]?.summary;
@@ -332,28 +376,20 @@ export async function generate24HourHistory(
     const hour = d.getHours();
     const hourLabel = `${hour.toString().padStart(2, '0')}:00`;
 
-    // 1. Incidents active in this hourly bucket
-    const activeIncidents = incidents.filter(inc => {
-      const incStart = inc.createdAt.getTime();
-      const incEnd = inc.resolvedAt ? inc.resolvedAt.getTime() : now.getTime();
-      return incStart <= windowEnd.getTime() && incEnd >= windowStart.getTime();
-    });
-
-    // 2. Failed jobs in this hourly bucket
+    // Customer/service incidents are intentionally excluded: they describe the
+    // monitored estate, not whether OpsKnight itself was available.
     const hourlyFailedJobs = failedJobs.filter(
       j =>
         j.createdAt.getTime() >= windowStart.getTime() &&
         j.createdAt.getTime() < windowEnd.getTime()
     );
 
-    // 3. Failed webhook deliveries in this hourly bucket
     const hourlyFailedDeliveries = failedDeliveries.filter(
       del =>
         del.createdAt.getTime() >= windowStart.getTime() &&
         del.createdAt.getTime() < windowEnd.getTime()
     );
 
-    // 4. Failed notification attempts in this hourly bucket
     const hourlyFailedNotifications = failedNotifications.filter(
       notif =>
         notif.startedAt.getTime() >= windowStart.getTime() &&
@@ -364,22 +400,7 @@ export async function generate24HourHistory(
     let scorePercent = 100;
     let reason = 'All systems operating normally';
 
-    const criticalInc = activeIncidents.find(
-      inc => inc.priority === 'P1' || inc.priority === 'P2'
-    );
-    const warningInc = activeIncidents.find(
-      inc => inc.priority === 'P3' || inc.priority === 'P4'
-    );
-
-    if (criticalInc) {
-      status = 'unhealthy';
-      scorePercent = 40;
-      reason = `Critical incident (${criticalInc.priority || 'P1'}): ${criticalInc.title}`;
-    } else if (warningInc) {
-      status = 'degraded';
-      scorePercent = 75;
-      reason = `Active incident (${warningInc.priority || 'P3'}): ${warningInc.title}`;
-    } else if (hourlyFailedJobs.length > 0) {
+    if (hourlyFailedJobs.length > 0) {
       status = 'degraded';
       scorePercent = Math.max(70, 100 - hourlyFailedJobs.length * 10);
       reason = `${hourlyFailedJobs.length} background job failure(s)`;
@@ -397,19 +418,15 @@ export async function generate24HourHistory(
           ? 'All diagnostic signals passing'
           : topCriticalIssue ||
             topWarningIssue ||
-            (overall === 'degraded'
-              ? 'Operational with warnings'
-              : 'Critical diagnostic error');
-    } else if (criticalIssues.length > 0) {
-      // ONLY if persistent CRITICAL infrastructure is failing (e.g. DB connection broken)
-      status = 'unhealthy';
-      scorePercent = Math.min(50, liveScorePercent);
-      reason = topCriticalIssue || 'Critical diagnostic error';
+            (overall === 'degraded' ? 'Operational with warnings' : 'Critical diagnostic error');
+    } else if (unavailableSources > 0) {
+      status = 'unknown';
+      scorePercent = 0;
+      reason = `${unavailableSources} historical evidence source(s) unavailable`;
     } else {
-      // Normal peaceful historical hour
       status = 'healthy';
       scorePercent = 100;
-      reason = 'All systems operating normally';
+      reason = 'No durable job or delivery failures recorded';
     }
 
     samples.push({
@@ -424,7 +441,12 @@ export async function generate24HourHistory(
   return samples;
 }
 
-export async function collectAdminHealth(): Promise<AdminHealthReport> {
+const HEALTH_CACHE_TTL_MS = 15_000;
+let cachedHealthReport: { report: AdminHealthReport; expiresAt: number } | null = null;
+let healthCollectionInFlight: Promise<AdminHealthReport> | null = null;
+
+async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
+  const collectionStartedAt = Date.now();
   const now = new Date();
   const checks: AdminHealthCheck[] = [];
 
@@ -458,7 +480,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       },
       action: {
         label: 'Monitoring guide',
-        href: 'https://opsknight.com/docs/v1.3/operations/monitoring',
+        href: ADMIN_HEALTH_GUIDES.monitoring,
       },
     });
   } catch (error) {
@@ -470,11 +492,11 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       summary: 'PostgreSQL is unavailable to this application instance.',
       details: [
         'Check DATABASE_URL, network policy, credentials, TLS, capacity, and PostgreSQL logs.',
-        `Error: ${error instanceof Error ? error.message : 'Unknown connection error'}`,
+        `Error class: ${safeErrorKind(error)}`,
       ],
       telemetry: {
         rawPayload: {
-          error: error instanceof Error ? error.message : 'Unknown connection error',
+          errorClass: safeErrorKind(error),
         },
       },
     });
@@ -506,6 +528,8 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         id: 'database-capacity',
         label: 'Database capacity',
         category: 'database',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
         status: !capacity
           ? 'unknown'
           : utilization >= 95 || capacity.longTransactions > 0
@@ -548,7 +572,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
           : undefined,
         action: {
           label: 'Capacity guide',
-          href: 'https://opsknight.com/docs/v1.3/core-concepts/scalability',
+          href: ADMIN_HEALTH_GUIDES.scalability,
         },
       });
     } catch {
@@ -635,7 +659,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         },
         action: {
           label: 'Migration runbook',
-          href: 'https://opsknight.com/docs/v1.3/deployment/database-migrations',
+          href: ADMIN_HEALTH_GUIDES.migrations,
         },
       });
     } catch {
@@ -688,7 +712,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         },
         action: {
           label: 'Maintenance guide',
-          href: 'https://opsknight.com/docs/v1.3/deployment/maintenance',
+          href: ADMIN_HEALTH_GUIDES.maintenance,
         },
       });
     } catch {
@@ -751,71 +775,155 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     }
 
     try {
-      const since = new Date(now.getTime() - 24 * HOUR);
-      const logs = await prisma.$queryRaw<Array<{ durationMs: number; incidentCount: number }>>`
-        SELECT "durationMs", "incidentCount"
+      const since24h = new Date(now.getTime() - 24 * HOUR);
+      const since1h = new Date(now.getTime() - HOUR);
+      const metricRows = await prisma.$queryRaw<SlaPerformanceSummaryRow[]>`
+        SELECT
+          "dataSource",
+          COUNT(*)::int AS "sampleCount24h",
+          COUNT(*) FILTER (WHERE timestamp >= ${since1h})::int AS "sampleCount1h",
+          percentile_cont(0.50) WITHIN GROUP (ORDER BY "durationMs")::double precision AS "p50Ms24h",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs")::double precision AS "p95Ms24h",
+          AVG("durationMs")::double precision AS "avgMs24h",
+          MAX("durationMs")::int AS "maxMs24h",
+          COUNT(*) FILTER (WHERE "durationMs" > 10000)::int AS "slowCount24h",
+          AVG("incidentCount")::double precision AS "avgIncidents24h",
+          percentile_cont(0.50) WITHIN GROUP (ORDER BY "durationMs")
+            FILTER (WHERE timestamp >= ${since1h})::double precision AS "p50Ms1h",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs")
+            FILTER (WHERE timestamp >= ${since1h})::double precision AS "p95Ms1h",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs")
+            FILTER (WHERE timestamp < ${since1h})::double precision AS "p95MsPrior23h",
+          AVG("durationMs") FILTER (WHERE timestamp >= ${since1h})::double precision AS "avgMs1h",
+          MAX("durationMs") FILTER (WHERE timestamp >= ${since1h})::int AS "maxMs1h",
+          COUNT(*) FILTER (WHERE timestamp >= ${since1h} AND "durationMs" > 10000)::int AS "slowCount1h",
+          AVG("incidentCount") FILTER (WHERE timestamp >= ${since1h})::double precision AS "avgIncidents1h"
         FROM sla_performance_logs
-        WHERE timestamp >= ${since}
-        ORDER BY timestamp DESC
+        WHERE timestamp >= ${since24h}
+        GROUP BY GROUPING SETS ((), ("dataSource"))
+        ORDER BY "dataSource" NULLS FIRST
       `;
-      const durations = logs.map(log => log.durationMs).sort((left, right) => left - right);
-      const percentile = (fraction: number) =>
-        durations.length > 0
-          ? durations[Math.min(durations.length - 1, Math.floor(durations.length * fraction))]
-          : null;
-      const average =
-        durations.length > 0
-          ? durations.reduce((total, duration) => total + duration, 0) / durations.length
-          : null;
-      const p50 = percentile(0.5);
-      const p95 = percentile(0.95);
-      const slow = durations.filter(duration => duration > 10_000).length;
-      const averageIncidents =
-        logs.length > 0
-          ? logs.reduce((total, log) => total + log.incidentCount, 0) / logs.length
-          : null;
+      const metrics = metricRows.find(row => row.dataSource === null);
+      const sourceSummary = (dataSource: 'live' | 'rollup' | 'hybrid') => {
+        const row = metricRows.find(candidate => candidate.dataSource === dataSource);
+        return {
+          sampleCount1h: row?.sampleCount1h ?? 0,
+          sampleCount24h: row?.sampleCount24h ?? 0,
+          p95Ms1h: row?.p95Ms1h ?? null,
+          p95Ms24h: row?.p95Ms24h ?? null,
+        };
+      };
+      const byDataSource = {
+        live: sourceSummary('live'),
+        rollup: sourceSummary('rollup'),
+        hybrid: sourceSummary('hybrid'),
+      };
+      const sampleCount24h = metrics?.sampleCount24h ?? 0;
+      const sampleCount1h = metrics?.sampleCount1h ?? 0;
+      const recentP95 = metrics?.p95Ms1h ?? null;
+      const dailyP95 = metrics?.p95Ms24h ?? null;
+      const priorP95 = metrics?.p95MsPrior23h ?? null;
+      const trend =
+        recentP95 === null || priorP95 === null || priorP95 === 0
+          ? 'insufficient-data'
+          : recentP95 > priorP95 * 1.2
+            ? 'regressing'
+            : recentP95 < priorP95 * 0.8
+              ? 'improving'
+              : 'stable';
+      const displayedP95 = recentP95 ?? dailyP95;
+      const displayedP50 = metrics?.p50Ms1h ?? metrics?.p50Ms24h ?? null;
+      const displayedAverage = metrics?.avgMs1h ?? metrics?.avgMs24h ?? null;
+      const displayWindow = sampleCount1h > 0 ? '1h' : '24h';
+      const slowRate24h =
+        sampleCount24h > 0
+          ? Math.round(((metrics?.slowCount24h ?? 0) / sampleCount24h) * 1000) / 10
+          : 0;
 
       checks.push({
         id: 'sla-performance',
         label: 'SLA query performance',
         category: 'workers',
         status:
-          logs.length === 0
+          sampleCount24h === 0
             ? 'unknown'
-            : slow > 0 || (p95 !== null && p95 > 10_000)
+            : (metrics?.slowCount1h ?? 0) > 0 || (displayedP95 !== null && displayedP95 > 10_000)
               ? 'degraded'
               : 'healthy',
         summary:
-          logs.length === 0
+          sampleCount24h === 0
             ? 'No recent SLA query timing data.'
-            : `${logs.length} queries in 24 hours; p95 ${p95 ?? 0} ms.`,
+            : sampleCount1h > 0
+              ? `${sampleCount1h} queries in the last hour; p95 ${healthDurationLabel(displayedP95)} (${trend} vs prior 23h).`
+              : `No executions in the last hour; historical 24h p95 was ${healthDurationLabel(dailyP95)}.`,
         details:
-          logs.length === 0
-            ? ['SLA performance metrics require recorded calculation events.']
+          sampleCount24h === 0
+            ? [
+                'SLA performance metrics require real calculation requests; no synthetic probe is generated.',
+              ]
             : [
-                `p50: ${p50 ?? 0} ms, average: ${average ? Math.round(average) : 0} ms`,
-                `Queries exceeding 10s: ${slow}`,
-                `Average incidents scanned per cycle: ${averageIncidents ? Math.round(averageIncidents) : 0}`,
+                `24 hours: ${sampleCount24h} queries, p50 ${healthDurationLabel(metrics?.p50Ms24h)}, p95 ${healthDurationLabel(dailyP95)}, max ${healthDurationLabel(metrics?.maxMs24h)}`,
+                `Slow queries over 10s: ${metrics?.slowCount24h ?? 0} (${slowRate24h}%) in 24h`,
+                ...(sampleCount1h > 0
+                  ? [
+                      `Last hour: p50 ${healthDurationLabel(metrics?.p50Ms1h)}, average ${healthDurationLabel(metrics?.avgMs1h)}, max ${healthDurationLabel(metrics?.maxMs1h)}`,
+                      `Last-hour slow queries: ${metrics?.slowCount1h ?? 0}; execution rate: ${(sampleCount1h / 60).toFixed(1)} per minute`,
+                      `Average incidents scanned: ${Math.round(metrics?.avgIncidents1h ?? 0)} in 1h / ${Math.round(metrics?.avgIncidents24h ?? 0)} in 24h`,
+                    ]
+                  : [
+                      'Last hour: no timing samples; current SLA-query performance is not established.',
+                      `Average incidents scanned per historical run: ${Math.round(metrics?.avgIncidents24h ?? 0)}`,
+                    ]),
+                ...Object.entries(byDataSource).map(([dataSource, source]) => {
+                  return source.sampleCount24h === 0
+                    ? `${dataSource}: no measured requests in 24h`
+                    : `${dataSource}: ${source.sampleCount1h} requests / p95 ${healthDurationLabel(source.p95Ms1h)} in 1h; ${source.sampleCount24h} requests / p95 ${healthDurationLabel(source.p95Ms24h)} in 24h`;
+                }),
               ],
         telemetry: {
           slaMetrics: {
-            p95Ms: p95,
-            p50Ms: p50,
-            avgMs: average ? Math.round(average) : null,
-            sampleCount: logs.length,
+            p95Ms: displayedP95,
+            p50Ms: displayedP50,
+            avgMs: displayedAverage === null ? null : Math.round(displayedAverage),
+            sampleCount: displayWindow === '1h' ? sampleCount1h : sampleCount24h,
+            windowLabel: displayWindow,
+            p95Ms24h: dailyP95,
+            sampleCount24h,
+            maxMs: metrics?.maxMs1h ?? metrics?.maxMs24h ?? null,
+            slowCount:
+              displayWindow === '1h' ? (metrics?.slowCount1h ?? 0) : (metrics?.slowCount24h ?? 0),
+            trend,
+            slowRate24h,
+            byDataSource,
           },
           rawPayload: {
-            sampleCount: logs.length,
-            p95Ms: p95,
-            p50Ms: p50,
-            averageMs: average,
-            slowQueriesCount: slow,
-            averageIncidentsScanned: averageIncidents,
+            window1h: {
+              sampleCount: sampleCount1h,
+              p50Ms: metrics?.p50Ms1h ?? null,
+              p95Ms: recentP95,
+              p95MsPrior23h: priorP95,
+              averageMs: metrics?.avgMs1h ?? null,
+              maxMs: metrics?.maxMs1h ?? null,
+              slowQueriesCount: metrics?.slowCount1h ?? 0,
+              averageIncidentsScanned: metrics?.avgIncidents1h ?? null,
+              executionsPerMinute: sampleCount1h / 60,
+            },
+            window24h: {
+              sampleCount: sampleCount24h,
+              p50Ms: metrics?.p50Ms24h ?? null,
+              p95Ms: dailyP95,
+              averageMs: metrics?.avgMs24h ?? null,
+              maxMs: metrics?.maxMs24h ?? null,
+              slowQueriesCount: metrics?.slowCount24h ?? 0,
+              averageIncidentsScanned: metrics?.avgIncidents24h ?? null,
+            },
+            trend,
+            byDataSource,
           },
         },
         action: {
           label: 'SLA guide',
-          href: 'https://opsknight.com/docs/v1.3/core-concepts/sla-management',
+          href: ADMIN_HEALTH_GUIDES.sla,
         },
       });
     } catch {
@@ -1072,6 +1180,8 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     id: 'encryption',
     label: 'Encryption configuration',
     category: 'security',
+    scope: 'configuration',
+    observedAt: now.toISOString(),
     status: encryptionValid
       ? 'healthy'
       : process.env.NODE_ENV === 'development'
@@ -1101,7 +1211,7 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     },
     action: {
       label: 'Encryption guide',
-      href: 'https://opsknight.com/docs/v1.3/security/encryption',
+      href: ADMIN_HEALTH_GUIDES.encryption,
     },
   });
 
@@ -1111,6 +1221,8 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     id: 'version',
     label: 'Version and upgrades',
     category: 'platform',
+    scope: 'external',
+    observedAt: now.toISOString(),
     status: !latest ? 'unknown' : comparison < 0 ? 'degraded' : 'healthy',
     summary: !latest
       ? `Running ${APP_VERSION}; the latest release could not be checked.`
@@ -1129,12 +1241,236 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     },
     action: {
       label: 'Upgrade runbook',
-      href: 'https://opsknight.com/docs/v1.3/deployment/upgrade-rollback',
+      href: ADMIN_HEALTH_GUIDES.upgrades,
     },
   });
 
-  const overall = overallStatus(checks);
-  const history = await generate24HourHistory(checks, overall, now);
+  // These signals close important blind spots in the durable control planes. They are
+  // deliberately collected after the baseline checks so a single optional subsystem
+  // can report "unknown" without preventing the rest of the page from rendering.
+  if (databaseAvailable) {
+    try {
+      const [rollup, staleExternalOperations, failedExternalOperations, staleInbound] =
+        await Promise.all([
+          prisma.incidentMetricRollup.findFirst({
+            where: { granularity: 'daily', serviceId: null, teamId: null },
+            orderBy: { date: 'desc' },
+            select: { date: true, updatedAt: true },
+          }),
+          prisma.externalOperation.count({
+            where: {
+              status: { in: ['PENDING', 'PROCESSING', 'AMBIGUOUS'] },
+              updatedAt: { lt: new Date(now.getTime() - 15 * MINUTE) },
+            },
+          }),
+          prisma.externalOperation.count({
+            where: { status: 'FAILED', updatedAt: { gte: new Date(now.getTime() - 24 * HOUR) } },
+          }),
+          prisma.inboundDelivery.count({
+            where: {
+              status: 'PROCESSING',
+              updatedAt: { lt: new Date(now.getTime() - 10 * MINUTE) },
+            },
+          }),
+        ]);
+      const expectedLatestDay = new Date(now);
+      expectedLatestDay.setUTCHours(0, 0, 0, 0);
+      expectedLatestDay.setUTCDate(expectedLatestDay.getUTCDate() - 1);
+      const rollupLagDays = rollup
+        ? Math.max(
+            0,
+            Math.floor((expectedLatestDay.getTime() - rollup.date.getTime()) / (24 * HOUR))
+          )
+        : null;
+      checks.push({
+        id: 'rollups',
+        label: 'Analytics rollup freshness',
+        category: 'workers',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
+        status:
+          rollupLagDays === null
+            ? 'unknown'
+            : rollupLagDays > 1
+              ? 'unhealthy'
+              : rollupLagDays > 0
+                ? 'degraded'
+                : 'healthy',
+        summary: rollup
+          ? `Latest complete daily rollup is ${rollupLagDays} day(s) behind.`
+          : 'No complete daily analytics rollup was found.',
+        details: [
+          `Latest rollup day: ${rollup?.date.toISOString() || 'none'}`,
+          `Last materialized: ${rollup?.updatedAt.toISOString() || 'never'}`,
+        ],
+        impact: 'Stale rollups can make historical reports and executive dashboards incomplete.',
+        telemetry: {
+          rawPayload: { rollupLagDays, latestDate: rollup?.date.toISOString() || null },
+        },
+      });
+      checks.push({
+        id: 'integration-control-plane',
+        label: 'Integration delivery control plane',
+        category: 'alerting',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
+        status:
+          staleExternalOperations > 0 || staleInbound > 0
+            ? 'unhealthy'
+            : failedExternalOperations > 0
+              ? 'degraded'
+              : 'healthy',
+        summary: `${staleExternalOperations} stale external operation(s), ${staleInbound} stale inbound delivery lease(s).`,
+        details: [
+          `Terminal external failures in 24 hours: ${failedExternalOperations}`,
+          'Durable database state is cluster-wide and survives replica restarts.',
+        ],
+        impact:
+          'Stale work delays inbound alerts, ChatOps responses, or external issue synchronization.',
+        telemetry: {
+          rawPayload: {
+            staleExternalOperations,
+            failedExternalOperations24h: failedExternalOperations,
+            staleInboundDeliveries: staleInbound,
+          },
+        },
+      });
+    } catch {
+      checks.push({
+        id: 'control-plane-storage',
+        label: 'Durable control-plane telemetry',
+        category: 'workers',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
+        status: 'unknown',
+        summary: 'Durable rollup and integration state could not be inspected.',
+        details: ['Verify migrations and database permissions for control-plane tables.'],
+      });
+    }
+  }
 
-  return { generatedAt: now.toISOString(), overall, checks, history };
+  const worker = getJobWorkerStatus();
+  const workerSuccessAgeMs = worker.lastSuccessAt
+    ? now.getTime() - worker.lastSuccessAt.getTime()
+    : null;
+  checks.push({
+    id: 'worker-replica',
+    label: 'Local durable-job worker',
+    category: 'workers',
+    scope: 'replica',
+    required: false,
+    observedAt: now.toISOString(),
+    status: !worker.running
+      ? 'informational'
+      : worker.lastError || workerSuccessAgeMs === null || workerSuccessAgeMs > 5 * MINUTE
+        ? 'degraded'
+        : 'healthy',
+    summary: !worker.running
+      ? 'This web replica does not run the durable-job worker.'
+      : workerSuccessAgeMs === null
+        ? 'The local worker has not completed a successful cycle.'
+        : `The local worker last succeeded ${ageLabel(worker.lastSuccessAt)}.`,
+    details: [
+      `Running on this replica: ${worker.running ? 'yes' : 'no'}`,
+      `In flight: ${worker.inFlight ? 'yes' : 'no'}`,
+      'A non-running local worker is informational when dedicated worker replicas are deployed.',
+    ],
+    impact:
+      'Use cluster queue age together with this replica signal to determine actual delivery health.',
+    telemetry: {
+      rawPayload: {
+        running: worker.running,
+        inFlight: worker.inFlight,
+        lastRunAt: worker.lastRunAt?.toISOString() || null,
+        lastSuccessAt: worker.lastSuccessAt?.toISOString() || null,
+        hasLastError: Boolean(worker.lastError),
+      },
+    },
+  });
+
+  const realtime = getRealtimeControlPlaneStatus();
+  checks.push({
+    id: 'realtime',
+    label: 'Realtime event control plane',
+    category: 'workers',
+    scope: 'replica',
+    observedAt: now.toISOString(),
+    status:
+      realtime.consecutiveFailures > 2
+        ? 'unhealthy'
+        : realtime.consecutiveFailures > 0
+          ? 'degraded'
+          : 'healthy',
+    summary:
+      realtime.consecutiveFailures > 0
+        ? `${realtime.consecutiveFailures} consecutive change-feed polling failure(s) on this replica.`
+        : 'The local realtime change feed has no recorded polling failures.',
+    details: [
+      `Connected subscribers on this replica: ${realtime.subscribers}`,
+      `Observed generation: ${realtime.observedGeneration || 'not yet observed'}`,
+      `Last temporal reconciliation: ${realtime.lastReconciliationAt || 'not started'}`,
+    ],
+    impact:
+      'Repeated failures delay dashboard and widget refreshes; durable data remains authoritative.',
+    telemetry: { rawPayload: realtime },
+  });
+
+  for (const check of checks) {
+    check.observedAt ??= now.toISOString();
+    check.scope ??=
+      check.id === 'version'
+        ? 'external'
+        : check.id === 'integrations'
+          ? 'replica'
+          : check.id === 'public-url' || check.id === 'encryption'
+            ? 'configuration'
+            : 'cluster';
+  }
+
+  const score = calculateOperationalScore(checks);
+  const overall = score.overall;
+  const history = await generate24HourHistory(checks, overall, now);
+  const requiredChecks = checks.filter(check => check.required !== false);
+  const knownChecks = requiredChecks.filter(check => check.status !== 'unknown').length;
+
+  return {
+    generatedAt: now.toISOString(),
+    durationMs: Date.now() - collectionStartedAt,
+    overall,
+    scorePercent: score.scorePercent,
+    knownSignalPercent: Math.round((knownChecks / Math.max(1, requiredChecks.length)) * 1000) / 10,
+    checks,
+    history,
+  };
+}
+
+/**
+ * A health page must not become a database load generator. One collection may
+ * contain several independent diagnostics, so requests on a replica share a
+ * short-lived snapshot and a single in-flight collection. `force` bypasses an
+ * existing snapshot but still joins an already-running collection.
+ */
+export async function collectAdminHealth(options?: {
+  force?: boolean;
+}): Promise<AdminHealthReport> {
+  const now = Date.now();
+  if (!options?.force && cachedHealthReport && cachedHealthReport.expiresAt > now) {
+    return cachedHealthReport.report;
+  }
+  if (healthCollectionInFlight) return healthCollectionInFlight;
+
+  healthCollectionInFlight = collectAdminHealthUncached()
+    .then(report => {
+      cachedHealthReport = { report, expiresAt: Date.now() + HEALTH_CACHE_TTL_MS };
+      return report;
+    })
+    .finally(() => {
+      healthCollectionInFlight = null;
+    });
+  return healthCollectionInFlight;
+}
+
+export function resetAdminHealthCacheForTests(): void {
+  cachedHealthReport = null;
+  healthCollectionInFlight = null;
 }

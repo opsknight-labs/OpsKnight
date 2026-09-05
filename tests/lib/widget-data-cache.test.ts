@@ -33,11 +33,20 @@ describe('widget data cache', () => {
   it('keeps user and dashboard filter scopes isolated', async () => {
     getWidgetDataMock.mockResolvedValue({ lastUpdated: new Date() });
 
-    await getCachedWidgetData('user-1', 'ADMIN', { serviceId: 'svc-1' }, 1_000);
-    await getCachedWidgetData('user-2', 'ADMIN', { serviceId: 'svc-1' }, 1_000);
-    await getCachedWidgetData('user-1', 'ADMIN', { serviceId: 'svc-2' }, 1_000);
+    await getCachedWidgetData('user-1', 'USER', { serviceId: 'svc-1' }, 1_000);
+    await getCachedWidgetData('user-2', 'USER', { serviceId: 'svc-1' }, 1_000);
+    await getCachedWidgetData('user-1', 'USER', { serviceId: 'svc-2' }, 1_000);
 
     expect(getWidgetDataMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('shares identical globally authorized projections across users', async () => {
+    getWidgetDataMock.mockResolvedValue({ lastUpdated: new Date() });
+
+    await getCachedWidgetData('admin-1', 'ADMIN', { windowDays: 30 }, 1_000, '8');
+    await getCachedWidgetData('admin-2', 'ADMIN', { windowDays: 30 }, 1_000, '8');
+
+    expect(getWidgetDataMock).toHaveBeenCalledTimes(1);
   });
 
   it('evicts rejected calculations so the next poll can retry', async () => {
@@ -57,5 +66,42 @@ describe('widget data cache', () => {
     expect(
       buildWidgetCacheKey('user-1', 'ADMIN', { startDate: start, serviceId: ['b', 'a'] })
     ).toBe(buildWidgetCacheKey('user-1', 'ADMIN', { serviceId: ['a', 'b'], startDate: start }));
+  });
+
+  it('fences cached projections by durable realtime generation', async () => {
+    getWidgetDataMock
+      .mockResolvedValueOnce({ marker: 'g1' })
+      .mockResolvedValueOnce({ marker: 'g2' });
+
+    await expect(getCachedWidgetData('user-1', 'ADMIN', {}, 1_000, '1')).resolves.toEqual({
+      marker: 'g1',
+    });
+    await expect(getCachedWidgetData('user-1', 'ADMIN', {}, 1_001, '2')).resolves.toEqual({
+      marker: 'g2',
+    });
+    expect(getWidgetDataMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('serves stale data while one background refresh is in flight', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = { lastUpdated: new Date(0), activeIncidents: [] };
+      let finishRefresh!: (value: typeof initial) => void;
+      getWidgetDataMock
+        .mockResolvedValueOnce(initial)
+        .mockReturnValueOnce(new Promise(resolve => (finishRefresh = resolve)));
+
+      await getCachedWidgetData('user-1', 'ADMIN', {}, Date.now());
+      await vi.advanceTimersByTimeAsync(31_000);
+
+      await expect(getCachedWidgetData('user-1', 'ADMIN', {}, Date.now())).resolves.toBe(initial);
+      await expect(getCachedWidgetData('user-1', 'ADMIN', {}, Date.now())).resolves.toBe(initial);
+      expect(getWidgetDataMock).toHaveBeenCalledTimes(2);
+
+      finishRefresh({ ...initial, lastUpdated: new Date() });
+      await vi.runAllTicks();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

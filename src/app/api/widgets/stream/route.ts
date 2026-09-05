@@ -10,26 +10,22 @@ import {
   resolveStreamAuthorization,
   type StreamAuthorization,
 } from '@/lib/realtime-stream-authorization';
+import {
+  getRealtimeChangeGeneration,
+  subscribeToRealtimeChanges,
+} from '@/lib/realtime-change-control-plane';
 
-/**
- * Server-Sent Events (SSE) Stream for Real-time Widget Updates
- * Pushes updates every 10 seconds or on demand
- */
+/** Event-driven SSE stream for filtered dashboard widget projections. */
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(await getAuthOptions());
-    if (!session?.user?.email) {
-      return new Response('Unauthorized', { status: 401 });
-    }
+    if (!session?.user?.email) return new Response('Unauthorized', { status: 401 });
 
     const sessionUser = await prisma.user.findUnique({
       where: { email: session.user.email },
       select: { id: true },
     });
-
-    if (!sessionUser) {
-      return new Response('Unauthorized', { status: 401 });
-    }
+    if (!sessionUser) return new Response('Unauthorized', { status: 401 });
 
     const expectedTokenVersion = session.user.tokenVersion ?? 0;
     const initialAuthorization = await resolveStreamAuthorization(
@@ -39,15 +35,15 @@ export async function GET(request: Request) {
     if (!initialAuthorization) return new Response('Unauthorized', { status: 401 });
     let actor: StreamAuthorization = initialAuthorization;
 
-    const encoder = new TextEncoder();
     const searchParams = new URL(request.url).searchParams;
     const range = searchParams.get('range') || '30';
-    const startDate = searchParams.get('startDate') || undefined;
-    const endDate = searchParams.get('endDate') || undefined;
+    const dateFilter = await buildRetainedDateFilter(
+      range,
+      searchParams.get('startDate') || undefined,
+      searchParams.get('endDate') || undefined
+    );
     const assigneeParam = searchParams.get('assignee');
     const serviceParam = searchParams.get('service');
-
-    const dateFilter = await buildRetainedDateFilter(range, startDate, endDate);
     const baseWidgetFilters = {
       serviceId: serviceParam && serviceParam !== 'all' ? serviceParam : undefined,
       assigneeId: assigneeParam === null ? undefined : assigneeParam === '' ? null : assigneeParam,
@@ -66,99 +62,114 @@ export async function GET(request: Request) {
     };
     const buildWidgetFilters = () => ({
       ...baseWidgetFilters,
-       ...dashboardMetricsScope(actor),
+      ...dashboardMetricsScope(actor),
     });
     let widgetFilters = buildWidgetFilters();
-
+    const encoder = new TextEncoder();
     let cleanup: () => void = () => {};
 
     const stream = new ReadableStream({
       async start(controller) {
         let isClosed = false;
-        let intervalId: NodeJS.Timeout | null = null;
         let isUpdating = false;
+        let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+        let unsubscribeChanges: () => void = () => {};
         let authorizationCounter = 0;
+        let pendingGeneration: string | null | undefined;
 
-        cleanup = () => {
-          isClosed = true;
-          if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = null;
+        const send = (value: unknown) => {
+          if (isClosed) return;
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(value)}\n\n`));
+          } catch (error) {
+            logger.debug('sse.widgets.send_closed', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+            cleanup();
           }
+        };
+        cleanup = () => {
+          if (isClosed) return;
+          isClosed = true;
+          unsubscribeChanges();
+          if (heartbeatInterval) clearInterval(heartbeatInterval);
           try {
             controller.close();
-          } catch (_error) {
-            // Already closed
+          } catch {
+            // The browser or proxy already closed the controller.
           }
-           logger.info('sse.widgets.stream_closed', { userId: actor.id });
+          logger.info('sse.widgets.stream_closed', { userId: actor.id });
         };
 
-        // Send initial data immediately
-        try {
-          const initialData = await getCachedWidgetData(
-             actor.id,
-             actor.role,
-            widgetFilters
-          );
-          if (!isClosed) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(initialData)}\n\n`));
+        const refreshProjection = async (generation: string | null) => {
+          if (isClosed) return;
+          if (isUpdating) {
+            pendingGeneration = generation;
+            return;
           }
-        } catch (error) {
-          logger.error('sse.widgets.initial_error', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        // Set up interval for periodic updates
-        intervalId = setInterval(async () => {
-          if (isClosed || isUpdating) return;
           isUpdating = true;
           try {
-            authorizationCounter++;
-            if (authorizationCounter >= 6) {
-              authorizationCounter = 0;
-              const nextAuthorization = await resolveStreamAuthorization(
-                 actor.id,
-                expectedTokenVersion
-              );
-              if (
-                !nextAuthorization ||
-                 !hasSameStreamAuthorizationScope(actor, nextAuthorization)
-              ) {
-                if (!isClosed) {
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ type: 'authorization_revoked' })}\n\n`)
-                  );
-                }
-                cleanup();
-                return;
-              }
-               actor = nextAuthorization;
-              widgetFilters = buildWidgetFilters();
-            }
-
             const data = await getCachedWidgetData(
-               actor.id,
-               actor.role,
-              widgetFilters
+              actor.id,
+              actor.role,
+              widgetFilters,
+              Date.now(),
+              generation
             );
-            if (!isClosed) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-            }
+            send(data);
           } catch (error) {
             logger.error('sse.widgets.update_error', {
               error: error instanceof Error ? error.message : String(error),
             });
-            cleanup();
+            send({ type: 'error', message: 'Widget updates are temporarily unavailable' });
           } finally {
             isUpdating = false;
+            const pending = pendingGeneration;
+            pendingGeneration = undefined;
+            if (pending !== undefined && !isClosed) void refreshProjection(pending);
           }
-        }, 10000); // Update every 10 seconds
+        };
 
-        // Cleanup on disconnect
-        request.signal.addEventListener('abort', () => {
+        request.signal.addEventListener('abort', cleanup, { once: true });
+        if (request.signal.aborted) {
           cleanup();
-        });
+          return;
+        }
+
+        const initialGeneration = await getRealtimeChangeGeneration();
+        await refreshProjection(initialGeneration);
+        if (isClosed) return;
+        unsubscribeChanges = subscribeToRealtimeChanges(
+          'widgets',
+          initialGeneration,
+          refreshProjection
+        );
+
+        heartbeatInterval = setInterval(async () => {
+          if (isClosed) return;
+          send({ type: 'heartbeat', timestamp: new Date().toISOString() });
+          authorizationCounter += 1;
+          if (authorizationCounter < 2) return;
+          authorizationCounter = 0;
+          try {
+            const nextAuthorization = await resolveStreamAuthorization(
+              actor.id,
+              expectedTokenVersion
+            );
+            if (!nextAuthorization || !hasSameStreamAuthorizationScope(actor, nextAuthorization)) {
+              send({ type: 'authorization_revoked' });
+              cleanup();
+              return;
+            }
+            actor = nextAuthorization;
+            widgetFilters = buildWidgetFilters();
+          } catch (error) {
+            logger.warn('widgets.authorization_recheck_failed', {
+              userId: actor.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }, 30_000);
       },
       cancel() {
         cleanup();
@@ -170,7 +181,7 @@ export async function GET(request: Request) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no', // Disable nginx buffering
+        'X-Accel-Buffering': 'no',
       },
     });
   } catch (error) {

@@ -14,6 +14,7 @@
  */
 
 import { logger } from './logger';
+import type { Prisma } from '@prisma/client';
 
 interface CacheEntry<T> {
   data: T;
@@ -165,11 +166,12 @@ export async function getCachedDashboardMetrics(
   userId: string,
   role: string,
   teamIds: string[],
-  lastHash?: string
+  lastHash?: string,
+  generation?: string | null
 ): Promise<{ data: any; changed: boolean; hash: string } | null> {
   const hasGlobalMetrics = isAppRole(role) && hasCapability(role, CAPABILITIES.METRICS_READ_ALL);
   const scope = hasGlobalMetrics ? 'global' : `user:${userId}`;
-  const key = CacheKeys.dashboardMetrics(userId, scope);
+  const key = `${CacheKeys.dashboardMetrics(userId, scope)}:g:${generation ?? 'initial'}`;
 
   const fetcher = async () => {
     const scope = hasGlobalMetrics
@@ -225,19 +227,17 @@ export async function getCachedRecentIncidents(
   userId: string,
   role: string,
   teamIds: string[],
-  lastHash?: string
+  lastHash?: string,
+  generation?: string | null
 ): Promise<{ data: any; changed: boolean; hash: string } | null> {
   const isPrivileged = isAppRole(role) && hasCapability(role, CAPABILITIES.INCIDENT_READ_ALL);
-  const key = isPrivileged
-    ? CacheKeys.recentIncidents(teamIds.join(',') || 'global')
+  const scopeKey = isPrivileged
+    ? CacheKeys.recentIncidents('global')
     : `recent-incidents:${userId}:${teamIds.slice().sort().join(',')}`;
+  const key = `${scopeKey}:g:${generation ?? 'initial'}`;
 
   const fetcher = async () => {
-    const tenSecondsAgo = new Date(Date.now() - 10000);
-
-    const whereClause: any = {
-      updatedAt: { gte: tenSecondsAgo },
-    };
+    const whereClause: Prisma.IncidentWhereInput = {};
 
     if (!isPrivileged) {
       whereClause.OR = [

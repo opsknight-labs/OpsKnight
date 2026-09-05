@@ -83,24 +83,33 @@ export async function GET(req: NextRequest) {
     const now = new Date();
     const window = await getReportingWindowForDays(days, 'incident', now);
 
-    const { calculateSLAMetrics } = await import('@/lib/sla-server');
-    const metrics = await calculateSLAMetrics({
-      serviceId: effectiveServiceIds,
-      startDate: window.start,
-      endDate: window.end,
-      includeIncidents: visibility.showIncidents,
-      incidentLimit: visibility.showIncidents ? 100 : 1,
-      visibility: 'PUBLIC',
-    });
-
-    const { serializeRecentIncidents } = await import('@/lib/sla');
     const incidents = visibility.showIncidents
-      ? serializeRecentIncidents(metrics.recentIncidents).map(incident =>
-          serializePublicStatusIncident(incident, statusPage)
-        )
+      ? (
+          await prisma.incident.findMany({
+            where: {
+              serviceId: { in: effectiveServiceIds },
+              visibility: 'PUBLIC',
+              createdAt: { gte: window.start, lte: window.end },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              status: true,
+              urgency: true,
+              createdAt: true,
+              resolvedAt: true,
+              service: { select: { name: true, region: true } },
+            },
+          })
+        ).map(incident => serializePublicStatusIncident(incident, statusPage))
       : [];
     const services = visibility.showServices
-      ? metrics.serviceMetrics.map(s => ({ id: s.id, name: s.name }))
+      ? statusPage.services
+          .filter(item => effectiveServiceIds.includes(item.serviceId))
+          .map(item => ({ id: item.service.id, name: item.service.name }))
       : [];
 
     const response = jsonOk(
@@ -112,16 +121,18 @@ export async function GET(req: NextRequest) {
           startDate: window.start.toISOString(),
           endDate: window.end.toISOString(),
           // Retention info
-          effectiveStart: metrics.effectiveStart.toISOString(),
-          effectiveEnd: metrics.effectiveEnd.toISOString(),
-          isClipped: window.isClipped || metrics.isClipped,
+          effectiveStart: window.start.toISOString(),
+          effectiveEnd: window.end.toISOString(),
+          isClipped: window.isClipped,
         },
       },
       200
     );
-    if (statusPage.requireAuth) {
+    if (statusPage.requireAuth || statusPage.statusApiRequireToken) {
       response.headers.set('Cache-Control', 'private, no-store');
       response.headers.set('Vary', 'Cookie, Authorization');
+    } else {
+      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=300');
     }
     return response;
   } catch (error: any) {

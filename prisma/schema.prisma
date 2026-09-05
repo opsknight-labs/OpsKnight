@@ -225,15 +225,15 @@ model ExternalOperation {
 /// Cluster-wide provider admission/cooldown state. Local circuit breakers are
 /// only fast-fail hints; this row is the shared source of truth for replicas.
 model ProviderAdmission {
-  key              String   @id
-  state            String   @default("CLOSED")
+  key              String    @id
+  state            String    @default("CLOSED")
   blockedUntil     DateTime?
-  consecutiveFails Int      @default(0)
+  consecutiveFails Int       @default(0)
   lastSuccessAt    DateTime?
   lastFailureAt    DateTime?
   lastStatusCode   Int?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([state, blockedUntil])
 }
@@ -594,43 +594,43 @@ model Alert {
 }
 
 model Incident {
-  id                     String             @id @default(cuid())
-  title                  String
-  description            String?
-  status                 IncidentStatus     @default(OPEN)
-  urgency                IncidentUrgency    @default(HIGH)
-  visibility             IncidentVisibility @default(PUBLIC)
-  priority               String? // P1, P2.. P5
-  dedupKey               String? // Key for deduplication
-  serviceId              String
-  assigneeId             String?
-  teamId                 String? // Team assignment; DB check constraint keeps it exclusive with assigneeId
-  currentEscalationStep  Int? // Current step index (0-based)
-  nextEscalationAt       DateTime? // When to execute next escalation step
-  escalationStatus       String? // ESCALATING, COMPLETED, PAUSED
-  escalationProcessingAt DateTime? // When escalation processing was claimed
-  escalationGeneration   Int                @default(0) // Stable logical run identity; increments on restart/loop
-  acknowledgedAt         DateTime? // When incident was acknowledged (for SLA tracking)
-  resolvedAt             DateTime? // When incident was resolved (for SLA tracking)
-  snoozedUntil           DateTime? // When to auto-unsnooze (for time-based snoozing)
-  snoozeReason           String? // Reason for snoozing
-  slaPausedMs            BigInt             @default(0) // Materialized closed SLA pause duration
-  slaPauseStartedAt      DateTime? // Current open SLA pause, if any
-  slaAckTargetMs         Int? // Immutable effective ACK target captured when the incident is created
-  slaResolveTargetMs     Int? // Immutable effective resolve target captured when the incident is created
-  slaTargetSource        String? // Provenance for the frozen target (priority/service/default/backfill)
-  slaTargetCapturedAt    DateTime? // When the immutable target contract was captured
+  id                        String                    @id @default(cuid())
+  title                     String
+  description               String?
+  status                    IncidentStatus            @default(OPEN)
+  urgency                   IncidentUrgency           @default(HIGH)
+  visibility                IncidentVisibility        @default(PUBLIC)
+  priority                  String? // P1, P2.. P5
+  dedupKey                  String? // Key for deduplication
+  serviceId                 String
+  assigneeId                String?
+  teamId                    String? // Team assignment; DB check constraint keeps it exclusive with assigneeId
+  currentEscalationStep     Int? // Current step index (0-based)
+  nextEscalationAt          DateTime? // When to execute next escalation step
+  escalationStatus          String? // ESCALATING, COMPLETED, PAUSED
+  escalationProcessingAt    DateTime? // When escalation processing was claimed
+  escalationGeneration      Int                       @default(0) // Stable logical run identity; increments on restart/loop
+  acknowledgedAt            DateTime? // When incident was acknowledged (for SLA tracking)
+  resolvedAt                DateTime? // When incident was resolved (for SLA tracking)
+  snoozedUntil              DateTime? // When to auto-unsnooze (for time-based snoozing)
+  snoozeReason              String? // Reason for snoozing
+  slaPausedMs               BigInt                    @default(0) // Materialized closed SLA pause duration
+  slaPauseStartedAt         DateTime? // Current open SLA pause, if any
+  slaAckTargetMs            Int? // Immutable effective ACK target captured when the incident is created
+  slaResolveTargetMs        Int? // Immutable effective resolve target captured when the incident is created
+  slaTargetSource           String? // Provenance for the frozen target (priority/service/default/backfill)
+  slaTargetCapturedAt       DateTime? // When the immutable target contract was captured
   // ChatOps War-Room fields
-  slackWorkspaceId       String? // Immutable workspace that owns this war-room instance
-  slackChannelId         String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
-  slackChannelName       String? // Channel name (e.g. "inc-104-payments-api")
-  warRoomUrl             String? // Video bridge URL (Jitsi/Zoom/Meet)
-  warRoomArchivedAt      DateTime? // Set when the Slack channel is archived; the channel id is kept for history
+  slackWorkspaceId          String? // Immutable workspace that owns this war-room instance
+  slackChannelId            String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
+  slackChannelName          String? // Channel name (e.g. "inc-104-payments-api")
+  warRoomUrl                String? // Video bridge URL (Jitsi/Zoom/Meet)
+  warRoomArchivedAt         DateTime? // Set when the Slack channel is archived; the channel id is kept for history
   warRoomProvisioningStatus WarRoomProvisioningStatus @default(NONE)
   warRoomProvisioningToken  String?
   warRoomProvisioningAt     DateTime?
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
 
   service                 Service                  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   assignee                User?                    @relation(fields: [assigneeId], references: [id])
@@ -681,6 +681,13 @@ model Incident {
   @@index([serviceId, updatedAt], name: "idx_incident_service_updated_at") // Per-service realtime updates
   // Dashboard filtering by priority (SLA dashboards, widgets, exports)
   @@index([priority, status], name: "idx_incident_priority_status")
+}
+
+/// Bounded transactional signal appended by database triggers whenever data
+/// that feeds realtime incident/dashboard projections changes.
+model RealtimeChange {
+  id        BigInt   @id @default(autoincrement())
+  changedAt DateTime @default(now())
 }
 
 model IncidentSlaPause {
@@ -1069,6 +1076,7 @@ model InAppNotification {
   @@index([userId, readAt]) // For unread count queries
   @@index([userId, readAt, createdAt]) // Optomized for "Unread" queries (readAt: null)
   @@index([createdAt]) // Retention cleanup
+  @@index([createdAt, id]) // Replica-wide notification change feed cursor
 }
 
 // User device tokens for push notifications
@@ -1252,23 +1260,23 @@ enum WarRoomProvisioningStatus {
 }
 
 model ChatOpsIntent {
-  id                String             @id @default(cuid())
-  kind              ChatOpsIntentKind
-  deliveryHash      String
-  workspaceId       String
-  channelId         String?
-  slackUserId       String?
-  encryptedPayload  String
-  status            ChatOpsIntentStatus @default(PENDING)
-  attempt           Int                @default(0)
-  leaseToken        String?
-  leaseExpiresAt    DateTime?
-  effectCompletedAt DateTime?
+  id                  String              @id @default(cuid())
+  kind                ChatOpsIntentKind
+  deliveryHash        String
+  workspaceId         String
+  channelId           String?
+  slackUserId         String?
+  encryptedPayload    String
+  status              ChatOpsIntentStatus @default(PENDING)
+  attempt             Int                 @default(0)
+  leaseToken          String?
+  leaseExpiresAt      DateTime?
+  effectCompletedAt   DateTime?
   responseCompletedAt DateTime?
-  responsePayload   Json?
-  lastError         String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  responsePayload     Json?
+  lastError           String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   @@unique([kind, deliveryHash])
   @@index([status, leaseExpiresAt])
@@ -1688,10 +1696,10 @@ model SLASnapshot {
   totalIncidents        Int
   metAckTime            Int // Count of incidents meeting ack SLA
   metResolveTime        Int // Count of incidents meeting resolve SLA
-  evaluatedAckCount     Int     @default(0)
-  evaluatedResolveCount Int     @default(0)
+  evaluatedAckCount     Int       @default(0)
+  evaluatedResolveCount Int       @default(0)
   complianceScore       Float? // null when no SLA sample was evaluated
-  denominatorUnknown    Boolean @default(false) // legacy snapshot awaiting canonical regeneration
+  denominatorUnknown    Boolean   @default(false) // legacy snapshot awaiting canonical regeneration
   targetAckMinutes      Int? // Immutable definition ACK target used for this materialization
   targetResolveMinutes  Int? // Immutable definition resolve target used for this materialization
   definitionVersion     Int? // Immutable SLA definition version used for this materialization
@@ -1715,12 +1723,14 @@ model SLAPerformanceLog {
 
   durationMs    Int
   incidentCount Int
+  dataSource    String @default("live") // live, rollup, or hybrid request path
 
   @@index([timestamp])
   @@index([durationMs])
   @@index([serviceId, timestamp]) // For service-scoped performance queries
   @@index([teamId, timestamp]) // For team-scoped performance queries
   @@index([timestamp, durationMs]) // For time-range performance analysis
+  @@index([timestamp, dataSource]) // For per-path operational health analysis
   @@map("sla_performance_logs")
 }
 
@@ -1796,13 +1806,13 @@ model RateLimit {
 /// The unique key makes pinning idempotent: re-reacting, or a second person
 /// reacting to the same message, no longer creates duplicate notes.
 model SlackPinnedMessage {
-  id         String   @id @default(cuid())
-  incidentId String
+  id          String   @id @default(cuid())
+  incidentId  String
   workspaceId String?
-  channelId  String // Slack channel the message lives in
-  messageTs  String // Slack message timestamp — unique within a channel
-  pinnedBy   String? // Display name of whoever reacted
-  createdAt  DateTime @default(now())
+  channelId   String // Slack channel the message lives in
+  messageTs   String // Slack message timestamp — unique within a channel
+  pinnedBy    String? // Display name of whoever reacted
+  createdAt   DateTime @default(now())
 
   incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 

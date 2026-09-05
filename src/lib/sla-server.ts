@@ -116,6 +116,8 @@ export type SLAMetricsFilter = IncidentMetricFilter & {
    * Bypass historical rollup path and force live database queries (used for drift detection)
    */
   _forceLive?: boolean;
+  /** Internal: hybrid owns the user-visible measurement, so its live child must not double-log. */
+  _skipPerformanceLog?: boolean;
 };
 
 const allowedStatus = ['OPEN', 'ACKNOWLEDGED', 'SNOOZED', 'SUPPRESSED', 'RESOLVED'] as const;
@@ -673,6 +675,37 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     [finalStart, finalEnd] = [finalEnd, finalStart];
   }
 
+  const performanceWindowDays = Math.max(
+    1,
+    Math.ceil((finalEnd.getTime() - finalStart.getTime()) / (24 * 60 * 60 * 1000))
+  );
+  const recordPerformance = async (
+    dataSource: 'live' | 'rollup' | 'hybrid',
+    durationMs: number,
+    incidentCount: number
+  ): Promise<void> => {
+    if (filters._skipPerformanceLog) return;
+    const serviceId = Array.isArray(filters.serviceId)
+      ? filters.serviceId[0]
+      : filters.serviceId || null;
+    const teamId = Array.isArray(filters.teamId) ? filters.teamId[0] : filters.teamId || null;
+    const id = `perf_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    try {
+      await prisma.$executeRaw`
+        INSERT INTO sla_performance_logs
+          (id, timestamp, "serviceId", "teamId", "windowDays", "durationMs", "incidentCount", "dataSource")
+        VALUES
+          (${id}, NOW(), ${serviceId}, ${teamId}, ${performanceWindowDays}, ${durationMs}, ${incidentCount}, ${dataSource})
+      `;
+    } catch (error) {
+      // Telemetry must never break the user-visible analytics request.
+      logger.warn('[SLA] Failed to persist performance measurement', {
+        dataSource,
+        errorType: error instanceof Error ? error.name : 'unknown',
+      });
+    }
+  };
+
   const { start: alertStart, end: alertEnd } = resolveReportingWindow({
     context: timeContext,
     policy: retentionPolicy,
@@ -791,6 +824,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       // Drop windowDays so the dates above take precedence.
       windowDays: undefined,
       includeAllTime: false,
+      _skipPerformanceLog: true,
     });
 
     const merged = mergeHybridMetrics(historicalMetrics, liveMetrics);
@@ -802,6 +836,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       mergedIncidents: merged.totalIncidents,
       dataSource: 'hybrid',
     });
+    await recordPerformance('hybrid', totalQueryDuration, merged.totalIncidents);
     return merged;
   }
 
@@ -836,6 +871,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       incidentCount: scopedRollupMetrics.totalIncidents,
       dataSource: 'rollup',
     });
+
+    await recordPerformance('rollup', totalQueryDuration, scopedRollupMetrics.totalIncidents);
 
     return scopedRollupMetrics;
   }
@@ -2171,29 +2208,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       fetchedForDisplay: displayIncidents.length,
     },
   });
-  // Write performance log to database using raw SQL (bypasses Prisma client cache)
-  const serviceIdValue = Array.isArray(filters.serviceId)
-    ? filters.serviceId[0]
-    : filters.serviceId || null;
-  const teamIdValue = Array.isArray(filters.teamId) ? filters.teamId[0] : filters.teamId || null;
-  const perfId = `perf_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-  // Fire-and-forget perf log. Explicitly `void`-wrapped so a rejected
-  // promise can't surface as an unhandled rejection if the .catch above
-  // ever throws synchronously, and so static analyzers don't flag the
-  // dangling promise. The internal try/catch ensures we never abort the
-  // metrics response on a logging failure.
-  void (async () => {
-    try {
-      await prisma.$executeRaw`
-        INSERT INTO sla_performance_logs (id, timestamp, "serviceId", "teamId", "windowDays", "durationMs", "incidentCount")
-        VALUES (${perfId}, NOW(), ${serviceIdValue}, ${teamIdValue}, ${actualWindowDays}, ${totalQueryDuration}, ${totalIncidentCount})
-      `;
-      logger.info('[SLA] Performance log written', { id: perfId });
-    } catch (err) {
-      logger.error('[SLA] Failed to log performance', { err: String(err) });
-    }
-  })();
+  await recordPerformance('live', totalQueryDuration, totalIncidentCount);
 
   // Slow query alert (>10s threshold)
   if (totalQueryDuration > 10000) {

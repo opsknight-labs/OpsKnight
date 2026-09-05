@@ -53,6 +53,7 @@ export function WidgetProvider({ children, initialData }: WidgetProviderProps) {
   const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY_MS);
   const reconnectAttemptsRef = useRef(0);
   const connectRef = useRef<() => void>(() => {});
+  const authorizationRevokedRef = useRef(false);
 
   /**
    * Cleans up SSE connection and timers
@@ -74,7 +75,7 @@ export function WidgetProvider({ children, initialData }: WidgetProviderProps) {
    */
   const connect = useCallback(() => {
     // Don't connect if unmounted or already connected
-    if (!isMountedRef.current) return;
+    if (!isMountedRef.current || authorizationRevokedRef.current) return;
     if (eventSourceRef.current?.readyState === EventSource.OPEN) return;
 
     // Cleanup any existing connection
@@ -107,6 +108,26 @@ export function WidgetProvider({ children, initialData }: WidgetProviderProps) {
 
         try {
           const newData = JSON.parse(event.data);
+
+          if (newData.type === 'heartbeat') return;
+          if (newData.type === 'authorization_revoked') {
+            authorizationRevokedRef.current = true;
+            eventSource.close();
+            eventSourceRef.current = null;
+            setConnectionState({
+              isConnected: false,
+              error: 'Real-time authorization was revoked. Sign in again to reconnect.',
+              reconnectAttempts: MAX_RECONNECT_ATTEMPTS,
+            });
+            return;
+          }
+          if (newData.type === 'error') {
+            setConnectionState(previous => ({
+              ...previous,
+              error: newData.message || 'Widget updates are temporarily unavailable.',
+            }));
+            return;
+          }
 
           // Safely parse lastUpdated date
           const lastUpdated = newData.lastUpdated ? new Date(newData.lastUpdated) : new Date();
@@ -187,7 +208,11 @@ export function WidgetProvider({ children, initialData }: WidgetProviderProps) {
   // Handle visibility change - reconnect when tab becomes visible
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !connectionState.isConnected) {
+      if (
+        document.visibilityState === 'visible' &&
+        !connectionState.isConnected &&
+        !authorizationRevokedRef.current
+      ) {
         // Reset backoff and attempt reconnection when tab becomes visible
         reconnectDelayRef.current = INITIAL_RECONNECT_DELAY_MS;
         reconnectAttemptsRef.current = 0;

@@ -30,15 +30,15 @@ Average traffic is insufficient for incident-management capacity planning. Test 
 
 The following v1.4 values are implementation guardrails. They prevent one path from consuming unlimited resources; they are not benchmark results or service-level objectives.
 
-| Path                                  | Shipped behavior                                                                                                                                      |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Published Events API                  | 120 requests per 60-second fixed window for the route's integration/API-key bucket.                                                                   |
-| Standard provider-integration handler | 100 requests per 60 seconds per integration by default; some provider-specific or legacy routes differ.                                               |
-| PostgreSQL background jobs            | A scheduler cycle claims at most 100 due rows and processes them with concurrency 15. The dynamic scheduler normally runs every 15 seconds–2 minutes. |
-| Immediate notification queue          | Each application process holds at most 5,000 pending items, takes batches of 50, and uses per-channel concurrency 10. A full queue drops new items.   |
-| Notification channel guards           | Per process and per minute: email 100, SMS 50, push 200, Slack 100, webhook 100, WhatsApp 30. Provider quotas can be lower.                           |
-| Real-time dashboard stream            | Each connected client polls cached incident/metric functions every five seconds and receives a heartbeat about every 30 seconds.                      |
-| Real-time cache                       | Process-local entries use short TTLs and a 5,000-entry bound. Replicas do not share this cache.                                                       |
+| Path                                  | Shipped behavior                                                                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Published Events API                  | 120 requests per 60-second fixed window for the route's integration/API-key bucket.                                                                                             |
+| Standard provider-integration handler | 100 requests per 60 seconds per integration by default; some provider-specific or legacy routes differ.                                                                         |
+| PostgreSQL background jobs            | A scheduler cycle claims at most 100 due rows and processes them with concurrency 15. The dynamic scheduler normally runs every 15 seconds–2 minutes.                           |
+| Immediate notification queue          | Each application process holds at most 5,000 pending items, takes batches of 50, and uses per-channel concurrency 10. A full queue drops new items.                             |
+| Notification channel guards           | Per process and per minute: email 100, SMS 50, push 200, Slack 100, webhook 100, WhatsApp 30. Provider quotas can be lower.                                                     |
+| Real-time dashboard stream            | Incident/service writes advance a durable change generation. Each replica polls that signal once per second and fans changes out to its local dashboard and widget subscribers. |
+| Real-time cache                       | Process-local, generation-fenced projections coalesce equivalent refreshes. Cache entries are bounded; PostgreSQL carries the cross-replica change signal.                      |
 
 See [API rate limiting](../api/rate-limiting) for the complete client-visible contract. Do not add the values above together to infer total notification or incident throughput. A slow provider, expensive query, or wide escalation fan-out can lower observed capacity significantly.
 
@@ -55,7 +55,15 @@ Multiple application replicas can use the same PostgreSQL database. For every re
 5. Allow long-lived SSE responses at the load balancer or reverse proxy and disable response buffering for them.
 6. Drain traffic and in-flight work before stopping the process.
 
-Horizontal application scaling does not turn process-local state into shared state. Each replica has its own immediate notification queue, real-time cache, and circuit-breaker state. A process exit can lose items that have not reached durable storage. Review [Technical architecture](./technical-architecture) before choosing a high-availability topology.
+Horizontal application scaling does not turn process-local state into shared state. Each replica has its own immediate notification queue, projection cache, and circuit-breaker state. Realtime invalidation is an exception: transaction-level PostgreSQL triggers append to a bounded `RealtimeChange` signal, and every active replica observes that durable generation. A process exit can still lose items that have not reached durable storage. Review [Technical architecture](./technical-architecture) before choosing a high-availability topology.
+
+### Realtime event control plane
+
+Dashboard and widget streams do not run projection queries on a per-client timer. An incident or service mutation appends a generation in the same database transaction. Each application process runs at most one lightweight change-feed poll while it has subscribers, then fans an observed generation out locally. Generation-scoped cache keys singleflight equivalent authorization/filter projections across connections.
+
+The feed is deliberately level-triggered: consumers need to know that state changed, not replay every mutation. PostgreSQL sequence values are not treated as commit ordering. The shared observer also emits a 30-second reconciliation epoch, which catches out-of-order concurrent commits and refreshes time-derived values such as rolling 24-hour metrics and SLA warning windows. This is one shared replica timer, not a per-client database poll. A bounded tail is retained, so disconnected replicas and newly connected clients load a current snapshot instead of replaying history. Thirty-second SSE heartbeats keep proxies alive; authorization is revalidated independently every minute. If the change-clock query temporarily fails, the stream stays connected, applies bounded retry backoff, and reports the failure through logs, deep health, and Prometheus.
+
+Monitor `opsknight_realtime_subscribers`, `opsknight_realtime_observed_generation`, `opsknight_realtime_change_age_seconds`, and `opsknight_realtime_clock_errors_total`. A growing error counter or stale generation during active incident mutations indicates database/proxy trouble. This design requires every replica to use the same migrated PostgreSQL database, matching the enterprise HA values and the release topology in #382.
 
 ## Budget PostgreSQL connections
 
@@ -156,8 +164,9 @@ Do not disable rate limits or raise queue/database limits as a first response wi
 - `src/lib/cron-scheduler.ts` — scheduler cadence, ownership, and job-cycle limits.
 - `src/lib/jobs/queue.ts` — durable job claims, concurrency, retry, and statistics.
 - `src/lib/notification-queue.ts` — process-local queue limits and channel guards.
-- `src/lib/realtime-cache.ts` — process-local cache TTLs and bound.
-- `src/app/api/realtime/stream/route.ts` — authenticated dashboard SSE polling.
+- `src/lib/realtime-change-control-plane.ts` — one durable change observer and local subscriber fanout per replica.
+- `src/lib/realtime-cache.ts` and `src/lib/widget-data-cache.ts` — bounded, generation-fenced projection caches.
+- `src/app/api/realtime/stream/route.ts` and `src/app/api/widgets/stream/route.ts` — authenticated event-driven SSE projections.
 - `src/lib/rate-limit.ts` and `src/lib/integrations/rate-limiter.ts` — database-backed request limits.
 - `src/lib/admin-health.ts` — administrator health checks and SLA-query observations.
 
