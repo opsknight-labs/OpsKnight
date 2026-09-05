@@ -1723,12 +1723,14 @@ model SLAPerformanceLog {
 
   durationMs    Int
   incidentCount Int
+  dataSource    String @default("live") // live, rollup, or hybrid request path
 
   @@index([timestamp])
   @@index([durationMs])
   @@index([serviceId, timestamp]) // For service-scoped performance queries
   @@index([teamId, timestamp]) // For team-scoped performance queries
   @@index([timestamp, durationMs]) // For time-range performance analysis
+  @@index([timestamp, dataSource]) // For per-path operational health analysis
   @@map("sla_performance_logs")
 }
 

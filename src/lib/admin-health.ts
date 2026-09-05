@@ -52,6 +52,15 @@ export type CheckTelemetry = {
     slowCount?: number;
     slowRate24h?: number;
     trend?: 'improving' | 'stable' | 'regressing' | 'insufficient-data';
+    byDataSource?: Record<
+      'live' | 'rollup' | 'hybrid',
+      {
+        sampleCount1h: number;
+        sampleCount24h: number;
+        p95Ms1h: number | null;
+        p95Ms24h: number | null;
+      }
+    >;
   };
   rawPayload?: Record<string, unknown>;
 };
@@ -114,6 +123,7 @@ type DatabaseCapacityRow = {
 };
 
 type SlaPerformanceSummaryRow = {
+  dataSource: string | null;
   sampleCount24h: number;
   sampleCount1h: number;
   p50Ms24h: number | null;
@@ -767,8 +777,9 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
     try {
       const since24h = new Date(now.getTime() - 24 * HOUR);
       const since1h = new Date(now.getTime() - HOUR);
-      const [metrics] = await prisma.$queryRaw<SlaPerformanceSummaryRow[]>`
+      const metricRows = await prisma.$queryRaw<SlaPerformanceSummaryRow[]>`
         SELECT
+          "dataSource",
           COUNT(*)::int AS "sampleCount24h",
           COUNT(*) FILTER (WHERE timestamp >= ${since1h})::int AS "sampleCount1h",
           percentile_cont(0.50) WITHIN GROUP (ORDER BY "durationMs")::double precision AS "p50Ms24h",
@@ -789,7 +800,24 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
           AVG("incidentCount") FILTER (WHERE timestamp >= ${since1h})::double precision AS "avgIncidents1h"
         FROM sla_performance_logs
         WHERE timestamp >= ${since24h}
+        GROUP BY GROUPING SETS ((), ("dataSource"))
+        ORDER BY "dataSource" NULLS FIRST
       `;
+      const metrics = metricRows.find(row => row.dataSource === null);
+      const sourceSummary = (dataSource: 'live' | 'rollup' | 'hybrid') => {
+        const row = metricRows.find(candidate => candidate.dataSource === dataSource);
+        return {
+          sampleCount1h: row?.sampleCount1h ?? 0,
+          sampleCount24h: row?.sampleCount24h ?? 0,
+          p95Ms1h: row?.p95Ms1h ?? null,
+          p95Ms24h: row?.p95Ms24h ?? null,
+        };
+      };
+      const byDataSource = {
+        live: sourceSummary('live'),
+        rollup: sourceSummary('rollup'),
+        hybrid: sourceSummary('hybrid'),
+      };
       const sampleCount24h = metrics?.sampleCount24h ?? 0;
       const sampleCount1h = metrics?.sampleCount1h ?? 0;
       const recentP95 = metrics?.p95Ms1h ?? null;
@@ -830,7 +858,9 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
               : `No executions in the last hour; historical 24h p95 was ${healthDurationLabel(dailyP95)}.`,
         details:
           sampleCount24h === 0
-            ? ['SLA performance metrics require recorded calculation events.']
+            ? [
+                'SLA performance metrics require real calculation requests; no synthetic probe is generated.',
+              ]
             : [
                 `24 hours: ${sampleCount24h} queries, p50 ${healthDurationLabel(metrics?.p50Ms24h)}, p95 ${healthDurationLabel(dailyP95)}, max ${healthDurationLabel(metrics?.maxMs24h)}`,
                 `Slow queries over 10s: ${metrics?.slowCount24h ?? 0} (${slowRate24h}%) in 24h`,
@@ -844,6 +874,11 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
                       'Last hour: no timing samples; current SLA-query performance is not established.',
                       `Average incidents scanned per historical run: ${Math.round(metrics?.avgIncidents24h ?? 0)}`,
                     ]),
+                ...Object.entries(byDataSource).map(([dataSource, source]) => {
+                  return source.sampleCount24h === 0
+                    ? `${dataSource}: no measured requests in 24h`
+                    : `${dataSource}: ${source.sampleCount1h} requests / p95 ${healthDurationLabel(source.p95Ms1h)} in 1h; ${source.sampleCount24h} requests / p95 ${healthDurationLabel(source.p95Ms24h)} in 24h`;
+                }),
               ],
         telemetry: {
           slaMetrics: {
@@ -859,6 +894,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
               displayWindow === '1h' ? (metrics?.slowCount1h ?? 0) : (metrics?.slowCount24h ?? 0),
             trend,
             slowRate24h,
+            byDataSource,
           },
           rawPayload: {
             window1h: {
@@ -882,6 +918,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
               averageIncidentsScanned: metrics?.avgIncidents24h ?? null,
             },
             trend,
+            byDataSource,
           },
         },
         action: {
