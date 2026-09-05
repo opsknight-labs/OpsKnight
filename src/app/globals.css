@@ -49,7 +49,7 @@
   --color-neutral-900: #111827;
 
   /* Background Colors - Clean & Sophisticated */
-  --bg-primary: #f8fafc;
+  --bg-primary: #e2e8f0;
   --bg-secondary: #ffffff;
   --bg-dark: #111827;
   --bg-surface: #ffffff;
@@ -68,8 +68,8 @@
   --text-disabled: #9ca3af;
 
   /* Border Colors */
-  --border: #e5e7eb;
-  --border-hover: #d1d5db;
+  --border: #cbd5e1;
+  --border-hover: #94a3b8;
   --border-focus: rgba(15, 23, 42, 0.2);
   --border-error: var(--color-error);
 
@@ -83,8 +83,8 @@
 
   /* Shadows */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.07);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
   --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
   --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.15);
@@ -790,6 +790,7 @@ select option {
   height: 100vh;
   height: 100dvh;
   overflow-y: auto;
+  background-color: var(--bg-primary);
 }
 
 .page-shell {

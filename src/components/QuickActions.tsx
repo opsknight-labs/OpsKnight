@@ -117,7 +117,7 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
       <DropdownMenuTrigger asChild>
         <Button
           variant="default"
-          className="h-8 sm:h-9 px-2.5 sm:px-3 gap-1.5 font-semibold text-xs sm:text-[13px] rounded-lg shadow-sm shadow-rose-600/25 transition-all duration-200 active:scale-95 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white border border-rose-400/30 hover:border-rose-300/50 hover:shadow-rose-600/35 focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 select-none cursor-pointer"
+          className="h-8 sm:h-9 px-2.5 sm:px-3 gap-1.5 font-semibold text-xs sm:text-[13px] rounded-lg shadow-xs transition-all duration-200 active:scale-95 bg-[#18181b] hover:bg-[#27272a] text-white border border-zinc-700/80 hover:border-zinc-500/80 focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 select-none cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 stroke-[2.5]" />
           <span className="hidden sm:inline tracking-tight">Create</span>
@@ -126,19 +126,19 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="w-64 p-1 overflow-hidden border border-border shadow-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl z-[1050] rounded-xl"
+        className="w-64 p-1 overflow-hidden border border-border shadow-xl bg-white/95 dark:bg-[#121216]/95 backdrop-blur-xl z-[1050] rounded-xl"
       >
         {/* Comfortable Header */}
-        <div className="relative p-3 bg-gradient-to-br from-primary/90 via-primary to-primary/90 text-primary-foreground overflow-hidden rounded-lg mb-1 border-b border-white/10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_50%)]" />
+        <div className="relative p-3 bg-gradient-to-br from-[#18181b] via-[#121216] to-[#09090b] text-white overflow-hidden rounded-lg mb-1 border-b border-zinc-800/80">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_50%)]" />
 
           <div className="relative z-10 flex items-center gap-2.5">
-            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 border border-white/20 shadow-sm backdrop-blur-md shrink-0">
+            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 border border-zinc-700/60 shadow-xs backdrop-blur-md shrink-0">
               <Sparkles className="h-4 w-4 text-white" />
             </div>
             <div className="flex flex-col min-w-0 flex-1">
               <p className="text-sm font-semibold truncate leading-tight text-white">Create New</p>
-              <p className="text-xs text-white/75 font-normal truncate">Select resource type</p>
+              <p className="text-xs text-zinc-400 font-normal truncate">Select resource type</p>
             </div>
           </div>
         </div>

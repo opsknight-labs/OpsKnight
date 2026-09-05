@@ -95,7 +95,7 @@ export default function DashboardCommandCenter({
     : null;
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] text-slate-100 p-4 md:p-6 mb-6 shadow-xl ring-1 ring-white/5">
+    <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] text-slate-100 p-4 md:p-6 mb-6 shadow-xl ring-1 ring-white/5">
       {/* Header */}
       <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-6 mb-6">
         <div className="space-y-3">
@@ -132,7 +132,7 @@ export default function DashboardCommandCenter({
             <Badge
               variant="outline"
               size="xs"
-              className="text-xs text-slate-300 border-slate-700/80 bg-slate-900/70"
+              className="text-xs text-slate-300 border-zinc-700/80 bg-zinc-900/70"
             >
               Range {rangeLabel}
             </Badge>
@@ -205,6 +205,7 @@ export default function DashboardCommandCenter({
           description={`${currentTriggeredCount.toLocaleString()} Triggered · ${currentAcknowledgedCount.toLocaleString()} Acknowledged`}
           href={activeHref}
           variant="hero"
+          tone={currentActiveCount > 0 ? 'rose' : 'default'}
           tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.activeIncidents)}
           dataState={metricDataState}
           asOf={metricsAsOf}
@@ -225,6 +226,7 @@ export default function DashboardCommandCenter({
           value={metricsResolvedCount}
           rangeLabel={metricScopeLabel('selected_period', rangeLabel)}
           variant="hero"
+          tone={metricsResolvedCount > 0 ? 'emerald' : 'default'}
           href={resolvedHref}
           tooltip={metricDefinitionTooltip(
             INCIDENT_METRIC_DEFINITIONS.resolvedIncidents,
@@ -238,6 +240,7 @@ export default function DashboardCommandCenter({
           value={unassignedCount}
           rangeLabel={metricScopeLabel('current')}
           variant="hero"
+          tone={unassignedCount > 0 ? 'amber' : 'default'}
           href={unassignedHref}
           tooltip={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.unassignedActive)}
           dataState={metricDataState}
