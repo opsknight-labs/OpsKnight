@@ -11,6 +11,17 @@ import { getRealtimeControlPlaneStatus } from '@/lib/realtime-change-control-pla
 export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 export type HealthCategory = 'database' | 'workers' | 'alerting' | 'security' | 'platform';
 
+/** Stable documentation channel; never pin health remediation to an aging release. */
+export const ADMIN_HEALTH_GUIDES = {
+  monitoring: 'https://opsknight.com/docs/latest/deployment/monitoring/',
+  scalability: 'https://opsknight.com/docs/latest/core-concepts/scalability/',
+  migrations: 'https://opsknight.com/docs/latest/deployment/database-migrations/',
+  maintenance: 'https://opsknight.com/docs/latest/deployment/maintenance/',
+  sla: 'https://opsknight.com/docs/latest/core-concepts/analytics/',
+  encryption: 'https://opsknight.com/docs/latest/security/encryption/',
+  upgrades: 'https://opsknight.com/docs/latest/deployment/upgrade-rollback/',
+} as const;
+
 export type CheckTelemetry = {
   latencyMs?: number;
   latencyThresholdMs?: number;
@@ -425,7 +436,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
       },
       action: {
         label: 'Monitoring guide',
-        href: 'https://opsknight.com/docs/v1.3/operations/monitoring',
+        href: ADMIN_HEALTH_GUIDES.monitoring,
       },
     });
   } catch (error) {
@@ -517,7 +528,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
           : undefined,
         action: {
           label: 'Capacity guide',
-          href: 'https://opsknight.com/docs/v1.3/core-concepts/scalability',
+          href: ADMIN_HEALTH_GUIDES.scalability,
         },
       });
     } catch {
@@ -604,7 +615,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         },
         action: {
           label: 'Migration runbook',
-          href: 'https://opsknight.com/docs/v1.3/deployment/database-migrations',
+          href: ADMIN_HEALTH_GUIDES.migrations,
         },
       });
     } catch {
@@ -657,7 +668,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         },
         action: {
           label: 'Maintenance guide',
-          href: 'https://opsknight.com/docs/v1.3/deployment/maintenance',
+          href: ADMIN_HEALTH_GUIDES.maintenance,
         },
       });
     } catch {
@@ -784,7 +795,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
         },
         action: {
           label: 'SLA guide',
-          href: 'https://opsknight.com/docs/v1.3/core-concepts/sla-management',
+          href: ADMIN_HEALTH_GUIDES.sla,
         },
       });
     } catch {
@@ -1072,7 +1083,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
     },
     action: {
       label: 'Encryption guide',
-      href: 'https://opsknight.com/docs/v1.3/security/encryption',
+      href: ADMIN_HEALTH_GUIDES.encryption,
     },
   });
 
@@ -1102,7 +1113,7 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
     },
     action: {
       label: 'Upgrade runbook',
-      href: 'https://opsknight.com/docs/v1.3/deployment/upgrade-rollback',
+      href: ADMIN_HEALTH_GUIDES.upgrades,
     },
   });
 
