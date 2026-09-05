@@ -17,6 +17,11 @@ import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
 } from '@/lib/integrations/request-security';
+import {
+  SnsEnvelope,
+  trustedSnsUrl,
+  verifySnsMessage,
+} from '@/lib/integrations/aws-sns-verification';
 
 const LEGACY_REQUIRED_MESSAGE = 'Please fill in all required fields.';
 const LEGACY_INVALID_INPUT_MESSAGE = 'Please check your input and try again.';
@@ -104,40 +109,42 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Handle SNS SubscriptionConfirmation (auto-confirm)
-      if (body.Type === 'SubscriptionConfirmation' && body.SubscribeURL) {
+      const isSnsEnvelope = typeof body.Type === 'string';
+      let verifiedSns: SnsEnvelope | null = null;
+      if (isSnsEnvelope) {
+        const validation = validatePayload(SNSNotificationSchema, body);
+        if (!validation.success) {
+          return jsonError(
+            new AppError({
+              code: 'INTEGRATION_PAYLOAD_INVALID',
+              userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+            }),
+            400
+          );
+        }
+        if (!integration.snsTopicArn) return jsonError('SNS topic is not configured', 403);
+        try {
+          verifiedSns = validation.data as SnsEnvelope;
+          await verifySnsMessage(verifiedSns, integration.snsTopicArn);
+        } catch (error) {
+          logger.warn('api.integration.cloudwatch_sns_verification_failed', {
+            integrationId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return jsonError('SNS verification failed', 403);
+        }
+      }
+
+      // Handle only cryptographically verified, topic-bound confirmations.
+      if (verifiedSns?.Type === 'SubscriptionConfirmation' && verifiedSns.SubscribeURL) {
         logger.info('api.integration.cloudwatch_subscription_confirmation', {
           integrationId,
-          topicArn: body.TopicArn,
+          topicArn: verifiedSns.TopicArn,
         });
 
         // Automatically confirm the subscription by visiting the SubscribeURL
         try {
-          // Strict SSRF protection: only allow well-formed AWS SNS HTTPS endpoints
-          const validateSnsUrl = (urlString: string): string => {
-            let url: URL;
-            try {
-              url = new URL(urlString);
-            } catch {
-              throw new Error('Invalid URL format');
-            }
-
-            if (url.protocol !== 'https:') {
-              throw new Error('Protocol must be https');
-            }
-
-            const hostname = url.hostname.toLowerCase();
-            // Match sns.<region>.amazonaws.com and sns.<region>.amazonaws.com.cn
-            const snsHostPattern = /^sns\.[a-z0-9-]+\.amazonaws\.com(\.cn)?$/;
-            if (!snsHostPattern.test(hostname)) {
-              throw new Error('Invalid SNS host');
-            }
-
-            // Return reconstructed string to break taint chain
-            return `https://${hostname}${url.pathname}${url.search}`;
-          };
-
-          const safeUrlString = validateSnsUrl(body.SubscribeURL);
+          const safeUrlString = trustedSnsUrl(verifiedSns.SubscribeURL, 'subscription').toString();
 
           // Log safety check pass
           logger.info('api.integration.cloudwatch_subscription_url_validated', {
@@ -145,11 +152,14 @@ export async function POST(req: NextRequest) {
             host: new URL(safeUrlString).hostname,
           });
 
-          const confirmResponse = await fetch(safeUrlString);
+          const confirmResponse = await fetch(safeUrlString, {
+            signal: AbortSignal.timeout(5_000),
+            redirect: 'error',
+          });
           if (confirmResponse.ok) {
             logger.info('api.integration.cloudwatch_subscription_confirmed', {
               integrationId,
-              topicArn: body.TopicArn,
+              topicArn: verifiedSns.TopicArn,
             });
             return jsonOk({ status: 'subscription_confirmed' }, 200);
           } else {
@@ -171,19 +181,10 @@ export async function POST(req: NextRequest) {
       // Handle SNS format vs direct CloudWatch format
       let alarmMessage: CloudWatchAlarmMessage;
 
-      if (body.Type === 'Notification' && body.Message) {
-        // Validate SNS wrapper
-        const snsValidation = validatePayload(SNSNotificationSchema, body);
-        if (!snsValidation.success) {
-          logger.warn('api.integration.cloudwatch_sns_validation_failed', {
-            errors: snsValidation.errors,
-            integrationId,
-          });
-        }
-
+      if (verifiedSns?.Type === 'Notification') {
         // Parse and validate embedded CloudWatch message
         try {
-          const parsedMessage = JSON.parse(body.Message);
+          const parsedMessage = JSON.parse(verifiedSns.Message);
           const messageValidation = validatePayload(CloudWatchAlarmSchema, parsedMessage);
           if (!messageValidation.success) {
             logger.warn('api.integration.cloudwatch_message_validation_failed', {

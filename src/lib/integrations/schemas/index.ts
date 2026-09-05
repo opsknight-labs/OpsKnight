@@ -53,11 +53,21 @@ export const CloudWatchAlarmSchema = z.object({
 
 // SNS wrapper for CloudWatch
 export const SNSNotificationSchema = z.object({
-  Type: z.literal('Notification'),
-  Message: z.string(),
-  MessageId: z.string().optional(),
-  TopicArn: z.string().optional(),
-  Timestamp: z.string().optional(),
+  Type: z.enum(['Notification', 'SubscriptionConfirmation', 'UnsubscribeConfirmation']),
+  Message: z.string().min(1),
+  MessageId: z.string().min(1),
+  TopicArn: z.string().startsWith('arn:'),
+  Timestamp: z.string().datetime(),
+  SignatureVersion: z.enum(['1', '2']),
+  Signature: z.string().min(1),
+  SigningCertURL: z.string().url(),
+  Subject: z.string().optional(),
+  SubscribeURL: z.string().url().optional(),
+  Token: z.string().optional(),
+}).superRefine((value, ctx) => {
+  if (value.Type !== 'Notification' && (!value.SubscribeURL || !value.Token)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Confirmation messages require SubscribeURL and Token' });
+  }
 });
 
 export type CloudWatchAlarmMessage = z.infer<typeof CloudWatchAlarmSchema>;

@@ -26,7 +26,10 @@ import { decryptStoredSecret } from '@/lib/encryption';
 import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
-  rejectWebhookReplay,
+  claimInboundDelivery,
+  completeInboundDelivery,
+  failInboundDelivery,
+  type InboundDeliveryClaim,
 } from './request-security';
 
 const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
@@ -67,6 +70,8 @@ export function createIntegrationHandler<T>(
     const startTime = performance.now();
     let integrationId: string | null = null;
     let integrationType: string = options.integrationType;
+    let deliveryId: string | null = null;
+    let deliveryClaim: Extract<InboundDeliveryClaim, { disposition: 'CLAIMED' }> | null = null;
 
     try {
       const { searchParams } = new URL(req.url);
@@ -167,7 +172,7 @@ export function createIntegrationHandler<T>(
           }
         }
 
-        let deliveryId = req.headers.get('x-github-delivery') || req.headers.get('x-request-id');
+        deliveryId = req.headers.get('x-github-delivery') || req.headers.get('x-request-id');
         if (!deliveryId && provider === 'sentry') {
           const timestamp = req.headers.get('sentry-hook-timestamp');
           const signature = req.headers.get('sentry-hook-signature');
@@ -181,9 +186,15 @@ export function createIntegrationHandler<T>(
             // Payload parsing below returns the canonical invalid-payload error.
           }
         }
-        if (await rejectWebhookReplay(integration.id, deliveryId)) {
-          throw IntegrationErrors.invalidSignature({ reason: 'Duplicate webhook delivery' });
+        const claim = await claimInboundDelivery(integration.id, provider, deliveryId);
+        if (claim?.disposition === 'COMPLETED') return jsonOk({ status: 'duplicate' }, 200);
+        if (claim?.disposition === 'BUSY') {
+          return new Response(JSON.stringify({ error: 'DELIVERY_IN_PROGRESS' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json', 'Retry-After': '5' },
+          });
         }
+        if (claim?.disposition === 'CLAIMED') deliveryClaim = claim;
       }
 
       let body: unknown;
@@ -220,11 +231,20 @@ export function createIntegrationHandler<T>(
       };
 
       const result = await processor(ctx);
+      if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
 
       recordWebhookReceived(integrationType, integrationId, true, performance.now() - startTime);
 
       return jsonOk({ status: 'success', result }, 202);
     } catch (error) {
+      if (deliveryClaim) {
+        await failInboundDelivery(deliveryClaim, error).catch(failureError =>
+          logger.error('integration.inbound_delivery_failure_record_failed', {
+            integrationId,
+            error: failureError instanceof Error ? failureError.message : String(failureError),
+          })
+        );
+      }
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(
           new AppError({

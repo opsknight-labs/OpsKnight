@@ -171,11 +171,30 @@ export async function GET(request: NextRequest) {
       });
 
       if (service?.slackIntegration) {
-        // Update existing integration
-        integration = await prisma.slackIntegration.update({
-          where: { id: service.slackIntegration.id },
-          data: integrationData,
-        });
+        if (service.slackIntegration.workspaceId === teamInfo.id) {
+          // Same workspace: refresh the installation credentials in place.
+          integration = await prisma.slackIntegration.update({
+            where: { id: service.slackIntegration.id },
+            data: integrationData,
+          });
+        } else {
+          // A service reconnecting to a different workspace must change only
+          // its binding. Never overwrite a shared installation that other
+          // services still use.
+          const targetWorkspace = await prisma.slackIntegration.findUnique({
+            where: { workspaceId: teamInfo.id },
+          });
+          integration = targetWorkspace
+            ? await prisma.slackIntegration.update({
+                where: { id: targetWorkspace.id },
+                data: integrationData,
+              })
+            : await prisma.slackIntegration.create({ data: integrationData });
+          await prisma.service.update({
+            where: { id: serviceId },
+            data: { slackIntegrationId: integration.id },
+          });
+        }
       } else {
         // Check if workspace integration already exists
         const existing = await prisma.slackIntegration.findUnique({

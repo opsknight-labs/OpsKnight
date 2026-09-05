@@ -20,7 +20,14 @@ export async function createIntegration(formData: FormData) {
   const serviceId = formData.get('serviceId') as string;
   const name = formData.get('name') as string;
   const type = (formData.get('type') as string) || 'EVENTS_API_V2';
+  const rawSnsTopicArn = formData.get('snsTopicArn');
+  const snsTopicArn = typeof rawSnsTopicArn === 'string' ? rawSnsTopicArn.trim() : '';
   if (!serviceId || !name) throw new Error('Missing required fields');
+  if (type === 'CLOUDWATCH') {
+    if (!/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/.test(snsTopicArn)) {
+      throw new Error('A valid, exact AWS SNS Topic ARN is required for CloudWatch.');
+    }
+  }
 
   let currentUser: { id: string } | null = null;
   try {
@@ -37,6 +44,7 @@ export async function createIntegration(formData: FormData) {
       serviceId,
       type,
       key,
+      snsTopicArn: type === 'CLOUDWATCH' ? snsTopicArn : null,
     },
   });
 

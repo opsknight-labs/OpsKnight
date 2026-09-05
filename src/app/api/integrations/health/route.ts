@@ -13,7 +13,6 @@ import {
   getMetricsByIntegration,
   serializeMetrics,
 } from '@/lib/integrations/metrics';
-import { getRateLimitStatus } from '@/lib/integrations/rate-limiter';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { assertCanViewService } from '@/lib/rbac';
@@ -57,10 +56,54 @@ export async function GET(req: NextRequest) {
       }
 
       const metrics = getMetricsByIntegration(integrationId);
-      const rateLimit = getRateLimitStatus(integrationId);
+      const [deliveries, terminalFailures, providerAdmission] = await Promise.all([
+        prisma.inboundDelivery.aggregate({
+          where: { integrationId, status: { in: ['PROCESSING', 'FAILED'] } },
+          _count: { id: true },
+          _min: { createdAt: true },
+        }),
+        prisma.$queryRaw<Array<{ count: bigint }>>`
+          SELECT COUNT(*)::bigint AS count FROM "ExternalOperation" operation
+          JOIN "Incident" incident ON incident."id" = operation."incidentId"
+          WHERE operation."status" = 'FAILED' AND incident."serviceId" = ${integration.service.id}
+        `.then(rows => Number(rows[0]?.count ?? 0)),
+        prisma.providerAdmission.findMany({
+          where: { key: { startsWith: integration.type.toLowerCase() } },
+          take: 20,
+        }),
+      ]);
+      const lastFailure = providerAdmission.reduce<Date | null>(
+        (latest, item) =>
+          item.lastFailureAt && (!latest || item.lastFailureAt > latest)
+            ? item.lastFailureAt
+            : latest,
+        null
+      );
+      const lastSuccess = providerAdmission.reduce<Date | null>(
+        (latest, item) =>
+          item.lastSuccessAt && (!latest || item.lastSuccessAt > latest)
+            ? item.lastSuccessAt
+            : latest,
+        null
+      );
+      const cooldownUntil = providerAdmission.reduce<Date | null>(
+        (latest, item) =>
+          item.blockedUntil && (!latest || item.blockedUntil > latest) ? item.blockedUntil : latest,
+        null
+      );
+      const healthState =
+        cooldownUntil && cooldownUntil > new Date()
+          ? 'UNHEALTHY'
+          : deliveries._count.id > 0 ||
+              terminalFailures > 0 ||
+              providerAdmission.some(item => item.consecutiveFails > 0)
+            ? 'DEGRADED'
+            : providerAdmission.length
+              ? 'HEALTHY'
+              : 'UNKNOWN';
 
       return jsonOk({
-        status: 'ok',
+        status: healthState,
         integration: {
           id: integration.id,
           type: integration.type,
@@ -70,10 +113,23 @@ export async function GET(req: NextRequest) {
           updatedAt: integration.updatedAt.toISOString(),
         },
         metrics: serializeMetrics(metrics),
-        rateLimit: {
-          remaining: rateLimit.remaining,
-          resetAt: new Date(rateLimit.resetAt).toISOString(),
+        admission: {
+          state: providerAdmission.length ? healthState : 'UNKNOWN',
+          cooldownUntil: cooldownUntil?.toISOString() ?? null,
+          lastSuccessAt: lastSuccess?.toISOString() ?? null,
+          lastFailureAt: lastFailure?.toISOString() ?? null,
+          consecutiveFailures: Math.max(0, ...providerAdmission.map(item => item.consecutiveFails)),
+          lastStatusCode:
+            providerAdmission.find(item => item.lastStatusCode)?.lastStatusCode ?? null,
         },
+        deliveries: {
+          pending: deliveries._count.id,
+          oldestPendingAgeSeconds: deliveries._min.createdAt
+            ? Math.max(0, (Date.now() - deliveries._min.createdAt.getTime()) / 1000)
+            : null,
+          terminalFailures,
+        },
+        rateLimit: { state: 'UNKNOWN' },
       });
     }
 

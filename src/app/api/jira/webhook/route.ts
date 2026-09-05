@@ -56,7 +56,6 @@ async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
   const provided =
     request.headers.get('x-jira-webhook-secret') ??
     request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
-    request.nextUrl.searchParams.get('secret') ??
     null;
 
   if (!provided) return false;

@@ -12,7 +12,10 @@ import { validatePayload, GrafanaAlertSchema } from '@/lib/integrations/schemas'
 import {
   IntegrationBodyTooLargeError,
   readIntegrationBody,
-  rejectWebhookReplay,
+  claimInboundDelivery,
+  completeInboundDelivery,
+  failInboundDelivery,
+  type InboundDeliveryClaim,
 } from '@/lib/integrations/request-security';
 
 const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
@@ -23,7 +26,8 @@ const VERIFY_SIGNATURES = process.env.INTEGRATION_VERIFY_SIGNATURES !== 'false';
  */
 export async function POST(req: NextRequest) {
   return withIntegrationMiddleware(req, 'GRAFANA', async () => {
-    const startTime = Date.now();
+  const startTime = Date.now();
+  let deliveryClaim: Extract<InboundDeliveryClaim, { disposition: 'CLAIMED' }> | null = null;
 
     try {
       const { searchParams } = new URL(req.url);
@@ -59,14 +63,14 @@ export async function POST(req: NextRequest) {
           logger.warn('api.integration.grafana_invalid_signature', { integrationId });
           return jsonError('Invalid webhook signature', 401);
         }
-        if (
-          await rejectWebhookReplay(
-            integration.id,
-            req.headers.get('x-request-id') || req.headers.get('x-grafana-delivery')
-          )
-        ) {
-          return jsonError('Duplicate webhook delivery', 409);
-        }
+        const claim = await claimInboundDelivery(
+          integration.id,
+          'GRAFANA',
+          req.headers.get('x-request-id') || req.headers.get('x-grafana-delivery')
+        );
+        if (claim?.disposition === 'COMPLETED') return jsonOk({ status: 'duplicate' }, 200);
+        if (claim?.disposition === 'BUSY') return jsonError('Webhook delivery is in progress', 503);
+        if (claim?.disposition === 'CLAIMED') deliveryClaim = claim;
       }
 
       let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -93,6 +97,7 @@ export async function POST(req: NextRequest) {
       }
 
       const primaryResult = results[0] || { action: 'ignored' };
+      if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
 
       logger.info('api.integration.grafana_success', {
         integrationId,
@@ -102,6 +107,7 @@ export async function POST(req: NextRequest) {
       });
       return jsonOk({ status: 'success', result: primaryResult, results }, 202);
     } catch (error: unknown) {
+      if (deliveryClaim) await failInboundDelivery(deliveryClaim, error).catch(() => undefined);
       if (error instanceof IntegrationBodyTooLargeError) {
         return jsonError(error.message, 413);
       }

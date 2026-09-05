@@ -181,6 +181,31 @@ export const OPERATIONAL_METRICS = [
     scope: 'instance',
     estimatedMaxSeries: 1,
   },
+  {
+    name: 'opsknight_integration_reconciliations_total',
+    help: 'Expired or ambiguous integration work reclaimed by bounded kind',
+    kind: 'counter', labels: ['kind'], scope: 'counter', estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_external_operations',
+    help: 'Durable external operations by bounded status',
+    kind: 'gauge', labels: ['status'], scope: 'cluster_snapshot', estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_chatops_intents',
+    help: 'Durable ChatOps intents by bounded status',
+    kind: 'gauge', labels: ['status'], scope: 'cluster_snapshot', estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_inbound_deliveries',
+    help: 'Inbound provider deliveries by bounded status',
+    kind: 'gauge', labels: ['status'], scope: 'cluster_snapshot', estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_provider_cooldown',
+    help: 'Whether a distributed provider key class has active cooldowns',
+    kind: 'gauge', labels: ['provider'], scope: 'cluster_snapshot', estimatedMaxSeries: 16,
+  },
 ] as const satisfies readonly MetricDefinition[];
 
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];

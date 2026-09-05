@@ -15,6 +15,7 @@ vi.mock('@/lib/prisma', () => ({
     incident: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     chatOpsConfig: {
       findUnique: vi.fn(),
@@ -128,7 +129,12 @@ describe('ChatOps War-Room Engine', () => {
         slackChannelId: 'C-OLD-ARCHIVED',
         warRoomArchivedAt: new Date('2026-08-15T10:00:00Z'),
         serviceId: 'srv-1',
-        service: { id: 'srv-1', name: 'Payments API', autoCreateWarRoom: true },
+        service: {
+          id: 'srv-1',
+          name: 'Payments API',
+          autoCreateWarRoom: true,
+          slackIntegration: { workspaceId: 'workspace-1' },
+        },
         assignee: null,
       } as any);
       vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
@@ -142,7 +148,7 @@ describe('ChatOps War-Room Engine', () => {
         id: 'srv-1',
         policy: { steps: [] },
       } as any);
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
+      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
       vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
       vi.mocked(retryModule.retryFetch).mockReset();
       vi.mocked(retryModule.retryFetch).mockImplementation((async (url: any) => {
@@ -156,7 +162,7 @@ describe('ChatOps War-Room Engine', () => {
 
       expect(result.success).toBe(true);
       expect(result.channelId).toBe('C-NEW');
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ slackChannelId: 'C-NEW', warRoomArchivedAt: null }),
         })
@@ -227,6 +233,7 @@ describe('ChatOps War-Room Engine', () => {
           name: 'Payments API',
           autoCreateWarRoom: false, // per-service auto-creation off
           warRoomVideoBridge: 'JITSI',
+          slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: null,
       } as any);
@@ -243,7 +250,7 @@ describe('ChatOps War-Room Engine', () => {
         id: 'srv-1',
         policy: { steps: [] },
       } as any);
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
+      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
       vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
 
       vi.mocked(retryModule.retryFetch).mockReset();
@@ -297,6 +304,7 @@ describe('ChatOps War-Room Engine', () => {
           name: 'Database Cluster',
           autoCreateWarRoom: true,
           warRoomVideoBridge: 'JITSI',
+          slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: { id: 'usr-1', name: 'Dev', email: 'dev@test.com' },
       } as any);
@@ -333,9 +341,9 @@ describe('ChatOps War-Room Engine', () => {
       expect(result.success).toBe(true);
       expect(result.channelId).toBe('C999888');
       expect(result.warRoomUrl).toBe('https://meet.jit.si/opsknight-inc-ef123456');
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          where: { id: 'inc-abcdef123456' },
+          where: expect.objectContaining({ id: 'inc-abcdef123456' }),
           data: expect.objectContaining({
             slackChannelId: 'C999888',
           }),
@@ -360,6 +368,7 @@ describe('ChatOps War-Room Engine', () => {
           name: 'Database Cluster',
           autoCreateWarRoom: true,
           warRoomVideoBridge: 'JITSI',
+          slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: { id: 'usr-1', name: 'Dev', email: 'dev@test.com' },
       } as any);

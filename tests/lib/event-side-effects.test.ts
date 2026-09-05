@@ -8,6 +8,8 @@ import {
   createIncidentWarRoom as mockedCreateIncidentWarRoom,
   postWarRoomUpdate as mockedPostWarRoomUpdate,
   updateWarRoomTopic as mockedUpdateWarRoomTopic,
+  inviteUserToWarRoom as mockedInviteUserToWarRoom,
+  inviteTeamToWarRoom as mockedInviteTeamToWarRoom,
 } from '@/lib/chatops/war-room';
 import prisma from '@/lib/prisma';
 import { processEventSideEffect } from '@/lib/event-side-effects';
@@ -39,6 +41,8 @@ vi.mock('@/lib/chatops/war-room', () => ({
   archiveWarRoomChannel: vi.fn(),
   postWarRoomUpdate: vi.fn(),
   updateWarRoomTopic: vi.fn(),
+  inviteUserToWarRoom: vi.fn(),
+  inviteTeamToWarRoom: vi.fn(),
 }));
 
 const executeEscalationMock = mockedExecuteEscalation as unknown as TestMock;
@@ -49,6 +53,8 @@ const archiveWarRoomChannelMock = mockedArchiveWarRoomChannel as unknown as Test
 const createIncidentWarRoomMock = mockedCreateIncidentWarRoom as unknown as TestMock;
 const postWarRoomUpdateMock = mockedPostWarRoomUpdate as unknown as TestMock;
 const updateWarRoomTopicMock = mockedUpdateWarRoomTopic as unknown as TestMock;
+const inviteUserToWarRoomMock = mockedInviteUserToWarRoom as unknown as TestMock;
+const inviteTeamToWarRoomMock = mockedInviteTeamToWarRoom as unknown as TestMock;
 const prismaMock = prisma as unknown as { incident: { findUnique: TestMock } };
 
 function payload(
@@ -312,6 +318,32 @@ describe('event durable side effects', () => {
     expect(createIncidentWarRoomMock).toHaveBeenCalledWith('inc-1');
     expect(postWarRoomUpdateMock).toHaveBeenCalledWith('inc-1', '🔄 *Status updated to OPEN*');
     expect(updateWarRoomTopicMock).toHaveBeenCalledWith('inc-1', 'OPEN');
+  });
+
+  it('delivers durable war-room message, topic, and invite effects', async () => {
+    postWarRoomUpdateMock.mockResolvedValue({ success: true });
+    updateWarRoomTopicMock.mockResolvedValue({ success: true });
+    inviteUserToWarRoomMock.mockResolvedValue({ success: true });
+    inviteTeamToWarRoomMock.mockResolvedValue({ success: true });
+
+    await processEventSideEffect({
+      ...payload('WAR_ROOM_MESSAGE', 'WAR_ROOM'),
+      warRoom: { message: 'durable update' },
+    });
+    await processEventSideEffect(payload('WAR_ROOM_TOPIC', 'WAR_ROOM'));
+    await processEventSideEffect({
+      ...payload('WAR_ROOM_INVITE_USER', 'WAR_ROOM'),
+      warRoom: { userId: 'user-1' },
+    });
+    await processEventSideEffect({
+      ...payload('WAR_ROOM_INVITE_TEAM', 'WAR_ROOM'),
+      warRoom: { teamId: 'team-1' },
+    });
+
+    expect(postWarRoomUpdateMock).toHaveBeenCalledWith('inc-1', 'durable update');
+    expect(updateWarRoomTopicMock).toHaveBeenCalledWith('inc-1');
+    expect(inviteUserToWarRoomMock).toHaveBeenCalledWith('inc-1', 'user-1');
+    expect(inviteTeamToWarRoomMock).toHaveBeenCalledWith('inc-1', 'team-1');
   });
 
   it('does not recreate a war-room for a stale reopen after the incident resolved again', async () => {
