@@ -5,7 +5,14 @@ import {
   createJiraIssue,
   findJiraIssueByCorrelationLabel,
   type JiraIssueSummary,
+  addJiraComment,
+  hasJiraCommentMarker,
 } from '@/lib/jira';
+import {
+  assertProviderAdmitted,
+  recordProviderFailure,
+  recordProviderSuccess,
+} from '@/lib/provider-admission';
 
 const LEASE_MS = 5 * 60_000;
 
@@ -20,6 +27,13 @@ export type JiraCreateOperationInput = {
   component?: string | null;
 };
 
+type JiraCommentOperationInput = {
+  incidentId: string;
+  externalKey: string;
+  eventId: string;
+  comment: string;
+};
+
 function jiraCreateKey(input: JiraCreateOperationInput): string {
   const owner = input.incidentId
     ? `incident:${input.incidentId}`
@@ -27,6 +41,43 @@ function jiraCreateKey(input: JiraCreateOperationInput): string {
       ? `action-item:${input.actionItemId}`
       : `request:${crypto.createHash('sha256').update(JSON.stringify(input)).digest('hex')}`;
   return `jira:create:${owner}`;
+}
+
+export async function enqueueJiraCommentOperations(
+  inputs: JiraCommentOperationInput[]
+): Promise<{ attempted: number; pending: number }> {
+  let pending = 0;
+  await prisma.$transaction(async tx => {
+    for (const input of inputs) {
+      const idempotencyKey = `jira:comment:${input.externalKey}:${input.eventId}`;
+      const existing = await tx.externalOperation.findUnique({
+        where: { provider_idempotencyKey: { provider: 'JIRA', idempotencyKey } },
+        select: { id: true },
+      });
+      if (existing) continue;
+      const operation = await tx.externalOperation.create({
+        data: {
+          provider: 'JIRA',
+          operation: 'ADD_COMMENT',
+          idempotencyKey,
+          incidentId: input.incidentId,
+          externalKey: input.externalKey,
+          requestPayload: input as Prisma.InputJsonObject,
+        },
+      });
+      await tx.backgroundJob.create({
+        data: {
+          type: 'EXTERNAL_OPERATION',
+          status: 'PENDING',
+          scheduledAt: new Date(),
+          maxAttempts: 8,
+          payload: { operationId: operation.id },
+        },
+      });
+      pending++;
+    }
+  });
+  return { attempted: inputs.length, pending };
 }
 
 export async function enqueueJiraCreateOperation(input: JiraCreateOperationInput): Promise<string> {
@@ -115,6 +166,49 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
   }
 
   const { operation, leaseToken } = claim;
+  if (operation.operation === 'ADD_COMMENT') {
+    const value = operation.requestPayload;
+    if (!value || Array.isArray(value) || typeof value !== 'object')
+      throw new Error('Jira comment payload is missing');
+    const input = value as Record<string, Prisma.JsonValue>;
+    if (typeof input.externalKey !== 'string' || typeof input.comment !== 'string')
+      throw new Error('Jira comment payload is invalid');
+    const providerKey = `jira:issue:${input.externalKey}`;
+    const marker = `opsknight-comment-${operation.id}`;
+    try {
+      await assertProviderAdmitted(providerKey);
+      if (!(await hasJiraCommentMarker(input.externalKey, marker))) {
+        await addJiraComment(input.externalKey, `${input.comment}\n\n[${marker}]`);
+      }
+      const completed = await prisma.externalOperation.updateMany({
+        where: { id, status: 'PROCESSING', leaseToken },
+        data: {
+          status: 'COMPLETED',
+          resultPayload: { delivered: true },
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (completed.count !== 1) throw new Error('External operation lease was lost');
+      await recordProviderSuccess(providerKey);
+      return null;
+    } catch (error) {
+      await recordProviderFailure(providerKey);
+      await prisma.externalOperation.updateMany({
+        where: { id, status: 'PROCESSING', leaseToken },
+        data: {
+          status: operation.attempts >= 8 ? 'FAILED' : 'AMBIGUOUS',
+          nextAttemptAt: new Date(Date.now() + 30_000),
+          lastError:
+            error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      throw error;
+    }
+  }
+
   const input = parseJiraCreatePayload(operation.requestPayload);
   const marker = `opsknight-operation-${operation.id}`;
   try {
@@ -173,7 +267,8 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
       data: {
         status: 'AMBIGUOUS',
         nextAttemptAt: new Date(Date.now() + 30_000),
-        lastError: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
+        lastError:
+          error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
         leaseToken: null,
         leaseExpiresAt: null,
       },

@@ -237,3 +237,14 @@ export async function addJiraComment(
     body: JSON.stringify(payload),
   });
 }
+
+export async function hasJiraCommentMarker(issueKeyOrId: string, marker: string): Promise<boolean> {
+  if (!/^opsknight-comment-[A-Za-z0-9_-]{1,200}$/.test(marker)) throw new Error('Invalid Jira comment marker');
+  const config = await getDecryptedJiraConfig();
+  if (!config) throw jiraNotConfigured();
+  const result = await jiraRequest<{ comments?: Array<{ body?: unknown }> }>(
+    config,
+    `/rest/api/3/issue/${encodeURIComponent(issueKeyOrId)}/comment?maxResults=100&orderBy=-created`
+  );
+  return (result.comments ?? []).some(comment => JSON.stringify(comment.body ?? '').includes(marker));
+}

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { getJiraIssue, addJiraComment } from '@/lib/jira';
+import { getJiraIssue } from '@/lib/jira';
+import { enqueueJiraCommentOperations } from '@/lib/external-operations';
 import { enqueueJiraCreateOperation, processExternalOperation } from '@/lib/external-operations';
 import { isValidJiraKey, extractJiraKey } from '@/lib/jira-validation';
 import { logAudit, getDefaultActorId } from '@/lib/audit';
@@ -334,13 +335,11 @@ export async function syncIncidentNoteToJira(
 
     const formattedComment = `[OpsKnight Note by ${authorName}]:\n${noteContent}`;
 
-    for (let i = 0; i < links.length; i += 5) {
-      await Promise.allSettled(
-        links.slice(i, i + 5).map(link => addJiraComment(link.externalKey, formattedComment))
-      );
-    }
-
-    return links.length;
+    const eventId = `note:${Buffer.from(`${authorName}\0${noteContent}`).toString('base64url').slice(0, 96)}`;
+    const result = await enqueueJiraCommentOperations(
+      links.map(link => ({ incidentId, externalKey: link.externalKey, eventId, comment: formattedComment }))
+    );
+    return result.pending;
   } catch (error) {
     logger.error('Failed to sync incident note to Jira', {
       component: 'jira-sync',
@@ -368,13 +367,11 @@ export async function syncIncidentEventToJira(
 
     const formattedComment = `[OpsKnight Update]: ${eventMessage}`;
 
-    for (let i = 0; i < links.length; i += 5) {
-      await Promise.allSettled(
-        links.slice(i, i + 5).map(link => addJiraComment(link.externalKey, formattedComment))
-      );
-    }
-
-    return links.length;
+    const eventId = `event:${Buffer.from(eventMessage).toString('base64url').slice(0, 96)}`;
+    const result = await enqueueJiraCommentOperations(
+      links.map(link => ({ incidentId, externalKey: link.externalKey, eventId, comment: formattedComment }))
+    );
+    return result.pending;
   } catch (error) {
     logger.error('Failed to sync incident event to Jira', {
       component: 'jira-sync',

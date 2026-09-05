@@ -1,0 +1,47 @@
+name: Integration control-plane certification
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * 1'
+permissions:
+  contents: read
+concurrency:
+  group: integration-certification
+  cancel-in-progress: false
+jobs:
+  multi-replica-failover-load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --legacy-peer-deps
+        env: { HUSKY: '0' }
+      - run: npm run prisma:validate && npx prisma generate && npx tsc --noEmit --incremental false
+      - run: docker build -t opsknight-certification:local .
+      - name: Start three web and three worker replicas
+        run: docker compose -f tests/certification/docker-compose.yml up -d --scale web=3 --scale worker=3 --wait
+      - name: Multi-replica and database-backed resilience suite
+        run: npm run test:ci:db
+        env:
+          VITEST_USE_REAL_DB: '1'
+          DATABASE_URL: postgresql://opsknight:certification-only@localhost:55432/opsknight
+      - name: Retry-storm and SLO gate
+        run: docker run --rm --network host -e BASE_URL=http://127.0.0.1:3300 -e RATE=100 -e DURATION=90s -v "$PWD/scripts/load:/scripts:ro" grafana/k6:0.54.0 run /scripts/integration-control-plane.js
+      - name: Database interruption and recovery
+        run: |
+          docker compose -f tests/certification/docker-compose.yml stop db
+          sleep 10
+          docker compose -f tests/certification/docker-compose.yml start db
+          docker compose -f tests/certification/docker-compose.yml wait db
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3300/api/health?mode=readiness && exit 0; sleep 2; done
+          exit 1
+      - name: Logs
+        if: always()
+        run: docker compose -f tests/certification/docker-compose.yml logs --no-color > certification.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: integration-certification, path: certification.log }
+      - if: always()
+        run: docker compose -f tests/certification/docker-compose.yml down -v

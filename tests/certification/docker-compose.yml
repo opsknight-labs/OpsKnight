@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: opsknight
+      POSTGRES_PASSWORD: certification-only
+      POSTGRES_DB: opsknight
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U opsknight]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    ports: ['127.0.0.1:55432:5432']
+  web:
+    image: opsknight-certification:local
+    environment: &app-env
+      NODE_ENV: production
+      DATABASE_URL: postgresql://opsknight:certification-only@db:5432/opsknight
+      NEXTAUTH_URL: http://proxy:3000
+      NEXT_PUBLIC_APP_URL: http://proxy:3000
+      NEXTAUTH_SECRET: certification-nextauth-secret-at-least-32-characters
+      ENCRYPTION_KEY: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+      OPSKNIGHT_PROCESS_ROLE: web
+    depends_on:
+      db: { condition: service_healthy }
+  worker:
+    image: opsknight-certification:local
+    environment:
+      <<: *app-env
+      OPSKNIGHT_PROCESS_ROLE: worker
+    depends_on:
+      db: { condition: service_healthy }
+  proxy:
+    image: nginx:1.27-alpine
+    ports: ['127.0.0.1:3300:3000']
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on: [web]

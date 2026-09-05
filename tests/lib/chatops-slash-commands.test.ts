@@ -5,6 +5,7 @@ import * as retryModule from '@/lib/retry';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
+  authorizeChatOpsIncident,
 } from '@/lib/incidents/chatops-lifecycle';
 import { sendIncidentNotifications } from '@/lib/user-notifications';
 
@@ -54,6 +55,7 @@ vi.mock('@/lib/retry', () => ({
 
 vi.mock('@/lib/incidents/chatops-lifecycle', () => ({
   executeChatOpsLifecycleCommand: vi.fn(),
+  authorizeChatOpsIncident: vi.fn().mockResolvedValue(undefined),
   chatOpsLifecycleErrorMessage: vi.fn(error =>
     error instanceof Error ? error.message : 'Unable to update incident.'
   ),

@@ -11,9 +11,9 @@ import { verifySlackSignature } from '@/lib/slack-signature';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
+  authorizeChatOpsIncident,
+  executeChatOpsAssignment,
 } from '@/lib/incidents/chatops-lifecycle';
-import { runSerializableTransaction } from '@/lib/db-utils';
-import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
 
 /**
  * Resolve the Slack user who pressed a button to an OpsKnight account and a
@@ -125,14 +125,21 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       // Get incident context needed for Slack identity resolution and non-lifecycle actions.
       const incident = await prisma.incident.findUnique({
         where: { id: incidentId },
-        include: { service: { select: { slackWorkspaceId: true, slackIntegration: { select: { workspaceId: true } } } } },
+        include: {
+          service: {
+            select: { slackWorkspaceId: true, slackIntegration: { select: { workspaceId: true } } },
+          },
+        },
       });
 
       if (!incident) {
         return NextResponse.json({ error: 'Incident not found' }, { status: 404 });
       }
       const workspaceId = payload.team?.id;
-      const incidentWorkspaceId = incident.slackWorkspaceId || incident.service.slackIntegration?.workspaceId || incident.service.slackWorkspaceId;
+      const incidentWorkspaceId =
+        incident.slackWorkspaceId ||
+        incident.service.slackIntegration?.workspaceId ||
+        incident.service.slackWorkspaceId;
       if (!workspaceId || !incidentWorkspaceId || workspaceId !== incidentWorkspaceId) {
         logger.warn('[Slack Actions] Rejected action from a different Slack workspace', {
           incidentId,
@@ -218,14 +225,6 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
           try {
             const { updateWarRoomTopic, slackApiCall } = await import('@/lib/chatops/war-room');
 
-            // Direct invite Slack user into channel via slackUserId
-            if (botToken && incident.slackChannelId) {
-              await slackApiCall('conversations.invite', botToken, {
-                channel: incident.slackChannelId,
-                users: slackUserId,
-              }).catch(() => {});
-            }
-
             const targetUser = actorUser;
 
             // No "first active user" fallback: assigning the incident to an
@@ -245,32 +244,23 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
               });
             }
 
-            const assignmentChanged = await runSerializableTransaction(async tx => {
-              const current = await tx.incident.findUnique({
-                where: { id: incidentId },
-                select: { assigneeId: true, teamId: true },
-              });
-              if (!current) throw new Error('Incident not found');
-              if (current.assigneeId === targetUser.id && current.teamId === null) return false;
-
-              await tx.incident.update({
-                where: { id: incidentId },
-                data: { assigneeId: targetUser.id, teamId: null },
-              });
-              await tx.incidentEvent.create({
-                data: {
-                  incidentId,
-                  type: 'ASSIGNMENT',
-                  message: `Assigned to ${targetUser.name} via Slack button`,
-                },
-              });
-              await enqueueIncidentUpdateSideEffects(tx, incidentId, [
-                'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
-              ]);
-              return true;
+            await authorizeChatOpsIncident(incidentId, actorUser.id, 'MANAGE');
+            const assignment = await executeChatOpsAssignment({
+              incidentId,
+              actor: { id: actorUser.id, name: targetUser.name },
+              targetUserId: targetUser.id,
+              ...(idempotency ? { idempotency } : {}),
             });
+            // External Slack side effects occur only after the durable domain
+            // mutation and outbox commit.
+            if (botToken && incident.slackChannelId) {
+              await slackApiCall('conversations.invite', botToken, {
+                channel: incident.slackChannelId,
+                users: slackUserId,
+              }).catch(() => {});
+            }
             updateWarRoomTopic(incidentId).catch(() => {});
-            responseMessage = assignmentChanged
+            responseMessage = assignment.changed
               ? `🙋 Incident assigned to *${targetUser.name}* (<@${slackUserId}>)`
               : `ℹ️ Incident is already assigned to *${targetUser.name}* (<@${slackUserId}>)`;
           } catch (err) {

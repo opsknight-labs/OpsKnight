@@ -11,6 +11,7 @@ import { retryFetch } from '@/lib/retry';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
+  authorizeChatOpsIncident,
 } from '@/lib/incidents/chatops-lifecycle';
 import { executeIdempotentOperation } from '@/lib/idempotency';
 import { runSerializableTransaction } from '@/lib/db-utils';
@@ -103,7 +104,12 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         { slackWorkspaceId: payload.team_id },
         {
           slackWorkspaceId: null,
-          service: { OR: [{ slackWorkspaceId: payload.team_id }, { slackIntegration: { workspaceId: payload.team_id } }] },
+          service: {
+            OR: [
+              { slackWorkspaceId: payload.team_id },
+              { slackIntegration: { workspaceId: payload.team_id } },
+            ],
+          },
         },
       ],
     },
@@ -141,20 +147,6 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     };
   }
 
-  if (subcommand === 'who' && !incident) {
-    const now = new Date();
-    const { getActiveOnCallShifts } = await import('@/lib/oncall-shifts');
-    const active = (await getActiveOnCallShifts(now)).map(
-      shift => `📅 *${shift.schedule.name}:* ${shift.user.name || 'Unknown user'}`
-    );
-    return {
-      response_type: 'ephemeral',
-      text: active.length
-        ? `*Currently on call:*\n${active.join('\n')}`
-        : 'ℹ️ No one is currently on call.',
-    };
-  }
-
   if (!incident) {
     return {
       response_type: 'ephemeral',
@@ -164,7 +156,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
 
   // Get bot token for user resolution
   const botToken = await getSlackBotToken(incident.service.id);
-  const mutatingCommands = new Set(['ack', 'acknowledge', 'resolve', 'note', 'postmortem']);
+  const mutatingCommands = new Set(['ack', 'acknowledge', 'resolve', 'note', 'postmortem', 'who']);
   const actor =
     mutatingCommands.has(subcommand) && botToken
       ? await resolveOpsKnightUser(user_id, botToken)
@@ -280,6 +272,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         };
       }
 
+      await authorizeChatOpsIncident(incident.id, noteUserId, 'NOTE');
       await runSerializableTransaction(async tx => {
         await executeIdempotentOperation(tx, {
           scope: 'chatops-note',
@@ -315,6 +308,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
     case 'who': {
       // Query on-call schedule for the service
       try {
+        await authorizeChatOpsIncident(incident.id, actor!.id, 'READ');
         const policy = incident.service.escalationPolicyId
           ? await prisma.escalationPolicy.findUnique({
               where: { id: incident.service.escalationPolicyId },
@@ -398,101 +392,19 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
 
     case 'postmortem': {
       try {
-        const appUrl = (await import('@/lib/env-validation')).getBaseUrl();
-        const existingPostmortem = await prisma.postmortem.findUnique({
-          where: { incidentId: incident.id },
-          select: { id: true, title: true, status: true },
+        const { executeChatOpsPostmortemCommand } =
+          await import('@/lib/incidents/chatops-postmortem');
+        const result = await executeChatOpsPostmortemCommand({
+          incidentId: incident.id,
+          actor: actor!,
+          channelName: payload.channel_name,
+          ...(idempotency ? { idempotency } : {}),
         });
-
-        if (existingPostmortem) {
-          const postmortemUrl = `${appUrl}/postmortems/${incident.id}`;
-          return {
-            response_type: 'in_channel',
-            text: `📄 *Postmortem Draft Exists*\nTitle: *${existingPostmortem.title}* (${existingPostmortem.status})\n🔗 *Edit & Publish:* ${postmortemUrl}`,
-          };
-        }
-
-        // Resolve author
-        const defaultAuthor = actor!.id;
-
-        if (!defaultAuthor) {
-          return {
-            response_type: 'ephemeral',
-            text: '⚠️ Could not resolve author for postmortem.',
-          };
-        }
-
-        // Fetch incident notes and events for timeline
-        const notes = await prisma.incidentNote.findMany({
-          where: { incidentId: incident.id },
-          include: { user: { select: { name: true } } },
-          orderBy: { createdAt: 'asc' },
-        });
-
-        const events = await prisma.incidentEvent.findMany({
-          where: { incidentId: incident.id },
-          orderBy: { createdAt: 'asc' },
-        });
-
-        const timelineEntries = [
-          ...events.map(e => ({
-            id: `event-${e.id}`,
-            timestamp: e.createdAt.toISOString(),
-            type: (e.type === 'ACKNOWLEDGED' || e.type === 'ESCALATED'
-              ? 'ESCALATION'
-              : e.type === 'MANUAL_RESOLVED' || e.type === 'AUTO_RESOLVED'
-                ? 'RESOLUTION'
-                : 'DETECTION') as 'DETECTION' | 'ESCALATION' | 'MITIGATION' | 'RESOLUTION',
-            title: e.message.slice(0, 60),
-            description: e.message,
-            actor: 'System',
-          })),
-          ...notes.map(n => ({
-            id: `note-${n.id}`,
-            timestamp: n.createdAt.toISOString(),
-            type: 'MITIGATION' as const,
-            title: `Note by ${n.user?.name ?? 'Deleted user'}`,
-            description: n.content,
-            actor: n.user?.name ?? 'Deleted user',
-          })),
-        ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-        const actionItemsFromNotes = notes
-          .filter(n => /todo:|action item:|fix:|followup:/i.test(n.content))
-          .map(n => ({
-            title: n.content.replace(/^(todo:|action item:|fix:|followup:)\s*/i, '').trim(),
-            status: 'OPEN',
-            priority: 'MEDIUM',
-          }));
-
-        const newPostmortem = await prisma.postmortem.create({
-          data: {
-            incidentId: incident.id,
-            title: `Postmortem: ${incident.title}`,
-            summary: `Automated postmortem draft generated from Slack war-room #${payload.channel_name}`,
-            impact: { service: incident.service.name, urgency: incident.urgency },
-            rootCause: 'TBD — Generated from Slack War Room',
-            resolution: `Resolved via ChatOps by @${payload.user_name}`,
-            lessons: 'Timeline and notes captured from Slack war-room channel.',
-            timeline: timelineEntries as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-            actionItems: actionItemsFromNotes as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-            createdById: defaultAuthor,
-            status: 'DRAFT',
-          },
-        });
-
-        await prisma.incidentEvent.create({
-          data: {
-            incidentId: incident.id,
-            message: `Postmortem draft generated via Slack ChatOps by @${payload.user_name}`,
-          },
-        });
-
-        const editUrl = `${appUrl}/postmortems/${incident.id}`;
-
         return {
           response_type: 'in_channel',
-          text: `📄 *Postmortem Draft Created!*\n*Title:* ${newPostmortem.title}\n*Timeline Events Captured:* ${timelineEntries.length}\n🔗 *Edit & Publish:* ${editUrl}`,
+          text: result.created
+            ? `📄 *Postmortem Draft Created!*\n*Title:* ${result.title}\n*Timeline Events Captured:* ${result.timelineCount}\n🔗 *Edit & Publish:* ${result.url}`
+            : `📄 *Postmortem Draft Exists*\nTitle: *${result.title}* (${result.status})\n🔗 *Edit & Publish:* ${result.url}`,
         };
       } catch (pmErr) {
         logger.error('[ChatOps] Failed to create postmortem via slash command', { error: pmErr });

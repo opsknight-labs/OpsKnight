@@ -222,6 +222,22 @@ model ExternalOperation {
   @@index([actionItemId, operation])
 }
 
+/// Cluster-wide provider admission/cooldown state. Local circuit breakers are
+/// only fast-fail hints; this row is the shared source of truth for replicas.
+model ProviderAdmission {
+  key              String   @id
+  state            String   @default("CLOSED")
+  blockedUntil     DateTime?
+  consecutiveFails Int      @default(0)
+  lastSuccessAt    DateTime?
+  lastFailureAt    DateTime?
+  lastStatusCode   Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([state, blockedUntil])
+}
+
 model User {
   id                           String     @id @default(cuid())
   name                         String
@@ -447,6 +463,7 @@ model Integration {
   type            String   @default("EVENTS_API_V2") // EVENTS_API_V2, EMAIL, etc.
   key             String   @unique // The routing key used in API calls
   signatureSecret String? // HMAC secret for webhook signature verification
+  snsTopicArn     String? // Expected, tenant-bound AWS SNS topic for CloudWatch deliveries
   enabled         Boolean  @default(true) // Enable/disable integration
   serviceId       String
   createdAt       DateTime @default(now())
@@ -455,6 +472,7 @@ model Integration {
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@index([serviceId])
+  @@index([type, snsTopicArn])
 }
 
 /// Provider delivery inbox. This is deliberately independent of rate limiting:
