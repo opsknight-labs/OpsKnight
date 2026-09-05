@@ -39,6 +39,13 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
           jiraServiceMapping: {
             select: { projectKey: true },
           },
+          slackIntegration: {
+            select: {
+              id: true,
+              enabled: true,
+              workspaceId: true,
+            },
+          },
         },
       },
       assignee: true,
@@ -79,8 +86,8 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   // Check if postmortem exists for this incident
   const postmortem = incident.status === 'RESOLVED' ? await getPostmortem(id) : null;
 
-  // Fetch Jira data for the incident sidebar
-  const [jiraLinks, jiraConfig] = await Promise.all([
+  // Fetch Jira & ChatOps data for the incident sidebar
+  const [jiraLinks, jiraConfig, chatOpsConfig] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
@@ -89,7 +96,18 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       where: { id: 'default' },
       select: { enabled: true },
     }),
+    prisma.chatOpsConfig.findUnique({
+      where: { id: 'default' },
+      select: { enabled: true },
+    }),
   ]);
+
+  const isWarRoomEnabled = Boolean(
+    chatOpsConfig?.enabled &&
+    incident.service.slackIntegration?.enabled !== false &&
+    incident.service.slackIntegration?.workspaceId &&
+    incident.service.autoCreateWarRoom
+  );
 
   // The resolution note is stored as a regular Note prefixed with "Resolution:" —
   // there's no separate resolution-summary column on Incident.
@@ -294,6 +312,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
           slackChannelName: incident.slackChannelName,
           warRoomUrl: incident.warRoomUrl,
           warRoomArchivedAt: incident.warRoomArchivedAt,
+          enabled: isWarRoomEnabled,
         }}
         jira={{
           links: jiraLinks,

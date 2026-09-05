@@ -81,6 +81,7 @@ type IncidentCommandBarProps = {
     slackChannelName: string | null;
     warRoomUrl: string | null;
     warRoomArchivedAt: Date | string | null;
+    enabled?: boolean;
   } | null;
   jira?: {
     links: JiraLinkItem[];
@@ -155,6 +156,7 @@ export default function IncidentCommandBar({
   // War-Room logic
   const isWarRoomArchived = Boolean(warRoom?.warRoomArchivedAt);
   const hasActiveWarRoom = Boolean(warRoom?.slackChannelId) && !isWarRoomArchived;
+  const warRoomEnabled = warRoom?.enabled ?? false;
 
   const handleCreateWarRoom = () => {
     setWarRoomError(null);
@@ -198,6 +200,12 @@ export default function IncidentCommandBar({
   const jiraLinks = jira?.links || [];
   const primaryJira = jiraLinks[0];
   const jiraEnabled = jira?.enabled ?? false;
+
+  const hasAnyIntegrations =
+    hasActiveWarRoom ||
+    (warRoomEnabled && canManage) ||
+    Boolean(primaryJira) ||
+    (jiraEnabled && canManage);
 
   const handleCreateJira = () => {
     setJiraError(null);
@@ -347,141 +355,145 @@ export default function IncidentCommandBar({
         )}
         data-command-bar
       >
-        {/* Left Side: Standard Collaboration Buttons with Integrations label */}
+        {/* Left Side: Collaboration & Tags */}
         <div className="flex items-center gap-3 flex-wrap min-w-0">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
-            Integrations:
-          </span>
-          {/* Slack War-Room */}
-          {hasActiveWarRoom ? (
-            <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 text-sm font-medium shadow-xs">
-              <SlackLogo className="h-4 w-4 shrink-0" />
-              <a
-                href={`slack://channel?team=&id=${warRoom?.slackChannelId}`}
-                className="hover:underline font-semibold"
-                title="Open in Slack App"
-              >
-                #{warRoom?.slackChannelName || 'war-room'}
-              </a>
-              <a
-                href={`https://slack.com/app_redirect?channel=${warRoom?.slackChannelId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open in Web Browser"
-                className="text-emerald-700 hover:text-emerald-900"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-              {warRoom?.warRoomUrl && (
-                <a
-                  href={warRoom.warRoomUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Join Video Huddle"
-                  className="ml-1 pl-2 border-l border-emerald-300 text-emerald-800 hover:text-emerald-950 inline-flex items-center gap-1.5 font-semibold"
-                >
-                  <Video className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>Huddle</span>
-                </a>
-              )}
-              {canManage && isResolved && (
-                <button
-                  type="button"
-                  onClick={handleArchiveWarRoom}
-                  disabled={isWarRoomPending}
-                  title="Archive War-Room"
-                  className="ml-1 pl-2 border-l border-emerald-300 text-emerald-700 hover:text-rose-600 transition-colors"
-                >
-                  {isWarRoomPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Archive className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              )}
-            </div>
-          ) : (
-            canManage && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleCreateWarRoom}
-                disabled={isWarRoomPending}
-                className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
-              >
-                {isWarRoomPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-                ) : (
+          {hasAnyIntegrations && (
+            <>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+                Integrations:
+              </span>
+              {/* Slack War-Room */}
+              {hasActiveWarRoom ? (
+                <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 text-sm font-medium shadow-xs">
                   <SlackLogo className="h-4 w-4 shrink-0" />
-                )}
-                <span>{isWarRoomArchived ? 'Re-open War-Room' : 'Create War-Room'}</span>
-              </Button>
-            )
-          )}
+                  <a
+                    href={`slack://channel?team=&id=${warRoom?.slackChannelId}`}
+                    className="hover:underline font-semibold"
+                    title="Open in Slack App"
+                  >
+                    #{warRoom?.slackChannelName || 'war-room'}
+                  </a>
+                  <a
+                    href={`https://slack.com/app_redirect?channel=${warRoom?.slackChannelId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open in Web Browser"
+                    className="text-emerald-700 hover:text-emerald-900"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                  {warRoom?.warRoomUrl && (
+                    <a
+                      href={warRoom.warRoomUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Join Video Huddle"
+                      className="ml-1 pl-2 border-l border-emerald-300 text-emerald-800 hover:text-emerald-950 inline-flex items-center gap-1.5 font-semibold"
+                    >
+                      <Video className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>Huddle</span>
+                    </a>
+                  )}
+                  {canManage && isResolved && (
+                    <button
+                      type="button"
+                      onClick={handleArchiveWarRoom}
+                      disabled={isWarRoomPending}
+                      title="Archive War-Room"
+                      className="ml-1 pl-2 border-l border-emerald-300 text-emerald-700 hover:text-rose-600 transition-colors"
+                    >
+                      {isWarRoomPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Archive className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              ) : warRoomEnabled ? (
+                canManage && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCreateWarRoom}
+                    disabled={isWarRoomPending}
+                    className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
+                  >
+                    {isWarRoomPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                    ) : (
+                      <SlackLogo className="h-4 w-4 shrink-0" />
+                    )}
+                    <span>{isWarRoomArchived ? 'Re-open War-Room' : 'Create War-Room'}</span>
+                  </Button>
+                )
+              ) : null}
 
-          {/* Jira Integration */}
-          {primaryJira ? (
-            <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-blue-50 text-blue-900 border border-blue-200 text-sm font-medium shadow-xs">
-              <JiraLogo className="h-4 w-4 shrink-0" />
-              <a
-                href={primaryJira.externalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:underline font-semibold inline-flex items-center gap-1"
-                title={`Jira: ${primaryJira.externalKey}`}
-              >
-                <span>{primaryJira.externalKey}</span>
-                {primaryJira.externalStatus && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-bold uppercase">
-                    {primaryJira.externalStatus}
-                  </span>
-                )}
-                <ExternalLink className="h-3.5 w-3.5 text-blue-600 ml-0.5" />
-              </a>
-              {jiraLinks.length > 1 && (
-                <span className="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">
-                  +{jiraLinks.length - 1}
+              {/* Jira Integration */}
+              {primaryJira ? (
+                <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-blue-50 text-blue-900 border border-blue-200 text-sm font-medium shadow-xs">
+                  <JiraLogo className="h-4 w-4 shrink-0" />
+                  <a
+                    href={primaryJira.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline font-semibold inline-flex items-center gap-1"
+                    title={`Jira: ${primaryJira.externalKey}`}
+                  >
+                    <span>{primaryJira.externalKey}</span>
+                    {primaryJira.externalStatus && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-bold uppercase">
+                        {primaryJira.externalStatus}
+                      </span>
+                    )}
+                    <ExternalLink className="h-3.5 w-3.5 text-blue-600 ml-0.5" />
+                  </a>
+                  {jiraLinks.length > 1 && (
+                    <span className="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">
+                      +{jiraLinks.length - 1}
+                    </span>
+                  )}
+                </div>
+              ) : jiraEnabled ? (
+                canManage && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowJiraDialog(true)}
+                    className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
+                  >
+                    <JiraLogo className="h-4 w-4 shrink-0" />
+                    <span>Link Jira Issue</span>
+                  </Button>
+                )
+              ) : (
+                canManage && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push('/settings/integrations/jira')}
+                    className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
+                  >
+                    <JiraLogo className="h-4 w-4 shrink-0" />
+                    <span>Connect Jira</span>
+                  </Button>
+                )
+              )}
+
+              {warRoomError && (
+                <span className="text-xs text-rose-600 inline-flex items-center gap-1 font-medium">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {warRoomError}
                 </span>
               )}
-            </div>
-          ) : jiraEnabled ? (
-            canManage && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowJiraDialog(true)}
-                className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
-              >
-                <JiraLogo className="h-4 w-4 shrink-0" />
-                <span>Link Jira Issue</span>
-              </Button>
-            )
-          ) : (
-            canManage && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => router.push('/settings/integrations/jira')}
-                className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
-              >
-                <JiraLogo className="h-4 w-4 shrink-0" />
-                <span>Connect Jira</span>
-              </Button>
-            )
-          )}
 
-          {warRoomError && (
-            <span className="text-xs text-rose-600 inline-flex items-center gap-1 font-medium">
-              <AlertCircle className="h-3.5 w-3.5" />
-              {warRoomError}
-            </span>
+              {/* Vertical divider between Integrations and Tags */}
+              <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 shrink-0 hidden md:block" />
+            </>
           )}
-
-          {/* Vertical divider between Integrations and Tags */}
-          <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 shrink-0 hidden md:block" />
 
           {/* Tags Section */}
           <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
@@ -617,7 +629,7 @@ export default function IncidentCommandBar({
             <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
           </div>
           <div className="flex flex-col gap-2 py-2">
-            {canManage && !hasActiveWarRoom && (
+            {canManage && !hasActiveWarRoom && warRoomEnabled && (
               <Button
                 type="button"
                 variant="outline"

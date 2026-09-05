@@ -1,8 +1,9 @@
 'use client';
 
 import { memo } from 'react';
+import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
-import { AlertCircle, ArrowUp, Zap, Info, ShieldAlert } from 'lucide-react';
+import { AlertCircle, ArrowUp, Zap, Info, ShieldAlert, type LucideIcon } from 'lucide-react';
 
 type PriorityBadgeProps = {
   priority: string | null | undefined;
@@ -11,80 +12,97 @@ type PriorityBadgeProps = {
   className?: string;
 };
 
-function getPriorityConfig(priority: string) {
+type PriorityConfig = {
+  label: string;
+  variant: 'danger' | 'warning' | 'info' | 'neutral';
+  icon: LucideIcon;
+  customClass?: string;
+};
+
+function getPriorityConfig(priority: string): PriorityConfig {
   switch (priority) {
     case 'P1':
       return {
         label: 'Crisis',
+        variant: 'danger',
         icon: ShieldAlert,
-        tone: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
       };
     case 'P2':
       return {
         label: 'High',
+        variant: 'warning',
         icon: ArrowUp,
-        tone: 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
       };
     case 'P3':
       return {
         label: 'Medium',
+        variant: 'warning',
         icon: AlertCircle,
-        tone: 'bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100/80 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800',
+        customClass:
+          'bg-gradient-to-r from-orange-500 to-amber-600 border-transparent text-white shadow-sm',
       };
     case 'P4':
       return {
         label: 'Low',
+        variant: 'info',
         icon: Zap,
-        tone: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100/80 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
       };
     case 'P5':
       return {
         label: 'Info',
+        variant: 'neutral',
         icon: Info,
-        tone: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700',
       };
     default:
       return {
         label: priority,
+        variant: 'neutral',
         icon: Info,
-        tone: 'bg-slate-50 text-slate-700 border-slate-200',
       };
   }
 }
 
-function getSizeClasses(size: 'sm' | 'md' | 'lg'): string {
+function getBadgeSize(size: 'sm' | 'md' | 'lg'): 'xs' | 'sm' | 'md' {
   switch (size) {
     case 'sm':
-      return 'text-xs px-2 py-0.5';
+      return 'xs';
     case 'lg':
-      return 'text-base px-3 py-1';
+      return 'md';
     case 'md':
     default:
-      return 'text-sm px-2.5 py-0.5';
+      return 'sm';
   }
 }
 
 function PriorityBadge({ priority, size = 'md', showLabel = true, className }: PriorityBadgeProps) {
   if (!priority) return null;
 
-  const { label, icon: Icon, tone } = getPriorityConfig(priority);
-  const sizeClasses = getSizeClasses(size);
+  const { label, variant, icon: Icon, customClass } = getPriorityConfig(priority);
+  const badgeSize = getBadgeSize(size);
 
   const displayLabel =
     size === 'sm' && !showLabel ? priority : showLabel ? `${priority} · ${label}` : priority;
 
   return (
-    <div
+    <Badge
+      variant={variant}
+      size={badgeSize}
       className={cn(
-        'font-semibold rounded-md border shadow-2xs inline-flex items-center gap-1.5 shrink-0 transition-all leading-normal',
-        sizeClasses,
-        tone,
+        'font-bold tracking-wide shadow-2xs gap-1 shrink-0 transition-all uppercase',
+        customClass,
         className
       )}
     >
-      {Icon && <Icon className={cn('shrink-0', size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5')} />}
+      {Icon && (
+        <Icon
+          className={cn(
+            'shrink-0 text-white',
+            badgeSize === 'xs' ? 'h-3 w-3' : badgeSize === 'md' ? 'h-4 w-4' : 'h-3.5 w-3.5'
+          )}
+        />
+      )}
       <span>{displayLabel}</span>
-    </div>
+    </Badge>
   );
 }
 
