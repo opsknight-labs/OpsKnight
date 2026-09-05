@@ -5,10 +5,11 @@ import { AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 
-interface ErrorStateProps {
+export interface ErrorStateProps {
   title?: string;
   message?: string;
   errorCode?: string;
+  retryText?: string;
   onRetry?: () => void;
   onGoBack?: () => void;
   showDetails?: boolean;
@@ -30,6 +31,7 @@ export default function ErrorState({
   title = 'Something went wrong',
   message = 'An error occurred while processing your request.',
   errorCode,
+  retryText = 'Try Again',
   onRetry,
   onGoBack,
   showDetails = false,
@@ -64,7 +66,7 @@ export default function ErrorState({
           {onRetry && (
             <Button onClick={onRetry} className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
-              Try Again
+              {retryText}
             </Button>
           )}
 

@@ -352,54 +352,83 @@ function eventPresentation(
   eventMessage?: string
 ) {
   const escalationMatch = eventMessage?.match(/Escalation Level\s+(\d+)/i);
-  if (escalationMatch)
+  if (escalationMatch) {
     return {
       header: `Escalation Level ${escalationMatch[1]}`,
       label: `Escalation Level ${escalationMatch[1]}`,
       message: `This incident has reached escalation level ${escalationMatch[1]} and requires responder attention.`,
       badge: 'error' as const,
+      headerGradient: 'linear-gradient(135deg, #881337 0%, #be123c 45%, #e11d48 100%)',
+      buttonBackground: 'linear-gradient(135deg, #be123c 0%, #e11d48 100%)',
+      buttonShadow: '0 8px 20px rgba(225, 29, 72, 0.35)',
+      accentColor: '#e11d48',
     };
-  if (eventType === 'resolved')
+  }
+  if (eventType === 'resolved') {
     return {
       header: 'Incident Resolved',
       label: 'Resolved',
       message: 'This incident has been resolved.',
       badge: 'success' as const,
+      headerGradient: 'linear-gradient(135deg, #064e3b 0%, #047857 45%, #059669 100%)',
+      buttonBackground: 'linear-gradient(135deg, #047857 0%, #059669 100%)',
+      buttonShadow: '0 8px 20px rgba(5, 150, 105, 0.35)',
+      accentColor: '#059669',
     };
-  if (eventType === 'acknowledged')
+  }
+  if (eventType === 'acknowledged') {
     return {
       header: 'Incident Acknowledged',
       label: 'Acknowledged',
       message: 'This incident has been acknowledged and is being actively worked.',
       badge: 'warning' as const,
+      headerGradient: 'linear-gradient(135deg, #78350f 0%, #b45309 45%, #d97706 100%)',
+      buttonBackground: 'linear-gradient(135deg, #b45309 0%, #d97706 100%)',
+      buttonShadow: '0 8px 20px rgba(217, 119, 6, 0.35)',
+      accentColor: '#d97706',
     };
-  if (eventType === 'updated')
+  }
+  if (eventType === 'updated') {
     return {
       header: 'Incident Updated',
       label: 'Updated',
       message: 'Incident details have been updated. Review the latest committed update below.',
       badge: 'info' as const,
+      headerGradient: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 45%, #3b82f6 100%)',
+      buttonBackground: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
+      buttonShadow: '0 8px 20px rgba(37, 99, 235, 0.35)',
+      accentColor: '#2563eb',
     };
+  }
+
+  const isHigh = urgency === 'HIGH';
+  const isMedium = urgency === 'MEDIUM';
+
   return {
-    header:
-      urgency === 'HIGH'
-        ? 'Critical Incident Alert'
-        : urgency === 'MEDIUM'
-          ? 'Elevated Incident Alert'
-          : 'Incident Notification',
-    label:
-      urgency === 'HIGH'
-        ? 'Critical Incident'
-        : urgency === 'MEDIUM'
-          ? 'Elevated Incident'
-          : 'New Incident',
+    header: isHigh
+      ? 'Critical Incident Alert'
+      : isMedium
+        ? 'Elevated Incident Alert'
+        : 'Incident Notification',
+    label: isHigh ? 'Critical Incident' : isMedium ? 'Elevated Incident' : 'New Incident',
     message: 'A new incident has been reported. Review the details and take action.',
-    badge:
-      urgency === 'HIGH'
-        ? ('error' as const)
-        : urgency === 'MEDIUM'
-          ? ('warning' as const)
-          : ('info' as const),
+    badge: isHigh ? ('error' as const) : isMedium ? ('warning' as const) : ('info' as const),
+    headerGradient: isHigh
+      ? 'linear-gradient(135deg, #881337 0%, #be123c 45%, #e11d48 100%)'
+      : isMedium
+        ? 'linear-gradient(135deg, #78350f 0%, #b45309 45%, #d97706 100%)'
+        : 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 45%, #3b82f6 100%)',
+    buttonBackground: isHigh
+      ? 'linear-gradient(135deg, #be123c 0%, #e11d48 100%)'
+      : isMedium
+        ? 'linear-gradient(135deg, #b45309 0%, #d97706 100%)'
+        : 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
+    buttonShadow: isHigh
+      ? '0 8px 20px rgba(225, 29, 72, 0.35)'
+      : isMedium
+        ? '0 8px 20px rgba(217, 119, 6, 0.35)'
+        : '0 8px 20px rgba(37, 99, 235, 0.35)',
+    accentColor: isHigh ? '#e11d48' : isMedium ? '#d97706' : '#2563eb',
   };
 }
 
@@ -445,16 +474,24 @@ export function generateIncidentEmailHTML(
   return EmailContainer(
     EmailHeader(
       presentation.header,
-      `Service: ${escapeHtml(incident.service?.name || 'Service')}`
+      `Service: ${escapeHtml(incident.service?.name || 'Service')}`,
+      { headerGradient: presentation.headerGradient }
     ) +
       EmailContent(`
         <div style="margin-bottom:18px">${StatusBadge(presentation.label.toUpperCase(), presentation.badge)}</div>
         <div style="font-size:14px;color:#475569;margin-bottom:20px">${escapeHtml(presentation.message)}</div>
         <h2 style="font-size:22px;color:#0f172a">${escapeHtml(incident.title)}</h2>
         ${context}
-        ${InfoCard(infoItems)}
+        ${InfoCard(infoItems, { accentColor: presentation.accentColor })}
         ${description}
-        <div style="margin-top:24px">${EmailButton(eventType === 'resolved' ? 'View Resolution' : 'View Incident', escapeHtml(incidentUrl))}</div>
+        <div style="margin-top:24px">${EmailButton(
+          eventType === 'resolved' ? 'View Resolution' : 'View Incident',
+          escapeHtml(incidentUrl),
+          {
+            buttonBackground: presentation.buttonBackground,
+            buttonShadow: presentation.buttonShadow,
+          }
+        )}</div>
       `) +
       EmailFooter()
   );
@@ -551,4 +588,136 @@ export async function sendIncidentEmail(
       error: error instanceof Error ? error.message : 'Send incident email error',
     };
   }
+}
+
+export type ShiftReminderData = {
+  userName: string;
+  scheduleName: string;
+  scheduleUrl: string;
+  shiftStart: Date;
+  shiftEnd: Date;
+  timeZone: string;
+  minutesUntilStart: number;
+};
+
+export function generateShiftReminderEmailHTML(data: ShiftReminderData): string {
+  const headerGradient = 'linear-gradient(135deg, #4c1d95 0%, #6d28d9 45%, #7c3aed 100%)';
+  const buttonBackground = 'linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%)';
+  const buttonShadow = '0 8px 20px rgba(124, 58, 237, 0.35)';
+
+  const formattedStart = formatDateTime(data.shiftStart, data.timeZone, { format: 'datetime' });
+  const formattedEnd = formatDateTime(data.shiftEnd, data.timeZone, { format: 'datetime' });
+  const durationHours = Math.max(
+    1,
+    Math.round((data.shiftEnd.getTime() - data.shiftStart.getTime()) / (1000 * 60 * 60))
+  );
+
+  const infoItems = [
+    { label: 'Schedule', value: data.scheduleName, highlight: true },
+    { label: 'Starts In', value: `~${data.minutesUntilStart} minute(s)` },
+    { label: 'Shift Start', value: `${formattedStart} (${data.timeZone})` },
+    { label: 'Shift End', value: `${formattedEnd} (${data.timeZone})` },
+    { label: 'Duration', value: `${durationHours} hour(s)` },
+  ];
+
+  return EmailContainer(
+    EmailHeader('Upcoming On-Call Shift', `Schedule: ${escapeHtml(data.scheduleName)}`, {
+      headerGradient,
+    }) +
+      EmailContent(`
+        <div style="margin-bottom:18px">${StatusBadge('UPCOMING ON-CALL', 'schedule')}</div>
+        <h2 style="font-size:22px;color:#0f172a;margin-bottom:12px">Hi ${escapeHtml(data.userName)}, your on-call shift is starting soon!</h2>
+        <p style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">
+          You are scheduled to go on-call for <strong>${escapeHtml(data.scheduleName)}</strong> in approximately <strong>${data.minutesUntilStart} minute(s)</strong>.
+          Please ensure your notification channels are active and you are prepared to respond to alerts.
+        </p>
+        ${InfoCard(infoItems, { accentColor: '#7c3aed' })}
+        <div style="margin-top:24px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:16px 20px;color:#5b21b6;font-size:13px;line-height:1.6">
+          <strong>💡 Responder Checklist:</strong>
+          <ul style="margin:8px 0 0 0;padding-left:20px">
+            <li>Verify your phone/SMS and mobile push notifications are unmuted.</li>
+            <li>Review active incidents or maintenance windows before taking over.</li>
+            <li>Coordinate with outgoing responders if any handoff context is pending.</li>
+          </ul>
+        </div>
+        <div style="margin-top:28px">${EmailButton('View On-Call Schedule', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
+      `) +
+      EmailFooter()
+  );
+}
+
+export async function sendShiftReminderEmail(
+  data: ShiftReminderData & { to: string }
+): Promise<EmailDeliveryResult> {
+  const subject = `⏰ [Upcoming Shift] You are on-call for "${data.scheduleName}" in ~${data.minutesUntilStart}m`;
+  const html = generateShiftReminderEmailHTML(data);
+  const text = `Upcoming On-Call Shift: You are scheduled to go on-call for "${data.scheduleName}" in approximately ${data.minutesUntilStart} minutes.\n\nSchedule: ${data.scheduleUrl}`;
+  return sendEmail({
+    to: data.to,
+    subject,
+    html,
+    text,
+  });
+}
+
+export type ShiftHandoffData = {
+  userName: string;
+  scheduleName: string;
+  scheduleUrl: string;
+  activeIncidents: Array<{
+    id: string;
+    title: string;
+    status: string;
+    incidentUrl: string;
+  }>;
+  timeZone: string;
+};
+
+export function generateShiftHandoffEmailHTML(data: ShiftHandoffData): string {
+  const headerGradient = 'linear-gradient(135deg, #1e3a8a 0%, #312e81 45%, #4338ca 100%)';
+  const buttonBackground = 'linear-gradient(135deg, #3730a3 0%, #4338ca 100%)';
+  const buttonShadow = '0 8px 20px rgba(67, 56, 202, 0.35)';
+
+  const incidentListHtml = data.activeIncidents
+    .map(
+      inc => `
+      <div style="padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px">
+        <div style="font-weight:600;font-size:14px;color:#0f172a">${escapeHtml(inc.title)}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">
+          Status: <strong>${escapeHtml(inc.status)}</strong> · <a href="${escapeHtml(inc.incidentUrl)}" style="color:#2563eb;text-decoration:none;font-weight:600">Open Incident &rarr;</a>
+        </div>
+      </div>`
+    )
+    .join('');
+
+  return EmailContainer(
+    EmailHeader('Shift Rotation Handoff', `Schedule: ${escapeHtml(data.scheduleName)}`, {
+      headerGradient,
+    }) +
+      EmailContent(`
+        <div style="margin-bottom:18px">${StatusBadge('SHIFT HANDOFF', 'schedule')}</div>
+        <h2 style="font-size:22px;color:#0f172a;margin-bottom:12px">Hi ${escapeHtml(data.userName)}, you are now On-Call</h2>
+        <p style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">
+          Your on-call shift for <strong>${escapeHtml(data.scheduleName)}</strong> has started.
+          The following <strong>${data.activeIncidents.length} active incident(s)</strong> have been automatically reassigned to you:
+        </p>
+        ${incidentListHtml}
+        <div style="margin-top:28px">${EmailButton('View Schedule & Incidents', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
+      `) +
+      EmailFooter()
+  );
+}
+
+export async function sendShiftHandoffEmail(
+  data: ShiftHandoffData & { to: string }
+): Promise<EmailDeliveryResult> {
+  const subject = `🔄 [Shift Handoff] You are now On-Call for "${data.scheduleName}" (${data.activeIncidents.length} active incidents)`;
+  const html = generateShiftHandoffEmailHTML(data);
+  const text = `Shift Handoff: You are now on-call for "${data.scheduleName}" with ${data.activeIncidents.length} active incident(s).\n\nSchedule: ${data.scheduleUrl}`;
+  return sendEmail({
+    to: data.to,
+    subject,
+    html,
+    text,
+  });
 }

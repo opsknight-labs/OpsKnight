@@ -79,12 +79,30 @@ export default class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      const rawMessage = this.state.error?.message?.toLowerCase() || '';
+      const isChunkError =
+        rawMessage.includes('loading chunk') ||
+        rawMessage.includes('chunkloaderror') ||
+        rawMessage.includes('failed to fetch dynamically imported module') ||
+        rawMessage.includes('error loading dynamically imported module');
+
       return (
         <ErrorState
-          title="Something went wrong"
-          message={this.state.error ? getUserFacingErrorMessage(this.state.error) : 'An unexpected error occurred'}
+          title={isChunkError ? 'Application Update Available' : 'Something went wrong'}
+          message={
+            isChunkError
+              ? 'A new version of OpsKnight has been deployed. Please reload the page to get the latest updates.'
+              : this.state.error
+                ? getUserFacingErrorMessage(this.state.error)
+                : 'An unexpected error occurred'
+          }
+          retryText={isChunkError ? 'Reload Application' : 'Try Again'}
           onRetry={() => {
-            this.setState({ hasError: false, error: null });
+            if (isChunkError && typeof window !== 'undefined') {
+              window.location.reload();
+            } else {
+              this.setState({ hasError: false, error: null });
+            }
           }}
         />
       );
