@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   incidentEventCreate: vi.fn(),
   enqueueIncidentUpdateSideEffects: vi.fn(),
+  enqueueWarRoomSideEffects: vi.fn(),
   transaction: vi.fn(),
 }));
 
@@ -28,6 +29,7 @@ vi.mock('@/lib/incidents/creation', () => ({
 
 vi.mock('@/lib/event-outbox', () => ({
   enqueueIncidentUpdateSideEffects: mocks.enqueueIncidentUpdateSideEffects,
+  enqueueWarRoomSideEffects: mocks.enqueueWarRoomSideEffects,
 }));
 
 vi.mock('@/lib/prisma', () => ({

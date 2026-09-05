@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { Prisma } from '@prisma/client';
 import { isAppRole } from '@/lib/authorization';
 import {
   AUTHORIZATION_ACTIONS,
@@ -16,6 +17,7 @@ import {
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
 import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
+import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
 
 export type ChatOpsLifecycleCommand = Extract<
   IncidentLifecycleCommand,
@@ -46,57 +48,67 @@ export async function authorizeChatOpsIncident(
   userId: string,
   requested: ChatOpsIncidentAuthorizationAction
 ): Promise<void> {
-  await runSerializableTransaction(async tx => {
-    const [user, incident] = await Promise.all([
-      tx.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          role: true,
-          status: true,
-          teamMemberships: { select: { teamId: true } },
-        },
-      }),
-      tx.incident.findUnique({
-        where: { id: incidentId },
-        select: {
-          assigneeId: true,
-          teamId: true,
-          visibility: true,
-          watchers: { select: { userId: true } },
-          service: { select: { teamId: true } },
-        },
-      }),
-    ]);
-    if (!user || !isAppRole(user.role) || user.status !== 'ACTIVE' || !incident) {
-      throw new AppError({
-        code: 'AUTHORIZATION_DENIED',
-        userMessage: 'You are not allowed to access this incident.',
-      });
-    }
-    const action =
-      requested === 'READ'
-        ? AUTHORIZATION_ACTIONS.INCIDENT_READ
-        : requested === 'NOTE'
-          ? AUTHORIZATION_ACTIONS.INCIDENT_NOTE
-          : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
-    const decision = authorize({
-      actor: {
-        id: user.id,
-        role: user.role,
-        status: user.status,
-        teamIds: user.teamMemberships.map(item => item.teamId),
+  await runSerializableTransaction(tx =>
+    authorizeChatOpsIncidentInTransaction(tx, incidentId, userId, requested)
+  );
+}
+
+/** Reload and authorize actor/resource using the mutation's transaction snapshot. */
+export async function authorizeChatOpsIncidentInTransaction(
+  tx: Prisma.TransactionClient,
+  incidentId: string,
+  userId: string,
+  requested: ChatOpsIncidentAuthorizationAction
+): Promise<void> {
+  const [user, incident] = await Promise.all([
+    tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        teamMemberships: { select: { teamId: true } },
       },
-      action,
-      resource: incidentResource(incident),
+    }),
+    tx.incident.findUnique({
+      where: { id: incidentId },
+      select: {
+        assigneeId: true,
+        teamId: true,
+        visibility: true,
+        watchers: { select: { userId: true } },
+        service: { select: { teamId: true } },
+      },
+    }),
+  ]);
+  if (!user || !isAppRole(user.role) || user.status !== 'ACTIVE' || !incident) {
+    throw new AppError({
+      code: 'AUTHORIZATION_DENIED',
+      userMessage: 'You are not allowed to access this incident.',
     });
-    if (!decision.allowed)
-      throw new AppError({
-        code: 'INCIDENT_ACCESS_DENIED',
-        userMessage: 'You do not have permission for this incident.',
-        details: { incidentId, requested, reason: decision.reason },
-      });
+  }
+  const action =
+    requested === 'READ'
+      ? AUTHORIZATION_ACTIONS.INCIDENT_READ
+      : requested === 'NOTE'
+        ? AUTHORIZATION_ACTIONS.INCIDENT_NOTE
+        : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
+  const decision = authorize({
+    actor: {
+      id: user.id,
+      role: user.role,
+      status: user.status,
+      teamIds: user.teamMemberships.map(item => item.teamId),
+    },
+    action,
+    resource: incidentResource(incident),
   });
+  if (!decision.allowed)
+    throw new AppError({
+      code: 'INCIDENT_ACCESS_DENIED',
+      userMessage: 'You do not have permission for this incident.',
+      details: { incidentId, requested, reason: decision.reason },
+    });
 }
 
 export async function executeChatOpsAssignment(input: {
@@ -106,6 +118,7 @@ export async function executeChatOpsAssignment(input: {
   idempotency?: IdempotencyContext;
 }): Promise<{ changed: boolean }> {
   return runSerializableTransaction(async tx => {
+    await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'MANAGE');
     const [target, incident] = await Promise.all([
       tx.user.findUnique({ where: { id: input.targetUserId }, select: { id: true, status: true } }),
       tx.incident.findUnique({
@@ -118,8 +131,6 @@ export async function executeChatOpsAssignment(input: {
         code: 'INCIDENT_NOT_FOUND',
         userMessage: 'Incident or assignee was not found.',
       });
-    // Authorization is intentionally performed by the common adapter before
-    // entering this transaction; idempotency fences the mutation and outbox.
     const execution = await executeIdempotentOperation(tx, {
       scope: 'chatops-assignment',
       context: input.idempotency,
@@ -140,6 +151,14 @@ export async function executeChatOpsAssignment(input: {
         });
         await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [
           'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION',
+        ]);
+        await enqueueWarRoomSideEffects(tx, input.incidentId, [
+          {
+            effect: 'WAR_ROOM_MESSAGE',
+            message: `👤 *Incident reassigned to ${input.actor.name}*`,
+          },
+          { effect: 'WAR_ROOM_INVITE_USER', userId: target.id },
+          { effect: 'WAR_ROOM_TOPIC' },
         ]);
         return { changed: true };
       },

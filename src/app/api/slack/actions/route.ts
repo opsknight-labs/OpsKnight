@@ -11,7 +11,6 @@ import { verifySlackSignature } from '@/lib/slack-signature';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
-  authorizeChatOpsIncident,
   executeChatOpsAssignment,
 } from '@/lib/incidents/chatops-lifecycle';
 
@@ -223,8 +222,6 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
       } else if (actionType === 'assign_me') {
         if (slackUserId) {
           try {
-            const { updateWarRoomTopic, slackApiCall } = await import('@/lib/chatops/war-room');
-
             const targetUser = actorUser;
 
             // No "first active user" fallback: assigning the incident to an
@@ -244,22 +241,12 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
               });
             }
 
-            await authorizeChatOpsIncident(incidentId, actorUser.id, 'MANAGE');
             const assignment = await executeChatOpsAssignment({
               incidentId,
               actor: { id: actorUser.id, name: targetUser.name },
               targetUserId: targetUser.id,
               ...(idempotency ? { idempotency } : {}),
             });
-            // External Slack side effects occur only after the durable domain
-            // mutation and outbox commit.
-            if (botToken && incident.slackChannelId) {
-              await slackApiCall('conversations.invite', botToken, {
-                channel: incident.slackChannelId,
-                users: slackUserId,
-              }).catch(() => {});
-            }
-            updateWarRoomTopic(incidentId).catch(() => {});
             responseMessage = assignment.changed
               ? `🙋 Incident assigned to *${targetUser.name}* (<@${slackUserId}>)`
               : `ℹ️ Incident is already assigned to *${targetUser.name}* (<@${slackUserId}>)`;

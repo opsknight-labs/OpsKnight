@@ -4,7 +4,6 @@ import prisma from '@/lib/prisma';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
-  authorizeChatOpsIncident,
   executeChatOpsAssignment,
 } from '@/lib/incidents/chatops-lifecycle';
 
@@ -48,7 +47,6 @@ vi.mock('@/lib/slack-signature', () => ({
 
 vi.mock('@/lib/incidents/chatops-lifecycle', () => ({
   executeChatOpsLifecycleCommand: vi.fn(),
-  authorizeChatOpsIncident: vi.fn().mockResolvedValue(undefined),
   executeChatOpsAssignment: vi.fn().mockResolvedValue({ changed: true }),
   chatOpsLifecycleErrorMessage: vi.fn(error =>
     error instanceof Error ? error.message : 'Unable to update incident.'
@@ -105,7 +103,6 @@ describe('Slack interactive lifecycle actions', () => {
     }));
     runSerializableTransaction.mockImplementation(operation => operation(prisma));
     enqueueIncidentUpdateSideEffects.mockResolvedValue(undefined);
-    vi.mocked(authorizeChatOpsIncident).mockResolvedValue(undefined);
     vi.mocked(executeChatOpsAssignment).mockResolvedValue({ changed: true });
   });
 
@@ -209,7 +206,6 @@ describe('Slack interactive lifecycle actions', () => {
     const body = await response.json();
 
     expect(body.text).toContain('assigned to');
-    expect(authorizeChatOpsIncident).toHaveBeenCalledWith('inc-1', 'user-1', 'MANAGE');
     expect(executeChatOpsAssignment).toHaveBeenCalledWith(
       expect.objectContaining({ incidentId: 'inc-1', targetUserId: 'user-1' })
     );

@@ -326,7 +326,8 @@ export async function processJiraWebhookEvent(
 export async function syncIncidentNoteToJira(
   incidentId: string,
   authorName: string,
-  noteContent: string
+  noteContent: string,
+  noteId: string
 ): Promise<number> {
   try {
     const links = await prisma.externalIssueLink.findMany({
@@ -338,7 +339,7 @@ export async function syncIncidentNoteToJira(
 
     const formattedComment = `[OpsKnight Note by ${authorName}]:\n${noteContent}`;
 
-    const eventId = `note:${Buffer.from(`${authorName}\0${noteContent}`).toString('base64url').slice(0, 96)}`;
+    const eventId = `note:${noteId}`;
     const result = await enqueueJiraCommentOperations(
       links.map(link => ({
         incidentId,
@@ -363,7 +364,8 @@ export async function syncIncidentNoteToJira(
  */
 export async function syncIncidentEventToJira(
   incidentId: string,
-  eventMessage: string
+  eventMessage: string,
+  incidentEventId: string
 ): Promise<number> {
   try {
     const links = await prisma.externalIssueLink.findMany({
@@ -375,7 +377,7 @@ export async function syncIncidentEventToJira(
 
     const formattedComment = `[OpsKnight Update]: ${eventMessage}`;
 
-    const eventId = `event:${Buffer.from(eventMessage).toString('base64url').slice(0, 96)}`;
+    const eventId = `event:${incidentEventId}`;
     const result = await enqueueJiraCommentOperations(
       links.map(link => ({
         incidentId,

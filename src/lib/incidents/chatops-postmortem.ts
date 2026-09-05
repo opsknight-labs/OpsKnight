@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { executeIdempotentOperation, type IdempotencyContext } from '@/lib/idempotency';
 import { getBaseUrl } from '@/lib/env-validation';
-import { authorizeChatOpsIncident } from './chatops-lifecycle';
+import { authorizeChatOpsIncidentInTransaction } from './chatops-lifecycle';
 
 export async function executeChatOpsPostmortemCommand(input: {
   incidentId: string;
@@ -10,8 +10,8 @@ export async function executeChatOpsPostmortemCommand(input: {
   channelName: string;
   idempotency?: IdempotencyContext;
 }) {
-  await authorizeChatOpsIncident(input.incidentId, input.actor.id, 'MANAGE');
   const result = await runSerializableTransaction(async tx => {
+    await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'MANAGE');
     const existing = await tx.postmortem.findUnique({
       where: { incidentId: input.incidentId },
       select: { title: true, status: true },

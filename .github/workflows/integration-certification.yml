@@ -1,5 +1,15 @@
 name: Integration control-plane certification
 on:
+  pull_request:
+    paths:
+      - 'src/lib/integrations/**'
+      - 'src/lib/chatops/**'
+      - 'src/lib/external-operations.ts'
+      - 'src/app/api/integrations/**'
+      - 'src/app/api/slack/**'
+      - 'tests/certification/**'
+      - 'scripts/load/integration-control-plane.js'
+      - '.github/workflows/integration-certification.yml'
   workflow_dispatch:
   schedule:
     - cron: '17 2 * * 1'
@@ -27,14 +37,36 @@ jobs:
         env:
           VITEST_USE_REAL_DB: '1'
           DATABASE_URL: postgresql://opsknight:certification-only@localhost:55432/opsknight
+      - name: Seed retry-storm integration
+        run: |
+          encrypted_secret=$(node -e "const c=require('node:crypto');const key=Buffer.from('9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08','hex');const iv=c.randomBytes(16);const x=c.createCipheriv('aes-256-cbc',key,iv);process.stdout.write(iv.toString('hex')+':'+x.update('certification-signing-secret','utf8','hex')+x.final('hex'))")
+          docker compose -f tests/certification/docker-compose.yml exec -T db psql -U opsknight -d opsknight -v ON_ERROR_STOP=1 -v signature_secret="$encrypted_secret" <<'SQL'
+          INSERT INTO "Service" (id, name, status, "createdAt", "updatedAt")
+          VALUES ('cert-service', 'Certification Service', 'OPERATIONAL', now(), now())
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO "Integration" (id, name, type, key, "signatureSecret", enabled, "serviceId", "createdAt", "updatedAt")
+          VALUES ('cert-github', 'Certification GitHub', 'GITHUB', 'certification-integration-key', :'signature_secret', true, 'cert-service', now(), now())
+          ON CONFLICT (id) DO UPDATE SET "signatureSecret" = EXCLUDED."signatureSecret";
+          SQL
       - name: Retry-storm and SLO gate
-        run: docker run --rm --network host -e BASE_URL=http://127.0.0.1:3300 -e RATE=100 -e DURATION=90s -v "$PWD/scripts/load:/scripts:ro" grafana/k6:0.54.0 run /scripts/integration-control-plane.js
+        run: |
+          docker run --rm --network host -e BASE_URL=http://127.0.0.1:3300 -e RATE=100 -e DURATION=90s -v "$PWD/scripts/load:/scripts:ro" grafana/k6:0.54.0 run /scripts/integration-control-plane.js &
+          load_pid=$!
+          sleep 15
+          worker_id=$(docker compose -f tests/certification/docker-compose.yml ps -q worker | head -n 1)
+          test -n "$worker_id"
+          docker kill --signal KILL "$worker_id"
+          docker compose -f tests/certification/docker-compose.yml up -d --scale worker=3 --wait worker
+          wait "$load_pid"
+      - name: Assert retry-storm idempotency invariant
+        run: |
+          count=$(docker compose -f tests/certification/docker-compose.yml exec -T db psql -U opsknight -d opsknight -Atc "SELECT count(*) FROM \"Incident\" WHERE \"dedupKey\" = 'cert-github:github-opsknight-labs-opsknight-certification-main'")
+          test "$count" = "1"
       - name: Database interruption and recovery
         run: |
           docker compose -f tests/certification/docker-compose.yml stop db
           sleep 10
-          docker compose -f tests/certification/docker-compose.yml start db
-          docker compose -f tests/certification/docker-compose.yml wait db
+          docker compose -f tests/certification/docker-compose.yml start --wait db
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3300/api/health?mode=readiness && exit 0; sleep 2; done
           exit 1
       - name: Logs

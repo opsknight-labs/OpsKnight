@@ -34,6 +34,8 @@ type JiraCommentOperationInput = {
   comment: string;
 };
 
+type TransactionClient = Prisma.TransactionClient;
+
 function jiraCreateKey(input: JiraCreateOperationInput): string {
   const owner = input.incidentId
     ? `incident:${input.incidentId}`
@@ -46,37 +48,43 @@ function jiraCreateKey(input: JiraCreateOperationInput): string {
 export async function enqueueJiraCommentOperations(
   inputs: JiraCommentOperationInput[]
 ): Promise<{ attempted: number; pending: number }> {
+  return prisma.$transaction(tx => enqueueJiraCommentOperationsInTransaction(tx, inputs));
+}
+
+/** Atomically persists Jira delivery intents with the source domain mutation. */
+export async function enqueueJiraCommentOperationsInTransaction(
+  tx: TransactionClient,
+  inputs: JiraCommentOperationInput[]
+): Promise<{ attempted: number; pending: number }> {
   let pending = 0;
-  await prisma.$transaction(async tx => {
-    for (const input of inputs) {
-      const idempotencyKey = `jira:comment:${input.externalKey}:${input.eventId}`;
-      const existing = await tx.externalOperation.findUnique({
-        where: { provider_idempotencyKey: { provider: 'JIRA', idempotencyKey } },
-        select: { id: true },
-      });
-      if (existing) continue;
-      const operation = await tx.externalOperation.create({
-        data: {
-          provider: 'JIRA',
-          operation: 'ADD_COMMENT',
-          idempotencyKey,
-          incidentId: input.incidentId,
-          externalKey: input.externalKey,
-          requestPayload: input as Prisma.InputJsonObject,
-        },
-      });
-      await tx.backgroundJob.create({
-        data: {
-          type: 'EXTERNAL_OPERATION',
-          status: 'PENDING',
-          scheduledAt: new Date(),
-          maxAttempts: 8,
-          payload: { operationId: operation.id },
-        },
-      });
-      pending++;
-    }
-  });
+  for (const input of inputs) {
+    const idempotencyKey = `jira:comment:${input.externalKey}:${input.eventId}`;
+    const existing = await tx.externalOperation.findUnique({
+      where: { provider_idempotencyKey: { provider: 'JIRA', idempotencyKey } },
+      select: { id: true },
+    });
+    if (existing) continue;
+    const operation = await tx.externalOperation.create({
+      data: {
+        provider: 'JIRA',
+        operation: 'ADD_COMMENT',
+        idempotencyKey,
+        incidentId: input.incidentId,
+        externalKey: input.externalKey,
+        requestPayload: input as Prisma.InputJsonObject,
+      },
+    });
+    await tx.backgroundJob.create({
+      data: {
+        type: 'EXTERNAL_OPERATION',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 8,
+        payload: { operationId: operation.id },
+      },
+    });
+    pending++;
+  }
   return { attempted: inputs.length, pending };
 }
 
