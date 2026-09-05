@@ -5,6 +5,8 @@ import path from 'node:path';
 import prisma from '@/lib/prisma';
 import { APP_VERSION } from '@/lib/version';
 import { getMetricsByIntegration, getMetricsSummary } from '@/lib/integrations/metrics';
+import { getJobWorkerStatus } from '@/lib/job-worker';
+import { getRealtimeControlPlaneStatus } from '@/lib/realtime-change-control-plane';
 
 export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 export type HealthCategory = 'database' | 'workers' | 'alerting' | 'security' | 'platform';
@@ -50,6 +52,12 @@ export type AdminHealthCheck = {
     steps?: string[];
   };
   telemetry?: CheckTelemetry;
+  /** Where the evidence originates. Prevents replica-local state being mistaken for cluster truth. */
+  scope?: 'cluster' | 'replica' | 'configuration' | 'external';
+  observedAt?: string;
+  impact?: string;
+  /** False for informative signals that are not expected on every deployment role. */
+  required?: boolean;
 };
 
 export type HealthHistorySample = {
@@ -63,7 +71,10 @@ export type HealthHistorySample = {
 
 export type AdminHealthReport = {
   generatedAt: string;
+  durationMs?: number;
   overall: HealthLevel;
+  scorePercent?: number;
+  knownSignalPercent?: number;
   checks: AdminHealthCheck[];
   history?: HealthHistorySample[];
 };
@@ -130,6 +141,15 @@ function byteLabel(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GiB`;
 }
 
+/** Keep diagnostics actionable without reflecting credentials, URLs, or driver internals. */
+function safeErrorKind(error: unknown): string {
+  if (!(error instanceof Error)) return 'Unexpected database error';
+  const name = error.name.replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 80);
+  return name
+    ? `${name} (see restricted server logs)`
+    : 'Database error (see restricted server logs)';
+}
+
 async function latestRelease(): Promise<string | null> {
   try {
     const response = await fetch(
@@ -157,6 +177,10 @@ export const CHECK_WEIGHTS: Record<string, number> = {
   jobs: 5,
   escalations: 5,
   'database-capacity': 5,
+  rollups: 5,
+  'integration-control-plane': 5,
+  'worker-replica': 3,
+  realtime: 3,
   // Auxiliary & Delivery Services (Weight 3)
   notifications: 3,
   integrations: 3,
@@ -202,8 +226,13 @@ export function calculateOperationalScore(checks: AdminHealthCheck[]): Operation
     } else if (check.status === 'healthy') {
       weightedScore += weight * 1.0;
     } else {
-      // 'unknown' is neutral, treated as passing
-      weightedScore += weight * 1.0;
+      // Unknown evidence must never inflate health. It is uncertainty, not success.
+      if (check.required === false) {
+        weightedScore += weight;
+      } else {
+        warningIssues.push(check);
+        weightedScore += weight * 0.5;
+      }
     }
   }
 
@@ -231,95 +260,55 @@ export async function generate24HourHistory(
 ): Promise<HealthHistorySample[]> {
   const since = new Date(now.getTime() - 24 * HOUR);
 
-  let incidents: Array<{
-    id: string;
-    title: string;
-    priority: string | null;
-    status: string;
-    createdAt: Date;
-    resolvedAt: Date | null;
-  }> = [];
-
-  let failedJobs: Array<{
+  type FailedJob = {
     id: string;
     createdAt: Date;
-  }> = [];
-
-  let failedDeliveries: Array<{
+  };
+  type FailedDelivery = {
     id: string;
     createdAt: Date;
-  }> = [];
-
-  let failedNotifications: Array<{
+  };
+  type FailedNotification = {
     id: string;
     startedAt: Date;
-  }> = [];
+  };
 
-  try {
-    incidents = await prisma.incident.findMany({
-      where: {
-        createdAt: { gte: since },
-      },
-      select: {
-        id: true,
-        title: true,
-        priority: true,
-        status: true,
-        createdAt: true,
-        resolvedAt: true,
-      },
-    });
-  } catch {
-    // Graceful fallback if database query is restricted
-  }
-
-  try {
-    failedJobs = await prisma.backgroundJob.findMany({
+  const historyResults = await Promise.allSettled([
+    prisma.backgroundJob.findMany({
       where: {
         createdAt: { gte: since },
         status: 'FAILED',
       },
-      select: {
-        id: true,
-        createdAt: true,
-      },
-    });
-  } catch {
-    // Graceful fallback
-  }
-
-  try {
-    failedDeliveries = await prisma.inboundDelivery.findMany({
+      select: { id: true, createdAt: true },
+    }),
+    prisma.inboundDelivery.findMany({
       where: {
         createdAt: { gte: since },
         status: 'FAILED',
       },
-      select: {
-        id: true,
-        createdAt: true,
-      },
-    });
-  } catch {
-    // Graceful fallback
-  }
-
-  try {
-    failedNotifications = await prisma.notificationDeliveryAttempt.findMany({
+      select: { id: true, createdAt: true },
+    }),
+    prisma.notificationDeliveryAttempt.findMany({
       where: {
         startedAt: { gte: since },
         outcome: 'FAILED',
       },
-      select: {
-        id: true,
-        startedAt: true,
-      },
-    });
-  } catch {
-    // Graceful fallback
-  }
+      select: { id: true, startedAt: true },
+    }),
+  ]);
+  const [jobResult, deliveryResult, notificationResult] = historyResults;
+  const failedJobs: FailedJob[] = jobResult.status === 'fulfilled' ? jobResult.value : [];
+  const failedDeliveries: FailedDelivery[] =
+    deliveryResult.status === 'fulfilled' ? deliveryResult.value : [];
+  const failedNotifications: FailedNotification[] =
+    notificationResult.status === 'fulfilled' ? notificationResult.value : [];
+  const unavailableSources = historyResults.filter(result => result.status === 'rejected').length;
 
-  const { scorePercent: liveScorePercent, criticalIssues, warningIssues } =
-    calculateOperationalScore(checks);
+  const {
+    scorePercent: liveScorePercent,
+    criticalIssues,
+    warningIssues,
+  } = calculateOperationalScore(checks);
 
   const topCriticalIssue = criticalIssues[0]?.summary;
   const topWarningIssue = warningIssues[0]?.summary;
@@ -332,28 +321,20 @@ export async function generate24HourHistory(
     const hour = d.getHours();
     const hourLabel = `${hour.toString().padStart(2, '0')}:00`;
 
-    // 1. Incidents active in this hourly bucket
-    const activeIncidents = incidents.filter(inc => {
-      const incStart = inc.createdAt.getTime();
-      const incEnd = inc.resolvedAt ? inc.resolvedAt.getTime() : now.getTime();
-      return incStart <= windowEnd.getTime() && incEnd >= windowStart.getTime();
-    });
-
-    // 2. Failed jobs in this hourly bucket
+    // Customer/service incidents are intentionally excluded: they describe the
+    // monitored estate, not whether OpsKnight itself was available.
     const hourlyFailedJobs = failedJobs.filter(
       j =>
         j.createdAt.getTime() >= windowStart.getTime() &&
         j.createdAt.getTime() < windowEnd.getTime()
     );
 
-    // 3. Failed webhook deliveries in this hourly bucket
     const hourlyFailedDeliveries = failedDeliveries.filter(
       del =>
         del.createdAt.getTime() >= windowStart.getTime() &&
         del.createdAt.getTime() < windowEnd.getTime()
     );
 
-    // 4. Failed notification attempts in this hourly bucket
     const hourlyFailedNotifications = failedNotifications.filter(
       notif =>
         notif.startedAt.getTime() >= windowStart.getTime() &&
@@ -364,22 +345,7 @@ export async function generate24HourHistory(
     let scorePercent = 100;
     let reason = 'All systems operating normally';
 
-    const criticalInc = activeIncidents.find(
-      inc => inc.priority === 'P1' || inc.priority === 'P2'
-    );
-    const warningInc = activeIncidents.find(
-      inc => inc.priority === 'P3' || inc.priority === 'P4'
-    );
-
-    if (criticalInc) {
-      status = 'unhealthy';
-      scorePercent = 40;
-      reason = `Critical incident (${criticalInc.priority || 'P1'}): ${criticalInc.title}`;
-    } else if (warningInc) {
-      status = 'degraded';
-      scorePercent = 75;
-      reason = `Active incident (${warningInc.priority || 'P3'}): ${warningInc.title}`;
-    } else if (hourlyFailedJobs.length > 0) {
+    if (hourlyFailedJobs.length > 0) {
       status = 'degraded';
       scorePercent = Math.max(70, 100 - hourlyFailedJobs.length * 10);
       reason = `${hourlyFailedJobs.length} background job failure(s)`;
@@ -397,19 +363,15 @@ export async function generate24HourHistory(
           ? 'All diagnostic signals passing'
           : topCriticalIssue ||
             topWarningIssue ||
-            (overall === 'degraded'
-              ? 'Operational with warnings'
-              : 'Critical diagnostic error');
-    } else if (criticalIssues.length > 0) {
-      // ONLY if persistent CRITICAL infrastructure is failing (e.g. DB connection broken)
-      status = 'unhealthy';
-      scorePercent = Math.min(50, liveScorePercent);
-      reason = topCriticalIssue || 'Critical diagnostic error';
+            (overall === 'degraded' ? 'Operational with warnings' : 'Critical diagnostic error');
+    } else if (unavailableSources > 0) {
+      status = 'unknown';
+      scorePercent = 0;
+      reason = `${unavailableSources} historical evidence source(s) unavailable`;
     } else {
-      // Normal peaceful historical hour
       status = 'healthy';
       scorePercent = 100;
-      reason = 'All systems operating normally';
+      reason = 'No durable job or delivery failures recorded';
     }
 
     samples.push({
@@ -424,7 +386,12 @@ export async function generate24HourHistory(
   return samples;
 }
 
-export async function collectAdminHealth(): Promise<AdminHealthReport> {
+const HEALTH_CACHE_TTL_MS = 15_000;
+let cachedHealthReport: { report: AdminHealthReport; expiresAt: number } | null = null;
+let healthCollectionInFlight: Promise<AdminHealthReport> | null = null;
+
+async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
+  const collectionStartedAt = Date.now();
   const now = new Date();
   const checks: AdminHealthCheck[] = [];
 
@@ -470,11 +437,11 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
       summary: 'PostgreSQL is unavailable to this application instance.',
       details: [
         'Check DATABASE_URL, network policy, credentials, TLS, capacity, and PostgreSQL logs.',
-        `Error: ${error instanceof Error ? error.message : 'Unknown connection error'}`,
+        `Error class: ${safeErrorKind(error)}`,
       ],
       telemetry: {
         rawPayload: {
-          error: error instanceof Error ? error.message : 'Unknown connection error',
+          errorClass: safeErrorKind(error),
         },
       },
     });
@@ -506,6 +473,8 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
         id: 'database-capacity',
         label: 'Database capacity',
         category: 'database',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
         status: !capacity
           ? 'unknown'
           : utilization >= 95 || capacity.longTransactions > 0
@@ -1072,6 +1041,8 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     id: 'encryption',
     label: 'Encryption configuration',
     category: 'security',
+    scope: 'configuration',
+    observedAt: now.toISOString(),
     status: encryptionValid
       ? 'healthy'
       : process.env.NODE_ENV === 'development'
@@ -1111,6 +1082,8 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     id: 'version',
     label: 'Version and upgrades',
     category: 'platform',
+    scope: 'external',
+    observedAt: now.toISOString(),
     status: !latest ? 'unknown' : comparison < 0 ? 'degraded' : 'healthy',
     summary: !latest
       ? `Running ${APP_VERSION}; the latest release could not be checked.`
@@ -1133,8 +1106,232 @@ export async function collectAdminHealth(): Promise<AdminHealthReport> {
     },
   });
 
-  const overall = overallStatus(checks);
-  const history = await generate24HourHistory(checks, overall, now);
+  // These signals close important blind spots in the durable control planes. They are
+  // deliberately collected after the baseline checks so a single optional subsystem
+  // can report "unknown" without preventing the rest of the page from rendering.
+  if (databaseAvailable) {
+    try {
+      const [rollup, staleExternalOperations, failedExternalOperations, staleInbound] =
+        await Promise.all([
+          prisma.incidentMetricRollup.findFirst({
+            where: { granularity: 'daily', serviceId: null, teamId: null },
+            orderBy: { date: 'desc' },
+            select: { date: true, updatedAt: true },
+          }),
+          prisma.externalOperation.count({
+            where: {
+              status: { in: ['PENDING', 'PROCESSING', 'AMBIGUOUS'] },
+              updatedAt: { lt: new Date(now.getTime() - 15 * MINUTE) },
+            },
+          }),
+          prisma.externalOperation.count({
+            where: { status: 'FAILED', updatedAt: { gte: new Date(now.getTime() - 24 * HOUR) } },
+          }),
+          prisma.inboundDelivery.count({
+            where: {
+              status: 'PROCESSING',
+              updatedAt: { lt: new Date(now.getTime() - 10 * MINUTE) },
+            },
+          }),
+        ]);
+      const expectedLatestDay = new Date(now);
+      expectedLatestDay.setUTCHours(0, 0, 0, 0);
+      expectedLatestDay.setUTCDate(expectedLatestDay.getUTCDate() - 1);
+      const rollupLagDays = rollup
+        ? Math.max(
+            0,
+            Math.floor((expectedLatestDay.getTime() - rollup.date.getTime()) / (24 * HOUR))
+          )
+        : null;
+      checks.push({
+        id: 'rollups',
+        label: 'Analytics rollup freshness',
+        category: 'workers',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
+        status:
+          rollupLagDays === null
+            ? 'unknown'
+            : rollupLagDays > 1
+              ? 'unhealthy'
+              : rollupLagDays > 0
+                ? 'degraded'
+                : 'healthy',
+        summary: rollup
+          ? `Latest complete daily rollup is ${rollupLagDays} day(s) behind.`
+          : 'No complete daily analytics rollup was found.',
+        details: [
+          `Latest rollup day: ${rollup?.date.toISOString() || 'none'}`,
+          `Last materialized: ${rollup?.updatedAt.toISOString() || 'never'}`,
+        ],
+        impact: 'Stale rollups can make historical reports and executive dashboards incomplete.',
+        telemetry: {
+          rawPayload: { rollupLagDays, latestDate: rollup?.date.toISOString() || null },
+        },
+      });
+      checks.push({
+        id: 'integration-control-plane',
+        label: 'Integration delivery control plane',
+        category: 'alerting',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
+        status:
+          staleExternalOperations > 0 || staleInbound > 0
+            ? 'unhealthy'
+            : failedExternalOperations > 0
+              ? 'degraded'
+              : 'healthy',
+        summary: `${staleExternalOperations} stale external operation(s), ${staleInbound} stale inbound delivery lease(s).`,
+        details: [
+          `Terminal external failures in 24 hours: ${failedExternalOperations}`,
+          'Durable database state is cluster-wide and survives replica restarts.',
+        ],
+        impact:
+          'Stale work delays inbound alerts, ChatOps responses, or external issue synchronization.',
+        telemetry: {
+          rawPayload: {
+            staleExternalOperations,
+            failedExternalOperations24h: failedExternalOperations,
+            staleInboundDeliveries: staleInbound,
+          },
+        },
+      });
+    } catch {
+      checks.push({
+        id: 'control-plane-storage',
+        label: 'Durable control-plane telemetry',
+        category: 'workers',
+        scope: 'cluster',
+        observedAt: now.toISOString(),
+        status: 'unknown',
+        summary: 'Durable rollup and integration state could not be inspected.',
+        details: ['Verify migrations and database permissions for control-plane tables.'],
+      });
+    }
+  }
 
-  return { generatedAt: now.toISOString(), overall, checks, history };
+  const worker = getJobWorkerStatus();
+  const workerSuccessAgeMs = worker.lastSuccessAt
+    ? now.getTime() - worker.lastSuccessAt.getTime()
+    : null;
+  checks.push({
+    id: 'worker-replica',
+    label: 'Local durable-job worker',
+    category: 'workers',
+    scope: 'replica',
+    required: false,
+    observedAt: now.toISOString(),
+    status: !worker.running
+      ? 'unknown'
+      : worker.lastError || workerSuccessAgeMs === null || workerSuccessAgeMs > 5 * MINUTE
+        ? 'degraded'
+        : 'healthy',
+    summary: !worker.running
+      ? 'This web replica does not run the durable-job worker.'
+      : workerSuccessAgeMs === null
+        ? 'The local worker has not completed a successful cycle.'
+        : `The local worker last succeeded ${ageLabel(worker.lastSuccessAt)}.`,
+    details: [
+      `Running on this replica: ${worker.running ? 'yes' : 'no'}`,
+      `In flight: ${worker.inFlight ? 'yes' : 'no'}`,
+      'A non-running local worker is informational when dedicated worker replicas are deployed.',
+    ],
+    impact:
+      'Use cluster queue age together with this replica signal to determine actual delivery health.',
+    telemetry: {
+      rawPayload: {
+        running: worker.running,
+        inFlight: worker.inFlight,
+        lastRunAt: worker.lastRunAt?.toISOString() || null,
+        lastSuccessAt: worker.lastSuccessAt?.toISOString() || null,
+        hasLastError: Boolean(worker.lastError),
+      },
+    },
+  });
+
+  const realtime = getRealtimeControlPlaneStatus();
+  checks.push({
+    id: 'realtime',
+    label: 'Realtime event control plane',
+    category: 'workers',
+    scope: 'replica',
+    observedAt: now.toISOString(),
+    status:
+      realtime.consecutiveFailures > 2
+        ? 'unhealthy'
+        : realtime.consecutiveFailures > 0
+          ? 'degraded'
+          : 'healthy',
+    summary:
+      realtime.consecutiveFailures > 0
+        ? `${realtime.consecutiveFailures} consecutive change-feed polling failure(s) on this replica.`
+        : 'The local realtime change feed has no recorded polling failures.',
+    details: [
+      `Connected subscribers on this replica: ${realtime.subscribers}`,
+      `Observed generation: ${realtime.observedGeneration || 'not yet observed'}`,
+      `Last temporal reconciliation: ${realtime.lastReconciliationAt || 'not started'}`,
+    ],
+    impact:
+      'Repeated failures delay dashboard and widget refreshes; durable data remains authoritative.',
+    telemetry: { rawPayload: realtime },
+  });
+
+  for (const check of checks) {
+    check.observedAt ??= now.toISOString();
+    check.scope ??=
+      check.id === 'version'
+        ? 'external'
+        : check.id === 'integrations'
+          ? 'replica'
+          : check.id === 'public-url' || check.id === 'encryption'
+            ? 'configuration'
+            : 'cluster';
+  }
+
+  const score = calculateOperationalScore(checks);
+  const overall = score.overall;
+  const history = await generate24HourHistory(checks, overall, now);
+  const requiredChecks = checks.filter(check => check.required !== false);
+  const knownChecks = requiredChecks.filter(check => check.status !== 'unknown').length;
+
+  return {
+    generatedAt: now.toISOString(),
+    durationMs: Date.now() - collectionStartedAt,
+    overall,
+    scorePercent: score.scorePercent,
+    knownSignalPercent: Math.round((knownChecks / Math.max(1, requiredChecks.length)) * 1000) / 10,
+    checks,
+    history,
+  };
+}
+
+/**
+ * A health page must not become a database load generator. One collection may
+ * contain several independent diagnostics, so requests on a replica share a
+ * short-lived snapshot and a single in-flight collection. `force` bypasses an
+ * existing snapshot but still joins an already-running collection.
+ */
+export async function collectAdminHealth(options?: {
+  force?: boolean;
+}): Promise<AdminHealthReport> {
+  const now = Date.now();
+  if (!options?.force && cachedHealthReport && cachedHealthReport.expiresAt > now) {
+    return cachedHealthReport.report;
+  }
+  if (healthCollectionInFlight) return healthCollectionInFlight;
+
+  healthCollectionInFlight = collectAdminHealthUncached()
+    .then(report => {
+      cachedHealthReport = { report, expiresAt: Date.now() + HEALTH_CACHE_TTL_MS };
+      return report;
+    })
+    .finally(() => {
+      healthCollectionInFlight = null;
+    });
+  return healthCollectionInFlight;
+}
+
+export function resetAdminHealthCacheForTests(): void {
+  cachedHealthReport = null;
+  healthCollectionInFlight = null;
 }

@@ -643,7 +643,7 @@ export async function refreshAdminHealthAction(): Promise<{
 }> {
   await assertAdmin();
   const { collectAdminHealth } = await import('@/lib/admin-health');
-  const report = await collectAdminHealth();
+  const report = await collectAdminHealth({ force: true });
   return { report };
 }
 
@@ -652,10 +652,11 @@ export async function refreshAdminHealthAction(): Promise<{
  */
 export async function refreshSingleHealthCheckAction(checkId: string): Promise<{
   check: import('@/lib/admin-health').AdminHealthCheck | null;
+  report: import('@/lib/admin-health').AdminHealthReport;
 }> {
   await assertAdmin();
   const { collectAdminHealth } = await import('@/lib/admin-health');
-  const report = await collectAdminHealth();
+  const report = await collectAdminHealth({ force: true });
   const check = report.checks.find(c => c.id === checkId) || null;
-  return { check };
+  return { check, report };
 }

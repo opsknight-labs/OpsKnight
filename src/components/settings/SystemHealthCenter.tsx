@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition, useMemo, useCallback } from 'react';
+import { useState, useEffect, useTransition, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import DetailTabs from '@/components/ui/DetailTabs';
@@ -153,39 +153,52 @@ export default function SystemHealthCenter({ initialReport }: Props) {
   const [countdown, setCountdown] = useState<number>(30);
   const [retestingId, setRetestingId] = useState<string | null>(null);
   const [inspectingCheck, setInspectingCheck] = useState<AdminHealthCheck | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(
     () => new Date(initialReport.generatedAt)
   );
+  const refreshInFlight = useRef(false);
 
   const handleRefresh = useCallback(() => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     startTransition(async () => {
       try {
         const { report: freshReport } = await refreshAdminHealthAction();
         setReport(freshReport);
         setLastRefreshedAt(new Date(freshReport.generatedAt));
+        setRefreshError(null);
         setCountdown(30);
         toast.success('System diagnostics refreshed');
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to refresh diagnostics');
+        const message = err instanceof Error ? err.message : 'Failed to refresh diagnostics';
+        setRefreshError(message);
+        toast.error(message);
+      } finally {
+        refreshInFlight.current = false;
       }
     });
   }, []);
 
   const handleRetestCheck = useCallback(async (checkId: string) => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     setRetestingId(checkId);
     try {
-      const { check: updatedCheck } = await refreshSingleHealthCheckAction(checkId);
+      const { check: updatedCheck, report: freshReport } =
+        await refreshSingleHealthCheckAction(checkId);
       if (updatedCheck) {
-        setReport(prev => ({
-          ...prev,
-          checks: prev.checks.map(c => (c.id === checkId ? updatedCheck : c)),
-        }));
+        setReport(freshReport);
+        setLastRefreshedAt(new Date(freshReport.generatedAt));
+        setRefreshError(null);
+        setInspectingCheck(previous => (previous?.id === checkId ? updatedCheck : previous));
         toast.success(`"${updatedCheck.label}" re-tested`);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to re-test signal');
     } finally {
       setRetestingId(null);
+      refreshInFlight.current = false;
     }
   }, []);
 
@@ -196,6 +209,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
       return;
     }
     const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
       setCountdown(prev => {
         if (prev <= 1) {
           handleRefresh();
@@ -220,7 +234,11 @@ export default function SystemHealthCenter({ initialReport }: Props) {
     () => report.checks.filter(c => c.status === 'unhealthy').length,
     [report.checks]
   );
-  const attentionCount = degradedCount + unhealthyCount;
+  const unknownCount = useMemo(
+    () => report.checks.filter(c => c.status === 'unknown').length,
+    [report.checks]
+  );
+  const attentionCount = degradedCount + unhealthyCount + unknownCount;
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -237,7 +255,7 @@ export default function SystemHealthCenter({ initialReport }: Props) {
       if (activeTab !== 'all' && check.category !== activeTab) {
         return false;
       }
-      if (onlyAttention && check.status !== 'degraded' && check.status !== 'unhealthy') {
+      if (onlyAttention && check.status === 'healthy') {
         return false;
       }
       return true;
@@ -312,7 +330,9 @@ export default function SystemHealthCenter({ initialReport }: Props) {
                   ? 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30'
                   : report.overall === 'degraded'
                     ? 'bg-amber-500/20 text-amber-100 border-amber-400/30'
-                    : 'bg-rose-500/20 text-rose-100 border-rose-400/30'
+                    : report.overall === 'unhealthy'
+                      ? 'bg-rose-500/20 text-rose-100 border-rose-400/30'
+                      : 'bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20'
               )}
             >
               {overallConfig.label}
@@ -326,7 +346,9 @@ export default function SystemHealthCenter({ initialReport }: Props) {
                 ? 'All Core Systems Operational'
                 : report.overall === 'degraded'
                   ? 'Operational with Warnings'
-                  : 'Critical Attention Required'}
+                  : report.overall === 'unhealthy'
+                    ? 'Critical Attention Required'
+                    : 'Insufficient Diagnostic Evidence'}
             </Badge>
           </>
         }
@@ -337,16 +359,19 @@ export default function SystemHealthCenter({ initialReport }: Props) {
               integrations.
             </span>
             <span className="opacity-40">•</span>
-            <span>Last verified at {lastRefreshedAt.toLocaleTimeString()}</span>
+            <span>
+              Last verified at {lastRefreshedAt.toLocaleTimeString()}
+              {report.durationMs !== undefined ? ` in ${report.durationMs} ms` : ''}
+            </span>
           </div>
         }
         statsPlacement="bottom"
         stats={[
           {
-            label: 'Total Signals',
-            value: report.checks.length,
+            label: 'Health Score',
+            value: report.scorePercent !== undefined ? `${report.scorePercent}%` : '—',
             icon: <Layers className="h-4 w-4 opacity-80" />,
-            subtext: 'Operational checks',
+            subtext: `${report.knownSignalPercent ?? 100}% evidence coverage`,
           },
           {
             label: 'Healthy',
@@ -361,10 +386,10 @@ export default function SystemHealthCenter({ initialReport }: Props) {
             subtext: 'Sub-optimal latency/retries',
           },
           {
-            label: 'Action Required',
-            value: unhealthyCount,
+            label: 'Action / Unknown',
+            value: `${unhealthyCount} / ${unknownCount}`,
             icon: <XCircle className="h-4 w-4 text-rose-300" />,
-            subtext: 'Needs intervention',
+            subtext: 'Failures / missing evidence',
           },
         ]}
         actions={
@@ -414,6 +439,23 @@ export default function SystemHealthCenter({ initialReport }: Props) {
       {/* 24-Hour Diagnostic History Sparkline (Service Health Trend) */}
       <HealthHistoryRibbon history={report.history} overall={report.overall} />
 
+      <OperationalBrief checks={report.checks} />
+
+      {refreshError && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              Latest refresh failed; showing the last successful report.
+            </p>
+            <p className="mt-0.5 opacity-90">{refreshError}</p>
+          </div>
+        </div>
+      )}
+
       {/* Centralized DetailTabs Navigation Header */}
       <DetailTabs
         tabs={tabItems}
@@ -450,8 +492,8 @@ export default function SystemHealthCenter({ initialReport }: Props) {
         {filteredChecks.length === 0 ? (
           <EmptyState
             icon={<CheckCircle2 className="h-6 w-6 text-emerald-500" />}
-            title="All Signals Healthy"
-            description="No signals in this category currently require operational attention."
+            title="No Signals Need Attention"
+            description="No degraded, unhealthy, or unreported signals match this filter."
             action={
               <Button
                 variant="outline"
@@ -514,6 +556,76 @@ export default function SystemHealthCenter({ initialReport }: Props) {
   );
 }
 
+function OperationalBrief({ checks }: { checks: AdminHealthCheck[] }) {
+  const attention = useMemo(() => {
+    const rank: Record<HealthLevel, number> = {
+      unhealthy: 0,
+      degraded: 1,
+      unknown: 2,
+      healthy: 3,
+    };
+    return checks
+      .filter(check => check.status !== 'healthy' && check.required !== false)
+      .sort((left, right) => rank[left.status] - rank[right.status])
+      .slice(0, 5);
+  }, [checks]);
+
+  if (attention.length === 0) return null;
+
+  return (
+    <Card className="border-border/80 shadow-2xs">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          Operational priorities
+        </CardTitle>
+        <CardDescription>
+          Highest-impact failures, warnings, and evidence gaps from this diagnostic run.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {attention.map(check => {
+          const config = STATUS_CONFIG[check.status];
+          const StatusIcon = config.icon;
+          return (
+            <div
+              key={check.id}
+              className="flex flex-col gap-2 rounded-lg border border-border/70 bg-muted/15 p-3 sm:flex-row sm:items-start sm:justify-between"
+            >
+              <div className="flex min-w-0 items-start gap-2.5">
+                <StatusIcon className={cn('mt-0.5 h-4 w-4 shrink-0', config.iconText)} />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-foreground">{check.label}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    {check.summary}
+                  </p>
+                  {check.impact && (
+                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                      <span className="font-semibold text-foreground">Impact:</span> {check.impact}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {check.action && (
+                <Button variant="outline" size="sm" asChild className="h-7 shrink-0 text-[11px]">
+                  <Link
+                    href={check.action.href}
+                    target={check.action.href.startsWith('http') ? '_blank' : undefined}
+                    rel={check.action.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  >
+                    {check.action.label}
+                    <ChevronRight className="ml-1 h-3 w-3" />
+                  </Link>
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 /**
  * 24-Hour Diagnostic History Ribbon (Service Health Trend)
  */
@@ -550,10 +662,10 @@ function HealthHistoryRibbon({
         <div className="flex items-center gap-2">
           <Activity className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-bold text-foreground text-xs tracking-tight">
-            24-Hour System Health Trend
+            24-Hour Recorded Signal Trend
           </span>
           <span className={cn('text-[11px] font-mono font-semibold', percentColorClass)}>
-            • {uptimePercent}% Operational
+            • {uptimePercent}% Signal Score
           </span>
         </div>
         <div className="hidden sm:flex items-center gap-2.5 text-[10px] text-muted-foreground font-mono">
@@ -659,6 +771,10 @@ function HealthHistoryRibbon({
         <span className="hidden sm:inline text-muted-foreground/60">12 hours ago</span>
         <span>Now</span>
       </div>
+      <p className="pt-2 text-[10px] leading-relaxed text-muted-foreground">
+        Derived from recorded incidents and durable delivery/job failures. This is diagnostic
+        context, not an uptime SLO or proof that unobserved periods were available.
+      </p>
     </div>
   );
 }
@@ -888,6 +1004,12 @@ function HealthCheckCard({
 
           {/* Details Bullet List */}
           <div className="space-y-1.5">
+            {check.scope && (
+              <div className="flex items-center justify-between rounded-md bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
+                <span>Evidence scope</span>
+                <span className="font-mono font-semibold uppercase">{check.scope}</span>
+              </div>
+            )}
             {check.details.map((detail, idx) => (
               <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
                 <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 mt-1.5 shrink-0" />
@@ -897,6 +1019,13 @@ function HealthCheckCard({
               </div>
             ))}
           </div>
+
+          {check.impact && (
+            <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">Operational impact: </span>
+              {check.impact}
+            </div>
+          )}
 
           {/* Database Migrations / Remediation Command Box with (i) Popover */}
           {check.commandSnippet && (
@@ -1043,7 +1172,10 @@ function DiagnosticInspectorModal({
       label: check.label,
       category: check.category,
       status: check.status,
+      evidenceScope: check.scope || 'unspecified',
+      observedAt: check.observedAt || null,
       summary: check.summary,
+      operationalImpact: check.impact || null,
       details: check.details,
       commandSnippet: check.commandSnippet || null,
       telemetry: check.telemetry?.rawPayload || check.telemetry || {},
@@ -1086,7 +1218,8 @@ function DiagnosticInspectorModal({
                 </Badge>
               </div>
               <DialogDescription className="text-xs text-muted-foreground font-mono">
-                Signal ID: {check.id} • Category: {check.category.toUpperCase()}
+                Signal ID: {check.id} • Category: {check.category.toUpperCase()} • Scope:{' '}
+                {(check.scope || 'unspecified').toUpperCase()}
               </DialogDescription>
             </div>
           </div>
@@ -1105,6 +1238,17 @@ function DiagnosticInspectorModal({
                 {check.summary}
               </p>
             </div>
+
+            {check.impact && (
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+                  Operational Impact
+                </span>
+                <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5 text-xs leading-relaxed text-muted-foreground">
+                  {check.impact}
+                </p>
+              </div>
+            )}
 
             {/* Diagnostic Facts */}
             <div className="space-y-2">

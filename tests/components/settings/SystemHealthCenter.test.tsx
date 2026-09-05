@@ -198,8 +198,9 @@ describe('SystemHealthCenter', () => {
 
     expect(screen.getByRole('heading', { name: 'System Health Center' })).toBeInTheDocument();
     expect(screen.getByText('Operational with Warnings')).toBeInTheDocument();
-    expect(screen.getByText('24-Hour System Health Trend')).toBeInTheDocument();
-    expect(screen.getByText('• 92.5% Operational')).toBeInTheDocument();
+    expect(screen.getByText('24-Hour Recorded Signal Trend')).toBeInTheDocument();
+    expect(screen.getByText('• 92.5% Signal Score')).toBeInTheDocument();
+    expect(screen.getByText(/not an uptime SLO/i)).toBeInTheDocument();
     expect(screen.getByText('24 hours ago')).toBeInTheDocument();
     expect(screen.getByText('12 hours ago')).toBeInTheDocument();
     expect(screen.getByText('Now')).toBeInTheDocument();
@@ -226,7 +227,7 @@ describe('SystemHealthCenter', () => {
       ],
     };
     render(<SystemHealthCenter initialReport={perfectReport} />);
-    expect(screen.getByText('• 100% Operational')).toBeInTheDocument();
+    expect(screen.getByText('• 100% Signal Score')).toBeInTheDocument();
   });
 
   it('renders visual telemetry gauges, latency pills, and queue distribution bars', () => {
@@ -276,9 +277,10 @@ describe('SystemHealthCenter', () => {
 
     expect(screen.getByText('PostgreSQL Database')).toBeInTheDocument();
     expect(screen.getByText('Database capacity')).toBeInTheDocument();
-    expect(screen.getByText('Database migrations')).toBeInTheDocument();
+    expect(screen.getAllByText('Database migrations').length).toBeGreaterThanOrEqual(1);
 
-    expect(screen.queryByText('Scheduler and workers')).not.toBeInTheDocument();
+    // It remains once in the global priority brief, but its diagnostic card is filtered out.
+    expect(screen.getAllByText('Scheduler and workers')).toHaveLength(1);
     expect(screen.queryByText('Encryption configuration')).not.toBeInTheDocument();
   });
 
@@ -288,9 +290,25 @@ describe('SystemHealthCenter', () => {
     const attentionToggle = screen.getByRole('button', { name: /needs attention only/i });
     fireEvent.click(attentionToggle);
 
-    expect(screen.getByText('Scheduler and workers')).toBeInTheDocument();
-    expect(screen.getByText('Background jobs')).toBeInTheDocument();
+    expect(screen.getAllByText('Scheduler and workers').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Background jobs').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('PostgreSQL Database')).not.toBeInTheDocument();
+  });
+
+  it('includes unknown evidence in the attention filter', () => {
+    render(
+      <SystemHealthCenter
+        initialReport={{
+          ...mockReport,
+          checks: mockReport.checks.map(check =>
+            check.id === 'sla-performance' ? { ...check, status: 'unknown' as const } : check
+          ),
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /needs attention only/i }));
+    expect(screen.getAllByText('SLA query performance').length).toBeGreaterThanOrEqual(1);
   });
 
   it('re-runs diagnostics when clicking the Re-run Diagnostics button', async () => {
@@ -313,6 +331,19 @@ describe('SystemHealthCenter', () => {
     });
   });
 
+  it('keeps the last successful report visible and explains refresh failures', async () => {
+    const { refreshAdminHealthAction } = await import('@/app/(app)/settings/system/actions');
+    vi.mocked(refreshAdminHealthAction).mockRejectedValue(new Error('Diagnostics timed out'));
+
+    render(<SystemHealthCenter initialReport={mockReport} />);
+    fireEvent.click(screen.getByRole('button', { name: /re-run diagnostics/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Latest refresh failed; showing the last successful report.'
+    );
+    expect(screen.getByText('PostgreSQL Database')).toBeInTheDocument();
+  });
+
   it('renders countdown badge when Live (30s) auto-refresh is toggled on', () => {
     render(<SystemHealthCenter initialReport={mockReport} />);
 
@@ -332,6 +363,15 @@ describe('SystemHealthCenter', () => {
         ...mockReport.checks[0],
         summary: 'PostgreSQL responded in 8 ms.',
         telemetry: { latencyMs: 8 },
+      },
+      report: {
+        ...mockReport,
+        generatedAt: '2026-09-02T12:01:00.000Z',
+        checks: mockReport.checks.map(check =>
+          check.id === 'database'
+            ? { ...check, summary: 'PostgreSQL responded in 8 ms.', telemetry: { latencyMs: 8 } }
+            : check
+        ),
       },
     });
 
