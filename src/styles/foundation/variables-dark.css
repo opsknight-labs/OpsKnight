@@ -57,8 +57,8 @@
     --accent: #3b82f6;
     /* Blue 500 */
 
-    --bg-primary: #0b1120;
-    /* Slate 950 (Main BG) */
+    --bg-primary: #09090b;
+    /* Zinc 950 (Main BG) */
     --bg-secondary: #0f172a;
     /* Slate 900 (Card BG) */
     --bg-dark: #020617;
@@ -111,10 +111,10 @@
     --color-neutral-900: #f8fafc;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, #1f2937 0%, #111827 55%, #0b1120 100%);
-    --gradient-dark: linear-gradient(135deg, #0b1120 0%, #111827 100%);
-    --gradient-glass: linear-gradient(145deg, rgba(15, 23, 42, 0.65) 0%, rgba(15, 23, 42, 0.35) 100%);
-    --gradient-surface: linear-gradient(180deg, #0f172a 0%, #0b1120 100%);
+    --gradient-primary: linear-gradient(135deg, #18181b 0%, #121216 55%, #09090b 100%);
+    --gradient-dark: linear-gradient(135deg, #09090b 0%, #121216 100%);
+    --gradient-glass: linear-gradient(145deg, rgba(18, 18, 22, 0.65) 0%, rgba(9, 9, 11, 0.35) 100%);
+    --gradient-surface: linear-gradient(180deg, #121216 0%, #09090b 100%);
 
     /* Badge Colors - Dark Mode */
     --badge-success-bg: rgba(5, 150, 105, 0.2);

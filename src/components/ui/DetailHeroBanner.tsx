@@ -67,7 +67,7 @@ export default function DetailHeroBanner({
       )}
 
       {/* Main Glassmorphic Hero Banner */}
-      <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] p-4 sm:p-5 md:p-6 text-slate-100 shadow-xl ring-1 ring-white/5">
+      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 sm:p-5 md:p-6 text-slate-100 shadow-xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
 
         <div className="relative flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
@@ -103,7 +103,7 @@ export default function DetailHeroBanner({
               {statsPlacement !== 'bottom' && stats.length > 0 && (
                 <div
                   className={cn(
-                    'grid gap-1.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-1.5 backdrop-blur-xs shadow-xs',
+                    'grid gap-1.5 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-1.5 backdrop-blur-xs shadow-xs',
                     stats.length === 1 && 'grid-cols-1 min-w-[120px]',
                     stats.length === 2 && 'grid-cols-2 min-w-[200px]',
                     stats.length === 3 && 'grid-cols-3 min-w-[280px]',
@@ -146,19 +146,19 @@ export default function DetailHeroBanner({
 
                     const itemClassName = cn(
                       'min-w-0 overflow-hidden rounded-lg px-2.5 py-1.5 text-center transition-all duration-150',
-                      idx > 0 && stats.length <= 3 && 'border-l border-slate-800/90',
-                      idx > 0 && stats.length === 4 && 'sm:border-l sm:border-slate-800/90',
+                      idx > 0 && stats.length <= 3 && 'border-l border-zinc-800/80',
+                      idx > 0 && stats.length === 4 && 'sm:border-l sm:border-zinc-800/80',
                       idx % 2 === 1 &&
                         stats.length === 4 &&
-                        'border-l border-slate-800/90 sm:border-l',
-                      idx > 0 && stats.length >= 5 && 'lg:border-l lg:border-slate-800/90',
+                        'border-l border-zinc-800/80 sm:border-l',
+                      idx > 0 && stats.length >= 5 && 'lg:border-l lg:border-zinc-800/80',
                       idx % 2 === 1 &&
                         stats.length >= 5 &&
-                        'border-l border-slate-800/90 lg:border-l',
+                        'border-l border-zinc-800/80 lg:border-l',
                       stat.href &&
-                        'hover:bg-slate-800/80 hover:text-white cursor-pointer focus:outline-none focus:ring-1 focus:ring-slate-400',
+                        'hover:bg-zinc-800/60 hover:text-white cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400',
                       stat.active &&
-                        'bg-slate-800/90 border-slate-700/80 ring-1 ring-white/10 font-bold',
+                        'bg-zinc-800/80 border-zinc-700/80 ring-1 ring-white/10 font-bold',
                       stat.className
                     );
 
@@ -230,10 +230,10 @@ export default function DetailHeroBanner({
               );
 
               const itemClassName = cn(
-                'min-w-0 overflow-hidden rounded-xl border border-slate-800/90 bg-slate-900/80 p-2.5 text-center shadow-xs transition-all duration-150 flex flex-col justify-center min-h-[72px]',
+                'min-w-0 overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2.5 text-center shadow-xs transition-all duration-150 flex flex-col justify-center min-h-[72px]',
                 stat.href &&
-                  'hover:bg-slate-800/80 hover:border-slate-700/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-slate-400',
-                stat.active && 'bg-slate-800/90 border-slate-700/80 ring-1 ring-white/10 font-bold',
+                  'hover:bg-zinc-800/60 hover:border-zinc-700/80 cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-400',
+                stat.active && 'bg-zinc-800/80 border-zinc-700/80 ring-1 ring-white/10 font-bold',
                 stat.className
               );
 

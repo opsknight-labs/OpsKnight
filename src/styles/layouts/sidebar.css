@@ -5,7 +5,7 @@
 .sidebar {
   width: var(--sidebar-width);
   /* Dark executive command surface matching Command Center */
-  background: #0b1120;
+  background: #09090b;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
@@ -25,7 +25,7 @@
 
 [data-theme='dark'] .sidebar,
 .dark .sidebar {
-  background: #0b1120;
+  background: #09090b;
   border-right-color: rgba(255, 255, 255, 0.08);
   color: #f8fafc;
 }
@@ -39,7 +39,7 @@
     width: min(288px, 85vw) !important;
     transform: translateX(-100%);
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    background: #0b1120 !important;
+    background: #09090b !important;
     box-shadow: 0 0 50px rgba(0, 0, 0, 0.5) !important;
   }
 

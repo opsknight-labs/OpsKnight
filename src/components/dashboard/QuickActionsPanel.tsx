@@ -47,17 +47,19 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
       <div className="space-y-2">
         {actions.map((action, idx) => {
           const classes = cn(
-            'group flex items-center gap-3 p-2.5 rounded-lg border transition-colors w-full',
+            'group flex items-center gap-3 p-2.5 rounded-lg border transition-all w-full shadow-xs',
             action.variant === 'primary'
-              ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
-              : 'bg-white border-slate-100 text-slate-700 hover:border-slate-200 hover:bg-slate-50/50'
+              ? 'bg-[#09090b] text-white border-zinc-800/80 hover:bg-[#18181b] hover:border-zinc-700/80'
+              : 'bg-white border-border text-slate-700 hover:border-slate-300 hover:bg-slate-50/50'
           );
           const content = (
             <>
               <div
                 className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                  action.variant === 'primary' ? 'bg-white/20' : 'bg-slate-100 text-slate-500'
+                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors',
+                  action.variant === 'primary'
+                    ? 'bg-white/10 text-white'
+                    : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200/70'
                 )}
               >
                 {action.icon}
@@ -67,8 +69,8 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
                 className={cn(
                   'w-3.5 h-3.5 shrink-0 transition-colors',
                   action.variant === 'primary'
-                    ? 'text-white/50 group-hover:text-white/80'
-                    : 'text-slate-300 group-hover:text-slate-500'
+                    ? 'text-zinc-500 group-hover:text-zinc-300'
+                    : 'text-slate-400 group-hover:text-slate-600'
                 )}
               />
             </>
