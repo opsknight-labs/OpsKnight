@@ -531,9 +531,9 @@ function HealthHistoryRibbon({
   const uptimePercent = Number.isInteger(avgScore) ? avgScore.toString() : avgScore.toFixed(1);
 
   const percentColorClass =
-    avgScore >= 99
+    avgScore >= 98
       ? 'text-emerald-600 dark:text-emerald-400'
-      : avgScore >= 90
+      : avgScore >= 80
         ? 'text-amber-600 dark:text-amber-400'
         : 'text-rose-600 dark:text-rose-400';
 

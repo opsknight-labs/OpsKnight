@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import DashboardRealtimeWrapper from '@/components/DashboardRealtimeWrapper';
 
 // Mock useRealtime hook (overridden per test as needed)
@@ -7,20 +7,21 @@ const useRealtimeMock = vi.fn(() => ({
   isConnected: true,
   metrics: { open: 5, acknowledged: 3, resolved24h: 10, highUrgency: 2 },
   recentIncidents: [] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
-  error: null
+  error: null,
 }));
+const refreshMock = vi.fn();
 
 vi.mock('@/hooks/useRealtime', () => ({
-  useRealtime: () => useRealtimeMock()
+  useRealtime: () => useRealtimeMock(),
 }));
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
-    refresh: vi.fn(),
+    refresh: refreshMock,
     push: vi.fn(),
-    replace: vi.fn()
-  })
+    replace: vi.fn(),
+  }),
 }));
 
 describe('DashboardRealtimeWrapper', () => {
@@ -57,7 +58,7 @@ describe('DashboardRealtimeWrapper', () => {
       isConnected: true,
       metrics: { open: 5, acknowledged: 3, resolved24h: 10, highUrgency: 2 },
       recentIncidents: [{ id: '1', title: 'Test Incident' }],
-      error: null
+      error: null,
     });
 
     render(
@@ -69,5 +70,22 @@ describe('DashboardRealtimeWrapper', () => {
     // Component should handle incidents updates
     expect(onIncidentsUpdate).toHaveBeenCalled();
   });
-});
 
+  it('lets server-rendered dashboards refresh explicitly when updates arrive', () => {
+    useRealtimeMock.mockReturnValueOnce({
+      isConnected: true,
+      metrics: { open: 5, acknowledged: 3, resolved24h: 10, highUrgency: 2 },
+      recentIncidents: [{ id: '1', title: 'Test Incident' }],
+      error: null,
+    });
+
+    render(
+      <DashboardRealtimeWrapper>
+        <div>Test</div>
+      </DashboardRealtimeWrapper>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /dashboard updates available/i }));
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+  });
+});

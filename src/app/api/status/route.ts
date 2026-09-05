@@ -196,9 +196,14 @@ export async function GET(req: NextRequest) {
         }))
       : [];
 
+    // Never let a shared cache satisfy a request that is protected at the
+    // origin. Public status payloads can absorb outage traffic at the edge;
+    // token/session-protected payloads remain private.
     const headers: Record<string, string> = {
-      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-      Pragma: 'no-cache',
+      'Cache-Control':
+        statusPage.requireAuth || statusPage.statusApiRequireToken
+          ? 'private, no-store'
+          : 'public, s-maxage=15, stale-while-revalidate=120',
       Expires: '0',
     };
 

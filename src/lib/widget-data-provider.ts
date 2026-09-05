@@ -1,9 +1,12 @@
 import prisma from '@/lib/prisma';
-import { calculateSLAMetrics } from '@/lib/sla-server';
-import type { SLAMetricsFilter } from '@/lib/sla-server';
+import { calculateSLAMetrics, type SLAMetricsFilter } from '@/lib/sla-server';
 import type { SLAMetrics as SLAServerMetrics } from '@/lib/sla';
 import { getActiveOnCallShifts } from '@/lib/oncall-shifts';
 import type { Prisma } from '@prisma/client';
+import { compileIncidentMetricFilter } from '@/lib/metrics/domain/filter';
+import { activeIncidentStatuses } from '@/lib/incident-status';
+import { resolveSlaTarget } from '@/lib/metrics/domain/sla-target';
+import { effectiveElapsedMs } from '@/lib/metrics/domain/sla-clock';
 
 /**
  * Centralized Widget Data Provider
@@ -78,12 +81,98 @@ export interface WidgetDataContext {
   lastUpdated: Date;
 }
 
+export type WidgetRealtimeProjection = Pick<
+  WidgetDataContext,
+  'activeIncidents' | 'slaBreachAlerts' | 'lastUpdated'
+>;
+
 // Threshold for overload detection (configurable)
 const OVERLOAD_THRESHOLD = 5;
 
 // SLA breach alert windows (in milliseconds)
 const ACK_BREACH_ALERT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const RESOLVE_BREACH_ALERT_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Lightweight realtime projection. Historical SLA rates and trends belong to
+ * the page/snapshot path; an SSE heartbeat must never recompute them.
+ */
+export async function getWidgetRealtimeProjection(
+  filters: SLAMetricsFilter = {}
+): Promise<WidgetRealtimeProjection> {
+  const now = new Date();
+  const where = compileIncidentMetricFilter({ ...filters, status: undefined }).prisma;
+  const incidents = await prisma.incident.findMany({
+    where: { AND: [where, { status: { in: activeIncidentStatuses() } }] },
+    orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
+    take: 100,
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      urgency: true,
+      createdAt: true,
+      acknowledgedAt: true,
+      serviceId: true,
+      assigneeId: true,
+      priority: true,
+      slaAckTargetMs: true,
+      slaResolveTargetMs: true,
+      slaPauses: { select: { startedAt: true, endedAt: true } },
+      service: {
+        select: { name: true, targetAckMinutes: true, targetResolveMinutes: true },
+      },
+    },
+  });
+  const activeIncidents: ActiveIncidentData[] = incidents.map(incident => {
+    const target = resolveSlaTarget({
+      incidentTargets: {
+        ackTargetMs: incident.slaAckTargetMs,
+        resolveTargetMs: incident.slaResolveTargetMs,
+      },
+      priority: incident.priority,
+      serviceTargets: {
+        ackMinutes: incident.service.targetAckMinutes,
+        resolveMinutes: incident.service.targetResolveMinutes,
+      },
+    });
+    const elapsed = effectiveElapsedMs({
+      startedAt: incident.createdAt,
+      evaluationAt: now,
+      pauses: incident.slaPauses,
+    });
+    return {
+      id: incident.id,
+      title: incident.title,
+      status: incident.status,
+      urgency: incident.urgency,
+      createdAt: incident.createdAt,
+      acknowledgedAt: incident.acknowledgedAt,
+      resolvedAt: null,
+      serviceId: incident.serviceId,
+      serviceName: incident.service.name,
+      assigneeId: incident.assigneeId,
+      assigneeName: null,
+      slaAckDeadline: incident.acknowledgedAt
+        ? null
+        : new Date(now.getTime() + Math.max(0, target.ackTargetMs - elapsed)),
+      slaResolveDeadline: new Date(now.getTime() + Math.max(0, target.resolveTargetMs - elapsed)),
+    };
+  });
+  const slaBreachAlerts = activeIncidents.filter(incident => {
+    const ackRemaining = incident.slaAckDeadline
+      ? incident.slaAckDeadline.getTime() - now.getTime()
+      : Number.POSITIVE_INFINITY;
+    const resolveRemaining = incident.slaResolveDeadline
+      ? incident.slaResolveDeadline.getTime() - now.getTime()
+      : Number.POSITIVE_INFINITY;
+    return (
+      ackRemaining <= ACK_BREACH_ALERT_WINDOW_MS ||
+      resolveRemaining <= RESOLVE_BREACH_ALERT_WINDOW_MS
+    );
+  });
+  return { activeIncidents, slaBreachAlerts, lastUpdated: now };
+}
 
 export function buildWidgetActivityIncidentWhere(
   filters: SLAMetricsFilter

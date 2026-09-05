@@ -371,20 +371,23 @@ function IncidentList({ incidents, serviceId }: IncidentListProps) {
 
 // Memoize IncidentList to prevent unnecessary re-renders when parent updates
 export default memo(IncidentList, (prevProps, nextProps) => {
-  return (
-    prevProps.serviceId === nextProps.serviceId &&
-    prevProps.incidents.length === nextProps.incidents.length &&
-    prevProps.incidents.every(
-      (inc, i) =>
-        inc.id === nextProps.incidents[i]?.id &&
-        inc.status === nextProps.incidents[i]?.status &&
-        inc.urgency === nextProps.incidents[i]?.urgency &&
-        inc.priority === nextProps.incidents[i]?.priority &&
-        inc.createdAt.getTime() === nextProps.incidents[i]?.createdAt.getTime() &&
-        inc.resolvedAt?.getTime() === nextProps.incidents[i]?.resolvedAt?.getTime() &&
-        inc.assignee?.id === nextProps.incidents[i]?.assignee?.id &&
-        inc.team?.id === nextProps.incidents[i]?.team?.id &&
-        inc.team?.name === nextProps.incidents[i]?.team?.name
-    )
-  );
+  if (prevProps.serviceId !== nextProps.serviceId) return false;
+  if (prevProps.incidents.length !== nextProps.incidents.length) return false;
+
+  let index = 0;
+  for (const inc of prevProps.incidents) {
+    const nextInc = nextProps.incidents.at(index);
+    index += 1;
+    if (!inc || !nextInc) return false;
+    if (inc.id !== nextInc.id) return false;
+    if (inc.status !== nextInc.status) return false;
+    if (inc.urgency !== nextInc.urgency) return false;
+    if (inc.priority !== nextInc.priority) return false;
+    if (inc.createdAt.getTime() !== nextInc.createdAt.getTime()) return false;
+    if (inc.resolvedAt?.getTime() !== nextInc.resolvedAt?.getTime()) return false;
+    if (inc.assignee?.id !== nextInc.assignee?.id) return false;
+    if (inc.team?.id !== nextInc.team?.id) return false;
+    if (inc.team?.name !== nextInc.team?.name) return false;
+  }
+  return true;
 });
