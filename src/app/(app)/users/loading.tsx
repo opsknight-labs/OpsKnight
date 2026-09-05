@@ -1,86 +1,53 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/shadcn/card';
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
+import { DetailHeroBannerSkeleton } from '@/components/ui/DetailHeroBanner';
 import { UserListSkeleton } from '@/components/users/UserCardSkeleton';
 
 export default function UsersLoading() {
   return (
-    <div className="w-full px-4 py-6 space-y-6">
-      {/* Header Skeleton */}
-      <div className="rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 md:p-6 shadow-xl ring-1 ring-white/5 animate-pulse h-[140px] md:h-[100px]" />
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
+      {/* Centralized Glassmorphic Hero Banner Skeleton */}
+      <DetailHeroBannerSkeleton statsCount={4} hasActions={true} />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
-        {/* Main Content */}
-        <div className="xl:col-span-2 space-y-4 md:space-y-6">
-          {/* Filters Skeleton */}
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32 mb-2" />
-              <Skeleton className="h-4 w-48" />
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-2 mb-4">
-                <Skeleton className="h-6 w-20 rounded-full" />
-                <Skeleton className="h-6 w-20 rounded-full" />
-                <Skeleton className="h-6 w-20 rounded-full" />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            </CardContent>
-          </Card>
+      {/* Filters Skeleton */}
+      <Card className="border-border/70 shadow-2xs">
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          {/* Quick filter chips */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-7 w-20 rounded-md" />
+            <Skeleton className="h-7 w-20 rounded-md" />
+            <Skeleton className="h-7 w-20 rounded-md" />
+            <Skeleton className="h-7 w-20 rounded-md" />
+            <Skeleton className="h-7 w-20 rounded-md" />
+          </div>
+          {/* Filter dropdowns row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Skeleton className="h-9 w-full rounded-lg" />
+            <Skeleton className="h-9 w-full rounded-lg" />
+            <Skeleton className="h-9 w-full rounded-lg" />
+            <Skeleton className="h-9 w-full rounded-lg" />
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* User List Skeleton */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <Skeleton className="h-6 w-32 mb-2" />
-                  <Skeleton className="h-4 w-40" />
-                </div>
-                <Skeleton className="h-9 w-24" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <UserListSkeleton />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar Skeleton */}
-        <div className="space-y-4 md:space-y-6">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32 mb-2" />
-              <Skeleton className="h-4 w-40" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32 mb-2" />
-              <Skeleton className="h-4 w-40" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      {/* User Directory Skeleton (Full-width responsive 3-column grid) */}
+      <Card className="border-border/70 shadow-2xs">
+        <CardHeader className="p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <Skeleton className="h-5 w-32 rounded-md" />
+              <Skeleton className="h-3.5 w-44 rounded-sm" />
+            </div>
+            <div className="flex items-center gap-2.5">
+              <Skeleton className="h-8 w-36 rounded-lg" />
+              <Skeleton className="h-8 w-24 rounded-lg" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-5 pt-0">
+          <UserListSkeleton count={6} viewMode="grid" />
+        </CardContent>
+      </Card>
     </div>
   );
 }

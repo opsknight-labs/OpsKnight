@@ -48,12 +48,12 @@ export default function InviteUserModal({
             type="button"
             disabled={disabled}
             className={cn(
-              'h-9 px-3.5 font-semibold text-xs gap-2 rounded-lg transition-all shadow-sm shrink-0 cursor-pointer',
-              'bg-white text-zinc-950 hover:bg-zinc-100 active:bg-zinc-200 border border-white/20 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100',
+              'h-9 px-3.5 font-semibold text-xs gap-2 rounded-lg transition-all duration-200 shadow-xs shrink-0 select-none cursor-pointer',
+              'bg-[#18181b] hover:bg-[#27272a] active:bg-[#2e2e33] text-white border border-zinc-700/80 hover:border-zinc-500/80 focus-visible:ring-2 focus-visible:ring-zinc-400',
               className
             )}
           >
-            <UserPlus className="h-3.5 w-3.5 text-zinc-950 stroke-[2.2]" />
+            <UserPlus className="h-3.5 w-3.5 text-zinc-200 stroke-[2.2]" />
             <span>{label}</span>
           </Button>
         ) : (
