@@ -1,20 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { mockPerformDataCleanup } = vi.hoisted(() => ({
-  mockPerformDataCleanup: vi.fn().mockResolvedValue({
-    incidents: 3,
-    alerts: 5,
-    logs: 0,
-    metrics: 12,
-    events: 8,
-    auditLogs: 0,
-    inAppNotifications: 0,
-    slaPerformanceLogs: 0,
-    executionTimeMs: 15,
-    dryRun: true,
-  }),
-}));
+const { mockPerformDataCleanup, MockCleanupConflictError } = vi.hoisted(() => {
+  class MockCleanupConflictError extends Error {
+    readonly status = 409;
+    constructor(message: string) {
+      super(message);
+      this.name = 'CleanupConflictError';
+    }
+  }
+
+  return {
+    mockPerformDataCleanup: vi.fn().mockResolvedValue({
+      incidents: 3,
+      alerts: 5,
+      logs: 0,
+      metrics: 12,
+      events: 8,
+      auditLogs: 0,
+      inAppNotifications: 0,
+      slaPerformanceLogs: 0,
+      executionTimeMs: 15,
+      dryRun: true,
+    }),
+    MockCleanupConflictError,
+  };
+});
 
 vi.mock('@/lib/rbac', () => ({
   assertAdmin: vi.fn().mockResolvedValue({ id: 'usr-admin-1', role: 'ADMIN' }),
@@ -27,6 +38,7 @@ vi.mock('@/lib/audit', () => ({
 vi.mock('@/lib/data-cleanup', () => ({
   performDataCleanup: (...args: unknown[]) => mockPerformDataCleanup(...args),
   getStorageStats: vi.fn(),
+  CleanupConflictError: MockCleanupConflictError,
 }));
 
 vi.mock('@/lib/retention-policy', () => ({
@@ -127,7 +139,9 @@ describe('POST /api/settings/retention', () => {
 
   it('returns 409 Conflict when cleanup is already in progress', async () => {
     mockPerformDataCleanup.mockRejectedValueOnce(
-      new Error('Data cleanup is already in progress. Please wait for the current run to complete.')
+      new MockCleanupConflictError(
+        'Data cleanup is already in progress. Please wait for the current run to complete.'
+      )
     );
 
     const req = new NextRequest('http://localhost:3000/api/settings/retention', {

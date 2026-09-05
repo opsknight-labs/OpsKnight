@@ -26,6 +26,15 @@ export interface CleanupResult {
   dryRun: boolean;
 }
 
+export class CleanupConflictError extends Error {
+  readonly code = 'CLEANUP_CONFLICT';
+  readonly status = 409;
+  constructor(message: string) {
+    super(message);
+    this.name = 'CleanupConflictError';
+  }
+}
+
 /** In-process single-flight lock to serialize cleanup mutations within this Node process */
 let isCleanupInProgress = false;
 
@@ -54,7 +63,7 @@ export async function performDataCleanup(
   let hasPgAdvisoryLock = false;
   if (!dryRun) {
     if (isCleanupInProgress) {
-      throw new Error(
+      throw new CleanupConflictError(
         'Data cleanup is already in progress. Please wait for the current run to complete.'
       );
     }
@@ -65,14 +74,14 @@ export async function performDataCleanup(
           SELECT pg_try_advisory_lock(9141004::bigint) AS "acquired"
         `;
         if (lockResult && lockResult[0]?.acquired === false) {
-          throw new Error(
+          throw new CleanupConflictError(
             'Data cleanup is currently being executed by another process or instance.'
           );
         }
         hasPgAdvisoryLock = lockResult?.[0]?.acquired === true;
       }
     } catch (lockErr) {
-      if (lockErr instanceof Error && lockErr.message.includes('currently being executed')) {
+      if (lockErr instanceof CleanupConflictError) {
         isCleanupInProgress = false;
         throw lockErr;
       }

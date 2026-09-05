@@ -4,7 +4,7 @@ import {
   updateRetentionPolicy,
   type RetentionPolicy,
 } from '@/lib/retention-policy';
-import { getStorageStats, performDataCleanup } from '@/lib/data-cleanup';
+import { getStorageStats, performDataCleanup, CleanupConflictError } from '@/lib/data-cleanup';
 import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
@@ -200,12 +200,8 @@ export async function POST(request: NextRequest) {
     return jsonOk({ success: true, dryRun, result });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
-    if (
-      error instanceof Error &&
-      (error.message.includes('already in progress') ||
-        error.message.includes('currently being executed'))
-    ) {
-      return jsonError(error.message, 409);
+    if (error instanceof CleanupConflictError) {
+      return jsonError(error.message, error.status);
     }
     logger.error('[API] Data cleanup failed', { error });
     return jsonError('Failed to execute cleanup', 500);
