@@ -239,6 +239,7 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                 )}
                 role="listitem"
                 aria-label={`${incident.title} - ${actionLabel} ${slaInfo.badgeText}`}
+                suppressHydrationWarning
               >
                 {/* Icon */}
                 <div
@@ -276,7 +277,7 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                     >
                       <span className="font-extrabold">{actionLabel}</span>
                       <span className="opacity-40">·</span>
-                      <span className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1" suppressHydrationWarning>
                         {slaInfo.isBreached && (
                           <span className="relative flex h-1.5 w-1.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-60" />
