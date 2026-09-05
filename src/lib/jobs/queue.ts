@@ -41,10 +41,19 @@ export async function claimPendingJobs(limit:number=50,type?:JobType):Promise<an
               AND older."payload"->>'incidentId'=candidate."payload"->>'incidentId'
               AND older."payload"->>'lane'=candidate."payload"->>'lane'
               AND older."id"<>candidate."id"
-              AND (older."payload"->>'eventOrderAt')::timestamptz < (candidate."payload"->>'eventOrderAt')::timestamptz
+              AND (
+                (older."payload"->>'eventOrderAt')::timestamptz < (candidate."payload"->>'eventOrderAt')::timestamptz
+                OR (
+                  (older."payload"->>'eventOrderAt')::timestamptz = (candidate."payload"->>'eventOrderAt')::timestamptz
+                  AND (
+                    older."createdAt" < candidate."createdAt"
+                    OR (older."createdAt" = candidate."createdAt" AND older."id" < candidate."id")
+                  )
+                )
+              )
           )
         )
-      ORDER BY candidate."scheduledAt" ASC,candidate."createdAt" ASC
+      ORDER BY candidate."scheduledAt" ASC, candidate."createdAt" ASC, candidate."id" ASC
       FOR UPDATE OF candidate SKIP LOCKED LIMIT ${limit}
     )
     UPDATE "BackgroundJob" SET "status"='PROCESSING',"startedAt"=NOW(),"attempts"="attempts"+1 WHERE "id" IN (SELECT "id" FROM cte) RETURNING *;
