@@ -6,7 +6,14 @@ import {
 
 type LayerUser = {
   userId: string;
-  user: { name: string; avatarUrl?: string | null; gender?: string | null };
+  user: {
+    name: string;
+    email?: string | null;
+    avatarUrl?: string | null;
+    gender?: string | null;
+    timeZone?: string | null;
+    emailNotificationsEnabled?: boolean;
+  };
   position: number;
 };
 
@@ -31,7 +38,14 @@ export type LayerInput = {
 export type OverrideInput = {
   id: string;
   userId: string;
-  user: { name: string; avatarUrl?: string | null; gender?: string | null };
+  user: {
+    name: string;
+    email?: string | null;
+    avatarUrl?: string | null;
+    gender?: string | null;
+    timeZone?: string | null;
+    emailNotificationsEnabled?: boolean;
+  };
   start: Date;
   end: Date;
   replacesUserId: string | null;
@@ -43,8 +57,11 @@ export type OnCallBlock = {
   end: Date;
   userId: string;
   userName: string;
+  userEmail?: string | null;
   userAvatar?: string | null;
   userGender?: string | null;
+  userTimeZone?: string | null;
+  userEmailNotificationsEnabled?: boolean;
   layerId: string;
   layerName: string;
   source: 'rotation' | 'override';
@@ -416,8 +433,11 @@ function generateLayerBlocks(
               end: sub.end,
               userId: user.userId,
               userName: user.user.name,
+              userEmail: user.user.email,
               userAvatar: user.user.avatarUrl,
               userGender: user.user.gender,
+              userTimeZone: user.user.timeZone,
+              userEmailNotificationsEnabled: user.user.emailNotificationsEnabled,
               layerId: layer.id,
               layerName: layer.name,
               source: 'rotation',
@@ -430,8 +450,11 @@ function generateLayerBlocks(
             end: clampedEnd,
             userId: user.userId,
             userName: user.user.name,
+            userEmail: user.user.email,
             userAvatar: user.user.avatarUrl,
             userGender: user.user.gender,
+            userTimeZone: user.user.timeZone,
+            userEmailNotificationsEnabled: user.user.emailNotificationsEnabled,
             layerId: layer.id,
             layerName: layer.name,
             source: 'rotation',
@@ -474,8 +497,11 @@ function applyOverrides(
         end,
         userId: override.userId,
         userName: override.user.name,
+        userEmail: override.user.email,
         userAvatar: override.user.avatarUrl,
         userGender: override.user.gender,
+        userTimeZone: override.user.timeZone,
+        userEmailNotificationsEnabled: override.user.emailNotificationsEnabled,
         layerId: 'override',
         layerName: 'Additive Override',
         source: 'override',
@@ -510,8 +536,11 @@ function applyOverrides(
         end: overrideEnd,
         userId: override.userId,
         userName: override.user.name,
+        userEmail: override.user.email,
         userAvatar: override.user.avatarUrl,
         userGender: override.user.gender,
+        userTimeZone: override.user.timeZone,
+        userEmailNotificationsEnabled: override.user.emailNotificationsEnabled,
         source: 'override',
       });
 
