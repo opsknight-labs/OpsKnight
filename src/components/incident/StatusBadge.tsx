@@ -12,53 +12,47 @@ type StatusBadgeProps = {
   className?: string;
 };
 
+function getStatusVariant(status: string): 'success' | 'warning' | 'danger' | 'neutral' | 'info' {
+  switch (status) {
+    case 'RESOLVED':
+    case 'OPERATIONAL':
+    case 'PUBLISHED':
+      return 'success';
+    case 'ACKNOWLEDGED':
+    case 'DEGRADED':
+    case 'ARCHIVED':
+      return 'warning';
+    case 'OPEN':
+    case 'CRITICAL':
+      return 'danger';
+    case 'SNOOZED':
+    case 'SUPPRESSED':
+    case 'DRAFT':
+      return 'neutral';
+    default:
+      return 'info';
+  }
+}
+
+function getBadgeSize(size: 'sm' | 'md' | 'lg'): 'xs' | 'sm' | 'md' {
+  switch (size) {
+    case 'sm':
+      return 'xs';
+    case 'lg':
+      return 'md';
+    case 'md':
+    default:
+      return 'sm';
+  }
+}
+
 function StatusBadge({ status, size = 'md', showDot = false, className }: StatusBadgeProps) {
-  const sizeMap: Record<NonNullable<StatusBadgeProps['size']>, 'xs' | 'sm' | 'md'> = {
-    sm: 'xs',
-    md: 'sm',
-    lg: 'md',
-  };
-
-  const statusVariantMap: Record<string, 'success' | 'warning' | 'danger' | 'neutral' | 'info'> = {
-    OPEN: 'danger',
-    ACKNOWLEDGED: 'warning',
-    RESOLVED: 'success',
-    SNOOZED: 'neutral',
-    SUPPRESSED: 'neutral',
-    OPERATIONAL: 'success',
-    DEGRADED: 'warning',
-    CRITICAL: 'danger',
-    // Postmortem statuses
-    DRAFT: 'neutral',
-    PUBLISHED: 'success',
-    ARCHIVED: 'warning',
-  };
-
-  const variant = statusVariantMap[status] ?? 'info';
-  const toneClass =
-    variant === 'danger'
-      ? 'bg-red-200 text-red-900 border-red-300 hover:bg-red-200'
-      : variant === 'warning'
-        ? 'bg-amber-200 text-amber-900 border-amber-300 hover:bg-amber-200'
-        : variant === 'success'
-          ? 'bg-emerald-200 text-emerald-900 border-emerald-300 hover:bg-emerald-200'
-          : variant === 'info'
-            ? 'bg-blue-200 text-blue-900 border-blue-300 hover:bg-blue-200'
-            : 'bg-slate-200 text-slate-900 border-slate-300 hover:bg-slate-200';
-  const dotColor =
-    variant === 'danger'
-      ? 'bg-red-500'
-      : variant === 'warning'
-        ? 'bg-amber-500'
-        : variant === 'success'
-          ? 'bg-emerald-500'
-          : variant === 'info'
-            ? 'bg-blue-500'
-            : 'bg-slate-400';
+  const variant = getStatusVariant(status);
+  const badgeSize = getBadgeSize(size);
 
   return (
-    <Badge variant={variant} size={sizeMap[size]} className={cn('uppercase', toneClass, className)}>
-      {showDot && <span className={cn('h-2 w-2 rounded-full', dotColor)} />}
+    <Badge variant={variant} size={badgeSize} className={cn('uppercase', className)}>
+      {showDot && <span className="h-2 w-2 rounded-full bg-white/80" />}
       {status}
     </Badge>
   );

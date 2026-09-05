@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold leading-4 tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  'inline-flex items-center justify-center gap-1 rounded-md border px-2.5 py-0.5 text-[11px] font-bold leading-4 tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
   {
     variants: {
       variant: {
@@ -14,11 +14,13 @@ const badgeVariants = cva(
         destructive:
           'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline: 'border-border text-foreground bg-transparent',
-        neutral: 'border-border bg-muted text-foreground',
-        info: 'border-blue-200 bg-blue-100 text-blue-800',
-        success: 'border-emerald-200 bg-emerald-100 text-emerald-800',
-        warning: 'border-amber-200 bg-amber-100 text-amber-800',
-        danger: 'border-red-200 bg-red-100 text-red-800',
+        neutral: 'border-transparent bg-slate-700 text-white shadow-sm',
+        info: 'border-transparent bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm',
+        success:
+          'border-transparent bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-sm',
+        warning:
+          'border-transparent bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm',
+        danger: 'border-transparent bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-sm',
         // Sidebar variants - solid colors with white text for dark backgrounds
         'sidebar-danger': 'border-red-500 bg-red-500 text-white',
         'sidebar-info': 'border-blue-500 bg-blue-500 text-white',

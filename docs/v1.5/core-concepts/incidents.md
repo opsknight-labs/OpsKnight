@@ -88,6 +88,28 @@ They are separate fields. If priority-specific SLA targets are configured for th
 
 Do not place credentials or sensitive customer data in notes, tags, custom fields, or public incident content.
 
+### Stakeholder and subscriber management
+
+OpsKnight provides cadence-based watcher notification routing inspired by PagerDuty and Incident.io operational models. Incident responders can subscribe cross-functional teammates without causing alert fatigue or violating least-privilege security boundaries.
+
+#### Subscriber roles and notification cadence
+
+| Role                            | Target Persona                                    | Notification Cadence                                                                                                                                                                                                          | Ideal For                                                                                     |
+| :------------------------------ | :------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| **Executive** (`EXEC`)          | VPs, Directors, C-Level Leadership                | **High-Impact Milestones Only**: Notified on incident creation only if priority is **P1/P2** or urgency is **High**, and upon final **Resolution**. Routine reassignments and low-severity background tickets are suppressed. | Senior leadership maintaining situational awareness without alert fatigue.                    |
+| **Stakeholder** (`STAKEHOLDER`) | Product Managers, Support Leads, Account Managers | **Status Milestones**: Notified when an incident is **Triggered**, **Acknowledged**, and **Resolved**.                                                                                                                        | Customer-facing liaisons who must communicate progress to external users and clients.         |
+| **Follower** (`FOLLOWER`)       | Peer Engineers, Dependent Service Owners          | **All Updates**: Receives notifications for all lifecycle state transitions, handoffs, and operational milestones.                                                                                                            | Technical collaborators observing investigation progress or tracking cross-team dependencies. |
+
+#### Security and RBAC access delegation
+
+Subscribing a teammate as a watcher immediately grants them **scoped read-only access** to private and team-restricted incidents via the RBAC policy engine (`src/lib/rbac.ts` and `src/lib/authorization-filters.ts`), enabling cross-functional collaboration without granting edit permissions on underlying service escalation policies.
+
+#### Managing subscribers
+
+- **1-Click Self-Subscription**: Any authenticated user can select **Subscribe** on an active incident to follow updates, or **Unsubscribe** when their attention is no longer needed.
+- **Add Teammates**: Responders can add teammates by selecting **+ Add**, choosing the target user, and selecting their subscriber cadence.
+- **Inline Role Switching**: Responders can click any subscriber's role badge directly in the sidebar list to adjust their notification cadence (for example, switching from Follower to Stakeholder) without deleting and recreating the entry.
+
 ### Snooze or suppress
 
 Use **Snooze** for a temporary pause, ideally with an end time and reason. Use **Suppress** when the alert should remain muted until a responder explicitly restores it. Both states pause escalation; neither resolves the underlying incident.

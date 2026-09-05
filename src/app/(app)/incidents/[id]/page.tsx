@@ -2,61 +2,33 @@ import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
-import StatusBadge from '@/components/incident/StatusBadge';
-import PriorityBadge from '@/components/incident/PriorityBadge';
-import {
-  addNote,
-  addWatcher,
-  removeWatcher,
-  resolveIncidentWithNote,
-  updateIncidentStatus,
-  updateIncidentUrgency,
-} from '../actions';
+import { addNote, addWatcher, removeWatcher, updateIncidentStatus } from '../actions';
 import { getPostmortem } from '@/app/(app)/postmortems/actions';
 import IncidentHeader from '@/components/incident/IncidentHeader';
-import IncidentSidebar from '@/components/incident/detail/IncidentSidebar';
+import IncidentWatchers from '@/components/incident/detail/IncidentWatchers';
+import IncidentJiraCard from '@/components/incident/detail/IncidentJiraCard';
+import IncidentCommandBar from '@/components/incident/detail/IncidentCommandBar';
+import IncidentDetailTabs from '@/components/incident/IncidentDetailTabs';
 import IncidentNotes from '@/components/incident/detail/IncidentNotes';
 import IncidentTimeline from '@/components/incident/detail/IncidentTimeline';
-import IncidentResolution from '@/components/incident/detail/IncidentResolution';
-import IncidentJiraCard from '@/components/incident/detail/IncidentJiraCard';
-import IncidentWarRoomCard from '@/components/incident/detail/IncidentWarRoomCard';
-import IncidentCustomFields from '@/components/IncidentCustomFields';
-import { Button } from '@/components/ui/shadcn/button';
+import IncidentResolutionSummary from '@/components/incident/detail/IncidentResolutionSummary';
+import IncidentPostmortemCard from '@/components/incident/detail/IncidentPostmortemCard';
+import IncidentPostmortemTabContent from '@/components/incident/detail/IncidentPostmortemTabContent';
+import IncidentDescriptionCard from '@/components/incident/detail/IncidentDescriptionCard';
+import IncidentSLABadges from '@/components/incident/detail/IncidentSLABadges';
+import IncidentCustomFieldsCard from '@/components/incident/detail/IncidentCustomFieldsCard';
+import IncidentQuickLinksCard from '@/components/incident/detail/IncidentQuickLinksCard';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
-import { getDefaultAvatar } from '@/lib/avatar';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/shadcn/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
-import PrioritySelector from '@/components/incident/PrioritySelector';
 import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
-import {
-  AlertCircle,
-  Activity,
-  ArrowLeft,
-  CheckCircle2,
-  Clock,
-  FileText,
-  History,
-  MessageSquare,
-  Settings2,
-  Timer,
-  User,
-  Zap,
-} from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Pause, Volume2 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await assertCanViewIncident(id);
+  const user = await assertCanViewIncident(id);
   const appUrl = await getAppUrl();
   const incident = await prisma.incident.findUnique({
     where: { id },
@@ -119,18 +91,9 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
     }),
   ]);
 
-  // Calculate time open
-  const getTimeOpen = () => {
-    const start = new Date(incident.createdAt);
-    const end = incident.resolvedAt ? new Date(incident.resolvedAt) : new Date();
-    const diffInMinutes = Math.floor((end.getTime() - start.getTime()) / 60000);
-    if (diffInMinutes < 60) return `${diffInMinutes}m`;
-    const hours = Math.floor(diffInMinutes / 60);
-    const mins = diffInMinutes % 60;
-    if (hours < 24) return `${hours}h ${mins}m`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ${hours % 24}h`;
-  };
+  // The resolution note is stored as a regular Note prefixed with "Resolution:" —
+  // there's no separate resolution-summary column on Incident.
+  const resolutionNote = incident.notes.find(n => n.content.startsWith('Resolution:')) ?? null;
 
   // Server actions
   async function handleAddNote(formData: FormData) {
@@ -149,11 +112,6 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
     await updateIncidentStatus(id, 'OPEN');
   }
 
-  async function handleSnooze() {
-    'use server';
-    await updateIncidentStatus(id, 'SNOOZED');
-  }
-
   async function handleSuppress() {
     'use server';
     await updateIncidentStatus(id, 'SUPPRESSED');
@@ -167,18 +125,6 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   async function handleUnsuppress() {
     'use server';
     await updateIncidentStatus(id, 'OPEN');
-  }
-
-  async function handleResolve(formData: FormData) {
-    'use server';
-    const resolution = (formData.get('resolution') as string) || '';
-    await resolveIncidentWithNote(id, resolution);
-  }
-
-  async function _handleUrgencyChange(formData: FormData) {
-    'use server';
-    const newUrgency = formData.get('urgency') as string;
-    await updateIncidentUrgency(id, newUrgency);
   }
 
   async function handleAddWatcher(formData: FormData) {
@@ -208,453 +154,282 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
         return 'from-red-600 to-rose-700';
     }
   };
-  const urgencyVariantMap: Record<'HIGH' | 'MEDIUM' | 'LOW', 'danger' | 'warning' | 'success'> = {
-    HIGH: 'danger',
-    MEDIUM: 'warning',
-    LOW: 'success',
-  };
-  const urgencyVariant =
-    urgencyVariantMap[incident.urgency as 'HIGH' | 'MEDIUM' | 'LOW'] ?? 'success';
+  const postmortemHref = `/postmortems/${id}`;
+
+  const activityContent = (
+    <IncidentNotes
+      notes={incident.notes.map(n => ({
+        id: n.id,
+        content: n.content,
+        user: n.user,
+        createdAt: n.createdAt,
+      }))}
+      canManage={canManageIncident || canAddIncidentNote}
+      onAddNote={handleAddNote}
+    />
+  );
+
+  const timelineContent = (
+    <IncidentTimeline
+      events={incident.events.map(e => ({
+        id: e.id,
+        message: e.message,
+        createdAt: e.createdAt,
+      }))}
+      incidentCreatedAt={incident.createdAt}
+      incidentAcknowledgedAt={incident.acknowledgedAt}
+      incidentResolvedAt={incident.resolvedAt}
+    />
+  );
+
+  const postmortemContent = (
+    <IncidentPostmortemTabContent
+      incidentId={id}
+      incidentStatus={incident.status}
+      canManage={canManageIncident}
+      eventCount={incident.events.length}
+      noteCount={incident.notes.length}
+      users={users}
+      postmortem={postmortem}
+    />
+  );
 
   return (
-    <div className="w-full px-4 py-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 [zoom:0.8]">
-      {/* Premium Header - Glassmorphic with Accent Bar */}
-      <div className="group relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/80 shadow-xl backdrop-blur-xl transition-all hover:shadow-2xl">
-        {/* Animated Accent Bar */}
-        <div
-          className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${getStatusColor()} animate-[pulse_3s_ease-in-out_infinite]`}
-        />
+    <div className="w-full px-4 py-6 pb-24 sm:pb-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Incident Hero Title Card — Stable, crisp, no flickering */}
+      <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:bg-slate-900 dark:border-slate-800">
+        {/* Crisp status accent line at top */}
+        <div className={`h-1 w-full bg-gradient-to-r ${getStatusColor()}`} />
 
-        {/* Subtle Background Tint */}
-        <div
-          className={`absolute inset-0 bg-gradient-to-br ${getStatusColor()} opacity-[0.03] pointer-events-none`}
-        />
-
-        <div className="relative p-6 md:p-8">
-          {/* Breadcrumb & Actions */}
-          <div className="flex items-center justify-between mb-6">
+        <div className="p-5 md:p-6">
+          {/* Breadcrumb & Quick Reference */}
+          <div className="flex items-center justify-between gap-4 mb-4">
             <Link
               href="/incidents"
-              className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors group/back"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition-colors"
             >
-              <ArrowLeft className="h-4 w-4 transition-transform group-hover/back:-translate-x-0.5" />
-              Back to Incidents
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Back to Incidents</span>
             </Link>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="font-mono text-xs text-slate-500 bg-slate-50">
+            <div className="flex items-center gap-1.5">
+              <Badge
+                variant="outline"
+                className="font-mono text-xs text-slate-500 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+              >
                 #{id.slice(0, 8)}
               </Badge>
-              <div className="h-4 w-px bg-slate-200 mx-1" />
+              <div className="h-3.5 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
               <CopyButton
                 text={id}
                 label="ID"
-                className="text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 h-6 px-2 text-xs"
               />
               <CopyButton
                 text={`${appUrl}/incidents/${id}`}
                 icon="link"
                 label="Link"
-                className="text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 h-6 px-2 text-xs"
               />
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row md:items-start gap-6">
-            {/* Large Status Icon */}
+          <div className="flex items-start gap-4">
+            {/* Status Icon */}
             <div
-              className={`shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br ${getStatusColor()} flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-transform duration-300`}
+              className={`shrink-0 w-11 h-11 rounded-lg bg-gradient-to-br ${getStatusColor()} flex items-center justify-center shadow-sm text-white`}
             >
-              <AlertCircle className="h-8 w-8 text-white" />
+              {incident.status === 'RESOLVED' ? (
+                <CheckCircle2 className="h-5 w-5" />
+              ) : incident.status === 'SNOOZED' ? (
+                <Pause className="h-5 w-5" />
+              ) : incident.status === 'SUPPRESSED' ? (
+                <Volume2 className="h-5 w-5" />
+              ) : (
+                <AlertCircle className="h-5 w-5" />
+              )}
             </div>
 
-            {/* Title and Status */}
-            <div className="space-y-3 flex-1">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-tight">
+            {/* Title and Status Badge */}
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight leading-snug">
                   {incident.title}
                 </h1>
                 <Badge
                   variant="outline"
-                  className={`px-3 py-1 rounded-full border-0 font-bold tracking-wide shadow-sm bg-gradient-to-r ${getStatusColor()} text-white`}
+                  className={`px-2.5 py-0.5 rounded-md border-0 font-bold tracking-wide shadow-2xs bg-gradient-to-r ${getStatusColor()} text-white text-xs shrink-0`}
                 >
                   {incident.status}
                 </Badge>
               </div>
+
+              {/* Live Response Health & SLA Status Pills */}
+              <IncidentSLABadges incident={incident} service={incident.service} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Stats Grid - Priority, Urgency, Assignee, Service */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
-        {/* Priority Card */}
-        <div className="group relative rounded-xl border border-slate-200/60 bg-white/50 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
-          <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-blue-400 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-                <Activity className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Priority
-              </span>
-            </div>
-            <PrioritySelector
-              incidentId={incident.id}
-              priority={incident.priority}
-              canManage={canManageIncident}
-            />
-          </div>
-        </div>
+      {/* Incident Command Bar Card — Collaboration Tools on Left, Lifecycle Actions on Right */}
+      <IncidentCommandBar
+        incidentId={incident.id}
+        currentStatus={incident.status}
+        canManage={canManageIncident}
+        canAcknowledge={canManageIncident || canAcknowledgeIncident}
+        snoozedUntil={incident.snoozedUntil}
+        onAcknowledge={handleAcknowledge}
+        onUnacknowledge={handleUnacknowledge}
+        onUnsnooze={handleUnsnooze}
+        onSuppress={handleSuppress}
+        onUnsuppress={handleUnsuppress}
+        resolvingIncident={{
+          id: incident.id,
+          title: incident.title,
+          service: { name: incident.service.name },
+        }}
+        postmortemHref={postmortemHref}
+        postmortemExists={Boolean(postmortem)}
+        warRoom={{
+          slackChannelId: incident.slackChannelId,
+          slackChannelName: incident.slackChannelName,
+          warRoomUrl: incident.warRoomUrl,
+          warRoomArchivedAt: incident.warRoomArchivedAt,
+        }}
+        jira={{
+          links: jiraLinks,
+          enabled: jiraConfig?.enabled ?? false,
+          serviceMapped: Boolean(incident.service.jiraServiceMapping?.projectKey),
+          serviceSettingsHref: `/services/${incident.serviceId}/settings`,
+        }}
+        tags={incident.tags.map(t => ({
+          id: t.tag.id,
+          name: t.tag.name,
+          color: t.tag.color,
+        }))}
+      />
 
-        {/* Urgency Card */}
-        <div className="group relative rounded-xl border border-slate-200/60 bg-white/50 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
-          <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-red-400 to-rose-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-600">
-                <AlertCircle className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Urgency
-              </span>
-            </div>
-            <div className="flex items-center">
-              <Badge
-                variant={urgencyVariant}
-                size="sm"
-                className="uppercase font-bold tracking-wide"
-              >
-                {incident.urgency}
-              </Badge>
-            </div>
-          </div>
-        </div>
+      {/* Incident Details Card — single unified card for all metadata */}
+      <IncidentHeader
+        incident={incident}
+        users={users}
+        teams={teams}
+        canManage={canManageIncident}
+      />
 
-        {/* Assignee Card */}
-        <div className="group relative rounded-xl border border-slate-200/60 bg-white/50 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
-          <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-violet-400 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center text-violet-600">
-                <User className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Assignee
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {incident.assignee ? (
-                <>
-                  <Avatar className="h-6 w-6 border border-slate-200">
-                    <AvatarImage
-                      src={
-                        incident.assignee.avatarUrl ||
-                        getDefaultAvatar(incident.assignee.gender, incident.assignee.id)
-                      }
-                    />
-                    <AvatarFallback className="text-[9px] bg-slate-100 text-slate-600">
-                      {incident.assignee.name.substring(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="font-semibold text-sm truncate text-slate-900">
-                    {incident.assignee.name}
-                  </span>
-                </>
-              ) : incident.team ? (
-                <>
-                  <div className="h-6 w-6 rounded-full border border-indigo-200 bg-indigo-100 flex items-center justify-center">
-                    <User className="h-3 w-3 text-indigo-600" />
-                  </div>
-                  <span className="font-semibold text-sm truncate text-slate-900">
-                    {incident.team.name}
-                  </span>
-                </>
-              ) : (
-                <span className="text-sm text-slate-400 italic">Unassigned</span>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* Incident Description Card — Full width, rich markdown, inline edit for responders, 1-click copy */}
+      <IncidentDescriptionCard
+        incidentId={incident.id}
+        description={incident.description}
+        canManage={canManageIncident}
+      />
 
-        {/* Service Card */}
-        <div className="group relative rounded-xl border border-slate-200/60 bg-white/50 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
-          <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-amber-400 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
-                <Zap className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Service
-              </span>
-            </div>
-            <div className="font-semibold text-sm truncate text-slate-900 pl-1">
-              {incident.service.name}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Description Section - Enhanced with Better Styling */}
-      {incident.description && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-6 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3">
-            <FileText className="h-4 w-4 text-slate-500" />
-            Description
-          </h3>
-          <div className="prose prose-sm prose-slate max-w-none">
-            <p className="text-slate-700 leading-relaxed whitespace-pre-wrap break-words m-0">
-              {incident.description}
-            </p>
-          </div>
-        </div>
+      {incident.status === 'RESOLVED' && (
+        <IncidentResolutionSummary
+          incident={incident}
+          service={incident.service}
+          resolutionNote={resolutionNote}
+          postmortemStatus={postmortem?.status ?? null}
+          canManage={canManageIncident}
+        />
       )}
 
-      {/* Main Grid - Like Teams Page */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
-        {/* Main Content - 3 columns */}
-        <div className="xl:col-span-3 space-y-4 md:space-y-6">
-          {/* Incident Details Card */}
-          <IncidentHeader
-            incident={incident as any} // eslint-disable-line @typescript-eslint/no-explicit-any
-            users={users}
-            teams={teams}
-            canManage={canManageIncident}
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
+        {/* Main Content */}
+        <div className="lg:col-span-8 xl:col-span-8 2xl:col-span-9 space-y-4 md:space-y-6">
+          <IncidentDetailTabs
+            eventCount={incident.events.length}
+            noteCount={incident.notes.length}
+            activityContent={activityContent}
+            timelineContent={timelineContent}
+            postmortemContent={postmortemContent}
+            postmortemStatus={postmortem?.status ?? null}
           />
-
-          {/* Tabbed Content */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between px-1">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Incident Details</h2>
-                <p className="text-sm text-slate-500">Timeline, notes, and resolution</p>
-              </div>
-              <Badge variant="outline" className="gap-1.5 py-1 px-2 border-slate-300 bg-white">
-                <Zap className="h-3.5 w-3.5 text-amber-500" />
-                <span className="font-medium">{incident.events.length} Events</span>
-              </Badge>
-            </div>
-            <div className="bg-transparent">
-              <Tabs defaultValue="overview" className="w-full mt-4">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="overview" className="gap-2">
-                    <Settings2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Overview</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="timeline" className="gap-2">
-                    <History className="h-4 w-4" />
-                    <span className="hidden sm:inline">Timeline</span>
-                  </TabsTrigger>
-                </TabsList>
-
-                <div className="mt-6">
-                  <TabsContent value="overview" className="mt-0 space-y-6">
-                    {/* Resolution Form */}
-                    {incident.status !== 'RESOLVED' && (
-                      <IncidentResolution
-                        incidentId={incident.id}
-                        canManage={canManageIncident}
-                        onResolve={handleResolve}
-                      />
-                    )}
-
-                    {/* Postmortem Section */}
-                    {incident.status === 'RESOLVED' && (
-                      <Card className="border-green-200 bg-green-50/50">
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2 text-green-900">
-                            <FileText className="h-5 w-5" />
-                            Postmortem
-                          </CardTitle>
-                          <CardDescription className="text-green-700">
-                            Document lessons learned for this resolved incident
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          {postmortem ? (
-                            <div className="flex items-center justify-between">
-                              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
-                                <CheckCircle2 className="h-4 w-4" />
-                                Postmortem Filed
-                              </span>
-                              <Link href={`/postmortems/${id}`}>
-                                <Button variant="outline" size="sm">
-                                  View Report
-                                </Button>
-                              </Link>
-                            </div>
-                          ) : (
-                            <Link href={`/postmortems/${id}`}>
-                              <Button className="w-full md:w-auto">Create Postmortem</Button>
-                            </Link>
-                          )}
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Custom Fields - Only show when fields are configured */}
-                    {customFields.length > 0 && (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-base">Custom Fields</CardTitle>
-                          <CardDescription>Additional incident metadata</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <IncidentCustomFields
-                            incidentId={id}
-                            customFieldValues={
-                              incident.customFieldValues?.map(v => ({
-                                id: v.id,
-                                value: v.value,
-                                customField: v.customField,
-                              })) || []
-                            }
-                            allCustomFields={customFields}
-                            canManage={canManageIncident}
-                          />
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Notes Section - Now in Overview for visibility */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <MessageSquare className="h-4 w-4" />
-                          Notes & Updates
-                          {incident.notes.length > 0 && (
-                            <Badge variant="secondary" size="xs" className="ml-auto">
-                              {incident.notes.length}
-                            </Badge>
-                          )}
-                        </CardTitle>
-                        <CardDescription>
-                          Communication and updates for this incident
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <IncidentNotes
-                          notes={incident.notes.map(n => ({
-                            id: n.id,
-                            content: n.content,
-                            user: n.user,
-                            createdAt: n.createdAt,
-                          }))}
-                          canManage={canManageIncident || canAddIncidentNote}
-                          onAddNote={handleAddNote}
-                        />
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="timeline" className="mt-0">
-                    <IncidentTimeline
-                      events={incident.events.map(e => ({
-                        id: e.id,
-                        message: e.message,
-                        createdAt: e.createdAt,
-                      }))}
-                      incidentCreatedAt={incident.createdAt}
-                      incidentAcknowledgedAt={incident.acknowledgedAt}
-                      incidentResolvedAt={incident.resolvedAt}
-                    />
-                  </TabsContent>
-                </div>
-              </Tabs>
-            </div>
-          </div>
         </div>
 
-        {/* Sidebar - 1 column */}
-        <aside className="space-y-4 md:space-y-6">
-          <IncidentSidebar
-            incident={{
-              id: incident.id,
-              status: incident.status,
-              assigneeId: incident.assigneeId,
-              assignee: incident.assignee,
-              service: incident.service,
-              acknowledgedAt: incident.acknowledgedAt,
-              resolvedAt: incident.resolvedAt,
-              createdAt: incident.createdAt,
-              escalationStatus: incident.escalationStatus,
-              currentEscalationStep: incident.currentEscalationStep,
-              nextEscalationAt: incident.nextEscalationAt,
-            }}
-            users={users}
+        {/* Response Rail */}
+        <aside className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 space-y-4 md:space-y-6">
+          <IncidentWatchers
             watchers={incident.watchers.map(w => ({
               id: w.id,
               user: w.user,
               role: w.role,
             }))}
-            tags={incident.tags.map(t => ({
-              id: t.tag.id,
-              name: t.tag.name,
-              color: t.tag.color,
-            }))}
+            users={users}
             canManage={canManageIncident}
-            canAcknowledge={canManageIncident || canAcknowledgeIncident}
-            onAcknowledge={handleAcknowledge}
-            onUnacknowledge={handleUnacknowledge}
-            onSnooze={handleSnooze}
-            onUnsnooze={handleUnsnooze}
-            onSuppress={handleSuppress}
-            onUnsuppress={handleUnsuppress}
+            currentUserId={user.id}
             onAddWatcher={handleAddWatcher}
             onRemoveWatcher={handleRemoveWatcher}
           />
 
-          {/* Jira Issues */}
-          <IncidentJiraCard
+          {/* Custom Fields in Sidebar */}
+          <IncidentCustomFieldsCard
             incidentId={id}
+            customFieldValues={
+              incident.customFieldValues?.map(v => ({
+                id: v.id,
+                value: v.value,
+                customField: v.customField,
+              })) || []
+            }
+            allCustomFields={customFields}
+            canManage={canManageIncident}
+          />
+
+          {/* Jira Integration */}
+          <IncidentJiraCard
+            incidentId={incident.id}
             serviceSettingsHref={`/services/${incident.serviceId}/settings`}
-            jiraLinks={jiraLinks}
+            jiraLinks={jiraLinks.map(l => ({
+              id: l.id,
+              externalKey: l.externalKey,
+              externalUrl: l.externalUrl,
+              externalStatus: l.externalStatus,
+              externalAssignee: l.externalAssignee,
+              syncState: l.syncState,
+              lastSyncedAt: l.lastSyncedAt,
+            }))}
             jiraEnabled={jiraConfig?.enabled ?? false}
             serviceJiraMapped={Boolean(incident.service.jiraServiceMapping?.projectKey)}
             canManage={canManageIncident}
           />
 
-          {/* ChatOps War-Room */}
-          <IncidentWarRoomCard
-            incident={{
-              id: incident.id,
-              slackChannelId: incident.slackChannelId,
-              slackChannelName: incident.slackChannelName,
-              warRoomUrl: incident.warRoomUrl,
-              warRoomArchivedAt: incident.warRoomArchivedAt,
-              status: incident.status,
-              service: { name: incident.service.name },
+          {/* Upgraded Quick Links */}
+          <IncidentQuickLinksCard
+            incidentId={incident.id}
+            service={{
+              id: incident.service.id,
+              name: incident.service.name,
+              status: incident.service.status,
+              slaTier: incident.service.slaTier,
+              policy: incident.service.policy
+                ? {
+                    id: incident.service.policy.id,
+                    name: incident.service.policy.name,
+                  }
+                : null,
             }}
-            canManage={canManageIncident}
+            team={
+              incident.team
+                ? {
+                    id: incident.team.id,
+                    name: incident.team.name,
+                  }
+                : null
+            }
+            warRoomUrl={incident.warRoomUrl}
+            slackChannelName={incident.slackChannelName}
+            status={incident.status}
+            postmortemExists={Boolean(postmortem)}
           />
 
-          {/* Quick Links - Like Teams Page */}
-          <div className="rounded-xl border border-slate-200/60 bg-white/50 shadow-sm p-5">
-            <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">
-              Quick Links
-            </h3>
-            <div className="space-y-2">
-              <Link href={`/services/${incident.serviceId}`}>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-2 bg-white hover:bg-slate-50 h-9 text-sm"
-                >
-                  <Zap className="h-4 w-4" />
-                  View Service
-                </Button>
-              </Link>
-              <Link href={`/analytics?incident=${incident.id}`}>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-2 bg-white hover:bg-slate-50 h-9 text-sm"
-                >
-                  <Clock className="h-4 w-4" />
-                  View in Analytics
-                </Button>
-              </Link>
-            </div>
-          </div>
+          {incident.status === 'RESOLVED' && (
+            <IncidentPostmortemCard
+              incidentId={id}
+              postmortemStatus={postmortem?.status ?? null}
+              canManage={canManageIncident}
+            />
+          )}
         </aside>
       </div>
     </div>
