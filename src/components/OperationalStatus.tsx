@@ -99,7 +99,7 @@ export default function OperationalStatus({
     danger: {
       bg: 'bg-rose-500/10 dark:bg-rose-950/40 hover:bg-rose-500/15 dark:hover:bg-rose-950/60',
       border: 'border-rose-500/30 dark:border-rose-500/40',
-      text: 'text-rose-600 dark:text-rose-300',
+      text: 'text-rose-400',
       dot: 'bg-rose-500',
       dotBg: 'bg-rose-500',
       icon: <AlertTriangle className="h-4 w-4 text-rose-500 dark:text-rose-400" />,
@@ -109,7 +109,7 @@ export default function OperationalStatus({
     warning: {
       bg: 'bg-amber-500/10 dark:bg-amber-950/40 hover:bg-amber-500/15 dark:hover:bg-amber-950/60',
       border: 'border-amber-500/30 dark:border-amber-500/40',
-      text: 'text-amber-600 dark:text-amber-300',
+      text: 'text-amber-400',
       dot: 'bg-amber-500',
       dotBg: 'bg-amber-500',
       icon: <AlertCircle className="h-4 w-4 text-amber-500 dark:text-amber-400" />,
@@ -119,7 +119,7 @@ export default function OperationalStatus({
     ok: {
       bg: 'bg-emerald-500/10 dark:bg-emerald-950/40 hover:bg-emerald-500/15 dark:hover:bg-emerald-950/60',
       border: 'border-emerald-500/30 dark:border-emerald-500/40',
-      text: 'text-emerald-600 dark:text-emerald-300',
+      text: 'text-emerald-400',
       dot: 'bg-emerald-500',
       dotBg: 'bg-emerald-500',
       icon: <ShieldCheck className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />,
@@ -148,8 +148,6 @@ export default function OperationalStatus({
       </div>
     );
   }
-
-  const summary = `H ${critical} · M ${medium} · L ${low}`;
 
   return (
     <HoverCard openDelay={0} closeDelay={150}>
@@ -180,11 +178,19 @@ export default function OperationalStatus({
           <span className="text-[10.5px] sm:text-[11px] font-bold tracking-wider uppercase">
             {label}
           </span>
-          <span className="hidden sm:inline text-[11px] text-zinc-500/60 dark:text-zinc-500 font-mono">
-            |
-          </span>
-          <span className="hidden sm:inline text-[11px] font-mono font-medium tabular-nums text-zinc-700 dark:text-zinc-200">
-            {summary}
+          <span className="hidden sm:inline text-[11px] text-zinc-500/60 font-mono">|</span>
+          <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-mono font-medium tabular-nums text-zinc-300">
+            <span>
+              H <span className="font-bold text-rose-300">{critical}</span>
+            </span>
+            <span className="text-zinc-600">·</span>
+            <span>
+              M <span className="font-bold text-amber-300">{medium}</span>
+            </span>
+            <span className="text-zinc-600">·</span>
+            <span>
+              L <span className="font-bold text-zinc-400">{low}</span>
+            </span>
           </span>
         </button>
       </HoverCardTrigger>
