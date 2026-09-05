@@ -117,11 +117,11 @@ export default function QuickActions({ canCreate = true }: QuickActionsProps) {
       <DropdownMenuTrigger asChild>
         <Button
           variant="default"
-          className="h-9 gap-1.5 font-semibold shadow-sm transition-all duration-300 active:scale-95 bg-primary hover:bg-primary/90 text-primary-foreground border border-primary/20"
+          className="h-8 sm:h-9 px-2.5 sm:px-3 gap-1.5 font-semibold text-xs sm:text-[13px] rounded-lg shadow-sm shadow-rose-600/25 transition-all duration-200 active:scale-95 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white border border-rose-400/30 hover:border-rose-300/50 hover:shadow-rose-600/35 focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 select-none cursor-pointer"
         >
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Create</span>
-          <ChevronDown className="h-3 w-3 opacity-50" />
+          <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 stroke-[2.5]" />
+          <span className="hidden sm:inline tracking-tight">Create</span>
+          <ChevronDown className="h-3 w-3 opacity-75 group-data-[state=open]:rotate-180 transition-transform duration-200" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

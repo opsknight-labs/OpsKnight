@@ -226,7 +226,11 @@ export default function TopbarNotifications() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-9 w-9 text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors"
+        >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
             <Badge

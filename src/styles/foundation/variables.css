@@ -198,7 +198,8 @@
     --badge-neutral-bg: #e2e8f0;
     --badge-neutral-text: #334155;
 
-    /* Layout - Responsive sidebar widths */
+    /* Layout - Responsive sidebar widths and header */
+    --header-height: 56px;
     --sidebar-width: 240px;
     --sidebar-width-collapsed: 64px;
 }

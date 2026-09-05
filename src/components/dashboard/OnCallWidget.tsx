@@ -90,9 +90,7 @@ const OnCallWidget = memo(function OnCallWidget({ activeShifts }: OnCallWidgetPr
                   {initials}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-slate-700 truncate">
-                    {userName}
-                  </div>
+                  <div className="text-xs font-semibold text-slate-700 truncate">{userName}</div>
                   <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
                     <Calendar className="w-3 h-3 shrink-0" />
                     <span className="truncate">{scheduleName}</span>

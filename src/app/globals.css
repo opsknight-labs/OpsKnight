@@ -250,14 +250,6 @@
   }
 }
 
-@media (min-width: 769px) {
-  .app-shell:has(.sidebar-collapsed) .app-header,
-  .app-shell:has(.sidebar-collapsed) header,
-  .app-shell:has([data-collapsed='true']) .app-header,
-  .app-shell:has([data-collapsed='true']) header {
-    left: var(--sidebar-width-collapsed) !important;
-  }
-}
 
 .focus-border:focus,
 .focus-border:focus-visible {

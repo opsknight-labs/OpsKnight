@@ -70,38 +70,33 @@ These cards are shortcuts into the underlying incidents and services. They do no
 
 ## Smart Insights
 
-The Command Center applies deterministic rules to the current data and can show:
+The Command Center applies deterministic rules to current incident telemetry and renders compact, single-line operational banners:
 
-- a workload warning when more than 30% of active incidents are unassigned;
-- a critical spike when three or more High-urgency incidents are active;
-- service concentration when one service contributes at least three incidents and 40% or more of the selected volume;
-- an unusual-volume message when the current count exceeds the comparison baseline used by the component;
-- a positive “all clear” message when no incidents are open.
+- **Critical Spike** (rose tier): Triggered when critical or High-urgency incidents surge, providing a direct **View Critical Feed →** 1-click filter link.
+- **Workload Warning** (amber tier): Triggered when unassigned active incidents exceed 30% or more of active workload, offering a **Triage Unassigned →** shortcut.
+- **Service Concentration**: Warns when a single service contributes 40% or more of active incident volume.
+- **Unusual Volume**: Highlights when current incoming rate exceeds the comparison baseline.
+- **All Clear**: Displays a calm green confirmation when all systems are operating normally.
 
-These are rule-based hints, not AI root-cause analysis. Dismissing a hint hides it in the current client state; it does not change incidents.
+Smart Insights use semantic color tiers (critical red, workload amber, calm emerald) and include dedicated dismiss buttons (`X`) that hide the hint for the current session without modifying underlying incident records.
 
-## Operational widgets
+## Real-time incident alerts and live updates
 
-Depending on the available data, the page includes widgets for:
+The Command Center connects to the server-sent events stream (`/api/notifications/stream` and `/api/realtime/stream`) to deliver instantaneous incident awareness without requiring page reloads:
 
-- on-call now and schedule coverage;
-- incidents approaching or breaching service SLA targets;
-- action-item progress and overdue work;
-- incident heatmap and recent incidents;
-- service health and active incident distribution;
-- response metrics derived from the same analytics engine used by Analytics.
+### Real-time alert toasts
 
-Open the linked guide when a widget identifies a problem:
+When a new incident is created (via integration webhooks such as Datadog, CloudWatch, Prometheus, Sentry, or manual triage), an ultra-compact alert card floats in the top-right corner:
 
-- [Schedules](./schedules) for coverage;
-- [Incidents](./incidents) for response;
-- [Services](./services) for routing and targets;
-- [Action Items](./action-items) for corrective work;
-- [Analytics](./analytics) for metric definitions.
+- **Single Incident Card**: Slim footprint (~65px height, max width 380px) with a left priority accent stripe (`P1` rose, `P2` amber, `P3` blue), live pulsing beacon dot, priority pill, affected service name, incident `#ID`, truncated title, inline `View ↗` link, inline `Acknowledge` action (when permitted by role), and a high-contrast dismiss button (`X`).
+- **Multi-Incident Batch Alerts**: When multiple incidents trigger concurrently or during multi-service cascade failures, the system consolidates them into a single high-density batch card (`{N} New Incidents`). It displays the top 2 highest-priority incidents with priority badges and service tags, a `+{N} more on board` overflow indicator, a direct `View board ↗` link, and a `Dismiss all` button.
+- **Dismiss Behavior**: Clicking the close button (`X`) or `Dismiss all` instantly closes the notification via the centralized Sonner toast manager.
 
-## Live updates and refresh
+### Optimistic table prepending
 
-The dashboard is server-rendered and wrapped by a real-time client that listens to `/api/realtime/stream`. A live event refreshes dashboard data. Network interruptions can delay updates; verify a critical change on the incident page or refresh the browser if the dashboard looks stale.
+Newly detected incidents are immediately prepended to the top of the incident list table with an animated emerald `LIVE` pulse indicator, and active dashboard counters (Command Center, Critical Focus, and Services at Risk) update in real time.
+
+Network interruptions can delay updates; verify a critical change on the incident page or refresh the browser if the dashboard looks stale.
 
 ## Export
 

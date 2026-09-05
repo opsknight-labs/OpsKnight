@@ -42,8 +42,8 @@ export default function TopbarUserMenu({ name, email, role, avatarUrl, gender, u
           {/* 1. Outer Gradient Frame */}
           <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 via-muted to-primary/20 group-hover:from-primary/40 group-hover:via-primary/10 group-hover:to-primary/40 transition-all duration-500" />
 
-          {/* 2. White/Background Gap */}
-          <div className="absolute inset-[2px] rounded-full bg-background" />
+          {/* 2. Slate Gap */}
+          <div className="absolute inset-[2px] rounded-full bg-slate-900" />
 
           {/* 3. Avatar Image */}
           <Avatar className="absolute inset-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full border border-black/5 dark:border-white/10 shadow-sm">

@@ -95,19 +95,19 @@ export default function DashboardCommandCenter({
     : null;
 
   return (
-    <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-4 md:p-6 mb-6 shadow-lg">
+    <div className="relative overflow-hidden rounded-xl border border-slate-800/90 bg-[#0b1120] text-slate-100 p-4 md:p-6 mb-6 shadow-xl ring-1 ring-white/5">
       {/* Header */}
       <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-6 mb-6">
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-primary-foreground">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
               Command Center
             </h1>
             <LiveClock timeZone={userTimeZone} />
           </div>
 
           {/* System Status */}
-          <div className="flex flex-wrap items-center gap-2 text-sm text-primary-foreground/80">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
             <span className="font-medium">System Status:</span>
             <Badge
               variant={statusVariant}
@@ -127,14 +127,12 @@ export default function DashboardCommandCenter({
               {systemStatus.label}
             </Badge>
             {allActiveIncidentsCount > 0 && (
-              <span className="text-xs text-primary-foreground/80">
-                ({allActiveIncidentsCount} active)
-              </span>
+              <span className="text-xs text-slate-300">({allActiveIncidentsCount} active)</span>
             )}
             <Badge
               variant="outline"
               size="xs"
-              className="text-xs text-primary-foreground/80 border-white/30"
+              className="text-xs text-slate-300 border-slate-700/80 bg-slate-900/70"
             >
               Range {rangeLabel}
             </Badge>
@@ -143,7 +141,7 @@ export default function DashboardCommandCenter({
                 Metric data unavailable
               </Badge>
             ) : dataAsOfLabel ? (
-              <span className="text-xs text-primary-foreground/70">Updated {dataAsOfLabel}</span>
+              <span className="text-xs text-slate-400">Updated {dataAsOfLabel}</span>
             ) : null}
             {/* Retention Warning */}
             {isClipped && (
@@ -162,10 +160,14 @@ export default function DashboardCommandCenter({
 
         {/* Actions */}
         <div className="flex gap-2">
-          <Suspense fallback={<div className="h-9 w-20 bg-white/20 rounded-md animate-pulse" />}>
+          <Suspense
+            fallback={<div className="h-8 w-20 bg-slate-800/60 rounded-lg animate-pulse" />}
+          >
             <DashboardRefresh />
           </Suspense>
-          <Suspense fallback={<div className="h-9 w-24 bg-white/20 rounded-md animate-pulse" />}>
+          <Suspense
+            fallback={<div className="h-8 w-24 bg-slate-800/60 rounded-lg animate-pulse" />}
+          >
             <DashboardExport
               incidents={incidents}
               filters={filters}
