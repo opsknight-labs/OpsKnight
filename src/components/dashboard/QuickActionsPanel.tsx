@@ -50,7 +50,7 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
           const classes = cn(
             'group flex items-center gap-3 p-2.5 rounded-lg border transition-all duration-150 w-full shadow-2xs cursor-pointer',
             isPrimary
-              ? 'bg-card dark:bg-[#121216] border-rose-500/30 dark:border-rose-500/30 border-l-[3px] border-l-rose-500 hover:border-rose-500/50 hover:bg-rose-500/[0.03] dark:hover:bg-rose-500/[0.06] text-foreground'
+              ? 'bg-[#18181b] hover:bg-[#27272a] text-white border-zinc-700/80 hover:border-zinc-500/80 shadow-xs'
               : 'bg-card dark:bg-[#121216] border-border dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-muted/40 dark:hover:bg-zinc-800/40 text-foreground'
           );
           const content = (
@@ -59,20 +59,25 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
                 className={cn(
                   'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150',
                   isPrimary
-                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 group-hover:bg-rose-500/20 group-hover:scale-105'
+                    ? 'bg-white/10 text-white group-hover:bg-white/20 group-hover:scale-105'
                     : 'bg-muted dark:bg-zinc-800/80 text-muted-foreground group-hover:text-foreground group-hover:bg-muted/90'
                 )}
               >
                 {action.icon}
               </div>
-              <span className="flex-1 text-xs font-semibold text-left text-foreground">
+              <span
+                className={cn(
+                  'flex-1 text-xs font-semibold text-left',
+                  isPrimary ? 'text-white' : 'text-foreground'
+                )}
+              >
                 {action.label}
               </span>
               <ChevronRight
                 className={cn(
                   'w-3.5 h-3.5 shrink-0 transition-all duration-150 group-hover:translate-x-0.5',
                   isPrimary
-                    ? 'text-muted-foreground/60 group-hover:text-rose-600 dark:group-hover:text-rose-400'
+                    ? 'text-zinc-400 group-hover:text-white'
                     : 'text-muted-foreground/50 group-hover:text-foreground'
                 )}
               />
