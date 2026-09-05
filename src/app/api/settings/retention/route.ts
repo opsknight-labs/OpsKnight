@@ -4,7 +4,7 @@ import {
   updateRetentionPolicy,
   type RetentionPolicy,
 } from '@/lib/retention-policy';
-import { getStorageStats, performDataCleanup } from '@/lib/data-cleanup';
+import { getStorageStats, performDataCleanup, CleanupConflictError } from '@/lib/data-cleanup';
 import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
@@ -20,7 +20,19 @@ const RetentionUpdateSchema = z
     metricsRetentionDays: z.number().int().min(30).max(3650).optional(),
     realTimeWindowDays: z.number().int().min(7).max(365).optional(),
   })
-  .refine(data => Object.keys(data).length > 0, { message: 'No valid fields provided' });
+  .refine(data => Object.keys(data).length > 0, { message: 'No valid fields provided' })
+  .refine(
+    data => {
+      if (data.realTimeWindowDays !== undefined && data.metricsRetentionDays !== undefined) {
+        return data.realTimeWindowDays <= data.metricsRetentionDays;
+      }
+      return true;
+    },
+    {
+      message: 'Real-time window cannot exceed metrics retention period',
+      path: ['realTimeWindowDays'],
+    }
+  );
 
 function retentionValidationError(error: z.ZodError) {
   return new AppError({
@@ -156,7 +168,18 @@ export async function POST(request: NextRequest) {
     const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
     const dryRun = payload.dryRun !== false;
 
-    const result = await performDataCleanup(dryRun);
+    let policyOverride: Partial<RetentionPolicy> | undefined;
+    if (payload.policy && typeof payload.policy === 'object') {
+      const parsed = RetentionUpdateSchema.safeParse(payload.policy);
+      if (!parsed.success) {
+        return jsonError(retentionValidationError(parsed.error), undefined, {
+          issues: parsed.error.issues,
+        });
+      }
+      policyOverride = parsed.data;
+    }
+
+    const result = await performDataCleanup(dryRun, policyOverride);
 
     if (!dryRun) {
       await logAudit({
@@ -168,10 +191,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    logger.info('[API] Data cleanup executed', { userId: admin.id, dryRun, result });
+    logger.info('[API] Data cleanup executed', {
+      userId: admin.id,
+      dryRun,
+      result,
+      policyOverride,
+    });
     return jsonOk({ success: true, dryRun, result });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
+    if (error instanceof CleanupConflictError) {
+      return jsonError(error.message, error.status);
+    }
     logger.error('[API] Data cleanup failed', { error });
     return jsonError('Failed to execute cleanup', 500);
   }

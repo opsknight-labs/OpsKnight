@@ -37,6 +37,7 @@ interface StorageStats {
   incidents: { total: number; byStatus: Record<string, number>; oldest: string | null };
   alerts: { total: number; oldest: string | null };
   logs: { total: number; oldest: string | null };
+  auditLogs?: { total: number; oldest: string | null };
   rollups: { total: number; oldest: string | null };
 }
 
@@ -139,6 +140,9 @@ export default function RetentionPolicySettings() {
     if (currentPolicy.realTimeWindowDays < 7 || currentPolicy.realTimeWindowDays > 365) {
       errors.realTimeWindowDays = 'Must be between 7 days and 1 year';
       isValid = false;
+    } else if (currentPolicy.realTimeWindowDays > currentPolicy.metricsRetentionDays) {
+      errors.realTimeWindowDays = 'Cannot exceed metrics retention period';
+      isValid = false;
     }
 
     setValidationErrors(errors);
@@ -191,6 +195,15 @@ export default function RetentionPolicySettings() {
   };
 
   const executeCleanup = async (dryRun: boolean) => {
+    if (!policy) return;
+
+    if (!validatePolicy(policy)) {
+      setGeneralError(
+        `Please fix validation errors below before running ${dryRun ? 'preview' : 'cleanup'}.`
+      );
+      return;
+    }
+
     try {
       setSaving(true);
       setGeneralError(null);
@@ -199,7 +212,7 @@ export default function RetentionPolicySettings() {
       const res = await fetch('/api/settings/retention', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun }),
+        body: JSON.stringify({ dryRun, policy }),
       });
 
       if (!res.ok) {
@@ -353,9 +366,17 @@ export default function RetentionPolicySettings() {
             <CompactStatRowItem
               icon={<FileText className="w-4 h-4 text-violet-500" />}
               label="Audit Logs"
-              value={stats.logs.total}
-              oldest={stats.logs.oldest}
-              subtext="Administrative changes"
+              value={(stats.auditLogs?.total ?? 0) > 0 ? stats.auditLogs!.total : stats.logs.total}
+              oldest={
+                (stats.auditLogs?.total ?? 0) > 0 ? stats.auditLogs!.oldest : stats.logs.oldest
+              }
+              subtext={
+                (stats.auditLogs?.total ?? 0) > 0
+                  ? 'Administrative changes'
+                  : stats.logs.total > 0
+                    ? 'System & event logs'
+                    : 'Administrative changes'
+              }
             />
             <CompactStatRowItem
               icon={<BarChart3 className="w-4 h-4 text-emerald-500" />}

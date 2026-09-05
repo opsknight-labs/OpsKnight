@@ -35,6 +35,9 @@ export const LOCK_KEYS = {
 
   /** Serializes all mutations that can remove the final ACTIVE administrator. */
   USER_ADMIN_INVARIANT: BigInt(9141003),
+
+  /** Serializes manual or scheduled data retention cleanups across cluster nodes. */
+  DATA_CLEANUP: BigInt(9141004),
 } as const;
 
 /**
