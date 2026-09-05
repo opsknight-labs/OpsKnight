@@ -6,6 +6,7 @@ import { tokensMatch } from '@/app/api/metrics/route';
 import { getJobWorkerStatus } from '@/lib/job-worker';
 import { getCronSchedulerStatus } from '@/lib/cron-scheduler';
 import { jsonApiOk } from '@/lib/api-response';
+import { getRealtimeControlPlaneStatus } from '@/lib/realtime-change-control-plane';
 
 async function authorized(request: Request): Promise<boolean> {
   const token = process.env.PROMETHEUS_SCRAPE_TOKEN;
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
       timestamp: new Date(now).toISOString(),
       worker: getJobWorkerStatus(),
       scheduler: await getCronSchedulerStatus(),
+      realtime: getRealtimeControlPlaneStatus(),
       jobs:
         queue.status === 'fulfilled'
           ? {

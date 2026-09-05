@@ -683,6 +683,13 @@ model Incident {
   @@index([priority, status], name: "idx_incident_priority_status")
 }
 
+/// Bounded transactional signal appended by database triggers whenever data
+/// that feeds realtime incident/dashboard projections changes.
+model RealtimeChange {
+  id        BigInt   @id @default(autoincrement())
+  changedAt DateTime @default(now())
+}
+
 model IncidentSlaPause {
   id                  String    @id @default(cuid())
   incidentId          String

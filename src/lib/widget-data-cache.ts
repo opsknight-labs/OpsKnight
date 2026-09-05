@@ -1,5 +1,6 @@
 import type { SLAMetricsFilter } from './sla-server';
 import { getWidgetRealtimeProjection, type WidgetRealtimeProjection } from './widget-data-provider';
+import { CAPABILITIES, hasCapability, isAppRole } from './authorization';
 
 const FRESH_TTL_MS = 30_000;
 const STALE_TTL_MS = 5 * 60_000;
@@ -24,13 +25,18 @@ function serializeFilterValue(value: unknown): unknown {
 export function buildWidgetCacheKey(
   userId: string,
   role: string,
-  filters: SLAMetricsFilter
+  filters: SLAMetricsFilter,
+  generation?: string | null
 ): string {
+  const scope =
+    isAppRole(role) && hasCapability(role, CAPABILITIES.METRICS_READ_ALL)
+      ? 'global'
+      : `user:${userId}`;
   const normalizedFilters = Object.entries(filters)
     .filter(([, value]) => value !== undefined)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => [key, serializeFilterValue(value)]);
-  return JSON.stringify([userId, role, normalizedFilters]);
+  return JSON.stringify([scope, generation ?? 'initial', normalizedFilters]);
 }
 
 function evict(now: number): void {
@@ -73,9 +79,10 @@ export async function getCachedWidgetData(
   userId: string,
   role: string,
   filters: SLAMetricsFilter,
-  now = Date.now()
+  now = Date.now(),
+  generation?: string | null
 ): Promise<WidgetRealtimeProjection> {
-  const key = buildWidgetCacheKey(userId, role, filters);
+  const key = buildWidgetCacheKey(userId, role, filters, generation);
   let entry = widgetCache.get(key);
   if (entry) {
     entry.lastAccessAt = now;
