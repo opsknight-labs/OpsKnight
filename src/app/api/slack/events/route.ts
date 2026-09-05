@@ -301,6 +301,14 @@ export async function POST(request: NextRequest) {
                   content: `📌 [Slack Pin by ${actorLabel}]: ${messageText}`,
                 },
               });
+
+              await tx.incidentEvent.create({
+                data: {
+                  incidentId: incident.id,
+                  type: 'COMMENT',
+                  message: `Note added via Slack pin by ${actorLabel}`,
+                },
+              });
               return true;
             });
           } catch (error) {

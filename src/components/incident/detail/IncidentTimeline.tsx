@@ -6,7 +6,7 @@ import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
-import { Clock, AlertCircle, CheckCircle2, Target, Activity } from 'lucide-react';
+import { Clock, AlertCircle, CheckCircle2, Target, Activity, MessageSquare } from 'lucide-react';
 
 type TimelineFilter =
   | 'ALL'
@@ -30,26 +30,40 @@ const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
 // Best-effort categorization from the free-text event message — there's no
 // structured "category" field on IncidentEvent, so this is a heuristic filter,
 // not an authoritative classification.
-function categorize(type: string, message: string): TimelineFilter {
+export function categorize(type: string, message: string): TimelineFilter {
+  if (type === 'NOTE' || type === 'COMMENT') return 'NOTES';
   if (type === 'CREATED' || type === 'ACKNOWLEDGED' || type === 'RESOLVED') return 'LIFECYCLE';
+  if (/\bnote\b|pinned message|comment/i.test(message)) return 'NOTES';
   if (/escalat/i.test(message)) return 'ESCALATION';
   if (/assign|unassigned/i.test(message)) return 'ASSIGNMENT';
   if (/notif|paged?\b|alert sent|sms|call attempt/i.test(message)) return 'NOTIFICATIONS';
   if (/jira|slack|webhook|integration|war.?room/i.test(message)) return 'INTEGRATIONS';
-  if (/\bnote\b/i.test(message)) return 'NOTES';
   if (/triggered|created|resolved|acknowledged|snooz|suppress|reopen/i.test(message))
     return 'LIFECYCLE';
   return 'ALL';
 }
 
-type Event = {
+export type Event = {
   id: string;
   message: string;
+  type?: string | null;
   createdAt: Date;
 };
 
-type IncidentTimelineProps = {
+export type Note = {
+  id: string;
+  content: string;
+  createdAt: Date;
+  user?: {
+    name?: string | null;
+    email?: string | null;
+    avatarUrl?: string | null;
+  } | null;
+};
+
+export type IncidentTimelineProps = {
   events: Event[];
+  notes?: Note[];
   incidentCreatedAt?: Date;
   incidentAcknowledgedAt?: Date | null;
   incidentResolvedAt?: Date | null;
@@ -57,6 +71,7 @@ type IncidentTimelineProps = {
 
 export default function IncidentTimeline({
   events,
+  notes = [],
   incidentCreatedAt,
   incidentAcknowledgedAt,
   incidentResolvedAt,
@@ -74,12 +89,12 @@ export default function IncidentTimeline({
     });
   };
 
-  // Create a comprehensive timeline with incident lifecycle events
+  // Create a comprehensive timeline with incident lifecycle events and notes
   const timelineEvents: Array<{
     id: string;
     message: string;
     createdAt: Date;
-    type: 'CREATED' | 'ACKNOWLEDGED' | 'RESOLVED' | 'EVENT';
+    type: string;
     sortPriority: number;
   }> = [];
 
@@ -120,14 +135,65 @@ export default function IncidentTimeline({
     });
   }
 
+  // Track matched notes to prevent duplicates when an incidentEvent already exists for a note
+  const matchedNoteIds = new Set<string>();
+
   // Add regular events
   events.forEach(event => {
+    const isNoteEvent =
+      event.type === 'NOTE' ||
+      event.type === 'COMMENT' ||
+      /\bnote\b|pinned message|comment/i.test(event.message);
+
+    let message = event.message;
+    let eventType = event.type || 'EVENT';
+
+    if (isNoteEvent) {
+      eventType = 'NOTE';
+      if (notes && notes.length > 0) {
+        const eventTime = new Date(event.createdAt).getTime();
+        const matchingNote = notes.find(n => {
+          if (matchedNoteIds.has(n.id)) return false;
+          const noteTime = new Date(n.createdAt).getTime();
+          return Math.abs(eventTime - noteTime) <= 15000;
+        });
+
+        if (matchingNote) {
+          matchedNoteIds.add(matchingNote.id);
+          if (!message.includes(matchingNote.content)) {
+            message = `${message}:\n${matchingNote.content}`;
+          }
+        }
+      }
+    }
+
     timelineEvents.push({
       ...event,
-      type: 'EVENT',
+      message,
+      type: eventType,
       sortPriority: 3,
     });
   });
+
+  // Synthesize timeline events for any notes that do not have a matching incidentEvent
+  if (notes && notes.length > 0) {
+    notes.forEach(note => {
+      if (!matchedNoteIds.has(note.id)) {
+        const author = note.user?.name || note.user?.email || 'Responder';
+        const formattedMsg = note.content.startsWith('📌')
+          ? note.content
+          : `Note added by ${author}:\n${note.content}`;
+
+        timelineEvents.push({
+          id: `note-${note.id}`,
+          message: formattedMsg,
+          createdAt: note.createdAt,
+          type: 'NOTE',
+          sortPriority: 3,
+        });
+      }
+    });
+  }
 
   // Sort by date (oldest first for timeline) with secondary ID tie-breaker for same-millisecond events
   timelineEvents.sort((a, b) => {
@@ -169,6 +235,15 @@ export default function IncidentTimeline({
           label: 'Resolved',
           avatarBg: 'bg-green-100',
           avatarText: 'text-green-600',
+        };
+      case 'NOTE':
+      case 'COMMENT':
+        return {
+          variant: 'info' as const,
+          icon: <MessageSquare className="h-4 w-4" />,
+          label: 'Note',
+          avatarBg: 'bg-blue-100 dark:bg-blue-950/40',
+          avatarText: 'text-blue-600 dark:text-blue-400',
         };
       default:
         return {
@@ -237,7 +312,9 @@ export default function IncidentTimeline({
         <div className="absolute left-[19px] top-2 bottom-4 w-px bg-slate-200 dark:bg-slate-700" />
         {filteredEvents.map((event, index) => {
           const config = getEventConfig(event.type);
-          const isMajorEvent = event.type !== 'EVENT';
+          const isLifecycleEvent =
+            event.type === 'CREATED' || event.type === 'ACKNOWLEDGED' || event.type === 'RESOLVED';
+          const isNote = event.type === 'NOTE' || event.type === 'COMMENT';
 
           return (
             <div
@@ -257,11 +334,11 @@ export default function IncidentTimeline({
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`text-sm font-semibold ${isMajorEvent ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300'}`}
+                      className={`text-sm font-semibold ${isLifecycleEvent ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-300'}`}
                     >
                       {config.label}
                     </span>
-                    {isMajorEvent && (
+                    {isLifecycleEvent && (
                       <Badge variant={config.variant} size="xs" className="uppercase h-5">
                         {event.type}
                       </Badge>
@@ -273,7 +350,13 @@ export default function IncidentTimeline({
                 </div>
 
                 <p
-                  className={`text-sm leading-relaxed whitespace-pre-wrap ${isMajorEvent ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-600 dark:text-slate-400'}`}
+                  className={`text-sm leading-relaxed whitespace-pre-wrap ${
+                    isLifecycleEvent
+                      ? 'text-slate-900 dark:text-slate-100 font-medium'
+                      : isNote
+                        ? 'text-slate-800 dark:text-slate-200'
+                        : 'text-slate-600 dark:text-slate-400'
+                  }`}
                 >
                   {formatEscalationMessage(event.message)}
                 </p>
