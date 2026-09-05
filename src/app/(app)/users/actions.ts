@@ -18,20 +18,34 @@ import {
 import { bulkUpdateUserSecurityState, updateUserSecurityState } from '@/lib/users/admin-invariants';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
+type EmailInviteResult = {
+  sent: boolean;
+  providerConfigured: boolean;
+  providerName?: string | null;
+};
+
 async function sendInviteEmailIfConfigured(data: {
   userId: string;
   email: string;
   name: string;
   inviteUrl: string;
   invitedBy?: string;
-}): Promise<boolean> {
+}): Promise<EmailInviteResult> {
   try {
     const { getEmailConfig } = await import('@/lib/notification-providers');
     const emailConfig = await getEmailConfig();
 
     if (!emailConfig.enabled || !emailConfig.provider) {
-      return false;
+      return { sent: false, providerConfigured: false, providerName: null };
     }
+
+    const providerLabels: Record<string, string> = {
+      resend: 'Resend',
+      sendgrid: 'SendGrid',
+      ses: 'Amazon SES',
+      smtp: 'Custom SMTP',
+    };
+    const providerName = providerLabels[emailConfig.provider] || emailConfig.provider;
 
     const { getUserInviteEmailTemplate } = await import('@/lib/user-invite-email-template');
     const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
@@ -62,14 +76,22 @@ async function sendInviteEmailIfConfigured(data: {
         text: template.text,
       },
     });
-    return result.delivered === true;
+    return {
+      sent: result.delivered === true,
+      providerConfigured: true,
+      providerName,
+    };
   } catch (error) {
     logger.warn('Failed to send invite email', {
       component: 'users-actions',
       error,
       email: data.email,
     });
-    return false;
+    return {
+      sent: false,
+      providerConfigured: true,
+      providerName: null,
+    };
   }
 }
 
@@ -149,9 +171,12 @@ async function deleteUserInternal(userId: string) {
   await assertUserIsNotSoleOwner(userId);
   await assertNotLastAdmin(userId);
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { status: true, email: true },
+  });
   if (!user) throw new Error('User not found.');
-  if (user.status !== 'DISABLED') {
+  if (user.status !== 'DISABLED' && user.status !== 'INVITED') {
     throw new Error('Deactivate the user before permanent deletion.');
   }
   const dependencies = dependencySummary(await discoverUserDependencies(userId));
@@ -165,6 +190,11 @@ async function deleteUserInternal(userId: string) {
     // Preserve incident notes for audit trail — nullify userId so notes survive user deletion
     prisma.incidentNote.updateMany({ where: { userId }, data: { userId: null } }),
     prisma.incidentWatcher.deleteMany({ where: { userId } }),
+    prisma.userToken.deleteMany({
+      where: {
+        OR: [{ userId }, ...(user.email ? [{ identifier: user.email.toLowerCase() }] : [])],
+      },
+    }),
     prisma.user.delete({ where: { id: userId } }),
   ]);
 }
@@ -174,6 +204,9 @@ export type UserFormState = {
   success?: boolean;
   inviteUrl?: string | null;
   emailSent?: boolean;
+  providerConfigured?: boolean;
+  providerName?: string | null;
+  recipientEmail?: string | null;
 };
 
 export async function getUserDependencyReport(
@@ -328,7 +361,7 @@ export async function addUser(
     revalidatePath('/users');
     revalidatePath('/audit');
 
-    const emailSent = await sendInviteEmailIfConfigured({
+    const emailResult = await sendInviteEmailIfConfigured({
       userId: user.id,
       email,
       name,
@@ -336,7 +369,14 @@ export async function addUser(
       invitedBy: admin?.name || admin?.email || undefined,
     });
 
-    return { success: true, inviteUrl, emailSent };
+    return {
+      success: true,
+      inviteUrl,
+      emailSent: emailResult.sent,
+      providerConfigured: emailResult.providerConfigured,
+      providerName: emailResult.providerName,
+      recipientEmail: email,
+    };
   } catch (error) {
     logger.error('Failed to add user', { component: 'users-actions', error, email, name, role });
     return {
@@ -579,7 +619,7 @@ export async function generateInvite(
   revalidatePath('/users');
   revalidatePath('/audit');
 
-  const emailSent = await sendInviteEmailIfConfigured({
+  const emailResult = await sendInviteEmailIfConfigured({
     userId: user.id,
     email: user.email,
     name: user.name || user.email,
@@ -587,7 +627,14 @@ export async function generateInvite(
     invitedBy: admin?.name || admin?.email || undefined,
   });
 
-  return { success: true, inviteUrl, emailSent };
+  return {
+    success: true,
+    inviteUrl,
+    emailSent: emailResult.sent,
+    providerConfigured: emailResult.providerConfigured,
+    providerName: emailResult.providerName,
+    recipientEmail: user.email,
+  };
 }
 
 export async function deleteUser(
@@ -607,13 +654,13 @@ export async function deleteUser(
   try {
     const userToDelete = await prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, name: true, role: true },
+      select: { email: true, name: true, role: true, status: true },
     });
 
     await deleteUserInternal(userId);
 
     await logAudit({
-      action: 'user.deleted',
+      action: userToDelete?.status === 'INVITED' ? 'user.invitation.deleted' : 'user.deleted',
       entityType: 'USER',
       entityId: userId,
       actorId: currentUser?.id || null,
@@ -622,6 +669,7 @@ export async function deleteUser(
         email: userToDelete?.email,
         name: userToDelete?.name,
         role: userToDelete?.role,
+        status: userToDelete?.status,
       },
     });
 

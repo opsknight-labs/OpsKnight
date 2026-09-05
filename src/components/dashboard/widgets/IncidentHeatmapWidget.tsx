@@ -151,7 +151,7 @@ export function IncidentHeatmapWidget({
                 <TooltipTrigger asChild>
                   <div
                     className={cn(
-                      'rounded-[3px] transition-transform hover:scale-125 cursor-pointer',
+                      'rounded-[1.5px] transition-all duration-150 hover:scale-125 hover:ring-1 hover:ring-zinc-400 dark:hover:ring-zinc-500 cursor-pointer',
                       getColor(day.count)
                     )}
                     style={{
@@ -180,15 +180,15 @@ export function IncidentHeatmapWidget({
           <span>Fewer</span>
           <div className="flex gap-1 items-center">
             {/* 0 incidents */}
-            <div className="w-2.5 h-2.5 rounded-[3px] bg-slate-200/60 border border-slate-300/60" />
+            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-slate-200/60 border border-slate-300/60" />
             {/* Low intensity (<25%) */}
-            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-100 border border-emerald-300/70" />
+            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-100 border border-emerald-300/70" />
             {/* Medium intensity (<50%) */}
-            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-300 border border-emerald-500/70" />
+            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-300 border border-emerald-500/70" />
             {/* High intensity (<75%) */}
-            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-500 border border-emerald-600/70" />
+            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-500 border border-emerald-600/70" />
             {/* Peak intensity (>75%) */}
-            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-700 shadow-2xs" />
+            <div className="w-2.5 h-2.5 rounded-[1.5px] bg-emerald-700 shadow-2xs" />
           </div>
           <span>More</span>
         </div>

@@ -1027,10 +1027,10 @@ export default function IncidentsListTable({
                     }
                   }}
                   className={cn(
-                    'group relative rounded-2xl border bg-card transition-all duration-200 overflow-hidden',
-                    'hover:shadow-md hover:border-border',
+                    'group relative rounded-2xl border bg-card transition-all duration-150 overflow-hidden',
+                    'hover:shadow-md hover:-translate-y-[1px]',
                     'focus-within:ring-2 focus-within:ring-primary/20',
-                    'border-border/75',
+                    'border-border',
                     getStatusHoverBorder(incidentStatus),
                     isSelected && 'ring-1 ring-primary/30 border-primary/50 bg-primary/5',
                     isFocused && 'ring-2 ring-primary/60 border-primary/70 shadow-sm bg-accent/25',

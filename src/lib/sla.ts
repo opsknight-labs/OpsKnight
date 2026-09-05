@@ -182,7 +182,12 @@ export type SLAMetrics = {
     id: string;
     userId?: string;
     scheduleId?: string;
-    user: { name: string | null };
+    user: {
+      id?: string;
+      name: string | null;
+      avatarUrl?: string | null;
+      gender?: string | null;
+    };
     schedule: { id?: string; name: string };
     start: Date;
     end: Date;

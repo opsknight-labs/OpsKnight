@@ -1,10 +1,9 @@
 import prisma from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import type { Prisma, Role, UserStatus, AuditEntityType } from '@prisma/client';
+import type { Prisma, Role, UserStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import {
   addUser,
   addUserToTeam,
@@ -15,7 +14,7 @@ import {
   reactivateUser,
   updateUserRole,
 } from './actions';
-import UserCreateForm from '@/components/UserCreateForm';
+import InviteUserModal from '@/components/users/InviteUserModal';
 import UserFilters from '@/components/users/UserFilters';
 import UserList from '@/components/users/UserList';
 import UserSortDropdown from '@/components/users/UserSortDropdown';
@@ -27,25 +26,14 @@ import {
   CardTitle,
 } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
-import { Input } from '@/components/ui/shadcn/input';
-import { Label } from '@/components/ui/shadcn/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/shadcn/select';
-import { Badge } from '@/components/ui/shadcn/badge';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import { Users, UserCheck, UserPlus, UserX, ArrowUpDown } from 'lucide-react';
+import { Users, UserCheck, UserPlus, UserX } from 'lucide-react';
 import { isAppRole } from '@/lib/authorization';
 import { assertAdmin } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
 const USERS_PER_PAGE = 20;
-const HISTORY_PER_PAGE = 20;
 
 type UsersPageProps = {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -72,9 +60,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   const sortOrder =
     typeof awaitedSearchParams?.sortOrder === 'string' ? awaitedSearchParams.sortOrder : 'desc';
   const page = Math.max(1, Number(awaitedSearchParams?.page) || 1);
-  const historyPage = Math.max(1, Number(awaitedSearchParams?.historyPage) || 1);
   const skip = (page - 1) * USERS_PER_PAGE;
-  const historySkip = (historyPage - 1) * HISTORY_PER_PAGE;
 
   // Security & Initialization Checks
   const session = await getServerSession(await getAuthOptions());
@@ -92,7 +78,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     redirect('/setup');
   }
 
-  const where: any = {
+  const where: Prisma.UserWhereInput = {
     AND: [
       query
         ? {
@@ -116,11 +102,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     ],
   };
 
-  const auditLogWhere: Prisma.AuditLogWhereInput = {
-    entityType: 'USER' as AuditEntityType,
-  };
-
-  const [users, totalCount, auditLogs, auditLogTotal, teams] = await Promise.all([
+  const [users, totalCount, teams] = await Promise.all([
     prisma.user.findMany({
       select: {
         id: true,
@@ -152,16 +134,6 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       take: USERS_PER_PAGE,
     }),
     prisma.user.count({ where }),
-    prisma.auditLog.findMany({
-      include: {
-        actor: true,
-      },
-      where: auditLogWhere,
-      orderBy: { createdAt: 'desc' },
-      skip: historySkip,
-      take: HISTORY_PER_PAGE,
-    }),
-    prisma.auditLog.count({ where: auditLogWhere }),
     prisma.team.findMany({ orderBy: { name: 'asc' } }),
   ]);
 
@@ -195,20 +167,17 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   }
 
   const totalPages = Math.ceil(totalCount / USERS_PER_PAGE);
-  const historyTotalPages = Math.ceil(auditLogTotal / HISTORY_PER_PAGE);
 
   const currentUserEmail = session?.user?.email;
   const currentUser = currentUserEmail
     ? await prisma.user.findUnique({
         where: { email: currentUserEmail },
-        select: { id: true, role: true, timeZone: true },
+        select: { id: true, role: true },
       })
     : null;
   const currentUserId = currentUser?.id || '';
   const currentUserRole = (currentUser?.role as Role) || 'USER';
   const isAdmin = currentUserRole === 'ADMIN';
-
-  const userTimeZone = getUserTimeZone(currentUser ?? undefined);
 
   const baseParams = new URLSearchParams();
   if (query) baseParams.set('q', query);
@@ -217,21 +186,6 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   if (teamFilter) baseParams.set('teamId', teamFilter);
   if (sortBy !== 'createdAt') baseParams.set('sortBy', sortBy);
   if (sortOrder !== 'desc') baseParams.set('sortOrder', sortOrder);
-
-  const historyBaseParams = new URLSearchParams();
-  if (query) historyBaseParams.set('q', query);
-  if (statusFilter) historyBaseParams.set('status', statusFilter);
-  if (roleFilter) historyBaseParams.set('role', roleFilter);
-  if (teamFilter) historyBaseParams.set('teamId', teamFilter);
-  if (page > 1) historyBaseParams.set('page', page.toString());
-  if (sortBy !== 'createdAt') historyBaseParams.set('sortBy', sortBy);
-  if (sortOrder !== 'desc') historyBaseParams.set('sortOrder', sortOrder);
-
-  function buildHistoryPaginationUrl(pageNum: number): string {
-    const params = new URLSearchParams(historyBaseParams);
-    params.set('historyPage', pageNum.toString());
-    return `/users?${params.toString()}`;
-  }
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
@@ -277,147 +231,81 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
         ]}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
-        {/* Main Content */}
-        <div className="xl:col-span-2 space-y-4 md:space-y-6">
-          {/* Filters */}
-          <UserFilters teams={teams} />
+      {/* Filters */}
+      <UserFilters teams={teams} />
 
-          {/* User List */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>User Directory</CardTitle>
-                  <CardDescription>
-                    Showing {skip + 1}-{Math.min(skip + USERS_PER_PAGE, totalCount)} of {totalCount}{' '}
-                    users
-                  </CardDescription>
-                </div>
-                <UserSortDropdown />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <UserList
-                users={users}
-                currentUserId={currentUserId}
-                isAdmin={isAdmin}
-                teams={teams}
-                updateUserRole={updateUserRole}
-                addUserToTeam={addUserToTeam}
-                deactivateUser={deactivateUser}
-                reactivateUser={reactivateUser}
-                deleteUser={deleteUser}
-                generateInvite={generateInvite as any}
-                getUserDependencyReport={getUserDependencyReport}
-              />
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between mt-6 pt-6 border-t gap-4">
-                  <div className="text-sm text-muted-foreground">
-                    Page {page} of {totalPages}
-                  </div>
-                  <div className="flex gap-2 flex-wrap justify-center">
-                    <Link href={buildPaginationUrl(baseParams, 1)}>
-                      <Button variant="outline" size="sm" disabled={page === 1}>
-                        First
-                      </Button>
-                    </Link>
-                    <Link href={buildPaginationUrl(baseParams, Math.max(1, page - 1))}>
-                      <Button variant="outline" size="sm" disabled={page === 1}>
-                        <span className="hidden sm:inline">Previous</span>
-                        <span className="sm:hidden">Prev</span>
-                      </Button>
-                    </Link>
-                    <Link href={buildPaginationUrl(baseParams, Math.min(totalPages, page + 1))}>
-                      <Button variant="outline" size="sm" disabled={page === totalPages}>
-                        Next
-                      </Button>
-                    </Link>
-                    <Link href={buildPaginationUrl(baseParams, totalPages)}>
-                      <Button variant="outline" size="sm" disabled={page === totalPages}>
-                        Last
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-4 md:space-y-6">
-          {/* Invite New User */}
-          <Card>
-            <CardHeader className="p-5 pb-2">
-              <CardTitle>Invite New User</CardTitle>
-              <CardDescription>Add a new team member</CardDescription>
-            </CardHeader>
-            <CardContent className="p-5 pt-0">
-              <UserCreateForm action={addUser} disabled={!isAdmin} />
-            </CardContent>
-          </Card>
-
-          {/* Activity Log */}
-          <Card>
-            <CardHeader className="p-5 pb-2">
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>
-                Showing {historySkip + 1}-{Math.min(historySkip + HISTORY_PER_PAGE, auditLogTotal)}{' '}
-                of {auditLogTotal} entries
+      {/* User List */}
+      <Card className="border-border/70 shadow-2xs">
+        <CardHeader className="p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-bold">User Directory</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Showing {skip + 1}-{Math.min(skip + USERS_PER_PAGE, totalCount)} of {totalCount}{' '}
+                users
               </CardDescription>
-            </CardHeader>
-            <CardContent className="p-5 pt-0">
-              <div className="space-y-3">
-                {auditLogs.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No activity yet</p>
-                ) : (
-                  auditLogs.map(log => (
-                    <div key={log.id} className="p-3 bg-muted/50 rounded-lg border">
-                      <div className="font-medium text-sm">{log.action}</div>
-                      <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
-                        <span>{log.actor?.name || 'System'}</span>
-                        <span>
-                          {formatDateTime(log.createdAt, userTimeZone, { format: 'datetime' })}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* History Pagination */}
-              {historyTotalPages > 1 && (
-                <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                  <div className="text-xs text-muted-foreground">
-                    Page {historyPage} of {historyTotalPages}
-                  </div>
-                  <div className="flex gap-1">
-                    <Link href={buildHistoryPaginationUrl(Math.max(1, historyPage - 1))}>
-                      <Button variant="outline" size="sm" disabled={historyPage === 1}>
-                        Prev
-                      </Button>
-                    </Link>
-                    <Link
-                      href={buildHistoryPaginationUrl(Math.min(historyTotalPages, historyPage + 1))}
-                    >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={historyPage === historyTotalPages}
-                      >
-                        Next
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <UserSortDropdown />
+              {isAdmin && (
+                <InviteUserModal
+                  action={addUser}
+                  disabled={!isAdmin}
+                  variant="topbar"
+                  label="Invite User"
+                />
               )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-5 pt-0">
+          <UserList
+            users={users}
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
+            teams={teams}
+            updateUserRole={updateUserRole}
+            addUserToTeam={addUserToTeam}
+            deactivateUser={deactivateUser}
+            reactivateUser={reactivateUser}
+            deleteUser={deleteUser}
+            generateInvite={generateInvite}
+            getUserDependencyReport={getUserDependencyReport}
+          />
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between mt-6 pt-6 border-t gap-4">
+              <div className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </div>
+              <div className="flex gap-2 flex-wrap justify-center">
+                <Link href={buildPaginationUrl(baseParams, 1)}>
+                  <Button variant="outline" size="sm" disabled={page === 1}>
+                    First
+                  </Button>
+                </Link>
+                <Link href={buildPaginationUrl(baseParams, Math.max(1, page - 1))}>
+                  <Button variant="outline" size="sm" disabled={page === 1}>
+                    <span className="hidden sm:inline">Previous</span>
+                    <span className="sm:hidden">Prev</span>
+                  </Button>
+                </Link>
+                <Link href={buildPaginationUrl(baseParams, Math.min(totalPages, page + 1))}>
+                  <Button variant="outline" size="sm" disabled={page === totalPages}>
+                    Next
+                  </Button>
+                </Link>
+                <Link href={buildPaginationUrl(baseParams, totalPages)}>
+                  <Button variant="outline" size="sm" disabled={page === totalPages}>
+                    Last
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

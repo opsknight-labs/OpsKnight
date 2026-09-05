@@ -56,9 +56,6 @@ export default function TopbarUserMenu({ name, email, role, avatarUrl, gender, u
               {initials}
             </AvatarFallback>
           </Avatar>
-
-          {/* 4. Online Status Dot */}
-          <span className="absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full border-[1.5px] border-background bg-emerald-500 shadow-sm z-20" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

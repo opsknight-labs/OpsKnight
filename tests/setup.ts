@@ -8,7 +8,9 @@ if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollIntoView)
 
 // Cleanup after each test
 afterEach(() => {
-  cleanup();
+  if (typeof document !== 'undefined') {
+    cleanup();
+  }
 });
 
 // Mock Next.js router
@@ -78,6 +80,7 @@ const mockPrisma = {
   systemSettings: createMockModel(),
   alert: createMockModel(),
   incidentNote: createMockModel(),
+  incidentWatcher: createMockModel(),
   $transaction: vi
     .fn()
     .mockImplementation((cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),

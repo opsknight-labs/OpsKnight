@@ -325,7 +325,6 @@ export default function Sidebar({
                       gender={currentGender}
                       avatarUrl={userAvatar}
                       size="sm"
-                      showOnlineStatus={true}
                       className="border-white/10 h-8 w-8 shrink-0 hover:scale-105 transition-transform"
                       fallbackClassName="bg-indigo-500/20 text-indigo-200 text-xs"
                     />
@@ -348,7 +347,6 @@ export default function Sidebar({
                   gender={currentGender}
                   avatarUrl={userAvatar}
                   size="sm"
-                  showOnlineStatus={true}
                   className="border-white/10 h-8 w-8 shrink-0"
                   fallbackClassName="bg-indigo-500/20 text-indigo-200 text-xs"
                 />
@@ -449,8 +447,23 @@ export default function Sidebar({
           {/* Metadata version info */}
           {!isDesktopCollapsed && (
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-[10px] text-slate-500">
-              <span>opsknight.com</span>
-              <span className="font-mono">{APP_VERSION}</span>
+              <a
+                href="https://opsknight.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-slate-300 transition-colors"
+              >
+                opsknight.com
+              </a>
+              <a
+                href={`https://github.com/opsknight-labs/OpsKnight/releases/tag/${APP_VERSION}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono hover:text-slate-300 transition-colors"
+                title={`View ${APP_VERSION} release notes`}
+              >
+                {APP_VERSION}
+              </a>
             </div>
           )}
         </div>
