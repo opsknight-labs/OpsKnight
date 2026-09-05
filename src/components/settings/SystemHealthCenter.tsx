@@ -519,26 +519,41 @@ export default function SystemHealthCenter({ initialReport }: Props) {
  */
 function HealthHistoryRibbon({
   history,
-  overall,
+  overall: _overall,
 }: {
   history?: HealthHistorySample[];
   overall: HealthLevel;
 }) {
   if (!history || history.length === 0) return null;
 
-  const uptimePercentage =
-    overall === 'healthy' ? '100%' : overall === 'degraded' ? '98.5%' : '92.0%';
+  const totalScore = history.reduce((sum, s) => sum + s.scorePercent, 0);
+  const avgScore = totalScore / history.length;
+  const uptimePercent = Number.isInteger(avgScore) ? avgScore.toString() : avgScore.toFixed(1);
+
+  const percentColorClass =
+    avgScore >= 99
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : avgScore >= 90
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-rose-600 dark:text-rose-400';
+
+  const statusMap: Record<HealthLevel, string> = {
+    healthy: 'Operational',
+    degraded: 'Degraded',
+    unhealthy: 'Action Required',
+    unknown: 'Not Reported',
+  };
 
   return (
     <div className="rounded-lg border border-border/80 bg-muted/20 p-3 shadow-2xs backdrop-blur-xs">
-      <div className="flex items-center justify-between pb-2 text-xs">
+      <div className="flex items-center justify-between pb-3 text-xs">
         <div className="flex items-center gap-2">
           <Activity className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-bold text-foreground text-xs tracking-tight">
             24-Hour System Health Trend
           </span>
-          <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-            • {uptimePercentage} Operational
+          <span className={cn('text-[11px] font-mono font-semibold', percentColorClass)}>
+            • {uptimePercent}% Operational
           </span>
         </div>
         <div className="hidden sm:flex items-center gap-2.5 text-[10px] text-muted-foreground font-mono">
@@ -554,8 +569,8 @@ function HealthHistoryRibbon({
         </div>
       </div>
 
-      {/* Slim 24-bar sparkline flex row with instant CSS tooltip */}
-      <div className="flex items-center gap-1 h-3 w-full">
+      {/* Slim 24-bar sparkline flex row with smart clamped tooltip */}
+      <div className="flex items-center gap-1 h-3.5 w-full">
         {history.map((sample, idx) => {
           const isHealthy = sample.status === 'healthy';
           const isDegraded = sample.status === 'degraded';
@@ -569,20 +584,69 @@ function HealthHistoryRibbon({
                 ? 'bg-rose-500 hover:bg-rose-400'
                 : 'bg-muted-foreground/30';
 
+          const isLeftEdge = idx < 3;
+          const isRightEdge = idx > history.length - 4;
+
+          const tooltipAlignClass = isLeftEdge
+            ? 'left-0 items-start'
+            : isRightEdge
+              ? 'right-0 items-end'
+              : 'left-1/2 -translate-x-1/2 items-center';
+
+          const arrowAlignClass = isLeftEdge
+            ? 'left-3'
+            : isRightEdge
+              ? 'right-3'
+              : 'left-1/2 -translate-x-1/2';
+
+          const statusLabel = statusMap[sample.status] || 'Unknown';
+
           return (
             <div key={idx} className="group relative flex-1 h-full min-w-0">
               <div
                 className={cn(
-                  'h-3 w-full rounded-[2px] transition-all cursor-pointer hover:opacity-75',
+                  'h-3.5 w-full rounded-[2px] transition-all cursor-pointer hover:opacity-75',
                   colorClass
                 )}
               />
-              {/* Floating Tooltip with whitespace-nowrap */}
-              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-50">
-                <div className="rounded bg-neutral-900 dark:bg-neutral-800 px-2 py-1 text-[10px] font-mono font-medium text-white shadow-md border border-white/10 whitespace-nowrap">
-                  {sample.hourLabel} — {sample.status.toUpperCase()} ({sample.scorePercent}% health)
+              {/* Floating Tooltip with smart edge clamping */}
+              <div
+                className={cn(
+                  'pointer-events-none absolute bottom-full mb-1.5 hidden group-hover:flex flex-col z-50',
+                  tooltipAlignClass
+                )}
+              >
+                <div className="rounded bg-neutral-900 dark:bg-neutral-800 px-2.5 py-1 text-[10px] font-mono font-medium text-white shadow-md border border-white/10 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <span>{sample.hourLabel}</span>
+                    <span className="text-neutral-400">•</span>
+                    <span
+                      className={
+                        isHealthy
+                          ? 'text-emerald-400'
+                          : isDegraded
+                            ? 'text-amber-400'
+                            : isUnhealthy
+                              ? 'text-rose-400'
+                              : 'text-neutral-300'
+                      }
+                    >
+                      {statusLabel}
+                    </span>
+                    <span className="text-neutral-400">({sample.scorePercent}%)</span>
+                  </div>
+                  {sample.reason && (
+                    <div className="text-[9px] text-neutral-300 dark:text-neutral-400 max-w-[220px] truncate pt-0.5 font-sans">
+                      {sample.reason}
+                    </div>
+                  )}
                 </div>
-                <div className="h-1 w-1.5 border-x-4 border-t-4 border-x-transparent border-t-neutral-900 dark:border-t-neutral-800" />
+                <div
+                  className={cn(
+                    'h-1 w-1.5 border-x-4 border-t-4 border-x-transparent border-t-neutral-900 dark:border-t-neutral-800',
+                    arrowAlignClass
+                  )}
+                />
               </div>
             </div>
           );
@@ -592,6 +656,7 @@ function HealthHistoryRibbon({
       {/* Axis markers */}
       <div className="flex items-center justify-between pt-1.5 text-[10px] text-muted-foreground font-mono">
         <span>24 hours ago</span>
+        <span className="hidden sm:inline text-muted-foreground/60">12 hours ago</span>
         <span>Now</span>
       </div>
     </div>

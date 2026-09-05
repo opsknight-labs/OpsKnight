@@ -16,8 +16,7 @@ type PageProps = {
 
 export default async function MobileUserDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const viewer = await getCurrentUser();
-  if (viewer.role !== 'ADMIN' && viewer.id !== id) notFound();
+  await getCurrentUser();
 
   const user = await prisma.user.findUnique({
     where: { id },

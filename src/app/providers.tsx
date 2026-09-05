@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Toaster } from '@/components/ui/shadcn/sonner';
 import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import { KeyboardShortcutsProvider } from '@/components/KeyboardShortcutsProvider';
+import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
 
 function AppThemeProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -28,7 +29,8 @@ function AppThemeProvider({ children }: { children: React.ReactNode }) {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider>
+    <SessionProvider refetchInterval={300} refetchOnWindowFocus={true}>
+      <ChunkLoadErrorHandler />
       <AppThemeProvider>
         <TimezoneProvider>
           <KeyboardShortcutsProvider>{children}</KeyboardShortcutsProvider>
