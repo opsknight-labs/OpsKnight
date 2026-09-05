@@ -276,7 +276,10 @@ export default function UserList({
           const handleDelete = async () => {
             const result = await deleteUser(user.id);
             if (result?.error) toast.error(result.error);
-            else toast.success('User permanently deleted');
+            else
+              toast.success(
+                user.status === 'INVITED' ? 'Invitation deleted' : 'User permanently deleted'
+              );
           };
 
           const handleGenerateInvite = async () => {

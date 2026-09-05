@@ -2,12 +2,14 @@
 
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 import { getEmailValidationError } from '@/lib/form-validation';
 import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/shadcn/select';
 import { Button } from '@/components/ui/shadcn/button';
+import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Mail,
   Shield,
@@ -17,6 +19,11 @@ import {
   Users,
   ShieldAlert,
   Loader2,
+  ChevronDown,
+  UserPlus,
+  Settings,
+  Link as LinkIcon,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +32,9 @@ type FormState = {
   success?: boolean;
   inviteUrl?: string | null;
   emailSent?: boolean;
+  providerConfigured?: boolean;
+  providerName?: string | null;
+  recipientEmail?: string | null;
 };
 
 type Props = {
@@ -76,6 +86,8 @@ export default function UserCreateForm({ action, className = '', disabled = fals
   const [emailError, setEmailError] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState('RESPONDER');
   const [isCopied, setIsCopied] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [showBackupLink, setShowBackupLink] = useState(false);
 
   useEffect(() => {
     if (state?.success) {
@@ -84,6 +96,8 @@ export default function UserCreateForm({ action, className = '', disabled = fals
       setEmail('');
       // Don't reset selectedRole, convenient for multiple adds
       setEmailError(null);
+      setDismissed(false);
+      setShowBackupLink(false);
     }
   }, [state?.success]);
 
@@ -101,6 +115,292 @@ export default function UserCreateForm({ action, className = '', disabled = fals
       setTimeout(() => setIsCopied(false), 2000);
     }
   };
+
+  const handleInviteAnother = () => {
+    setDismissed(true);
+    formRef.current?.reset();
+    setEmail('');
+    setEmailError(null);
+    setIsCopied(false);
+    setShowBackupLink(false);
+  };
+
+  // Dedicated Post-Invite Result Screen
+  if (state?.success && !dismissed) {
+    const isAutoEmailSent = state.providerConfigured && state.emailSent;
+    const isDeliveryFailed = state.providerConfigured && !state.emailSent;
+    const isManualOnly = !state.providerConfigured;
+    const targetEmail = state.recipientEmail || email;
+
+    return (
+      <div
+        className={cn(
+          'relative w-full max-w-full min-w-0 space-y-4 animate-in fade-in zoom-in-98 duration-200',
+          className
+        )}
+      >
+        {/* CASE 1: Email Provider Configured & Email Sent */}
+        {isAutoEmailSent && (
+          <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 dark:bg-emerald-950/20 p-4 sm:p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/30">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-foreground">Invitation Dispatched</h3>
+                  {state.providerName && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                    >
+                      via {state.providerName}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  An automated onboarding email has been sent to{' '}
+                  <span className="font-semibold text-foreground">{targetEmail}</span>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-background/80 border border-border/70 text-xs text-muted-foreground leading-relaxed">
+              <Mail className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+              <span>
+                Ask the user to check their inbox or spam folder. The password setup link is valid
+                for 7 days.
+              </span>
+            </div>
+
+            {/* Collapsible Backup Link */}
+            {state.inviteUrl && (
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowBackupLink(prev => !prev)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer select-none"
+                >
+                  <ChevronDown
+                    className={cn(
+                      'h-3.5 w-3.5 transition-transform duration-200',
+                      showBackupLink && 'rotate-180'
+                    )}
+                  />
+                  <span>
+                    {showBackupLink
+                      ? 'Hide direct setup link'
+                      : "Didn't receive the email? Copy backup link"}
+                  </span>
+                </button>
+
+                {showBackupLink && (
+                  <div className="p-3 rounded-xl bg-background border border-border/80 space-y-2 animate-in fade-in slide-in-from-top-1">
+                    <p className="text-[11px] text-muted-foreground">
+                      Share this private setup link directly if their corporate email firewall
+                      delays incoming mail:
+                    </p>
+                    <div className="flex items-center gap-2 bg-muted/40 p-1.5 rounded-lg border border-border/60">
+                      <code
+                        className="text-xs flex-1 min-w-0 truncate font-mono px-2 py-1 text-foreground/90 select-all"
+                        title={state.inviteUrl}
+                      >
+                        {state.inviteUrl}
+                      </code>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={copyToClipboard}
+                        className={cn(
+                          'h-7 px-2.5 shrink-0 text-xs font-medium gap-1.5 transition-all shadow-2xs cursor-pointer',
+                          isCopied && 'text-emerald-600 bg-emerald-500/15 border-emerald-500/30'
+                        )}
+                      >
+                        {isCopied ? (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CASE 2: No Email Provider Configured (Manual Sharing Mode) */}
+        {isManualOnly && (
+          <div className="rounded-2xl border border-blue-500/25 bg-blue-500/5 dark:bg-blue-950/20 p-4 sm:p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 ring-1 ring-inset ring-blue-500/30">
+                <LinkIcon className="h-5 w-5" />
+              </div>
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-foreground">User Invited</h3>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-semibold bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30"
+                  >
+                    Manual Delivery Required
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  No email service is configured in this workspace. Share the one-time invitation
+                  link directly with{' '}
+                  <span className="font-semibold text-foreground">{targetEmail}</span>:
+                </p>
+              </div>
+            </div>
+
+            {/* High Visibility Copy Box */}
+            {state.inviteUrl && (
+              <div className="p-3 rounded-xl bg-background border border-border/80 space-y-2 shadow-2xs">
+                <div className="flex items-center gap-2 bg-muted/40 p-1.5 rounded-lg border border-border/60">
+                  <code
+                    className="text-xs flex-1 min-w-0 truncate font-mono px-2 py-1 text-foreground/90 select-all"
+                    title={state.inviteUrl}
+                  >
+                    {state.inviteUrl}
+                  </code>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={copyToClipboard}
+                    className={cn(
+                      'h-7 px-3 shrink-0 text-xs font-semibold gap-1.5 transition-all shadow-2xs cursor-pointer',
+                      isCopied && 'text-blue-600 bg-blue-500/15 border-blue-500/30'
+                    )}
+                  >
+                    {isCopied ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>Copy Link</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Send this link via Slack, Teams, or direct message. Single-use and expires in 7
+                  days.
+                </p>
+              </div>
+            )}
+
+            {/* Admin tip */}
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-background/60 border border-border/60 text-xs text-muted-foreground">
+              <Settings className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span>
+                Want automated emails? Configure an email provider in{' '}
+                <Link
+                  href="/settings/notifications"
+                  className="font-semibold text-foreground hover:text-primary underline underline-offset-2"
+                >
+                  Settings &gt; Notifications
+                </Link>
+                .
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* CASE 3: Provider Configured but Delivery Failed */}
+        {isDeliveryFailed && (
+          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 dark:bg-amber-950/20 p-4 sm:p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-1 ring-inset ring-amber-500/30">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-foreground">User Created</h3>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                  >
+                    Email Delivery Failed
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  The account was registered, but{' '}
+                  <span className="font-semibold text-foreground">
+                    {state.providerName || 'the email provider'}
+                  </span>{' '}
+                  could not deliver to{' '}
+                  <span className="font-semibold text-foreground">{targetEmail}</span>.
+                </p>
+              </div>
+            </div>
+
+            {/* Manual Link Box */}
+            {state.inviteUrl && (
+              <div className="p-3 rounded-xl bg-background border border-border/80 space-y-2 shadow-2xs">
+                <p className="text-[11px] text-muted-foreground">
+                  Share this setup link manually so the user is not blocked from joining:
+                </p>
+                <div className="flex items-center gap-2 bg-muted/40 p-1.5 rounded-lg border border-border/60">
+                  <code
+                    className="text-xs flex-1 min-w-0 truncate font-mono px-2 py-1 text-foreground/90 select-all"
+                    title={state.inviteUrl}
+                  >
+                    {state.inviteUrl}
+                  </code>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={copyToClipboard}
+                    className={cn(
+                      'h-7 px-3 shrink-0 text-xs font-semibold gap-1.5 transition-all shadow-2xs cursor-pointer',
+                      isCopied && 'text-amber-600 bg-amber-500/15 border-amber-500/30'
+                    )}
+                  >
+                    {isCopied ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-amber-600" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>Copy Link</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action Button: Invite Another Member */}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleInviteAnother}
+          className="w-full h-9 font-semibold text-xs gap-2 shadow-2xs cursor-pointer"
+        >
+          <UserPlus className="h-3.5 w-3.5" />
+          <span>Invite Another Member</span>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className={cn('relative w-full max-w-full min-w-0', className)}>
@@ -269,60 +569,6 @@ export default function UserCreateForm({ action, className = '', disabled = fals
           <div className="bg-destructive/10 text-destructive p-3 rounded-lg text-xs border border-destructive/20 flex items-start gap-2 animate-in fade-in slide-in-from-top-2 w-full max-w-full min-w-0">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
             <p className="leading-relaxed">{getUserFacingErrorMessage(state.error)}</p>
-          </div>
-        )}
-
-        {state?.success && state?.inviteUrl && (
-          <div className="bg-emerald-500/10 border border-emerald-500/25 dark:bg-emerald-950/20 dark:border-emerald-800/40 rounded-xl p-3.5 sm:p-4 space-y-2.5 animate-in fade-in slide-in-from-bottom-2 w-full max-w-full min-w-0">
-            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-semibold text-xs sm:text-sm">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <span>User Invited Successfully!</span>
-            </div>
-            {state.emailSent && (
-              <p className="text-[11px] text-muted-foreground leading-relaxed pl-6">
-                Invitation email sent to the user.
-              </p>
-            )}
-
-            <div className="bg-background border border-border/80 rounded-lg p-1.5 flex items-center gap-2 shadow-2xs w-full max-w-full min-w-0">
-              <code
-                className="text-[11px] sm:text-xs flex-1 min-w-0 truncate font-mono bg-muted/60 px-2 py-1 rounded text-foreground/90 select-all"
-                title={state.inviteUrl}
-              >
-                {state.inviteUrl}
-              </code>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={copyToClipboard}
-                className={cn(
-                  'h-7 px-2.5 shrink-0 text-xs font-medium gap-1.5 transition-all shadow-2xs cursor-pointer',
-                  isCopied && 'text-emerald-600 bg-emerald-500/15 border-emerald-500/30'
-                )}
-              >
-                {isCopied ? (
-                  <>
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                    <span>Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" />
-                    <span>Copy</span>
-                  </>
-                )}
-              </Button>
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed pl-6">
-              Share this link with them. They need it to set up their account password.
-            </p>
-          </div>
-        )}
-        {state?.success && !state?.inviteUrl && (
-          <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-lg p-3 flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300 animate-in fade-in slide-in-from-bottom-2 w-full max-w-full min-w-0">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-            <span>Invitation sent via email!</span>
           </div>
         )}
       </form>

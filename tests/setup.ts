@@ -78,6 +78,7 @@ const mockPrisma = {
   systemSettings: createMockModel(),
   alert: createMockModel(),
   incidentNote: createMockModel(),
+  incidentWatcher: createMockModel(),
   $transaction: vi
     .fn()
     .mockImplementation((cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),

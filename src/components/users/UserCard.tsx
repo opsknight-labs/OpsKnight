@@ -386,7 +386,7 @@ export function UserCard({
             </DropdownMenuItem>
           )}
 
-          {onDelete && user.status === 'DISABLED' && (
+          {onDelete && (user.status === 'DISABLED' || user.status === 'INVITED') && (
             <>
               <DropdownMenuSeparator className="my-1" />
               <DropdownMenuItem
@@ -394,7 +394,7 @@ export function UserCard({
                 className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-950/40"
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Delete User</span>
+                <span>{user.status === 'INVITED' ? 'Delete Invitation' : 'Delete User'}</span>
               </DropdownMenuItem>
             </>
           )}
@@ -827,16 +827,29 @@ export function UserCard({
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-red-600">
               <Trash2 className="h-5 w-5" />
-              Delete User Permanently
+              {user.status === 'INVITED' ? 'Delete Invited User' : 'Delete User Permanently'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="text-red-600 font-semibold">This action cannot be undone.</span>
-              <br />
-              <br />
-              Permanently removes <strong>{user.name}</strong>&apos;s account and personal
-              credentials. Historical incident, notification, note, and audit records retained for
-              operational evidence will remain. Active assignments and owned resources must be
-              transferred first.
+              {user.status === 'INVITED' ? (
+                <>
+                  <span className="text-red-600 font-semibold">This action cannot be undone.</span>
+                  <br />
+                  <br />
+                  Permanently deletes the invitation for <strong>{user.name}</strong> ({user.email}
+                  ). Any invitation links already sent will be immediately invalidated, and this
+                  pending account will be removed.
+                </>
+              ) : (
+                <>
+                  <span className="text-red-600 font-semibold">This action cannot be undone.</span>
+                  <br />
+                  <br />
+                  Permanently removes <strong>{user.name}</strong>&apos;s account and personal
+                  credentials. Historical incident, notification, note, and audit records retained
+                  for operational evidence will remain. Active assignments and owned resources must
+                  be transferred first.
+                </>
+              )}
             </AlertDialogDescription>
             {loadingDependencies && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -927,7 +940,7 @@ export function UserCard({
             <AlertDialogAction
               onClick={handleDelete}
               disabled={
-                user.status !== 'DISABLED' ||
+                !['DISABLED', 'INVITED'].includes(user.status) ||
                 loadingDependencies ||
                 Boolean(dependencyError) ||
                 Boolean(
@@ -937,7 +950,7 @@ export function UserCard({
               }
               className="bg-red-600 hover:bg-red-700"
             >
-              Delete Permanently
+              {user.status === 'INVITED' ? 'Delete Invitation' : 'Delete Permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

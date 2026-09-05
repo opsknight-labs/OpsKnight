@@ -19,6 +19,9 @@ type FormState = {
   success?: boolean;
   inviteUrl?: string | null;
   emailSent?: boolean;
+  providerConfigured?: boolean;
+  providerName?: string | null;
+  recipientEmail?: string | null;
 };
 
 type InviteUserModalProps = {
