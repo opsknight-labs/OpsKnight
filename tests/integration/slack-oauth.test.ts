@@ -183,7 +183,9 @@ describe('Slack OAuth Integration', () => {
       global.fetch = mockFetch;
 
       vi.mocked(prisma.slackIntegration.findUnique).mockResolvedValue(null);
-      vi.mocked(prisma.slackIntegration.create).mockResolvedValue({ id: 'integration-1' } as any);
+      vi.mocked(prisma.slackIntegration.create).mockResolvedValue({
+        id: 'integration-1',
+      } as unknown as NonNullable<Awaited<ReturnType<typeof prisma.slackIntegration.create>>>);
 
       const response = await callbackHandler(req);
 
@@ -211,7 +213,7 @@ describe('Slack OAuth Integration', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         encryptionKey: null,
-      } as any); // Type assertion to handle Prisma client version differences
+      } as unknown as NonNullable<Awaited<ReturnType<typeof prisma.systemSettings.findUnique>>>);
 
       const req = new NextRequest(
         'http://localhost:3000/api/slack/oauth/callback?error=test_error'

@@ -16,8 +16,10 @@ import {
   type IncidentLifecycleCommand,
   type IncidentLifecycleResult,
 } from '@/lib/incidents/lifecycle';
-import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
-import { enqueueWarRoomSideEffects } from '@/lib/event-outbox';
+import {
+  enqueueIncidentUpdateSideEffects,
+  enqueueWarRoomSideEffects,
+} from '@/lib/event-outbox';
 
 export type ChatOpsLifecycleCommand = Extract<
   IncidentLifecycleCommand,
