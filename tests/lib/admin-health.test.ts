@@ -263,8 +263,8 @@ describe('generate24HourHistory', () => {
         status: 'RESOLVED',
         createdAt: new Date('2026-09-05T10:15:00.000Z'),
         resolvedAt: new Date('2026-09-05T10:45:00.000Z'),
-      } as any,
-    ]);
+      },
+    ] as unknown as never);
 
     const samples = await generate24HourHistory(mockBaseChecks, 'healthy', now);
     expect(samples).toHaveLength(24);
