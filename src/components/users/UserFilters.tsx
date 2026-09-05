@@ -107,12 +107,12 @@ export default function UserFilters({ teams }: UserFiltersProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Quick Filters (Badges) */}
+        {/* Quick Filters */}
         <div className="flex flex-wrap gap-2">
           <Badge
             variant={!status && !role && !teamId && !query ? 'default' : 'outline'}
             size="sm"
-            className="cursor-pointer hover:bg-primary/90 hover:text-primary-foreground transition-colors"
+            className="cursor-pointer rounded-md hover:bg-primary/90 hover:text-primary-foreground transition-colors"
             onClick={() => clearFilters()}
           >
             All Users
@@ -120,7 +120,7 @@ export default function UserFilters({ teams }: UserFiltersProps) {
           <Badge
             variant={status === 'ACTIVE' ? 'success' : 'outline'}
             size="sm"
-            className="cursor-pointer hover:bg-green-100 hover:text-green-800 transition-colors"
+            className="cursor-pointer rounded-md hover:bg-green-100 hover:text-green-800 transition-colors"
             onClick={() => handleFilterChange('status', status === 'ACTIVE' ? '' : 'ACTIVE')}
           >
             <UserCheck className="mr-1 h-3 w-3" /> Active
@@ -128,7 +128,7 @@ export default function UserFilters({ teams }: UserFiltersProps) {
           <Badge
             variant={status === 'INVITED' ? 'warning' : 'outline'}
             size="sm"
-            className="cursor-pointer hover:bg-yellow-100 hover:text-yellow-800 transition-colors"
+            className="cursor-pointer rounded-md hover:bg-yellow-100 hover:text-yellow-800 transition-colors"
             onClick={() => handleFilterChange('status', status === 'INVITED' ? '' : 'INVITED')}
           >
             <UserPlus className="mr-1 h-3 w-3" /> Invited
@@ -136,7 +136,7 @@ export default function UserFilters({ teams }: UserFiltersProps) {
           <Badge
             variant={status === 'DISABLED' ? 'neutral' : 'outline'}
             size="sm"
-            className="cursor-pointer hover:bg-gray-100 hover:text-gray-800 transition-colors"
+            className="cursor-pointer rounded-md hover:bg-gray-100 hover:text-gray-800 transition-colors"
             onClick={() => handleFilterChange('status', status === 'DISABLED' ? '' : 'DISABLED')}
           >
             <UserX className="mr-1 h-3 w-3" /> Disabled
@@ -144,7 +144,7 @@ export default function UserFilters({ teams }: UserFiltersProps) {
           <Badge
             variant={role === 'ADMIN' ? 'danger' : 'outline'}
             size="sm"
-            className="cursor-pointer hover:bg-rose-100 hover:text-rose-800 transition-colors"
+            className="cursor-pointer rounded-md hover:bg-rose-100 hover:text-rose-800 transition-colors"
             onClick={() => handleFilterChange('role', role === 'ADMIN' ? '' : 'ADMIN')}
           >
             <Users className="mr-1 h-3 w-3" /> Admins

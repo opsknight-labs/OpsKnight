@@ -26,9 +26,9 @@ export function UserCardSkeleton({ count = 1 }: UserCardSkeletonProps) {
 
           {/* Badges + Actions skeleton */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <Skeleton className="h-7 w-20 rounded-full" />
-            <Skeleton className="h-7 w-16 rounded-full" />
-            <Skeleton className="h-8 w-8 rounded-lg" />
+            <Skeleton className="h-6 w-16 rounded-md" />
+            <Skeleton className="h-6 w-16 rounded-md" />
+            <Skeleton className="h-7 w-7 rounded-md" />
           </div>
         </div>
       ))}
