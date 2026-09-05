@@ -57,13 +57,23 @@ export default function QuickActionsPanel({ greeting, userName }: QuickActionsPa
             <>
               <div
                 className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150',
+                  'relative w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200',
                   isPrimary
-                    ? 'bg-white/10 text-white group-hover:bg-white/20 group-hover:scale-105'
+                    ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30 shadow-[0_0_12px_rgba(244,63,94,0.3)] group-hover:shadow-[0_0_18px_rgba(244,63,94,0.5)] group-hover:bg-rose-500/25 group-hover:border-rose-500/50 group-hover:scale-105'
                     : 'bg-muted dark:bg-zinc-800/80 text-muted-foreground group-hover:text-foreground group-hover:bg-muted/90'
                 )}
               >
-                {action.icon}
+                {isPrimary && (
+                  <span className="absolute inset-0 rounded-lg bg-rose-500/10 animate-pulse pointer-events-none" />
+                )}
+                <span
+                  className={cn(
+                    'relative z-10 flex items-center justify-center',
+                    isPrimary && 'drop-shadow-[0_0_6px_rgba(244,63,94,0.85)]'
+                  )}
+                >
+                  {action.icon}
+                </span>
               </div>
               <span
                 className={cn(
