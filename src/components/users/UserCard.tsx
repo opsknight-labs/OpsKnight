@@ -102,46 +102,24 @@ const getRoleStyle = (role: string) => {
   switch (role) {
     case 'ADMIN':
       return {
-        badge:
-          'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60',
-        dot: 'bg-rose-500',
+        badge: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20',
         label: 'Admin',
-        topBar: 'bg-gradient-to-r from-rose-500 via-pink-500 to-amber-500',
-        glow: 'bg-rose-500/15',
-        borderHover: 'hover:border-rose-300/80 dark:hover:border-rose-700/60',
-        bar: 'bg-rose-500',
       };
     case 'RESPONDER':
       return {
-        badge:
-          'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/60',
-        dot: 'bg-indigo-500',
+        badge: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20',
         label: 'Responder',
-        topBar: 'bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500',
-        glow: 'bg-indigo-500/15',
-        borderHover: 'hover:border-indigo-300/80 dark:hover:border-indigo-700/60',
-        bar: 'bg-indigo-500',
       };
     case 'AUDITOR':
       return {
-        badge:
-          'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/60',
-        dot: 'bg-violet-500',
+        badge: 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20',
         label: 'Auditor',
-        topBar: 'bg-gradient-to-r from-violet-500 via-fuchsia-500 to-purple-500',
-        glow: 'bg-violet-500/15',
-        borderHover: 'hover:border-violet-300/80 dark:hover:border-violet-700/60',
-        bar: 'bg-violet-500',
       };
     default:
       return {
-        badge: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/60',
-        dot: 'bg-sky-500',
+        badge:
+          'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700',
         label: 'User',
-        topBar: 'bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-500',
-        glow: 'bg-sky-500/15',
-        borderHover: 'hover:border-sky-300/80 dark:hover:border-sky-700/60',
-        bar: 'bg-sky-500',
       };
   }
 };
@@ -150,20 +128,19 @@ const getStatusStyle = (status: string) => {
   switch (status) {
     case 'ACTIVE':
       return {
-        badge:
-          'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60',
+        badge: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
         dot: 'bg-emerald-500',
       };
     case 'INVITED':
       return {
-        badge:
-          'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60',
+        badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
         dot: 'bg-amber-500',
       };
     default:
       return {
-        badge: 'bg-muted text-muted-foreground border-border/70',
-        dot: 'bg-slate-400',
+        badge:
+          'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700',
+        dot: 'bg-zinc-400',
       };
   }
 };
@@ -409,7 +386,7 @@ export function UserCard({
             </DropdownMenuItem>
           )}
 
-          {onDelete && user.status === 'DISABLED' && (
+          {onDelete && (user.status === 'DISABLED' || user.status === 'INVITED') && (
             <>
               <DropdownMenuSeparator className="my-1" />
               <DropdownMenuItem
@@ -417,7 +394,7 @@ export function UserCard({
                 className="flex items-center gap-2.5 py-2 px-2 rounded-lg cursor-pointer text-xs font-medium text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-950/40"
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Delete User</span>
+                <span>{user.status === 'INVITED' ? 'Delete Invitation' : 'Delete User'}</span>
               </DropdownMenuItem>
             </>
           )}
@@ -429,11 +406,10 @@ export function UserCard({
   const renderRoleBadge = () => (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border shadow-2xs',
+        'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border shadow-2xs',
         roleStyle.badge
       )}
     >
-      <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', roleStyle.dot)} />
       {roleStyle.label}
     </span>
   );
@@ -441,7 +417,7 @@ export function UserCard({
   const renderStatusBadge = () => (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border shadow-2xs uppercase tracking-wider',
+        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider border shadow-2xs',
         statusStyle.badge
       )}
     >
@@ -455,33 +431,16 @@ export function UserCard({
       {viewMode === 'grid' ? (
         <div
           className={cn(
-            'group relative flex flex-col justify-between h-[196px] rounded-2xl border transition-all duration-300 overflow-hidden',
-            'bg-gradient-to-b from-card via-card to-card/90 dark:from-slate-900/90 dark:to-slate-950/90',
-            'hover:shadow-xl hover:-translate-y-1',
-            roleStyle.borderHover,
+            'group relative flex flex-col justify-between min-h-[192px] rounded-xl border transition-all duration-200 overflow-hidden',
+            'bg-card text-card-foreground shadow-2xs',
             selected
-              ? 'border-primary bg-primary/5 ring-2 ring-primary/30 shadow-md'
-              : 'border-border/80 hover:border-border'
+              ? 'border-primary bg-primary/[0.03] ring-1 ring-primary/30'
+              : 'border-border/70 hover:border-border hover:shadow-xs'
           )}
         >
-          {/* Ambient Top Role Glow Strip */}
-          <div
-            className={cn(
-              'absolute top-0 left-0 right-0 h-1 opacity-85 group-hover:opacity-100 transition-opacity',
-              roleStyle.topBar
-            )}
-          />
-          {/* Soft corner radial aura */}
-          <div
-            className={cn(
-              'absolute -top-10 -right-10 w-32 h-32 rounded-full blur-2xl pointer-events-none opacity-25 group-hover:opacity-50 transition-opacity duration-500',
-              roleStyle.glow
-            )}
-          />
-
           <div>
             {/* Card Top Toolbar */}
-            <div className="flex items-center justify-between gap-2 p-4 pb-1 shrink-0">
+            <div className="flex items-center justify-between gap-2 p-3.5 pb-1 shrink-0">
               <div className="flex items-center gap-2">
                 {isAdmin && !isCurrentUser && (
                   <input
@@ -496,7 +455,7 @@ export function UserCard({
                   />
                 )}
                 {isCurrentUser && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold tracking-wider uppercase bg-primary/10 text-primary border border-primary/20">
                     You
                   </span>
                 )}
@@ -510,7 +469,7 @@ export function UserCard({
             </div>
 
             {/* User Identity */}
-            <div className="px-4 py-1 flex items-start gap-3.5 shrink-0">
+            <div className="px-3.5 py-1.5 flex items-start gap-3 shrink-0">
               <Link href={`/users/${user.id}`} className="shrink-0 group/avatar">
                 <UserAvatar
                   userId={user.id}
@@ -518,14 +477,14 @@ export function UserCard({
                   name={user.name}
                   gender={user.gender}
                   size="lg"
-                  className="rounded-full ring-2 ring-border/70 group-hover/avatar:ring-primary/40 transition-all"
+                  className="rounded-full ring-1 ring-border/80 group-hover/avatar:ring-primary/40 transition-all"
                 />
               </Link>
 
               <div className="min-w-0 flex-1 space-y-0.5">
                 <Link
                   href={`/users/${user.id}`}
-                  className="font-bold text-base tracking-tight text-foreground hover:text-primary transition-colors truncate block"
+                  className="font-semibold text-sm tracking-tight text-foreground hover:text-primary transition-colors truncate block"
                 >
                   {user.name}
                 </Link>
@@ -550,13 +509,13 @@ export function UserCard({
                 {/* Fixed-height metadata slot for title / department */}
                 <div className="h-5 flex items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground font-medium overflow-hidden">
                   {user.jobTitle && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/60 text-foreground/80 border border-border/40 truncate max-w-[130px]">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/60 text-foreground/80 border border-border/50 truncate max-w-[130px]">
                       <Briefcase className="h-2.5 w-2.5 opacity-60 shrink-0" />
                       <span className="truncate">{user.jobTitle}</span>
                     </span>
                   )}
                   {user.department && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/60 text-foreground/80 border border-border/40 truncate max-w-[130px]">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/60 text-foreground/80 border border-border/50 truncate max-w-[130px]">
                       <Building2 className="h-2.5 w-2.5 opacity-60 shrink-0" />
                       <span className="truncate">{user.department}</span>
                     </span>
@@ -566,13 +525,13 @@ export function UserCard({
             </div>
 
             {/* Teams section - fixed height */}
-            <div className="h-8 flex items-center px-4 overflow-hidden shrink-0">
+            <div className="h-8 flex items-center px-3.5 overflow-hidden shrink-0">
               {user.teamMemberships && user.teamMemberships.length > 0 ? (
-                <div className="flex items-center gap-1 overflow-hidden">
+                <div className="flex items-center gap-1.5 overflow-hidden">
                   {user.teamMemberships.slice(0, 2).map(member => (
                     <span
                       key={member.id}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border/50 hover:bg-muted/80 transition-colors shrink-0"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-muted/50 text-muted-foreground border border-border/50 hover:bg-muted hover:text-foreground transition-colors shrink-0"
                       title={`${member.team.name} (${member.role})`}
                     >
                       <Users className="h-2.5 w-2.5 opacity-60" />
@@ -581,7 +540,7 @@ export function UserCard({
                   ))}
                   {user.teamMemberships.length > 2 && (
                     <span
-                      className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border/40 shrink-0"
+                      className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-muted/50 text-muted-foreground border border-border/40 shrink-0"
                       title={user.teamMemberships
                         .slice(2)
                         .map(m => m.team.name)
@@ -595,7 +554,7 @@ export function UserCard({
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors cursor-pointer shrink-0"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors cursor-pointer shrink-0"
                           title="Add to another team"
                         >
                           <UserPlus className="h-2.5 w-2.5" />
@@ -620,7 +579,7 @@ export function UserCard({
                 </div>
               ) : (
                 <div className="flex items-center justify-between w-full">
-                  <span className="text-[11px] text-muted-foreground/50 italic select-none">
+                  <span className="text-[11px] text-muted-foreground/60 select-none">
                     No team memberships
                   </span>
                   {isAdmin && onAddToTeam && availableTeams.length > 0 && (
@@ -656,13 +615,13 @@ export function UserCard({
           </div>
 
           {/* Card Footer: Quick Actions - fixed height */}
-          <div className="h-10 flex items-center justify-between px-4 border-t border-border/60 bg-muted/20 text-xs shrink-0">
+          <div className="h-9 flex items-center justify-between px-3.5 border-t border-border/50 bg-muted/15 text-xs shrink-0">
             <Link
               href={`/users/${user.id}`}
-              className="font-medium text-xs text-primary hover:underline flex items-center gap-1 group/link"
+              className="font-medium text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 group/link transition-colors"
             >
               <span>View Profile</span>
-              <ExternalLink className="h-3 w-3 transition-transform group-hover/link:translate-x-0.5" />
+              <ExternalLink className="h-3 w-3 opacity-60 group-hover/link:opacity-100 transition-all group-hover/link:translate-x-0.5" />
             </Link>
 
             {isAdmin &&
@@ -671,7 +630,7 @@ export function UserCard({
                 <button
                   type="button"
                   onClick={handleGenerateLink}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 >
                   {user.status === 'INVITED' ? (
                     <>
@@ -680,7 +639,7 @@ export function UserCard({
                     </>
                   ) : (
                     <>
-                      <Key className="h-3 w-3 text-emerald-500" />
+                      <Key className="h-3 w-3 text-muted-foreground" />
                       <span>Reset Key</span>
                     </>
                   )}
@@ -692,34 +651,14 @@ export function UserCard({
         /* List Mode View */
         <div
           className={cn(
-            'group relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-4 rounded-xl border transition-all duration-200 overflow-hidden',
-            'bg-gradient-to-r from-card via-card to-card/95 dark:from-slate-900/90 dark:to-slate-950/90',
-            'hover:shadow-md hover:border-border',
-            roleStyle.borderHover,
+            'group relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-xl border transition-all duration-200 overflow-hidden',
+            'bg-card text-card-foreground shadow-2xs',
             selected
-              ? 'border-primary bg-primary/5 ring-1 ring-primary/30 shadow-xs'
-              : 'border-border/70'
+              ? 'border-primary bg-primary/[0.03] ring-1 ring-primary/30'
+              : 'border-border/70 hover:border-border hover:shadow-xs'
           )}
         >
-          {/* Subtle role accent indicator on card edge */}
-          <div
-            className={cn(
-              'absolute left-0 top-2 bottom-2 w-1 rounded-r-full transition-all duration-200',
-              roleStyle.bar,
-              selected
-                ? 'opacity-100 w-1.5'
-                : 'opacity-70 group-hover:opacity-100 group-hover:w-1.5'
-            )}
-          />
-          {/* Soft background glow */}
-          <div
-            className={cn(
-              'absolute top-0 right-0 w-32 h-full blur-2xl pointer-events-none opacity-10 group-hover:opacity-20 transition-opacity',
-              roleStyle.glow
-            )}
-          />
-
-          <div className="flex items-center gap-3.5 min-w-0 flex-1 pl-1.5">
+          <div className="flex items-center gap-3.5 min-w-0 flex-1">
             {isAdmin && !isCurrentUser && (
               <input
                 type="checkbox"
@@ -740,7 +679,7 @@ export function UserCard({
                 name={user.name}
                 gender={user.gender}
                 size="md"
-                className="rounded-full ring-2 ring-border/70 group-hover/avatar:ring-primary/40 transition-all"
+                className="rounded-full ring-1 ring-border/80 group-hover/avatar:ring-primary/40 transition-all"
               />
             </Link>
 
@@ -753,7 +692,7 @@ export function UserCard({
                   {user.name}
                 </Link>
                 {isCurrentUser && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs shrink-0">
+                  <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold tracking-wider uppercase bg-primary/10 text-primary border border-primary/20 shrink-0">
                     You
                   </span>
                 )}
@@ -821,7 +760,7 @@ export function UserCard({
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-dashed border-border text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border border-dashed border-border text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                         >
                           <UserPlus className="h-2.5 w-2.5" />
                           <span>Assign team</span>
@@ -888,16 +827,29 @@ export function UserCard({
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-red-600">
               <Trash2 className="h-5 w-5" />
-              Delete User Permanently
+              {user.status === 'INVITED' ? 'Delete Invited User' : 'Delete User Permanently'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="text-red-600 font-semibold">This action cannot be undone.</span>
-              <br />
-              <br />
-              Permanently removes <strong>{user.name}</strong>&apos;s account and personal
-              credentials. Historical incident, notification, note, and audit records retained for
-              operational evidence will remain. Active assignments and owned resources must be
-              transferred first.
+              {user.status === 'INVITED' ? (
+                <>
+                  <span className="text-red-600 font-semibold">This action cannot be undone.</span>
+                  <br />
+                  <br />
+                  Permanently deletes the invitation for <strong>{user.name}</strong> ({user.email}
+                  ). Any invitation links already sent will be immediately invalidated, and this
+                  pending account will be removed.
+                </>
+              ) : (
+                <>
+                  <span className="text-red-600 font-semibold">This action cannot be undone.</span>
+                  <br />
+                  <br />
+                  Permanently removes <strong>{user.name}</strong>&apos;s account and personal
+                  credentials. Historical incident, notification, note, and audit records retained
+                  for operational evidence will remain. Active assignments and owned resources must
+                  be transferred first.
+                </>
+              )}
             </AlertDialogDescription>
             {loadingDependencies && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -988,7 +940,7 @@ export function UserCard({
             <AlertDialogAction
               onClick={handleDelete}
               disabled={
-                user.status !== 'DISABLED' ||
+                !['DISABLED', 'INVITED'].includes(user.status) ||
                 loadingDependencies ||
                 Boolean(dependencyError) ||
                 Boolean(
@@ -998,7 +950,7 @@ export function UserCard({
               }
               className="bg-red-600 hover:bg-red-700"
             >
-              Delete Permanently
+              {user.status === 'INVITED' ? 'Delete Invitation' : 'Delete Permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

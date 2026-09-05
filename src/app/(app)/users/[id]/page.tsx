@@ -18,7 +18,7 @@ import UserAvatar from '@/components/UserAvatar';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import UserDetailTabs from '@/components/users/UserDetailTabs';
 import UserProfileHeaderActions from '@/components/users/UserProfileHeaderActions';
-import { updateUserProfile } from '../actions';
+import { deleteUser, updateUserProfile } from '../actions';
 
 export const revalidate = 0;
 
@@ -188,7 +188,6 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
             avatarUrl={user.avatarUrl}
             gender={user.gender}
             size="xl"
-            showOnlineStatus={user.status === 'ACTIVE'}
             className="shrink-0 ring-2 ring-primary-foreground/20 rounded-full"
           />
         }
@@ -288,6 +287,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
               name: user.name,
               email: user.email,
               role: user.role,
+              status: user.status,
               department: user.department,
               jobTitle: user.jobTitle,
               timeZone: user.timeZone,
@@ -299,7 +299,9 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
             }}
             canManage={canManage}
             canManageRole={canManageRole}
+            isSelf={isSelf}
             updateProfile={updateUserProfile}
+            deleteUser={deleteUser}
           />
         }
       />
