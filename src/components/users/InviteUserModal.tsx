@@ -27,7 +27,7 @@ type FormState = {
 type InviteUserModalProps = {
   action: (prevState: FormState, formData: FormData) => Promise<FormState>;
   disabled?: boolean;
-  variant?: 'default' | 'outline' | 'secondary' | 'banner';
+  variant?: 'default' | 'outline' | 'secondary' | 'banner' | 'topbar';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
   label?: string;
@@ -46,12 +46,12 @@ export default function InviteUserModal({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {variant === 'banner' ? (
+        {variant === 'banner' || variant === 'topbar' ? (
           <Button
             type="button"
             disabled={disabled}
             className={cn(
-              'h-9 px-3.5 font-semibold text-xs gap-2 rounded-lg transition-all duration-200 shadow-xs shrink-0 select-none cursor-pointer',
+              'h-8 sm:h-8.5 px-3 font-semibold text-xs gap-1.5 rounded-lg transition-all duration-200 active:scale-95 shadow-xs shrink-0 select-none cursor-pointer',
               'bg-[#18181b] hover:bg-[#27272a] active:bg-[#2e2e33] text-white border border-zinc-700/80 hover:border-zinc-500/80 focus-visible:ring-2 focus-visible:ring-zinc-400',
               className
             )}

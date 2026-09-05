@@ -7,7 +7,7 @@ export default function UsersLoading() {
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
       {/* Centralized Glassmorphic Hero Banner Skeleton */}
-      <DetailHeroBannerSkeleton statsCount={4} hasActions={true} />
+      <DetailHeroBannerSkeleton statsCount={4} hasActions={false} />
 
       {/* Filters Skeleton */}
       <Card className="border-border/70 shadow-2xs">

@@ -229,16 +229,6 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             valueClassName: stats.disabled > 0 ? 'text-rose-200' : undefined,
           },
         ]}
-        actions={
-          isAdmin ? (
-            <InviteUserModal
-              action={addUser}
-              disabled={!isAdmin}
-              variant="banner"
-              label="Invite User"
-            />
-          ) : undefined
-        }
       />
 
       {/* Filters */}
@@ -261,9 +251,8 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
                 <InviteUserModal
                   action={addUser}
                   disabled={!isAdmin}
-                  variant="outline"
-                  size="sm"
-                  className="h-8 font-medium text-xs gap-1.5 shadow-2xs"
+                  variant="topbar"
+                  label="Invite User"
                 />
               )}
             </div>
