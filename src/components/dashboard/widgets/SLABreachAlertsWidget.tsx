@@ -24,25 +24,64 @@ interface SLAAlert {
 }
 
 /**
- * Formats milliseconds as a human-readable countdown
+ * Formats SLA deadline with live countdown or overdue elapsed timer
  */
-function formatTimeRemaining(ms: number): string {
-  if (!Number.isFinite(ms)) return '0s';
-  if (ms <= 0) return 'Breached';
+function formatSLATime(ms: number): {
+  badgeText: string;
+  isBreached: boolean;
+  isUrgent: boolean;
+} {
+  if (!Number.isFinite(ms)) {
+    return { badgeText: '0s', isBreached: false, isUrgent: false };
+  }
 
+  if (ms <= 0) {
+    const elapsedMs = Math.abs(ms);
+    const totalSeconds = Math.floor(elapsedMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    let overdueText = '';
+    if (days > 0) {
+      overdueText = `+${days}d`;
+    } else if (hours > 0) {
+      const remainingMins = minutes % 60;
+      overdueText = remainingMins > 0 ? `+${hours}h ${remainingMins}m` : `+${hours}h`;
+    } else if (minutes > 0) {
+      overdueText = `+${minutes}m`;
+    } else {
+      overdueText = `+${Math.max(1, totalSeconds)}s`;
+    }
+
+    return {
+      badgeText: `${overdueText} overdue`,
+      isBreached: true,
+      isUrgent: true,
+    };
+  }
+
+  // Active Countdown
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
 
+  let countdownText = '';
   if (minutes > 60) {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+    countdownText = mins > 0 ? `${hours}h ${mins}m left` : `${hours}h left`;
+  } else if (minutes > 0) {
+    countdownText = `${minutes}m ${seconds}s left`;
+  } else {
+    countdownText = `${seconds}s left`;
   }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-  return `${seconds}s`;
+
+  return {
+    badgeText: countdownText,
+    isBreached: false,
+    isUrgent: ms <= 10 * 60000,
+  };
 }
 
 /**
@@ -182,10 +221,9 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
         </div>
       ) : (
         <div className="space-y-2" role="list" aria-label="SLA breach alerts">
-          {sortedAlerts.slice(0, 3).map(({ incident, alertType, timeRemaining, severity }) => {
-            const isUrgent = severity === 'critical';
+          {sortedAlerts.slice(0, 3).map(({ incident, alertType, timeRemaining }) => {
             const actionLabel = alertType === 'ack' ? 'ACK' : 'RESOLVE';
-            const timeStr = formatTimeRemaining(timeRemaining);
+            const slaInfo = formatSLATime(timeRemaining);
 
             return (
               <button
@@ -193,20 +231,24 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                 onClick={() => handleIncidentClick(incident.id)}
                 className={cn(
                   'group flex items-center gap-3 p-2.5 rounded-lg border text-left w-full transition-all duration-150 shadow-2xs cursor-pointer',
-                  isUrgent
+                  slaInfo.isBreached
                     ? 'bg-card dark:bg-[#121216] border-rose-500/25 dark:border-rose-500/30 border-l-[3px] border-l-rose-500 hover:border-rose-500/50 hover:bg-rose-500/[0.03] dark:hover:bg-rose-500/[0.06]'
-                    : 'bg-card dark:bg-[#121216] border-amber-500/25 dark:border-amber-500/30 border-l-[3px] border-l-amber-500 hover:border-amber-500/50 hover:bg-amber-500/[0.03] dark:hover:bg-amber-500/[0.06]'
+                    : slaInfo.isUrgent
+                      ? 'bg-card dark:bg-[#121216] border-amber-500/25 dark:border-amber-500/30 border-l-[3px] border-l-amber-500 hover:border-amber-500/50 hover:bg-amber-500/[0.03] dark:hover:bg-amber-500/[0.06]'
+                      : 'bg-card dark:bg-[#121216] border-border/80 dark:border-zinc-800/80 border-l-[3px] border-l-zinc-400 dark:border-l-zinc-600 hover:border-border hover:bg-accent/40'
                 )}
                 role="listitem"
-                aria-label={`${incident.title} - ${actionLabel} deadline in ${timeStr}`}
+                aria-label={`${incident.title} - ${actionLabel} ${slaInfo.badgeText}`}
               >
                 {/* Icon */}
                 <div
                   className={cn(
                     'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-150 group-hover:scale-105',
-                    isUrgent
+                    slaInfo.isBreached
                       ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      : slaInfo.isUrgent
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'bg-muted text-muted-foreground'
                   )}
                   aria-hidden="true"
                 >
@@ -224,13 +266,25 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
                     <span className="text-zinc-300 dark:text-zinc-700">•</span>
                     <span
                       className={cn(
-                        'font-mono font-bold text-[10px] px-1.5 py-0.5 rounded border tabular-nums',
-                        isUrgent
-                          ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
-                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                        'inline-flex items-center gap-1 font-mono font-bold text-[10px] px-1.5 py-0.5 rounded border tabular-nums whitespace-nowrap shrink-0',
+                        slaInfo.isBreached
+                          ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25'
+                          : slaInfo.isUrgent
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
+                            : 'bg-muted/60 text-muted-foreground border-border/80'
                       )}
                     >
-                      {actionLabel} {timeStr}
+                      <span className="font-extrabold">{actionLabel}</span>
+                      <span className="opacity-40">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        {slaInfo.isBreached && (
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-60" />
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500" />
+                          </span>
+                        )}
+                        {slaInfo.badgeText}
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -239,6 +293,15 @@ const SLABreachAlertsWidget = memo(function SLABreachAlertsWidget() {
               </button>
             );
           })}
+
+          {sortedAlerts.length > 3 && (
+            <button
+              onClick={handleViewAll}
+              className="w-full py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:text-foreground bg-muted/20 hover:bg-muted/50 rounded-lg border border-border/60 transition-colors cursor-pointer"
+            >
+              +{sortedAlerts.length - 3} more SLA alerts awaiting action &rarr;
+            </button>
+          )}
         </div>
       )}
     </SidebarWidget>
