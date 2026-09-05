@@ -129,7 +129,7 @@ const CompactPerformanceMetrics = memo(function CompactPerformanceMetrics({
         {timeMetrics.map((metric, idx) => (
           <div
             key={idx}
-            className="p-2.5 px-3 rounded-md bg-muted/40 border border-border overflow-hidden"
+            className="p-2.5 px-3 rounded-lg bg-white dark:bg-[#121216] border border-border hover:border-slate-300 dark:hover:border-zinc-700 shadow-2xs transition-all overflow-hidden"
             role="listitem"
             aria-label={`${metric.description}: ${metric.value}`}
           >
@@ -159,7 +159,7 @@ const CompactPerformanceMetrics = memo(function CompactPerformanceMetrics({
         {slaMetrics.map((metric, idx) => (
           <div
             key={idx}
-            className="p-2.5 px-3 rounded-md bg-muted/40 border border-border"
+            className="p-2.5 px-3 rounded-lg bg-white dark:bg-[#121216] border border-border hover:border-slate-300 dark:hover:border-zinc-700 shadow-2xs transition-all"
             role="listitem"
             aria-label={`${metric.description}: ${metric.value}`}
           >
@@ -172,7 +172,7 @@ const CompactPerformanceMetrics = memo(function CompactPerformanceMetrics({
               </span>
             </div>
             {/* Progress Bar */}
-            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+            <div className="h-2 w-full bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
               <div
                 className={cn('h-full rounded-full transition-all duration-500', metric.barClass)}
                 style={{
