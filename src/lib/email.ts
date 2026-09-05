@@ -465,26 +465,51 @@ export function generateIncidentEmailHTML(
       label: 'Resolved',
       value: formatDateTime(incident.resolvedAt, timeZone, { format: 'datetime' }),
     });
-  const context = eventMessage
-    ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;color:#334155;font-size:13px;">${escapeHtml(eventMessage)}</div>`
-    : '';
+  // Deduplicate context/eventMessage if it merely echoes incident title or [Service] title
+  const serviceName = incident.service?.name || '';
+  const trimmedMsg = (eventMessage || '').trim().toLowerCase();
+  const trimmedTitle = incident.title.trim().toLowerCase();
+  const prefixedTitle = `[${serviceName}] ${incident.title}`.trim().toLowerCase();
+  const isDuplicateMessage =
+    trimmedMsg === trimmedTitle ||
+    trimmedMsg === prefixedTitle ||
+    (trimmedMsg.startsWith(`[${serviceName.toLowerCase()}]`) &&
+      trimmedMsg.endsWith(trimmedTitle));
+
+  const context =
+    eventMessage && !isDuplicateMessage
+      ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid ${presentation.accentColor};border-radius:8px;padding:12px 16px;margin:16px 0;color:#334155;font-size:13px;line-height:1.5;">${escapeHtml(eventMessage)}</div>`
+      : '';
+
+  // Structured Incident Description (replaces raw uncontained "Overview" header)
   const description = incident.description
-    ? `<div style="margin-top:22px"><h3 style="font-size:14px">Overview</h3><p style="white-space:pre-wrap;color:#4b5563">${escapeHtml(incident.description)}</p></div>`
+    ? `<div class="desktop-font-body" style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${presentation.accentColor};border-radius:8px;padding:14px 18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;">
+          Incident Description
+        </div>
+        <div style="white-space:pre-wrap;font-size:14px;color:#334155;line-height:1.6;word-break:break-word;">
+          ${escapeHtml(incident.description)}
+        </div>
+      </div>`
     : '';
+
   return EmailContainer(
     EmailHeader(
       presentation.header,
-      `Service: ${escapeHtml(incident.service?.name || 'Service')}`,
-      { headerGradient: presentation.headerGradient }
+      `Service: ${incident.service?.name || 'Service'}`,
+      {
+        headerGradient: presentation.headerGradient,
+        logoUrl: `${getBaseUrl()}/logo.png`,
+      }
     ) +
       EmailContent(`
-        <div style="margin-bottom:18px">${StatusBadge(presentation.label.toUpperCase(), presentation.badge)}</div>
-        <div style="font-size:14px;color:#475569;margin-bottom:20px">${escapeHtml(presentation.message)}</div>
-        <h2 style="font-size:22px;color:#0f172a">${escapeHtml(incident.title)}</h2>
+        <div style="margin-bottom:16px">${StatusBadge(presentation.label.toUpperCase(), presentation.badge)}</div>
+        <div class="desktop-font-body" style="font-size:14px;color:#475569;margin-bottom:18px;line-height:1.5;">${escapeHtml(presentation.message)}</div>
+        <h2 class="desktop-font-title" style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 16px 0;line-height:1.35;letter-spacing:-0.01em;">${escapeHtml(incident.title)}</h2>
         ${context}
         ${InfoCard(infoItems, { accentColor: presentation.accentColor })}
         ${description}
-        <div style="margin-top:24px">${EmailButton(
+        <div style="margin-top:24px;text-align:center;">${EmailButton(
           eventType === 'resolved' ? 'View Resolution' : 'View Incident',
           escapeHtml(incidentUrl),
           {
@@ -621,8 +646,9 @@ export function generateShiftReminderEmailHTML(data: ShiftReminderData): string 
   ];
 
   return EmailContainer(
-    EmailHeader('Upcoming On-Call Shift', `Schedule: ${escapeHtml(data.scheduleName)}`, {
+    EmailHeader('Upcoming On-Call Shift', `Schedule: ${data.scheduleName}`, {
       headerGradient,
+      logoUrl: `${getBaseUrl()}/logo.png`,
     }) +
       EmailContent(`
         <div style="margin-bottom:18px">${StatusBadge('UPCOMING ON-CALL', 'schedule')}</div>
@@ -640,7 +666,7 @@ export function generateShiftReminderEmailHTML(data: ShiftReminderData): string 
             <li>Coordinate with outgoing responders if any handoff context is pending.</li>
           </ul>
         </div>
-        <div style="margin-top:28px">${EmailButton('View On-Call Schedule', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
+        <div style="margin-top:28px;text-align:center;">${EmailButton('View On-Call Schedule', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
       `) +
       EmailFooter()
   );
@@ -691,8 +717,9 @@ export function generateShiftHandoffEmailHTML(data: ShiftHandoffData): string {
     .join('');
 
   return EmailContainer(
-    EmailHeader('Shift Rotation Handoff', `Schedule: ${escapeHtml(data.scheduleName)}`, {
+    EmailHeader('Shift Rotation Handoff', `Schedule: ${data.scheduleName}`, {
       headerGradient,
+      logoUrl: `${getBaseUrl()}/logo.png`,
     }) +
       EmailContent(`
         <div style="margin-bottom:18px">${StatusBadge('SHIFT HANDOFF', 'schedule')}</div>
@@ -702,7 +729,7 @@ export function generateShiftHandoffEmailHTML(data: ShiftHandoffData): string {
           The following <strong>${data.activeIncidents.length} active incident(s)</strong> have been automatically reassigned to you:
         </p>
         ${incidentListHtml}
-        <div style="margin-top:28px">${EmailButton('View Schedule & Incidents', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
+        <div style="margin-top:28px;text-align:center;">${EmailButton('View Schedule & Incidents', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
       `) +
       EmailFooter()
   );

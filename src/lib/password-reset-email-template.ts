@@ -51,8 +51,8 @@ export function getPasswordResetEmailTemplate(data: PasswordResetEmailData): {
             </div>
             
             <!-- Reset Instructions -->
-            <div style="background: linear-gradient(135deg, #0b0b0f 0%, #111827 100%); border: 1px solid #1f2937; border-radius: 16px; padding: 32px; margin: 32px 0; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.35);">
-                <p style="margin: 0 0 24px 0; color: #e2e8f0; font-size: 15px; line-height: 1.7; text-align: center;">
+            <div style="background: linear-gradient(135deg, #0b0b0f 0%, #111827 100%); border: 1px solid #1f2937; border-radius: 14px; padding: 24px 20px; margin: 24px 0; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);">
+                <p style="margin: 0 0 20px 0; color: #e2e8f0; font-size: 15px; line-height: 1.6; text-align: center;">
                     Click the button below to create a new password for your account:
                 </p>
                 

@@ -10,7 +10,9 @@ export interface EmailStyles {
   headerGradient?: string;
   logoUrl?: string;
   logoAlt?: string;
+  logoWidth?: number;
   brandName?: string;
+  brandUrl?: string;
   buttonBackground?: string;
   buttonTextColor?: string;
   buttonShadow?: string;
@@ -39,11 +41,11 @@ export function sanitizeUrl(url: string | null | undefined): string {
 
 /**
  * Email container with responsive layout and OpsKnight branding
- * Fully optimized for mobile devices
+ * Fully optimized for both mobile and laptop/desktop screens
  */
 export function EmailContainer(content: string, styles: EmailStyles = {}): string {
   const backgroundColor = styles.backgroundColor || '#ffffff';
-  const outerBackground = '#f3f4f6';
+  const outerBackground = '#f8fafc';
 
   return `
 <!DOCTYPE html>
@@ -66,32 +68,83 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
     <![endif]-->
     <style type="text/css">
         :root { color-scheme: light; supported-color-schemes: light; }
-        @media only screen and (max-width: 600px) {
-            .mobile-padding { padding: 20px !important; }
+        html, body { margin: 0 auto !important; padding: 0 !important; height: 100% !important; width: 100% !important; }
+        * { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; box-sizing: border-box; }
+        table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; }
+        table { border-spacing: 0 !important; border-collapse: collapse !important; table-layout: fixed !important; margin: 0 auto !important; }
+        img { -ms-interpolation-mode: bicubic; }
+        /* Mobile Optimization (<= 640px) */
+        @media only screen and (max-width: 640px) {
+            .mobile-outer-padding { padding: 12px 8px !important; }
+            .mobile-container { width: 100% !important; max-width: 100% !important; border-radius: 12px !important; }
+            .mobile-header-padding { padding: 26px 20px !important; }
             .mobile-text-center { text-align: center !important; }
             .mobile-full-width { width: 100% !important; max-width: 100% !important; }
-            .mobile-font-large { font-size: 24px !important; }
-            .mobile-font-medium { font-size: 16px !important; }
-            .mobile-font-small { font-size: 14px !important; }
+            .mobile-font-large { font-size: 22px !important; line-height: 1.3 !important; }
+            .mobile-font-medium { font-size: 15px !important; }
+            .mobile-font-small { font-size: 13px !important; }
             .mobile-button { width: 100% !important; display: block !important; }
-            .mobile-button a { width: 100% !important; box-sizing: border-box !important; }
+            .mobile-button a { width: 100% !important; box-sizing: border-box !important; min-width: 0 !important; padding: 14px 16px !important; font-size: 15px !important; }
             .mobile-hide { display: none !important; }
-            .mobile-header-padding { padding: 32px 20px !important; }
             .mobile-logo-name { font-size: 20px !important; }
-            .mobile-spacing { margin: 16px 0 !important; }
+            .mobile-logo-img { width: 44px !important; height: 44px !important; }
+            .mobile-spacing { margin: 20px 0 !important; }
+            .mobile-table-cell { padding: 10px 12px !important; font-size: 13px !important; }
+            .mobile-table-label { width: 38% !important; }
+        }
+
+        /* Large Displays & Desktop Screens (>= 1024px) */
+        @media only screen and (min-width: 1024px) {
+            .desktop-container { max-width: 860px !important; width: 90% !important; border-radius: 20px !important; }
+            .desktop-outer-padding { padding: 48px 32px !important; }
+            .desktop-header-padding { padding: 44px 50px !important; }
+            .desktop-padding { padding: 40px 50px !important; }
+            .desktop-font-title { font-size: 30px !important; }
+            .desktop-font-body { font-size: 15px !important; line-height: 1.65 !important; }
+            .desktop-logo-img { width: 60px !important; height: 60px !important; }
+            .desktop-logo-name { font-size: 26px !important; }
+            .desktop-table-cell { padding: 15px 24px !important; font-size: 15px !important; }
+            .desktop-button a { padding: 16px 40px !important; font-size: 16px !important; min-width: 260px !important; }
+        }
+
+        /* 27-inch Displays & Quad-HD Monitors (>= 1440px) */
+        @media only screen and (min-width: 1440px) {
+            .desktop-container { max-width: 1080px !important; width: 88% !important; border-radius: 24px !important; }
+            .desktop-outer-padding { padding: 60px 48px !important; }
+            .desktop-header-padding { padding: 54px 64px !important; }
+            .desktop-padding { padding: 50px 64px !important; }
+            .desktop-font-title { font-size: 34px !important; }
+            .desktop-font-body { font-size: 16px !important; line-height: 1.75 !important; }
+            .desktop-logo-img { width: 72px !important; height: 72px !important; }
+            .desktop-logo-name { font-size: 30px !important; }
+            .desktop-table-cell { padding: 18px 32px !important; font-size: 16px !important; }
+            .desktop-button a { padding: 18px 52px !important; font-size: 17px !important; min-width: 300px !important; }
+        }
+
+        /* Ultrawide & 4K Displays (>= 1920px) */
+        @media only screen and (min-width: 1920px) {
+            .desktop-container { max-width: 1180px !important; width: 85% !important; border-radius: 28px !important; }
+            .desktop-outer-padding { padding: 72px 64px !important; }
+            .desktop-header-padding { padding: 60px 76px !important; }
+            .desktop-padding { padding: 56px 76px !important; }
+            .desktop-font-title { font-size: 36px !important; }
+            .desktop-logo-img { width: 76px !important; height: 76px !important; }
+            .desktop-logo-name { font-size: 32px !important; }
+            .desktop-table-cell { padding: 20px 36px !important; font-size: 16px !important; }
+            .desktop-button a { padding: 20px 56px !important; font-size: 18px !important; min-width: 340px !important; }
         }
     </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: ${outerBackground}; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; color: #1e293b;">
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${outerBackground};">
+<body style="margin: 0; padding: 0; background-color: ${outerBackground}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; color: #1e293b;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${outerBackground}; table-layout: fixed;">
         <tr>
-            <td align="center" style="padding: 40px 10px;">
+            <td align="center" class="mobile-outer-padding desktop-outer-padding" style="padding: 32px 16px;">
                 <!--[if mso]>
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" align="center">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="640" align="center">
                 <tr>
                 <td>
                 <![endif]-->
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: ${backgroundColor}; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #e5e7eb;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="mobile-container desktop-container" style="max-width: 640px; margin: 0 auto; background-color: ${backgroundColor}; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0;">
                     <tr>
                         <td style="padding: 0;">
                             ${content}
@@ -111,7 +164,7 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
 }
 
 /**
- * Branded email header with OpsKnight logo and red gradient
+ * Branded email header with OpsKnight logo and gradient
  * Mobile-responsive with flexible layout
  */
 export function EmailHeader(title: string, subtitle?: string, styles: EmailStyles = {}): string {
@@ -120,34 +173,31 @@ export function EmailHeader(title: string, subtitle?: string, styles: EmailStyle
   const brandName = escapeHtml(styles.brandName || 'OpsKnight');
   const safeTitle = escapeHtml(title);
   const safeSubtitle = subtitle ? escapeHtml(subtitle) : undefined;
+  const logoWidth = styles.logoWidth || 56;
+  const brandUrl = sanitizeUrl(styles.brandUrl || 'https://opsknight.com/');
 
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
-        <td class="mobile-header-padding" style="background: ${headerGradient}; padding: 48px 44px; text-align: left; position: relative;">
-            <!-- Logo with Brand Name -->
-            <div style="margin-bottom: 32px;">
-                <!--[if mso]>
-                <table role="presentation" align="left"><tr><td>
-                <![endif]-->
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="left" style="margin: 0;">
-                    <tr>
-                        <td style="padding-right: 12px; vertical-align: middle;">
-                            ${getOpsKnightLogo(56, styles)}
-                        </td>
-                        <td style="vertical-align: middle;">
-                            <span class="mobile-logo-name" style="font-size: 24px; font-weight: 700; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">${brandName}</span>
-                        </td>
-                    </tr>
-                </table>
-                <!--[if mso]>
-                </td></tr></table>
-                <![endif]-->
-                <div style="clear: both;"></div>
-            </div>
+        <td class="mobile-header-padding desktop-header-padding" style="background: ${headerGradient}; padding: 38px 36px; text-align: left; position: relative;">
+            <!-- Brand Bar -->
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 0 22px 0;">
+                <tr>
+                    <td style="padding-right: 14px; vertical-align: middle;">
+                        <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                            ${getOpsKnightLogo(logoWidth, styles)}
+                        </a>
+                    </td>
+                    <td style="vertical-align: middle;">
+                        <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                            <span class="mobile-logo-name desktop-logo-name" style="font-size: 24px; font-weight: 800; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">${brandName}</span>
+                        </a>
+                    </td>
+                </tr>
+            </table>
             
             <!-- Title -->
-            <h1 class="mobile-font-large" style="margin: 0 0 ${safeSubtitle ? '10px' : '0'} 0; color: #ffffff !important; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25;">
+            <h1 class="mobile-font-large desktop-font-title" style="margin: 0 0 ${safeSubtitle ? '8px' : '0'} 0; color: #ffffff !important; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3;">
                 ${safeTitle}
             </h1>
             
@@ -155,7 +205,7 @@ export function EmailHeader(title: string, subtitle?: string, styles: EmailStyle
               safeSubtitle
                 ? `
             <!-- Subtitle -->
-            <p class="mobile-font-small" style="margin: 0; color: rgba(255, 255, 255, 0.85) !important; font-size: 15px; font-weight: 500;">
+            <p class="mobile-font-small desktop-font-body" style="margin: 0; color: rgba(255, 255, 255, 0.9) !important; font-size: 14px; font-weight: 500; line-height: 1.4;">
                 ${safeSubtitle}
             </p>
             `
@@ -173,7 +223,7 @@ export function EmailContent(content: string): string {
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
-        <td class="mobile-padding" style="padding: 52px 44px; background: #ffffff;">
+        <td class="mobile-padding desktop-padding" style="padding: 32px 32px; background: #ffffff;">
             ${content}
         </td>
     </tr>
@@ -254,7 +304,7 @@ export function EmailButton(text: string, url: string, styles: EmailStyles = {})
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" class="mobile-full-width mobile-spacing" style="margin: 32px auto; width: auto;">
     <tr>
-        <td class="mobile-button" style="border-radius: 10px; background: ${buttonBackground}; text-align: center; box-shadow: ${buttonShadow};">
+        <td class="mobile-button desktop-button" style="border-radius: 10px; background: ${buttonBackground}; text-align: center; box-shadow: ${buttonShadow};">
             <a href="${safeUrl}" target="_blank" style="display: inline-block; padding: 14px 32px; color: ${buttonTextColor} !important; text-decoration: none; font-weight: 600; font-size: 15px; line-height: 1.5; border-radius: 10px; min-width: 220px; text-align: center;">
                 ${safeText}
             </a>
@@ -265,20 +315,21 @@ export function EmailButton(text: string, url: string, styles: EmailStyles = {})
 
 /**
  * Information card with label and value
+ * Fluid responsive widths optimized for mobile and desktop screens
  */
 export function InfoCard(
   items: Array<{ label: string; value: string; highlight?: boolean }>,
   styles: { accentColor?: string } = {}
 ): string {
-  const accentColor = styles.accentColor || '#e5e7eb';
+  const accentColor = styles.accentColor || '#e2e8f0';
   const rows = items
     .map(
-      item => `
-        <tr>
-            <td style="padding: 12px 20px; border-bottom: 1px solid #e5e7eb; font-size: 14px; font-weight: 600; color: #6b7280; width: 140px;">
+      (item, idx) => `
+        <tr style="${idx % 2 === 1 ? 'background: #f8fafc;' : 'background: #ffffff;'}">
+            <td class="mobile-table-cell desktop-table-cell mobile-table-label" style="padding: 12px 18px; border-bottom: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #64748b; width: 34%; min-width: 90px; vertical-align: middle;">
                 ${escapeHtml(item.label)}
             </td>
-            <td style="padding: 12px 20px; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: #1f2937; ${item.highlight ? 'font-weight: 600;' : ''}">
+            <td class="mobile-table-cell desktop-table-cell" style="padding: 12px 18px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #1e293b; width: 66%; word-break: break-word; vertical-align: middle; ${item.highlight ? 'font-weight: 600;' : ''}">
                 ${escapeHtml(item.value)}
             </td>
         </tr>
@@ -287,7 +338,7 @@ export function InfoCard(
     .join('');
 
   return `
-<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e5e7eb; border-left: 4px solid ${accentColor};">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; border-left: 4px solid ${accentColor}; margin: 20px 0;">
     ${rows}
 </table>`.trim();
 }
@@ -307,49 +358,79 @@ export function AlertBox(
     info: { bg: '#eff6ff', border: '#2563eb', title: '#1e40af', text: '#1e3a8a' },
   };
 
-  const color =
-    type === 'success'
-      ? colors.success
-      : type === 'warning'
-        ? colors.warning
-        : type === 'error'
-          ? colors.error
-          : colors.info;
+  let color;
+  switch (type) {
+    case 'success':
+      color = colors.success;
+      break;
+    case 'warning':
+      color = colors.warning;
+      break;
+    case 'error':
+      color = colors.error;
+      break;
+    case 'info':
+    default:
+      color = colors.info;
+      break;
+  }
   const safeTitle = escapeHtml(title);
   const safeMessage = escapeHtml(message);
 
   return `
-<div style="background: ${color.bg}; border-left: 4px solid ${color.border}; padding: 24px; border-radius: 12px; margin: 24px 0;">
-    <h3 style="margin: 0 0 12px 0; color: ${color.title}; font-size: 18px; font-weight: 700; letter-spacing: -0.01em;">
+<div style="background: ${color.bg}; border-left: 4px solid ${color.border}; padding: 20px 22px; border-radius: 12px; margin: 20px 0;">
+    <h3 style="margin: 0 0 10px 0; color: ${color.title}; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">
         ${safeTitle}
     </h3>
-    <p style="margin: 0; color: ${color.text}; font-size: 15px; line-height: 1.7;">
+    <p style="margin: 0; color: ${color.text}; font-size: 14px; line-height: 1.6;">
         ${safeMessage}
     </p>
 </div>`.trim();
 }
 
 /**
- * Footer with OpsKnight branding
+ * Dedicated OpsKnight product promotion card
+ * @deprecated Dedicated promo card is removed to keep transactional alert emails clean, subtle, and focused.
  */
-export function EmailFooter(unsubscribeUrl?: string): string {
+export function OpsKnightPromoCard(): string {
+  return '';
+}
+
+/**
+ * Footer with OpsKnight branding and notification context
+ * Subtle, minimalist, and elegant.
+ */
+export function EmailFooter(
+  unsubscribeUrl?: string,
+  settingsUrl?: string,
+  brandUrl?: string
+): string {
   const safeUnsubscribe = unsubscribeUrl ? sanitizeUrl(unsubscribeUrl) : undefined;
+  const safeSettings = settingsUrl ? sanitizeUrl(settingsUrl) : undefined;
+  const safeBrandUrl = sanitizeUrl(brandUrl || 'https://opsknight.com/');
+
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
-        <td style="padding: 36px 40px; background: #f3f4f6; border-top: 1px solid #e5e7eb; text-align: center;">
-            <p style="margin: 0 0 12px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
-                This is an automated notification from <strong style="color: #1e293b;">OpsKnight</strong> Incident Management.
+        <td style="padding: 24px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
+            <p style="margin: 0 0 6px 0; color: #64748b; font-size: 13px; line-height: 1.5;">
+                This is an automated notification from <a href="${safeBrandUrl}" target="_blank" rel="noopener noreferrer" style="color: #0f172a; text-decoration: none; font-weight: 700;"><strong style="color: #0f172a;">OpsKnight</strong></a> Incident Management.
             </p>
-            ${
-              safeUnsubscribe && safeUnsubscribe !== '#'
-                ? `
-            <p style="margin: 12px 0 0 0; font-size: 13px;">
-                <a href="${safeUnsubscribe}" style="color: #1e293b; text-decoration: none; font-weight: 600;">Unsubscribe from these emails</a>
+            <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px; line-height: 1.5;">
+                <a href="${safeBrandUrl}" target="_blank" rel="noopener noreferrer" style="color: #94a3b8; text-decoration: none;">OpsKnight</a> &bull; Open-Source Incident Response
             </p>
-            `
-                : ''
-            }
+            <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+                ${
+                  safeSettings && safeSettings !== '#'
+                    ? `<a href="${safeSettings}" style="color: #64748b; text-decoration: underline; margin-right: 12px;">Notification Settings</a>`
+                    : ''
+                }
+                ${
+                  safeUnsubscribe && safeUnsubscribe !== '#'
+                    ? `<a href="${safeUnsubscribe}" style="color: #64748b; text-decoration: underline;">Unsubscribe from these emails</a>`
+                    : ''
+                }
+            </p>
         </td>
     </tr>
 </table>`.trim();
@@ -374,48 +455,56 @@ export function SubscriberEmailHeader(
     styles.headerGradient || 'linear-gradient(135deg, #1e293b 0%, #334155 40%, #475569 100%)';
   const displayName = escapeHtml(styles.brandName || pageName);
   const logoAlt = escapeHtml(styles.logoAlt || displayName);
-  const brandLogo = getOpsKnightLogo(52, {
+  const logoWidth = styles.logoWidth || 52;
+  const brandLogo = getOpsKnightLogo(logoWidth, {
     ...styles,
     logoAlt,
   });
   const safeTitle = escapeHtml(title);
   const safeSubtitle = subtitle ? escapeHtml(subtitle) : undefined;
+  const brandUrl = sanitizeUrl(styles.brandUrl || 'https://opsknight.com/');
 
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
-        <td class="mobile-header-padding" style="background: ${headerGradient}; padding: 48px 44px; text-align: left; position: relative;">
+        <td class="mobile-header-padding desktop-header-padding" style="background: ${headerGradient}; padding: 36px 32px; text-align: left; position: relative;">
             <!-- Brand Header -->
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 28px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 20px;">
                 <tr>
                     <td align="left" valign="middle">
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                             <tr>
                                 <td style="padding-right: 12px; vertical-align: middle;">
-                                    ${brandLogo}
+                                    <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                                        ${brandLogo}
+                                    </a>
                                 </td>
                                 <td style="vertical-align: middle;">
-                                    <span class="mobile-logo-name" style="font-size: 22px; font-weight: 700; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">
-                                        ${displayName}
-                                    </span>
+                                    <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                                        <span class="mobile-logo-name desktop-logo-name" style="font-size: 22px; font-weight: 700; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">
+                                            ${displayName}
+                                        </span>
+                                    </a>
                                 </td>
                             </tr>
                         </table>
                     </td>
-                    <td align="right" valign="middle" class="mobile-hide" style="color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;">
-                        Powered by OpsKnight
+                    <td align="right" valign="middle" class="mobile-hide">
+                        <a href="https://opsknight.com/" target="_blank" rel="noopener noreferrer" style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;">
+                            Powered by OpsKnight
+                        </a>
                     </td>
                 </tr>
             </table>
 
             <!-- Organization Name (The Sender) -->
-            <h1 class="mobile-font-large" style="margin: 0 0 14px 0; color: #ffffff !important; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25;">
+            <h1 class="mobile-font-large desktop-font-title" style="margin: 0 0 10px 0; color: #ffffff !important; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3;">
                 ${displayName}
             </h1>
             
             <!-- Update Type Badge -->
-            <div style="margin-bottom: 24px;">
-                <span style="display: inline-block; padding: 6px 14px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 10px; color: #ffffff !important; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">
+            <div style="margin-bottom: 18px;">
+                <span style="display: inline-block; padding: 5px 12px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 8px; color: #ffffff !important; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">
                     ${safeTitle}
                 </span>
             </div>
@@ -423,7 +512,7 @@ export function SubscriberEmailHeader(
             ${
               safeSubtitle
                 ? `
-            <p class="mobile-font-medium" style="margin: 0; color: rgba(255, 255, 255, 0.9) !important; font-size: 16px; font-weight: 500; line-height: 1.5;">
+            <p class="mobile-font-medium desktop-font-body" style="margin: 0; color: rgba(255, 255, 255, 0.9) !important; font-size: 15px; font-weight: 500; line-height: 1.45;">
                 ${safeSubtitle}
             </p>
             `
@@ -444,25 +533,31 @@ export function SubscriberEmailFooter(unsubscribeUrl: string, pageName: string):
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
-        <td style="padding: 36px 20px; background: #f8fafc; border-top: 1px solid #e5e7eb; text-align: center;">
-            <p style="margin: 0 0 16px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
+        <td style="padding: 28px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
+            <p style="margin: 0 0 12px 0; color: #64748b; font-size: 13px; line-height: 1.6;">
                 You received this email because you are subscribed to <strong>${safePageName}</strong> updates.
             </p>
             
-            <p style="margin: 0 0 32px 0; font-size: 13px;">
-                <a href="${safeUnsubscribe}" style="color: #6b7280; text-decoration: underline;">Unsubscribe from updates</a>
+            <p style="margin: 0 0 24px 0; font-size: 13px;">
+                <a href="${safeUnsubscribe}" style="color: #64748b; text-decoration: underline;">Unsubscribe from updates</a>
             </p>
 
             <!-- OpsKnight Marketing -->
-            <div style="opacity: 0.8;">
-                <p style="margin: 0; color: #9ca3af; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">
+            <div>
+                <p style="margin: 0 0 6px 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;">
                     Powered by
                 </p>
-                <a href="https://OpsKnight.com" target="_blank" style="text-decoration: none; display: inline-block; margin-top: 8px;">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        ${getOpsKnightLogo(24)}
-                        <span style="color: #1f2937; font-size: 16px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.02em;">OpsKnight</span>
-                    </div>
+                <a href="https://opsknight.com/" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                        <tr>
+                            <td style="padding-right: 8px; vertical-align: middle;">
+                                ${getOpsKnightLogo(22)}
+                            </td>
+                            <td style="vertical-align: middle;">
+                                <span style="color: #0f172a; font-size: 15px; font-weight: 700; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: -0.01em;">OpsKnight</span>
+                            </td>
+                        </tr>
+                    </table>
                 </a>
             </div>
         </td>
@@ -477,27 +572,31 @@ export function SubscriberEmailFooter(unsubscribeUrl: string, pageName: string):
 function getOpsKnightLogo(width: number, styles: EmailStyles = {}): string {
   const logoUrl = styles.logoUrl || getDefaultLogoUrl();
   const logoAlt = escapeHtml(styles.logoAlt || 'OpsKnight');
+
   if (logoUrl) {
     const safeLogoUrl = sanitizeUrl(logoUrl);
     if (safeLogoUrl !== '#') {
-      return `<img src="${safeLogoUrl}" width="${width}" height="${width}" alt="${logoAlt}" style="display: block; border-radius: 12px;" />`;
+      return `<img src="${safeLogoUrl}" width="${width}" height="${width}" alt="${logoAlt}" class="mobile-logo-img desktop-logo-img" style="display: block; width: ${width}px; height: ${width}px; max-width: 100%; border: 0; outline: none; text-decoration: none;" />`;
     }
   }
 
-  // Inline SVG logo fallback for email compatibility
-  return `<svg width="${width}" height="${width}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="display: block;">
-        <!-- Shield background -->
-        <path d="M50 5 L85 20 L85 45 Q85 75 50 95 Q15 75 15 45 L15 20 Z" fill="url(#grad)" stroke="#0f172a" stroke-width="2"/>
-        <!-- Gradient definition -->
-        <defs>
-            <linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style="stop-color:#334155;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
-            </linearGradient>
-        </defs>
-        <!-- OS Text -->
-        <text x="50" y="58" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle">OS</text>
-    </svg>`;
+  // Authentic OpsKnight shield & headset knight vector fallback
+  return `
+<svg width="${width}" height="${width}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mobile-logo-img desktop-logo-img" style="display: block; width: ${width}px; height: ${width}px;">
+    <defs>
+        <linearGradient id="shieldGrad" x1="50" y1="5" x2="50" y2="95" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#ef4444"/>
+            <stop offset="100%" stop-color="#b91c1c"/>
+        </linearGradient>
+    </defs>
+    <path d="M50 6 C68 15 84 18 86 28 C88 52 74 76 50 94 C26 76 12 52 14 28 C16 18 32 15 50 6 Z" fill="url(#shieldGrad)" stroke="#ffffff" stroke-width="3"/>
+    <path d="M34 46 C34 32 40 24 50 24 C60 24 66 32 66 46" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round"/>
+    <rect x="29" y="42" width="9" height="18" rx="4.5" fill="#ffffff"/>
+    <rect x="62" y="42" width="9" height="18" rx="4.5" fill="#ffffff"/>
+    <path d="M66 54 C66 62 58 65 52 65" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M38 73 L50 64 L62 73" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M50 64 L50 82" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>`.trim();
 }
 
 function getDefaultLogoUrl(): string | null {
@@ -508,9 +607,9 @@ function getDefaultLogoUrl(): string | null {
     const basePath =
       parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/$/, '') : '';
     const prefix = basePath ? `${parsed.origin}${basePath}` : parsed.origin;
-    return `${prefix}/logo-compressed.png`;
+    return `${prefix}/logo.png`;
   } catch {
-    return `${baseUrl.replace(/\/$/, '')}/logo-compressed.png`;
+    return `${baseUrl.replace(/\/$/, '')}/logo.png`;
   }
 }
 
