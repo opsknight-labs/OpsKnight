@@ -58,4 +58,27 @@ describe('widget data cache', () => {
       buildWidgetCacheKey('user-1', 'ADMIN', { startDate: start, serviceId: ['b', 'a'] })
     ).toBe(buildWidgetCacheKey('user-1', 'ADMIN', { serviceId: ['a', 'b'], startDate: start }));
   });
+
+  it('serves stale data while one background refresh is in flight', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = { lastUpdated: new Date(0), activeIncidents: [] };
+      let finishRefresh!: (value: typeof initial) => void;
+      getWidgetDataMock
+        .mockResolvedValueOnce(initial)
+        .mockReturnValueOnce(new Promise(resolve => (finishRefresh = resolve)));
+
+      await getCachedWidgetData('user-1', 'ADMIN', {}, Date.now());
+      await vi.advanceTimersByTimeAsync(31_000);
+
+      await expect(getCachedWidgetData('user-1', 'ADMIN', {}, Date.now())).resolves.toBe(initial);
+      await expect(getCachedWidgetData('user-1', 'ADMIN', {}, Date.now())).resolves.toBe(initial);
+      expect(getWidgetDataMock).toHaveBeenCalledTimes(2);
+
+      finishRefresh({ ...initial, lastUpdated: new Date() });
+      await vi.runAllTicks();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { useRealtime } from '@/hooks/useRealtime';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
+import { RealtimeProvider, useRealtime } from '@/hooks/useRealtime';
+import { createElement, type ReactNode } from 'react';
 
 type MockEventSource = {
   onopen: ((event: Event) => void) | null;
@@ -11,18 +12,27 @@ type MockEventSource = {
 
 // Spies for tracking behavior
 const closeSpy = vi.fn().mockName('close');
-const mockEventSourceCtor = vi.fn().mockImplementation(function (this: any) {
-  this.onopen = null;
-  this.onmessage = null;
-  this.onerror = null;
-  this.close = closeSpy;
-  return this;
-}).mockName('EventSource');
+const mockEventSourceCtor = vi
+  .fn()
+  .mockImplementation(function (this: MockEventSource) {
+    this.onopen = null;
+    this.onmessage = null;
+    this.onerror = null;
+    this.close = closeSpy;
+    return this;
+  })
+  .mockName('EventSource');
 
 vi.stubGlobal('EventSource', mockEventSourceCtor);
 
-function getMockEventSourceInstance(index = 0): any {
-  return mockEventSourceCtor.mock.results[index]?.value;
+function getMockEventSourceInstance(index = 0): MockEventSource {
+  const instance = mockEventSourceCtor.mock.results.at(index)?.value as MockEventSource | undefined;
+  if (!instance) throw new Error(`Missing EventSource instance ${index}`);
+  return instance;
+}
+
+function wrapper({ children }: { children: ReactNode }) {
+  return createElement(RealtimeProvider, null, children);
 }
 
 describe('useRealtime', () => {
@@ -31,19 +41,28 @@ describe('useRealtime', () => {
   });
 
   it('should initialize with disconnected state', () => {
-    const { result } = renderHook(() => useRealtime());
+    const { result } = renderHook(() => useRealtime(), { wrapper });
     expect(result.current.isConnected).toBe(false);
     expect(result.current.metrics).toBeNull();
     expect(result.current.recentIncidents).toEqual([]);
   });
 
   it('should create EventSource connection', () => {
-    renderHook(() => useRealtime());
+    renderHook(() => useRealtime(), { wrapper });
     expect(global.EventSource).toHaveBeenCalledWith('/api/realtime/stream');
   });
 
+  it('shares one EventSource across multiple consumers', () => {
+    function Consumer() {
+      useRealtime();
+      return null;
+    }
+    render(createElement(RealtimeProvider, null, createElement(Consumer), createElement(Consumer)));
+    expect(global.EventSource).toHaveBeenCalledTimes(1);
+  });
+
   it('should handle connection open', async () => {
-    const { result } = renderHook(() => useRealtime());
+    const { result } = renderHook(() => useRealtime(), { wrapper });
     const eventSourceInstance = getMockEventSourceInstance();
     act(() => {
       eventSourceInstance.onopen?.(new Event('open'));
@@ -55,7 +74,7 @@ describe('useRealtime', () => {
   });
 
   it('should handle metrics update', async () => {
-    const { result } = renderHook(() => useRealtime());
+    const { result } = renderHook(() => useRealtime(), { wrapper });
 
     // Get the EventSource instance
     const eventSourceInstance = getMockEventSourceInstance();
@@ -91,7 +110,7 @@ describe('useRealtime', () => {
   });
 
   it('should handle incidents update', async () => {
-    const { result } = renderHook(() => useRealtime());
+    const { result } = renderHook(() => useRealtime(), { wrapper });
 
     const eventSourceInstance = getMockEventSourceInstance();
 
@@ -115,7 +134,7 @@ describe('useRealtime', () => {
   });
 
   it('should handle connection errors', async () => {
-    const { result } = renderHook(() => useRealtime());
+    const { result } = renderHook(() => useRealtime(), { wrapper });
 
     const eventSourceInstance = getMockEventSourceInstance();
 
@@ -130,7 +149,7 @@ describe('useRealtime', () => {
   });
 
   it('should cleanup on unmount', () => {
-    const { unmount } = renderHook(() => useRealtime());
+    const { unmount } = renderHook(() => useRealtime(), { wrapper });
     const eventSourceInstance = getMockEventSourceInstance();
 
     unmount();

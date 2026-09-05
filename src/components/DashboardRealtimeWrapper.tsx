@@ -1,6 +1,6 @@
 'use client';
 
-import { useRealtime } from '@/hooks/useRealtime';
+import { RealtimeProvider, useRealtime } from '@/hooks/useRealtime';
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
 import { useRouter } from 'next/navigation';
@@ -25,12 +25,37 @@ export default function DashboardRealtimeWrapper({
   onMetricsUpdate,
   onIncidentsUpdate,
 }: DashboardRealtimeWrapperProps) {
+  return (
+    <RealtimeProvider>
+      <DashboardRealtimeContent
+        onMetricsUpdate={onMetricsUpdate}
+        onIncidentsUpdate={onIncidentsUpdate}
+      >
+        {children}
+      </DashboardRealtimeContent>
+    </RealtimeProvider>
+  );
+}
+
+function DashboardRealtimeContent({
+  children,
+  onMetricsUpdate,
+  onIncidentsUpdate,
+}: DashboardRealtimeWrapperProps) {
   const router = useRouter();
   const { isConnected, metrics, recentIncidents, error } = useRealtime();
   const [showDisconnected, setShowDisconnected] = useState(false);
   const [dismissedIncidentKey, setDismissedIncidentKey] = useState('');
   const incidentUpdateKey = recentIncidents?.length
-    ? JSON.stringify(recentIncidents.map(incident => incident.id))
+    ? JSON.stringify(
+        recentIncidents.map(incident => [
+          incident.id,
+          incident.updatedAt,
+          incident.status,
+          incident.urgency,
+          incident.escalationStatus,
+        ])
+      )
     : '';
   const hasUpdates =
     !onIncidentsUpdate && Boolean(incidentUpdateKey) && dismissedIncidentKey !== incidentUpdateKey;

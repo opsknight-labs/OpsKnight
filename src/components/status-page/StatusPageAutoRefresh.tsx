@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 type StatusPageAutoRefreshProps = {
   enabled: boolean;
@@ -11,6 +12,7 @@ export default function StatusPageAutoRefresh({
   enabled,
   intervalSeconds,
 }: StatusPageAutoRefreshProps) {
+  const router = useRouter();
   useEffect(() => {
     if (!enabled) return;
 
@@ -20,16 +22,14 @@ export default function StatusPageAutoRefresh({
 
     const timeout = window.setTimeout(() => {
       try {
-        const url = new URL(window.location.href);
-        url.searchParams.set('_t', Date.now().toString());
-        window.location.replace(url.toString());
+        router.refresh();
       } catch (error) {
         console.error('[Status Page] Auto-refresh error:', error);
       }
     }, refreshMs);
 
     return () => window.clearTimeout(timeout);
-  }, [enabled, intervalSeconds]);
+  }, [enabled, intervalSeconds, router]);
 
   return null;
 }
