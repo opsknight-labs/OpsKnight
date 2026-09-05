@@ -256,9 +256,20 @@ export async function createIncidentWarRoom(
     if (!botToken) {
       return { success: false, error: 'No Slack bot token configured' };
     }
-    const slackWorkspaceId = incident.service.slackIntegration?.workspaceId;
+    // Verify a Slack workspace installation exists (service-specific or global)
+    const slackWorkspaceId =
+      incident.service.slackIntegration?.workspaceId ||
+      (
+        await prisma.slackIntegration.findFirst({
+          where: { enabled: true, services: { none: {} } },
+          select: { workspaceId: true },
+        })
+      )?.workspaceId;
     if (!slackWorkspaceId) {
-      return { success: false, error: 'No Slack workspace installation configured for this service' };
+      return {
+        success: false,
+        error: 'No Slack workspace installation configured for this service or organization',
+      };
     }
 
     // Generate channel name
@@ -556,7 +567,10 @@ export async function createIncidentWarRoom(
     });
     if (attached.count !== 1) {
       logger.warn('[ChatOps] War-room completion lease was lost', { incidentId, channelId });
-      return { success: false, error: 'War-room provisioning lease was lost; reconciliation will adopt the channel' };
+      return {
+        success: false,
+        error: 'War-room provisioning lease was lost; reconciliation will adopt the channel',
+      };
     }
 
     // Log timeline event
