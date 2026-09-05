@@ -59,16 +59,16 @@ const NotificationList = memo(function NotificationList({
     return (
       <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
         <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-3">
-          <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          <CheckCircle2 className="h-6 w-6 text-emerald-400" />
         </div>
-        <p className="text-sm font-semibold text-foreground mb-0.5">{emptyMessage}</p>
-        <p className="text-xs text-muted-foreground">{emptySub}</p>
+        <p className="text-sm font-semibold text-zinc-200 mb-0.5">{emptyMessage}</p>
+        <p className="text-xs text-zinc-500">{emptySub}</p>
       </div>
     );
   }
 
   return (
-    <div className="divide-y divide-border/60 relative">
+    <div className="p-3 sm:p-3.5 space-y-2.5">
       {items.map(notification => {
         const isIncident = notification.type === 'incident';
         const isService = notification.type === 'service';
@@ -78,10 +78,14 @@ const NotificationList = memo(function NotificationList({
           <div
             key={notification.id}
             className={cn(
-              'group relative flex items-start gap-3 p-3.5 text-left transition-all duration-150 cursor-pointer hover:bg-muted/40',
+              'group relative flex items-start gap-3 p-3 rounded-xl border text-left transition-all duration-150 shadow-2xs cursor-pointer',
               notification.unread
-                ? 'bg-primary/[0.03] dark:bg-primary/[0.04] border-l-[3px] border-l-primary'
-                : 'border-l-[3px] border-l-transparent opacity-85 hover:opacity-100'
+                ? isIncident
+                  ? 'bg-[#141215] hover:bg-[#181419] border-rose-500/30 border-l-[3.5px] border-l-rose-500 hover:border-rose-500/50 hover:shadow-xs'
+                  : isService
+                    ? 'bg-[#10131b] hover:bg-[#131825] border-blue-500/30 border-l-[3.5px] border-l-blue-500 hover:border-blue-500/50 hover:shadow-xs'
+                    : 'bg-[#13111b] hover:bg-[#171424] border-purple-500/30 border-l-[3.5px] border-l-purple-500 hover:border-purple-500/50 hover:shadow-xs'
+                : 'bg-[#101013]/90 hover:bg-[#141418] border-zinc-800/80 border-l-[3.5px] border-l-zinc-700/80 opacity-80 hover:opacity-100'
             )}
             onClick={() => {
               if (notification.incidentId) {
@@ -99,17 +103,17 @@ const NotificationList = memo(function NotificationList({
             {/* Type Icon */}
             <div className="mt-0.5 shrink-0">
               {isIncident && (
-                <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shadow-2xs">
                   <AlertTriangle className="h-4 w-4" />
                 </div>
               )}
               {isService && (
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center shadow-2xs">
                   <Server className="h-4 w-4" />
                 </div>
               )}
               {isSchedule && (
-                <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center shadow-2xs">
                   <CalendarClock className="h-4 w-4" />
                 </div>
               )}
@@ -117,28 +121,57 @@ const NotificationList = memo(function NotificationList({
 
             {/* Content */}
             <div className="flex-1 min-w-0 space-y-1">
-              <div className="flex items-start justify-between gap-2">
-                <p
-                  className={cn(
-                    'text-xs font-semibold leading-tight line-clamp-1',
-                    notification.unread ? 'text-foreground' : 'text-muted-foreground'
-                  )}
-                >
-                  {notification.title}
-                </p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className={cn(
+                      'text-[9px] font-mono font-bold tracking-wider uppercase px-1.5 py-0.5 rounded border leading-none shrink-0',
+                      isIncident
+                        ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                        : isService
+                          ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                          : 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                    )}
+                  >
+                    {isIncident ? 'Incident' : isService ? 'Service' : 'Shift'}
+                  </span>
+                  <p
+                    className={cn(
+                      'text-xs font-semibold leading-snug truncate',
+                      notification.unread ? 'text-zinc-100' : 'text-zinc-400'
+                    )}
+                  >
+                    {notification.title}
+                  </p>
+                </div>
                 {notification.unread && (
-                  <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-0.5 ring-2 ring-primary/20" />
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60 bg-rose-500" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+                  </span>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+              <p
+                className={cn(
+                  'text-xs line-clamp-2 leading-relaxed',
+                  notification.unread ? 'text-zinc-300' : 'text-zinc-500'
+                )}
+              >
                 {notification.message}
               </p>
-              <div className="flex items-center justify-between pt-0.5">
-                <span className="text-[10.5px] text-muted-foreground/70 font-mono">
-                  {notification.time}
-                </span>
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[10.5px] text-zinc-500 font-mono">{notification.time}</span>
                 {notification.incidentId && (
-                  <span className="text-[10.5px] font-medium text-primary inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                  <span
+                    className={cn(
+                      'text-[11px] font-medium inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform',
+                      isIncident
+                        ? 'text-rose-400 hover:text-rose-300'
+                        : isService
+                          ? 'text-blue-400 hover:text-blue-300'
+                          : 'text-purple-400 hover:text-purple-300'
+                    )}
+                  >
                     View incident <ArrowRight className="h-3 w-3" />
                   </span>
                 )}
@@ -151,7 +184,7 @@ const NotificationList = memo(function NotificationList({
                 type="button"
                 title="Mark as read"
                 onClick={e => onMarkAsRead(notification.id, e)}
-                className="opacity-0 group-hover:opacity-100 absolute top-2.5 right-2.5 p-1 rounded-md bg-background/90 hover:bg-background border border-border shadow-xs text-muted-foreground hover:text-foreground transition-all duration-150 cursor-pointer"
+                className="opacity-0 group-hover:opacity-100 absolute top-2.5 right-2.5 p-1 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 shadow-xs text-zinc-400 hover:text-white transition-all duration-150 cursor-pointer"
               >
                 <Check className="h-3.5 w-3.5" />
               </button>
@@ -326,71 +359,106 @@ export default function TopbarNotifications() {
           <span className="sr-only">Notifications</span>
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-background border-l border-border shadow-2xl">
-        <SheetHeader className="px-5 pt-5 pb-3 pr-12">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <SheetTitle className="text-base font-bold tracking-tight">Notifications</SheetTitle>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border',
-                  isLive
-                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                    : 'text-zinc-500 bg-muted border-border'
-                )}
-              >
-                <span
-                  className={cn(
-                    'w-1.5 h-1.5 rounded-full',
-                    isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'
-                  )}
-                />
-                {isLive ? 'Live' : 'Polling'}
-              </span>
+      <SheetContent className="w-full sm:max-w-md flex flex-col p-0 bg-[#0c0c0e] text-zinc-100 border-l border-zinc-800/90 shadow-2xl [&>button]:text-zinc-400 [&>button]:hover:text-white [&>button]:top-4 [&>button]:right-4.5 [&>button]:rounded-md [&>button]:p-1.5 [&>button]:hover:bg-white/10 [&>button]:transition-colors overflow-hidden">
+        <div className="relative px-5 pt-4 pb-3 bg-gradient-to-b from-[#18181b] via-[#121216] to-[#0c0c0e] text-white border-b border-zinc-800/80 shadow-2xs">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.06),transparent_60%)] pointer-events-none" />
+          <SheetHeader className="p-0 space-y-0 text-left">
+            {/* Top row: Bell Icon + Title + Live badge. Leaves right side completely clear for X button */}
+            <div className="relative z-10 flex items-center justify-between pr-10">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 border border-zinc-700/60 shadow-xs backdrop-blur-md shrink-0">
+                  <Bell className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <SheetTitle className="text-base font-bold tracking-tight text-white m-0 truncate">
+                    Notifications
+                  </SheetTitle>
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full border leading-none shrink-0',
+                      isLive
+                        ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25'
+                        : 'text-zinc-400 bg-zinc-800/80 border-zinc-700/60'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'w-1.5 h-1.5 rounded-full',
+                        isLive ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'
+                      )}
+                    />
+                    {isLive ? 'Live' : 'Polling'}
+                  </span>
+                </div>
+              </div>
             </div>
-            {unreadCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={markAllRead}
-              >
-                <CheckCheck className="mr-1 h-3.5 w-3.5" />
-                Mark all read
-              </Button>
-            )}
-          </div>
-          <SheetDescription className="sr-only">
-            Recent activity, incident alerts, and schedule changes.
-          </SheetDescription>
-        </SheetHeader>
 
-        <Tabs defaultValue="all" className="flex-1 flex flex-col overflow-hidden">
-          <div className="px-5 pb-2.5 border-b border-border/80">
-            <TabsList className="w-full grid grid-cols-4 h-8 p-0.5 bg-muted/60 dark:bg-zinc-900 rounded-lg">
-              <TabsTrigger value="all" className="text-[11px] font-semibold py-1">
+            {/* Second row: Subtitle + Action Toolbar (Mark all read) - completely clear of X close button */}
+            <div className="relative z-10 flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-zinc-800/50">
+              <p className="text-[11.5px] text-zinc-400 truncate">
+                Incident alerts & schedule changes
+              </p>
+              {unreadCount > 0 ? (
+                <button
+                  type="button"
+                  className="text-[11.5px] h-6 px-2 text-zinc-300 hover:text-white bg-zinc-800/90 hover:bg-zinc-700/90 border border-zinc-700/70 rounded-md font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                  onClick={markAllRead}
+                >
+                  <CheckCheck className="h-3.5 w-3.5 text-zinc-400" />
+                  <span>Mark all read</span>
+                </button>
+              ) : (
+                <span className="text-[11px] text-zinc-500 font-mono inline-flex items-center gap-1 shrink-0">
+                  <Check className="h-3 w-3 text-emerald-400/80" />
+                  All caught up
+                </span>
+              )}
+            </div>
+
+            <SheetDescription className="sr-only">
+              Recent activity, incident alerts, and schedule changes.
+            </SheetDescription>
+          </SheetHeader>
+        </div>
+
+        <Tabs defaultValue="all" className="flex-1 flex flex-col overflow-hidden bg-[#0c0c0e]">
+          <div className="px-4 py-2.5 bg-[#0e0e11] border-b border-zinc-800/80">
+            <TabsList className="w-full grid grid-cols-4 h-8 p-0.5 bg-zinc-900/90 border border-zinc-800/80 rounded-lg">
+              <TabsTrigger
+                value="all"
+                className="text-[11px] font-semibold py-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
+              >
                 All
               </TabsTrigger>
-              <TabsTrigger value="unread" className="text-[11px] font-semibold py-1 gap-1">
+              <TabsTrigger
+                value="unread"
+                className="text-[11px] font-semibold py-1 gap-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
+              >
                 Unread
                 {unreadCount > 0 && (
-                  <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-primary/15 text-primary text-[10px] font-bold">
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[10px] font-bold">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="incident" className="text-[11px] font-semibold py-1">
+              <TabsTrigger
+                value="incident"
+                className="text-[11px] font-semibold py-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
+              >
                 Incidents
               </TabsTrigger>
-              <TabsTrigger value="schedule" className="text-[11px] font-semibold py-1">
+              <TabsTrigger
+                value="schedule"
+                className="text-[11px] font-semibold py-1 text-zinc-400 data-[state=active]:bg-zinc-800 data-[state=active]:text-white data-[state=active]:shadow-2xs transition-all"
+              >
                 Shifts
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto bg-[#0c0c0e]">
             {loading ? (
-              <div className="flex h-48 items-center justify-center text-xs text-muted-foreground">
+              <div className="flex h-48 items-center justify-center text-xs text-zinc-400">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mr-2" />
                 Loading notifications...
               </div>
@@ -435,30 +503,30 @@ export default function TopbarNotifications() {
           </div>
         </Tabs>
 
-        <div className="p-3 border-t border-border/80 bg-muted/20 flex items-center justify-between gap-2">
+        <div className="p-3 border-t border-zinc-800/80 bg-[#0e0e11] flex items-center justify-between gap-2 shadow-xs">
           <Button
             variant="ghost"
             size="sm"
-            className="flex-1 justify-start text-xs text-muted-foreground hover:text-foreground h-8 cursor-pointer"
+            className="flex-1 justify-start text-xs text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/70 h-8 cursor-pointer"
             onClick={() => {
               setOpen(false);
               router.push('/settings/notifications/history');
             }}
           >
-            <Archive className="mr-1.5 h-3.5 w-3.5" />
+            <Archive className="mr-1.5 h-3.5 w-3.5 text-zinc-400" />
             History Log
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className="text-xs text-muted-foreground hover:text-foreground h-8 px-2.5 cursor-pointer"
+            className="text-xs text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/70 h-8 px-2.5 cursor-pointer"
             onClick={() => {
               setOpen(false);
               router.push('/settings/notifications');
             }}
             title="Notification Preferences"
           >
-            <Settings2 className="h-3.5 w-3.5 mr-1" />
+            <Settings2 className="h-3.5 w-3.5 mr-1 text-zinc-400" />
             Preferences
           </Button>
         </div>
