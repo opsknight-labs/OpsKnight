@@ -137,7 +137,7 @@ RUN chmod +x docker-entrypoint.sh
 
 # Health check with improved error handling
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/api/health?mode=readiness', (r) => {let data='';r.on('data',(c)=>data+=c);r.on('end',()=>{const res=JSON.parse(data);process.exit(res.status==='healthy'?0:1)});}).on('error',()=>process.exit(1))"
+    CMD node -e "require('http').get('http://localhost:3000/api/health?mode=readiness', (r) => {let data='';r.on('data',(c)=>data+=c);r.on('end',()=>{const res=JSON.parse(data);process.exit(res.status!=='unhealthy'&&r.statusCode<400?0:1)});}).on('error',()=>process.exit(1))"
 
 # Run entrypoint which does: migrate → start app
 ENTRYPOINT ["./docker-entrypoint.sh"]
