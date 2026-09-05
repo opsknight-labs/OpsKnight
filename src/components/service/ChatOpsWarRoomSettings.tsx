@@ -1,5 +1,7 @@
 'use client';
 
+import { useActionState, useEffect } from 'react';
+import { useFormStatus } from 'react-dom';
 import {
   Card,
   CardContent,
@@ -10,9 +12,11 @@ import {
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { MessageCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
+import { CheckCircle2, Loader2, MessageCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { updateServiceChatOpsSettings } from '@/app/(app)/services/actions';
+import { notify } from '@/lib/toast';
 
 const VIDEO_BRIDGE_OPTIONS = [
   { value: 'INHERIT', label: 'Inherit Global' },
@@ -21,6 +25,16 @@ const VIDEO_BRIDGE_OPTIONS = [
   { value: 'GOOGLE_MEET', label: 'Google Meet' },
   { value: 'NONE', label: 'None' },
 ];
+
+function SubmitButton({ disabled }: { disabled: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" size="sm" disabled={disabled || pending}>
+      {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+      {pending ? 'Saving ChatOps settings...' : 'Save ChatOps settings'}
+    </Button>
+  );
+}
 
 export default function ChatOpsWarRoomSettings({
   serviceId,
@@ -37,7 +51,18 @@ export default function ChatOpsWarRoomSettings({
   chatOpsEnabled: boolean;
   canManage: boolean;
 }) {
-  const saveChatOpsSettings = updateServiceChatOpsSettings.bind(null, serviceId);
+  const [state, formAction] = useActionState(updateServiceChatOpsSettings, {
+    error: null,
+    success: false,
+  });
+
+  useEffect(() => {
+    if (state?.success) {
+      notify.success('ChatOps settings saved');
+    } else if (state?.error) {
+      notify.error(state.error);
+    }
+  }, [state]);
 
   return (
     <Card>
@@ -59,17 +84,39 @@ export default function ChatOpsWarRoomSettings({
         </div>
       </CardHeader>
       <CardContent>
-        <form action={saveChatOpsSettings} className="space-y-4">
+        <form action={formAction} className="space-y-4">
+          <input type="hidden" name="serviceId" value={serviceId} />
+
+          {state?.error && (
+            <Alert variant="destructive">
+              <XCircle className="h-4 w-4" />
+              <AlertDescription>{state.error}</AlertDescription>
+            </Alert>
+          )}
+
+          {state?.success && (
+            <Alert className="border-emerald-200 bg-emerald-50 text-emerald-800">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <AlertDescription>ChatOps & war room settings saved.</AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-4">
-            <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
+            <label className="flex items-center gap-3 rounded-md border p-3 text-sm cursor-pointer">
               <input
                 type="checkbox"
                 name="autoCreateWarRoom"
                 defaultChecked={autoCreateWarRoom}
                 disabled={!canManage}
-                className="h-4 w-4"
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
               />
-              Auto-create War Room
+              <div>
+                <div className="font-medium">Auto-create War Room</div>
+                <div className="text-xs text-muted-foreground">
+                  Automatically spin up dedicated Slack channel and video bridge when an incident
+                  occurs.
+                </div>
+              </div>
             </label>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -98,14 +145,16 @@ export default function ChatOpsWarRoomSettings({
                   placeholder="https://meet.company.com/{incidentId}"
                   disabled={!canManage}
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Optional. Use <code className="text-xs">{'{incidentId}'}</code> as a placeholder
+                  for dynamic room links.
+                </p>
               </div>
             </div>
           </div>
           {canManage && (
             <div className="flex justify-end">
-              <Button type="submit" size="sm">
-                Save ChatOps settings
-              </Button>
+              <SubmitButton disabled={!canManage} />
             </div>
           )}
         </form>

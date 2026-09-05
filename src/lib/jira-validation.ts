@@ -60,3 +60,40 @@ export function assertJiraIssueType(value: string, fieldName: string): string {
   }
   return normalized;
 }
+
+const DONE_STATUS_NAMES = new Set([
+  'done',
+  'closed',
+  'resolved',
+  'complete',
+  'completed',
+  'fixed',
+  'deployed',
+  'verified',
+  'shipped',
+  'cancelled',
+  'canceled',
+  'fin',
+  'finished',
+]);
+
+/**
+ * Determine whether a Jira status or status category represents completion.
+ * Checks statusCategoryKey (e.g. 'done'), statusCategoryName, and standard Done status names.
+ */
+export function isJiraStatusDone(
+  statusName?: string | null,
+  statusCategoryKey?: string | null,
+  statusCategoryName?: string | null
+): boolean {
+  if (statusCategoryKey && statusCategoryKey.trim().toLowerCase() === 'done') {
+    return true;
+  }
+  if (statusCategoryName && statusCategoryName.trim().toLowerCase() === 'done') {
+    return true;
+  }
+  if (!statusName) return false;
+  const normalized = statusName.trim().toLowerCase();
+  if (DONE_STATUS_NAMES.has(normalized)) return true;
+  return /^(done|closed|resolved|completed?|finished|fixed)$/i.test(normalized);
+}
