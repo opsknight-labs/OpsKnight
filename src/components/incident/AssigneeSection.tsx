@@ -15,8 +15,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/shadcn/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { Button } from '@/components/ui/shadcn/button';
-import { Check, ChevronsUpDown, Users as UsersIcon, User, X } from 'lucide-react';
+import { Check, ChevronDown, Users as UsersIcon, User, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type AssigneeSectionProps = {
@@ -180,21 +179,77 @@ export default function AssigneeSection({
 
   // Header Variant - Button Trigger
   if (variant === 'header') {
+    const SELECTOR_BASE_CLASS =
+      'inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200 shadow-2xs transition-all max-w-full select-none';
+
+    if (!canManage) {
+      return (
+        <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+          {team ? (
+            <>
+              <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+              <span className="truncate max-w-[110px]">{team.name}</span>
+            </>
+          ) : assignee ? (
+            <>
+              <UserAvatar
+                userId={assignee.id}
+                name={assignee.name}
+                gender={assignee.gender}
+                avatarUrl={assignee.avatarUrl}
+                size="xs"
+                className="border-slate-200 shrink-0 h-4 w-4 text-[9px]"
+              />
+              <span className="truncate max-w-[110px]">{assignee.name}</span>
+            </>
+          ) : (
+            <>
+              <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <span className="text-slate-500 dark:text-zinc-400 font-medium">Unassigned</span>
+            </>
+          )}
+        </div>
+      );
+    }
+
     return (
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            className="h-6 w-6 p-0 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-500 hover:text-slate-900 shrink-0"
-            disabled={!canManage}
+          <button
+            type="button"
+            className={cn(
+              SELECTOR_BASE_CLASS,
+              'hover:bg-slate-50 dark:hover:bg-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 cursor-pointer group'
+            )}
             title="Change Assignee"
           >
-            <ChevronsUpDown className="h-3 w-3" />
-          </Button>
+            {team ? (
+              <>
+                <UsersIcon className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                <span className="truncate max-w-[110px]">{team.name}</span>
+              </>
+            ) : assignee ? (
+              <>
+                <UserAvatar
+                  userId={assignee.id}
+                  name={assignee.name}
+                  gender={assignee.gender}
+                  avatarUrl={assignee.avatarUrl}
+                  size="xs"
+                  className="border-slate-200 shrink-0 h-4 w-4 text-[9px]"
+                />
+                <span className="truncate max-w-[110px]">{assignee.name}</span>
+              </>
+            ) : (
+              <>
+                <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <span className="text-slate-500 dark:text-zinc-400 font-medium">Unassigned</span>
+              </>
+            )}
+            <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 transition-colors shrink-0 ml-auto" />
+          </button>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-64" align="end">
+        <PopoverContent className="p-0 w-64" align="start">
           {ReassignContent}
         </PopoverContent>
       </Popover>

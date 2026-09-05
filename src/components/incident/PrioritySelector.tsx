@@ -6,13 +6,20 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/shadcn/select';
-import { Badge } from '@/components/ui/shadcn/badge';
-import PriorityBadge from './PriorityBadge';
 import { updateIncidentPriority } from '@/app/(app)/incidents/actions';
-import { ChevronDown, AlertCircle } from 'lucide-react';
+import {
+  ShieldAlert,
+  ArrowUp,
+  AlertCircle,
+  Zap,
+  Info,
+  ChevronDown,
+  Activity,
+  X,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type PrioritySelectorProps = {
@@ -20,6 +27,52 @@ type PrioritySelectorProps = {
   priority: string | null;
   canManage: boolean;
 };
+
+const PRIORITY_OPTIONS = [
+  {
+    key: 'P1',
+    label: 'Crisis',
+    icon: ShieldAlert,
+    iconColor: 'text-rose-600 dark:text-rose-400',
+    textColor: 'text-rose-700 dark:text-rose-400',
+  },
+  {
+    key: 'P2',
+    label: 'High',
+    icon: ArrowUp,
+    iconColor: 'text-amber-600 dark:text-amber-400',
+    textColor: 'text-amber-700 dark:text-amber-400',
+  },
+  {
+    key: 'P3',
+    label: 'Medium',
+    icon: AlertCircle,
+    iconColor: 'text-orange-600 dark:text-orange-400',
+    textColor: 'text-orange-700 dark:text-orange-400',
+  },
+  {
+    key: 'P4',
+    label: 'Low',
+    icon: Zap,
+    iconColor: 'text-blue-600 dark:text-blue-400',
+    textColor: 'text-blue-700 dark:text-blue-400',
+  },
+  {
+    key: 'P5',
+    label: 'Info',
+    icon: Info,
+    iconColor: 'text-slate-500 dark:text-slate-400',
+    textColor: 'text-slate-700 dark:text-slate-400',
+  },
+] as const;
+
+function getPriorityItem(priority: string | null | undefined) {
+  if (!priority) return null;
+  return PRIORITY_OPTIONS.find(opt => opt.key === priority) || null;
+}
+
+const SELECTOR_BASE_CLASS =
+  'inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200 shadow-2xs transition-all max-w-full select-none';
 
 export default function PrioritySelector({
   incidentId,
@@ -29,14 +82,26 @@ export default function PrioritySelector({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  const currentItem = getPriorityItem(priority);
+
   // Read-only view
   if (!canManage) {
-    return priority ? (
-      <PriorityBadge priority={priority} size="md" />
-    ) : (
-      <Badge variant="neutral" size="sm" className="border-dashed bg-transparent">
-        Unassigned
-      </Badge>
+    if (currentItem && priority) {
+      const Icon = currentItem.icon;
+      return (
+        <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+          <Icon className={cn('h-3.5 w-3.5 shrink-0', currentItem.iconColor)} />
+          <span className="truncate">
+            {priority} · {currentItem.label}
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div className={cn(SELECTOR_BASE_CLASS, 'cursor-default')}>
+        <Activity className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+        <span className="text-slate-500 dark:text-zinc-400 font-medium">Unassigned</span>
+      </div>
     );
   }
 
@@ -51,50 +116,50 @@ export default function PrioritySelector({
       }}
       disabled={isPending}
     >
-      <SelectTrigger
-        className={cn(
-          'h-7 w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group'
-        )}
-      >
-        <SelectValue placeholder="Priority">
-          {priority ? (
-            <div className="inline-flex items-center gap-1.5 cursor-pointer">
-              <PriorityBadge
-                priority={priority}
-                size="md"
-                className="transition-all group-hover:brightness-95"
-              />
-              <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-colors" />
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-50 text-slate-500 border border-dashed border-slate-300 hover:border-slate-400 hover:text-slate-700 transition-all cursor-pointer">
-              <AlertCircle className="h-3.5 w-3.5" />
-              <span className="text-sm font-semibold">Set Priority</span>
-              <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-            </div>
+      <SelectTrigger className="h-auto w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group">
+        <div
+          className={cn(
+            SELECTOR_BASE_CLASS,
+            'hover:bg-slate-50 dark:hover:bg-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 cursor-pointer group'
           )}
-        </SelectValue>
+        >
+          {currentItem && priority ? (
+            <>
+              <currentItem.icon className={cn('h-3.5 w-3.5 shrink-0', currentItem.iconColor)} />
+              <span className="truncate">
+                {priority} · {currentItem.label}
+              </span>
+            </>
+          ) : (
+            <>
+              <Activity className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <span className="text-slate-500 dark:text-zinc-400 font-medium">Set Priority</span>
+            </>
+          )}
+          <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 transition-colors shrink-0 ml-auto" />
+        </div>
       </SelectTrigger>
       <SelectContent align="start" className="min-w-[160px]">
-        <SelectItem value="unassigned" className="text-muted-foreground text-xs py-2">
-          Unassigned
+        <SelectItem value="unassigned" className="cursor-pointer">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <X className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span>Unassigned</span>
+          </div>
         </SelectItem>
-        <div className="h-px bg-slate-100 my-1" />
-        <SelectItem value="P1">
-          <PriorityBadge priority="P1" size="sm" showLabel />
-        </SelectItem>
-        <SelectItem value="P2">
-          <PriorityBadge priority="P2" size="sm" showLabel />
-        </SelectItem>
-        <SelectItem value="P3">
-          <PriorityBadge priority="P3" size="sm" showLabel />
-        </SelectItem>
-        <SelectItem value="P4">
-          <PriorityBadge priority="P4" size="sm" showLabel />
-        </SelectItem>
-        <SelectItem value="P5">
-          <PriorityBadge priority="P5" size="sm" showLabel />
-        </SelectItem>
+        <SelectSeparator />
+        {PRIORITY_OPTIONS.map(opt => {
+          const Icon = opt.icon;
+          return (
+            <SelectItem key={opt.key} value={opt.key} className="cursor-pointer">
+              <div className={cn('flex items-center gap-2 text-xs font-semibold', opt.textColor)}>
+                <Icon className={cn('h-3.5 w-3.5 shrink-0', opt.iconColor)} />
+                <span>
+                  {opt.key} · {opt.label}
+                </span>
+              </div>
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );
