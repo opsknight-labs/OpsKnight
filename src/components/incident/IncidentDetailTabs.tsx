@@ -3,7 +3,7 @@
 import React, { type ReactNode } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Settings2, History, Zap } from 'lucide-react';
+import { Settings2, History, Zap, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type IncidentDetailTabsProps = {
@@ -12,6 +12,8 @@ export type IncidentDetailTabsProps = {
   noteCount?: number;
   activityContent: ReactNode;
   timelineContent: ReactNode;
+  postmortemContent?: ReactNode;
+  postmortemStatus?: string | null;
   className?: string;
 };
 
@@ -20,6 +22,8 @@ export default function IncidentDetailTabs({
   eventCount,
   activityContent,
   timelineContent,
+  postmortemContent,
+  postmortemStatus,
   className,
 }: IncidentDetailTabsProps) {
   return (
@@ -42,6 +46,24 @@ export default function IncidentDetailTabs({
               <History className="h-4 w-4" />
               <span>Timeline</span>
             </TabsTrigger>
+            <TabsTrigger
+              value="postmortem"
+              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-2xs dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-slate-100 rounded-md transition-all"
+            >
+              <FileText className="h-4 w-4" />
+              <span>Postmortem</span>
+              {postmortemStatus && (
+                <span
+                  className={cn(
+                    'inline-block w-1.5 h-1.5 rounded-full ml-0.5',
+                    postmortemStatus === 'PUBLISHED'
+                      ? 'bg-emerald-500 ring-2 ring-emerald-500/20'
+                      : 'bg-amber-500 ring-2 ring-amber-500/20'
+                  )}
+                  title={`Status: ${postmortemStatus}`}
+                />
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <Badge
@@ -61,6 +83,10 @@ export default function IncidentDetailTabs({
 
           <TabsContent value="timeline" className="mt-0 focus-visible:outline-none">
             {timelineContent}
+          </TabsContent>
+
+          <TabsContent value="postmortem" className="mt-0 focus-visible:outline-none">
+            {postmortemContent}
           </TabsContent>
         </div>
       </div>

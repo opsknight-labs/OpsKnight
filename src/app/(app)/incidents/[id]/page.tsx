@@ -13,6 +13,7 @@ import IncidentNotes from '@/components/incident/detail/IncidentNotes';
 import IncidentTimeline from '@/components/incident/detail/IncidentTimeline';
 import IncidentResolutionSummary from '@/components/incident/detail/IncidentResolutionSummary';
 import IncidentPostmortemCard from '@/components/incident/detail/IncidentPostmortemCard';
+import IncidentPostmortemTabContent from '@/components/incident/detail/IncidentPostmortemTabContent';
 import IncidentDescriptionCard from '@/components/incident/detail/IncidentDescriptionCard';
 import IncidentSLABadges from '@/components/incident/detail/IncidentSLABadges';
 import IncidentCustomFieldsCard from '@/components/incident/detail/IncidentCustomFieldsCard';
@@ -181,6 +182,18 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
     />
   );
 
+  const postmortemContent = (
+    <IncidentPostmortemTabContent
+      incidentId={id}
+      incidentStatus={incident.status}
+      canManage={canManageIncident}
+      eventCount={incident.events.length}
+      noteCount={incident.notes.length}
+      users={users}
+      postmortem={postmortem}
+    />
+  );
+
   return (
     <div className="w-full px-4 py-6 pb-24 sm:pb-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Incident Hero Title Card — Stable, crisp, no flickering */}
@@ -315,6 +328,8 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
           incident={incident}
           service={incident.service}
           resolutionNote={resolutionNote}
+          postmortemStatus={postmortem?.status ?? null}
+          canManage={canManageIncident}
         />
       )}
 
@@ -327,6 +342,8 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
             noteCount={incident.notes.length}
             activityContent={activityContent}
             timelineContent={timelineContent}
+            postmortemContent={postmortemContent}
+            postmortemStatus={postmortem?.status ?? null}
           />
         </div>
 
