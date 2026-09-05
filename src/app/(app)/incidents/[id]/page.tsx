@@ -196,7 +196,14 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       events={incident.events.map(e => ({
         id: e.id,
         message: e.message,
+        type: e.type,
         createdAt: e.createdAt,
+      }))}
+      notes={incident.notes.map(n => ({
+        id: n.id,
+        content: n.content,
+        user: n.user,
+        createdAt: n.createdAt,
       }))}
       incidentCreatedAt={incident.createdAt}
       incidentAcknowledgedAt={incident.acknowledgedAt}

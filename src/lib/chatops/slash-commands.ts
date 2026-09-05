@@ -286,7 +286,7 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
               data: {
                 incidentId: incident.id,
                 type: 'COMMENT',
-                message: `Note added via Slack ChatOps by @${payload.user_name}`,
+                message: `Note added via Slack ChatOps by @${payload.user_name}${args ? `:\n${args}` : ''}`,
               },
             });
             return { created: true };
