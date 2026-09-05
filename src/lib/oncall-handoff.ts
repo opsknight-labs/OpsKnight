@@ -3,6 +3,9 @@ import { logger } from './logger';
 import { getActiveOnCallShifts } from './oncall-shifts';
 import { createInAppNotifications } from './in-app-notifications';
 import { activeIncidentStatuses } from './incident-status';
+import { getBaseUrl } from './env-validation';
+import { generateShiftReminderEmailHTML, generateShiftHandoffEmailHTML } from './email';
+import { enqueueCentralNotification } from './notification-control-plane';
 
 export interface ShiftHandoffResult {
   remindersSent: number;
@@ -60,6 +63,56 @@ export async function processUpcomingShiftReminders(
             : null;
 
         if (!recentNotification) {
+          // Send Shift Reminder Email if user has an email
+          if (shift.user.email) {
+            try {
+              const baseUrl = getBaseUrl();
+              const scheduleUrl = `${baseUrl}/schedules/${shift.scheduleId}`;
+              const subject = `⏰ [Upcoming Shift] You are on-call for "${shift.schedule.name}" in ~${minutesUntilStart}m`;
+              const html = generateShiftReminderEmailHTML({
+                userName: shift.user.name || 'Team Member',
+                scheduleName: shift.schedule.name,
+                scheduleUrl,
+                shiftStart: shift.start,
+                shiftEnd: shift.end,
+                timeZone: shift.user.timeZone || 'UTC',
+                minutesUntilStart,
+              });
+              const text = `Upcoming On-Call Shift: You are scheduled to go on-call for "${shift.schedule.name}" in approximately ${minutesUntilStart} minutes.\n\nSchedule: ${scheduleUrl}`;
+
+              await enqueueCentralNotification(
+                {
+                  category: 'SYSTEM',
+                  channel: 'EMAIL',
+                  recipientType: 'USER',
+                  recipientId: shift.userId,
+                  recipientAddress: shift.user.email,
+                  userId: shift.userId,
+                  templateKey: 'oncall-shift-reminder',
+                  sourceType: 'ON_CALL_SCHEDULE',
+                  sourceId: shift.scheduleId,
+                  eventKey: `${shift.scheduleId}-${shift.userId}-${shift.start.getTime()}`,
+                  displayMessage: `Upcoming shift reminder for ${shift.schedule.name}`,
+                  priority: 2,
+                  payload: {
+                    kind: 'EMAIL',
+                    to: shift.user.email,
+                    subject,
+                    html,
+                    text,
+                  },
+                },
+                { dispatchImmediately: true }
+              );
+            } catch (emailErr) {
+              logger.warn('[OnCall Handoff] Failed to send shift reminder email', {
+                error: emailErr,
+                userId: shift.userId,
+                scheduleId: shift.scheduleId,
+              });
+            }
+          }
+
           await createInAppNotifications({
             userIds: [shift.userId],
             type: 'SCHEDULE',
@@ -176,6 +229,59 @@ export async function processShiftRotations(now: Date = new Date()): Promise<Shi
               entityType: 'SCHEDULE',
               entityId: scheduleId,
             });
+
+            // Send Shift Handoff Summary Email to incoming responder
+            if (incomingShift.user.email) {
+              try {
+                const baseUrl = getBaseUrl();
+                const scheduleUrl = `${baseUrl}/schedules/${scheduleId}`;
+                const subject = `🔄 [Shift Handoff] You are now On-Call for "${incomingShift.schedule.name}" (${incidentsToReassign.length} active incidents)`;
+                const html = generateShiftHandoffEmailHTML({
+                  userName: incomingShift.user.name || 'Team Member',
+                  scheduleName: incomingShift.schedule.name,
+                  scheduleUrl,
+                  activeIncidents: incidentsToReassign.map(inc => ({
+                    id: inc.id,
+                    title: inc.title,
+                    status: inc.status,
+                    incidentUrl: `${baseUrl}/incidents/${inc.id}`,
+                  })),
+                  timeZone: incomingShift.user.timeZone || 'UTC',
+                });
+                const text = `Shift Handoff: You are now on-call for "${incomingShift.schedule.name}" with ${incidentsToReassign.length} active incident(s).\n\nSchedule: ${scheduleUrl}`;
+
+                await enqueueCentralNotification(
+                  {
+                    category: 'SYSTEM',
+                    channel: 'EMAIL',
+                    recipientType: 'USER',
+                    recipientId: incomingShift.userId,
+                    recipientAddress: incomingShift.user.email,
+                    userId: incomingShift.userId,
+                    templateKey: 'oncall-shift-handoff',
+                    sourceType: 'ON_CALL_SCHEDULE',
+                    sourceId: scheduleId,
+                    eventKey: `${scheduleId}-${incomingShift.userId}-${incomingShift.start.getTime()}-handoff`,
+                    displayMessage: `Shift handoff digest for ${incomingShift.schedule.name}`,
+                    priority: 2,
+                    payload: {
+                      kind: 'EMAIL',
+                      to: incomingShift.user.email,
+                      subject,
+                      html,
+                      text,
+                    },
+                  },
+                  { dispatchImmediately: true }
+                );
+              } catch (emailErr) {
+                logger.warn('[OnCall Handoff] Failed to send shift handoff email', {
+                  error: emailErr,
+                  userId: incomingShift.userId,
+                  scheduleId,
+                });
+              }
+            }
           }
         }
       }

@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { buildScheduleBlocks, getFinalScheduleBlocks } from './oncall';
+import { buildScheduleBlocks, getFinalScheduleBlocks, type LayerRestrictions } from './oncall';
 
 export interface DynamicOnCallShift {
   id: string;
@@ -7,8 +7,11 @@ export interface DynamicOnCallShift {
   user: {
     id: string;
     name: string | null;
+    email?: string | null;
     avatarUrl?: string | null;
     gender?: string | null;
+    timeZone?: string | null;
+    emailNotificationsEnabled?: boolean;
   };
   scheduleId: string;
   schedule: {
@@ -41,7 +44,16 @@ export async function getActiveOnCallShifts(
           users: {
             include: {
               user: {
-                select: { id: true, name: true, avatarUrl: true, gender: true, status: true },
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  avatarUrl: true,
+                  gender: true,
+                  status: true,
+                  timeZone: true,
+                  emailNotificationsEnabled: true,
+                },
               },
             },
             orderBy: { position: 'asc' },
@@ -57,7 +69,15 @@ export async function getActiveOnCallShifts(
         },
         include: {
           user: {
-            select: { id: true, name: true, avatarUrl: true, gender: true },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+              gender: true,
+              timeZone: true,
+              emailNotificationsEnabled: true,
+            },
           },
         },
       },
@@ -77,7 +97,7 @@ export async function getActiveOnCallShifts(
         end: layer.end,
         rotationLengthHours: layer.rotationLengthHours,
         shiftLengthHours: (layer as { shiftLengthHours?: number | null }).shiftLengthHours,
-        restrictions: layer.restrictions as any,
+        restrictions: layer.restrictions as LayerRestrictions | null | undefined,
         priority: (layer as { priority?: number }).priority,
         users: layer.users
           .filter(lu => lu.user.status === 'ACTIVE')
@@ -85,8 +105,11 @@ export async function getActiveOnCallShifts(
             userId: lu.userId,
             user: {
               name: lu.user?.name ?? 'Unknown User',
+              email: lu.user?.email ?? null,
               avatarUrl: lu.user?.avatarUrl ?? null,
               gender: lu.user?.gender ?? null,
+              timeZone: lu.user?.timeZone ?? null,
+              emailNotificationsEnabled: lu.user?.emailNotificationsEnabled ?? false,
             },
             position: lu.position,
           })),
@@ -96,8 +119,11 @@ export async function getActiveOnCallShifts(
         userId: override.userId,
         user: {
           name: override.user?.name ?? 'Unknown User',
+          email: override.user?.email ?? null,
           avatarUrl: override.user?.avatarUrl ?? null,
           gender: override.user?.gender ?? null,
+          timeZone: override.user?.timeZone ?? null,
+          emailNotificationsEnabled: override.user?.emailNotificationsEnabled ?? false,
         },
         start: override.start,
         end: override.end,
@@ -125,8 +151,11 @@ export async function getActiveOnCallShifts(
         user: {
           id: block.userId,
           name: block.userName,
+          email: block.userEmail,
           avatarUrl: block.userAvatar,
           gender: block.userGender,
+          timeZone: block.userTimeZone,
+          emailNotificationsEnabled: block.userEmailNotificationsEnabled,
         },
         scheduleId: schedule.id,
         schedule: {
@@ -159,7 +188,16 @@ export async function getWindowOnCallShifts(
           users: {
             include: {
               user: {
-                select: { id: true, name: true, avatarUrl: true, gender: true, status: true },
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  avatarUrl: true,
+                  gender: true,
+                  status: true,
+                  timeZone: true,
+                  emailNotificationsEnabled: true,
+                },
               },
             },
             orderBy: { position: 'asc' },
@@ -175,7 +213,15 @@ export async function getWindowOnCallShifts(
         },
         include: {
           user: {
-            select: { id: true, name: true, avatarUrl: true, gender: true },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+              gender: true,
+              timeZone: true,
+              emailNotificationsEnabled: true,
+            },
           },
         },
       },
@@ -195,7 +241,7 @@ export async function getWindowOnCallShifts(
         end: layer.end,
         rotationLengthHours: layer.rotationLengthHours,
         shiftLengthHours: (layer as { shiftLengthHours?: number | null }).shiftLengthHours,
-        restrictions: layer.restrictions as any,
+        restrictions: layer.restrictions as LayerRestrictions | null | undefined,
         priority: (layer as { priority?: number }).priority,
         users: layer.users
           .filter(lu => lu.user.status === 'ACTIVE')
@@ -203,8 +249,11 @@ export async function getWindowOnCallShifts(
             userId: lu.userId,
             user: {
               name: lu.user?.name ?? 'Unknown User',
+              email: lu.user?.email ?? null,
               avatarUrl: lu.user?.avatarUrl ?? null,
               gender: lu.user?.gender ?? null,
+              timeZone: lu.user?.timeZone ?? null,
+              emailNotificationsEnabled: lu.user?.emailNotificationsEnabled ?? false,
             },
             position: lu.position,
           })),
@@ -214,8 +263,11 @@ export async function getWindowOnCallShifts(
         userId: override.userId,
         user: {
           name: override.user?.name ?? 'Unknown User',
+          email: override.user?.email ?? null,
           avatarUrl: override.user?.avatarUrl ?? null,
           gender: override.user?.gender ?? null,
+          timeZone: override.user?.timeZone ?? null,
+          emailNotificationsEnabled: override.user?.emailNotificationsEnabled ?? false,
         },
         start: override.start,
         end: override.end,
@@ -244,8 +296,11 @@ export async function getWindowOnCallShifts(
         user: {
           id: block.userId,
           name: block.userName,
+          email: block.userEmail,
           avatarUrl: block.userAvatar,
           gender: block.userGender,
+          timeZone: block.userTimeZone,
+          emailNotificationsEnabled: block.userEmailNotificationsEnabled,
         },
         scheduleId: schedule.id,
         schedule: {

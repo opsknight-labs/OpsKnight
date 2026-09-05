@@ -185,7 +185,7 @@ export function EmailContent(content: string): string {
  */
 export function StatusBadge(
   status: string,
-  type: 'success' | 'warning' | 'error' | 'info' = 'info'
+  type: 'success' | 'warning' | 'error' | 'info' | 'schedule' = 'info'
 ): string {
   const colors = {
     success: {
@@ -212,9 +212,24 @@ export function StatusBadge(
       icon: getInfoIcon(16, '#ffffff'),
       shadow: 'rgba(37, 99, 235, 0.2)',
     },
+    schedule: {
+      bg: '#7c3aed',
+      text: '#ffffff',
+      icon: getCalendarIcon(16, '#ffffff'),
+      shadow: 'rgba(124, 58, 237, 0.2)',
+    },
   };
 
-  const color = colors[type];
+  const color =
+    type === 'success'
+      ? colors.success
+      : type === 'warning'
+        ? colors.warning
+        : type === 'error'
+          ? colors.error
+          : type === 'schedule'
+            ? colors.schedule
+            : colors.info;
   const safeStatus = escapeHtml(status);
 
   return `
@@ -225,14 +240,14 @@ export function StatusBadge(
 }
 
 /**
- * Call-to-action button with OpsKnight red gradient
+ * Call-to-action button with OpsKnight branded gradient
  * Optimized for mobile with large touch targets
  */
-export function EmailButton(text: string, url: string, _styles: EmailStyles = {}): string {
+export function EmailButton(text: string, url: string, styles: EmailStyles = {}): string {
   const buttonBackground =
-    _styles.buttonBackground || 'linear-gradient(135deg, #1e293b 0%, #334155 100%)';
-  const buttonShadow = _styles.buttonShadow || '0 8px 20px rgba(30, 41, 59, 0.25)';
-  const buttonTextColor = _styles.buttonTextColor || '#ffffff';
+    styles.buttonBackground || 'linear-gradient(135deg, #1e293b 0%, #334155 100%)';
+  const buttonShadow = styles.buttonShadow || '0 8px 20px rgba(30, 41, 59, 0.25)';
+  const buttonTextColor = styles.buttonTextColor || '#ffffff';
   const safeText = escapeHtml(text);
   const safeUrl = sanitizeUrl(url);
 
@@ -292,7 +307,14 @@ export function AlertBox(
     info: { bg: '#eff6ff', border: '#2563eb', title: '#1e40af', text: '#1e3a8a' },
   };
 
-  const color = colors[type];
+  const color =
+    type === 'success'
+      ? colors.success
+      : type === 'warning'
+        ? colors.warning
+        : type === 'error'
+          ? colors.error
+          : colors.info;
   const safeTitle = escapeHtml(title);
   const safeMessage = escapeHtml(message);
 
@@ -517,5 +539,12 @@ function getInfoIcon(size: number, color: string): string {
   return `
 <svg width="${size}" height="${size}" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: inline-block; vertical-align: middle;">
     <path fill-rule="evenodd" clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" fill="${color}"/>
+</svg>`.trim();
+}
+
+export function getCalendarIcon(size: number, color: string): string {
+  return `
+<svg width="${size}" height="${size}" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: inline-block; vertical-align: middle;">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" fill="${color}"/>
 </svg>`.trim();
 }
