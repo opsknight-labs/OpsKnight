@@ -10,12 +10,30 @@ import { readIntegrationBody } from '@/lib/integrations/request-security';
 
 const JiraWebhookSchema = z
   .object({
-    webhookEvent: z.string(),
+    webhookEvent: z.string().optional(),
+    issue_event_type_name: z.string().optional(),
     issue: z
       .object({
         id: z.string().optional(),
         key: z.string().optional(),
         fields: z.record(z.unknown()).optional(),
+      })
+      .optional(),
+    changelog: z
+      .object({
+        id: z.string().optional(),
+        items: z
+          .array(
+            z.object({
+              field: z.string().optional(),
+              fieldId: z.string().optional(),
+              fromString: z.string().nullable().optional(),
+              toString: z.string().nullable().optional(),
+              from: z.string().nullable().optional(),
+              to: z.string().nullable().optional(),
+            })
+          )
+          .optional(),
       })
       .optional(),
     comment: z
@@ -24,7 +42,7 @@ const JiraWebhookSchema = z
         body: z.unknown().optional(),
       })
       .optional(),
-    timestamp: z.number().optional(),
+    timestamp: z.union([z.number(), z.string()]).optional(),
     user: z.record(z.unknown()).optional(),
   })
   .passthrough();
@@ -68,7 +86,24 @@ async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
   }
 }
 
-const HANDLED_EVENTS = new Set(['jira:issue_updated', 'jira:issue_deleted']);
+const HANDLED_EVENTS = new Set([
+  'jira:issue_updated',
+  'jira:issue_generic',
+  'jira:issue_created',
+  'jira:issue_deleted',
+  'issue_updated',
+  'issue_generic',
+  'issue_created',
+  'issue_deleted',
+]);
+
+function isHandledJiraEvent(event?: string, eventType?: string): boolean {
+  const candidate = (event || eventType || '').toLowerCase().trim();
+  if (!candidate) return false;
+  if (HANDLED_EVENTS.has(candidate)) return true;
+  if (candidate.startsWith('jira:issue_') || candidate.startsWith('issue_')) return true;
+  return false;
+}
 
 async function postJiraWebhook(request: NextRequest) {
   try {
@@ -105,8 +140,7 @@ async function postJiraWebhook(request: NextRequest) {
 
     const payload = parsed.data;
 
-    const event = payload.webhookEvent;
-    if (!event || !HANDLED_EVENTS.has(event)) {
+    if (!isHandledJiraEvent(payload.webhookEvent, payload.issue_event_type_name)) {
       // Acknowledge but don't process unrecognized events
       return new NextResponse(null, { status: 204 });
     }

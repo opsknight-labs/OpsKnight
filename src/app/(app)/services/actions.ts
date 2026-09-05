@@ -24,7 +24,9 @@ export async function createIntegration(formData: FormData) {
   const snsTopicArn = typeof rawSnsTopicArn === 'string' ? rawSnsTopicArn.trim() : '';
   if (!serviceId || !name) throw new Error('Missing required fields');
   if (type === 'CLOUDWATCH') {
-    if (!/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/.test(snsTopicArn)) {
+    if (
+      !/^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/.test(snsTopicArn)
+    ) {
       throw new Error('A valid, exact AWS SNS Topic ARN is required for CloudWatch.');
     }
   }
@@ -200,32 +202,88 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
   redirect(serviceSettingsRedirect(serviceId));
 }
 
-export async function updateServiceChatOpsSettings(serviceId: string, formData: FormData) {
-  const currentUser = await assertCanModifyService(serviceId);
-  const bridge = String(formData.get('warRoomVideoBridge') ?? 'INHERIT');
-  const warRoomVideoBridge = bridge === 'INHERIT' ? null : bridge;
-  const warRoomCustomBridgeUrl =
-    String(formData.get('warRoomCustomBridgeUrl') ?? '').trim() || null;
+const ALLOWED_VIDEO_BRIDGES = new Set(['INHERIT', 'JITSI', 'ZOOM', 'GOOGLE_MEET', 'NONE']);
 
-  await prisma.service.update({
-    where: { id: serviceId },
-    data: {
-      autoCreateWarRoom: formData.get('autoCreateWarRoom') === 'on',
-      warRoomVideoBridge,
-      warRoomCustomBridgeUrl,
-    },
-  });
+export async function updateServiceChatOpsSettings(
+  prevStateOrServiceId: { success?: boolean; error?: string | null } | string | undefined,
+  formData: FormData
+): Promise<{ success?: boolean; error?: string | null }> {
+  let currentUser: { id: string } | null = null;
+  try {
+    const serviceId = (
+      typeof prevStateOrServiceId === 'string'
+        ? prevStateOrServiceId
+        : ((formData.get('serviceId') as string | null) ?? '')
+    ).trim();
 
-  await logAudit({
-    action: 'service.chatops.updated',
-    entityType: 'SERVICE',
-    entityId: serviceId,
-    actorId: currentUser.id,
-    details: { warRoomVideoBridge, hasCustomBridgeUrl: Boolean(warRoomCustomBridgeUrl) },
-  });
+    if (!serviceId) {
+      return { error: 'Service ID is required.' };
+    }
 
-  revalidatePath(`/services/${serviceId}`);
-  redirect(serviceSettingsRedirect(serviceId));
+    currentUser = await assertCanModifyService(serviceId);
+
+    const bridge = String(formData.get('warRoomVideoBridge') ?? 'INHERIT').trim();
+    if (!ALLOWED_VIDEO_BRIDGES.has(bridge)) {
+      return { error: 'Invalid video bridge option.' };
+    }
+    const warRoomVideoBridge = bridge === 'INHERIT' ? null : bridge;
+
+    const rawCustomUrl = String(formData.get('warRoomCustomBridgeUrl') ?? '').trim();
+    let warRoomCustomBridgeUrl: string | null = null;
+    if (rawCustomUrl) {
+      let urlToTest = rawCustomUrl;
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(urlToTest)) {
+        try {
+          const parsed = new URL(urlToTest.replace(/\{incidentId\}/g, 'test-incident-placeholder'));
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return { error: 'Custom bridge URL must use HTTP or HTTPS protocol.' };
+          }
+        } catch {
+          return { error: 'Please enter a valid URL for the custom bridge.' };
+        }
+      } else {
+        urlToTest = `https://${urlToTest}`;
+        try {
+          new URL(urlToTest.replace(/\{incidentId\}/g, 'test-incident-placeholder'));
+        } catch {
+          return { error: 'Please enter a valid URL for the custom bridge.' };
+        }
+      }
+      warRoomCustomBridgeUrl = urlToTest;
+    }
+
+    const autoCreateWarRoom = formData.get('autoCreateWarRoom') === 'on';
+
+    await prisma.service.update({
+      where: { id: serviceId },
+      data: {
+        autoCreateWarRoom,
+        warRoomVideoBridge,
+        warRoomCustomBridgeUrl,
+      },
+    });
+
+    await logAudit({
+      action: 'service.chatops.updated',
+      entityType: 'SERVICE',
+      entityId: serviceId,
+      actorId: currentUser.id,
+      details: {
+        autoCreateWarRoom,
+        warRoomVideoBridge,
+        hasCustomBridgeUrl: Boolean(warRoomCustomBridgeUrl),
+      },
+    });
+
+    revalidatePath(`/services/${serviceId}/settings`);
+    revalidatePath(`/services/${serviceId}`);
+
+    return { success: true, error: null };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Failed to update ChatOps settings.',
+    };
+  }
 }
 
 export async function saveJiraServiceMapping(

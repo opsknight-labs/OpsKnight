@@ -10,6 +10,8 @@ export type JiraIssueSummary = {
   url: string;
   status?: string;
   assignee?: string;
+  statusCategoryKey?: string;
+  statusCategoryName?: string;
 };
 
 type JiraConfigForRequest = {
@@ -23,7 +25,15 @@ type JiraIssueResponse = {
   key: string;
   self?: string;
   fields?: {
-    status?: { name?: string };
+    status?: {
+      name?: string;
+      statusCategory?: {
+        id?: number;
+        key?: string;
+        name?: string;
+        colorName?: string;
+      };
+    };
     assignee?: { displayName?: string; emailAddress?: string };
   };
 };
@@ -193,6 +203,8 @@ export async function getJiraIssue(issueKeyOrId: string): Promise<JiraIssueSumma
     url: jiraIssueUrl(config.baseUrl, issue.key),
     status: issue.fields?.status?.name,
     assignee: issue.fields?.assignee?.displayName ?? issue.fields?.assignee?.emailAddress,
+    statusCategoryKey: issue.fields?.status?.statusCategory?.key,
+    statusCategoryName: issue.fields?.status?.statusCategory?.name,
   };
 }
 
@@ -218,13 +230,12 @@ export async function findJiraIssueByCorrelationLabel(
     url: jiraIssueUrl(config.baseUrl, issue.key),
     status: issue.fields?.status?.name,
     assignee: issue.fields?.assignee?.displayName ?? issue.fields?.assignee?.emailAddress,
+    statusCategoryKey: issue.fields?.status?.statusCategory?.key,
+    statusCategoryName: issue.fields?.status?.statusCategory?.name,
   };
 }
 
-export async function addJiraComment(
-  issueKeyOrId: string,
-  commentText: string
-): Promise<void> {
+export async function addJiraComment(issueKeyOrId: string, commentText: string): Promise<void> {
   const config = await getDecryptedJiraConfig();
   if (!config) return;
 
@@ -239,12 +250,15 @@ export async function addJiraComment(
 }
 
 export async function hasJiraCommentMarker(issueKeyOrId: string, marker: string): Promise<boolean> {
-  if (!/^opsknight-comment-[A-Za-z0-9_-]{1,200}$/.test(marker)) throw new Error('Invalid Jira comment marker');
+  if (!/^opsknight-comment-[A-Za-z0-9_-]{1,200}$/.test(marker))
+    throw new Error('Invalid Jira comment marker');
   const config = await getDecryptedJiraConfig();
   if (!config) throw jiraNotConfigured();
   const result = await jiraRequest<{ comments?: Array<{ body?: unknown }> }>(
     config,
     `/rest/api/3/issue/${encodeURIComponent(issueKeyOrId)}/comment?maxResults=100&orderBy=-created`
   );
-  return (result.comments ?? []).some(comment => JSON.stringify(comment.body ?? '').includes(marker));
+  return (result.comments ?? []).some(comment =>
+    JSON.stringify(comment.body ?? '').includes(marker)
+  );
 }

@@ -33,7 +33,24 @@ import {
   unlinkJiraIssueFromIncident,
   syncIncidentJiraIssue,
 } from '@/app/(app)/incidents/jira/actions';
+import { isJiraStatusDone } from '@/lib/jira-validation';
 import { errorFromResponse } from '@/lib/client-error';
+
+function jiraStatusBadgeStyle(status: string | null): string {
+  if (!status)
+    return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+  if (isJiraStatusDone(status)) {
+    return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+  }
+  const lower = status.toLowerCase();
+  if (lower === 'in progress' || lower === 'in review' || lower === 'investigating') {
+    return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800';
+  }
+  if (lower === 'to do' || lower === 'open' || lower === 'backlog') {
+    return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
+  }
+  return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+}
 import { toUserFacingError } from '@/lib/user-facing-error';
 import {
   Check,
@@ -493,7 +510,12 @@ export default function IncidentCommandBar({
                   >
                     <span>{primaryJira.externalKey}</span>
                     {primaryJira.externalStatus && (
-                      <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-bold uppercase">
+                      <span
+                        className={cn(
+                          'ml-1 px-1.5 py-0.5 rounded text-xs font-bold uppercase border',
+                          jiraStatusBadgeStyle(primaryJira.externalStatus)
+                        )}
+                      >
                         {primaryJira.externalStatus}
                       </span>
                     )}
@@ -831,7 +853,12 @@ export default function IncidentCommandBar({
                           <ExternalLink className="h-3 w-3" />
                         </a>
                         {link.externalStatus && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-200 dark:bg-slate-700 font-medium">
+                          <span
+                            className={cn(
+                              'px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border',
+                              jiraStatusBadgeStyle(link.externalStatus)
+                            )}
+                          >
                             {link.externalStatus}
                           </span>
                         )}
