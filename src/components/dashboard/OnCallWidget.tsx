@@ -3,13 +3,18 @@
 import Link from 'next/link';
 import { memo } from 'react';
 import SidebarWidget, { WIDGET_ICON_BG } from '@/components/dashboard/SidebarWidget';
+import UserAvatar from '@/components/UserAvatar';
 import { Users, Calendar, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface OnCallShift {
   id: string;
+  userId?: string;
   user: {
+    id?: string;
     name: string | null;
+    avatarUrl?: string | null;
+    gender?: string | null;
   };
   schedule: {
     name: string;
@@ -18,16 +23,6 @@ interface OnCallShift {
 
 interface OnCallWidgetProps {
   activeShifts: OnCallShift[];
-}
-
-/**
- * Extract initials from a name safely
- */
-function getInitials(name: string | null | undefined): string {
-  if (!name || typeof name !== 'string') return '?';
-  const trimmed = name.trim();
-  if (!trimmed) return '?';
-  return trimmed.charAt(0).toUpperCase();
 }
 
 /**
@@ -71,7 +66,6 @@ const OnCallWidget = memo(function OnCallWidget({ activeShifts }: OnCallWidgetPr
         ) : (
           shifts.slice(0, 3).map(shift => {
             const userName = getDisplayName(shift.user?.name);
-            const initials = getInitials(shift.user?.name);
             const scheduleName = shift.schedule?.name || 'Unknown Schedule';
 
             return (
@@ -83,14 +77,15 @@ const OnCallWidget = memo(function OnCallWidget({ activeShifts }: OnCallWidgetPr
                 aria-label={`${userName} on ${scheduleName}`}
               >
                 <div className="relative shrink-0">
-                  <div
-                    className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 flex items-center justify-center font-bold text-xs"
-                    aria-hidden="true"
-                  >
-                    {initials}
-                  </div>
+                  <UserAvatar
+                    userId={shift.user?.id || shift.userId || ''}
+                    name={userName}
+                    avatarUrl={shift.user?.avatarUrl}
+                    gender={shift.user?.gender}
+                    size="sm"
+                  />
                   <span
-                    className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white"
+                    className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-zinc-900"
                     title="Active on-call"
                   />
                 </div>

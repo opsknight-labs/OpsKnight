@@ -2417,7 +2417,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       id: s.id,
       userId: s.userId,
       scheduleId: s.scheduleId,
-      user: { name: s.user.name },
+      user: {
+        id: s.user.id,
+        name: s.user.name,
+        avatarUrl: s.user.avatarUrl,
+        gender: s.user.gender,
+      },
       schedule: { id: s.schedule.id, name: s.schedule.name },
       start: s.start,
       end: s.end,
@@ -2707,10 +2712,14 @@ export async function calculateMultiServiceUptime(
   serviceIds: string[],
   startDate: Date,
   endDate: Date = new Date(),
-  options: 'PUBLIC' | 'PRIVATE' | 'ALL' | {
-    visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
-    incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
-  } = {}
+  options:
+    | 'PUBLIC'
+    | 'PRIVATE'
+    | 'ALL'
+    | {
+        visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
+        incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
+      } = {}
 ): Promise<Record<string, number>> {
   const { default: prisma } = await import('./prisma');
 
