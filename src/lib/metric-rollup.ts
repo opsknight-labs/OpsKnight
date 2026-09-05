@@ -960,20 +960,36 @@ export async function queryRollupMetrics(
  * that a concurrent rollup-generation transaction is in the middle of
  * upserting.
  */
-export async function cleanupOldRollups(): Promise<number> {
+export async function cleanupOldRollups(cutoffDateOverride?: Date): Promise<number> {
   const { default: prisma } = await import('./prisma');
   const policy = await getRetentionPolicy();
 
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - policy.metricsRetentionDays);
+  let cutoffDate: Date;
+  if (cutoffDateOverride instanceof Date && !isNaN(cutoffDateOverride.getTime())) {
+    cutoffDate = cutoffDateOverride;
+  } else {
+    cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - policy.metricsRetentionDays);
+  }
 
-  const deletedCount = await prisma.$transaction(async tx => {
-    await acquireAdvisoryLock(tx, LOCK_KEYS.ROLLUP_WRITE);
-    const result = await tx.incidentMetricRollup.deleteMany({
-      where: { date: { lt: cutoffDate } },
-    });
-    return result.count;
-  });
+  const deletedCount = await prisma.$transaction(
+    async tx => {
+      await acquireAdvisoryLock(tx, LOCK_KEYS.ROLLUP_WRITE);
+      if (tx.incidentMetricRollupByPriority?.deleteMany) {
+        await tx.incidentMetricRollupByPriority.deleteMany({
+          where: { rollup: { date: { lt: cutoffDate } } },
+        });
+      }
+      const result = await tx.incidentMetricRollup.deleteMany({
+        where: { date: { lt: cutoffDate } },
+      });
+      return result.count;
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
+    }
+  );
 
   logger.info('[MetricRollup] Cleanup completed', {
     deletedCount,

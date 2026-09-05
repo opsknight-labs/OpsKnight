@@ -83,4 +83,60 @@ describe('POST /api/settings/retention', () => {
 
     expect(mockPerformDataCleanup).toHaveBeenCalledWith(true, undefined);
   });
+
+  it('returns 400 validation error when policy override contains invalid values', async () => {
+    const req = new NextRequest('http://localhost:3000/api/settings/retention', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dryRun: true,
+        policy: {
+          incidentRetentionDays: 5, // below min 30
+        },
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+
+    const data = await res.json();
+    expect(data.error).toBeDefined();
+    expect(mockPerformDataCleanup).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 validation error when realTimeWindowDays exceeds metricsRetentionDays', async () => {
+    const req = new NextRequest('http://localhost:3000/api/settings/retention', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dryRun: true,
+        policy: {
+          metricsRetentionDays: 30,
+          realTimeWindowDays: 60,
+        },
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+
+    const data = await res.json();
+    expect(data.error).toBeDefined();
+    expect(mockPerformDataCleanup).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 Conflict when cleanup is already in progress', async () => {
+    mockPerformDataCleanup.mockRejectedValueOnce(
+      new Error('Data cleanup is already in progress. Please wait for the current run to complete.')
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/settings/retention', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dryRun: false }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(409);
+  });
 });

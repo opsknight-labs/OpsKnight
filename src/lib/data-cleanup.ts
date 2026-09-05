@@ -26,6 +26,9 @@ export interface CleanupResult {
   dryRun: boolean;
 }
 
+/** In-process single-flight lock to serialize cleanup mutations within this Node process */
+let isCleanupInProgress = false;
+
 /**
  * Performs data cleanup based on retention policy
  *
@@ -48,6 +51,35 @@ export async function performDataCleanup(
     policy,
   });
 
+  let hasPgAdvisoryLock = false;
+  if (!dryRun) {
+    if (isCleanupInProgress) {
+      throw new Error(
+        'Data cleanup is already in progress. Please wait for the current run to complete.'
+      );
+    }
+    isCleanupInProgress = true;
+    try {
+      if (prisma.$queryRaw) {
+        const lockResult = await prisma.$queryRaw<Array<{ acquired: boolean }>>`
+          SELECT pg_try_advisory_lock(9141004::bigint) AS "acquired"
+        `;
+        if (lockResult && lockResult[0]?.acquired === false) {
+          throw new Error(
+            'Data cleanup is currently being executed by another process or instance.'
+          );
+        }
+        hasPgAdvisoryLock = lockResult?.[0]?.acquired === true;
+      }
+    } catch (lockErr) {
+      if (lockErr instanceof Error && lockErr.message.includes('currently being executed')) {
+        isCleanupInProgress = false;
+        throw lockErr;
+      }
+      // Non-PostgreSQL environments (e.g. unit test mocks) safely fall back to in-process mutex
+    }
+  }
+
   const now = new Date();
 
   // Calculate cutoff dates
@@ -62,13 +94,14 @@ export async function performDataCleanup(
   const metricsCutoff = new Date(now);
   metricsCutoff.setDate(metricsCutoff.getDate() - policy.metricsRetentionDays);
 
-  // Resolved incidents older than incidentCutoff that have had no event activity
+  // Resolved incidents older than incidentCutoff that have had no event or note activity
   // since the incident retention cutoff. Also guard resolvedAt if set.
   const resolvedIncidentCleanupWhere = {
     createdAt: { lt: incidentCutoff },
     status: 'RESOLVED' as const,
     OR: [{ resolvedAt: { lt: incidentCutoff } }, { resolvedAt: null }],
     events: { none: { createdAt: { gte: incidentCutoff } } },
+    notes: { none: { createdAt: { gte: incidentCutoff } } },
   };
 
   let incidentCount = 0;
@@ -153,8 +186,7 @@ export async function performDataCleanup(
       };
     }
 
-    // 2. Delete in order (events/notes first due to foreign keys)
-
+    // 2. Delete in order with strict FK dependency ordering
     const BATCH_SIZE = 500;
     while (true) {
       const incidentIds = await prisma.incident.findMany({
@@ -165,42 +197,128 @@ export async function performDataCleanup(
       });
       const batch = incidentIds.map(i => i.id);
       if (batch.length === 0) break;
-      await prisma.$transaction(async tx => {
-        // Delete incident events
-        const eventsDeleted = await tx.incidentEvent.deleteMany({
-          where: { incidentId: { in: batch } },
-        });
-        eventCount += eventsDeleted.count;
 
-        // Delete incident notes
-        await tx.incidentNote.deleteMany({
-          where: { incidentId: { in: batch } },
-        });
+      let deletedBatchCount = 0;
+      await prisma.$transaction(
+        async tx => {
+          // 2.1 Delete external issue links
+          if (tx.externalIssueLink?.deleteMany) {
+            await tx.externalIssueLink.deleteMany({
+              where: {
+                OR: [{ incidentId: { in: batch } }, { actionItem: { incidentId: { in: batch } } }],
+              },
+            });
+          }
 
-        // Delete custom field values
-        await tx.customFieldValue.deleteMany({
-          where: { incidentId: { in: batch } },
-        });
+          // 2.2 Delete action items
+          if (tx.actionItem?.deleteMany) {
+            await tx.actionItem.deleteMany({
+              where: { incidentId: { in: batch } },
+            });
+          }
 
-        // Delete related notifications
-        if (tx.notification?.deleteMany) {
-          await tx.notification.deleteMany({
+          // 2.3 Delete postmortems
+          if (tx.postmortem?.deleteMany) {
+            await tx.postmortem.deleteMany({
+              where: { incidentId: { in: batch } },
+            });
+          }
+
+          // 2.4 Delete incident watchers & tags
+          if (tx.incidentWatcher?.deleteMany) {
+            await tx.incidentWatcher.deleteMany({
+              where: { incidentId: { in: batch } },
+            });
+          }
+          if (tx.incidentTag?.deleteMany) {
+            await tx.incidentTag.deleteMany({
+              where: { incidentId: { in: batch } },
+            });
+          }
+
+          // 2.5 Delete SLA pauses
+          if (tx.incidentSlaPause?.deleteMany) {
+            await tx.incidentSlaPause.deleteMany({
+              where: { incidentId: { in: batch } },
+            });
+          }
+
+          // 2.6 Delete Slack pinned messages
+          if (tx.slackPinnedMessage?.deleteMany) {
+            await tx.slackPinnedMessage.deleteMany({
+              where: { incidentId: { in: batch } },
+            });
+          }
+
+          // 2.7 Unlink status page announcements
+          if (tx.statusPageAnnouncement?.updateMany) {
+            await tx.statusPageAnnouncement.updateMany({
+              where: { incidentId: { in: batch } },
+              data: { incidentId: null },
+            });
+          }
+
+          // 2.8 Delete external operations referencing incidents
+          if (tx.externalOperation?.deleteMany) {
+            await tx.externalOperation.deleteMany({
+              where: { incidentId: { in: batch } },
+            });
+          }
+
+          // 2.9 Delete notification delivery attempts and notifications
+          if (tx.notificationDeliveryAttempt?.deleteMany) {
+            await tx.notificationDeliveryAttempt.deleteMany({
+              where: { notification: { incidentId: { in: batch } } },
+            });
+          }
+          if (tx.notification?.deleteMany) {
+            await tx.notification.deleteMany({
+              where: { incidentId: { in: batch } },
+            });
+          }
+
+          // 2.10 Delete incident events
+          const eventsDeleted = await tx.incidentEvent.deleteMany({
             where: { incidentId: { in: batch } },
           });
+          eventCount += eventsDeleted.count;
+
+          // 2.11 Delete incident notes
+          await tx.incidentNote.deleteMany({
+            where: { incidentId: { in: batch } },
+          });
+
+          // 2.12 Delete custom field values
+          await tx.customFieldValue.deleteMany({
+            where: { incidentId: { in: batch } },
+          });
+
+          // 2.13 Unlink alerts (set incidentId to null)
+          await tx.alert.updateMany({
+            where: { incidentId: { in: batch } },
+            data: { incidentId: null },
+          });
+
+          // 2.14 Delete incidents
+          const incidentsDeleted = await tx.incident.deleteMany({
+            where: { id: { in: batch } },
+          });
+          incidentCount += incidentsDeleted.count;
+          deletedBatchCount = incidentsDeleted.count;
+        },
+        {
+          maxWait: 10000,
+          timeout: 60000,
         }
+      );
 
-        // Delete related alerts (set incidentId to null instead of deleting)
-        await tx.alert.updateMany({
-          where: { incidentId: { in: batch } },
-          data: { incidentId: null },
+      // Loop termination safety guard against infinite loops
+      if (deletedBatchCount === 0) {
+        logger.warn('[DataCleanup] Batch incident delete returned 0 rows, stopping batch loop', {
+          batchCount: batch.length,
         });
-
-        // Delete incidents
-        const incidentsDeleted = await tx.incident.deleteMany({
-          where: { id: { in: batch } },
-        });
-        incidentCount += incidentsDeleted.count;
-      });
+        break;
+      }
     }
 
     const deleteInBatches = async (
@@ -211,16 +329,20 @@ export async function performDataCleanup(
       while (true) {
         const rows = await findIds();
         if (rows.length === 0) return deleted;
-        deleted += (await deleteIds(rows.map(row => row.id))).count;
+        const res = await deleteIds(rows.map(row => row.id));
+        if (res.count === 0) {
+          // Safety guard against infinite loop if rows cannot be deleted
+          break;
+        }
+        deleted += res.count;
       }
+      return deleted;
     };
 
     alertCount = await deleteInBatches(
       () =>
         prisma.alert.findMany({
-          // Prune all alerts older than the retention cutoff, regardless of incidentId.
-          // The previous restriction (incidentId: null) incorrectly exempted attached alerts
-          // from pruning, causing unbounded Alert table growth on high-volume streams.
+          // Prune all alerts older than retention cutoff, regardless of incidentId.
           where: { createdAt: { lt: alertCutoff } },
           select: { id: true },
           orderBy: { id: 'asc' },
@@ -228,6 +350,43 @@ export async function performDataCleanup(
         }),
       ids => prisma.alert.deleteMany({ where: { id: { in: ids } } })
     );
+
+    // Prune standalone / unlinked notifications older than alertCutoff
+    if (prisma.notificationDeliveryAttempt?.deleteMany && prisma.notification?.deleteMany) {
+      await deleteInBatches(
+        () =>
+          prisma.notification.findMany({
+            where: { createdAt: { lt: alertCutoff } },
+            select: { id: true },
+            orderBy: { id: 'asc' },
+            take: BATCH_SIZE,
+          }),
+        async ids => {
+          await prisma.notificationDeliveryAttempt.deleteMany({
+            where: { notificationId: { in: ids } },
+          });
+          return prisma.notification.deleteMany({ where: { id: { in: ids } } });
+        }
+      );
+    }
+
+    // Prune completed/failed external operations older than logCutoff
+    if (prisma.externalOperation?.deleteMany) {
+      await deleteInBatches(
+        () =>
+          prisma.externalOperation.findMany({
+            where: {
+              createdAt: { lt: logCutoff },
+              status: { in: ['COMPLETED', 'FAILED'] },
+            },
+            select: { id: true },
+            orderBy: { id: 'asc' },
+            take: BATCH_SIZE,
+          }),
+        ids => prisma.externalOperation.deleteMany({ where: { id: { in: ids } } })
+      );
+    }
+
     eventCount += await deleteInBatches(
       () =>
         prisma.incidentEvent.findMany({
@@ -238,6 +397,7 @@ export async function performDataCleanup(
         }),
       ids => prisma.incidentEvent.deleteMany({ where: { id: { in: ids } } })
     );
+
     auditLogCount = await deleteInBatches(
       () =>
         prisma.auditLog.findMany({
@@ -248,6 +408,7 @@ export async function performDataCleanup(
         }),
       ids => prisma.auditLog.deleteMany({ where: { id: { in: ids } } })
     );
+
     logCount = await deleteInBatches(
       () =>
         prisma.logEntry.findMany({
@@ -258,6 +419,7 @@ export async function performDataCleanup(
         }),
       ids => prisma.logEntry.deleteMany({ where: { id: { in: ids } } })
     );
+
     inAppNotificationCount = await deleteInBatches(
       () =>
         prisma.inAppNotification.findMany({
@@ -268,6 +430,7 @@ export async function performDataCleanup(
         }),
       ids => prisma.inAppNotification.deleteMany({ where: { id: { in: ids } } })
     );
+
     slaPerformanceLogCount = await deleteInBatches(
       () =>
         prisma.sLAPerformanceLog.findMany({
@@ -279,8 +442,8 @@ export async function performDataCleanup(
       ids => prisma.sLAPerformanceLog.deleteMany({ where: { id: { in: ids } } })
     );
 
-    // Cleanup old metric rollups (telemetry)
-    metricsCount = await cleanupOldRollups();
+    // Cleanup old metric rollups (with exact cutoff matching preview)
+    metricsCount = await cleanupOldRollups(metricsCutoff);
 
     const executionTimeMs = Date.now() - startTime;
 
@@ -311,6 +474,17 @@ export async function performDataCleanup(
   } catch (error) {
     logger.error('[DataCleanup] Cleanup failed', { error });
     throw error;
+  } finally {
+    if (!dryRun) {
+      isCleanupInProgress = false;
+      if (hasPgAdvisoryLock && prisma.$queryRaw) {
+        try {
+          await prisma.$queryRaw`SELECT pg_advisory_unlock(9141004::bigint)`;
+        } catch (_unlockErr) {
+          // Ignore unlock error on cleanup finish
+        }
+      }
+    }
   }
 }
 
@@ -350,6 +524,7 @@ export async function getStorageStats(): Promise<{
   alerts: { total: number; oldest: Date | null };
   logs: { total: number; oldest: Date | null };
   auditLogs: { total: number; oldest: Date | null };
+  inAppNotifications: { total: number; oldest: Date | null };
   rollups: { total: number; oldest: Date | null };
 }> {
   const { default: prisma } = await import('./prisma');
@@ -366,40 +541,61 @@ export async function getStorageStats(): Promise<{
     oldestAuditLog,
     rollupTotal,
     oldestRollup,
+    inAppNotificationTotal,
+    oldestInAppNotification,
   ] = await Promise.all([
-    prisma.incident.count(),
-    prisma.incident.groupBy({
-      by: ['status'],
-      _count: { _all: true },
-    }),
-    prisma.incident.findFirst({
-      select: { createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.alert.count(),
-    prisma.alert.findFirst({
-      select: { createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.logEntry.count(),
-    prisma.logEntry.findFirst({
-      select: { timestamp: true },
-      orderBy: { timestamp: 'asc' },
-    }),
-    prisma.auditLog.count(),
-    prisma.auditLog.findFirst({
-      select: { createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.incidentMetricRollup.count(),
-    prisma.incidentMetricRollup.findFirst({
-      select: { date: true },
-      orderBy: { date: 'asc' },
-    }),
+    prisma.incident?.count ? prisma.incident.count() : Promise.resolve(0),
+    prisma.incident?.groupBy
+      ? prisma.incident.groupBy({
+          by: ['status'],
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+    prisma.incident?.findFirst
+      ? prisma.incident.findFirst({
+          select: { createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      : Promise.resolve(null),
+    prisma.alert?.count ? prisma.alert.count() : Promise.resolve(0),
+    prisma.alert?.findFirst
+      ? prisma.alert.findFirst({
+          select: { createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      : Promise.resolve(null),
+    prisma.logEntry?.count ? prisma.logEntry.count() : Promise.resolve(0),
+    prisma.logEntry?.findFirst
+      ? prisma.logEntry.findFirst({
+          select: { timestamp: true },
+          orderBy: { timestamp: 'asc' },
+        })
+      : Promise.resolve(null),
+    prisma.auditLog?.count ? prisma.auditLog.count() : Promise.resolve(0),
+    prisma.auditLog?.findFirst
+      ? prisma.auditLog.findFirst({
+          select: { createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      : Promise.resolve(null),
+    prisma.incidentMetricRollup?.count ? prisma.incidentMetricRollup.count() : Promise.resolve(0),
+    prisma.incidentMetricRollup?.findFirst
+      ? prisma.incidentMetricRollup.findFirst({
+          select: { date: true },
+          orderBy: { date: 'asc' },
+        })
+      : Promise.resolve(null),
+    prisma.inAppNotification?.count ? prisma.inAppNotification.count() : Promise.resolve(0),
+    prisma.inAppNotification?.findFirst
+      ? prisma.inAppNotification.findFirst({
+          select: { createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      : Promise.resolve(null),
   ]);
 
   const statusCounts: Record<string, number> = {};
-  for (const group of incidentByStatus) {
+  for (const group of incidentByStatus || []) {
     statusCounts[group.status] = group._count._all;
   }
 
@@ -420,6 +616,10 @@ export async function getStorageStats(): Promise<{
     auditLogs: {
       total: auditLogTotal,
       oldest: oldestAuditLog?.createdAt || null,
+    },
+    inAppNotifications: {
+      total: inAppNotificationTotal,
+      oldest: oldestInAppNotification?.createdAt || null,
     },
     rollups: {
       total: rollupTotal,

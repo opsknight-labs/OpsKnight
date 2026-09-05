@@ -20,7 +20,19 @@ const RetentionUpdateSchema = z
     metricsRetentionDays: z.number().int().min(30).max(3650).optional(),
     realTimeWindowDays: z.number().int().min(7).max(365).optional(),
   })
-  .refine(data => Object.keys(data).length > 0, { message: 'No valid fields provided' });
+  .refine(data => Object.keys(data).length > 0, { message: 'No valid fields provided' })
+  .refine(
+    data => {
+      if (data.realTimeWindowDays !== undefined && data.metricsRetentionDays !== undefined) {
+        return data.realTimeWindowDays <= data.metricsRetentionDays;
+      }
+      return true;
+    },
+    {
+      message: 'Real-time window cannot exceed metrics retention period',
+      path: ['realTimeWindowDays'],
+    }
+  );
 
 function retentionValidationError(error: z.ZodError) {
   return new AppError({
@@ -159,9 +171,12 @@ export async function POST(request: NextRequest) {
     let policyOverride: Partial<RetentionPolicy> | undefined;
     if (payload.policy && typeof payload.policy === 'object') {
       const parsed = RetentionUpdateSchema.safeParse(payload.policy);
-      if (parsed.success) {
-        policyOverride = parsed.data;
+      if (!parsed.success) {
+        return jsonError(retentionValidationError(parsed.error), undefined, {
+          issues: parsed.error.issues,
+        });
       }
+      policyOverride = parsed.data;
     }
 
     const result = await performDataCleanup(dryRun, policyOverride);
@@ -185,6 +200,13 @@ export async function POST(request: NextRequest) {
     return jsonOk({ success: true, dryRun, result });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
+    if (
+      error instanceof Error &&
+      (error.message.includes('already in progress') ||
+        error.message.includes('currently being executed'))
+    ) {
+      return jsonError(error.message, 409);
+    }
     logger.error('[API] Data cleanup failed', { error });
     return jsonError('Failed to execute cleanup', 500);
   }

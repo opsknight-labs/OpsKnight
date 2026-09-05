@@ -161,4 +161,70 @@ describe('Data Cleanup Retention Logic', () => {
     expect(stats.rollups.total).toBe(1600);
     expect(mockPrisma.auditLog.count).toHaveBeenCalled();
   });
+
+  it('cascades deletion across all incident relations before deleting incidents', async () => {
+    const { cleanupOldRollups } = await import('@/lib/metric-rollup');
+    const mockTx: Record<
+      string,
+      { deleteMany?: ReturnType<typeof vi.fn>; updateMany?: ReturnType<typeof vi.fn> }
+    > = {
+      externalIssueLink: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      actionItem: { deleteMany: vi.fn().mockResolvedValue({ count: 2 }) },
+      postmortem: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      incidentWatcher: { deleteMany: vi.fn().mockResolvedValue({ count: 3 }) },
+      incidentTag: { deleteMany: vi.fn().mockResolvedValue({ count: 4 }) },
+      incidentSlaPause: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      slackPinnedMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 2 }) },
+      statusPageAnnouncement: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      externalOperation: { deleteMany: vi.fn().mockResolvedValue({ count: 2 }) },
+      notificationDeliveryAttempt: { deleteMany: vi.fn().mockResolvedValue({ count: 5 }) },
+      notification: { deleteMany: vi.fn().mockResolvedValue({ count: 5 }) },
+      incidentEvent: { deleteMany: vi.fn().mockResolvedValue({ count: 10 }) },
+      incidentNote: { deleteMany: vi.fn().mockResolvedValue({ count: 2 }) },
+      customFieldValue: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      alert: { updateMany: vi.fn().mockResolvedValue({ count: 2 }) },
+      incident: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    };
+
+    mockPrisma.$transaction.mockImplementationOnce(async (cb: (tx: unknown) => unknown) =>
+      cb(mockTx)
+    );
+    mockPrisma.incident.findMany
+      .mockResolvedValueOnce([{ id: 'inc-old-1' }])
+      .mockResolvedValueOnce([]);
+    mockPrisma.alert.findMany.mockResolvedValue([]);
+    mockPrisma.incidentEvent.findMany.mockResolvedValue([]);
+    mockPrisma.auditLog.findMany.mockResolvedValue([]);
+    mockPrisma.logEntry.findMany.mockResolvedValue([]);
+    mockPrisma.inAppNotification.findMany.mockResolvedValue([]);
+    mockPrisma.sLAPerformanceLog.findMany.mockResolvedValue([]);
+
+    const result = await performDataCleanup(false, {
+      metricsRetentionDays: 45,
+    });
+
+    expect(result.dryRun).toBe(false);
+    expect(result.incidents).toBe(1);
+
+    // Verify all child relations were deleted
+    expect(mockTx.externalIssueLink.deleteMany).toHaveBeenCalled();
+    expect(mockTx.actionItem.deleteMany).toHaveBeenCalled();
+    expect(mockTx.postmortem.deleteMany).toHaveBeenCalled();
+    expect(mockTx.incidentWatcher.deleteMany).toHaveBeenCalled();
+    expect(mockTx.incidentTag.deleteMany).toHaveBeenCalled();
+    expect(mockTx.incidentSlaPause.deleteMany).toHaveBeenCalled();
+    expect(mockTx.slackPinnedMessage.deleteMany).toHaveBeenCalled();
+    expect(mockTx.statusPageAnnouncement.updateMany).toHaveBeenCalled();
+    expect(mockTx.externalOperation.deleteMany).toHaveBeenCalled();
+    expect(mockTx.notificationDeliveryAttempt.deleteMany).toHaveBeenCalled();
+    expect(mockTx.notification.deleteMany).toHaveBeenCalled();
+    expect(mockTx.incidentEvent.deleteMany).toHaveBeenCalled();
+    expect(mockTx.incidentNote.deleteMany).toHaveBeenCalled();
+    expect(mockTx.customFieldValue.deleteMany).toHaveBeenCalled();
+    expect(mockTx.alert.updateMany).toHaveBeenCalled();
+    expect(mockTx.incident.deleteMany).toHaveBeenCalled();
+
+    // Verify metricsCutoff was passed to cleanupOldRollups
+    expect(cleanupOldRollups).toHaveBeenCalledWith(expect.any(Date));
+  });
 });
