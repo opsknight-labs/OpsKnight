@@ -121,6 +121,12 @@ const mockReport: AdminHealthReport = {
           p50Ms: 32,
           avgMs: 45,
           sampleCount: 142,
+          windowLabel: '1h',
+          p95Ms24h: 240,
+          sampleCount24h: 21216,
+          maxMs: 520,
+          slowCount: 0,
+          trend: 'improving',
         },
       },
     },
@@ -235,7 +241,7 @@ describe('SystemHealthCenter', () => {
 
     // Latency pills
     expect(screen.getByText('12ms')).toBeInTheDocument();
-    expect(screen.getByText('p95: 180ms')).toBeInTheDocument();
+    expect(screen.getByText('p95 1h: 180ms')).toBeInTheDocument();
 
     // Pool utilization gauge
     expect(screen.getByText('Pool Utilization')).toBeInTheDocument();

@@ -45,6 +45,12 @@ export type CheckTelemetry = {
     p50Ms: number | null;
     avgMs: number | null;
     sampleCount: number;
+    windowLabel?: '1h' | '24h';
+    p95Ms24h?: number | null;
+    sampleCount24h?: number;
+    maxMs?: number | null;
+    slowCount?: number;
+    trend?: 'improving' | 'stable' | 'regressing' | 'insufficient-data';
   };
   rawPayload?: Record<string, unknown>;
 };
@@ -104,6 +110,24 @@ type DatabaseCapacityRow = {
   usedConnections: number;
   activeConnections: number;
   longTransactions: number;
+};
+
+type SlaPerformanceSummaryRow = {
+  sampleCount24h: number;
+  sampleCount1h: number;
+  p50Ms24h: number | null;
+  p95Ms24h: number | null;
+  avgMs24h: number | null;
+  maxMs24h: number | null;
+  slowCount24h: number;
+  avgIncidents24h: number | null;
+  p50Ms1h: number | null;
+  p95Ms1h: number | null;
+  p95MsPrior23h: number | null;
+  avgMs1h: number | null;
+  maxMs1h: number | null;
+  slowCount1h: number;
+  avgIncidents1h: number | null;
 };
 
 const MINUTE = 60_000;
@@ -731,66 +755,111 @@ async function collectAdminHealthUncached(): Promise<AdminHealthReport> {
     }
 
     try {
-      const since = new Date(now.getTime() - 24 * HOUR);
-      const logs = await prisma.$queryRaw<Array<{ durationMs: number; incidentCount: number }>>`
-        SELECT "durationMs", "incidentCount"
+      const since24h = new Date(now.getTime() - 24 * HOUR);
+      const since1h = new Date(now.getTime() - HOUR);
+      const [metrics] = await prisma.$queryRaw<SlaPerformanceSummaryRow[]>`
+        SELECT
+          COUNT(*)::int AS "sampleCount24h",
+          COUNT(*) FILTER (WHERE timestamp >= ${since1h})::int AS "sampleCount1h",
+          percentile_cont(0.50) WITHIN GROUP (ORDER BY "durationMs")::double precision AS "p50Ms24h",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs")::double precision AS "p95Ms24h",
+          AVG("durationMs")::double precision AS "avgMs24h",
+          MAX("durationMs")::int AS "maxMs24h",
+          COUNT(*) FILTER (WHERE "durationMs" > 10000)::int AS "slowCount24h",
+          AVG("incidentCount")::double precision AS "avgIncidents24h",
+          percentile_cont(0.50) WITHIN GROUP (ORDER BY "durationMs")
+            FILTER (WHERE timestamp >= ${since1h})::double precision AS "p50Ms1h",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs")
+            FILTER (WHERE timestamp >= ${since1h})::double precision AS "p95Ms1h",
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs")
+            FILTER (WHERE timestamp < ${since1h})::double precision AS "p95MsPrior23h",
+          AVG("durationMs") FILTER (WHERE timestamp >= ${since1h})::double precision AS "avgMs1h",
+          MAX("durationMs") FILTER (WHERE timestamp >= ${since1h})::int AS "maxMs1h",
+          COUNT(*) FILTER (WHERE timestamp >= ${since1h} AND "durationMs" > 10000)::int AS "slowCount1h",
+          AVG("incidentCount") FILTER (WHERE timestamp >= ${since1h})::double precision AS "avgIncidents1h"
         FROM sla_performance_logs
-        WHERE timestamp >= ${since}
-        ORDER BY timestamp DESC
+        WHERE timestamp >= ${since24h}
       `;
-      const durations = logs.map(log => log.durationMs).sort((left, right) => left - right);
-      const percentile = (fraction: number) =>
-        durations.length > 0
-          ? durations[Math.min(durations.length - 1, Math.floor(durations.length * fraction))]
-          : null;
-      const average =
-        durations.length > 0
-          ? durations.reduce((total, duration) => total + duration, 0) / durations.length
-          : null;
-      const p50 = percentile(0.5);
-      const p95 = percentile(0.95);
-      const slow = durations.filter(duration => duration > 10_000).length;
-      const averageIncidents =
-        logs.length > 0
-          ? logs.reduce((total, log) => total + log.incidentCount, 0) / logs.length
-          : null;
+      const sampleCount24h = metrics?.sampleCount24h ?? 0;
+      const sampleCount1h = metrics?.sampleCount1h ?? 0;
+      const recentP95 = metrics?.p95Ms1h ?? null;
+      const dailyP95 = metrics?.p95Ms24h ?? null;
+      const priorP95 = metrics?.p95MsPrior23h ?? null;
+      const trend =
+        recentP95 === null || priorP95 === null || priorP95 === 0
+          ? 'insufficient-data'
+          : recentP95 > priorP95 * 1.2
+            ? 'regressing'
+            : recentP95 < priorP95 * 0.8
+              ? 'improving'
+              : 'stable';
+      const displayedP95 = recentP95 ?? dailyP95;
+      const displayedP50 = metrics?.p50Ms1h ?? metrics?.p50Ms24h ?? null;
+      const displayedAverage = metrics?.avgMs1h ?? metrics?.avgMs24h ?? null;
+      const displayWindow = sampleCount1h > 0 ? '1h' : '24h';
 
       checks.push({
         id: 'sla-performance',
         label: 'SLA query performance',
         category: 'workers',
         status:
-          logs.length === 0
+          sampleCount24h === 0
             ? 'unknown'
-            : slow > 0 || (p95 !== null && p95 > 10_000)
+            : (metrics?.slowCount1h ?? 0) > 0 || (displayedP95 !== null && displayedP95 > 10_000)
               ? 'degraded'
               : 'healthy',
         summary:
-          logs.length === 0
+          sampleCount24h === 0
             ? 'No recent SLA query timing data.'
-            : `${logs.length} queries in 24 hours; p95 ${p95 ?? 0} ms.`,
+            : sampleCount1h > 0
+              ? `${sampleCount1h} queries in the last hour; p95 ${Math.round(displayedP95 ?? 0)} ms (${trend} vs prior 23h).`
+              : `${sampleCount24h} queries in 24 hours; no executions last hour; 24h p95 ${Math.round(dailyP95 ?? 0)} ms.`,
         details:
-          logs.length === 0
+          sampleCount24h === 0
             ? ['SLA performance metrics require recorded calculation events.']
             : [
-                `p50: ${p50 ?? 0} ms, average: ${average ? Math.round(average) : 0} ms`,
-                `Queries exceeding 10s: ${slow}`,
-                `Average incidents scanned per cycle: ${averageIncidents ? Math.round(averageIncidents) : 0}`,
+                `24 hours: ${sampleCount24h} queries, p95 ${Math.round(dailyP95 ?? 0)} ms, max ${metrics?.maxMs24h ?? 0} ms`,
+                `Last hour: p50 ${Math.round(metrics?.p50Ms1h ?? 0)} ms, average ${Math.round(metrics?.avgMs1h ?? 0)} ms, max ${metrics?.maxMs1h ?? 0} ms`,
+                `Queries exceeding 10s: ${metrics?.slowCount1h ?? 0} in 1h / ${metrics?.slowCount24h ?? 0} in 24h`,
+                `Execution rate: ${(sampleCount1h / 60).toFixed(1)} per minute in the last hour`,
+                `Average incidents scanned: ${Math.round(metrics?.avgIncidents1h ?? 0)} in 1h / ${Math.round(metrics?.avgIncidents24h ?? 0)} in 24h`,
               ],
         telemetry: {
           slaMetrics: {
-            p95Ms: p95,
-            p50Ms: p50,
-            avgMs: average ? Math.round(average) : null,
-            sampleCount: logs.length,
+            p95Ms: displayedP95,
+            p50Ms: displayedP50,
+            avgMs: displayedAverage === null ? null : Math.round(displayedAverage),
+            sampleCount: displayWindow === '1h' ? sampleCount1h : sampleCount24h,
+            windowLabel: displayWindow,
+            p95Ms24h: dailyP95,
+            sampleCount24h,
+            maxMs: metrics?.maxMs1h ?? metrics?.maxMs24h ?? null,
+            slowCount:
+              displayWindow === '1h' ? (metrics?.slowCount1h ?? 0) : (metrics?.slowCount24h ?? 0),
+            trend,
           },
           rawPayload: {
-            sampleCount: logs.length,
-            p95Ms: p95,
-            p50Ms: p50,
-            averageMs: average,
-            slowQueriesCount: slow,
-            averageIncidentsScanned: averageIncidents,
+            window1h: {
+              sampleCount: sampleCount1h,
+              p50Ms: metrics?.p50Ms1h ?? null,
+              p95Ms: recentP95,
+              p95MsPrior23h: priorP95,
+              averageMs: metrics?.avgMs1h ?? null,
+              maxMs: metrics?.maxMs1h ?? null,
+              slowQueriesCount: metrics?.slowCount1h ?? 0,
+              averageIncidentsScanned: metrics?.avgIncidents1h ?? null,
+              executionsPerMinute: sampleCount1h / 60,
+            },
+            window24h: {
+              sampleCount: sampleCount24h,
+              p50Ms: metrics?.p50Ms24h ?? null,
+              p95Ms: dailyP95,
+              averageMs: metrics?.avgMs24h ?? null,
+              maxMs: metrics?.maxMs24h ?? null,
+              slowQueriesCount: metrics?.slowCount24h ?? 0,
+              averageIncidentsScanned: metrics?.avgIncidents24h ?? null,
+            },
+            trend,
           },
         },
         action: {
