@@ -102,6 +102,35 @@ export async function updateIncidentPriority(id: string, priority: string | null
   revalidatePath('/');
 }
 
+export async function updateIncidentDescription(id: string, description: string | null) {
+  await assertResponderOrAbove();
+
+  await prisma.$transaction(async tx => {
+    await tx.incident.update({
+      where: { id },
+      data: {
+        description: description?.trim() ? description.trim() : null,
+        events: {
+          create: {
+            type: 'COMMENT',
+            message: 'Incident description updated',
+          },
+        },
+      },
+    });
+    await enqueueWarRoomSideEffects(tx, id, [
+      {
+        effect: 'WAR_ROOM_MESSAGE',
+        message: '📄 *Incident description updated*',
+      },
+    ]);
+  });
+
+  revalidatePath(`/incidents/${id}`);
+  revalidatePath('/incidents');
+  revalidatePath('/');
+}
+
 async function createIncidentFromFormData(formData: FormData, source: IncidentCreationSource) {
   const title = String(formData.get('title') ?? '');
   const description = String(formData.get('description') ?? '');

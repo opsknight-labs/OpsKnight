@@ -333,6 +333,38 @@ async function previouslyEngagedResponderIds(incidentId: string): Promise<string
   ];
 }
 
+/**
+ * Role-based watcher notification filtering following PagerDuty & Incident.io models:
+ * - EXEC: High-impact milestones only (Triggered on P1/P2 or High Urgency, and Resolved).
+ * - STAKEHOLDER: Core business & customer status milestones (Triggered, Acknowledged, Resolved).
+ * - FOLLOWER: All operational updates and lifecycle transitions.
+ */
+export function filterWatchersByCadence(
+  watchers: Array<{ userId: string; role: string }> | undefined | null,
+  eventType: string,
+  incident: { priority?: string | null; urgency?: string | null }
+): string[] {
+  if (!watchers || watchers.length === 0) return [];
+  const isHighImpact =
+    incident.priority === 'P1' || incident.priority === 'P2' || incident.urgency === 'HIGH';
+
+  return watchers
+    .filter(w => {
+      const role = (w.role || 'FOLLOWER').toUpperCase();
+      if (role === 'EXEC') {
+        if (eventType === 'resolved') return true;
+        if (eventType === 'triggered' && isHighImpact) return true;
+        return false;
+      }
+      if (role === 'STAKEHOLDER') {
+        return ['triggered', 'acknowledged', 'resolved'].includes(eventType);
+      }
+      // FOLLOWER: receives all operational updates
+      return true;
+    })
+    .map(w => w.userId);
+}
+
 /** Personal lifecycle fan-out. Service integrations are deliberately separate. */
 export async function sendIncidentNotifications(
   incidentId: string,
@@ -374,6 +406,12 @@ export async function sendIncidentNotifications(
           .map(member => member.userId)
       : [];
 
+    const watcherUserIds = filterWatchersByCadence(
+      incidentRecord.watchers,
+      eventType,
+      incidentRecord
+    );
+
     const inAppRecipients: string[] = [];
     if (intent === 'ASSIGNED_TO_USER') {
       if (incidentRecord.assigneeId) inAppRecipients.push(incidentRecord.assigneeId);
@@ -382,8 +420,8 @@ export async function sendIncidentNotifications(
     } else {
       if (incidentRecord.assigneeId) inAppRecipients.push(incidentRecord.assigneeId);
       inAppRecipients.push(...assignedTeamUserIds);
-      if (incidentRecord.watchers) {
-        inAppRecipients.push(...incidentRecord.watchers.map(watcher => watcher.userId));
+      if (watcherUserIds.length > 0) {
+        inAppRecipients.push(...watcherUserIds);
       }
       if (incidentRecord.service.team) {
         inAppRecipients.push(
@@ -460,7 +498,7 @@ export async function sendIncidentNotifications(
       const engaged = [
         ...(incidentRecord.assigneeId ? [incidentRecord.assigneeId] : []),
         ...assignedTeamUserIds,
-        ...(incidentRecord.watchers?.map(watcher => watcher.userId) ?? []),
+        ...watcherUserIds,
       ];
       if (eventType === 'acknowledged' || eventType === 'resolved') {
         engaged.push(...(await previouslyEngagedResponderIds(incidentId)));

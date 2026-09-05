@@ -1,9 +1,8 @@
 'use client';
 
 import { memo } from 'react';
-import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
-import { AlertCircle, ArrowUp, Zap } from 'lucide-react';
+import { AlertCircle, ArrowUp, Zap, Info, ShieldAlert } from 'lucide-react';
 
 type PriorityBadgeProps = {
   priority: string | null | undefined;
@@ -17,66 +16,66 @@ function PriorityBadge({ priority, size = 'md', showLabel = true, className }: P
 
   const config: Record<
     string,
-    { label: string; variant: 'danger' | 'warning' | 'info' | 'neutral'; icon: any }
+    { label: string; icon: React.ComponentType<{ className?: string }>; tone: string }
   > = {
     P1: {
       label: 'Crisis',
-      variant: 'danger',
-      icon: Zap,
+      icon: ShieldAlert,
+      tone: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/80 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
     },
     P2: {
       label: 'High',
-      variant: 'warning',
       icon: ArrowUp,
+      tone: 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
     },
     P3: {
       label: 'Medium',
-      variant: 'warning',
       icon: AlertCircle,
+      tone: 'bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100/80 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800',
     },
     P4: {
       label: 'Low',
-      variant: 'info',
-      icon: null,
+      icon: Zap,
+      tone: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100/80 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
     },
     P5: {
       label: 'Info',
-      variant: 'neutral',
-      icon: null,
+      icon: Info,
+      tone: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700',
     },
   };
 
-  const { label, variant, icon: Icon } = config[priority] || {
+  const {
+    label,
+    icon: Icon,
+    tone,
+  } = config[priority] || {
     label: priority,
-    variant: 'neutral',
-    icon: null,
+    icon: Info,
+    tone: 'bg-slate-50 text-slate-700 border-slate-200',
   };
-  const toneClass =
-    variant === 'danger'
-      ? 'bg-red-200 text-red-900 border-red-300 hover:bg-red-200'
-      : variant === 'warning'
-        ? 'bg-amber-200 text-amber-900 border-amber-300 hover:bg-amber-200'
-        : variant === 'info'
-          ? 'bg-blue-200 text-blue-900 border-blue-300 hover:bg-blue-200'
-          : 'bg-slate-200 text-slate-900 border-slate-300 hover:bg-slate-200';
 
-  const badgeSize = size === 'sm' ? 'xs' : size === 'lg' ? 'md' : 'sm';
+  const sizeClasses = {
+    sm: 'text-xs px-2 py-0.5',
+    md: 'text-sm px-2.5 py-0.5',
+    lg: 'text-base px-3 py-1',
+  }[size];
+
   const displayLabel =
-    size === 'sm' && !showLabel ? priority : showLabel ? `${priority} - ${label}` : priority;
+    size === 'sm' && !showLabel ? priority : showLabel ? `${priority} · ${label}` : priority;
 
   return (
-    <Badge
-      variant={variant}
-      size={badgeSize}
+    <div
       className={cn(
-        'font-bold shadow-sm flex items-center gap-1.5 shrink-0 transition-colors',
-        toneClass,
+        'font-semibold rounded-md border shadow-2xs inline-flex items-center gap-1.5 shrink-0 transition-all leading-normal',
+        sizeClasses,
+        tone,
         className
       )}
     >
       {Icon && <Icon className={cn('shrink-0', size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5')} />}
       <span>{displayLabel}</span>
-    </Badge>
+    </div>
   );
 }
 

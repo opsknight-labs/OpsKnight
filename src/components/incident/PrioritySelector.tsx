@@ -53,23 +53,24 @@ export default function PrioritySelector({
     >
       <SelectTrigger
         className={cn(
-          'h-auto w-auto min-w-[100px] border-0 bg-transparent p-0 shadow-none focus:ring-0 hover:opacity-100 transition-all [&>svg]:hidden group'
+          'h-7 w-fit border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden group'
         )}
       >
         <SelectValue placeholder="Priority">
           {priority ? (
-            <div className="flex items-center gap-1.5 cursor-pointer py-1">
+            <div className="inline-flex items-center gap-1.5 cursor-pointer">
               <PriorityBadge
                 priority={priority}
                 size="md"
-                className="shadow-sm ring-1 ring-slate-900/5"
+                className="transition-all group-hover:brightness-95"
               />
-              <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-colors opacity-50 group-hover:opacity-100" />
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-colors" />
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-slate-500 border-2 border-dashed border-slate-300 hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-all cursor-pointer shadow-sm">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-50 text-slate-500 border border-dashed border-slate-300 hover:border-slate-400 hover:text-slate-700 transition-all cursor-pointer">
               <AlertCircle className="h-3.5 w-3.5" />
-              <span className="text-xs font-bold uppercase tracking-wide">Set Priority</span>
+              <span className="text-sm font-semibold">Set Priority</span>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
             </div>
           )}
         </SelectValue>
