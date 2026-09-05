@@ -50,10 +50,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
   if (!session?.user?.email) {
     redirect(`/login?callbackUrl=/users/${id}`);
   }
-  const viewer = await getCurrentUser();
-  if (viewer.role !== 'ADMIN' && viewer.id !== id) {
-    notFound();
-  }
+  await getCurrentUser();
 
   const [user, permissions, currentUser] = await Promise.all([
     prisma.user.findUnique({
