@@ -1,11 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  ADMIN_HEALTH_GUIDES,
   calculateOperationalScore,
   overallStatus,
   generate24HourHistory,
   CHECK_WEIGHTS,
   type AdminHealthCheck,
 } from '@/lib/admin-health';
+
+describe('admin health guide links', () => {
+  it('uses stable latest-channel routes that exist in both published v1.4 and v1.5 docs', () => {
+    expect(ADMIN_HEALTH_GUIDES).toEqual({
+      monitoring: 'https://opsknight.com/docs/latest/deployment/monitoring/',
+      scalability: 'https://opsknight.com/docs/latest/core-concepts/scalability/',
+      migrations: 'https://opsknight.com/docs/latest/deployment/database-migrations/',
+      maintenance: 'https://opsknight.com/docs/latest/deployment/maintenance/',
+      sla: 'https://opsknight.com/docs/latest/core-concepts/analytics/',
+      encryption: 'https://opsknight.com/docs/latest/security/encryption/',
+      upgrades: 'https://opsknight.com/docs/latest/deployment/upgrade-rollback/',
+    });
+  });
+});
 
 vi.mock('@/lib/prisma', () => ({
   default: {
