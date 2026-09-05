@@ -117,6 +117,14 @@ describe('Dynamic Colorful Incident Email Templates', () => {
     expect(html).not.toContain('https://docs.opsknight.com');
   });
 
+  it('hyperlinks OpsKnight brand logo, name, and footer to https://opsknight.com/', () => {
+    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+
+    // Header logo & brand name should link to https://opsknight.com/
+    expect(html).toContain('href="https://opsknight.com/"');
+    expect(html).toContain('<strong style="color: #0f172a;">OpsKnight</strong></a>');
+  });
+
   it('deduplicates eventMessage if it echoes incident title or [Service] title', () => {
     // Case 1: eventMessage duplicates [Checkout & Payments] Payment Gateway Connection Timeout
     const duplicateHtml = generateIncidentEmailHTML(

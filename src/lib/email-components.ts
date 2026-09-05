@@ -12,6 +12,7 @@ export interface EmailStyles {
   logoAlt?: string;
   logoWidth?: number;
   brandName?: string;
+  brandUrl?: string;
   buttonBackground?: string;
   buttonTextColor?: string;
   buttonShadow?: string;
@@ -173,6 +174,7 @@ export function EmailHeader(title: string, subtitle?: string, styles: EmailStyle
   const safeTitle = escapeHtml(title);
   const safeSubtitle = subtitle ? escapeHtml(subtitle) : undefined;
   const logoWidth = styles.logoWidth || 56;
+  const brandUrl = sanitizeUrl(styles.brandUrl || 'https://opsknight.com/');
 
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
@@ -182,10 +184,14 @@ export function EmailHeader(title: string, subtitle?: string, styles: EmailStyle
             <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 0 22px 0;">
                 <tr>
                     <td style="padding-right: 14px; vertical-align: middle;">
-                        ${getOpsKnightLogo(logoWidth, styles)}
+                        <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                            ${getOpsKnightLogo(logoWidth, styles)}
+                        </a>
                     </td>
                     <td style="vertical-align: middle;">
-                        <span class="mobile-logo-name desktop-logo-name" style="font-size: 24px; font-weight: 800; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">${brandName}</span>
+                        <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                            <span class="mobile-logo-name desktop-logo-name" style="font-size: 24px; font-weight: 800; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">${brandName}</span>
+                        </a>
                     </td>
                 </tr>
             </table>
@@ -394,19 +400,24 @@ export function OpsKnightPromoCard(): string {
  * Footer with OpsKnight branding and notification context
  * Subtle, minimalist, and elegant.
  */
-export function EmailFooter(unsubscribeUrl?: string, settingsUrl?: string): string {
+export function EmailFooter(
+  unsubscribeUrl?: string,
+  settingsUrl?: string,
+  brandUrl?: string
+): string {
   const safeUnsubscribe = unsubscribeUrl ? sanitizeUrl(unsubscribeUrl) : undefined;
   const safeSettings = settingsUrl ? sanitizeUrl(settingsUrl) : undefined;
+  const safeBrandUrl = sanitizeUrl(brandUrl || 'https://opsknight.com/');
 
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
         <td style="padding: 24px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
             <p style="margin: 0 0 6px 0; color: #64748b; font-size: 13px; line-height: 1.5;">
-                This is an automated notification from <strong style="color: #0f172a;">OpsKnight</strong> Incident Management.
+                This is an automated notification from <a href="${safeBrandUrl}" target="_blank" rel="noopener noreferrer" style="color: #0f172a; text-decoration: none; font-weight: 700;"><strong style="color: #0f172a;">OpsKnight</strong></a> Incident Management.
             </p>
             <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px; line-height: 1.5;">
-                OpsKnight &bull; Open-Source Incident Response
+                <a href="${safeBrandUrl}" target="_blank" rel="noopener noreferrer" style="color: #94a3b8; text-decoration: none;">OpsKnight</a> &bull; Open-Source Incident Response
             </p>
             <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">
                 ${
@@ -451,6 +462,7 @@ export function SubscriberEmailHeader(
   });
   const safeTitle = escapeHtml(title);
   const safeSubtitle = subtitle ? escapeHtml(subtitle) : undefined;
+  const brandUrl = sanitizeUrl(styles.brandUrl || 'https://opsknight.com/');
 
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
@@ -463,18 +475,24 @@ export function SubscriberEmailHeader(
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                             <tr>
                                 <td style="padding-right: 12px; vertical-align: middle;">
-                                    ${brandLogo}
+                                    <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                                        ${brandLogo}
+                                    </a>
                                 </td>
                                 <td style="vertical-align: middle;">
-                                    <span class="mobile-logo-name desktop-logo-name" style="font-size: 22px; font-weight: 700; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">
-                                        ${displayName}
-                                    </span>
+                                    <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                                        <span class="mobile-logo-name desktop-logo-name" style="font-size: 22px; font-weight: 700; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">
+                                            ${displayName}
+                                        </span>
+                                    </a>
                                 </td>
                             </tr>
                         </table>
                     </td>
-                    <td align="right" valign="middle" class="mobile-hide" style="color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;">
-                        Powered by OpsKnight
+                    <td align="right" valign="middle" class="mobile-hide">
+                        <a href="https://opsknight.com/" target="_blank" rel="noopener noreferrer" style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;">
+                            Powered by OpsKnight
+                        </a>
                     </td>
                 </tr>
             </table>
@@ -529,7 +547,7 @@ export function SubscriberEmailFooter(unsubscribeUrl: string, pageName: string):
                 <p style="margin: 0 0 6px 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;">
                     Powered by
                 </p>
-                <a href="https://opsknight.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                <a href="https://opsknight.com/" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
                         <tr>
                             <td style="padding-right: 8px; vertical-align: middle;">
