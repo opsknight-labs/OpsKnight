@@ -1,12 +1,16 @@
 import type { SLAMetricsFilter } from './sla-server';
-import { getWidgetData, type WidgetDataContext } from './widget-data-provider';
+import { getWidgetRealtimeProjection, type WidgetRealtimeProjection } from './widget-data-provider';
 
-const WIDGET_CACHE_TTL_MS = 5_000;
+const FRESH_TTL_MS = 30_000;
+const STALE_TTL_MS = 5 * 60_000;
 const MAX_WIDGET_CACHE_ENTRIES = 1_000;
 
 type CacheEntry = {
-  expiresAt: number;
-  value: Promise<WidgetDataContext>;
+  value?: WidgetRealtimeProjection;
+  freshUntil: number;
+  staleUntil: number;
+  inFlight?: Promise<WidgetRealtimeProjection>;
+  lastAccessAt: number;
 };
 
 const widgetCache = new Map<string, CacheEntry>();
@@ -26,49 +30,67 @@ export function buildWidgetCacheKey(
     .filter(([, value]) => value !== undefined)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => [key, serializeFilterValue(value)]);
-
   return JSON.stringify([userId, role, normalizedFilters]);
 }
 
-/**
- * Share the expensive widget calculation across equivalent SSE connections.
- * The promise itself is cached so simultaneous connections coalesce into one
- * calculation. User and filter scope are part of the key to prevent data from
- * crossing authorization or dashboard-filter boundaries.
- */
+function evict(now: number): void {
+  for (const [key, entry] of widgetCache) {
+    if (entry.staleUntil <= now && !entry.inFlight) widgetCache.delete(key);
+  }
+  if (widgetCache.size < MAX_WIDGET_CACHE_ENTRIES) return;
+  const oldest = [...widgetCache.entries()]
+    .sort((left, right) => left[1].lastAccessAt - right[1].lastAccessAt)
+    .slice(0, widgetCache.size - MAX_WIDGET_CACHE_ENTRIES + 1);
+  for (const [key] of oldest) widgetCache.delete(key);
+}
+
+function refresh(
+  key: string,
+  entry: CacheEntry,
+  filters: SLAMetricsFilter
+): Promise<WidgetRealtimeProjection> {
+  if (entry.inFlight) return entry.inFlight;
+  const request = getWidgetRealtimeProjection(filters)
+    .then(value => {
+      // Start freshness after the expensive fetch completes.
+      const completedAt = Date.now();
+      entry.value = value;
+      entry.freshUntil = completedAt + FRESH_TTL_MS;
+      entry.staleUntil = completedAt + STALE_TTL_MS;
+      entry.lastAccessAt = completedAt;
+      return value;
+    })
+    .finally(() => {
+      if (entry.inFlight === request) entry.inFlight = undefined;
+      if (!entry.value && widgetCache.get(key) === entry) widgetCache.delete(key);
+    });
+  entry.inFlight = request;
+  return request;
+}
+
+/** Process-local L1 singleflight with bounded stale-while-revalidate. */
 export async function getCachedWidgetData(
   userId: string,
   role: string,
   filters: SLAMetricsFilter,
   now = Date.now()
-): Promise<WidgetDataContext> {
+): Promise<WidgetRealtimeProjection> {
   const key = buildWidgetCacheKey(userId, role, filters);
-  const existing = widgetCache.get(key);
-  if (existing && existing.expiresAt > now) return existing.value;
-
-  // Filter combinations are user-controlled. Bound the process-local map and
-  // preferentially discard expired entries before evicting the oldest key.
-  if (widgetCache.size >= MAX_WIDGET_CACHE_ENTRIES) {
-    for (const [cachedKey, entry] of widgetCache) {
-      if (entry.expiresAt <= now) widgetCache.delete(cachedKey);
+  let entry = widgetCache.get(key);
+  if (entry) {
+    entry.lastAccessAt = now;
+    if (entry.value && entry.freshUntil > now) return entry.value;
+    if (entry.value && entry.staleUntil > now) {
+      void refresh(key, entry, filters).catch(() => undefined);
+      return entry.value;
     }
-    while (widgetCache.size >= MAX_WIDGET_CACHE_ENTRIES) {
-      const oldestKey = widgetCache.keys().next().value as string | undefined;
-      if (!oldestKey) break;
-      widgetCache.delete(oldestKey);
-    }
+    return refresh(key, entry, filters);
   }
 
-  const value = getWidgetData(userId, role, filters);
-  widgetCache.set(key, { expiresAt: now + WIDGET_CACHE_TTL_MS, value });
-
-  try {
-    return await value;
-  } catch (error) {
-    // A transient failure must not poison this key until the TTL expires.
-    if (widgetCache.get(key)?.value === value) widgetCache.delete(key);
-    throw error;
-  }
+  evict(now);
+  entry = { freshUntil: 0, staleUntil: 0, lastAccessAt: now };
+  widgetCache.set(key, entry);
+  return refresh(key, entry, filters);
 }
 
 export function clearWidgetDataCache(): void {

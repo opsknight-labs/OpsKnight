@@ -254,20 +254,54 @@ async function renderStatusPage(statusPage: any) {
     : [];
 
   // Calculate uptime metrics for last 30 and 90 days
-  const { calculateSLAMetrics, calculateMultiServiceUptime, getExternalStatusLabel } =
-    await import('@/lib/sla-server');
+  const { calculateMultiServiceUptime, getExternalStatusLabel } = await import('@/lib/sla-server');
 
   const ninetyDaysAgo = new Date(ninetyDayWindow.start);
   const thirtyDaysAgo = new Date(thirtyDayWindow.start);
-  const serviceIdsForSLA = statusPage.services.map((sp: any) => sp.serviceId);
+  const serviceIdsForSLA: string[] = statusPage.services.map((sp: any) => String(sp.serviceId));
 
   // Optimized: Single call to get metrics for all services
-  const [uptime90, metrics] = await Promise.all([
+  const [uptime90, activeServiceGroups] = await Promise.all([
     visibility.showUptime
       ? calculateMultiServiceUptime(serviceIdsForSLA, ninetyDaysAgo, now, 'PUBLIC')
       : Promise.resolve({} as Record<string, number>),
-    calculateSLAMetrics({ serviceId: serviceIdsForSLA, visibility: 'PUBLIC' }),
+    prisma.incident.groupBy({
+      by: ['serviceId', 'urgency'],
+      where: {
+        serviceId: { in: serviceIdsForSLA },
+        visibility: 'PUBLIC',
+        status: { in: activeIncidentStatuses() },
+      },
+      _count: { _all: true },
+    }),
   ]);
+
+  const serviceMetrics: Array<{
+    id: string;
+    activeCount: number;
+    dynamicStatus: 'CRITICAL' | 'DEGRADED' | 'OPERATIONAL';
+  }> = serviceIdsForSLA.map(serviceId => {
+    const groups = activeServiceGroups.filter(group => group.serviceId === serviceId);
+    const activeCount = groups.reduce((sum, group) => sum + group._count._all, 0);
+    const criticalCount = groups
+      .filter(group => group.urgency === 'HIGH')
+      .reduce((sum, group) => sum + group._count._all, 0);
+    return {
+      id: serviceId,
+      activeCount,
+      dynamicStatus: criticalCount > 0 ? 'CRITICAL' : activeCount > 0 ? 'DEGRADED' : 'OPERATIONAL',
+    };
+  });
+  const metrics = {
+    serviceMetrics,
+    dynamicStatus: serviceMetrics.some(metric => metric.dynamicStatus === 'CRITICAL')
+      ? 'CRITICAL'
+      : serviceMetrics.some(metric => metric.dynamicStatus === 'DEGRADED')
+        ? 'DEGRADED'
+        : 'OPERATIONAL',
+    isClipped: ninetyDayWindow.isClipped,
+    retentionDays: 90,
+  };
 
   const serviceStatusMap = new Map<string, string>();
   metrics.serviceMetrics.forEach((m: any) => {
@@ -306,6 +340,8 @@ async function renderStatusPage(statusPage: any) {
           status: true,
           urgency: true,
         },
+        orderBy: { createdAt: 'desc' },
+        take: 1_000,
       })
     : [];
 
@@ -328,15 +364,11 @@ async function renderStatusPage(statusPage: any) {
       : service
   );
 
-  const activeIncidents = allIncidents.filter(
-    inc => inc.status !== 'RESOLVED' && inc.status !== 'SNOOZED' && inc.status !== 'SUPPRESSED'
-  );
-  const hasOutage = visibility.showMetrics
-    ? activeIncidents.some(inc => inc.urgency === 'HIGH')
-    : metrics.dynamicStatus === 'CRITICAL';
-  const hasDegraded = visibility.showMetrics
-    ? activeIncidents.some(inc => inc.urgency === 'MEDIUM' || inc.urgency === 'LOW')
-    : metrics.dynamicStatus === 'DEGRADED';
+  // Derive the headline from the unbounded aggregate, not the bounded history
+  // projection. A busy status page must not look healthy because older active
+  // incidents fell outside the history payload limit.
+  const hasOutage = metrics.dynamicStatus === 'CRITICAL';
+  const hasDegraded = metrics.dynamicStatus === 'DEGRADED';
   const hasMaintenance = services.some(service => service.status === 'MAINTENANCE');
   const overallStatus = hasOutage
     ? 'outage'
@@ -348,7 +380,10 @@ async function renderStatusPage(statusPage: any) {
   const affectedServices = services.filter(
     service => service.status && service.status !== 'OPERATIONAL'
   ).length;
-  const activeIncidentCount = activeIncidents.length;
+  const activeIncidentCount = serviceMetrics.reduce(
+    (sum, serviceMetric) => sum + serviceMetric.activeCount,
+    0
+  );
   const statusSummary =
     overallStatus === 'outage'
       ? { label: 'Major Outage', color: '#be123c', background: '#fef2f2', border: '#fecaca' }

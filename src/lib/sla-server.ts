@@ -967,6 +967,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
   const [
     activeIncidentsData,
+    activeStatusBreakdown,
+    activeUrgencyBreakdown,
+    unassignedActive,
+    serviceActiveCounts,
+    serviceCriticalCounts,
     mutedStatusCounts,
     alertsCount,
     futureShifts,
@@ -1002,6 +1007,29 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         slaResolveTargetMs: true,
         slaPauses: { select: { startedAt: true, endedAt: true } },
       },
+      orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
+      take: Math.min(filters.incidentLimit || DEFAULT_INCIDENT_DISPLAY_LIMIT, DEFAULT_PAGE_SIZE),
+    }),
+    prisma.incident.groupBy({
+      by: ['status'],
+      where: activeWhere,
+      _count: { _all: true },
+    }),
+    prisma.incident.groupBy({
+      by: ['urgency'],
+      where: activeWhere,
+      _count: { _all: true },
+    }),
+    prisma.incident.count({ where: { AND: [activeWhere, { assigneeId: null }] } }),
+    prisma.incident.groupBy({
+      by: ['serviceId'],
+      where: activeWhere,
+      _count: { _all: true },
+    }),
+    prisma.incident.groupBy({
+      by: ['serviceId'],
+      where: { AND: [activeWhere, { urgency: 'HIGH' }] },
+      _count: { _all: true },
     }),
     // Muted status counts (snoozed/suppressed)
     shouldIncludeMutedCounts
@@ -1190,7 +1218,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
   // For small datasets, we use displayIncidentsRaw for all processing
   // For large datasets, we use DB aggregation + limited display incidents
-  let recentIncidents = displayIncidentsRaw;
+  const recentIncidents = displayIncidentsRaw;
 
   // Performance monitoring: Log query completion with timing
   const dbQueryDuration = Date.now() - queryStartTime;
@@ -1234,63 +1262,22 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
     // Check if DB aggregation failed (signaled by totalIncidents = -1)
     if (dbAggMetrics.totalIncidents === -1) {
-      logger.warn('[SLA] DB aggregation failed; loading the complete filtered set for fallback');
-      dbAggMetrics = null;
-      // The display query is intentionally paginated above. Reusing that
-      // truncated array for fallback silently published incorrect headline
-      // metrics. A raw-query failure is exceptional, so favor correctness and
-      // load the full filtered set through Prisma's structured query path.
-      recentIncidents = await prisma.incident.findMany({
-        where: recentIncidentWhere,
-        select: incidentMetricSelect,
-        orderBy: { createdAt: 'desc' },
-      });
-      logger.info('[SLA] Complete in-memory fallback dataset loaded', {
-        incidentCount: recentIncidents.length,
-      });
+      // Never react to a degraded aggregate query by loading an unbounded
+      // incident population into Node. That turns a database incident into an
+      // application OOM cascade. Callers can retry or serve their stale
+      // projection while the optimized path recovers.
+      throw new Error(
+        `SLA database aggregation unavailable for ${totalIncidentCount} incidents; unbounded fallback disabled`
+      );
     }
   }
 
   // DERIVE active metrics from the single batch fetch
-  const activeIncidents = activeIncidentsData.length;
-  const unassignedActive = activeIncidentsData.filter(i => !i.assigneeId).length;
-  const criticalActiveIncidents = activeIncidentsData.filter(i => i.urgency === 'HIGH').length;
-  const mediumActiveIncidents = activeIncidentsData.filter(i => i.urgency === 'MEDIUM').length;
-  const lowActiveIncidents = activeIncidentsData.filter(i => i.urgency === 'LOW').length;
-
-  const activeStatusCountMap = new Map<string, number>();
-  activeIncidentsData.forEach(i => {
-    activeStatusCountMap.set(i.status, (activeStatusCountMap.get(i.status) || 0) + 1);
-  });
-
-  const activeStatusBreakdown = Array.from(activeStatusCountMap.entries()).map(
-    ([status, count]) => ({
-      status,
-      _count: { _all: count },
-    })
+  const activeIncidents = activeStatusBreakdown.reduce((sum, row) => sum + row._count._all, 0);
+  const urgencyCountMap = new Map(
+    activeUrgencyBreakdown.map(row => [row.urgency, row._count._all])
   );
-
-  const serviceActiveCountMap = new Map<string, number>();
-  const serviceCriticalCountMap = new Map<string, number>();
-  activeIncidentsData.forEach(i => {
-    serviceActiveCountMap.set(i.serviceId, (serviceActiveCountMap.get(i.serviceId) || 0) + 1);
-    if (i.urgency === 'HIGH') {
-      serviceCriticalCountMap.set(i.serviceId, (serviceCriticalCountMap.get(i.serviceId) || 0) + 1);
-    }
-  });
-
-  const serviceActiveCounts = Array.from(serviceActiveCountMap.entries()).map(
-    ([serviceId, count]) => ({
-      serviceId,
-      _count: { _all: count },
-    })
-  );
-  const serviceCriticalCounts = Array.from(serviceCriticalCountMap.entries()).map(
-    ([serviceId, count]) => ({
-      serviceId,
-      _count: { _all: count },
-    })
-  );
+  const criticalActiveIncidents = urgencyCountMap.get('HIGH') ?? 0;
 
   // Note: serviceTargetMap was already built above for DB aggregation
 
@@ -2707,10 +2694,14 @@ export async function calculateMultiServiceUptime(
   serviceIds: string[],
   startDate: Date,
   endDate: Date = new Date(),
-  options: 'PUBLIC' | 'PRIVATE' | 'ALL' | {
-    visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
-    incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
-  } = {}
+  options:
+    | 'PUBLIC'
+    | 'PRIVATE'
+    | 'ALL'
+    | {
+        visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
+        incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
+      } = {}
 ): Promise<Record<string, number>> {
   const { default: prisma } = await import('./prisma');
 
