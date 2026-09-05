@@ -258,11 +258,7 @@ export async function generate24HourHistory(
   try {
     incidents = await prisma.incident.findMany({
       where: {
-        OR: [
-          { createdAt: { gte: since } },
-          { resolvedAt: { gte: since } },
-          { status: { in: ['OPEN', 'ACKNOWLEDGED', 'SNOOZED'] } },
-        ],
+        createdAt: { gte: since },
       },
       select: {
         id: true,
