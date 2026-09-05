@@ -37,7 +37,7 @@ export function getUserInviteEmailTemplate(data: UserInviteEmailData): {
     const basePath =
       parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/$/, '') : '';
     const prefix = basePath ? `${parsed.origin}${basePath}` : parsed.origin;
-    return `${prefix}/logo-compressed.png`;
+    return `${prefix}/logo.png`;
   };
   let logoUrl: string | undefined;
   try {

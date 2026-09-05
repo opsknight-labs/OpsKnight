@@ -484,7 +484,7 @@ export function generateIncidentEmailHTML(
 
   // Structured Incident Description (replaces raw uncontained "Overview" header)
   const description = incident.description
-    ? `<div style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${presentation.accentColor};border-radius:8px;padding:14px 18px;">
+    ? `<div class="desktop-font-body" style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${presentation.accentColor};border-radius:8px;padding:14px 18px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;">
           Incident Description
         </div>
@@ -497,16 +497,16 @@ export function generateIncidentEmailHTML(
   return EmailContainer(
     EmailHeader(
       presentation.header,
-      `Service: ${escapeHtml(incident.service?.name || 'Service')}`,
+      `Service: ${incident.service?.name || 'Service'}`,
       {
         headerGradient: presentation.headerGradient,
-        logoUrl: `${getBaseUrl()}/logo-compressed.png`,
+        logoUrl: `${getBaseUrl()}/logo.png`,
       }
     ) +
       EmailContent(`
         <div style="margin-bottom:16px">${StatusBadge(presentation.label.toUpperCase(), presentation.badge)}</div>
-        <div style="font-size:14px;color:#475569;margin-bottom:18px;line-height:1.5;">${escapeHtml(presentation.message)}</div>
-        <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 16px 0;line-height:1.35;letter-spacing:-0.01em;">${escapeHtml(incident.title)}</h2>
+        <div class="desktop-font-body" style="font-size:14px;color:#475569;margin-bottom:18px;line-height:1.5;">${escapeHtml(presentation.message)}</div>
+        <h2 class="desktop-font-title" style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 16px 0;line-height:1.35;letter-spacing:-0.01em;">${escapeHtml(incident.title)}</h2>
         ${context}
         ${InfoCard(infoItems, { accentColor: presentation.accentColor })}
         ${description}
@@ -647,9 +647,9 @@ export function generateShiftReminderEmailHTML(data: ShiftReminderData): string 
   ];
 
   return EmailContainer(
-    EmailHeader('Upcoming On-Call Shift', `Schedule: ${escapeHtml(data.scheduleName)}`, {
+    EmailHeader('Upcoming On-Call Shift', `Schedule: ${data.scheduleName}`, {
       headerGradient,
-      logoUrl: `${getBaseUrl()}/logo-compressed.png`,
+      logoUrl: `${getBaseUrl()}/logo.png`,
     }) +
       EmailContent(`
         <div style="margin-bottom:18px">${StatusBadge('UPCOMING ON-CALL', 'schedule')}</div>
@@ -718,9 +718,9 @@ export function generateShiftHandoffEmailHTML(data: ShiftHandoffData): string {
     .join('');
 
   return EmailContainer(
-    EmailHeader('Shift Rotation Handoff', `Schedule: ${escapeHtml(data.scheduleName)}`, {
+    EmailHeader('Shift Rotation Handoff', `Schedule: ${data.scheduleName}`, {
       headerGradient,
-      logoUrl: `${getBaseUrl()}/logo-compressed.png`,
+      logoUrl: `${getBaseUrl()}/logo.png`,
     }) +
       EmailContent(`
         <div style="margin-bottom:18px">${StatusBadge('SHIFT HANDOFF', 'schedule')}</div>
