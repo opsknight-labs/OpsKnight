@@ -4,6 +4,7 @@ const FEED_TTL_MS = 2_000;
 const CURSOR_LOOKBACK_MS = 30_000;
 const USER_VERSION_RETENTION_MS = 5 * 60_000;
 const FEED_BATCH_SIZE = 2_000;
+const MAX_PAGES_PER_REFRESH = 5;
 
 type Cursor = { createdAt: Date; id: string };
 type UserVersion = { generation: number; seenAt: number };
@@ -19,38 +20,48 @@ async function refreshChangedUsers(): Promise<void> {
   if (expiresAt > now) return;
   if (inFlight) return inFlight;
 
-  inFlight = prisma.inAppNotification
-    .findMany({
-      where: {
-        OR: [
-          { createdAt: { gt: cursor.createdAt } },
-          { createdAt: cursor.createdAt, id: { gt: cursor.id } },
-        ],
-      },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: FEED_BATCH_SIZE,
-      select: { userId: true, createdAt: true, id: true },
-    })
-    .then(rows => {
-      if (rows.length > 0) {
-        generation += 1;
-        const observedAt = Date.now();
-        for (const row of rows) {
-          userVersions.set(row.userId, { generation, seenAt: observedAt });
-        }
-        const last = rows[rows.length - 1];
-        cursor = { createdAt: last.createdAt, id: last.id };
+  inFlight = (async () => {
+    let caughtUp = false;
+    for (let page = 0; page < MAX_PAGES_PER_REFRESH; page += 1) {
+      const rows = await prisma.inAppNotification.findMany({
+        where: {
+          OR: [
+            { createdAt: { gt: cursor.createdAt } },
+            { createdAt: cursor.createdAt, id: { gt: cursor.id } },
+          ],
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: FEED_BATCH_SIZE,
+        select: { userId: true, createdAt: true, id: true },
+      });
+      if (rows.length === 0) {
+        caughtUp = true;
+        break;
       }
 
-      const retentionCutoff = Date.now() - USER_VERSION_RETENTION_MS;
-      for (const [userId, version] of userVersions) {
-        if (version.seenAt < retentionCutoff) userVersions.delete(userId);
+      generation += 1;
+      const observedAt = Date.now();
+      for (const row of rows) {
+        userVersions.set(row.userId, { generation, seenAt: observedAt });
       }
-      expiresAt = Date.now() + FEED_TTL_MS;
-    })
-    .finally(() => {
-      inFlight = null;
-    });
+      const last = rows[rows.length - 1];
+      cursor = { createdAt: last.createdAt, id: last.id };
+      if (rows.length < FEED_BATCH_SIZE) {
+        caughtUp = true;
+        break;
+      }
+    }
+
+    const retentionCutoff = Date.now() - USER_VERSION_RETENTION_MS;
+    for (const [userId, version] of userVersions) {
+      if (version.seenAt < retentionCutoff) userVersions.delete(userId);
+    }
+    // A safety-bounded refresh that is still behind should be eligible to
+    // continue immediately instead of sleeping for the normal idle TTL.
+    expiresAt = caughtUp ? Date.now() + FEED_TTL_MS : 0;
+  })().finally(() => {
+    inFlight = null;
+  });
 
   return inFlight;
 }

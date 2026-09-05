@@ -48,4 +48,24 @@ describe('notification change feed', () => {
       })
     );
   });
+
+  it('drains full feed pages immediately up to the safety bound', async () => {
+    const firstPage = Array.from({ length: 2_000 }, (_, index) => ({
+      userId: 'user-a',
+      id: `notification-${String(index).padStart(4, '0')}`,
+      createdAt: new Date('2026-09-05T00:00:10.000Z'),
+    }));
+    vi.mocked(prisma.inAppNotification.findMany)
+      .mockResolvedValueOnce(firstPage as never)
+      .mockResolvedValueOnce([
+        {
+          userId: 'user-b',
+          id: 'notification-next',
+          createdAt: new Date('2026-09-05T00:00:11.000Z'),
+        },
+      ] as never);
+
+    expect(await getNotificationUserChangeVersion('user-b')).toBe(2);
+    expect(prisma.inAppNotification.findMany).toHaveBeenCalledTimes(2);
+  });
 });

@@ -86,7 +86,6 @@ export async function GET(req: NextRequest) {
           const userChanged = nextVersion !== notificationVersion;
           notificationVersion = nextVersion;
           if (!userChanged && pollCount % 6 !== 0) {
-            send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
             return;
           }
           // Optimized query: purely time-based, uses index [userId, createdAt]

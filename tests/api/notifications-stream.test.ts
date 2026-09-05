@@ -80,4 +80,34 @@ describe('API Route - Notifications Stream', () => {
     controller.abort();
     vi.useRealTimers();
   });
+
+  it('does not send idle heartbeats or query the user before 30 seconds', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'user-1',
+      timeZone: 'UTC',
+      status: 'ACTIVE',
+    } as never);
+    vi.mocked(getNotificationUserChangeVersion).mockResolvedValue(0);
+    vi.mocked(prisma.inAppNotification.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.inAppNotification.count).mockResolvedValue(0);
+
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/notifications/stream', {
+        signal: controller.signal,
+      })
+    );
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(prisma.inAppNotification.findMany).not.toHaveBeenCalled();
+    expect(prisma.inAppNotification.count).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(prisma.inAppNotification.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.inAppNotification.count).toHaveBeenCalledTimes(1);
+    response.body?.cancel();
+    controller.abort();
+    vi.useRealTimers();
+  });
 });

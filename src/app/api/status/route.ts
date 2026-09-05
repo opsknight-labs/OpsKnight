@@ -137,6 +137,7 @@ export async function GET(req: NextRequest) {
 
     const { calculateMultiServiceUptime, getExternalStatusLabel } =
       await import('@/lib/sla-server');
+    const uptimeWindow = await getReportingWindowForDays(30, 'incident');
     const [activeGroups, recentIncidents] = await Promise.all([
       prisma.incident.groupBy({
         by: ['serviceId', 'urgency'],
@@ -149,7 +150,11 @@ export async function GET(req: NextRequest) {
       }),
       visibility.showIncidents
         ? prisma.incident.findMany({
-            where: { serviceId: { in: serviceIds }, visibility: 'PUBLIC' },
+            where: {
+              serviceId: { in: serviceIds },
+              visibility: 'PUBLIC',
+              createdAt: { gte: uptimeWindow.start, lte: uptimeWindow.end },
+            },
             orderBy: { createdAt: 'desc' },
             take: 20,
             select: {
@@ -203,7 +208,6 @@ export async function GET(req: NextRequest) {
         }))
       : [];
 
-    const uptimeWindow = await getReportingWindowForDays(30, 'incident');
     const uptimeMap = visibility.showUptime
       ? await calculateMultiServiceUptime(
           serviceIds,
