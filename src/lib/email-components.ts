@@ -94,30 +94,43 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
 
         /* Large Displays & Desktop Screens (>= 1024px) */
         @media only screen and (min-width: 1024px) {
-            .desktop-container { max-width: 780px !important; width: 85% !important; border-radius: 18px !important; }
-            .desktop-outer-padding { padding: 44px 24px !important; }
-            .desktop-header-padding { padding: 42px 46px !important; }
-            .desktop-padding { padding: 36px 46px !important; }
-            .desktop-font-title { font-size: 28px !important; }
+            .desktop-container { max-width: 860px !important; width: 90% !important; border-radius: 20px !important; }
+            .desktop-outer-padding { padding: 48px 32px !important; }
+            .desktop-header-padding { padding: 44px 50px !important; }
+            .desktop-padding { padding: 40px 50px !important; }
+            .desktop-font-title { font-size: 30px !important; }
             .desktop-font-body { font-size: 15px !important; line-height: 1.65 !important; }
-            .desktop-logo-img { width: 56px !important; height: 56px !important; }
-            .desktop-logo-name { font-size: 24px !important; }
-            .desktop-table-cell { padding: 14px 22px !important; font-size: 15px !important; }
-            .desktop-button a { padding: 16px 36px !important; font-size: 16px !important; min-width: 240px !important; }
+            .desktop-logo-img { width: 60px !important; height: 60px !important; }
+            .desktop-logo-name { font-size: 26px !important; }
+            .desktop-table-cell { padding: 15px 24px !important; font-size: 15px !important; }
+            .desktop-button a { padding: 16px 40px !important; font-size: 16px !important; min-width: 260px !important; }
         }
 
-        /* 27-inch Displays & Ultrawide Monitors (>= 1440px) */
+        /* 27-inch Displays & Quad-HD Monitors (>= 1440px) */
         @media only screen and (min-width: 1440px) {
-            .desktop-container { max-width: 920px !important; width: 80% !important; border-radius: 22px !important; }
-            .desktop-outer-padding { padding: 56px 40px !important; }
-            .desktop-header-padding { padding: 50px 56px !important; }
-            .desktop-padding { padding: 46px 56px !important; }
-            .desktop-font-title { font-size: 32px !important; }
-            .desktop-font-body { font-size: 16px !important; line-height: 1.7 !important; }
-            .desktop-logo-img { width: 68px !important; height: 68px !important; }
-            .desktop-logo-name { font-size: 28px !important; }
-            .desktop-table-cell { padding: 16px 28px !important; font-size: 15px !important; }
-            .desktop-button a { padding: 18px 44px !important; font-size: 17px !important; min-width: 280px !important; }
+            .desktop-container { max-width: 1080px !important; width: 88% !important; border-radius: 24px !important; }
+            .desktop-outer-padding { padding: 60px 48px !important; }
+            .desktop-header-padding { padding: 54px 64px !important; }
+            .desktop-padding { padding: 50px 64px !important; }
+            .desktop-font-title { font-size: 34px !important; }
+            .desktop-font-body { font-size: 16px !important; line-height: 1.75 !important; }
+            .desktop-logo-img { width: 72px !important; height: 72px !important; }
+            .desktop-logo-name { font-size: 30px !important; }
+            .desktop-table-cell { padding: 18px 32px !important; font-size: 16px !important; }
+            .desktop-button a { padding: 18px 52px !important; font-size: 17px !important; min-width: 300px !important; }
+        }
+
+        /* Ultrawide & 4K Displays (>= 1920px) */
+        @media only screen and (min-width: 1920px) {
+            .desktop-container { max-width: 1180px !important; width: 85% !important; border-radius: 28px !important; }
+            .desktop-outer-padding { padding: 72px 64px !important; }
+            .desktop-header-padding { padding: 60px 76px !important; }
+            .desktop-padding { padding: 56px 76px !important; }
+            .desktop-font-title { font-size: 36px !important; }
+            .desktop-logo-img { width: 76px !important; height: 76px !important; }
+            .desktop-logo-name { font-size: 32px !important; }
+            .desktop-table-cell { padding: 20px 36px !important; font-size: 16px !important; }
+            .desktop-button a { padding: 20px 56px !important; font-size: 18px !important; min-width: 340px !important; }
         }
     </style>
 </head>
