@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import type { Role, UserStatus } from '@prisma/client';
+import type { Prisma, Role, UserStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import {
@@ -78,7 +78,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     redirect('/setup');
   }
 
-  const where: any = {
+  const where: Prisma.UserWhereInput = {
     AND: [
       query
         ? {
@@ -269,7 +269,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             deactivateUser={deactivateUser}
             reactivateUser={reactivateUser}
             deleteUser={deleteUser}
-            generateInvite={generateInvite as any}
+            generateInvite={generateInvite}
             getUserDependencyReport={getUserDependencyReport}
           />
 
