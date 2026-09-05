@@ -4,9 +4,23 @@ import {
   calculateOperationalScore,
   overallStatus,
   generate24HourHistory,
+  healthDurationLabel,
   CHECK_WEIGHTS,
   type AdminHealthCheck,
 } from '@/lib/admin-health';
+
+describe('health duration labels', () => {
+  it('distinguishes missing evidence from a real zero-duration sample', () => {
+    expect(healthDurationLabel(null)).toBe('no samples');
+    expect(healthDurationLabel(undefined)).toBe('no samples');
+    expect(healthDurationLabel(0)).toBe('0 ms');
+  });
+
+  it('makes severe latency readable without discarding precision', () => {
+    expect(healthDurationLabel(26_989)).toBe('27.0 s');
+    expect(healthDurationLabel(313_559)).toBe('5m 14s');
+  });
+});
 
 describe('admin health guide links', () => {
   it('uses stable latest-channel routes that exist in both published v1.4 and v1.5 docs', () => {
