@@ -188,6 +188,35 @@ describe('calculateOperationalScore and weighted health logic', () => {
     expect(result.criticalIssues[0].id).toBe('database');
   });
 
+  it('treats missing evidence as uncertainty instead of silently passing it', () => {
+    const checks = mockBaseChecks.map(check =>
+      check.id === 'sla-performance' ? { ...check, status: 'unknown' as const } : check
+    );
+    const result = calculateOperationalScore(checks);
+
+    expect(result.scorePercent).toBeLessThan(100);
+    expect(result.overall).toBe('degraded');
+    expect(result.warningIssues.some(check => check.id === 'sla-performance')).toBe(true);
+  });
+
+  it('does not degrade the cluster when an optional replica role is not running locally', () => {
+    const result = calculateOperationalScore([
+      ...mockBaseChecks,
+      {
+        id: 'worker-replica',
+        label: 'Local durable-job worker',
+        category: 'workers',
+        status: 'unknown',
+        required: false,
+        summary: 'This web replica does not run the durable-job worker.',
+        details: [],
+      },
+    ]);
+
+    expect(result.overall).toBe('healthy');
+    expect(result.warningIssues).toHaveLength(0);
+  });
+
   it('assigns higher weight to database, migrations, encryption, and scheduler than auxiliary checks', () => {
     expect(CHECK_WEIGHTS.database).toBe(10);
     expect(CHECK_WEIGHTS.migrations).toBe(10);
@@ -250,10 +279,10 @@ describe('generate24HourHistory', () => {
     expect(priorHours.every(s => s.scorePercent === 100)).toBe(true);
   });
 
-  it('does not allow incidents from before the 24-hour window to pollute current historical baseline', async () => {
+  it('does not classify customer incidents as OpsKnight platform-health failures', async () => {
     const prisma = (await import('@/lib/prisma')).default;
     const now = new Date('2026-09-05T12:00:00.000Z');
-    
+
     // Simulate prisma.incident returning only items within the 24-hour query where clause
     vi.mocked(prisma.incident.findMany).mockResolvedValueOnce([
       {
@@ -269,16 +298,8 @@ describe('generate24HourHistory', () => {
     const samples = await generate24HourHistory(mockBaseChecks, 'healthy', now);
     expect(samples).toHaveLength(24);
 
-    // Window ending at 11:00 (index 22, representing 10:00-11:00 UTC) was degraded during the incident
-    const windowEnd11 = new Date(now.getTime() - 1 * 3600000);
-    const expectedLabel = `${windowEnd11.getHours().toString().padStart(2, '0')}:00`;
-    const degradedSample = samples.find(s => s.hourLabel === expectedLabel);
-    expect(degradedSample?.status).toBe('degraded');
-    expect(degradedSample?.scorePercent).toBe(75);
-
-    // Other peaceful hours remain 100% healthy
-    const peacefulSamples = samples.filter(s => s !== degradedSample);
-    expect(peacefulSamples.every(s => s.status === 'healthy')).toBe(true);
-    expect(peacefulSamples.every(s => s.scorePercent === 100)).toBe(true);
+    expect(samples.every(s => s.status === 'healthy')).toBe(true);
+    expect(samples.every(s => s.scorePercent === 100)).toBe(true);
+    expect(prisma.incident.findMany).not.toHaveBeenCalled();
   });
 });
