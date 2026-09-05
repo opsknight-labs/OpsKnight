@@ -624,7 +624,7 @@ describe('calculateSLAMetrics composed PostgreSQL queries', () => {
     expect(metrics.insights).toEqual([]);
   });
 
-  it('loads the complete filtered set when database aggregation fails', async () => {
+  it('fails closed instead of loading an unbounded set when database aggregation fails', async () => {
     setupBaseMocks({
       activeIncidents: [],
       recentIncidents: [],
@@ -676,12 +676,8 @@ describe('calculateSLAMetrics composed PostgreSQL queries', () => {
       return [];
     });
 
-    const metrics = await calculateSLAMetrics({ windowDays: 1, userTimeZone: 'UTC' });
-
-    expect(prismaMock.incident.findMany).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ take: expect.anything() })
+    await expect(calculateSLAMetrics({ windowDays: 1, userTimeZone: 'UTC' })).rejects.toThrow(
+      'unbounded fallback disabled'
     );
-    expect(metrics.highUrgencyCount).toBe(1);
-    expect(metrics.ackRate).toBe(100);
   });
 });

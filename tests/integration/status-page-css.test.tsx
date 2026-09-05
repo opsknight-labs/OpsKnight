@@ -13,6 +13,7 @@ const mockPrisma = vi.hoisted(() => ({
   },
   incident: {
     findMany: vi.fn(),
+    groupBy: vi.fn().mockResolvedValue([]),
     count: vi.fn().mockResolvedValue(0),
   },
   slaPolicy: {

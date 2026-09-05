@@ -2,8 +2,8 @@
 
 import { useRealtime } from '@/hooks/useRealtime';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { logger } from '@/lib/logger';
+import { useRouter } from 'next/navigation';
 
 interface DashboardRealtimeWrapperProps {
   children: React.ReactNode;
@@ -25,9 +25,15 @@ export default function DashboardRealtimeWrapper({
   onMetricsUpdate,
   onIncidentsUpdate,
 }: DashboardRealtimeWrapperProps) {
-  const { isConnected, metrics, recentIncidents, error } = useRealtime();
   const router = useRouter();
+  const { isConnected, metrics, recentIncidents, error } = useRealtime();
   const [showDisconnected, setShowDisconnected] = useState(false);
+  const [dismissedIncidentKey, setDismissedIncidentKey] = useState('');
+  const incidentUpdateKey = recentIncidents?.length
+    ? JSON.stringify(recentIncidents.map(incident => incident.id))
+    : '';
+  const hasUpdates =
+    !onIncidentsUpdate && Boolean(incidentUpdateKey) && dismissedIncidentKey !== incidentUpdateKey;
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -44,29 +50,10 @@ export default function DashboardRealtimeWrapper({
   }, [metrics, onMetricsUpdate]);
 
   useEffect(() => {
-    if (recentIncidents && recentIncidents.length > 0) {
-      if (onIncidentsUpdate) {
-        onIncidentsUpdate(recentIncidents);
-      }
-
-      // Check sessionStorage for last refresh time (persists across remounts/refreshes)
-      // This is critical because router.refresh() might cause a full remount
-      const now = Date.now();
-      const lastRefreshCtx = sessionStorage.getItem('dashboard_last_refresh');
-      const lastRefresh = lastRefreshCtx ? parseInt(lastRefreshCtx, 10) : 0;
-
-      // Only auto-refresh if it's been at least 15 seconds since the last one
-      if (now - lastRefresh > 15000) {
-        sessionStorage.setItem('dashboard_last_refresh', now.toString());
-        logger.debug('Triggering dashboard refresh from realtime update');
-        router.refresh();
-      } else {
-        logger.debug('Skipping dashboard refresh (debounced)', {
-          timeSinceLast: now - lastRefresh,
-        });
-      }
+    if (recentIncidents && recentIncidents.length > 0 && onIncidentsUpdate) {
+      onIncidentsUpdate(recentIncidents);
     }
-  }, [recentIncidents, onIncidentsUpdate, router]);
+  }, [recentIncidents, onIncidentsUpdate]);
 
   // Show connection status indicator (optional)
   if (error && process.env.NODE_ENV === 'development') {
@@ -76,6 +63,30 @@ export default function DashboardRealtimeWrapper({
   return (
     <>
       {children}
+      {hasUpdates && (
+        <button
+          type="button"
+          onClick={() => {
+            setDismissedIncidentKey(incidentUpdateKey);
+            router.refresh();
+          }}
+          style={{
+            position: 'fixed',
+            bottom: showDisconnected ? '4.5rem' : '1rem',
+            right: '1rem',
+            padding: '0.5rem 1rem',
+            background: 'var(--color-primary)',
+            color: 'white',
+            border: 0,
+            borderRadius: 'var(--radius-md)',
+            fontSize: '0.875rem',
+            zIndex: 1000,
+            cursor: 'pointer',
+          }}
+        >
+          Dashboard updates available — refresh
+        </button>
+      )}
       {showDisconnected && !isConnected && (
         <div
           style={{

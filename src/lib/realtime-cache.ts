@@ -22,7 +22,8 @@ interface CacheEntry<T> {
 }
 
 // Global cache store
-const cache = new Map<string, CacheEntry<any>>();
+const cache = new Map<string, CacheEntry<unknown>>();
+const inFlight = new Map<string, Promise<CacheEntry<unknown>>>();
 
 // Cache configuration
 const DEFAULT_TTL_MS = 5000; // 5 seconds
@@ -93,25 +94,30 @@ export async function getCachedOrFetch<T>(
   maybeCleanup();
 
   const now = Date.now();
-  const existing = cache.get(key);
+  const existing = cache.get(key) as CacheEntry<T> | undefined;
 
   // Return cached data if still valid
   if (existing && now < existing.expiresAt) {
     return { data: existing.data, fromCache: true, hash: existing.hash };
   }
 
-  // Fetch fresh data
-  const data = await fetcher();
-  const hash = hashData(data);
-
-  // Store in cache
-  cache.set(key, {
-    data,
-    expiresAt: now + ttlMs,
-    hash,
-  });
-
-  return { data, fromCache: false, hash };
+  // Coalesce equivalent misses on this replica. Freshness begins only after
+  // the fetch completes, so a slow query cannot populate an expired entry.
+  let request = inFlight.get(key) as Promise<CacheEntry<T>> | undefined;
+  if (!request) {
+    request = fetcher()
+      .then(data => {
+        const entry = { data, expiresAt: Date.now() + ttlMs, hash: hashData(data) };
+        cache.set(key, entry);
+        return entry;
+      })
+      .finally(() => {
+        if (inFlight.get(key) === request) inFlight.delete(key);
+      });
+    inFlight.set(key, request);
+  }
+  const entry = await request;
+  return { data: entry.data, fromCache: false, hash: entry.hash };
 }
 
 /**
@@ -137,7 +143,8 @@ export async function getIfChanged<T>(
 // ============================================================================
 
 import prisma from './prisma';
-import { CAPABILITIES, hasCapability, isAppRole } from './authorization';
+import { CAPABILITIES, hasCapability, isAppRole, type AppRole } from './authorization';
+import { incidentReadWhere } from './authorization-filters';
 
 /**
  * Cache key generators
@@ -165,24 +172,41 @@ export async function getCachedDashboardMetrics(
   const key = CacheKeys.dashboardMetrics(userId, scope);
 
   const fetcher = async () => {
-    const { calculateSLAMetrics } = await import('./sla-server');
-    const slaFilters: any = { useOrScope: true };
-
-    if (!hasGlobalMetrics) {
-      slaFilters.assigneeId = userId;
-      if (teamIds.length > 0) slaFilters.teamId = teamIds;
-    }
-
-    const slaMetrics = await calculateSLAMetrics(slaFilters);
+    const scope = hasGlobalMetrics
+      ? {}
+      : incidentReadWhere({ id: userId, role: role as AppRole, status: 'ACTIVE', teamIds });
+    const resolvedSince = new Date(Date.now() - 24 * 60 * 60_000);
+    const [statusGroups, resolved24h] = await Promise.all([
+      prisma.incident.groupBy({
+        by: ['status', 'urgency'],
+        where: scope,
+        _count: { _all: true },
+      }),
+      prisma.incident.count({
+        where: { AND: [scope, { status: 'RESOLVED', resolvedAt: { gte: resolvedSince } }] },
+      }),
+    ]);
+    const count = (status: string) =>
+      statusGroups
+        .filter(group => group.status === status)
+        .reduce((sum, group) => sum + group._count._all, 0);
+    const open = count('OPEN');
+    const acknowledged = count('ACKNOWLEDGED');
+    const active = statusGroups
+      .filter(group => group.status !== 'RESOLVED')
+      .reduce((sum, group) => sum + group._count._all, 0);
+    const critical = statusGroups
+      .filter(group => group.status !== 'RESOLVED' && group.urgency === 'HIGH')
+      .reduce((sum, group) => sum + group._count._all, 0);
 
     return {
-      open: slaMetrics.openCount,
-      acknowledged: slaMetrics.acknowledgedCount,
-      resolved: slaMetrics.resolved24h,
-      critical: slaMetrics.criticalCount,
-      active: slaMetrics.activeCount,
-      isClipped: slaMetrics.isClipped,
-      retentionDays: slaMetrics.retentionDays,
+      open,
+      acknowledged,
+      resolved: resolved24h,
+      critical,
+      active,
+      isClipped: false,
+      retentionDays: null,
     };
   };
 
@@ -339,6 +363,9 @@ export function invalidateCache(pattern: string): number {
       invalidated++;
     }
   }
+  for (const key of inFlight.keys()) {
+    if (key.includes(pattern)) inFlight.delete(key);
+  }
   return invalidated;
 }
 
@@ -357,4 +384,5 @@ export function getCacheStats(): { size: number; hitRate: number } {
  */
 export function clearCache(): void {
   cache.clear();
+  inFlight.clear();
 }

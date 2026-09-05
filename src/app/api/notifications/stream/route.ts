@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
+import { getNotificationChangeVersion } from '@/lib/notification-change-clock';
 
 /**
  * Server-Sent Events endpoint for real-time notification updates
@@ -74,12 +75,20 @@ export async function GET(req: NextRequest) {
       let lastCheck = new Date();
       let lastCheckId = '';
       let pollCount = 0;
+      let notificationVersion = await getNotificationChangeVersion();
 
       pollInterval = setInterval(async () => {
         if (isClosed || isPolling) return;
         isPolling = true;
         pollCount++;
         try {
+          const nextVersion = await getNotificationChangeVersion();
+          const globallyChanged = nextVersion !== notificationVersion;
+          notificationVersion = nextVersion;
+          if (!globallyChanged && pollCount % 6 !== 0) {
+            send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
+            return;
+          }
           // Optimized query: purely time-based, uses index [userId, createdAt]
           // We check for ANY new notification regardless of read status to notify the user
           const newNotifications = await prisma.inAppNotification.findMany({
@@ -152,7 +161,7 @@ export async function GET(req: NextRequest) {
           // Only check unread count if:
           // 1. We found new notifications (count definitely changed)
           // 2. OR: Every 5th poll (every 25s) to catch up on "mark as read" from other tabs/devices
-          if (shouldUpdateUnreadCount || pollCount % 5 === 0) {
+          if (shouldUpdateUnreadCount || pollCount % 6 === 0) {
             const unreadCount = await prisma.inAppNotification.count({
               where: {
                 userId: user.id,
