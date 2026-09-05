@@ -1,6 +1,8 @@
 name: Integration control-plane certification
 on:
-  pull_request:
+  push:
+    branches:
+      - main
     paths:
       - 'src/lib/integrations/**'
       - 'src/lib/chatops/**'
