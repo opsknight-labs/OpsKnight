@@ -59,6 +59,24 @@ describe('realtime change control plane', () => {
     expect(prisma.realtimeChange.findFirst).toHaveBeenCalledTimes(4);
   });
 
+  it('reconciles unchanged generations every 30 seconds for temporal state and commit reordering', async () => {
+    vi.setSystemTime(new Date('2026-09-05T00:00:00.000Z'));
+    vi.mocked(prisma.realtimeChange.findFirst).mockResolvedValue({
+      id: BigInt(7),
+      changedAt: new Date(),
+    });
+    const listener = vi.fn();
+    const stop = subscribeToRealtimeChanges('widgets', '7', listener);
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(listener).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(expect.stringMatching(/^reconcile:7:\d+$/));
+    stop();
+  });
+
   it('degrades safely when the initial durable clock read fails', async () => {
     vi.mocked(prisma.realtimeChange.findFirst).mockRejectedValue(new Error('database unavailable'));
     await expect(getRealtimeChangeGeneration()).resolves.toBeNull();

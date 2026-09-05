@@ -17,6 +17,7 @@ type ControlPlaneState = {
   lastChangedAt: number | null;
   consecutiveFailures: number;
   initialRead: Promise<string | null> | null;
+  lastReconciliationAt: number;
 };
 
 declare global {
@@ -32,10 +33,12 @@ const state: ControlPlaneState = (globalThis.realtimeChangeControlPlaneGlobal ??
   lastChangedAt: null,
   consecutiveFailures: 0,
   initialRead: null,
+  lastReconciliationAt: 0,
 });
 
 const NORMAL_POLL_MS = 1_000;
 const MAX_ERROR_BACKOFF_MS = 10_000;
+const RECONCILIATION_INTERVAL_MS = 30_000;
 
 function updateSubscriberMetrics(): void {
   for (const stream of ['dashboard', 'widgets'] as const) {
@@ -86,17 +89,24 @@ async function poll(): Promise<void> {
     );
 
     const generation = clock.generation.toString();
+    const now = Date.now();
+    const reconciliationDue = now - state.lastReconciliationAt >= RECONCILIATION_INTERVAL_MS;
     for (const listener of state.listeners) {
-      if (listener.afterGeneration !== null && clock.generation <= listener.afterGeneration)
-        continue;
-      listener.afterGeneration = clock.generation;
-      Promise.resolve(listener.notify(generation)).catch(error =>
+      const changed =
+        listener.afterGeneration === null || clock.generation > listener.afterGeneration;
+      if (!changed && !reconciliationDue) continue;
+      if (changed) listener.afterGeneration = clock.generation;
+      const projectionVersion = changed
+        ? generation
+        : `reconcile:${generation}:${Math.floor(now / RECONCILIATION_INTERVAL_MS)}`;
+      Promise.resolve(listener.notify(projectionVersion)).catch(error =>
         logger.warn('realtime.listener_failed', {
           stream: listener.stream,
           error: error instanceof Error ? error.message : String(error),
         })
       );
     }
+    if (reconciliationDue) state.lastReconciliationAt = now;
   } catch (error) {
     state.consecutiveFailures += 1;
     addOperationalMetric('opsknight_realtime_clock_errors_total', 1);
@@ -150,6 +160,7 @@ export function subscribeToRealtimeChanges(
 ): () => void {
   const parsed = afterGeneration === null ? null : BigInt(afterGeneration);
   const listener: Listener = { stream, afterGeneration: parsed, notify };
+  if (state.listeners.size === 0) state.lastReconciliationAt = Date.now();
   state.listeners.add(listener);
   updateSubscriberMetrics();
 
@@ -178,6 +189,8 @@ export function getRealtimeControlPlaneStatus() {
     observedGeneration: state.lastObservedGeneration?.toString() ?? null,
     lastChangeAt: state.lastChangedAt === null ? null : new Date(state.lastChangedAt).toISOString(),
     consecutiveFailures: state.consecutiveFailures,
+    lastReconciliationAt:
+      state.lastReconciliationAt === 0 ? null : new Date(state.lastReconciliationAt).toISOString(),
   };
 }
 
@@ -190,5 +203,6 @@ export function resetRealtimeControlPlaneForTests(): void {
   state.lastChangedAt = null;
   state.consecutiveFailures = 0;
   state.initialRead = null;
+  state.lastReconciliationAt = 0;
   updateSubscriberMetrics();
 }

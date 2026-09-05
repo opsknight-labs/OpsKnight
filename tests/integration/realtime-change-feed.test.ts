@@ -40,4 +40,34 @@ describe('realtime change feed', () => {
 
     expect(await newestGeneration()).toBe(before);
   });
+
+  it('demonstrates that concurrent commits can become visible out of sequence', async () => {
+    const first = await createTestService('Slow transaction');
+    const second = await createTestService('Fast transaction');
+    let releaseSlow!: () => void;
+    const holdSlow = new Promise<void>(resolve => {
+      releaseSlow = resolve;
+    });
+    let reportSlowGeneration!: (generation: bigint) => void;
+    const slowGeneration = new Promise<bigint>(resolve => {
+      reportSlowGeneration = resolve;
+    });
+
+    const slowTransaction = testPrisma.$transaction(async tx => {
+      await tx.service.update({ where: { id: first.id }, data: { name: 'Slow committed' } });
+      const ownChange = await tx.realtimeChange.findFirst({ orderBy: { id: 'desc' } });
+      if (!ownChange) throw new Error('Expected slow transaction generation');
+      reportSlowGeneration(ownChange.id);
+      await holdSlow;
+    });
+
+    const lowerGeneration = await slowGeneration;
+    await testPrisma.service.update({ where: { id: second.id }, data: { name: 'Fast committed' } });
+    const visibleAfterFastCommit = await newestGeneration();
+    expect(visibleAfterFastCommit).toBeGreaterThan(lowerGeneration);
+
+    releaseSlow();
+    await slowTransaction;
+    expect(await newestGeneration()).toBe(visibleAfterFastCommit);
+  });
 });
