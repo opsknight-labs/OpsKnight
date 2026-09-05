@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
 
         // Track last sent metrics for change detection to reduce bandwidth
         let lastMetricsHash = '';
+        let lastIncidentHash = '';
         let heartbeatCounter = 0;
         let authorizationCounter = 0;
 
@@ -104,11 +105,12 @@ export async function GET(req: NextRequest) {
               user.id,
               streamAuthorization.role,
               [...streamAuthorization.teamIds],
-              lastMetricsHash ? undefined : undefined // Always check for incidents
+              lastIncidentHash || undefined
             );
 
             // Only send incident updates if there are actual changes
             if (incidentResult && incidentResult.data.length > 0) {
+              lastIncidentHash = incidentResult.hash;
               send(
                 JSON.stringify({
                   type: 'incidents_updated',

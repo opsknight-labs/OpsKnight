@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { getWidgetDataMock } = vi.hoisted(() => ({ getWidgetDataMock: vi.fn() }));
 
 vi.mock('@/lib/widget-data-provider', () => ({
-  getWidgetData: getWidgetDataMock,
+  getWidgetRealtimeProjection: getWidgetDataMock,
 }));
 
 import {
