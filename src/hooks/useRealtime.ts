@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { logger } from '@/lib/logger';
 
 export type RealtimeEvent =
@@ -24,7 +32,7 @@ export type RealtimeMetrics = {
 
 export type RealtimeIncident = Record<string, unknown>;
 
-export function useRealtime() {
+function useRealtimeConnection() {
   const [isConnected, setIsConnected] = useState(false);
   const [metrics, setMetrics] = useState<RealtimeMetrics | null>(null);
   const [recentIncidents, setRecentIncidents] = useState<RealtimeIncident[]>([]);
@@ -146,4 +154,19 @@ export function useRealtime() {
     recentIncidents,
     error,
   };
+}
+
+type RealtimeContextValue = ReturnType<typeof useRealtimeConnection>;
+const RealtimeContext = createContext<RealtimeContextValue | null>(null);
+
+export function RealtimeProvider({ children }: { children: ReactNode }) {
+  const value = useRealtimeConnection();
+  return createElement(RealtimeContext.Provider, { value }, children);
+}
+
+/** Consume the single realtime connection owned by the nearest provider. */
+export function useRealtime(): RealtimeContextValue {
+  const value = useContext(RealtimeContext);
+  if (!value) throw new Error('useRealtime must be used within RealtimeProvider');
+  return value;
 }

@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/notifications/stream/route';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { getNotificationUserChangeVersion } from '@/lib/notification-change-clock';
 
 vi.mock('next-auth', () => ({
   getServerSession: vi.fn(),
@@ -12,6 +13,10 @@ vi.mock('@/lib/auth', () => ({
   getAuthOptions: vi.fn().mockResolvedValue({}),
 }));
 
+vi.mock('@/lib/notification-change-clock', () => ({
+  getNotificationUserChangeVersion: vi.fn(),
+}));
+
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
@@ -19,7 +24,6 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
     },
     inAppNotification: {
-      aggregate: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
     },
@@ -50,11 +54,7 @@ describe('API Route - Notifications Stream', () => {
     } as never);
     vi.mocked(prisma.inAppNotification.findMany).mockResolvedValue([]);
     vi.mocked(prisma.inAppNotification.count).mockResolvedValue(0);
-    vi.mocked(prisma.inAppNotification.aggregate)
-      .mockResolvedValueOnce({ _max: { createdAt: null, id: null } } as never)
-      .mockResolvedValue({
-        _max: { createdAt: new Date('2026-09-05T00:00:00.000Z'), id: 'notification-1' },
-      } as never);
+    vi.mocked(getNotificationUserChangeVersion).mockResolvedValueOnce(0).mockResolvedValue(1);
 
     const req = new NextRequest(new URL('http://localhost:3000/api/notifications/stream'), {
       signal: controller.signal,
@@ -77,6 +77,36 @@ describe('API Route - Notifications Stream', () => {
       })
     );
 
+    controller.abort();
+    vi.useRealTimers();
+  });
+
+  it('does not send idle heartbeats or query the user before 30 seconds', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'user-1',
+      timeZone: 'UTC',
+      status: 'ACTIVE',
+    } as never);
+    vi.mocked(getNotificationUserChangeVersion).mockResolvedValue(0);
+    vi.mocked(prisma.inAppNotification.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.inAppNotification.count).mockResolvedValue(0);
+
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/notifications/stream', {
+        signal: controller.signal,
+      })
+    );
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(prisma.inAppNotification.findMany).not.toHaveBeenCalled();
+    expect(prisma.inAppNotification.count).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(prisma.inAppNotification.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.inAppNotification.count).toHaveBeenCalledTimes(1);
+    response.body?.cancel();
     controller.abort();
     vi.useRealTimers();
   });

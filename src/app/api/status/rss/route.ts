@@ -7,11 +7,14 @@ import { getAuthOptions } from '@/lib/auth';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { publicStatusVisibility } from '@/lib/status-page-public-data';
 import { createHash } from 'node:crypto';
+import { getReportingWindowForDays } from '@/lib/retention-policy';
 
-export function opaqueRssIncidentGuid(baseUrl: string, statusPageId: string, incidentId: string): string {
-  const opaqueId = createHash('sha256')
-    .update(`${statusPageId}\u0000${incidentId}`)
-    .digest('hex');
+export function opaqueRssIncidentGuid(
+  baseUrl: string,
+  statusPageId: string,
+  incidentId: string
+): string {
+  const opaqueId = createHash('sha256').update(`${statusPageId}\u0000${incidentId}`).digest('hex');
   return `${baseUrl}/status#update-${opaqueId}`;
 }
 
@@ -69,22 +72,30 @@ export async function GET(req: NextRequest) {
 
     const baseUrl = getBaseUrl();
 
-    const { calculateSLAMetrics } = await import('@/lib/sla-server');
-    const metrics =
+    const window = await getReportingWindowForDays(30, 'incident');
+    const incidents =
       visibility.showIncidents && serviceIds.length > 0
-        ? await calculateSLAMetrics({
-            serviceId: serviceIds,
-            windowDays: 30, // Last 30 days
-            includeIncidents: true,
-            incidentLimit: 50,
-            visibility: 'PUBLIC',
+        ? await prisma.incident.findMany({
+            where: {
+              serviceId: { in: serviceIds },
+              visibility: 'PUBLIC',
+              createdAt: { gte: window.start, lte: window.end },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              status: true,
+              createdAt: true,
+              service: { select: { name: true } },
+            },
           })
-        : null;
+        : [];
 
-    const incidents = visibility.showIncidents ? metrics?.recentIncidents || [] : [];
-
-    const description = metrics?.isClipped
-      ? `Current status and incidents (limited to ${metrics.retentionDays} days retention)`
+    const description = window.isClipped
+      ? 'Current status and incidents (limited by configured retention)'
       : 'Current status and incidents';
 
     // Generate RSS XML
@@ -135,6 +146,10 @@ export async function GET(req: NextRequest) {
     return new NextResponse(rss, {
       headers: {
         'Content-Type': 'application/rss+xml; charset=utf-8',
+        'Cache-Control':
+          statusPage.requireAuth || statusPage.statusApiRequireToken
+            ? 'private, no-store'
+            : 'public, s-maxage=30, stale-while-revalidate=300',
       },
     });
   } catch (error: unknown) {

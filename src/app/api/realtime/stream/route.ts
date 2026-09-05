@@ -108,16 +108,17 @@ export async function GET(req: NextRequest) {
               lastIncidentHash || undefined
             );
 
-            // Only send incident updates if there are actual changes
-            if (incidentResult && incidentResult.data.length > 0) {
+            if (incidentResult) {
               lastIncidentHash = incidentResult.hash;
-              send(
-                JSON.stringify({
-                  type: 'incidents_updated',
-                  incidents: incidentResult.data,
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              if (incidentResult.data.length > 0) {
+                send(
+                  JSON.stringify({
+                    type: 'incidents_updated',
+                    incidents: incidentResult.data,
+                    timestamp: new Date().toISOString(),
+                  })
+                );
+              }
             }
 
             // Get dashboard metrics using cached query (reduces DB load by 80%)

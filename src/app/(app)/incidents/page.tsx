@@ -18,6 +18,7 @@ import {
 } from '@/lib/incidents-query';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from 'lucide-react';
+import { RealtimeProvider } from '@/hooks/useRealtime';
 
 export const revalidate = 0;
 
@@ -256,17 +257,19 @@ export default async function IncidentsPage({
         />
 
         {/* List */}
-        <IncidentsListTable
-          incidents={incidents}
-          users={users}
-          canManageIncidents={permissions.isResponderOrAbove}
-          pagination={{
-            currentPage,
-            totalPages,
-            totalItems: totalCount,
-            itemsPerPage: ITEMS_PER_PAGE,
-          }}
-        />
+        <RealtimeProvider>
+          <IncidentsListTable
+            incidents={incidents}
+            users={users}
+            canManageIncidents={permissions.isResponderOrAbove}
+            pagination={{
+              currentPage,
+              totalPages,
+              totalItems: totalCount,
+              itemsPerPage: ITEMS_PER_PAGE,
+            }}
+          />
+        </RealtimeProvider>
       </div>
     </div>
   );
