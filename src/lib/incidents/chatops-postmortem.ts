@@ -1,5 +1,4 @@
 import { Prisma } from '@prisma/client';
-import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { executeIdempotentOperation, type IdempotencyContext } from '@/lib/idempotency';
 import { getBaseUrl } from '@/lib/env-validation';

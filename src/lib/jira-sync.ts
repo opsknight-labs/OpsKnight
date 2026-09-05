@@ -1,8 +1,11 @@
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getJiraIssue } from '@/lib/jira';
-import { enqueueJiraCommentOperations } from '@/lib/external-operations';
-import { enqueueJiraCreateOperation, processExternalOperation } from '@/lib/external-operations';
+import {
+  enqueueJiraCommentOperations,
+  enqueueJiraCreateOperation,
+  processExternalOperation,
+} from '@/lib/external-operations';
 import { isValidJiraKey, extractJiraKey } from '@/lib/jira-validation';
 import { logAudit, getDefaultActorId } from '@/lib/audit';
 import { logger } from '@/lib/logger';
@@ -152,7 +155,7 @@ export async function syncExternalIssueLink(linkId: string) {
         lastSyncedAt: new Date(),
       },
     });
-  } catch (error) {
+  } catch (_error) {
     await prisma.externalIssueLink.update({
       where: { id: linkId },
       data: { syncState: 'FAILED' },
@@ -337,7 +340,12 @@ export async function syncIncidentNoteToJira(
 
     const eventId = `note:${Buffer.from(`${authorName}\0${noteContent}`).toString('base64url').slice(0, 96)}`;
     const result = await enqueueJiraCommentOperations(
-      links.map(link => ({ incidentId, externalKey: link.externalKey, eventId, comment: formattedComment }))
+      links.map(link => ({
+        incidentId,
+        externalKey: link.externalKey,
+        eventId,
+        comment: formattedComment,
+      }))
     );
     return result.pending;
   } catch (error) {
@@ -369,7 +377,12 @@ export async function syncIncidentEventToJira(
 
     const eventId = `event:${Buffer.from(eventMessage).toString('base64url').slice(0, 96)}`;
     const result = await enqueueJiraCommentOperations(
-      links.map(link => ({ incidentId, externalKey: link.externalKey, eventId, comment: formattedComment }))
+      links.map(link => ({
+        incidentId,
+        externalKey: link.externalKey,
+        eventId,
+        comment: formattedComment,
+      }))
     );
     return result.pending;
   } catch (error) {

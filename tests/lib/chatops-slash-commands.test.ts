@@ -5,7 +5,6 @@ import * as retryModule from '@/lib/retry';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
-  authorizeChatOpsIncident,
 } from '@/lib/incidents/chatops-lifecycle';
 import { sendIncidentNotifications } from '@/lib/user-notifications';
 
