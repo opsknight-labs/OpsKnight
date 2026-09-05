@@ -5,9 +5,10 @@ import { GET } from '@/app/api/realtime/stream/route';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
 
-const { recentIncidentsMock, dashboardMetricsMock } = vi.hoisted(() => ({
+const { recentIncidentsMock, dashboardMetricsMock, changeListeners } = vi.hoisted(() => ({
   recentIncidentsMock: vi.fn(),
   dashboardMetricsMock: vi.fn(),
+  changeListeners: new Set<(generation: string) => void | Promise<void>>(),
 }));
 
 vi.mock('@/lib/realtime-cache', () => ({
@@ -17,6 +18,16 @@ vi.mock('@/lib/realtime-cache', () => ({
 
 vi.mock('@/lib/rbac', () => ({
   getCurrentUser: vi.fn(),
+}));
+
+vi.mock('@/lib/realtime-change-control-plane', () => ({
+  getRealtimeChangeGeneration: vi.fn().mockResolvedValue('10'),
+  subscribeToRealtimeChanges: vi.fn(
+    (_stream: string, _generation: string, listener: (generation: string) => void) => {
+      changeListeners.add(listener);
+      return () => changeListeners.delete(listener);
+    }
+  ),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -35,6 +46,7 @@ vi.mock('@/lib/prisma', () => ({
 describe('API Route - Realtime Stream', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    changeListeners.clear();
     recentIncidentsMock.mockResolvedValue({ data: [], changed: true, hash: '[]' });
     dashboardMetricsMock.mockResolvedValue(null);
   });
@@ -91,8 +103,7 @@ describe('API Route - Realtime Stream', () => {
     controller.abort();
   });
 
-  it('commits the empty incident hash as the next polling baseline', async () => {
-    vi.useFakeTimers();
+  it('refreshes projections only after the shared durable generation advances', async () => {
     const controller = new AbortController();
     vi.mocked(getCurrentUser).mockResolvedValue({
       id: 'user-1',
@@ -127,10 +138,11 @@ describe('API Route - Realtime Stream', () => {
       })
     );
     expect(response.status).toBe(200);
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.waitFor(() => expect(changeListeners.size).toBe(1));
+    expect(recentIncidentsMock).toHaveBeenCalledTimes(1);
+    await Promise.all([...changeListeners].map(listener => listener('11')));
 
-    expect(recentIncidentsMock).toHaveBeenNthCalledWith(2, 'user-1', 'ADMIN', [], '[]');
+    expect(recentIncidentsMock).toHaveBeenNthCalledWith(2, 'user-1', 'ADMIN', [], '[]', '11');
     controller.abort();
-    vi.useRealTimers();
   });
 });
