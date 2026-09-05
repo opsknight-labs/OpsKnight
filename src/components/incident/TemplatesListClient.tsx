@@ -32,6 +32,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import CreateIncidentButton from '@/components/incident/CreateIncidentButton';
 import { deleteTemplate } from '@/app/(app)/incidents/template-actions';
 import { notify } from '@/lib/toast';
@@ -131,6 +141,9 @@ export default function TemplatesListClient({
   const [activeFilter, setActiveFilter] = useState<UrgencyFilter>('ALL');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [isDeleting, startDeleteTransition] = useTransition();
+  const [templateToDelete, setTemplateToDelete] = useState<{ id: string; name: string } | null>(
+    null
+  );
 
   // Filter and search
   const filteredTemplates = useMemo(() => {
@@ -186,20 +199,15 @@ export default function TemplatesListClient({
     };
   }, [templates]);
 
-  const handleDelete = (templateId: string, templateName: string) => {
-    // eslint-disable-next-line no-alert
-    if (
-      !window.confirm(
-        `Are you sure you want to delete template "${templateName}"? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
+  const handleConfirmDelete = () => {
+    if (!templateToDelete) return;
+    const { id, name } = templateToDelete;
 
     startDeleteTransition(async () => {
       try {
-        await deleteTemplate(templateId);
-        notify.success(`Template "${templateName}" deleted`);
+        await deleteTemplate(id);
+        notify.success(`Template "${name}" deleted`);
+        setTemplateToDelete(null);
         router.refresh();
       } catch (err) {
         notify.error(err instanceof Error ? err.message : 'Failed to delete template');
@@ -584,7 +592,9 @@ export default function TemplatesListClient({
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               disabled={isDeleting}
-                              onClick={() => handleDelete(template.id, template.name)}
+                              onClick={() =>
+                                setTemplateToDelete({ id: template.id, name: template.name })
+                              }
                               className="text-xs text-rose-600 dark:text-rose-400 focus:text-rose-600 focus:bg-rose-500/10 cursor-pointer"
                             >
                               <Trash2 className="h-3.5 w-3.5 mr-2" />
@@ -601,6 +611,39 @@ export default function TemplatesListClient({
           )}
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog
+        open={Boolean(templateToDelete)}
+        onOpenChange={open => {
+          if (!open) setTemplateToDelete(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold">
+              Delete Incident Template
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              Are you sure you want to delete template &quot;{templateToDelete?.name}&quot;?
+              Responders will no longer be able to declare incidents using this template. This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={isDeleting} className="text-xs font-semibold">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Template'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

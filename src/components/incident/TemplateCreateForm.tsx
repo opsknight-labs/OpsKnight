@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useState, useActionState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import Link from 'next/link';
@@ -254,14 +254,14 @@ export default function TemplateCreateForm({ services, action }: TemplateCreateF
     },
   });
 
-  // Watched values for live preview
-  const watchedName = form.watch('name');
-  const watchedTitle = form.watch('title');
-  const watchedUrgency = form.watch('defaultUrgency');
-  const watchedPriority = form.watch('defaultPriority');
-  const watchedServiceId = form.watch('defaultServiceId');
-  const watchedIsPublic = form.watch('isPublic');
-  const watchedDescText = form.watch('descriptionText');
+  // Watched values for live preview (using useWatch for memoization & compiler compliance)
+  const watchedName = useWatch({ control: form.control, name: 'name' });
+  const watchedTitle = useWatch({ control: form.control, name: 'title' });
+  const watchedUrgency = useWatch({ control: form.control, name: 'defaultUrgency' });
+  const watchedPriority = useWatch({ control: form.control, name: 'defaultPriority' });
+  const watchedServiceId = useWatch({ control: form.control, name: 'defaultServiceId' });
+  const watchedIsPublic = useWatch({ control: form.control, name: 'isPublic' });
+  const watchedDescText = useWatch({ control: form.control, name: 'descriptionText' });
 
   const selectedService = services.find(s => s.id === watchedServiceId);
 
