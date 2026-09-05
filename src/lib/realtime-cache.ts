@@ -14,6 +14,7 @@
  */
 
 import { logger } from './logger';
+import type { Prisma } from '@prisma/client';
 
 interface CacheEntry<T> {
   data: T;
@@ -236,7 +237,7 @@ export async function getCachedRecentIncidents(
   const key = `${scopeKey}:g:${generation ?? 'initial'}`;
 
   const fetcher = async () => {
-    const whereClause: any = {};
+    const whereClause: Prisma.IncidentWhereInput = {};
 
     if (!isPrivileged) {
       whereClause.OR = [
