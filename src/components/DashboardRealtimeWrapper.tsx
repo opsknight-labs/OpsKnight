@@ -28,7 +28,12 @@ export default function DashboardRealtimeWrapper({
   const router = useRouter();
   const { isConnected, metrics, recentIncidents, error } = useRealtime();
   const [showDisconnected, setShowDisconnected] = useState(false);
-  const [hasUpdates, setHasUpdates] = useState(false);
+  const [dismissedIncidentKey, setDismissedIncidentKey] = useState('');
+  const incidentUpdateKey = recentIncidents?.length
+    ? JSON.stringify(recentIncidents.map(incident => incident.id))
+    : '';
+  const hasUpdates =
+    !onIncidentsUpdate && Boolean(incidentUpdateKey) && dismissedIncidentKey !== incidentUpdateKey;
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -45,15 +50,8 @@ export default function DashboardRealtimeWrapper({
   }, [metrics, onMetricsUpdate]);
 
   useEffect(() => {
-    if (recentIncidents && recentIncidents.length > 0) {
-      if (onIncidentsUpdate) {
-        onIncidentsUpdate(recentIncidents);
-      } else {
-        // Server-rendered dashboard children cannot consume the projection
-        // directly. Surface an explicit refresh action instead of multiplying
-        // expensive server renders automatically during an incident storm.
-        setHasUpdates(true);
-      }
+    if (recentIncidents && recentIncidents.length > 0 && onIncidentsUpdate) {
+      onIncidentsUpdate(recentIncidents);
     }
   }, [recentIncidents, onIncidentsUpdate]);
 
@@ -69,7 +67,7 @@ export default function DashboardRealtimeWrapper({
         <button
           type="button"
           onClick={() => {
-            setHasUpdates(false);
+            setDismissedIncidentKey(incidentUpdateKey);
             router.refresh();
           }}
           style={{

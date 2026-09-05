@@ -258,7 +258,9 @@ async function renderStatusPage(statusPage: any) {
 
   const ninetyDaysAgo = new Date(ninetyDayWindow.start);
   const thirtyDaysAgo = new Date(thirtyDayWindow.start);
-  const serviceIdsForSLA: string[] = statusPage.services.map((sp: any) => String(sp.serviceId));
+  const serviceIdsForSLA: string[] = statusPage.services.map((sp: { serviceId: string }) =>
+    String(sp.serviceId)
+  );
 
   // Optimized: Single call to get metrics for all services
   const [uptime90, activeServiceGroups] = await Promise.all([

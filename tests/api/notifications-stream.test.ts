@@ -47,18 +47,18 @@ describe('API Route - Notifications Stream', () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: 'user-1',
       timeZone: 'UTC',
-    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    } as never);
     vi.mocked(prisma.inAppNotification.findMany).mockResolvedValue([]);
     vi.mocked(prisma.inAppNotification.count).mockResolvedValue(0);
     vi.mocked(prisma.inAppNotification.aggregate)
-      .mockResolvedValueOnce({ _max: { createdAt: null, id: null } } as any)
+      .mockResolvedValueOnce({ _max: { createdAt: null, id: null } } as never)
       .mockResolvedValue({
         _max: { createdAt: new Date('2026-09-05T00:00:00.000Z'), id: 'notification-1' },
-      } as any);
+      } as never);
 
     const req = new NextRequest(new URL('http://localhost:3000/api/notifications/stream'), {
       signal: controller.signal,
-    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    });
     const res = await GET(req);
 
     expect(res.status).toBe(200);

@@ -22,8 +22,8 @@ interface CacheEntry<T> {
 }
 
 // Global cache store
-const cache = new Map<string, CacheEntry<any>>();
-const inFlight = new Map<string, Promise<CacheEntry<any>>>();
+const cache = new Map<string, CacheEntry<unknown>>();
+const inFlight = new Map<string, Promise<CacheEntry<unknown>>>();
 
 // Cache configuration
 const DEFAULT_TTL_MS = 5000; // 5 seconds
@@ -94,7 +94,7 @@ export async function getCachedOrFetch<T>(
   maybeCleanup();
 
   const now = Date.now();
-  const existing = cache.get(key);
+  const existing = cache.get(key) as CacheEntry<T> | undefined;
 
   // Return cached data if still valid
   if (existing && now < existing.expiresAt) {
