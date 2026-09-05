@@ -66,7 +66,7 @@ jobs:
         run: |
           docker compose -f tests/certification/docker-compose.yml stop db
           sleep 10
-          docker compose -f tests/certification/docker-compose.yml start --wait db
+          docker compose -f tests/certification/docker-compose.yml start db
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3300/api/health?mode=readiness && exit 0; sleep 2; done
           exit 1
       - name: Logs
