@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useTransition } from 'react';
+import { useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/shadcn/input';
 import {
@@ -21,7 +21,6 @@ import {
   ArrowUpDown,
   Activity,
   X,
-  ChevronRight,
 } from 'lucide-react';
 import DashboardTimeRange from '@/components/DashboardTimeRange';
 import { cn } from '@/lib/utils';
@@ -51,7 +50,7 @@ const sortOptions = [
 
 export default function DashboardIncidentFilters({
   services,
-  users,
+  users: _users,
   currentStatus,
   currentUrgency,
   currentService,
@@ -171,7 +170,12 @@ export default function DashboardIncidentFilters({
             <Badge
               variant={currentStatus === 'all' && currentAssignee === 'all' ? 'default' : 'outline'}
               size="xs"
-              className="cursor-pointer transition-colors"
+              className={cn(
+                'cursor-pointer transition-colors',
+                currentStatus === 'all' && currentAssignee === 'all'
+                  ? 'bg-[#09090b] text-white border-zinc-800 hover:bg-[#18181b]'
+                  : 'hover:bg-slate-100 hover:border-slate-300'
+              )}
               onClick={() => updateParams({ status: 'all', assignee: 'all' })}
             >
               All
@@ -179,7 +183,12 @@ export default function DashboardIncidentFilters({
             <Badge
               variant={userId && currentAssignee === userId ? 'info' : 'outline'}
               size="xs"
-              className="cursor-pointer transition-colors"
+              className={cn(
+                'cursor-pointer transition-colors',
+                userId && currentAssignee === userId
+                  ? 'bg-sky-50 text-sky-700 border-sky-300 hover:bg-sky-100/70 font-semibold'
+                  : 'hover:bg-slate-100 hover:border-slate-300'
+              )}
               onClick={() => {
                 if (!userId) return;
                 if (currentAssignee === userId) {
@@ -194,7 +203,12 @@ export default function DashboardIncidentFilters({
             <Badge
               variant={currentAssignee === 'unassigned' ? 'info' : 'outline'}
               size="xs"
-              className="cursor-pointer transition-colors"
+              className={cn(
+                'cursor-pointer transition-colors',
+                currentAssignee === 'unassigned'
+                  ? 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100/70 font-semibold'
+                  : 'hover:bg-slate-100 hover:border-slate-300'
+              )}
               onClick={() => {
                 if (currentAssignee === 'unassigned') {
                   updateParams({ assignee: 'all', status: 'all' });
@@ -205,32 +219,47 @@ export default function DashboardIncidentFilters({
             >
               Unassigned
             </Badge>
-            <div className="h-5 w-px bg-slate-200 mx-0.5" />
+            <div className="h-5 w-px bg-slate-300 mx-0.5" />
             <Badge
               variant={currentUrgency === 'HIGH' ? 'danger' : 'outline'}
               size="xs"
-              className="cursor-pointer transition-colors"
+              className={cn(
+                'cursor-pointer transition-colors',
+                currentUrgency === 'HIGH'
+                  ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100/70 font-semibold'
+                  : 'hover:bg-slate-100 hover:border-slate-300'
+              )}
               onClick={() => updateParams({ urgency: currentUrgency === 'HIGH' ? 'all' : 'HIGH' })}
             >
-              <Flame className="mr-0.5 h-3 w-3" /> High
+              <Flame className="mr-0.5 h-3 w-3 text-rose-600" /> High
             </Badge>
             <Badge
               variant={currentUrgency === 'MEDIUM' ? 'warning' : 'outline'}
               size="xs"
-              className="cursor-pointer transition-colors"
+              className={cn(
+                'cursor-pointer transition-colors',
+                currentUrgency === 'MEDIUM'
+                  ? 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100/70 font-semibold'
+                  : 'hover:bg-slate-100 hover:border-slate-300'
+              )}
               onClick={() =>
                 updateParams({ urgency: currentUrgency === 'MEDIUM' ? 'all' : 'MEDIUM' })
               }
             >
-              <AlertCircle className="mr-0.5 h-3 w-3" /> Medium
+              <AlertCircle className="mr-0.5 h-3 w-3 text-amber-600" /> Medium
             </Badge>
             <Badge
               variant={currentUrgency === 'LOW' ? 'success' : 'outline'}
               size="xs"
-              className="cursor-pointer transition-colors"
+              className={cn(
+                'cursor-pointer transition-colors',
+                currentUrgency === 'LOW'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100/70 font-semibold'
+                  : 'hover:bg-slate-100 hover:border-slate-300'
+              )}
               onClick={() => updateParams({ urgency: currentUrgency === 'LOW' ? 'all' : 'LOW' })}
             >
-              <MinusCircle className="mr-0.5 h-3 w-3" /> Low
+              <MinusCircle className="mr-0.5 h-3 w-3 text-emerald-600" /> Low
             </Badge>
           </div>
         </div>
@@ -251,7 +280,7 @@ export default function DashboardIncidentFilters({
               <Input
                 id="dashboard-incident-search"
                 placeholder="Search..."
-                className="h-9 pl-8 text-xs bg-white border-slate-200 focus:border-blue-300 rounded-lg"
+                className="h-9 pl-8 text-xs bg-white border-border hover:border-slate-300 focus:border-zinc-400 rounded-lg shadow-2xs"
                 value={currentSearch}
                 onChange={e => updateParams({ search: e.target.value })}
               />
@@ -262,7 +291,7 @@ export default function DashboardIncidentFilters({
               value={currentService}
               onValueChange={val => updateParams({ service: val === 'all' ? 'all' : val })}
             >
-              <SelectTrigger className="h-9 text-xs bg-white border-slate-200 focus:border-blue-300 rounded-lg">
+              <SelectTrigger className="h-9 text-xs bg-white border-border hover:border-slate-300 focus:border-zinc-400 rounded-lg shadow-2xs">
                 <div className="flex items-center gap-1.5">
                   <Briefcase className="h-3.5 w-3.5 text-blue-500" />
                   <SelectValue placeholder="Service" />
@@ -280,7 +309,7 @@ export default function DashboardIncidentFilters({
 
             {/* Status */}
             <Select value={currentStatus} onValueChange={val => updateParams({ status: val })}>
-              <SelectTrigger className="h-9 text-xs bg-white border-slate-200 focus:border-blue-300 rounded-lg">
+              <SelectTrigger className="h-9 text-xs bg-white border-border hover:border-slate-300 focus:border-zinc-400 rounded-lg shadow-2xs">
                 <div className="flex items-center gap-1.5">
                   <Activity className="h-3.5 w-3.5 text-emerald-500" />
                   <SelectValue placeholder="Status" />
@@ -322,7 +351,7 @@ export default function DashboardIncidentFilters({
                 updateParams({ sortBy: 'all', sortOrder: 'all' });
               }}
             >
-              <SelectTrigger className="h-9 text-xs bg-white border-slate-200 focus:border-blue-300 rounded-lg">
+              <SelectTrigger className="h-9 text-xs bg-white border-border hover:border-slate-300 focus:border-zinc-400 rounded-lg shadow-2xs">
                 <div className="flex items-center gap-1.5">
                   <ArrowUpDown className="h-3.5 w-3.5 text-violet-500" />
                   <SelectValue placeholder="Sort" />

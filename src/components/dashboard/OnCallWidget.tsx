@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { memo } from 'react';
 import SidebarWidget, { WIDGET_ICON_BG } from '@/components/dashboard/SidebarWidget';
 import { Users, Calendar, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
 interface OnCallShift {
@@ -79,24 +78,32 @@ const OnCallWidget = memo(function OnCallWidget({ activeShifts }: OnCallWidgetPr
               <Link
                 key={shift.id}
                 href={`/schedules`}
-                className="group flex items-center gap-3 p-2.5 rounded-lg bg-white border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-colors"
+                className="group flex items-center gap-3 p-2.5 rounded-lg bg-white border border-border hover:border-slate-300 hover:bg-slate-50/60 shadow-xs transition-all"
                 role="listitem"
                 aria-label={`${userName} on ${scheduleName}`}
               >
-                <div
-                  className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0"
-                  aria-hidden="true"
-                >
-                  {initials}
+                <div className="relative shrink-0">
+                  <div
+                    className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 flex items-center justify-center font-bold text-xs"
+                    aria-hidden="true"
+                  >
+                    {initials}
+                  </div>
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white"
+                    title="Active on-call"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-slate-700 truncate">{userName}</div>
+                  <div className="text-xs font-semibold text-slate-800 truncate group-hover:text-primary transition-colors">
+                    {userName}
+                  </div>
                   <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
-                    <Calendar className="w-3 h-3 shrink-0" />
+                    <Calendar className="w-3 h-3 shrink-0 text-slate-400" />
                     <span className="truncate">{scheduleName}</span>
                   </div>
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" />
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 group-hover:translate-x-0.5 transition-all shrink-0" />
               </Link>
             );
           })

@@ -12,63 +12,63 @@
     /* Slate 400 */
     --primary-dark: #ffffff;
 
-    /* Shadcn Dark Mode Overrides - Slate Theme matched (HSL) */
-    --background: 222.2 84% 4.9%;
-    /* Slate 950 #020617 */
+    /* Shadcn Dark Mode Overrides - Zinc Theme matched (HSL) */
+    --background: 240 10% 3.9%;
+    /* Zinc 950 #09090b */
     --foreground: 210 40% 98%;
     /* Slate 50 #f8fafc */
-    --card: 222.2 84% 4.9%;
-    /* Slate 950 */
+    --card: 240 5.9% 7.5%;
+    /* Elevated Zinc #121216 */
     --card-foreground: 210 40% 98%;
     /* Slate 50 */
-    --popover: 222.2 84% 4.9%;
-    /* Slate 950 */
+    --popover: 240 5.9% 7.5%;
+    /* Elevated Zinc #121216 */
     --popover-foreground: 210 40% 98%;
     /* Slate 50 */
     --primary: 210 40% 98%;
     /* Slate 50 */
     --primary-foreground: 222.2 47.4% 11.2%;
     /* Slate 900 */
-    --secondary: 217.2 32.6% 17.5%;
-    /* Slate 800 */
+    --secondary: 240 3.7% 15.9%;
+    /* Zinc 800 */
     --secondary-foreground: 210 40% 98%;
     /* Slate 50 */
-    --muted: 217.2 32.6% 17.5%;
-    /* Slate 800 */
-    --muted-foreground: 215 20.2% 65.1%;
-    /* Slate 400 */
-    --accent: 217.2 32.6% 17.5%;
-    /* Slate 800 */
+    --muted: 240 3.7% 15.9%;
+    /* Zinc 800 */
+    --muted-foreground: 240 5% 64.9%;
+    /* Zinc 400 */
+    --accent: 240 3.7% 15.9%;
+    /* Zinc 800 */
     --accent-foreground: 210 40% 98%;
     /* Slate 50 */
     --destructive: 0 62.8% 30.6%;
     /* Red 900 */
     --destructive-foreground: 210 40% 98%;
     /* Slate 50 */
-    --border: 217.2 32.6% 17.5%;
-    /* Slate 800 */
-    --input: 217.2 32.6% 17.5%;
-    /* Slate 800 */
-    --ring: 212.7 26.8% 83.9%;
-    /* Slate 300 */
+    --border: 240 3.7% 15.9%;
+    /* Zinc 800 #27272a */
+    --input: 240 3.7% 15.9%;
+    /* Zinc 800 #27272a */
+    --ring: 240 4.9% 83.9%;
+    /* Zinc 300 */
 
-    --secondary: #94a3b8;
-    /* Slate 400 */
+    --secondary: #a1a1aa;
+    /* Zinc 400 */
     --accent: #3b82f6;
     /* Blue 500 */
 
     --bg-primary: #09090b;
     /* Zinc 950 (Main BG) */
-    --bg-secondary: #0f172a;
-    /* Slate 900 (Card BG) */
-    --bg-dark: #020617;
-    /* Slate 950+ */
-    --bg-surface: #0f172a;
-    /* Slate 900 */
-    --bg-overlay: rgba(2, 6, 23, 0.72);
+    --bg-secondary: #121216;
+    /* Elevated Zinc 900 (Card BG) */
+    --bg-dark: #09090b;
+    /* Zinc 950 */
+    --bg-surface: #121216;
+    /* Elevated Zinc 900 */
+    --bg-overlay: rgba(9, 9, 11, 0.75);
 
-    --glass-bg: rgba(15, 23, 42, 0.6);
-    --glass-border: rgba(148, 163, 184, 0.2);
+    --glass-bg: rgba(18, 18, 22, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.08);
     --glass-blur: blur(14px);
 
     --text-primary: #f8fafc;
@@ -77,16 +77,16 @@
     /* Slate 300 */
     --text-muted: #94a3b8;
     /* Slate 400 */
-    --text-inverse: #0f172a;
-    /* Slate 950 */
-    --text-tertiary: #64748b;
-    /* Slate 500 */
-    --text-disabled: #64748b;
+    --text-inverse: #09090b;
+    /* Zinc 950 */
+    --text-tertiary: #71717a;
+    /* Zinc 500 */
+    --text-disabled: #71717a;
 
-    --border: #334155;
-    /* Slate 700 */
-    --border-hover: #475569;
-    /* Slate 600 */
+    --border: #27272a;
+    /* Zinc 800 */
+    --border-hover: #3f3f46;
+    /* Zinc 700 */
     --border-focus: rgba(59, 130, 246, 0.5);
 
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);

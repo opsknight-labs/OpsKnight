@@ -84,13 +84,14 @@ export function IncidentHeatmapWidget({
 
   const getColor = useCallback(
     (count: number) => {
-      if (count === 0) return 'bg-slate-100 hover:bg-slate-200 border border-slate-200/60';
+      if (count === 0) return 'bg-slate-200/60 hover:bg-slate-300/80 border border-slate-300/60';
       const scale = Math.max(maxCount, 4);
       const v = count / scale;
-      if (v <= 0.25) return 'bg-emerald-100 hover:bg-emerald-200 border border-emerald-200/70';
-      if (v <= 0.5) return 'bg-emerald-300 hover:bg-emerald-400 border border-emerald-400/70';
-      if (v <= 0.75) return 'bg-amber-300 hover:bg-amber-400 border border-amber-400/70';
-      return 'bg-rose-500 hover:bg-rose-600 shadow-2xs';
+      if (v <= 0.25) return 'bg-emerald-100 hover:bg-emerald-200 border border-emerald-300/70';
+      if (v <= 0.5) return 'bg-emerald-300 hover:bg-emerald-400 border border-emerald-500/70';
+      if (v <= 0.75)
+        return 'bg-emerald-500 hover:bg-emerald-600 border border-emerald-600/70 text-white';
+      return 'bg-emerald-700 hover:bg-emerald-800 border border-emerald-800 shadow-2xs text-white';
     },
     [maxCount]
   );
@@ -101,14 +102,14 @@ export function IncidentHeatmapWidget({
         className={cn(
           'group relative overflow-hidden p-4 sm:p-5',
           variant === 'dashboard'
-            ? 'rounded-xl border border-slate-200 bg-white shadow-xs'
-            : 'rounded-xl border border-slate-200 bg-slate-50 shadow-none'
+            ? 'rounded-xl border border-border bg-white shadow-xs'
+            : 'rounded-xl border border-border bg-slate-50 shadow-none'
         )}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-3.5">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600">
               <Activity className="w-4 h-4" />
             </div>
             <div>
@@ -118,7 +119,7 @@ export function IncidentHeatmapWidget({
               </p>
             </div>
           </div>
-          <div className="text-[11px] text-slate-500 font-medium bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200/80">
+          <div className="text-[11px] text-slate-600 font-medium bg-slate-100/90 px-2.5 py-1 rounded-md border border-border">
             Peak: <span className="font-bold text-slate-800">{maxCount} / day</span>
           </div>
         </div>
@@ -150,7 +151,7 @@ export function IncidentHeatmapWidget({
                 <TooltipTrigger asChild>
                   <div
                     className={cn(
-                      'rounded-[2px] transition-transform hover:scale-125 cursor-pointer',
+                      'rounded-[3px] transition-transform hover:scale-125 cursor-pointer',
                       getColor(day.count)
                     )}
                     style={{
@@ -179,15 +180,15 @@ export function IncidentHeatmapWidget({
           <span>Fewer</span>
           <div className="flex gap-1 items-center">
             {/* 0 incidents */}
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-slate-100 border border-slate-200/60" />
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-slate-200/60 border border-slate-300/60" />
             {/* Low intensity (<25%) */}
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-emerald-100 border border-emerald-200/70" />
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-100 border border-emerald-300/70" />
             {/* Medium intensity (<50%) */}
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-emerald-300 border border-emerald-400/70" />
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-300 border border-emerald-500/70" />
             {/* High intensity (<75%) */}
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-amber-300 border border-amber-400/70" />
-            {/* Critical intensity (>75%) */}
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-rose-500 shadow-2xs" />
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-500 border border-emerald-600/70" />
+            {/* Peak intensity (>75%) */}
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-700 shadow-2xs" />
           </div>
           <span>More</span>
         </div>
