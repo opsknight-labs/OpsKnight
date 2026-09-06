@@ -30,12 +30,18 @@ function cleanTitle(title: string): string {
   return title.replace(/^[\s🚨🔥⚡🛑⚠️]+/, '').trim() || title;
 }
 
-function PriorityPill({ priority }: { priority?: string | null }) {
-  const p = priority?.toUpperCase() || 'P1';
+function PriorityPill({
+  priority,
+  urgency,
+}: {
+  priority?: string | null;
+  urgency?: string | null;
+}) {
+  const p = priority?.toUpperCase() || (urgency === 'HIGH' ? 'HIGH' : urgency ? urgency.toUpperCase() : 'ALERT');
   const color =
-    p === 'P1'
+    p === 'P1' || p === 'HIGH'
       ? 'bg-rose-100 text-rose-700 border-rose-200'
-      : p === 'P2'
+      : p === 'P2' || p === 'MEDIUM'
         ? 'bg-amber-100 text-amber-700 border-amber-200'
         : 'bg-blue-100 text-blue-700 border-blue-200';
   return (
@@ -50,17 +56,12 @@ function PriorityPill({ priority }: { priority?: string | null }) {
   );
 }
 
-function getPriorityBorder(priority?: string | null): string {
-  switch (priority?.toUpperCase()) {
-    case 'P1':
-      return 'bg-rose-600';
-    case 'P2':
-      return 'bg-amber-500';
-    case 'P3':
-      return 'bg-blue-500';
-    default:
-      return 'bg-rose-600';
-  }
+function getPriorityBorder(priority?: string | null, urgency?: string | null): string {
+  const p = priority?.toUpperCase();
+  if (p === 'P1' || (!p && urgency === 'HIGH')) return 'bg-rose-600';
+  if (p === 'P2' || (!p && urgency === 'MEDIUM')) return 'bg-amber-500';
+  if (p === 'P3' || (!p && urgency === 'LOW')) return 'bg-blue-500';
+  return 'bg-slate-500';
 }
 
 export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: IncidentAlertToastProps) {
@@ -83,7 +84,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
 
   // Compact Single Incident Alert Card
   if (!isMultiple) {
-    const barBg = getPriorityBorder(primaryIncident.priority);
+    const barBg = getPriorityBorder(primaryIncident.priority, primaryIncident.urgency);
 
     return (
       <div
@@ -107,7 +108,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
           <div className="flex-1 min-w-0">
             {/* Top row: Priority Pill + Service + ID */}
             <div className="flex items-center gap-1.5 mb-1 leading-none">
-              <PriorityPill priority={primaryIncident.priority} />
+              <PriorityPill priority={primaryIncident.priority} urgency={primaryIncident.urgency} />
               <span className="text-[11px] font-semibold text-slate-700 truncate max-w-[160px]">
                 {primaryIncident.service?.name || 'Incident'}
               </span>
@@ -219,7 +220,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors group cursor-pointer text-xs"
             >
               <div className="min-w-0 flex-1 flex items-center gap-1.5">
-                <PriorityPill priority={item.priority} />
+                <PriorityPill priority={item.priority} urgency={item.urgency} />
                 <span className="font-semibold text-[11px] text-slate-900 truncate group-hover:text-rose-600 transition-colors">
                   {cleanTitle(item.title)}
                 </span>

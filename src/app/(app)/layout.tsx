@@ -27,6 +27,10 @@ import CreateIncidentModal from '@/components/incident/CreateIncidentModal';
 import BrandLockup from '@/components/layout/BrandLockup';
 import SidebarTrigger from '@/components/layout/SidebarTrigger';
 import AppHeader from '@/components/layout/AppHeader';
+import type { Prisma } from '@prisma/client';
+import { RealtimeProvider } from '@/hooks/useRealtime';
+import { IncidentAlertProvider, type CriticalIncidentSummary } from '@/contexts/IncidentAlertContext';
+import GlobalIncidentBanner from '@/components/layout/GlobalIncidentBanner';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -199,6 +203,74 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     logger.error('[App Layout] Failed to load incident counts', { component: 'layout', error });
   }
 
+  let initialCriticalIncidents: CriticalIncidentSummary[] = [];
+  try {
+    const isPrivileged = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.INCIDENT_READ_ALL);
+    const whereScope: Prisma.IncidentWhereInput = {
+      status: { in: activeIncidentStatuses() },
+      OR: [
+        { priority: { in: ['P1', 'P2'] } },
+        { urgency: 'HIGH' },
+      ],
+    };
+    if (!isPrivileged && dbUser?.id) {
+      whereScope.AND = [
+        {
+          OR: [
+            { assigneeId: dbUser.id },
+            { service: { team: { members: { some: { userId: dbUser.id } } } } },
+          ],
+        },
+      ];
+    }
+
+    const fetched = await prisma.incident.findMany({
+      where: whereScope,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        urgency: true,
+        priority: true,
+        createdAt: true,
+        updatedAt: true,
+        acknowledgedAt: true,
+        service: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: [
+        { priority: 'asc' },
+        { createdAt: 'desc' },
+      ],
+      take: 5,
+    });
+
+    initialCriticalIncidents = fetched.map(inc => ({
+      id: inc.id,
+      title: inc.title,
+      status: inc.status,
+      urgency: inc.urgency,
+      priority: inc.priority,
+      createdAt: inc.createdAt.toISOString(),
+      updatedAt: inc.updatedAt?.toISOString() ?? null,
+      acknowledgedAt: inc.acknowledgedAt?.toISOString() ?? null,
+      service: inc.service ? { id: inc.service.id, name: inc.service.name } : null,
+      assignee: inc.assignee ? { id: inc.assignee.id, name: inc.assignee.name ?? null } : null,
+    }));
+  } catch (error) {
+    logger.error('[App Layout] Failed to load initial critical incidents', { component: 'layout', error });
+  }
+
   // Status Logic
   let statusTone: 'ok' | 'warning' | 'danger' = 'ok';
   let statusLabel = 'Green Corridor';
@@ -232,62 +304,67 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         >
           <SidebarProvider>
             <IncidentCreationModalProvider>
-              <GlobalKeyboardHandlerWrapper />
-              <SkipLinks />
-              <div className="app-shell flex flex-col min-h-screen">
-                <AppHeader>
-                  <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
-                    <BrandLockup variant="header" />
-                    <div className="h-4 w-px bg-slate-800 mx-0.5 sm:mx-1" />
-                    <SidebarTrigger />
-                    <div className="hidden sm:block">
-                      <OperationalStatus
-                        tone={statusTone}
-                        label={statusLabel}
-                        detail={statusDetail}
-                        criticalCount={criticalOpenCount}
-                        mediumCount={mediumOpenCount}
-                        lowCount={lowOpenCount}
+              <RealtimeProvider>
+                <IncidentAlertProvider initialIncidents={initialCriticalIncidents}>
+                  <GlobalKeyboardHandlerWrapper />
+                  <SkipLinks />
+                  <div className="app-shell flex flex-col min-h-screen">
+                    <AppHeader>
+                      <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                        <BrandLockup variant="header" />
+                        <div className="h-4 w-px bg-slate-800 mx-0.5 sm:mx-1" />
+                        <SidebarTrigger />
+                        <div className="hidden sm:block">
+                          <OperationalStatus
+                            tone={statusTone}
+                            label={statusLabel}
+                            detail={statusDetail}
+                            criticalCount={criticalOpenCount}
+                            mediumCount={mediumOpenCount}
+                            lowCount={lowOpenCount}
+                          />
+                        </div>
+                        <div className="hidden xl:block">
+                          <TopbarBreadcrumbs />
+                        </div>
+                      </div>
+                      <div className="hidden md:flex flex-1 items-center justify-center max-w-md mx-auto px-2">
+                        <SidebarSearch />
+                      </div>
+                      <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">
+                        <TopbarNotifications />
+                        <QuickActions canCreate={canCreate} />
+                        <TopbarUserMenu
+                          name={userName}
+                          email={userEmail}
+                          role={userRole}
+                          avatarUrl={userAvatar}
+                          gender={userGender}
+                          userId={userId}
+                        />
+                      </div>
+                    </AppHeader>
+                    <div className="flex flex-1 min-h-0 relative pt-14">
+                      <Sidebar
+                        userName={userName}
+                        userEmail={userEmail}
+                        userRole={userRole}
+                        userAvatar={userAvatar}
+                        userGender={userGender}
+                        userId={userId}
+                        initialActiveCount={initialActiveIncidentsCount}
                       />
+                      <div className="content-shell flex-1">
+                        <GlobalIncidentBanner />
+                        <main id="main-content" className="page-shell">
+                          {children}
+                        </main>
+                      </div>
                     </div>
-                    <div className="hidden xl:block">
-                      <TopbarBreadcrumbs />
-                    </div>
                   </div>
-                  <div className="hidden md:flex flex-1 items-center justify-center max-w-md mx-auto px-2">
-                    <SidebarSearch />
-                  </div>
-                  <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">
-                    <TopbarNotifications />
-                    <QuickActions canCreate={canCreate} />
-                    <TopbarUserMenu
-                      name={userName}
-                      email={userEmail}
-                      role={userRole}
-                      avatarUrl={userAvatar}
-                      gender={userGender}
-                      userId={userId}
-                    />
-                  </div>
-                </AppHeader>
-                <div className="flex flex-1 min-h-0 relative pt-14">
-                  <Sidebar
-                    userName={userName}
-                    userEmail={userEmail}
-                    userRole={userRole}
-                    userAvatar={userAvatar}
-                    userGender={userGender}
-                    userId={userId}
-                    initialActiveCount={initialActiveIncidentsCount}
-                  />
-                  <div className="content-shell flex-1">
-                    <main id="main-content" className="page-shell">
-                      {children}
-                    </main>
-                  </div>
-                </div>
-              </div>
-              <CreateIncidentModal />
+                  <CreateIncidentModal />
+                </IncidentAlertProvider>
+              </RealtimeProvider>
             </IncidentCreationModalProvider>
           </SidebarProvider>
         </UserAvatarProvider>

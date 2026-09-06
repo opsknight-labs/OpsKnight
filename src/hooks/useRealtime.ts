@@ -3,6 +3,7 @@
 import {
   createContext,
   createElement,
+  Fragment,
   useContext,
   useEffect,
   useState,
@@ -170,9 +171,17 @@ function useRealtimeConnection() {
 type RealtimeContextValue = ReturnType<typeof useRealtimeConnection>;
 const RealtimeContext = createContext<RealtimeContextValue | null>(null);
 
-export function RealtimeProvider({ children }: { children: ReactNode }) {
+function RealtimeRootProvider({ children }: { children: ReactNode }) {
   const value = useRealtimeConnection();
   return createElement(RealtimeContext.Provider, { value }, children);
+}
+
+export function RealtimeProvider({ children }: { children: ReactNode }) {
+  const existing = useContext(RealtimeContext);
+  if (existing) {
+    return createElement(Fragment, null, children);
+  }
+  return createElement(RealtimeRootProvider, null, children);
 }
 
 /** Consume the single realtime connection owned by the nearest provider. */
