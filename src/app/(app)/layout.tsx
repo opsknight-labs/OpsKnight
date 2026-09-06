@@ -27,9 +27,8 @@ import CreateIncidentModal from '@/components/incident/CreateIncidentModal';
 import BrandLockup from '@/components/layout/BrandLockup';
 import SidebarTrigger from '@/components/layout/SidebarTrigger';
 import AppHeader from '@/components/layout/AppHeader';
-import type { Prisma } from '@prisma/client';
 import { RealtimeProvider } from '@/hooks/useRealtime';
-import { IncidentAlertProvider, type CriticalIncidentSummary } from '@/contexts/IncidentAlertContext';
+import { IncidentAlertProvider } from '@/contexts/IncidentAlertContext';
 import GlobalIncidentBanner from '@/components/layout/GlobalIncidentBanner';
 
 const isNextRedirectError = (error: unknown) => {
@@ -203,77 +202,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     logger.error('[App Layout] Failed to load incident counts', { component: 'layout', error });
   }
 
-  let initialCriticalIncidents: CriticalIncidentSummary[] = [];
-  // Performance optimization: skip incident fetch entirely if no critical or medium incidents exist
-  if (criticalOpenCount > 0 || mediumOpenCount > 0) {
-    try {
-      const isPrivileged = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.INCIDENT_READ_ALL);
-      const whereScope: Prisma.IncidentWhereInput = {
-        status: { in: activeIncidentStatuses() },
-        OR: [
-          { priority: { in: ['P1', 'P2'] } },
-          { urgency: 'HIGH' },
-        ],
-      };
-      if (!isPrivileged && dbUser?.id) {
-        whereScope.AND = [
-          {
-            OR: [
-              { assigneeId: dbUser.id },
-              { service: { team: { members: { some: { userId: dbUser.id } } } } },
-            ],
-          },
-        ];
-      }
-
-      const fetched = await prisma.incident.findMany({
-        where: whereScope,
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          urgency: true,
-          priority: true,
-          createdAt: true,
-          updatedAt: true,
-          acknowledgedAt: true,
-          service: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          assignee: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-        orderBy: [
-          { priority: 'asc' },
-          { createdAt: 'desc' },
-        ],
-        take: 5,
-      });
-
-      initialCriticalIncidents = fetched.map(inc => ({
-        id: inc.id,
-        title: inc.title,
-        status: inc.status,
-        urgency: inc.urgency,
-        priority: inc.priority,
-        createdAt: inc.createdAt.toISOString(),
-        updatedAt: inc.updatedAt?.toISOString() ?? null,
-        acknowledgedAt: inc.acknowledgedAt?.toISOString() ?? null,
-        service: inc.service ? { id: inc.service.id, name: inc.service.name } : null,
-        assignee: inc.assignee ? { id: inc.assignee.id, name: inc.assignee.name ?? null } : null,
-      }));
-    } catch (error) {
-      logger.error('[App Layout] Failed to load initial critical incidents', { component: 'layout', error });
-    }
-  }
-
   // Status Logic
   let statusTone: 'ok' | 'warning' | 'danger' = 'ok';
   let statusLabel = 'Green Corridor';
@@ -308,7 +236,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <SidebarProvider>
             <IncidentCreationModalProvider>
               <RealtimeProvider>
-                <IncidentAlertProvider initialIncidents={initialCriticalIncidents}>
+                <IncidentAlertProvider>
                   <GlobalKeyboardHandlerWrapper />
                   <SkipLinks />
                   <div className="app-shell flex flex-col min-h-screen">
