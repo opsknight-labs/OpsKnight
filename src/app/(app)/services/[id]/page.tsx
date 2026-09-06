@@ -59,6 +59,7 @@ import DeleteIntegrationButton from '@/components/service/DeleteIntegrationButto
 import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
 import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingSettings';
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
+import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -169,9 +170,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     // The service is viewable but this user cannot change its configuration.
   }
 
-  const { calculateActorSLAMetrics, calculateActorMultiServiceUptime } = await import(
-    '@/lib/actor-metrics'
-  );
+  const { calculateActorSLAMetrics, calculateActorMultiServiceUptime } =
+    await import('@/lib/actor-metrics');
   const slaWindowDays = 30;
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - slaWindowDays * 24 * 60 * 60 * 1000);
@@ -808,6 +808,14 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               </form>
             </CardContent>
           </Card>
+
+          {/* Default Incident Visibility Settings */}
+          <ServiceVisibilitySettings
+            key={`visibility-${id}`}
+            serviceId={id}
+            defaultIncidentVisibility={service.defaultIncidentVisibility || 'PUBLIC'}
+            canManage={canManageService}
+          />
 
           {/* Slack & ChatOps Integration Settings */}
           <ServiceNotificationSettings

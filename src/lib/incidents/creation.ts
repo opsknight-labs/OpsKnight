@@ -126,7 +126,7 @@ function normalizeInput(input: IncidentCreationInput): IncidentCreationInput {
     dedupKey,
     assigneeId,
     teamId,
-    visibility: input.visibility ?? 'PUBLIC',
+    visibility: input.visibility,
   };
 }
 
@@ -171,10 +171,10 @@ async function validateCustomFields(
 async function assertServiceExists(
   tx: Prisma.TransactionClient,
   serviceId: string
-): Promise<void> {
+): Promise<{ id: string; defaultIncidentVisibility: IncidentVisibility }> {
   const service = await tx.service.findUnique({
     where: { id: serviceId },
-    select: { id: true },
+    select: { id: true, defaultIncidentVisibility: true },
   });
   if (!service) {
     throw new AppError({
@@ -183,6 +183,7 @@ async function assertServiceExists(
       details: { serviceId },
     });
   }
+  return service;
 }
 
 async function validateAssignmentReferences(
@@ -246,7 +247,8 @@ export async function applyIncidentCreation(
   const input = normalizeInput(rawInput);
   const now = input.now ?? new Date();
 
-  await assertServiceExists(tx, input.serviceId);
+  const service = await assertServiceExists(tx, input.serviceId);
+  const resolvedVisibility = input.visibility ?? service.defaultIncidentVisibility ?? 'PUBLIC';
 
   // The current REST contract does not expose custom fields. Preserve that wire
   // behavior while web/mobile continue to validate required/default field values.
@@ -325,7 +327,7 @@ export async function applyIncidentCreation(
       status: 'OPEN',
       urgency: input.urgency,
       serviceId: input.serviceId,
-      visibility: input.visibility ?? 'PUBLIC',
+      visibility: resolvedVisibility,
       priority: input.priority ?? null,
       dedupKey: input.dedupKey ?? null,
       assigneeId: input.assigneeId ?? null,

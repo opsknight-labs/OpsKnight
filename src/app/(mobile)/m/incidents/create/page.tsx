@@ -21,7 +21,11 @@ export default async function MobileCreateIncidentPage() {
     );
   }
 
-  const services = context.services.map(service => ({ id: service.id, name: service.name }));
+  const services = context.services.map(service => ({
+    id: service.id,
+    name: service.name,
+    defaultIncidentVisibility: service.defaultIncidentVisibility,
+  }));
   const users = context.users.map(user => ({ id: user.id, name: user.name, email: user.email }));
 
   return (

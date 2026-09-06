@@ -7,7 +7,11 @@ import { cn } from '@/lib/utils';
 import { notify as toast } from '@/lib/toast';
 import { toUserFacingError } from '@/lib/user-facing-error';
 
-type Service = { id: string; name: string };
+type Service = {
+  id: string;
+  name: string;
+  defaultIncidentVisibility?: 'PUBLIC' | 'PRIVATE';
+};
 type User = { id: string; name: string | null; email: string };
 type CreateIncidentResult = {
   id: string;
@@ -30,6 +34,20 @@ export default function MobileCreateIncidentClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [urgency, setUrgency] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('HIGH');
+  const [selectedServiceId, setSelectedServiceId] = useState(defaultServiceId);
+  const selectedService = services.find(s => s.id === selectedServiceId);
+  const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>(
+    selectedService?.defaultIncidentVisibility || 'PUBLIC'
+  );
+  const [userModifiedVisibility, setUserModifiedVisibility] = useState(false);
+
+  const handleServiceChange = (serviceId: string) => {
+    setSelectedServiceId(serviceId);
+    const svc = services.find(s => s.id === serviceId);
+    if (!userModifiedVisibility && svc?.defaultIncidentVisibility) {
+      setVisibility(svc.defaultIncidentVisibility);
+    }
+  };
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -57,7 +75,9 @@ export default function MobileCreateIncidentClient({
         throw err;
       }
       const userFacing = toUserFacingError(err, 'Failed to create incident. Please try again.');
-      setError(userFacing.description ? `${userFacing.title}. ${userFacing.description}` : userFacing.title);
+      setError(
+        userFacing.description ? `${userFacing.title}. ${userFacing.description}` : userFacing.title
+      );
       setLoading(false);
     }
   }
@@ -102,7 +122,8 @@ export default function MobileCreateIncidentClient({
             <select
               name="serviceId"
               required
-              defaultValue={defaultServiceId}
+              value={selectedServiceId}
+              onChange={e => handleServiceChange(e.target.value)}
               className="w-full appearance-none rounded-xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] px-3 py-3 pr-10 text-sm text-[color:var(--text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <option value="" disabled>
@@ -155,6 +176,67 @@ export default function MobileCreateIncidentClient({
               checked={urgency === 'LOW'}
               onChange={() => setUrgency('LOW')}
             />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
+            Visibility
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label
+              className={cn(
+                'flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-semibold uppercase tracking-wide transition',
+                visibility === 'PUBLIC'
+                  ? 'border-sky-500 bg-sky-100 text-sky-700 dark:border-sky-600 dark:bg-sky-950/40 dark:text-sky-300'
+                  : 'border-[color:var(--border)] bg-[color:var(--bg-surface)] text-[color:var(--text-secondary)]'
+              )}
+            >
+              <input
+                type="radio"
+                name="visibility"
+                value="PUBLIC"
+                checked={visibility === 'PUBLIC'}
+                onChange={() => {
+                  setUserModifiedVisibility(true);
+                  setVisibility('PUBLIC');
+                }}
+                className="sr-only"
+              />
+              <span>Public</span>
+              {selectedService?.defaultIncidentVisibility === 'PUBLIC' && (
+                <span className="text-[10px] lowercase text-sky-600 dark:text-sky-400 font-normal">
+                  (default)
+                </span>
+              )}
+            </label>
+
+            <label
+              className={cn(
+                'flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-semibold uppercase tracking-wide transition',
+                visibility === 'PRIVATE'
+                  ? 'border-slate-500 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-300'
+                  : 'border-[color:var(--border)] bg-[color:var(--bg-surface)] text-[color:var(--text-secondary)]'
+              )}
+            >
+              <input
+                type="radio"
+                name="visibility"
+                value="PRIVATE"
+                checked={visibility === 'PRIVATE'}
+                onChange={() => {
+                  setUserModifiedVisibility(true);
+                  setVisibility('PRIVATE');
+                }}
+                className="sr-only"
+              />
+              <span>Private</span>
+              {selectedService?.defaultIncidentVisibility === 'PRIVATE' && (
+                <span className="text-[10px] lowercase text-slate-600 dark:text-slate-400 font-normal">
+                  (default)
+                </span>
+              )}
+            </label>
           </div>
         </div>
 
