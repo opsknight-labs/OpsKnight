@@ -4,6 +4,9 @@ import React from 'react';
 import {
   IncidentAlertProvider,
   useIncidentAlert,
+  AUTO_DISMISS_TIMEOUT_MS,
+  DISMISSED_STORAGE_KEY,
+  SHOWN_STORAGE_KEY,
   type CriticalIncidentSummary,
 } from '@/contexts/IncidentAlertContext';
 
@@ -354,6 +357,232 @@ describe('IncidentAlertContext', () => {
 
     // Should be excluded from emergency banner
     expect(result.current.activeCriticalIncidents).toHaveLength(0);
+    expect(result.current.isBannerVisible).toBe(false);
+  });
+
+  it('auto-dismisses the banner after 120 seconds and remains hidden across route changes until next incident', () => {
+    vi.useFakeTimers();
+    try {
+      const existingIncident = {
+        id: 'inc-auto-dismiss',
+        title: 'High Urgency Outage',
+        status: 'OPEN',
+        priority: null,
+        urgency: 'HIGH',
+        createdAt: new Date().toISOString(),
+      };
+
+      mockUseRealtime.mockReturnValue({
+        recentIncidents: [existingIncident],
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <IncidentAlertProvider>{children}</IncidentAlertProvider>
+      );
+
+      const { result, rerender } = renderHook(() => useIncidentAlert(), { wrapper });
+
+      expect(result.current.isBannerVisible).toBe(true);
+      expect(sessionStorage.getItem(SHOWN_STORAGE_KEY)).toBeDefined();
+
+      // Advance clock by 119 seconds -> banner should still be visible
+      act(() => {
+        vi.advanceTimersByTime(119 * 1000);
+      });
+      expect(result.current.isBannerVisible).toBe(true);
+
+      // Advance clock by remaining 1 second (total 120s) -> auto-dismiss triggers!
+      act(() => {
+        vi.advanceTimersByTime(1 * 1000);
+      });
+
+      expect(result.current.isBannerVisible).toBe(false);
+      expect(result.current.isDismissed).toBe(true);
+      expect(sessionStorage.getItem(DISMISSED_STORAGE_KEY)).toBeDefined();
+      expect(sessionStorage.getItem(SHOWN_STORAGE_KEY)).toBeNull();
+
+      // Navigating to another route should maintain dismissal
+      mockPathname.mockReturnValue('/incidents');
+      rerender();
+      expect(result.current.isBannerVisible).toBe(false);
+
+      // A new HIGH incident arrives -> restores banner visibility and resets cycle
+      const newHighIncident = {
+        id: 'inc-new-high',
+        title: 'New High Urgency Service Disruption',
+        status: 'OPEN',
+        priority: null,
+        urgency: 'HIGH',
+        createdAt: new Date().toISOString(),
+      };
+
+      act(() => {
+        mockUseRealtime.mockReturnValue({
+          recentIncidents: [existingIncident, newHighIncident],
+        });
+        rerender();
+      });
+
+      expect(result.current.isBannerVisible).toBe(true);
+      expect(result.current.currentIncident?.id).toBe('inc-new-high');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('initializes as dismissed if 120 seconds have already elapsed in sessionStorage without showing banner', () => {
+    const shownTimestamp = Date.now() - 130 * 1000; // 130s ago (>120s)
+    sessionStorage.setItem(SHOWN_STORAGE_KEY, String(shownTimestamp));
+
+    const initialIncidents: CriticalIncidentSummary[] = [
+      {
+        id: 'inc-past-timer',
+        title: 'Past 120s Incident',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        priority: null,
+        createdAt: new Date(shownTimestamp).toISOString(),
+      },
+    ];
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider initialIncidents={initialIncidents}>{children}</IncidentAlertProvider>
+    );
+
+    const { result } = renderHook(() => useIncidentAlert(), { wrapper });
+
+    // Should immediately be dismissed without flashing
+    expect(result.current.isBannerVisible).toBe(false);
+    expect(result.current.isDismissed).toBe(true);
+    expect(sessionStorage.getItem(DISMISSED_STORAGE_KEY)).toBe(String(shownTimestamp + AUTO_DISMISS_TIMEOUT_MS));
+    expect(sessionStorage.getItem(SHOWN_STORAGE_KEY)).toBeNull();
+  });
+
+  it('supports HIGH urgency incidents when P1 is not declared, sorting them at rank 1 ahead of P2', () => {
+    const initialIncidents: CriticalIncidentSummary[] = [
+      {
+        id: 'inc-p2',
+        title: 'Cache Latency Warning',
+        status: 'OPEN',
+        priority: 'P2',
+        urgency: 'MEDIUM',
+        createdAt: '2026-09-06T10:00:00Z',
+      },
+      {
+        id: 'inc-high-no-p1',
+        title: 'Payment API Gateway Failure',
+        status: 'OPEN',
+        priority: null, // P1 not declared!
+        urgency: 'HIGH',
+        createdAt: '2026-09-06T09:00:00Z',
+      },
+    ];
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider initialIncidents={initialIncidents}>{children}</IncidentAlertProvider>
+    );
+
+    const { result } = renderHook(() => useIncidentAlert(), { wrapper });
+
+    expect(result.current.totalCount).toBe(2);
+    // Even though created earlier than inc-p2 and priority is null, urgency HIGH puts it at rank 1
+    expect(result.current.currentIncident?.id).toBe('inc-high-no-p1');
+    expect(result.current.activeCriticalIncidents[0].id).toBe('inc-high-no-p1');
+    expect(result.current.activeCriticalIncidents[1].id).toBe('inc-p2');
+  });
+
+  it('re-triggers banner and clears dismissal when an incident escalates to HIGH urgency without declared P1', () => {
+    const existingIncident = {
+      id: 'inc-escalate',
+      title: 'Slow Database Query',
+      status: 'OPEN',
+      priority: null,
+      urgency: 'MEDIUM',
+      createdAt: new Date(Date.now() - 100000).toISOString(),
+    };
+
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [existingIncident],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    const { result, rerender } = renderHook(() => useIncidentAlert(), { wrapper });
+
+    // User dismisses banner
+    act(() => {
+      result.current.dismissBanner();
+    });
+    expect(result.current.isBannerVisible).toBe(false);
+
+    // Incident escalates to urgency: HIGH in real-time (priority remains undeclared)
+    const escalatedIncident = {
+      ...existingIncident,
+      title: 'Database Outage - Critical Slowdown',
+      urgency: 'HIGH',
+      updatedAt: new Date().toISOString(),
+    };
+
+    act(() => {
+      mockUseRealtime.mockReturnValue({
+        recentIncidents: [escalatedIncident],
+      });
+      rerender();
+    });
+
+    // Escalation to HIGH urgency MUST re-trigger the banner!
+    expect(result.current.isBannerVisible).toBe(true);
+    expect(result.current.currentIncident?.id).toBe('inc-escalate');
+    expect(result.current.currentIncident?.urgency).toBe('HIGH');
+  });
+
+  it('does NOT break prior dismissal when a new non-critical (P2/MEDIUM) incident arrives', () => {
+    const p1Incident = {
+      id: 'inc-initial-p1',
+      title: 'Initial Outage',
+      status: 'OPEN',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date(Date.now() - 60000).toISOString(),
+    };
+
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [p1Incident],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    const { result, rerender } = renderHook(() => useIncidentAlert(), { wrapper });
+    expect(result.current.isBannerVisible).toBe(true);
+
+    // Dismiss banner
+    act(() => {
+      result.current.dismissBanner();
+    });
+    expect(result.current.isBannerVisible).toBe(false);
+
+    // A P2 incident with MEDIUM urgency arrives
+    const p2Arrival = {
+      id: 'inc-p2-medium',
+      title: 'Secondary Service Warning',
+      status: 'OPEN',
+      priority: 'P2',
+      urgency: 'MEDIUM',
+      createdAt: new Date().toISOString(),
+    };
+
+    act(() => {
+      mockUseRealtime.mockReturnValue({
+        recentIncidents: [p1Incident, p2Arrival],
+      });
+      rerender();
+    });
+
+    // P2/MEDIUM incident should NOT break the dismissal
     expect(result.current.isBannerVisible).toBe(false);
   });
 });

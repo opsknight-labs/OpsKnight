@@ -2,7 +2,13 @@ import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
-import { addNote, addWatcher, removeWatcher, updateIncidentStatus } from '../actions';
+import {
+  addNote,
+  addWatcher,
+  removeWatcher,
+  updateIncidentDescription,
+  updateIncidentStatus,
+} from '../actions';
 import { getPostmortem } from '@/app/(app)/postmortems/actions';
 import IncidentHeader from '@/components/incident/IncidentHeader';
 import IncidentWatchers from '@/components/incident/detail/IncidentWatchers';
@@ -181,6 +187,11 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
     'use server';
     const watcherId = formData.get('watcherMemberId') as string;
     await removeWatcher(id, watcherId);
+  }
+
+  async function handleUpdateDescription(description: string) {
+    'use server';
+    await updateIncidentDescription(id, description);
   }
 
   const getStatusColor = () => {
@@ -372,6 +383,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
         incidentId={incident.id}
         description={incident.description}
         canManage={canManageIncident}
+        onUpdateDescription={handleUpdateDescription}
       />
 
       {incident.status === 'RESOLVED' && (

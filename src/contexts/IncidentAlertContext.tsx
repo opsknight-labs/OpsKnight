@@ -54,9 +54,19 @@ export interface IncidentAlertContextValue {
 
 const IncidentAlertContext = createContext<IncidentAlertContextValue | null>(null);
 
-const DISMISSED_STORAGE_KEY = 'opsknight:banner_dismissed_at';
-const SNOOZE_STORAGE_KEY = 'opsknight:snoozed_critical_incidents';
+export const AUTO_DISMISS_TIMEOUT_MS = 120 * 1000; // 120 seconds
+export const DISMISSED_STORAGE_KEY = 'opsknight:banner_dismissed_at';
+export const SHOWN_STORAGE_KEY = 'opsknight:banner_shown_at';
 const RECENCY_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+export function isP1OrHighUrgency(item: {
+  priority?: unknown;
+  urgency?: unknown;
+}): boolean {
+  const priority = typeof item.priority === 'string' ? item.priority.toUpperCase() : null;
+  const urgency = typeof item.urgency === 'string' ? item.urgency.toUpperCase() : null;
+  return priority === 'P1' || urgency === 'HIGH';
+}
 
 function isCriticalIncident(item: {
   status?: unknown;
@@ -123,6 +133,21 @@ export function IncidentAlertProvider({
         const val = Number(stored);
         if (!isNaN(val) && val > 0) return val;
       }
+
+      // Check if a prior active banner auto-dismissed while navigating or in background
+      const shownStored = sessionStorage.getItem(SHOWN_STORAGE_KEY);
+      if (shownStored) {
+        const shownVal = Number(shownStored);
+        if (!isNaN(shownVal) && shownVal > 0) {
+          const elapsed = Date.now() - shownVal;
+          if (elapsed >= AUTO_DISMISS_TIMEOUT_MS) {
+            const autoDismissTime = shownVal + AUTO_DISMISS_TIMEOUT_MS;
+            sessionStorage.setItem(DISMISSED_STORAGE_KEY, String(autoDismissTime));
+            sessionStorage.removeItem(SHOWN_STORAGE_KEY);
+            return autoDismissTime;
+          }
+        }
+      }
     } catch {
       // Ignore storage read error
     }
@@ -141,6 +166,7 @@ export function IncidentAlertProvider({
     setDismissedAt(now);
     try {
       sessionStorage.setItem(DISMISSED_STORAGE_KEY, String(now));
+      sessionStorage.removeItem(SHOWN_STORAGE_KEY);
     } catch {
       // Ignore write error
     }
@@ -150,6 +176,7 @@ export function IncidentAlertProvider({
     setDismissedAt(null);
     try {
       sessionStorage.removeItem(DISMISSED_STORAGE_KEY);
+      sessionStorage.removeItem(SHOWN_STORAGE_KEY);
     } catch {
       // Ignore write error
     }
@@ -208,8 +235,15 @@ export function IncidentAlertProvider({
             next.set(parsed.id, parsed);
             changed = true;
 
-            // If an incident escalates (e.g. from P2 to P1 or reopens), re-open banner across all pages
-            if (existing && existing.priority !== 'P1' && parsed.priority === 'P1') {
+            // If an incident escalates (e.g. from P2/medium to P1 or HIGH urgency), re-open banner across all pages
+            const wasHighOrP1 = existing && isP1OrHighUrgency(existing);
+            const isHighOrP1 = isP1OrHighUrgency(parsed);
+            const updatedTime = parsed.updatedAt ? new Date(parsed.updatedAt).getTime() : 0;
+            const isEscalation =
+              (existing && !wasHighOrP1 && isHighOrP1) ||
+              (!existing && isHighOrP1 && (updatedTime >= mountTimestampRef.current - 5000 || updatedTime > (dismissedAt ?? 0)));
+
+            if (isEscalation) {
               clearDismissal();
             }
           }
@@ -226,8 +260,10 @@ export function IncidentAlertProvider({
         if (isNewArrival) {
           toastedIdsRef.current.add(parsed.id);
 
-          // A brand-new critical incident breaks any prior dismissal across all pages
-          clearDismissal();
+          // A brand-new critical incident (P1 or HIGH urgency) breaks any prior dismissal across all pages
+          if (isP1OrHighUrgency(parsed)) {
+            clearDismissal();
+          }
 
           notify.incident(
             {
@@ -249,7 +285,7 @@ export function IncidentAlertProvider({
 
       return changed ? next : prev;
     });
-  }, [recentIncidents, clearDismissal, acknowledgeIncident]);
+  }, [recentIncidents, clearDismissal, acknowledgeIncident, dismissedAt]);
 
   // Derive visible active critical incidents scoped to the last 24h
   const activeCriticalIncidents = useMemo(() => {
@@ -266,10 +302,11 @@ export function IncidentAlertProvider({
         // Open before Acknowledged
         if (a.status === 'OPEN' && b.status !== 'OPEN') return -1;
         if (b.status === 'OPEN' && a.status !== 'OPEN') return 1;
-        // P1 before P2
-        const pA = a.priority === 'P1' ? 1 : a.priority === 'P2' ? 2 : 3;
-        const pB = b.priority === 'P1' ? 1 : b.priority === 'P2' ? 2 : 3;
-        if (pA !== pB) return pA - pB;
+
+        // P1 or HIGH urgency incidents take top rank (1)
+        const rankA = isP1OrHighUrgency(a) ? 1 : a.priority === 'P2' || a.urgency?.toUpperCase() === 'MEDIUM' ? 2 : 3;
+        const rankB = isP1OrHighUrgency(b) ? 1 : b.priority === 'P2' || b.urgency?.toUpperCase() === 'MEDIUM' ? 2 : 3;
+        if (rankA !== rankB) return rankA - rankB;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [incidentsMap]);
@@ -286,17 +323,66 @@ export function IncidentAlertProvider({
     });
   }, [activeCriticalIncidents, viewingIncidentId]);
 
-  // Once closed (dismissed), banner does NOT show on any page UNLESS a new P1/high incident occurs
+  // Once closed (dismissed), banner does NOT show on any page UNLESS a new P1 or HIGH urgency incident occurs
   const hasNewIncidentAfterDismissal = useMemo(() => {
     if (!dismissedAt) return true;
     return displayableIncidents.some(inc => {
+      if (!isP1OrHighUrgency(inc)) return false;
       const createdTime = new Date(inc.createdAt).getTime();
-      return createdTime > dismissedAt;
+      const updatedTime = inc.updatedAt ? new Date(inc.updatedAt).getTime() : 0;
+      return createdTime > dismissedAt || updatedTime > dismissedAt;
     });
   }, [displayableIncidents, dismissedAt]);
 
   const isBannerVisible = displayableIncidents.length > 0 && hasNewIncidentAfterDismissal;
   const isDismissed = Boolean(dismissedAt && !hasNewIncidentAfterDismissal);
+
+  // Timebound banner: auto-dismiss after 120s and stay hidden until the next incident
+  useEffect(() => {
+    if (!isBannerVisible) return;
+
+    let shownAt = Date.now();
+    try {
+      const stored = sessionStorage.getItem(SHOWN_STORAGE_KEY);
+      if (stored) {
+        const val = Number(stored);
+        if (!isNaN(val) && val > 0) {
+          shownAt = val;
+        } else {
+          sessionStorage.setItem(SHOWN_STORAGE_KEY, String(shownAt));
+        }
+      } else {
+        sessionStorage.setItem(SHOWN_STORAGE_KEY, String(shownAt));
+      }
+    } catch {
+      // Ignore storage error
+    }
+
+    const elapsed = Date.now() - shownAt;
+    const remaining = Math.max(0, AUTO_DISMISS_TIMEOUT_MS - elapsed);
+
+    if (remaining <= 0) {
+      dismissBanner();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      dismissBanner();
+    }, remaining);
+
+    return () => clearTimeout(timer);
+  }, [isBannerVisible, dismissBanner]);
+
+  // Clean up shown timestamp when no critical incidents exist
+  useEffect(() => {
+    if (activeCriticalIncidents.length === 0) {
+      try {
+        sessionStorage.removeItem(SHOWN_STORAGE_KEY);
+      } catch {
+        // Ignore storage error
+      }
+    }
+  }, [activeCriticalIncidents.length]);
 
   const totalCount = displayableIncidents.length;
   const clampedIndex = totalCount > 0 ? Math.min(selectedIndex, totalCount - 1) : 0;

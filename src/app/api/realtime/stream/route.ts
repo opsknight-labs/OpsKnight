@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
         // Establish a durable generation baseline, load the initial projection,
         // then subscribe this connection to the process-wide change fanout.
         const initialGeneration = await getRealtimeChangeGeneration();
-        await refreshProjection(initialGeneration, false);
+        await refreshProjection(initialGeneration, true);
         if (isClosed) return;
         unsubscribeChanges = subscribeToRealtimeChanges(
           'dashboard',
