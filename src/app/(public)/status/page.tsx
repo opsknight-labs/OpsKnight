@@ -18,10 +18,14 @@ import { serializeJsonForHtml, toSafeStyleTagContent } from '@/lib/status-page-c
 import { publicStatusVisibility } from '@/lib/status-page-public-data';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
 import {
-  activeMaintenanceServiceIds as getActiveMaintenanceServiceIds,
   projectServiceStatus,
+  visibleMaintenanceServiceIds,
+  visibleStatusPageMappings,
 } from '@/lib/status-page-projection';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
+import type { Prisma } from '@prisma/client';
+
+type PublicStatusPageMapping = Prisma.StatusPageServiceGetPayload<{ include: { service: true } }>;
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -32,8 +36,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export async function getPublicStatusMetadata(slug?: string): Promise<Metadata> {
   const statusPage = await prisma.statusPage.findFirst({
-    where: { enabled: true, ...(slug ? { slug } : {}) },
-    orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+    where: slug ? { enabled: true, slug } : { enabled: true, isDefault: true },
   });
 
   if (!statusPage) {
@@ -88,8 +91,7 @@ export default async function PublicStatusPage() {
 export async function renderPublicStatusPage(slug?: string) {
   // Get the status page configuration
   const statusPage = await prisma.statusPage.findFirst({
-    where: slug ? { slug } : undefined,
-    orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+    where: slug ? { slug } : { isDefault: true },
     include: {
       services: {
         include: {
@@ -200,9 +202,10 @@ async function renderStatusPage(statusPage: any) {
   const showUptimeExports = statusPage.enableUptimeExports === true && visibility.showUptime;
 
   // Get current service statuses
-  const serviceIds = statusPage.services
-    .filter((sp: any) => sp.showOnPage) // eslint-disable-line @typescript-eslint/no-explicit-any
-    .map((sp: any) => sp.serviceId); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const visibleMappings = visibleStatusPageMappings(
+    statusPage.services as PublicStatusPageMapping[]
+  );
+  const serviceIds = visibleMappings.map((sp: { serviceId: string }) => sp.serviceId);
 
   // If no services are configured, get all services (or show empty state)
   let services: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -283,7 +286,7 @@ async function renderStatusPage(statusPage: any) {
 
   const ninetyDaysAgo = new Date(ninetyDayWindow.start);
   const thirtyDaysAgo = new Date(thirtyDayWindow.start);
-  const serviceIdsForSLA: string[] = statusPage.services.map((sp: { serviceId: string }) =>
+  const serviceIdsForSLA: string[] = visibleMappings.map((sp: { serviceId: string }) =>
     String(sp.serviceId)
   );
 
@@ -336,7 +339,7 @@ async function renderStatusPage(statusPage: any) {
   });
 
   // Re-map services to include SLA-derived status and incident counts
-  services = statusPage.services.map((sp: any) => {
+  services = visibleMappings.map((sp: any) => {
     const serviceMetric = metrics.serviceMetrics.find((m: any) => m.id === sp.serviceId);
     return {
       ...sp.service,
@@ -372,7 +375,11 @@ async function renderStatusPage(statusPage: any) {
       })
     : [];
 
-  const activeMaintenanceServiceIds = getActiveMaintenanceServiceIds(statusPage.announcements, now);
+  const activeMaintenanceServiceIds = visibleMaintenanceServiceIds(
+    statusPage.announcements,
+    serviceIds,
+    now
+  );
   services = services.map(service => ({
     ...service,
     status: projectServiceStatus(service.id, service.status, activeMaintenanceServiceIds),
@@ -968,7 +975,7 @@ async function renderStatusPage(statusPage: any) {
               {services.length > 0 ? (
                 <StatusPageServices
                   services={services}
-                  statusPageServices={statusPage.services}
+                  statusPageServices={visibleMappings}
                   uptime90={visibility.showUptime ? serviceUptime90 : {}}
                   incidents={incidentsForHistory}
                   privacySettings={{

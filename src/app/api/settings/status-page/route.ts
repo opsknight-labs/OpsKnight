@@ -137,6 +137,10 @@ export async function POST(req: NextRequest) {
           orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
         });
 
+    if (id && !statusPage) {
+      return jsonError('Status page not found.', 404);
+    }
+
     if (!statusPage) {
       statusPage = await prisma.statusPage.create({
         data: {

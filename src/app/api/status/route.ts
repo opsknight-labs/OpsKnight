@@ -13,9 +13,10 @@ import {
 } from '@/lib/status-page-public-data';
 import { createHash } from 'node:crypto';
 import {
-  activeMaintenanceServiceIds,
   projectOverallStatus,
   projectServiceStatus,
+  statusProjectionClock,
+  visibleMaintenanceServiceIds,
 } from '@/lib/status-page-projection';
 import { observeOperationalHistogram } from '@/lib/metrics/operational/registry';
 
@@ -33,8 +34,7 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
   const projectionStartedAt = performance.now();
   try {
     const statusPage = await prisma.statusPage.findFirst({
-      where: { enabled: true, ...(slug ? { slug } : {}) },
-      orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      where: slug ? { enabled: true, slug } : { enabled: true, isDefault: true },
       select: {
         id: true,
         updatedAt: true,
@@ -160,7 +160,10 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
 
     const { calculateMultiServiceUptime, getExternalStatusLabel } =
       await import('@/lib/sla-server');
-    const uptimeWindow = await getReportingWindowForDays(30, 'incident');
+    // Public projections advance on a bounded clock. This keeps ETags useful
+    // across request bursts while still refreshing time-derived uptime once a minute.
+    const projectionNow = statusProjectionClock();
+    const uptimeWindow = await getReportingWindowForDays(30, 'incident', projectionNow);
     const [activeGroups, recentIncidents] = await Promise.all([
       prisma.incident.groupBy({
         by: ['serviceId', 'urgency'],
@@ -209,7 +212,11 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
       serviceActiveCountMap.set(serviceId, activeCount);
     }
 
-    const maintenanceServiceIds = activeMaintenanceServiceIds(statusPage.announcements, new Date());
+    const maintenanceServiceIds = visibleMaintenanceServiceIds(
+      statusPage.announcements,
+      serviceIds,
+      projectionNow
+    );
     for (const serviceId of serviceIds) {
       serviceStatusMap.set(
         serviceId,

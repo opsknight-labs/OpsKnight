@@ -28,8 +28,7 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
     const days = Number.isFinite(parsedDays) ? Math.min(Math.max(parsedDays, 1), 730) : 90;
 
     const statusPage = await prisma.statusPage.findFirst({
-      where: { enabled: true, ...(slug ? { slug } : {}) },
-      orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      where: slug ? { enabled: true, slug } : { enabled: true, isDefault: true },
       include: {
         services: {
           include: {

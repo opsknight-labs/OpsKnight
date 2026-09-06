@@ -10,6 +10,10 @@ function normalizedHost(value: string): string {
   return value.trim().toLowerCase().split(':')[0] ?? '';
 }
 
+export function statusPageSlugMatches(actualSlug: string | null, expectedSlug?: string): boolean {
+  return expectedSlug === undefined || actualSlug === expectedSlug;
+}
+
 /** Resolve page identity once at the transport boundary; downstream code receives an explicit page id. */
 export async function resolveStatusPage(identity: StatusPageIdentity = { default: true }) {
   if ('id' in identity) {
@@ -26,8 +30,7 @@ export async function resolveStatusPage(identity: StatusPageIdentity = { default
     });
   }
   return prisma.statusPage.findFirst({
-    where: { enabled: true },
-    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+    where: { isDefault: true, enabled: true },
   });
 }
 

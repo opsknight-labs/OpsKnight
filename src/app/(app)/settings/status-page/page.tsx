@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { assertAdmin } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import StatusPageConfig from '@/components/StatusPageConfig';
@@ -48,6 +48,8 @@ export default async function StatusPageSettingsPage({
       },
     },
   });
+
+  if (selectedPageId && !statusPage) notFound();
 
   if (!statusPage) {
     // Create default status page

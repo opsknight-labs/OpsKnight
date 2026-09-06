@@ -6,6 +6,14 @@ export type MaintenanceAnnouncement = {
   affectedServiceIds?: unknown;
 };
 
+export function visibleStatusPageMappings<T extends { showOnPage: boolean }>(mappings: T[]): T[] {
+  return mappings.filter(mapping => mapping.showOnPage);
+}
+
+export function statusProjectionClock(nowMs: number = Date.now()): Date {
+  return new Date(Math.floor(nowMs / 60_000) * 60_000);
+}
+
 export function activeMaintenanceServiceIds(
   announcements: MaintenanceAnnouncement[],
   now: Date
@@ -22,6 +30,19 @@ export function activeMaintenanceServiceIds(
     }
   }
   return result;
+}
+
+export function visibleMaintenanceServiceIds(
+  announcements: MaintenanceAnnouncement[],
+  visibleServiceIds: Iterable<string>,
+  now: Date
+): Set<string> {
+  const visible = new Set(visibleServiceIds);
+  return new Set(
+    [...activeMaintenanceServiceIds(announcements, now)].filter(serviceId =>
+      visible.has(serviceId)
+    )
+  );
 }
 
 /** Incident impact always outranks scheduled maintenance. */

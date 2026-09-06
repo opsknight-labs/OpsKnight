@@ -3,18 +3,23 @@ import Link from 'next/link';
 import { logger } from '@/lib/logger';
 import { redirect } from 'next/navigation';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
+import { statusPageSlugMatches } from '@/lib/status-page-resolver';
 
 export const dynamic = 'force-dynamic';
 
 async function confirmUnsubscribe(formData: FormData) {
   'use server';
   const token = String(formData.get('token') || '');
+  const expectedSlug = String(formData.get('expectedSlug') || '');
   if (token) {
     const subscription = await prisma.statusPageSubscription.findUnique({
       where: { token },
       select: { statusPage: { select: { slug: true, isDefault: true } } },
     });
-    if (subscription) {
+    if (
+      subscription &&
+      statusPageSlugMatches(subscription.statusPage.slug, expectedSlug || undefined)
+    ) {
       await prisma.statusPageSubscription.updateMany({
         where: { token, unsubscribedAt: null },
         data: { unsubscribedAt: new Date() },
@@ -37,7 +42,15 @@ export default async function UnsubscribePage({
   searchParams?: Promise<{ done?: string }>;
 }) {
   const { token } = await params;
-  const { done } = (await searchParams) ?? {};
+  return renderUnsubscribePage(token, await searchParams);
+}
+
+export async function renderUnsubscribePage(
+  token: string,
+  searchParams?: { done?: string },
+  expectedSlug?: string
+) {
+  const { done } = searchParams ?? {};
   let status: 'invalid' | 'already_unsubscribed' | 'confirm' | 'success' | 'error' = 'error';
   let subscription = null;
 
@@ -49,7 +62,7 @@ export default async function UnsubscribePage({
       },
     });
 
-    if (!sub) {
+    if (!sub || !statusPageSlugMatches(sub.statusPage.slug, expectedSlug)) {
       status = 'invalid';
     } else if (done === '1' && sub.unsubscribedAt) {
       status = 'success';
@@ -122,6 +135,7 @@ export default async function UnsubscribePage({
           </p>
           <form action={confirmUnsubscribe}>
             <input type="hidden" name="token" value={token} />
+            {expectedSlug && <input type="hidden" name="expectedSlug" value={expectedSlug} />}
             <button type="submit">Confirm unsubscribe</button>
           </form>
         </section>

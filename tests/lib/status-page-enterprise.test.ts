@@ -32,13 +32,16 @@ vi.mock('@/lib/api-keys', () => ({
   hashLegacyScryptToken: async () => 'v1-hash',
 }));
 
-import { resolveStatusPage } from '@/lib/status-page-resolver';
+import { resolveStatusPage, statusPageSlugMatches } from '@/lib/status-page-resolver';
 import { canPublishIncidentToStatusPage } from '@/lib/status-page-publication';
 import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import {
   activeMaintenanceServiceIds,
   projectOverallStatus,
   projectServiceStatus,
+  statusProjectionClock,
+  visibleMaintenanceServiceIds,
+  visibleStatusPageMappings,
 } from '@/lib/status-page-projection';
 
 describe('enterprise status-page contracts', () => {
@@ -48,15 +51,29 @@ describe('enterprise status-page contracts', () => {
     mocks.tokenFindFirst.mockResolvedValue(null);
   });
 
-  it('resolves the legacy route deterministically to the default page', async () => {
+  it('resolves the legacy route only to the enabled default page', async () => {
     mocks.statusPageFindFirst.mockResolvedValue({ id: 'page-default' });
     await expect(resolveStatusPage()).resolves.toEqual({ id: 'page-default' });
     expect(mocks.statusPageFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { enabled: true },
-        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        where: { isDefault: true, enabled: true },
       })
     );
+  });
+
+  it('does not fall through from a disabled default page to another enabled page', async () => {
+    mocks.statusPageFindFirst.mockResolvedValue(null);
+    await expect(resolveStatusPage()).resolves.toBeNull();
+    expect(mocks.statusPageFindFirst).toHaveBeenCalledTimes(1);
+    expect(mocks.statusPageFindFirst).toHaveBeenCalledWith({
+      where: { isDefault: true, enabled: true },
+    });
+  });
+
+  it('binds verification and unsubscribe tokens to the slug in the route', () => {
+    expect(statusPageSlugMatches('page-a', 'page-a')).toBe(true);
+    expect(statusPageSlugMatches('page-a', 'page-b')).toBe(false);
+    expect(statusPageSlugMatches('page-a')).toBe(true);
   });
 
   it('fails closed unless page, mapping, service and public incident authorize a postmortem', async () => {
@@ -146,5 +163,57 @@ describe('enterprise status-page contracts', () => {
     expect(projectServiceStatus('service-a', 'CRITICAL', maintenance)).toBe('CRITICAL');
     expect(projectOverallStatus(true, true, maintenance)).toBe('outage');
     expect(projectOverallStatus(false, false, maintenance)).toBe('maintenance');
+  });
+
+  it('ignores maintenance that references services hidden or removed from the page', () => {
+    const maintenance = visibleMaintenanceServiceIds(
+      [
+        {
+          type: 'MAINTENANCE',
+          isActive: true,
+          startDate: '2026-09-06T10:00:00Z',
+          endDate: '2026-09-06T12:00:00Z',
+          affectedServiceIds: ['visible-service', 'removed-service'],
+        },
+      ],
+      ['visible-service'],
+      new Date('2026-09-06T11:00:00Z')
+    );
+    expect([...maintenance]).toEqual(['visible-service']);
+    expect(projectOverallStatus(false, false, new Set(['removed-service']))).toBe('maintenance');
+    expect(
+      projectOverallStatus(
+        false,
+        false,
+        visibleMaintenanceServiceIds(
+          [
+            {
+              type: 'MAINTENANCE',
+              affectedServiceIds: ['removed-service'],
+            },
+          ],
+          ['visible-service'],
+          new Date()
+        )
+      )
+    ).toBe('operational');
+  });
+
+  it('keeps hidden service mappings out of every downstream public projection', () => {
+    const visible = visibleStatusPageMappings([
+      { serviceId: 'visible', showOnPage: true },
+      { serviceId: 'hidden', showOnPage: false },
+    ]);
+    expect(visible).toEqual([{ serviceId: 'visible', showOnPage: true }]);
+    expect(visible.map(mapping => mapping.serviceId)).not.toContain('hidden');
+  });
+
+  it('uses a stable projection clock within an edge-cache window', () => {
+    expect(statusProjectionClock(Date.parse('2026-09-06T11:26:01.000Z')).toISOString()).toBe(
+      '2026-09-06T11:26:00.000Z'
+    );
+    expect(statusProjectionClock(Date.parse('2026-09-06T11:26:59.999Z')).toISOString()).toBe(
+      '2026-09-06T11:26:00.000Z'
+    );
   });
 });

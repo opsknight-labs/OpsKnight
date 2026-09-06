@@ -30,8 +30,7 @@ export async function GET(req: NextRequest) {
 export async function getStatusRssResponse(req: NextRequest, slug?: string) {
   try {
     const statusPage = await prisma.statusPage.findFirst({
-      where: { enabled: true, ...(slug ? { slug } : {}) },
-      orderBy: slug ? undefined : [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      where: slug ? { enabled: true, slug } : { enabled: true, isDefault: true },
       include: {
         services: {
           include: {
