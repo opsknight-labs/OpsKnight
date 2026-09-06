@@ -29,7 +29,6 @@ import {
   bulkUpdateStatus,
 } from '@/app/(app)/incidents/bulk-actions';
 import { useToast } from '@/hooks/use-product-notification';
-import { notify } from '@/lib/toast';
 import Pagination from './Pagination';
 
 import StatusBadge from './StatusBadge';
@@ -275,15 +274,6 @@ export default function IncidentsListTable({
         return next;
       });
 
-      // Show centralized rich Incident Alert Card (handles single & multiple incidents, working cross dismiss, quick ack)
-      notify.incident(newIncomingItems, {
-        onAcknowledge: isManageable
-          ? async incidentId => {
-              await handleStatusChange(incidentId, 'ACKNOWLEDGED');
-            }
-          : undefined,
-      });
-
       // Background sync with server
       router.refresh();
 
@@ -321,7 +311,7 @@ export default function IncidentsListTable({
       });
       router.refresh();
     }
-  }, [recentIncidents, router, handleStatusChange, isManageable]);
+  }, [recentIncidents, router]);
 
   useEffect(() => {
     if (focusedIndex !== null) {
