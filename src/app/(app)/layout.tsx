@@ -204,71 +204,74 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   let initialCriticalIncidents: CriticalIncidentSummary[] = [];
-  try {
-    const isPrivileged = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.INCIDENT_READ_ALL);
-    const whereScope: Prisma.IncidentWhereInput = {
-      status: { in: activeIncidentStatuses() },
-      OR: [
-        { priority: { in: ['P1', 'P2'] } },
-        { urgency: 'HIGH' },
-      ],
-    };
-    if (!isPrivileged && dbUser?.id) {
-      whereScope.AND = [
-        {
-          OR: [
-            { assigneeId: dbUser.id },
-            { service: { team: { members: { some: { userId: dbUser.id } } } } },
-          ],
+  // Performance optimization: skip incident fetch entirely if no critical or medium incidents exist
+  if (criticalOpenCount > 0 || mediumOpenCount > 0) {
+    try {
+      const isPrivileged = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.INCIDENT_READ_ALL);
+      const whereScope: Prisma.IncidentWhereInput = {
+        status: { in: activeIncidentStatuses() },
+        OR: [
+          { priority: { in: ['P1', 'P2'] } },
+          { urgency: 'HIGH' },
+        ],
+      };
+      if (!isPrivileged && dbUser?.id) {
+        whereScope.AND = [
+          {
+            OR: [
+              { assigneeId: dbUser.id },
+              { service: { team: { members: { some: { userId: dbUser.id } } } } },
+            ],
+          },
+        ];
+      }
+
+      const fetched = await prisma.incident.findMany({
+        where: whereScope,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          urgency: true,
+          priority: true,
+          createdAt: true,
+          updatedAt: true,
+          acknowledgedAt: true,
+          service: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          assignee: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
-      ];
+        orderBy: [
+          { priority: 'asc' },
+          { createdAt: 'desc' },
+        ],
+        take: 5,
+      });
+
+      initialCriticalIncidents = fetched.map(inc => ({
+        id: inc.id,
+        title: inc.title,
+        status: inc.status,
+        urgency: inc.urgency,
+        priority: inc.priority,
+        createdAt: inc.createdAt.toISOString(),
+        updatedAt: inc.updatedAt?.toISOString() ?? null,
+        acknowledgedAt: inc.acknowledgedAt?.toISOString() ?? null,
+        service: inc.service ? { id: inc.service.id, name: inc.service.name } : null,
+        assignee: inc.assignee ? { id: inc.assignee.id, name: inc.assignee.name ?? null } : null,
+      }));
+    } catch (error) {
+      logger.error('[App Layout] Failed to load initial critical incidents', { component: 'layout', error });
     }
-
-    const fetched = await prisma.incident.findMany({
-      where: whereScope,
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        urgency: true,
-        priority: true,
-        createdAt: true,
-        updatedAt: true,
-        acknowledgedAt: true,
-        service: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        assignee: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: [
-        { priority: 'asc' },
-        { createdAt: 'desc' },
-      ],
-      take: 5,
-    });
-
-    initialCriticalIncidents = fetched.map(inc => ({
-      id: inc.id,
-      title: inc.title,
-      status: inc.status,
-      urgency: inc.urgency,
-      priority: inc.priority,
-      createdAt: inc.createdAt.toISOString(),
-      updatedAt: inc.updatedAt?.toISOString() ?? null,
-      acknowledgedAt: inc.acknowledgedAt?.toISOString() ?? null,
-      service: inc.service ? { id: inc.service.id, name: inc.service.name } : null,
-      assignee: inc.assignee ? { id: inc.assignee.id, name: inc.assignee.name ?? null } : null,
-    }));
-  } catch (error) {
-    logger.error('[App Layout] Failed to load initial critical incidents', { component: 'layout', error });
   }
 
   // Status Logic
