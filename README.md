@@ -26,18 +26,13 @@ _From alert ingestion and on-call routing through response, customer communicati
 ---
 
 > [!IMPORTANT]
-> ### 🚀 OpsKnight 2.0 is in active development!
+> ### 🚀 OpsKnight 2.0 is coming soon!
 >
-> Following our **v1.4.0** release, over **220+ PRs** have been merged into `main`. While we initially planned a minor `v1.5` update, the sheer scale of improvements across every layer of the platform has evolved this milestone into our next major evolutionary leap: **OpsKnight 2.0**!
+> We have merged over **220+ PRs** since our last release (`v1.4.0`). While we initially planned a minor `v1.5`, the massive improvements across the board—a completely redesigned modern UI, real-time push streaming, rock-solid availability, and deep engine upgrades—mean our next milestone will be **OpsKnight 2.0**!
 >
-> **What to look forward to in OpsKnight 2.0:**
-> - 🎨 **Next-Gen UI & War Room Experience**: Completely refreshed command center, fluid zero-CLS navigation, streamlined incident creation modals & templating, dark/light theme ergonomics, and unified hero headers.
-> - ⚡ **Event-Driven Push Engine**: High-performance Server-Sent Events (SSE) streaming with a durable control plane, sub-second fanout, zero layout flickering, and persistent contextual emergency alert banners with smart 120s auto-dismissal.
-> - 🛡️ **Enterprise Availability & Resilience**: Centralized mutation command engine, durable side-effect outbox, typed application error contracts, fail-closed security, and robust database offline fallbacks.
-> - 📅 **Hardened On-Call & Rotations**: DST-safe rotation resolution, shift handoff awareness, alert flapping suppression, and multi-channel delivery (Slack ChatOps, Web Push, SMS, WhatsApp, Email).
-> - 🌐 **Multi-Page Status Portals**: Enterprise multi-page status architecture with granular privacy, dynamic inheritance, and real-time subscriber delivery.
+> We're putting the finishing touches on a faster, more reliable, and beautiful incident response platform.
 >
-> 💡 *To our community and repository watchers: **OpsKnight 2.0 is going to be massive.** Star ⭐ and watch this repository to stay tuned for the upcoming release!*
+> ⭐ **Star and watch this repository to stay tuned for the 2.0 release!**
 
 ---
 
@@ -356,7 +351,7 @@ Hardening guidance: [Security documentation](docs/v1.4/security/README.md)
 - [x] **Mobile PWA with Biometric Security & Push Notifications**
 - [x] **Administrator Health Center & Release-Quality Contract**
 - [x] **Reliable Delayed Escalation Recovery & Multi-Architecture Releases**
-- [ ] 🚀 **OpsKnight 2.0: Next-Gen UI/UX, Real-Time Push Stream Engine, and Enterprise Availability Hardening**
+- [ ] 🚀 **OpsKnight 2.0: Redesigned UI, real-time push engine, and availability hardening**
 
 See the full [ROADMAP.md](ROADMAP.md)
 
