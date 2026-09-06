@@ -339,8 +339,8 @@ async function renderStatusPage(statusPage: any) {
   });
 
   // Re-map services to include SLA-derived status and incident counts
-  services = visibleMappings.map((sp: any) => {
-    const serviceMetric = metrics.serviceMetrics.find((m: any) => m.id === sp.serviceId);
+  services = visibleMappings.map(sp => {
+    const serviceMetric = metrics.serviceMetrics.find(metric => metric.id === sp.serviceId);
     return {
       ...sp.service,
       status: serviceStatusMap.get(sp.serviceId) || sp.service.status,
