@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
@@ -20,6 +20,7 @@ export default function DashboardRefresh({ autoRefreshInterval = 60 }: Dashboard
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [timeUntilRefresh, setTimeUntilRefresh] = useState(autoRefreshInterval);
   const [mounted, setMounted] = useState(false);
+  const [, startTransition] = useTransition();
 
   // Only set time after component mounts on client
   useEffect(() => {
@@ -37,7 +38,9 @@ export default function DashboardRefresh({ autoRefreshInterval = 60 }: Dashboard
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    router.refresh();
+    startTransition(() => {
+      router.refresh();
+    });
     setLastUpdated(new Date());
     setTimeUntilRefresh(autoRefreshInterval);
     setTimeout(() => setIsRefreshing(false), 500);
@@ -78,7 +81,7 @@ export default function DashboardRefresh({ autoRefreshInterval = 60 }: Dashboard
           <>
             Updated: {formatDateTime(lastUpdated, userTimeZone, { format: 'time' })}
             {autoRefreshEnabled && (
-              <span className="ml-2 text-xs font-mono text-slate-400">
+              <span className="ml-2 text-xs font-mono tabular-nums text-slate-400">
                 (Auto: {timeUntilRefresh}s)
               </span>
             )}

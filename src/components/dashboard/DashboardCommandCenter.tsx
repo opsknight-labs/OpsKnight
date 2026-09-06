@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React from 'react';
 import DashboardRefresh from '../DashboardRefresh';
 import DashboardExport from '../DashboardExport';
 import MetricCard from './MetricCard';
@@ -160,30 +160,22 @@ export default function DashboardCommandCenter({
 
         {/* Actions */}
         <div className="flex gap-2">
-          <Suspense
-            fallback={<div className="h-8 w-20 bg-slate-800/60 rounded-lg animate-pulse" />}
-          >
-            <DashboardRefresh />
-          </Suspense>
-          <Suspense
-            fallback={<div className="h-8 w-24 bg-slate-800/60 rounded-lg animate-pulse" />}
-          >
-            <DashboardExport
-              incidents={incidents}
-              filters={filters}
-              metrics={{
-                totalActive: currentActiveCount,
-                totalTriggered: currentTriggeredCount,
-                totalMuted: currentMutedCount,
-                totalSnoozed: currentSnoozedCount,
-                totalSuppressed: currentSuppressedCount,
-                totalResolved: metricsResolvedCount,
-                totalAcknowledged: currentAcknowledgedCount,
-                unassigned: unassignedCount,
-                dataState: metricDataState,
-              }}
-            />
-          </Suspense>
+          <DashboardRefresh />
+          <DashboardExport
+            incidents={incidents}
+            filters={filters}
+            metrics={{
+              totalActive: currentActiveCount,
+              totalTriggered: currentTriggeredCount,
+              totalMuted: currentMutedCount,
+              totalSnoozed: currentSnoozedCount,
+              totalSuppressed: currentSuppressedCount,
+              totalResolved: metricsResolvedCount,
+              totalAcknowledged: currentAcknowledgedCount,
+              unassigned: unassignedCount,
+              dataState: metricDataState,
+            }}
+          />
         </div>
       </div>
 
