@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useTransition } from 'react';
+import { useCallback, useState, useRef, useEffect, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/shadcn/input';
 import {
@@ -16,6 +16,7 @@ import {
   Briefcase,
   Filter,
   Flame,
+  Loader2,
   MinusCircle,
   Search,
   ArrowUpDown,
@@ -66,6 +67,24 @@ export default function DashboardIncidentFilters({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
+  // Local state for search to prevent re-rendering server components on every keystroke
+  const [searchValue, setSearchValue] = useState(currentSearch);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Synchronize local searchValue when currentSearch changes externally (e.g. clear filters or browser nav)
+  useEffect(() => {
+    setSearchValue(currentSearch);
+  }, [currentSearch]);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
   const updateParams = useCallback(
     (updates: Record<string, string>) => {
       const currentQuery = searchParams.toString();
@@ -96,7 +115,30 @@ export default function DashboardIncidentFilters({
     [router, searchParams, startTransition]
   );
 
+  const handleSearchChange = (val: string) => {
+    setSearchValue(val);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      updateParams({ search: val });
+    }, 300);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      updateParams({ search: searchValue });
+    }
+  };
+
   const clearFilters = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    setSearchValue('');
     startTransition(() => {
       router.push('/', { scroll: false });
     });
@@ -123,7 +165,7 @@ export default function DashboardIncidentFilters({
   ].filter(Boolean).length;
 
   return (
-    <div className="rounded-2xl border border-border bg-card shadow-xs transition-all duration-200 overflow-hidden">
+    <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
       {/* Header */}
       <div className="p-4 pb-3 border-b border-border">
         <div className="flex items-center justify-between">
@@ -140,6 +182,12 @@ export default function DashboardIncidentFilters({
           </div>
 
           <div className="flex items-center gap-2">
+            {isPending && (
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium mr-1">
+                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                <span>Updating...</span>
+              </div>
+            )}
             {activeFilterCount > 0 && (
               <Badge variant="info" size="xs">
                 {activeFilterCount} active
@@ -281,8 +329,9 @@ export default function DashboardIncidentFilters({
                 id="dashboard-incident-search"
                 placeholder="Search..."
                 className="h-9 pl-8 text-xs bg-white border-border hover:border-slate-300 focus:border-zinc-400 rounded-lg shadow-2xs"
-                value={currentSearch}
-                onChange={e => updateParams({ search: e.target.value })}
+                value={searchValue}
+                onChange={e => handleSearchChange(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
               />
             </div>
 
@@ -367,8 +416,6 @@ export default function DashboardIncidentFilters({
             </Select>
           </div>
         </div>
-
-        {isPending && <div className="text-[10px] text-slate-400 animate-pulse">Updating...</div>}
       </div>
     </div>
   );

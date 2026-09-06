@@ -67,15 +67,17 @@ const LiveClock = memo(function LiveClock({ timeZone = 'UTC' }: LiveClockProps) 
     };
   }, [formatTime]);
 
-  // Loading state
+  // Loading state matching mounted dimensions and typography
   if (!isMounted || time === null) {
     return (
       <div
-        className="font-mono text-sm bg-[#18181b] border border-zinc-800 text-zinc-400 px-3 py-1.5 rounded-lg flex items-center gap-3 shadow-inner shadow-black/20"
+        className="font-mono text-base bg-gradient-to-b from-[#18181b] to-[#121216] border border-zinc-700/60 text-zinc-400 px-3.5 py-1.5 rounded-lg flex items-center gap-2.5 shadow-md shadow-black/25 ring-1 ring-white/5 select-none"
         aria-label="Loading clock"
       >
-        <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0" aria-hidden="true" />
-        <span className="opacity-50 tracking-widest">--:--:--</span>
+        <div className="relative flex items-center justify-center">
+          <span className="h-2 w-2 rounded-full bg-zinc-600 shrink-0" aria-hidden="true" />
+        </div>
+        <span className="tracking-[0.1em] font-semibold opacity-50">--:--:--</span>
       </div>
     );
   }
@@ -90,7 +92,7 @@ const LiveClock = memo(function LiveClock({ timeZone = 'UTC' }: LiveClockProps) 
     >
       <div className="relative flex items-center justify-center">
         <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+          <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-50" />
           <span
             className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
             aria-hidden="true"

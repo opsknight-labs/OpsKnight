@@ -22,17 +22,24 @@ type MetricCardProps = {
 /**
  * Optimized count-up hook with stable animation
  */
-const useCountUp = (end: number, duration = 800) => {
-  const [count, setCount] = useState(0);
+const useCountUp = (end: number, duration = 350) => {
+  const [count, setCount] = useState(end);
   const animationRef = useRef<number | null>(null);
   const prevEndRef = useRef<number>(end);
-  const countRef = useRef(0);
+  const countRef = useRef(end);
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
     const updateCount = (value: number) => {
       countRef.current = value;
       setCount(value);
     };
+
+    // Skip animation on initial mount so cards show initial values immediately
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
 
     // Skip animation if value hasn't changed
     if (prevEndRef.current === end && countRef.current === end) {
@@ -87,182 +94,198 @@ const useCountUp = (end: number, duration = 800) => {
  * MetricCard Component
  * Displays a single metric with optional animation and range label
  */
-const MetricCard = memo(function MetricCard({
-  label,
-  value,
-  rangeLabel,
-  isDark = false,
-  variant = 'default',
-  tone = 'default',
-  description,
-  href,
-  tooltip,
-  dataState = 'available',
-  asOf,
-}: MetricCardProps) {
-  // Parse value and determine if we should animate
-  const { shouldAnimate, numericEnd, displayString } = React.useMemo(() => {
-    if (typeof value === 'number') {
-      // Guard against NaN and infinity
-      if (!Number.isFinite(value)) {
-        return { shouldAnimate: false, numericEnd: 0, displayString: 'N/A' };
+const MetricCard = memo(
+  function MetricCard({
+    label,
+    value,
+    rangeLabel,
+    isDark = false,
+    variant = 'default',
+    tone = 'default',
+    description,
+    href,
+    tooltip,
+    dataState = 'available',
+    asOf,
+  }: MetricCardProps) {
+    // Parse value and determine if we should animate
+    const { shouldAnimate, numericEnd, displayString } = React.useMemo(() => {
+      if (typeof value === 'number') {
+        // Guard against NaN and infinity
+        if (!Number.isFinite(value)) {
+          return { shouldAnimate: false, numericEnd: 0, displayString: 'N/A' };
+        }
+        return { shouldAnimate: true, numericEnd: Math.max(0, value), displayString: '' };
       }
-      return { shouldAnimate: true, numericEnd: Math.max(0, value), displayString: '' };
-    }
 
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      // Empty string
-      if (trimmed === '') {
-        return { shouldAnimate: false, numericEnd: 0, displayString: '0' };
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        // Empty string
+        if (trimmed === '') {
+          return { shouldAnimate: false, numericEnd: 0, displayString: '0' };
+        }
+        // Check if it looks like a pure number (allowing commas)
+        const clean = trimmed.replace(/,/g, '');
+        const parsed = Number(clean);
+        if (!isNaN(parsed) && Number.isFinite(parsed) && /^[\d,]+$/.test(trimmed)) {
+          return { shouldAnimate: true, numericEnd: Math.max(0, parsed), displayString: '' };
+        }
+        // Keep as string (e.g., percentages, special values)
+        return { shouldAnimate: false, numericEnd: 0, displayString: trimmed };
       }
-      // Check if it looks like a pure number (allowing commas)
-      const clean = trimmed.replace(/,/g, '');
-      const parsed = Number(clean);
-      if (!isNaN(parsed) && Number.isFinite(parsed) && /^[\d,]+$/.test(trimmed)) {
-        return { shouldAnimate: true, numericEnd: Math.max(0, parsed), displayString: '' };
-      }
-      // Keep as string (e.g., percentages, special values)
-      return { shouldAnimate: false, numericEnd: 0, displayString: trimmed };
-    }
 
-    return { shouldAnimate: false, numericEnd: 0, displayString: String(value ?? 'N/A') };
-  }, [value]);
+      return { shouldAnimate: false, numericEnd: 0, displayString: String(value ?? 'N/A') };
+    }, [value]);
 
-  const animatedValue = useCountUp(shouldAnimate ? numericEnd : 0);
+    const animatedValue = useCountUp(shouldAnimate ? numericEnd : 0);
 
-  // Format the display value
-  const formattedDisplay =
-    dataState === 'unavailable' || dataState === 'no_data'
-      ? 'N/A'
-      : shouldAnimate
-        ? animatedValue.toLocaleString()
-        : displayString;
+    // Format the display value
+    const formattedDisplay =
+      dataState === 'unavailable' || dataState === 'no_data'
+        ? 'N/A'
+        : shouldAnimate
+          ? animatedValue.toLocaleString()
+          : displayString;
 
-  const isHero = variant === 'hero';
+    const isHero = variant === 'hero';
 
-  const heroToneClass =
-    tone === 'rose'
-      ? 'border-rose-500/30 bg-rose-950/20 hover:border-rose-500/50 hover:bg-rose-950/30'
-      : tone === 'amber'
-        ? 'border-amber-500/30 bg-amber-950/20 hover:border-amber-500/50 hover:bg-amber-950/30'
-        : tone === 'emerald'
-          ? 'border-emerald-500/30 bg-emerald-950/20 hover:border-emerald-500/50 hover:bg-emerald-950/30'
-          : 'border-zinc-800/80 bg-zinc-900/60 hover:border-zinc-700/80 hover:bg-zinc-800/60';
+    const heroToneClass =
+      tone === 'rose'
+        ? 'border-rose-500/30 bg-rose-950/20 hover:border-rose-500/50 hover:bg-rose-950/30'
+        : tone === 'amber'
+          ? 'border-amber-500/30 bg-amber-950/20 hover:border-amber-500/50 hover:bg-amber-950/30'
+          : tone === 'emerald'
+            ? 'border-emerald-500/30 bg-emerald-950/20 hover:border-emerald-500/50 hover:bg-emerald-950/30'
+            : 'border-zinc-800/80 bg-zinc-900/60 hover:border-zinc-700/80 hover:bg-zinc-800/60';
 
-  const heroValueClass =
-    tone === 'rose'
-      ? 'text-rose-400 font-extrabold'
-      : tone === 'amber'
-        ? 'text-amber-400 font-extrabold'
-        : tone === 'emerald'
-          ? 'text-emerald-400 font-extrabold'
-          : 'text-white font-extrabold';
+    const heroValueClass =
+      tone === 'rose'
+        ? 'text-rose-400 font-extrabold'
+        : tone === 'amber'
+          ? 'text-amber-400 font-extrabold'
+          : tone === 'emerald'
+            ? 'text-emerald-400 font-extrabold'
+            : 'text-white font-extrabold';
 
-  const card = (
-    <div
-      className={cn(
-        'relative h-full overflow-hidden text-center transition-all duration-300',
-        isHero
-          ? cn(
-              'rounded-xl border shadow-xs transition-all text-slate-100 backdrop-blur-xs',
-              heroToneClass
-            )
-          : 'group rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm',
-        'transform-gpu',
-        isDark && !isHero
-          ? 'bg-white/[0.03] border border-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-white/[0.08] hover:border-white/20'
-          : '',
-        isHero ? 'flex min-h-32 flex-col justify-center p-3 md:p-4' : 'p-6 sm:p-4'
-      )}
-      role="figure"
-      aria-label={`${label}: ${formattedDisplay}${description ? `. ${description}` : ''}${rangeLabel ? ` ${rangeLabel}` : ''}`}
-      title={tooltip}
-    >
-      {/* Hover glow effect for dark mode */}
-      {isDark && (
-        <div className="absolute top-0 -left-full w-3/5 h-full bg-gradient-to-r from-transparent via-white/[0.08] to-transparent skew-x-[-20deg] transition-[left] duration-600 pointer-events-none z-0 hover:left-[200%] hover:duration-800" />
-      )}
-
+    const card = (
       <div
         className={cn(
-          'text-3xl sm:text-2xl font-bold mb-1.5 leading-tight tabular-nums relative z-10',
-          isDark ? 'text-white' : isHero ? heroValueClass : 'text-foreground'
+          'relative h-full overflow-hidden text-center transition-all duration-300',
+          isHero
+            ? cn(
+                'rounded-xl border shadow-xs transition-all text-slate-100 backdrop-blur-xs',
+                heroToneClass
+              )
+            : 'group rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm',
+          'transform-gpu',
+          isDark && !isHero
+            ? 'bg-white/[0.03] border border-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-white/[0.08] hover:border-white/20'
+            : '',
+          isHero ? 'flex min-h-32 flex-col justify-center p-3 md:p-4' : 'p-6 sm:p-4'
         )}
-        aria-live="polite"
+        role="figure"
+        aria-label={`${label}: ${formattedDisplay}${description ? `. ${description}` : ''}${rangeLabel ? ` ${rangeLabel}` : ''}`}
+        title={tooltip}
       >
-        {formattedDisplay}
-      </div>
-      <div
-        className={cn(
-          'text-xs font-medium uppercase tracking-wide relative z-10',
-          isDark
-            ? 'text-white/70'
-            : isHero
-              ? 'text-slate-400 font-semibold tracking-wider text-[11px]'
-              : 'text-muted-foreground'
+        {/* Hover glow effect for dark mode */}
+        {isDark && (
+          <div className="absolute top-0 -left-full w-3/5 h-full bg-gradient-to-r from-transparent via-white/[0.08] to-transparent skew-x-[-20deg] transition-[left] duration-600 pointer-events-none z-0 hover:left-[200%] hover:duration-800" />
         )}
-      >
-        {label}{' '}
-        {rangeLabel && (
-          <span
-            className={cn('text-[0.7rem]', isHero ? 'text-slate-400 opacity-90' : 'opacity-80')}
-          >
-            {rangeLabel}
-          </span>
-        )}
-      </div>
-      {description && (
+
         <div
           className={cn(
-            'mt-1 text-[0.7rem] leading-tight relative z-10',
+            'text-3xl sm:text-2xl font-bold mb-1.5 leading-tight tabular-nums relative z-10',
+            isDark ? 'text-white' : isHero ? heroValueClass : 'text-foreground'
+          )}
+          aria-live="polite"
+        >
+          {formattedDisplay}
+        </div>
+        <div
+          className={cn(
+            'text-xs font-medium uppercase tracking-wide relative z-10',
             isDark
-              ? 'text-white/75'
+              ? 'text-white/70'
               : isHero
-                ? 'text-slate-400 text-[11px]'
+                ? 'text-slate-400 font-semibold tracking-wider text-[11px]'
                 : 'text-muted-foreground'
           )}
         >
-          {description}
-        </div>
-      )}
-      {dataState !== 'available' && (
-        <div
-          className={cn(
-            'mt-1 text-[0.65rem] font-semibold uppercase tracking-wide relative z-10',
-            isDark || isHero ? 'text-amber-100' : 'text-amber-700'
+          {label}{' '}
+          {rangeLabel && (
+            <span
+              className={cn('text-[0.7rem]', isHero ? 'text-slate-400 opacity-90' : 'opacity-80')}
+            >
+              {rangeLabel}
+            </span>
           )}
-          role="status"
-        >
-          {dataState === 'unavailable'
-            ? 'Data unavailable'
-            : dataState === 'no_data'
-              ? 'No qualifying data'
-              : `${dataState} data`}
         </div>
-      )}
-      {asOf && dataState !== 'unavailable' && (
-        <span className="sr-only">Data calculated at {asOf}</span>
-      )}
-    </div>
-  );
+        {description && (
+          <div
+            className={cn(
+              'mt-1 text-[0.7rem] leading-tight relative z-10',
+              isDark
+                ? 'text-white/75'
+                : isHero
+                  ? 'text-slate-400 text-[11px]'
+                  : 'text-muted-foreground'
+            )}
+          >
+            {description}
+          </div>
+        )}
+        {dataState !== 'available' && (
+          <div
+            className={cn(
+              'mt-1 text-[0.65rem] font-semibold uppercase tracking-wide relative z-10',
+              isDark || isHero ? 'text-amber-100' : 'text-amber-700'
+            )}
+            role="status"
+          >
+            {dataState === 'unavailable'
+              ? 'Data unavailable'
+              : dataState === 'no_data'
+                ? 'No qualifying data'
+                : `${dataState} data`}
+          </div>
+        )}
+        {asOf && dataState !== 'unavailable' && (
+          <span className="sr-only">Data calculated at {asOf}</span>
+        )}
+      </div>
+    );
 
-  if (!href) return card;
+    if (!href) return card;
 
-  return (
-    <Link
-      href={href}
-      className={cn(
-        'block h-full rounded-xl no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
-        isHero
-          ? 'focus-visible:ring-slate-400 focus-visible:ring-offset-slate-950'
-          : 'focus-visible:ring-ring focus-visible:ring-offset-background'
-      )}
-      aria-label={`View ${label.toLowerCase()} incidents`}
-    >
-      {card}
-    </Link>
-  );
-});
+    return (
+      <Link
+        href={href}
+        className={cn(
+          'block h-full rounded-xl no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+          isHero
+            ? 'focus-visible:ring-slate-400 focus-visible:ring-offset-slate-950'
+            : 'focus-visible:ring-ring focus-visible:ring-offset-background'
+        )}
+        aria-label={`View ${label.toLowerCase()} incidents`}
+      >
+        {card}
+      </Link>
+    );
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.label === nextProps.label &&
+      prevProps.value === nextProps.value &&
+      prevProps.rangeLabel === nextProps.rangeLabel &&
+      prevProps.isDark === nextProps.isDark &&
+      prevProps.variant === nextProps.variant &&
+      prevProps.tone === nextProps.tone &&
+      prevProps.description === nextProps.description &&
+      prevProps.href === nextProps.href &&
+      prevProps.tooltip === nextProps.tooltip &&
+      prevProps.dataState === nextProps.dataState
+    );
+  }
+);
 
 export default MetricCard;

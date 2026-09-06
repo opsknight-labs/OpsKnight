@@ -1,15 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { Button } from '@/components/ui/shadcn/button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/shadcn/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
 import { cn } from '@/lib/utils';
 import { CalendarIcon, X } from 'lucide-react';
 
@@ -35,6 +31,7 @@ export default function DashboardTimeRange({
   const searchParams = useSearchParams();
   const { userTimeZone } = useTimezone();
   const [showCustomPicker, setShowCustomPicker] = useState(false);
+  const [, startTransition] = useTransition();
 
   // Local state for custom date inputs
   const [customStart, setCustomStart] = useState('');
@@ -62,7 +59,9 @@ export default function DashboardTimeRange({
       params.delete('endDate');
     }
     params.delete('page');
-    router.push(`${pathname}?${params.toString()}`);
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    });
   };
 
   const handleCustomApply = () => {
@@ -74,7 +73,9 @@ export default function DashboardTimeRange({
       params.set('startDate', start);
       params.set('endDate', end);
       params.delete('page');
-      router.push(`${pathname}?${params.toString()}`);
+      startTransition(() => {
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      });
       setShowCustomPicker(false);
     }
   };
@@ -86,7 +87,9 @@ export default function DashboardTimeRange({
     params.delete('startDate');
     params.delete('endDate');
     params.delete('page');
-    router.push(`${pathname}?${params.toString()}`);
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    });
     setCustomStart('');
     setCustomEnd('');
   };
@@ -97,7 +100,8 @@ export default function DashboardTimeRange({
 
   const isCustomSelected = !!customStartParam;
   const textClass = tone === 'dark' ? 'text-white/95' : 'text-slate-700';
-  const pillClass = tone === 'dark' ? 'bg-white/10 border-white/10' : 'bg-slate-100 border-border/60';
+  const pillClass =
+    tone === 'dark' ? 'bg-white/10 border-white/10' : 'bg-slate-100 border-border/60';
   const buttonSelectedClass =
     tone === 'dark'
       ? 'bg-white/20 text-white shadow-sm font-bold'
@@ -110,12 +114,12 @@ export default function DashboardTimeRange({
   return (
     <div className="flex items-center gap-3 flex-wrap relative">
       {showLabel && (
-        <span className={cn('text-[0.95rem] font-semibold', textClass)}>
-          Time Range:
-        </span>
+        <span className={cn('text-[0.95rem] font-semibold', textClass)}>Time Range:</span>
       )}
 
-      <div className={cn('flex items-center gap-2 p-1 rounded-lg backdrop-blur-sm border', pillClass)}>
+      <div
+        className={cn('flex items-center gap-2 p-1 rounded-lg backdrop-blur-sm border', pillClass)}
+      >
         {timeRangeOptions.map(option => (
           <Button
             key={option.value}
@@ -124,9 +128,7 @@ export default function DashboardTimeRange({
             size="sm"
             className={cn(
               'h-8 px-3 text-xs font-medium transition-all rounded-md',
-              isSelected(option.value)
-                ? buttonSelectedClass
-                : buttonDefaultClass
+              isSelected(option.value) ? buttonSelectedClass : buttonDefaultClass
             )}
           >
             {option.label}
@@ -140,9 +142,7 @@ export default function DashboardTimeRange({
               size="sm"
               className={cn(
                 'h-8 px-3 text-xs font-medium transition-all gap-2 rounded-md',
-                isCustomSelected
-                  ? buttonSelectedClass
-                  : buttonDefaultClass
+                isCustomSelected ? buttonSelectedClass : buttonDefaultClass
               )}
             >
               <CalendarIcon className="h-3.5 w-3.5" />
@@ -173,7 +173,7 @@ export default function DashboardTimeRange({
                   <input
                     type="date"
                     value={customStart || customStartParam || ''}
-                    onChange={(e) => setCustomStart(e.target.value)}
+                    onChange={e => setCustomStart(e.target.value)}
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
@@ -182,17 +182,13 @@ export default function DashboardTimeRange({
                   <input
                     type="date"
                     value={customEnd || customEndParam || ''}
-                    onChange={(e) => setCustomEnd(e.target.value)}
+                    onChange={e => setCustomEnd(e.target.value)}
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2 border-t">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCustomPicker(false)}
-                >
+                <Button variant="outline" size="sm" onClick={() => setShowCustomPicker(false)}>
                   Cancel
                 </Button>
                 <Button
