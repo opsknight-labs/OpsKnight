@@ -39,6 +39,7 @@ describe('JiraIntegrationPage Component', () => {
 
     // Card 2: Inbound Webhook Sync
     expect(screen.getByText('Inbound Webhook Sync')).toBeInTheDocument();
+    expect(screen.getByText('Jira Cloud Webhook URL')).toBeInTheDocument();
     expect(screen.getByText('OpsKnight Webhook Endpoint')).toBeInTheDocument();
     expect(screen.getByText('Copy URL')).toBeInTheDocument();
 

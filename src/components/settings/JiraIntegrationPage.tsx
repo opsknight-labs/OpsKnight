@@ -463,7 +463,7 @@ export default function JiraIntegrationPage({
 
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Standard Webhook URL (Header-based)
+              OpsKnight Webhook Endpoint
             </Label>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
