@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  Check,
-  Loader2,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
@@ -36,8 +34,6 @@ export default function GlobalIncidentBanner() {
     nextIncident,
     prevIncident,
     dismissBanner,
-    acknowledgeIncident,
-    isAcknowledging,
   } = useIncidentAlert();
 
   // Tick for elapsed duration every 30 seconds
@@ -51,16 +47,26 @@ export default function GlobalIncidentBanner() {
     return null;
   }
 
-  const isP1 = currentIncident.priority === 'P1' || currentIncident.urgency === 'HIGH';
+  const isCritical = currentIncident.priority === 'P1' || currentIncident.urgency?.toUpperCase() === 'HIGH';
   const isAcked = currentIncident.status === 'ACKNOWLEDGED';
   const elapsed = formatElapsed(currentIncident.createdAt);
+
+  const badgeLabel =
+    currentIncident.priority ||
+    (currentIncident.urgency?.toUpperCase() === 'HIGH'
+      ? 'HIGH'
+      : currentIncident.urgency?.toUpperCase() === 'MEDIUM'
+        ? 'MEDIUM'
+        : isCritical
+          ? 'P1'
+          : 'ALERT');
 
   return (
     <aside
       aria-label="Active critical incident notification"
       className={cn(
         'sticky top-0 z-30 w-full transition-all duration-200 border-b shadow-md text-xs sm:text-sm',
-        isP1
+        isCritical
           ? 'bg-rose-700 dark:bg-rose-950/95 text-white dark:text-rose-50 border-rose-800 dark:border-rose-800/90 shadow-rose-900/20 dark:shadow-rose-950/20'
           : 'bg-amber-600 dark:bg-amber-950/95 text-white dark:text-amber-50 border-amber-700 dark:border-amber-800/90 shadow-amber-900/20 dark:shadow-amber-950/20'
       )}
@@ -69,7 +75,7 @@ export default function GlobalIncidentBanner() {
       <div
         className={cn(
           'h-0.5 w-full',
-          isP1
+          isCritical
             ? 'bg-gradient-to-r from-rose-300 via-rose-100 to-rose-300 dark:from-rose-500 dark:via-red-400 dark:to-rose-500'
             : 'bg-gradient-to-r from-amber-300 via-amber-100 to-amber-300 dark:from-amber-500 dark:via-orange-400 dark:to-amber-500'
         )}
@@ -85,14 +91,14 @@ export default function GlobalIncidentBanner() {
                 <span
                   className={cn(
                     'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75',
-                    isP1 ? 'bg-rose-200 dark:bg-rose-400' : 'bg-amber-200 dark:bg-amber-400'
+                    isCritical ? 'bg-rose-200 dark:bg-rose-400' : 'bg-amber-200 dark:bg-amber-400'
                   )}
                 />
               )}
               <span
                 className={cn(
                   'relative inline-flex rounded-full h-2.5 w-2.5',
-                  isP1 ? 'bg-white dark:bg-rose-500' : 'bg-white dark:bg-amber-500'
+                  isCritical ? 'bg-white dark:bg-rose-500' : 'bg-white dark:bg-amber-500'
                 )}
               />
             </span>
@@ -100,12 +106,12 @@ export default function GlobalIncidentBanner() {
             <span
               className={cn(
                 'px-1.5 py-0.5 rounded text-[11px] font-black uppercase tracking-wider leading-none shadow-xs border',
-                isP1
+                isCritical
                   ? 'bg-black/20 dark:bg-rose-500/20 text-white dark:text-rose-200 border-white/25 dark:border-rose-400/30'
                   : 'bg-black/20 dark:bg-amber-500/20 text-white dark:text-amber-200 border-white/25 dark:border-amber-400/30'
               )}
             >
-              {currentIncident.priority || (isP1 ? 'P1' : 'P2')}
+              {badgeLabel}
             </span>
           </div>
 
@@ -176,36 +182,16 @@ export default function GlobalIncidentBanner() {
             </div>
           )}
 
-          {/* 1-Click Acknowledge Button (if not already acknowledged) */}
-          {!isAcked && (
-            <button
-              type="button"
-              onClick={() => acknowledgeIncident(currentIncident.id)}
-              disabled={isAcknowledging}
-              className={cn(
-                'inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-bold text-xs transition-all cursor-pointer shadow-xs border shrink-0',
-                'bg-white text-slate-900 hover:bg-slate-100 active:scale-95 disabled:opacity-50 border-white/60'
-              )}
-            >
-              {isAcknowledging ? (
-                <Loader2 size={12} className="animate-spin shrink-0" />
-              ) : (
-                <Check size={12} className="stroke-[3] shrink-0" />
-              )}
-              <span>Acknowledge</span>
-            </button>
-          )}
-
           {/* View Details Link */}
           <Link
             href={`/incidents/${currentIncident.id}`}
             className={cn(
-              'inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-semibold text-xs transition-all border shadow-xs shrink-0',
-              'bg-white/15 hover:bg-white/25 text-white border-white/30 hover:border-white/40'
+              'inline-flex items-center gap-1.5 px-3 py-1 rounded-md font-semibold text-xs transition-all border shadow-xs shrink-0',
+              'bg-white/15 hover:bg-white/25 active:bg-white/30 text-white border-white/30 hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white/60'
             )}
           >
             <span>View</span>
-            <ArrowRight size={12} className="shrink-0" />
+            <ArrowRight size={12} className="shrink-0 stroke-[2.5]" />
           </Link>
 
           {/* Dismiss Button - High contrast, explicit solid/elevated container visible in both dark & light browser configs */}
@@ -216,7 +202,7 @@ export default function GlobalIncidentBanner() {
               'inline-flex items-center justify-center h-7 w-7 rounded-md shrink-0 transition-all cursor-pointer shadow-xs border',
               'bg-white/15 hover:bg-white/25 active:bg-white/30 text-white border-white/30 hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white/60'
             )}
-            title="Dismiss banner (reopens if a new P1 incident occurs)"
+            title="Dismiss banner (auto-dismisses after 120s, reopens if a new P1 or high-urgency incident occurs)"
             aria-label="Dismiss banner"
           >
             <X size={15} className="shrink-0 stroke-[2.5] text-white" />

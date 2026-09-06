@@ -38,7 +38,7 @@ describe('GlobalIncidentBanner', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders P1 incident details, service, title, and action buttons', () => {
+  it('renders P1 incident details, service, title, and View link', () => {
     mockContextValue.isBannerVisible = true;
     mockContextValue.currentIncident = {
       id: 'inc-p1-123',
@@ -59,31 +59,12 @@ describe('GlobalIncidentBanner', () => {
     expect(screen.getByText('Payment Gateway Down')).toBeDefined();
     expect(screen.getByText('Active for 10m')).toBeDefined();
     expect(screen.getByText('Triggered')).toBeDefined();
-    expect(screen.getByRole('button', { name: /acknowledge/i })).toBeDefined();
     expect(screen.getByRole('link', { name: /view/i })).toBeDefined();
+    // Acknowledge button is removed in favor of navigating directly to incident
+    expect(screen.queryByRole('button', { name: /acknowledge/i })).toBeNull();
   });
 
-  it('triggers acknowledgeIncident when clicking Acknowledge', () => {
-    mockContextValue.isBannerVisible = true;
-    mockContextValue.currentIncident = {
-      id: 'inc-p1-123',
-      title: 'Payment Gateway Down',
-      status: 'OPEN',
-      priority: 'P1',
-      urgency: 'HIGH',
-      createdAt: new Date().toISOString(),
-      service: { id: 'svc-payments', name: 'Payments API' },
-    };
-
-    render(<GlobalIncidentBanner />);
-
-    const ackButton = screen.getByRole('button', { name: /acknowledge/i });
-    fireEvent.click(ackButton);
-
-    expect(mockContextValue.acknowledgeIncident).toHaveBeenCalledWith('inc-p1-123');
-  });
-
-  it('hides Acknowledge button and displays Acknowledged badge when incident is already acknowledged', () => {
+  it('displays Acknowledged badge when incident status is ACKNOWLEDGED without acknowledge button', () => {
     mockContextValue.isBannerVisible = true;
     mockContextValue.currentIncident = {
       id: 'inc-p1-123',
@@ -97,7 +78,7 @@ describe('GlobalIncidentBanner', () => {
 
     render(<GlobalIncidentBanner />);
 
-    expect(screen.queryByRole('button', { name: /^acknowledge$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /acknowledge/i })).toBeNull();
     expect(screen.getByText('Acknowledged')).toBeDefined();
   });
 
@@ -148,5 +129,53 @@ describe('GlobalIncidentBanner', () => {
     fireEvent.click(dismissBtn);
 
     expect(mockContextValue.dismissBanner).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders HIGH badge and critical rose styling when priority is undeclared but urgency is HIGH', () => {
+    mockContextValue.isBannerVisible = true;
+    mockContextValue.totalCount = 1;
+    mockContextValue.currentIncident = {
+      id: 'inc-high-no-priority',
+      title: 'Database Spike',
+      status: 'OPEN',
+      priority: null, // Undeclared P1
+      urgency: 'HIGH',
+      createdAt: new Date().toISOString(),
+      service: { id: 'svc-db', name: 'Database' },
+    };
+
+    render(<GlobalIncidentBanner />);
+
+    // Should display HIGH badge, not P1
+    expect(screen.getByText('HIGH')).toBeDefined();
+    expect(screen.queryByText('P1')).toBeNull();
+
+    // Should have critical rose styling in container
+    const aside = screen.getByRole('complementary');
+    expect(aside.className).toContain('bg-rose-700');
+  });
+
+  it('renders MEDIUM badge and amber warning styling when priority is undeclared and urgency is MEDIUM', () => {
+    mockContextValue.isBannerVisible = true;
+    mockContextValue.totalCount = 1;
+    mockContextValue.currentIncident = {
+      id: 'inc-medium-no-priority',
+      title: 'Cache Invalidation Lag',
+      status: 'OPEN',
+      priority: null,
+      urgency: 'MEDIUM',
+      createdAt: new Date().toISOString(),
+      service: { id: 'svc-cache', name: 'Redis Cache' },
+    };
+
+    render(<GlobalIncidentBanner />);
+
+    expect(screen.getByText('MEDIUM')).toBeDefined();
+    expect(screen.queryByText('P1')).toBeNull();
+    expect(screen.queryByText('P2')).toBeNull();
+
+    // Should have amber styling
+    const aside = screen.getByRole('complementary');
+    expect(aside.className).toContain('bg-amber-600');
   });
 });
