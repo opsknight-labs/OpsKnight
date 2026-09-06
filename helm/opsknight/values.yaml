@@ -129,10 +129,12 @@ secrets:
   keys:
     databaseUrl: DATABASE_URL
     nextauthSecret: NEXTAUTH_SECRET
+    apiKeySecret: API_KEY_SECRET
     encryptionKey: ENCRYPTION_KEY
     postgresUser: POSTGRES_USER
     postgresPassword: POSTGRES_PASSWORD
   nextauthSecret: 'change_this_to_a_random_secret_in_production'
+  apiKeySecret: 'change_this_to_an_independent_api_key_secret_in_production'
   encryptionKey: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
 
 networkPolicy:

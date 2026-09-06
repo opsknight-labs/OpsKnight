@@ -186,6 +186,9 @@ async function fetchStatusDomainConfig(): Promise<StatusDomainConfig | null> {
  */
 function getSecurityHeaders(): Record<string, string> {
   const isProduction = process.env.NODE_ENV === 'production';
+  const scriptSrc = isProduction
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' 'unsafe-eval' 'unsafe-inline'";
 
   return {
     // Prevent MIME type sniffing
@@ -199,12 +202,11 @@ function getSecurityHeaders(): Record<string, string> {
     // Permissions policy (formerly Feature-Policy)
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     // Content Security Policy
-    // Note: 'unsafe-eval' is required by Next.js for development hot reloading
-    // Note: 'unsafe-inline' is required for styled-jsx and inline styles
-    // For stricter CSP, consider using nonce-based approach with next-safe package
+    // 'unsafe-eval' is limited to development for Next.js hot reloading.
+    // 'unsafe-inline' remains until the application adopts nonce-based script/style handling.
     'Content-Security-Policy': [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: https:",
       "font-src 'self' data: https://fonts.gstatic.com",

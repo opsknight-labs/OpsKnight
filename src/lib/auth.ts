@@ -18,9 +18,9 @@ import {
 } from '@/lib/auth-cookies';
 
 function getJwtUserRefreshTtlMs() {
-  const raw = process.env.JWT_USER_REFRESH_TTL_MS ?? '60000';
+  const raw = process.env.JWT_USER_REFRESH_TTL_MS ?? '15000';
   const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 60000;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 15000;
 }
 
 import type { JWT } from 'next-auth/jwt';
@@ -125,7 +125,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     //   - Web with "Remember Me" gets the long ceiling.
     //   - The only way to log a user out is server-side revocation:
     //     `tokenVersion` is bumped (user disabled, password reset,
-    //     deletion) and the next JWT callback rejects the stale token.
+    //     deletion) and the next authoritative JWT refresh rejects the stale token.
     const sessionMaxAgeSeconds = 60 * 60 * 24 * 7; // 7 days (web, no Remember Me)
     const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 365; // 1 year (web + RM, all mobile)
     const sessionUpdateAgeSeconds = 60 * 60; // sliding refresh at most hourly
@@ -144,7 +144,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
     return {
       // No adapter - using pure JWT sessions (industry standard for OIDC)
-      // Session cap is `rememberMeMaxAgeSeconds` (30 days) so a
+      // Session cap is `rememberMeMaxAgeSeconds` (1 year) so a
       // remember-me JWT can outlive 7 days. Non-remember-me sessions
       // are still pinned to 7 days via the JWT's own `exp` set in the
       // jwt callback below — NextAuth respects whichever is shorter.
@@ -263,7 +263,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             const ip = getClientIp(req?.headers);
             const userAgent = userAgentHeader || 'Unknown';
 
-            logger.warn('[Auth-Debug] Authorize started', {
+            logger.debug('[Auth-Debug] Authorize started', {
               component: 'auth:credentials',
               email,
               ip,
@@ -317,7 +317,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 'ACCOUNT_LOCKED',
                 attemptCheck.lockoutDurationMs || undefined
               );
-              console.warn('[Auth] Login blocked - account locked', {
+              logger.warn('[Auth] Login blocked - account locked', {
+                component: 'auth:credentials',
                 email,
                 ip,
                 lockedUntil: attemptCheck.lockedUntil?.toISOString(),
@@ -329,7 +330,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             if (!user || !user.passwordHash) {
               recordFailedAttempt(email, ip);
               await logLoginFailed(email, ip, userAgent, 'USER_NOT_FOUND');
-              logger.warn('[Auth-Debug] User not found or no password hash', {
+              logger.debug('[Auth-Debug] User not found or no password hash', {
                 component: 'auth:credentials',
                 email,
               });
@@ -354,13 +355,14 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               );
 
               if (result.locked) {
-                console.warn('[Auth] Account locked after failed attempts', {
+                logger.warn('[Auth] Account locked after failed attempts', {
+                  component: 'auth:credentials',
                   email,
                   attemptCount: result.attemptCount,
                   lockoutDurationMs: result.lockoutDurationMs,
                 });
               }
-              logger.warn('[Auth-Debug] Invalid Password', {
+              logger.debug('[Auth-Debug] Invalid Password', {
                 component: 'auth:credentials',
                 email,
               });
@@ -371,7 +373,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             resetLoginAttempts(email, ip);
             await logLoginSuccess(email, user.id, ip, userAgent, 'credentials');
 
-            // Log remember me usage (Note: extending session maxAge dynamically requires JWT callback changes)
             if (rememberMe) {
               logger.debug('[Auth] User requested "Remember Me"', { email });
             }
@@ -388,7 +389,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               });
             }
 
-            logger.warn('[Auth-Debug] Authorize Success', {
+            logger.debug('[Auth-Debug] Authorize Success', {
               component: 'auth:credentials',
               id: user.id,
               tokenVersion: user.tokenVersion,
@@ -396,7 +397,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
             // Stash the rememberMe flag onto the user object so the
             // jwt callback can pick it up and cap the JWT exp at the
-            // appropriate value (7d default, 30d when set).
+            // appropriate value (7d default, 1y when set).
             return {
               id: user.id,
               name: user.name,
@@ -414,8 +415,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
       },
       callbacks: {
         async jwt({ token, user, account, trigger, session: _session }) {
-          // Debug: Log incoming token state
-          logger.warn('[Auth-Debug] JWT callback started', {
+          logger.debug('[Auth-Debug] JWT callback started', {
             component: 'auth:jwt',
             hasSub: !!token.sub,
             sub: token.sub,
@@ -425,12 +425,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           // Initial sign in
           if (user && account) {
             delete (token as AugmentedJWT).error;
-            logger.warn('[Auth-Debug] Initial Sign In', {
+            logger.debug('[Auth-Debug] Initial Sign In', {
               component: 'auth:jwt',
               userId: user.id,
               provider: account.provider,
             });
-            // ... (keep existing initial sign-in logic)
             // For OIDC, we must look up the user in the DB to get the internal CUID and current role
             // The 'user' object from OIDC is just the profile, so 'user.id' is the OIDC 'sub' (not our DB ID)
             if (account.provider === 'oidc' && user.email) {
@@ -458,20 +457,20 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   token.role = dbUser.role;
                   token.name = dbUser.name;
                   token.email = dbUser.email;
-                  // Include tokenVersion so we can revoke sessions later
                   (token as AugmentedJWT).tokenVersion = dbUser.tokenVersion ?? 0;
                 } else {
-                  // This should technically not happen if signIn passed, but just in case
-                  logger.error('[Auth] JWT callback - OIDC user not found in DB', {
+                  logger.warn('[Auth] JWT callback - OIDC user not found in DB', {
                     component: 'auth:jwt',
                     email: user.email,
                   });
+                  return clearSessionToken(token as AugmentedJWT, 'USER_NOT_FOUND');
                 }
               } catch (error) {
                 logger.error('[Auth] JWT callback - DB lookup failed', {
                   component: 'auth:jwt',
                   error,
                 });
+                return clearSessionToken(token as AugmentedJWT, 'AUTHORITY_LOOKUP_FAILED');
               }
             } else {
               // For Credentials, 'user' comes from authorize() and is already the DB user object
@@ -484,22 +483,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               (token as AugmentedJWT).rememberMe = (user as AugmentedUser).rememberMe === true;
             }
 
-            // Pick the JWT exp cap based on rememberMe. The session
-            // cookie itself uses the 30-day NextAuth maxAge so the
-            // browser will hold either token; the JWT's own `exp`
-            // claim is what makes verification fail at 7 days for
-            // non-remember-me sessions.
             const remember = (token as AugmentedJWT).rememberMe === true;
             const ttlSeconds = remember ? rememberMeMaxAgeSeconds : sessionMaxAgeSeconds;
             token.exp = Math.floor(Date.now() / 1000) + ttlSeconds;
-          }
-          // The user provided in the jwt callback is the one returned by the `authorize` function
-          // or the OIDC provider. We need to ensure `token.sub` is set to our internal user ID
-          // and `token.role` is set correctly.
-          // This block handles the initial population of the token from the `user` object.
-          else if (user) {
+          } else if (user) {
             delete (token as AugmentedJWT).error;
-            logger.warn('[Auth-Debug] Initial Sign In (Fallback)', {
+            logger.debug('[Auth-Debug] Initial Sign In (Fallback)', {
               component: 'auth:jwt',
               userId: user.id || (user as AugmentedUser).id,
             });
@@ -510,26 +499,15 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             (token as AugmentedJWT).tokenVersion = (user as AugmentedUser).tokenVersion ?? 0;
           }
 
-          // Handle client-side update() calls
-          // If trigger is "update", we can accept partial updates from the client if needed,
-          // OR simply force a refresh (which is safer/better).
-          // We'll treat trigger="update" as a signal to bypass cache.
-          if (trigger === 'update') {
-            // ...
-          }
+          // trigger="update" is treated as a signal to bypass the authority cache.
 
-          // Fetch latest user data from database on each request to ensure name is up-to-date
-          // This ensures name changes reflect immediately without requiring re-login
           if (token.sub && typeof token.sub === 'string') {
-            // Session revocation: if the user increments tokenVersion, older JWTs are invalid.
-            // Session revocation: if the user increments tokenVersion, older JWTs are invalid.
             const currentTokenVersion = (token as AugmentedJWT).tokenVersion;
             const lastFetchedAt = (token as AugmentedJWT).userFetchedAt;
             const ttlMs = getJwtUserRefreshTtlMs();
 
-            // Skip DB fetch if cached AND NOT forced by update trigger
             if (trigger !== 'update' && lastFetchedAt && Date.now() - lastFetchedAt < ttlMs) {
-              // Cached
+              // Cached authority state is still inside the configured refresh window.
             } else {
               try {
                 const dbUser = await prisma.user.findUnique({
@@ -545,58 +523,64 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   },
                 });
 
-                if (dbUser) {
-                  const dbTokenVersion =
-                    typeof dbUser.tokenVersion === 'number' ? dbUser.tokenVersion : 0;
-                  logger.warn('[Auth-Debug] User Check', {
+                if (!dbUser) {
+                  logger.warn('[Auth] Revoking session because user no longer exists', {
                     component: 'auth:jwt',
-                    dbId: token.sub,
-                    dbVer: dbTokenVersion,
-                    tokenVer: currentTokenVersion,
+                    userId: token.sub,
                   });
-
-                  // If disabled, force logout.
-                  if (dbUser.status === 'DISABLED') {
-                    return clearSessionToken(token as AugmentedJWT, 'USER_DISABLED');
-                  }
-
-                  if (
-                    typeof currentTokenVersion === 'number' &&
-                    dbTokenVersion !== currentTokenVersion
-                  ) {
-                    logger.warn('[Auth-Debug] REVOKING SESSION: Version Mismatch', {
-                      component: 'auth:jwt',
-                      db: dbTokenVersion,
-                      token: currentTokenVersion,
-                    });
-                    return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
-                  }
-
-                  token.name = dbUser.name;
-                  token.email = dbUser.email;
-                  token.role = dbUser.role;
-                  token.avatarUrl = dbUser.avatarUrl;
-                  token.gender = dbUser.gender;
-                  (token as AugmentedJWT).tokenVersion = dbTokenVersion;
-                } else {
-                  logger.warn('[Auth-Debug] User NOT FOUND in DB', {
-                    component: 'auth:jwt',
-                    id: token.sub,
-                  });
+                  return clearSessionToken(token as AugmentedJWT, 'USER_NOT_FOUND');
                 }
+
+                const dbTokenVersion =
+                  typeof dbUser.tokenVersion === 'number' ? dbUser.tokenVersion : 0;
+                logger.debug('[Auth-Debug] User Check', {
+                  component: 'auth:jwt',
+                  dbId: token.sub,
+                  dbVer: dbTokenVersion,
+                  tokenVer: currentTokenVersion,
+                });
+
+                if (dbUser.status === 'DISABLED') {
+                  return clearSessionToken(token as AugmentedJWT, 'USER_DISABLED');
+                }
+
+                if (
+                  typeof currentTokenVersion === 'number' &&
+                  dbTokenVersion !== currentTokenVersion
+                ) {
+                  logger.info('[Auth] Revoking session after token-version change', {
+                    component: 'auth:jwt',
+                    userId: token.sub,
+                  });
+                  return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
+                }
+
+                token.name = dbUser.name;
+                token.email = dbUser.email;
+                token.role = dbUser.role;
+                token.avatarUrl = dbUser.avatarUrl;
+                token.gender = dbUser.gender;
+                (token as AugmentedJWT).tokenVersion = dbTokenVersion;
+                // Advance freshness only after a successful authoritative lookup.
+                (token as AugmentedJWT).userFetchedAt = Date.now();
               } catch (error) {
-                console.error('[Auth-Debug] DB Fetch Error', error);
+                // Do not advance userFetchedAt on a failed authority lookup. The next
+                // request retries instead of extending a stale authorization window.
+                logger.error('[Auth] JWT authority refresh failed', {
+                  component: 'auth:jwt',
+                  userId: token.sub,
+                  error,
+                });
               }
-              (token as AugmentedJWT).userFetchedAt = Date.now();
             }
           } else {
-            logger.warn('[Auth-Debug] No token.sub found!', { component: 'auth:jwt', token });
+            logger.debug('[Auth-Debug] No token.sub found', { component: 'auth:jwt' });
           }
 
           return token;
         },
         async session({ session, token }) {
-          logger.warn('[Auth-Debug] Session callback', {
+          logger.debug('[Auth-Debug] Session callback', {
             component: 'auth:session',
             hasToken: !!token,
             sub: token?.sub,
@@ -606,7 +590,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           if ((token as AugmentedJWT)?.error || !token.sub) {
             // Force unauthenticated session shape.
             (session as unknown as { user: unknown }).user = undefined;
-            logger.warn('[Auth-Debug] Session CLEARED due to error/missing sub', {
+            logger.debug('[Auth-Debug] Session cleared due to error/missing sub', {
               component: 'auth:session',
             });
             return session;
@@ -617,12 +601,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             (session.user as AugmentedUser).id = token.sub;
             (session.user as AugmentedUser).tokenVersion =
               (token as AugmentedJWT).tokenVersion ?? 0;
-            // Always use the latest name from token (which is fetched from DB)
             session.user.name = (token.name as string) || session.user.name;
             session.user.email = (token.email as string) || session.user.email;
             session.user.avatarUrl = token.avatarUrl;
             session.user.gender = token.gender;
-            // Map to standard image field as well for compatibility
             session.user.image = token.avatarUrl || getDefaultAvatar(token.gender, token.sub);
           }
 
@@ -669,8 +651,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return false;
             }
 
-            // Enforce email verification when available (recommended).
-            // If strict mode is enabled, require an explicit true value.
             const emailVerifiedClaim = coerceBooleanClaim((profile as any)?.email_verified); // eslint-disable-line @typescript-eslint/no-explicit-any
             if (emailVerifiedClaim === false) {
               logger.warn('[Auth] OIDC sign-in rejected: email not verified by IdP', {
@@ -721,7 +701,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               });
             }
 
-            // Create new user if auto-provision is enabled
             if (!existing) {
               if (!activeConfig.autoProvision) {
                 logger.warn('[Auth] OIDC sign-in rejected: auto-provision disabled', {
@@ -731,13 +710,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 return false;
               }
 
-              // Create new user from OIDC profile
               try {
                 const newUser = await prisma.user.create({
                   data: {
                     email,
                     name: user.name || email.split('@')[0],
-                    role: 'USER', // Default role, can be overridden by role mapping below
+                    role: 'USER',
                     status: 'ACTIVE',
                   },
                 });
@@ -748,7 +726,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   email,
                 });
 
-                // Update user object with new ID for JWT callback
                 user.id = newUser.id;
               } catch (error) {
                 logger.error('[Auth] Failed to create OIDC user', {
@@ -759,7 +736,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               }
             }
 
-            // Get user for updates (either existing or newly created)
             const targetUser = existing || (await prisma.user.findUnique({ where: { email } }));
 
             if (!targetUser) {
@@ -770,9 +746,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return false;
             }
 
-            // Administrative disable is authoritative. OIDC must never create a
-            // new identity link or reactivate a disabled account, even when a
-            // historical invite record exists for that email address.
             if (targetUser.status === 'DISABLED') {
               logger.warn('[Auth] OIDC sign-in rejected: user is disabled', {
                 component: 'auth:signIn',
@@ -782,7 +755,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return false;
             }
 
-            // Create/validate stable issuer+subject identity link to avoid unsafe email-only linking.
             const issuer = normalizeIssuer(activeConfig.issuer);
             const subject =
               account?.providerAccountId ||
@@ -824,8 +796,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     return linked;
                   }
 
-                  // An existing account must prove control of a verified address. ACTIVE
-                  // accounts additionally require a fresh, one-time administrator approval.
                   if (existing && emailVerifiedClaim !== true) {
                     throw new Error('OIDC_LINK_NOT_APPROVED');
                   }
@@ -887,11 +857,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
             const updateData: any = {};
 
-            // Ensure user object has correct ID for JWT
             user.id = targetUser.id;
 
-            // First successful SSO completes an outstanding invitation. A
-            // DISABLED account was rejected above and is never reactivated.
             if (targetUser.status === 'INVITED') {
               updateData.status = 'ACTIVE';
               updateData.invitedAt = null;
@@ -903,7 +870,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               });
             }
 
-            // Role Evaluation
             if (
               activeConfig.roleMapping &&
               Array.isArray(activeConfig.roleMapping) &&
@@ -956,7 +922,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                       matchedValue: rule.value,
                     });
                   }
-                  break; // Stop at first match
+                  break;
                 }
               }
 
@@ -968,7 +934,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               }
             }
 
-            // JIT Profile Sync - sync attributes from OIDC profile
             if (
               activeConfig.profileMapping &&
               typeof activeConfig.profileMapping === 'object' &&
@@ -982,7 +947,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               const mapping = activeConfig.profileMapping as Record<string, string>;
               const oidcProfile = profile as Record<string, unknown>;
 
-              // Sync department
               if (mapping.department && oidcProfile[mapping.department]) {
                 const dept = String(oidcProfile[mapping.department]);
                 if (dept && dept !== targetUser.department) {
@@ -996,7 +960,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 }
               }
 
-              // Sync job title
               if (mapping.jobTitle && oidcProfile[mapping.jobTitle]) {
                 const title = String(oidcProfile[mapping.jobTitle]);
                 if (title && title !== targetUser.jobTitle) {
@@ -1010,7 +973,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 }
               }
 
-              // Sync avatar URL
               if (mapping.avatarUrl && oidcProfile[mapping.avatarUrl]) {
                 const avatar = String(oidcProfile[mapping.avatarUrl]);
                 let safeAvatar: string | null = null;
@@ -1022,8 +984,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 } catch {
                   safeAvatar = null;
                 }
-                // Only sync if value changed AND the current value is NOT a locally uploaded file
-                // This prevents OIDC from overwriting a user's custom uploaded photo.
                 const isLocalUpload =
                   targetUser.avatarUrl?.startsWith('/api/users/') ||
                   targetUser.avatarUrl?.startsWith('/uploads/');
@@ -1038,7 +998,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 }
               }
 
-              // Update lastOidcSync timestamp if any profile data was synced
               if (updateData.department || updateData.jobTitle || updateData.avatarUrl) {
                 updateData.lastOidcSync = new Date();
                 logger.info('[Auth] OIDC profile sync completed', {

@@ -7,6 +7,11 @@
 
 import { logger } from './logger';
 
+function isEnabledFlag(value: string | undefined): boolean {
+  if (!value) return false;
+  return ['true', '1', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
 /**
  * Get the base application URL with proper validation
  * Throws an error in production if not configured
@@ -42,8 +47,9 @@ export function getBaseUrl(): string {
  * Call this early in application startup
  */
 export function validateProductionEnv(): void {
-  if (process.env.NODE_ENV !== 'production' || process.env.SKIP_ENV_VALIDATION) {
-    if (process.env.SKIP_ENV_VALIDATION) {
+  const skipValidation = isEnabledFlag(process.env.SKIP_ENV_VALIDATION);
+  if (process.env.NODE_ENV !== 'production' || skipValidation) {
+    if (skipValidation) {
       logger.warn('⚠️  Skipping environment validation due to SKIP_ENV_VALIDATION flag');
     }
     return; // Skip validation
@@ -67,6 +73,10 @@ export function validateProductionEnv(): void {
   // Optional environment variables for reference and documentation
   const _optional: Array<{ name: string; description: string }> = [
     {
+      name: 'API_KEY_SECRET',
+      description: 'Independent HMAC secret for API-key lookup hashes',
+    },
+    {
       name: 'PROMETHEUS_SCRAPE_TOKEN',
       description: 'Bearer token for scraping Prometheus metrics endpoint (/api/metrics)',
     },
@@ -74,7 +84,7 @@ export function validateProductionEnv(): void {
 
   // Safe because 'name' comes from the hardcoded 'required' array above
   // eslint-disable-next-line security/detect-object-injection
-  const missing = required.filter(({ name }) => !process.env[name]);
+  const missing = required.filter(({ name }) => !process.env[name]?.trim());
 
   if (!process.env.ENCRYPTION_KEY && !process.env.ENCRYPTION_KEYS) {
     missing.push({
@@ -97,6 +107,18 @@ export function validateProductionEnv(): void {
     ].join('\n');
 
     throw new Error(errorMessage);
+  }
+
+  const apiKeySecret = process.env.API_KEY_SECRET;
+  if (apiKeySecret && apiKeySecret === process.env.NEXTAUTH_SECRET) {
+    throw new Error(
+      '❌ PRODUCTION CONFIGURATION ERROR\n\nAPI_KEY_SECRET must be different from NEXTAUTH_SECRET so API-key hashes and session JWTs do not share cryptographic key material.'
+    );
+  }
+  if (!apiKeySecret) {
+    logger.warn(
+      'API_KEY_SECRET is not configured. API-key hashes will use a domain-separated key derived from NEXTAUTH_SECRET. Configure an independent API_KEY_SECRET to decouple API-key hashes from session-secret rotation.'
+    );
   }
 
   // Validate NEXT_PUBLIC_APP_URL format if present

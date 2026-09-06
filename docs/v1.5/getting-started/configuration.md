@@ -16,13 +16,13 @@ cp env.example .env
 
 ## Required Variables
 
-These variables must be set for OpsKnight to start correctly in any environment.
+These variables must be set for OpsKnight to start correctly in production.
 
-| Variable          | Description                                    | Example / How to Generate             |
-| ----------------- | ---------------------------------------------- | ------------------------------------- |
-| `DATABASE_URL`    | PostgreSQL connection string                   | `postgresql://user:pass@host:5432/db` |
-| `NEXTAUTH_URL`    | Public-facing URL of the application           | `https://ops.yourcompany.com`         |
-| `NEXTAUTH_SECRET` | Secret used to sign and encrypt session tokens | `openssl rand -base64 32`             |
+| Variable          | Description                          | Example / How to Generate             |
+| ----------------- | ------------------------------------ | ------------------------------------- |
+| `DATABASE_URL`    | PostgreSQL connection string         | `postgresql://user:pass@host:5432/db` |
+| `NEXTAUTH_URL`    | Public-facing URL of the application | `https://ops.yourcompany.com`         |
+| `NEXTAUTH_SECRET` | Secret for session JWTs              | `openssl rand -base64 32`             |
 
 > **`NEXTAUTH_URL`** must match the exact base URL your users will access, including the scheme (`https://`). Mismatches cause OAuth callback failures.
 
@@ -34,6 +34,7 @@ These variables must be set for OpsKnight to start correctly in any environment.
 | --------------------------- | :--------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `ENCRYPTION_KEYS`           |      Recommended       | Rotation keyring in `key-id:64-hex-key` entries. The first key encrypts new values; remaining keys decrypt older v3/legacy values.                                                                                             |
 | `ENCRYPTION_KEY`            |   Yes if no keyring    | Single 32-byte hex key used for compatibility and as an optional legacy key alongside `ENCRYPTION_KEYS`. API keys are keyed hashes and are not encrypted with this key.                                                        |
+| `API_KEY_SECRET`            |      Recommended       | Independent HMAC secret for API-key lookup hashes. Must differ from `NEXTAUTH_SECRET` when set. If omitted, OpsKnight derives a domain-separated API-key root from the session secret for backward-compatible startup.          |
 
 The notification control plane derives recipient identities from the existing `NEXTAUTH_SECRET`.
 It uses the active encryption key only for compatibility if no session secret is available. No
@@ -65,13 +66,21 @@ See [Encryption](../security/encryption) for key rotation, migration guidance, a
 
 ## Authentication
 
-| Variable          | Required | Description                                   | Generate With             |
-| ----------------- | :------: | --------------------------------------------- | ------------------------- |
-| `NEXTAUTH_SECRET` |   Yes    | Secret for signing session JWTs               | `openssl rand -base64 32` |
-| `NEXTAUTH_URL`    |   Yes    | Base URL for OAuth callbacks and redirects    | Your public domain        |
-| `ENCRYPTION_KEY`  |  Yes\*   | Master key for encrypting integration secrets | `openssl rand -hex 32`    |
+| Variable                  | Required | Description                                                                                           | Generate With             |
+| ------------------------- | :------: | ----------------------------------------------------------------------------------------------------- | ------------------------- |
+| `NEXTAUTH_SECRET`         |   Yes    | Secret for signing/encrypting session JWTs                                                            | `openssl rand -base64 32` |
+| `API_KEY_SECRET`          |    No    | Recommended independent API-key HMAC secret; must differ from `NEXTAUTH_SECRET` when configured       | `openssl rand -base64 32` |
+| `NEXTAUTH_URL`            |   Yes    | Base URL for OAuth callbacks and redirects                                                            | Your public domain        |
+| `ENCRYPTION_KEY`          |  Yes\*   | Master key for encrypting integration secrets                                                         | `openssl rand -hex 32`    |
+| `JWT_USER_REFRESH_TTL_MS` |    No    | Maximum cached user-authority age for JWT refresh checks                                              | Default `15000`           |
 
 \*Required in production; auto-fallback available in development.
+
+The default JWT authority refresh interval is **15 seconds**. Disabling a user, deleting an account, or incrementing `tokenVersion` is therefore observed on the next authoritative refresh after at most roughly that cache window for an active client. Setting `JWT_USER_REFRESH_TTL_MS=0` forces a database authority lookup on every applicable JWT callback; do this only if the extra database load is acceptable.
+
+If an authority refresh fails because the database is temporarily unavailable, OpsKnight does not advance the refresh timestamp. The next request retries the authoritative lookup instead of extending the stale cache window.
+
+When `API_KEY_SECRET` is omitted, OpsKnight derives a domain-separated API-key root from `NEXTAUTH_SECRET`. This avoids using the session secret directly as an API-key HMAC key, but the derived root still changes when the session secret changes. Configure an independent `API_KEY_SECRET` to decouple API-key hashes from session-secret rotation.
 
 ---
 
@@ -134,7 +143,7 @@ Set the public and private variables together. The database-backed Web Push prov
 
 | Variable                                  | Default                    | Description                                                                                                                                               |
 | ----------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LOG_LEVEL`                               | `info`                     | Minimum structured-log level: `debug`, `info`, `warn`, or `error`.                                                                                        |
+| `LOG_LEVEL`                               | `info`                     | Minimum structured-log level: `debug`, `info`, `warn`, or `error`. Authentication diagnostic traces are emitted at `debug`, not `warn`.                  |
 | `LOG_FORMAT`                              | Environment dependent      | Set to `json` for JSON output.                                                                                                                            |
 | `LOG_BUFFER_MAX`                          | `500`                      | Maximum in-memory log-buffer size.                                                                                                                        |
 | `SENTRY_DSN`                              | —                          | Requests optional Sentry initialization when a custom build includes `@sentry/nextjs`; the standard v1.4 dependency set does not.                         |
@@ -156,27 +165,28 @@ OpenTelemetry variables are not consumed by the v1.4 application code and are th
 | `INTEGRATION_VERIFY_SIGNATURES`  | `true`       | Set to `false` to disable signature checks on handlers that honor this flag. Use only for controlled diagnosis.                           |
 | `CORS_ALLOWED_ORIGINS`           | empty        | Comma-separated origins allowed by middleware for cross-origin API requests.                                                              |
 | `STATUS_PAGE_DOMAIN_CACHE_TTL`   | `60`         | Custom-status-domain middleware cache TTL in seconds.                                                                                     |
-| `EVENT_TRANSACTION_MAX_ATTEMPTS` | code default | Advanced transaction retry limit; tune only after reviewing database contention.                                                          |
+| `EVENT_TRANSACTION_MAX_ATTEMPTS` | code default | Advanced transaction retry limit; tune only after reviewing database contention.                                                         |
 | `ESCALATION_LOCK_TIMEOUT_MS`     | code default | Advanced escalation lock timeout in milliseconds.                                                                                         |
-| `SKIP_ENV_VALIDATION`            | unset        | Bypasses production environment validation. Use only for controlled build/diagnostic workflows.                                           |
+| `SKIP_ENV_VALIDATION`            | unset        | Bypasses production validation only for explicit enabled values (`true`, `1`, `yes`, or `on`). Use only for controlled diagnostics.      |
 | `DISABLE_PWA`                    | `false`      | Set to `true` at build time to disable production service-worker generation, PWA installation, push, and supported offline behavior.      |
 | `EMAIL_FROM`                     | derived      | Fallback sender address when code paths do not receive a provider-specific From address; prefer an explicitly verified provider identity. |
 | `MIGRATION_RECOVERY_MODE`        | `safe`       | Startup recovery policy. Do not use `aggressive` without database-owner review of the failed migration and actual schema state.           |
 
 ## Authentication and integration overrides
 
-| Variable                                                       | Purpose                                                                                                           |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `AUTH_TRUST_HOST`                                              | Explicitly enables Auth.js host trust; setting `NEXTAUTH_URL` also enables it.                                    |
-| `TRUSTED_PROXY_HOPS`                                           | Number of trusted proxy entries read from the right side of `X-Forwarded-For`; defaults to `1`.                   |
-| `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`                           | Requires a verified-email claim from OIDC; defaults to `true`. Set `false` only after IdP-specific risk review.   |
-| `OIDC_CONFIG_CACHE_TTL_MS`, `OIDC_CONFIG_RECORD_CACHE_TTL_MS`  | Advanced OIDC cache TTLs.                                                                                         |
-| `AUTH_OPTIONS_CACHE_TTL_MS`, `JWT_USER_REFRESH_TTL_MS`         | Advanced authentication/session cache timing.                                                                     |
-| `API_KEY_SECRET`                                               | Overrides the secret used to hash API keys; otherwise `NEXTAUTH_SECRET` is used. Back up and rotate deliberately. |
-| `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_REDIRECT_URI` | Slack OAuth fallback values when equivalent stored settings are absent.                                           |
-| `SLACK_SIGNING_SECRET`                                         | Slack request-signature fallback/override.                                                                        |
-| `SLACK_BOT_TOKEN`, `SLACK_WEBHOOK_URL`                         | Legacy Slack sender fallbacks; prefer the encrypted Slack configuration UI.                                       |
-| `SLA_ALERT_EMAIL`                                              | Fallback recipient for configured SLA-breach email alerts.                                                        |
+| Variable                                                       | Purpose                                                                                                                                                          |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_TRUST_HOST`                                              | Explicitly enables Auth.js host trust; setting `NEXTAUTH_URL` also enables it.                                                                                   |
+| `TRUSTED_PROXY_HOPS`                                           | Number of trusted proxy entries read from the right side of `X-Forwarded-For`; defaults to `1`.                                                                  |
+| `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`                           | Requires a verified-email claim from OIDC; defaults to `true`. Set `false` only after IdP-specific risk review.                                                  |
+| `OIDC_CONFIG_CACHE_TTL_MS`, `OIDC_CONFIG_RECORD_CACHE_TTL_MS`  | Advanced OIDC cache TTLs.                                                                                                                                        |
+| `AUTH_OPTIONS_CACHE_TTL_MS`                                    | Advanced auth-options cache timing.                                                                                                                              |
+| `JWT_USER_REFRESH_TTL_MS`                                      | User/status/role/token-version refresh cache; defaults to `15000` ms. Lower values reduce revocation delay but increase DB reads.                               |
+| `API_KEY_SECRET`                                               | Recommended independent API-key HMAC secret. If omitted, a domain-separated key is derived from `NEXTAUTH_SECRET`; identical explicit values are rejected.       |
+| `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_REDIRECT_URI` | Slack OAuth fallback values when equivalent stored settings are absent.                                                                                          |
+| `SLACK_SIGNING_SECRET`                                         | Slack request-signature fallback/override.                                                                                                                       |
+| `SLACK_BOT_TOKEN`, `SLACK_WEBHOOK_URL`                         | Legacy Slack sender fallbacks; prefer the encrypted Slack configuration UI.                                                                                      |
+| `SLA_ALERT_EMAIL`                                              | Fallback recipient for configured SLA-breach email alerts.                                                                                                       |
 
 ---
 
@@ -192,12 +202,18 @@ DATABASE_URL=postgresql://opsknight:your_secure_password@db-host:5432/opsknight_
 NEXTAUTH_URL=https://ops.yourcompany.com
 NEXTAUTH_SECRET=<output of: openssl rand -base64 32>
 
+# --- Recommended API-key secret (independent from NEXTAUTH_SECRET) ---
+API_KEY_SECRET=<separate output of: openssl rand -base64 32>
+
 # --- Encryption (required in production) ---
 # Generate with: openssl rand -hex 32
 ENCRYPTION_KEY=<your-64-char-hex-key>
 
 # --- Application URL ---
 NEXT_PUBLIC_APP_URL=https://ops.yourcompany.com
+
+# Optional: default is 15 seconds.
+# JWT_USER_REFRESH_TTL_MS=15000
 
 # Configure notification-provider credentials in the application UI.
 ```
@@ -213,7 +229,8 @@ NEXT_PUBLIC_APP_URL=https://ops.yourcompany.com
 
 DATABASE_URL=postgresql://opsknight:opsknight@localhost:5432/opsknight_db
 NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=dev-secret-not-for-production
+NEXTAUTH_SECRET=dev-session-secret-not-for-production
+API_KEY_SECRET=dev-api-key-secret-not-for-production
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # ENCRYPTION_KEY is intentionally omitted in development.
@@ -225,9 +242,11 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 ## Configuration Tips
 
 - **Secrets management**: Use AWS Secrets Manager, HashiCorp Vault, or GCP Secret Manager in production. Never commit secrets to source control.
-- **Per-environment isolation**: Use distinct values for `NEXTAUTH_SECRET` and `ENCRYPTION_KEY` across dev, staging, and production.
-- **Rotation**: Rotate `NEXTAUTH_SECRET` (invalidates all sessions) and `ENCRYPTION_KEY` (requires data re-encryption) on a regular cadence or after a suspected compromise.
-- **Validation**: OpsKnight validates `ENCRYPTION_KEY` format on startup. If it is set but malformed (not a 64-char hex string), encryption is disabled and an error is logged.
+- **Cryptographic separation**: Prefer independent `NEXTAUTH_SECRET`, `API_KEY_SECRET`, and `ENCRYPTION_KEY` values. If `API_KEY_SECRET` is omitted, OpsKnight still derives a domain-separated API-key key instead of directly reusing session key material.
+- **Per-environment isolation**: Use distinct values across dev, staging, and production.
+- **API-key upgrade migration**: Existing keys created from the historical direct session-secret basis migrate automatically on successful use. If you omit `API_KEY_SECRET`, plan session-secret rotation carefully because the derived API-key root changes with it.
+- **Rotation**: Rotating `NEXTAUTH_SECRET` invalidates all sessions. `ENCRYPTION_KEY` rotation requires the documented keyring/re-encryption process. With an explicit `API_KEY_SECRET`, session-secret rotation no longer changes the primary API-key hash basis.
+- **Validation**: Production startup rejects an explicitly configured `API_KEY_SECRET` that equals `NEXTAUTH_SECRET`. `SKIP_ENV_VALIDATION=false` does not bypass validation.
 
 ---
 
@@ -236,5 +255,6 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - [Installation Guide](./installation) — Get OpsKnight running
 - [Encryption](../security/encryption) — Key management and rotation
 - [Authentication](../administration/authentication) — OIDC SSO configuration
+- [API Reference](../api/README) — API-key handling and migration
 - [Deployment: Docker](../deployment/docker) — Docker-specific configuration
 - [Deployment: Kubernetes](../deployment/kubernetes) — Kubernetes secrets and ConfigMaps
