@@ -676,6 +676,15 @@ export default async function Dashboard({
               readOnly={true}
               title="Latest incidents"
               showExport={false}
+              realtimeFilter={{
+                status,
+                serviceId: service,
+                assignee: assignee === '' ? 'unassigned' : assignee,
+                urgency,
+                search,
+                createdAfter: operational.effectiveStart.toISOString(),
+                createdBefore: operational.effectiveEnd.toISOString(),
+              }}
             />
           </div>
 

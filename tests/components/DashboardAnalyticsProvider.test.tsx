@@ -45,4 +45,38 @@ describe('DashboardAnalyticsProvider', () => {
     await vi.advanceTimersByTimeAsync(120_000);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('retries a shed request using Retry-After', async () => {
+    vi.mocked(fetch)
+      .mockReset()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        headers: new Headers({ 'Retry-After': '1' }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue(response),
+      } as unknown as Response);
+    render(
+      <DashboardAnalyticsProvider query={{ range: '30' }}>
+        <div>dashboard</div>
+      </DashboardAnalyticsProvider>
+    );
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(2_100);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  });
+
+  it('performs only slow jittered reconciliation for a continuously visible tab', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    render(
+      <DashboardAnalyticsProvider query={{ range: '30' }}>
+        <div>dashboard</div>
+      </DashboardAnalyticsProvider>
+    );
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + 1);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  });
 });

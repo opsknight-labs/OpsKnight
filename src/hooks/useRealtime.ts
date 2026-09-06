@@ -143,7 +143,8 @@ function useRealtimeConnection() {
           eventSource.close();
 
           // Attempt to reconnect with exponential backoff
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+          const baseDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+          const delay = Math.min(30_000, Math.round(baseDelay * (0.5 + Math.random())));
           reconnectAttempts.current++;
           reconnectTimeoutRef.current = setTimeout(() => {
             if (mounted) connect();

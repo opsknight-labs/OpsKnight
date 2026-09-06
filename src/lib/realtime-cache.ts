@@ -260,14 +260,12 @@ export async function getCachedRecentIncidents(
   const key = `${scopeKey}:g:${generation ?? 'initial'}`;
 
   const fetcher = async () => {
-    const whereClause: Prisma.IncidentWhereInput = {};
-
-    if (!isPrivileged) {
-      whereClause.OR = [
-        { assigneeId: userId },
-        { service: { team: { members: { some: { userId } } } } },
-      ];
-    }
+    const whereClause = incidentReadWhere({
+      id: userId,
+      role: role as AppRole,
+      status: 'ACTIVE',
+      teamIds,
+    });
 
     return prisma.incident.findMany({
       where: whereClause,

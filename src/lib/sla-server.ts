@@ -293,7 +293,13 @@ async function calculateDbAggregateMetrics(
       }>
     >(Prisma.sql`
       WITH metric_rows AS MATERIALIZED (
-        SELECT "Incident".*,
+        SELECT
+          "Incident"."id", "Incident"."createdAt", "Incident"."acknowledgedAt",
+          "Incident"."resolvedAt", "Incident"."updatedAt", "Incident"."status",
+          "Incident"."urgency", "Incident"."priority", "Incident"."serviceId",
+          "Incident"."slaAckTargetMs", "Incident"."slaResolveTargetMs",
+          "Incident"."slaAckElapsedMs", "Incident"."slaResolveElapsedMs",
+          "Incident"."slaPausedMs", "Incident"."slaPauseStartedAt",
           ${ackElapsed} AS ack_elapsed_ms,
           ${resolveElapsed} AS resolve_elapsed_ms,
           ${currentElapsed} AS current_elapsed_ms,
@@ -368,7 +374,10 @@ async function calculateDbAggregateMetrics(
       }>
     >(Prisma.sql`
       WITH metric_rows AS MATERIALIZED (
-        SELECT "Incident".*,
+        SELECT
+          "Incident"."id", "Incident"."createdAt", "Incident"."acknowledgedAt",
+          "Incident"."resolvedAt", "Incident"."updatedAt", "Incident"."status",
+          "Incident"."slaAckElapsedMs", "Incident"."slaResolveElapsedMs",
           ${ackElapsed} AS ack_elapsed_ms,
           ${resolveElapsed} AS resolve_elapsed_ms
         FROM "Incident"
@@ -1215,7 +1224,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       >(
         Prisma.sql`
       WITH metric_rows AS MATERIALIZED (
-        SELECT "Incident".*,
+        SELECT
+          "Incident"."id", "Incident"."createdAt", "Incident"."acknowledgedAt",
+          "Incident"."resolvedAt", "Incident"."updatedAt", "Incident"."status",
+          "Incident"."urgency", "Incident"."slaAckElapsedMs",
+          "Incident"."slaResolveElapsedMs",
           ${previousAckElapsed} AS ack_elapsed_ms,
           ${previousResolveElapsed} AS resolve_elapsed_ms
         FROM "Incident"

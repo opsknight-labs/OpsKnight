@@ -11,6 +11,7 @@ describe('dashboard query isolation contract', () => {
     'utf8'
   );
   const widgetProvider = readFileSync('src/lib/widget-data-provider.ts', 'utf8');
+  const realtimeCache = readFileSync('src/lib/realtime-cache.ts', 'utf8');
 
   it('never blocks dashboard SSR on the deep SLA engine', () => {
     expect(page).not.toContain('calculateActorSLAMetrics');
@@ -40,5 +41,15 @@ describe('dashboard query isolation contract', () => {
     expect(analyticsProvider).not.toContain('setInterval');
     expect(widgetProvider).not.toContain('slaPauses:');
     expect(widgetProvider).toContain('effectiveMaterializedElapsedMs');
+  });
+
+  it('keeps dashboard reconciliation filtered and realtime reads centrally authorized', () => {
+    expect(page).toContain('realtimeFilter={{');
+    const recentFetcher = realtimeCache.slice(
+      realtimeCache.indexOf('export async function getCachedRecentIncidents'),
+      realtimeCache.indexOf('export async function getCachedServiceIncidents')
+    );
+    expect(recentFetcher).toContain('incidentReadWhere({');
+    expect(recentFetcher).not.toContain('service: { team: { members:');
   });
 });

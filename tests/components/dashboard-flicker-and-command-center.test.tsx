@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import DashboardIncidentFilters from '@/components/dashboard/DashboardIncidentFilters';
 import DashboardCommandCenter from '@/components/dashboard/DashboardCommandCenter';
@@ -8,7 +8,10 @@ import LiveClock from '@/components/dashboard/LiveClock';
 
 const mockPush = vi.fn();
 const mockRefresh = vi.fn();
-const realtime = vi.hoisted(() => ({ metrics: null as null | Record<string, number> }));
+const realtime = vi.hoisted(() => ({
+  metrics: null as null | Record<string, number>,
+  recentIncidents: [] as Record<string, unknown>[],
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -30,17 +33,19 @@ vi.mock('@/contexts/TimezoneContext', () => ({
 }));
 
 vi.mock('@/hooks/useRealtime', () => ({
-  useRealtime: () => ({ metrics: realtime.metrics }),
+  useRealtime: () => ({ metrics: realtime.metrics, recentIncidents: realtime.recentIncidents }),
 }));
 
 describe('Dashboard Flicker Fixes & Command Center Verification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     realtime.metrics = null;
+    realtime.recentIncidents = [];
   });
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
     vi.clearAllTimers();
     vi.useRealTimers();
   });
@@ -187,6 +192,55 @@ describe('Dashboard Flicker Fixes & Command Center Verification', () => {
       expect(screen.getAllByText('3').length).toBeGreaterThan(0);
       expect(screen.queryByText('32')).toBeNull();
       expect(screen.getByText('OPERATIONAL')).toBeInTheDocument();
+    });
+
+    it('reconciles filtered counters from the server-authorized realtime projection', async () => {
+      realtime.metrics = { open: 27, acknowledged: 5, active: 32, resolved24h: 4, highUrgency: 10 };
+      realtime.recentIncidents = [{ id: 'incident-1', status: 'RESOLVED' }];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: vi.fn().mockResolvedValue({
+            data: {
+              open: 2,
+              acknowledged: 0,
+              active: 2,
+              snoozed: 0,
+              suppressed: 0,
+              unassigned: 1,
+              highUrgency: 0,
+            },
+          }),
+        })
+      );
+      render(
+        <DashboardCommandCenter
+          systemStatus={{ label: 'OPERATIONAL', color: 'text-emerald-500', bg: '' }}
+          allActiveIncidentsCount={3}
+          totalInRange={3}
+          currentActiveCount={3}
+          currentTriggeredCount={3}
+          currentAcknowledgedCount={0}
+          currentMutedCount={0}
+          currentSnoozedCount={0}
+          currentSuppressedCount={0}
+          metricsResolvedCount={0}
+          unassignedCount={1}
+          rangeLabel="30d"
+          incidents={[]}
+          filters={{ service: 'service-a' }}
+        />
+      );
+      await waitFor(() =>
+        expect(fetch).toHaveBeenCalledWith(
+          '/api/dashboard/metrics?service=service-a',
+          expect.anything()
+        )
+      );
+      await waitFor(() => expect(screen.getAllByText('2').length).toBeGreaterThan(0));
+      expect(screen.queryByText('32')).toBeNull();
+      vi.unstubAllGlobals();
     });
   });
 

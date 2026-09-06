@@ -18,6 +18,8 @@ After migration, sample `slaAckElapsedMs` and `slaResolveElapsedMs` against `Inc
 
 An explicit `connection_limit` in `DATABASE_URL` takes precedence. Size aggregate connections across replicas and PgBouncer against the actual PostgreSQL limit.
 
+Application connections default to a 30-second PostgreSQL `statement_timeout`; an explicit `options` parameter in `DATABASE_URL` takes precedence. This bounds an executing query rather than only bounding pool wait time. Validate longer administrative/reporting workloads before lowering the limit.
+
 ## Certification
 
 Seed an isolated performance database (never production), or restore a production-shaped fixture:
@@ -50,3 +52,5 @@ k6 run -e BASE_URL=https://staging.example.com \
 The script distributes VUs across those identities and fails when analytics admission errors exceed 2%. Record shell and analytics p50/p95/p99, PostgreSQL CPU/load, active connections, slow-query duration, cache state, readiness latency, realtime recovery, analytics calculation count, dashboard RSC requests after one incident mutation, and analytics 503 rate. Targets are shell p95 under 2 seconds, cached analytics under 250 ms, cold analytics under 5 seconds, readiness p95 under 1 second, and analytics 503 below 2%. The operational dashboard must remain usable during admission pressure.
 
 Prometheus exposes dashboard shell/analytics duration, analytics in-flight work, cache states, stale serves, and failures. Deep health exposes cache entry count and last success/failure timestamps without treating stale analytics as an application outage.
+
+The SLA capture migration performs one set-based historical backfill. For very large installations, measure the qualifying incident and pause-row counts, migration duration, WAL capacity, and replica lag on a restored production-sized database before rollout. Schedule the migration in a controlled window when that rehearsal exceeds the normal deployment budget.

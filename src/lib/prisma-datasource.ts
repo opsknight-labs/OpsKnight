@@ -20,6 +20,9 @@ export function configurePrismaDatasource(
     if (!url.searchParams.has('statement_cache_size')) {
       url.searchParams.set('statement_cache_size', '100');
     }
+    if (!url.searchParams.has('options')) {
+      url.searchParams.set('options', '-c statement_timeout=30000');
+    }
     return url.toString();
   } catch {
     // Preserve provider-specific Prisma URLs that the WHATWG parser does not
