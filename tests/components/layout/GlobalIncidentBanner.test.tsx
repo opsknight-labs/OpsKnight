@@ -13,6 +13,7 @@ const mockContextValue = {
   nextIncident: vi.fn(),
   prevIncident: vi.fn(),
   selectIncident: vi.fn(),
+  dismissBanner: vi.fn(),
   snoozeBanner: vi.fn(),
   dismissIncident: vi.fn(),
   acknowledgeIncident: vi.fn(),
@@ -128,7 +129,7 @@ describe('GlobalIncidentBanner', () => {
     expect(mockContextValue.nextIncident).toHaveBeenCalledTimes(1);
   });
 
-  it('calls snoozeBanner when clicking the snooze X button', () => {
+  it('calls dismissBanner when clicking the dismiss X button', () => {
     mockContextValue.isBannerVisible = true;
     mockContextValue.totalCount = 1;
     mockContextValue.currentIncident = {
@@ -143,9 +144,9 @@ describe('GlobalIncidentBanner', () => {
 
     render(<GlobalIncidentBanner />);
 
-    const snoozeBtn = screen.getByRole('button', { name: /snooze banner for this session/i });
-    fireEvent.click(snoozeBtn);
+    const dismissBtn = screen.getByRole('button', { name: /dismiss banner/i });
+    fireEvent.click(dismissBtn);
 
-    expect(mockContextValue.snoozeBanner).toHaveBeenCalledTimes(1);
+    expect(mockContextValue.dismissBanner).toHaveBeenCalledTimes(1);
   });
 });
