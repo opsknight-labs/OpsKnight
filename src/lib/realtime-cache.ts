@@ -186,7 +186,10 @@ export async function getCachedDashboardMetrics(
     const authorizationScope = hasGlobalMetrics
       ? {}
       : incidentReadWhere({ id: userId, role: role as AppRole, status: 'ACTIVE', teamIds });
-    const selectedScope = compileIncidentMetricFilter({ ...metricFilter, status: undefined }).prisma;
+    const selectedScope = compileIncidentMetricFilter({
+      ...metricFilter,
+      status: undefined,
+    }).prisma;
     const scope: Prisma.IncidentWhereInput = { AND: [authorizationScope, selectedScope] };
     const resolvedSince = new Date(Date.now() - 24 * 60 * 60_000);
     const [statusGroups, resolved24h] = await Promise.all([
@@ -211,8 +214,7 @@ export async function getCachedDashboardMetrics(
     const critical = statusGroups
       .filter(
         group =>
-          (group.status === 'OPEN' || group.status === 'ACKNOWLEDGED') &&
-          group.urgency === 'HIGH'
+          (group.status === 'OPEN' || group.status === 'ACKNOWLEDGED') && group.urgency === 'HIGH'
       )
       .reduce((sum, group) => sum + group._count._all, 0);
     const unassigned = await prisma.incident.count({
@@ -272,6 +274,7 @@ export async function getCachedRecentIncidents(
       select: {
         id: true,
         title: true,
+        description: true,
         status: true,
         urgency: true,
         priority: true,

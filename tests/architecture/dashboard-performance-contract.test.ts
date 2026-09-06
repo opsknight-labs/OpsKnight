@@ -5,6 +5,12 @@ describe('dashboard query isolation contract', () => {
   const page = readFileSync('src/app/(app)/page.tsx', 'utf8');
   const operational = readFileSync('src/lib/dashboard/dashboard-operational-snapshot.ts', 'utf8');
   const wrapper = readFileSync('src/components/DashboardRealtimeWrapper.tsx', 'utf8');
+  const incidentList = readFileSync('src/components/incident/IncidentsListTable.tsx', 'utf8');
+  const analyticsProvider = readFileSync(
+    'src/components/dashboard/DashboardAnalyticsProvider.tsx',
+    'utf8'
+  );
+  const widgetProvider = readFileSync('src/lib/widget-data-provider.ts', 'utf8');
 
   it('never blocks dashboard SSR on the deep SLA engine', () => {
     expect(page).not.toContain('calculateActorSLAMetrics');
@@ -23,5 +29,16 @@ describe('dashboard query isolation contract', () => {
   it('does not rely on a full route refresh for realtime updates', () => {
     expect(wrapper).not.toContain('router.refresh');
     expect(wrapper).not.toContain('useRouter');
+    const realtimeEffect = incidentList.slice(
+      incidentList.indexOf('// Real-time updates & newly incoming pulse tracking'),
+      incidentList.indexOf('useEffect(() => {\n    if (focusedIndex')
+    );
+    expect(realtimeEffect).not.toContain('router.refresh');
+  });
+
+  it('does not poll historical analytics and keeps operational SLA reads materialized', () => {
+    expect(analyticsProvider).not.toContain('setInterval');
+    expect(widgetProvider).not.toContain('slaPauses:');
+    expect(widgetProvider).toContain('effectiveMaterializedElapsedMs');
   });
 });

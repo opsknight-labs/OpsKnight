@@ -36,7 +36,8 @@ describe('realtime temporal projections', () => {
         priority: null,
         slaAckTargetMs: 20 * 60_000,
         slaResolveTargetMs: 120 * 60_000,
-        slaPauses: [],
+        slaPausedMs: BigInt(0),
+        slaPauseStartedAt: null,
         service: { name: 'API', targetAckMinutes: 20, targetResolveMinutes: 120 },
       },
     ] as never);

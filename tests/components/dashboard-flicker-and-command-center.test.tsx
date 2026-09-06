@@ -8,6 +8,7 @@ import LiveClock from '@/components/dashboard/LiveClock';
 
 const mockPush = vi.fn();
 const mockRefresh = vi.fn();
+const realtime = vi.hoisted(() => ({ metrics: null as null | Record<string, number> }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -29,12 +30,13 @@ vi.mock('@/contexts/TimezoneContext', () => ({
 }));
 
 vi.mock('@/hooks/useRealtime', () => ({
-  useRealtime: () => ({ metrics: null }),
+  useRealtime: () => ({ metrics: realtime.metrics }),
 }));
 
 describe('Dashboard Flicker Fixes & Command Center Verification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    realtime.metrics = null;
   });
 
   afterEach(() => {
@@ -151,6 +153,40 @@ describe('Dashboard Flicker Fixes & Command Center Verification', () => {
       expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument();
       // Export button should be present immediately
       expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
+    });
+
+    it('does not overwrite filtered counters with organization-wide realtime metrics', () => {
+      realtime.metrics = {
+        open: 27,
+        acknowledged: 5,
+        active: 32,
+        resolved24h: 4,
+        highUrgency: 10,
+        snoozed: 3,
+        suppressed: 2,
+        unassigned: 8,
+      };
+      render(
+        <DashboardCommandCenter
+          systemStatus={{ label: 'OPERATIONAL', color: 'text-emerald-500', bg: '' }}
+          allActiveIncidentsCount={3}
+          totalInRange={3}
+          currentActiveCount={3}
+          currentTriggeredCount={3}
+          currentAcknowledgedCount={0}
+          currentMutedCount={0}
+          currentSnoozedCount={0}
+          currentSuppressedCount={0}
+          metricsResolvedCount={0}
+          unassignedCount={1}
+          rangeLabel="30d"
+          incidents={[]}
+          filters={{ service: 'service-a' }}
+        />
+      );
+      expect(screen.getAllByText('3').length).toBeGreaterThan(0);
+      expect(screen.queryByText('32')).toBeNull();
+      expect(screen.getByText('OPERATIONAL')).toBeInTheDocument();
     });
   });
 

@@ -27,14 +27,26 @@ PERF_SEED_CONFIRM=1084 DATABASE_URL='postgresql://…/isolated_perf' \
   npx ts-node --project tsconfig.script.json scripts/perf/dashboard-seed.ts
 ```
 
-The command prints a unique run ID embedded in every fixture title for targeted cleanup. Obtain an authenticated session cookie, then run:
+The command prints a unique run ID embedded in every fixture title for targeted cleanup. Obtain authenticated cookies for distinct representative global and scoped users, then run:
+
+First certify the exact 1,084-row SLA query directly and retain its JSON result:
+
+```sh
+PERF_SERVICE_ID='<serviceId printed by the seed>' DATABASE_URL='postgresql://…/isolated_perf' \
+  NODE_PATH=scripts/perf/shims npx ts-node --project tsconfig.script.json \
+  -r tsconfig-paths/register scripts/perf/dashboard-benchmark.ts
+```
+
+The benchmark executes ten uncached SLA calculations, reports cold/p50/p95/max, and fails when p95 reaches five seconds.
+
+Then certify the authenticated dashboard topology:
 
 ```sh
 k6 run -e BASE_URL=https://staging.example.com \
-  -e SESSION_COOKIE='next-auth.session-token=…' \
+  -e SESSION_COOKIES_JSON='["next-auth.session-token=admin…","next-auth.session-token=scoped-user…"]' \
   scripts/load/dashboard-query-isolation.js
 ```
 
-Record shell and analytics p50/p95/p99, PostgreSQL CPU/load, active connections, slow-query duration, cache state, readiness latency, and realtime recovery. Targets are shell p95 under 2 seconds, cached analytics under 250 ms, cold analytics under 5 seconds, and readiness p95 under 1 second. A `503` from analytics during admission pressure is expected; the operational dashboard must stay usable.
+The script distributes VUs across those identities and fails when analytics admission errors exceed 2%. Record shell and analytics p50/p95/p99, PostgreSQL CPU/load, active connections, slow-query duration, cache state, readiness latency, realtime recovery, analytics calculation count, dashboard RSC requests after one incident mutation, and analytics 503 rate. Targets are shell p95 under 2 seconds, cached analytics under 250 ms, cold analytics under 5 seconds, readiness p95 under 1 second, and analytics 503 below 2%. The operational dashboard must remain usable during admission pressure.
 
 Prometheus exposes dashboard shell/analytics duration, analytics in-flight work, cache states, stale serves, and failures. Deep health exposes cache entry count and last success/failure timestamps without treating stale analytics as an application outage.

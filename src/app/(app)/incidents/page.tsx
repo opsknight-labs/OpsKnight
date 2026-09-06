@@ -268,6 +268,19 @@ export default async function IncidentsPage({
               totalItems: totalCount,
               itemsPerPage: ITEMS_PER_PAGE,
             }}
+            realtimeFilter={{
+              filter: currentFilter,
+              actorId: actor.id,
+              status: currentStatus,
+              assignee: currentAssignee,
+              serviceId: currentServiceId,
+              urgency: currentUrgency,
+              priority: currentPriority,
+              teamId: currentTeamId,
+              search: currentSearch,
+              createdAfter: validCreatedAfter?.toISOString(),
+              createdBefore: validCreatedBefore?.toISOString(),
+            }}
           />
         </RealtimeProvider>
       </div>

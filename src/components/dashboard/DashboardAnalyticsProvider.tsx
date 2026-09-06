@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { DashboardAnalyticsSnapshot } from '@/lib/dashboard/dashboard-analytics-cache';
 
 type AnalyticsState = {
@@ -49,23 +57,26 @@ export function DashboardAnalyticsProvider({
       });
     } catch (_error) {
       if (controller.signal.aborted) return;
-      setAnalytics(previous => ({ data: previous.data, state: previous.data ? 'updating' : 'unavailable' }));
+      setAnalytics(previous => ({
+        data: previous.data,
+        state: previous.data ? 'updating' : 'unavailable',
+      }));
     }
   }, [stableQuery]);
 
   useEffect(() => {
     void load();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void load();
-    }, 30_000);
+    let loadedAt = Date.now();
     const resume = () => {
-      if (document.visibilityState === 'visible') void load();
+      if (document.visibilityState === 'visible' && Date.now() - loadedAt >= 5 * 60_000) {
+        loadedAt = Date.now();
+        void load();
+      }
     };
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('online', resume);
     return () => {
       requestRef.current?.abort();
-      window.clearInterval(interval);
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('online', resume);
     };
@@ -80,6 +91,7 @@ export function DashboardAnalyticsProvider({
 
 export function useDashboardAnalytics() {
   const value = useContext(DashboardAnalyticsContext);
-  if (!value) throw new Error('useDashboardAnalytics must be used within DashboardAnalyticsProvider');
+  if (!value)
+    throw new Error('useDashboardAnalytics must be used within DashboardAnalyticsProvider');
   return value;
 }

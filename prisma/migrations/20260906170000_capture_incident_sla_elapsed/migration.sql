@@ -10,9 +10,9 @@ WITH targets AS (
   FROM "Incident" i
   WHERE i."acknowledgedAt" IS NOT NULL AND i."slaAckElapsedMs" IS NULL
   UNION ALL
-  SELECT i."id", 'resolve'::text, i."createdAt", i."resolvedAt"
+  SELECT i."id", 'resolve'::text, i."createdAt", COALESCE(i."resolvedAt", i."updatedAt")
   FROM "Incident" i
-  WHERE i."resolvedAt" IS NOT NULL AND i."slaResolveElapsedMs" IS NULL
+  WHERE i."status" = 'RESOLVED' AND i."slaResolveElapsedMs" IS NULL
 ), clipped AS (
   SELECT
     t."id",

@@ -11,6 +11,7 @@ import {
   setOperationalGauge,
 } from '@/lib/metrics/operational/registry';
 import { logger } from '@/lib/logger';
+import { actorMetricReadScope } from '@/lib/authorization-filters';
 
 export type DashboardAnalyticsFilters = {
   rangeDays?: number;
@@ -69,11 +70,10 @@ let lastSuccessAt: Date | null = null;
 let lastFailureAt: Date | null = null;
 
 function normalizedKey(actor: AuthorizationActor, filters: DashboardAnalyticsFilters): string {
-  const scope = {
-    actorId: actor.id,
-    role: actor.role,
-    teams: [...actor.teamIds].sort(),
-  };
+  const metricScope = actorMetricReadScope(actor).authorizationScope;
+  const scope = metricScope
+    ? { type: 'scoped', actorId: metricScope.actorId, teams: [...metricScope.teamIds].sort() }
+    : { type: 'global' };
   const normalizedFilters = {
     rangeDays: filters.rangeDays,
     startDate: filters.startDate?.toISOString(),
@@ -156,8 +156,10 @@ async function calculate(
     cache.delete(key);
     cache.set(key, entry);
     lastSuccessAt = new Date(now);
-    observeOperationalHistogram('opsknight_dashboard_analytics_duration_seconds',
-      (now - startedAt) / 1000);
+    observeOperationalHistogram(
+      'opsknight_dashboard_analytics_duration_seconds',
+      (now - startedAt) / 1000
+    );
     return entry;
   } catch (error) {
     lastFailureAt = new Date();

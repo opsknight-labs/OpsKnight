@@ -47,6 +47,7 @@ function useRealtimeConnection() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
   const authorizationRevoked = useRef(false);
+  const lastEventAt = useRef(0);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -67,7 +68,12 @@ function useRealtimeConnection() {
     };
     window.addEventListener('online', handleOnline);
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') handleOnline();
+      if (
+        document.visibilityState === 'visible' &&
+        (!eventSourceRef.current || Date.now() - lastEventAt.current >= 90_000)
+      ) {
+        handleOnline();
+      }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
@@ -92,6 +98,7 @@ function useRealtimeConnection() {
           setIsConnected(true);
           setError(null);
           reconnectAttempts.current = 0;
+          lastEventAt.current = Date.now();
         };
 
         eventSource.onmessage = event => {
@@ -99,6 +106,7 @@ function useRealtimeConnection() {
 
           try {
             const data: RealtimeEvent = JSON.parse(event.data);
+            lastEventAt.current = Date.now();
 
             switch (data.type) {
               case 'connected':

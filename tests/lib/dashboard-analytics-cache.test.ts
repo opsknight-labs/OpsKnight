@@ -16,7 +16,12 @@ import {
   resetDashboardAnalyticsCacheForTests,
 } from '@/lib/dashboard/dashboard-analytics-cache';
 
-const actor = { id: 'user-1', role: 'USER' as const, status: 'ACTIVE' as const, teamIds: ['team-1'] };
+const actor = {
+  id: 'user-1',
+  role: 'USER' as const,
+  status: 'ACTIVE' as const,
+  teamIds: ['team-1'],
+};
 const metrics = {
   mttd: 4,
   mttr: 20,
@@ -60,5 +65,21 @@ describe('dashboard analytics cache', () => {
     await getDashboardAnalytics(actor, { rangeDays: 30 });
     await getDashboardAnalytics({ ...actor, id: 'user-2' }, { rangeDays: 30 });
     expect(mocks.calculate).toHaveBeenCalledTimes(2);
+  });
+
+  it('singleflights equivalent organization-wide actors', async () => {
+    let finish!: (value: typeof metrics) => void;
+    mocks.calculate.mockReturnValue(new Promise(resolve => (finish = resolve)));
+    const first = getDashboardAnalytics(
+      { ...actor, id: 'admin-1', role: 'ADMIN', teamIds: [] },
+      { rangeDays: 30 }
+    );
+    const second = getDashboardAnalytics(
+      { ...actor, id: 'responder-1', role: 'RESPONDER', teamIds: ['team-2'] },
+      { rangeDays: 30 }
+    );
+    finish(metrics);
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(mocks.calculate).toHaveBeenCalledOnce();
   });
 });
