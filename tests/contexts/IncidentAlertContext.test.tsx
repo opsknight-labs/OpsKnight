@@ -154,12 +154,13 @@ describe('IncidentAlertContext', () => {
     expect(result.current.isBannerVisible).toBe(true);
 
     act(() => {
-      result.current.snoozeBanner();
+      result.current.dismissBanner();
     });
 
     expect(result.current.isBannerVisible).toBe(false);
-    expect(result.current.isSnoozed).toBe(true);
-    expect(sessionStorage.getItem('opsknight:snoozed_critical_incidents')).toContain('inc-1');
+    expect(result.current.isDismissed).toBe(true);
+    expect(sessionStorage.getItem('opsknight:banner_dismissed_at')).toBeDefined();
+    expect(Number(sessionStorage.getItem('opsknight:banner_dismissed_at'))).toBeGreaterThan(0);
   });
 
   it('contextually suppresses banner when viewing the incident on /incidents/[id]', () => {
@@ -271,5 +272,88 @@ describe('IncidentAlertContext', () => {
       }),
       expect.anything()
     );
+  });
+
+  it('once dismissed via X, banner remains hidden across route changes unless a new P1 incident arrives', () => {
+    const existingIncident = {
+      id: 'inc-existing',
+      title: 'Current Outage',
+      status: 'OPEN',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+    };
+
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [existingIncident],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    const { result, rerender } = renderHook(() => useIncidentAlert(), { wrapper });
+
+    expect(result.current.isBannerVisible).toBe(true);
+
+    // User dismisses banner on current page
+    act(() => {
+      result.current.dismissBanner();
+    });
+
+    expect(result.current.isBannerVisible).toBe(false);
+
+    // User navigates to /services (simulate route change)
+    mockPathname.mockReturnValue('/services');
+    rerender();
+
+    // Banner MUST remain hidden across pages
+    expect(result.current.isBannerVisible).toBe(false);
+
+    // Now a brand-new P1 incident occurs in real-time
+    const newArrival = {
+      id: 'inc-new-p1',
+      title: 'New Catastrophic P1 Outage',
+      status: 'OPEN',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date().toISOString(),
+    };
+
+    act(() => {
+      mockUseRealtime.mockReturnValue({
+        recentIncidents: [existingIncident, newArrival],
+      });
+      rerender();
+    });
+
+    // The brand-new P1 incident MUST re-open the banner across all pages!
+    expect(result.current.isBannerVisible).toBe(true);
+    expect(result.current.currentIncident?.id).toBe('inc-new-p1');
+  });
+
+  it('excludes stale incidents older than 24 hours from the emergency banner', () => {
+    const staleIncident = {
+      id: 'inc-old',
+      title: 'Old Incident from last week',
+      status: 'OPEN',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(), // 7 days ago
+    };
+
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [staleIncident],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    const { result } = renderHook(() => useIncidentAlert(), { wrapper });
+
+    // Should be excluded from emergency banner
+    expect(result.current.activeCriticalIncidents).toHaveLength(0);
+    expect(result.current.isBannerVisible).toBe(false);
   });
 });

@@ -35,7 +35,7 @@ export default function GlobalIncidentBanner() {
     isBannerVisible,
     nextIncident,
     prevIncident,
-    snoozeBanner,
+    dismissBanner,
     acknowledgeIncident,
     isAcknowledging,
   } = useIncidentAlert();
@@ -59,7 +59,7 @@ export default function GlobalIncidentBanner() {
     <aside
       aria-label="Active critical incident notification"
       className={cn(
-        'relative z-30 w-full transition-all duration-200 border-b shadow-sm overflow-hidden text-xs sm:text-sm',
+        'sticky top-0 z-30 w-full transition-all duration-200 border-b shadow-md text-xs sm:text-sm',
         isP1
           ? 'bg-rose-950/95 text-rose-50 border-rose-800/90 shadow-rose-950/20'
           : 'bg-amber-950/95 text-amber-50 border-amber-800/90 shadow-amber-950/20'
@@ -208,13 +208,13 @@ export default function GlobalIncidentBanner() {
             <ArrowRight size={12} />
           </Link>
 
-          {/* Snooze / Dismiss Button */}
+          {/* Dismiss Button */}
           <button
             type="button"
-            onClick={snoozeBanner}
+            onClick={dismissBanner}
             className="h-7 w-7 rounded-md hover:bg-white/15 text-white/70 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-            title="Snooze banner for this session"
-            aria-label="Snooze banner for this session"
+            title="Dismiss banner (reopens if a new P1 incident occurs)"
+            aria-label="Dismiss banner"
           >
             <X size={15} />
           </button>
