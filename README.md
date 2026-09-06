@@ -14,6 +14,7 @@ _From alert ingestion and on-call routing through response, customer communicati
 [![License](https://img.shields.io/badge/License-Apache_2.0-111827?style=flat)](LICENSE)
 [![Docker Package](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=flat&logo=docker&logoColor=white)](https://github.com/opsknight-labs/OpsKnight/pkgs/container/opsknight)
 [![Status](https://img.shields.io/badge/Status-v1.4.0-success?style=flat)](ROADMAP.md)
+[![Next Major](https://img.shields.io/badge/Next_Major-OpsKnight_2.0_In_Development_🔥-FF5722?style=flat&logo=rocket&logoColor=white)](ROADMAP.md)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=flat&logo=github&logoColor=white)](https://github.com/sponsors/dushyant-rahangdale)
 [![Tests](https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml/badge.svg)](https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml)
 [![Security](https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml/badge.svg)](https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml)
@@ -24,7 +25,23 @@ _From alert ingestion and on-call routing through response, customer communicati
 
 ---
 
-> ### 🆕 What's new in v1.4
+> [!IMPORTANT]
+> ### 🚀 OpsKnight 2.0 is in active development!
+>
+> Following our **v1.4.0** release, over **220+ PRs** have been merged into `main`. While we initially planned a minor `v1.5` update, the sheer scale of improvements across every layer of the platform has evolved this milestone into our next major evolutionary leap: **OpsKnight 2.0**!
+>
+> **What to look forward to in OpsKnight 2.0:**
+> - 🎨 **Next-Gen UI & War Room Experience**: Completely refreshed command center, fluid zero-CLS navigation, streamlined incident creation modals & templating, dark/light theme ergonomics, and unified hero headers.
+> - ⚡ **Event-Driven Push Engine**: High-performance Server-Sent Events (SSE) streaming with a durable control plane, sub-second fanout, zero layout flickering, and persistent contextual emergency alert banners with smart 120s auto-dismissal.
+> - 🛡️ **Enterprise Availability & Resilience**: Centralized mutation command engine, durable side-effect outbox, typed application error contracts, fail-closed security, and robust database offline fallbacks.
+> - 📅 **Hardened On-Call & Rotations**: DST-safe rotation resolution, shift handoff awareness, alert flapping suppression, and multi-channel delivery (Slack ChatOps, Web Push, SMS, WhatsApp, Email).
+> - 🌐 **Multi-Page Status Portals**: Enterprise multi-page status architecture with granular privacy, dynamic inheritance, and real-time subscriber delivery.
+>
+> 💡 *To our community and repository watchers: **OpsKnight 2.0 is going to be massive.** Star ⭐ and watch this repository to stay tuned for the upcoming release!*
+
+---
+
+> ### 📦 Current Stable Release: v1.4.0
 >
 > **Paging reliability** — delayed escalations remain delayed, orphaned work is
 > recovered safely, and notification routes avoid duplicate delivery.
@@ -326,7 +343,7 @@ Hardening guidance: [Security documentation](docs/v1.4/security/README.md)
 
 ## 🗺️ Roadmap
 
-We are preparing **Version 1.4.0 (August 2026)**! 🚀
+🔥 **Currently In Active Development: OpsKnight 2.0 (Next Major Evolution)**
 
 - [x] Core Incident Management & On-Call Schedules
 - [x] **Slack ChatOps Incident War Rooms & Interactive Cards**
@@ -339,6 +356,7 @@ We are preparing **Version 1.4.0 (August 2026)**! 🚀
 - [x] **Mobile PWA with Biometric Security & Push Notifications**
 - [x] **Administrator Health Center & Release-Quality Contract**
 - [x] **Reliable Delayed Escalation Recovery & Multi-Architecture Releases**
+- [ ] 🚀 **OpsKnight 2.0: Next-Gen UI/UX, Real-Time Push Stream Engine, and Enterprise Availability Hardening**
 
 See the full [ROADMAP.md](ROADMAP.md)
 
