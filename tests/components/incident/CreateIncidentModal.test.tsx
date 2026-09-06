@@ -29,6 +29,7 @@ const mockContextData = {
     {
       id: 'srv-checkout',
       name: 'Checkout API',
+      defaultIncidentVisibility: 'PUBLIC',
       team: { id: 'team-sre', name: 'SRE Core' },
       policy: {
         id: 'pol-1',
@@ -47,6 +48,7 @@ const mockContextData = {
     {
       id: 'srv-auth',
       name: 'Authentication Service',
+      defaultIncidentVisibility: 'PRIVATE',
       team: { id: 'team-sre', name: 'SRE Core' },
       policy: null,
     },
@@ -187,6 +189,19 @@ describe('CreateIncidentModal', () => {
     const customerBtn = screen.getByRole('button', { name: /Customer-Facing Outage/i });
     fireEvent.click(customerBtn);
     expect(customerBtn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('automatically inherits service default visibility when service is pre-selected', async () => {
+    mockOpenOptions = { serviceId: 'srv-auth' };
+    render(<CreateIncidentModal />);
+
+    await screen.findByText('Declare Incident');
+
+    await waitFor(() => {
+      const internalBtn = screen.getByRole('button', { name: /Internal System Only/i });
+      expect(internalBtn.getAttribute('aria-pressed')).toBe('true');
+      expect(screen.getByText('Service Default')).toBeInTheDocument();
+    });
   });
 
   it('switches description between Write and Preview modes', async () => {

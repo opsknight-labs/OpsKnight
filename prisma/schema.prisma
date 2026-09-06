@@ -386,6 +386,7 @@ model Service {
   serviceNotifyOnAck          Boolean               @default(true)
   serviceNotifyOnResolved     Boolean               @default(true)
   serviceNotifyOnSlaBreach    Boolean               @default(false)
+  defaultIncidentVisibility   IncidentVisibility    @default(PUBLIC) // Default incident visibility (PUBLIC vs PRIVATE)
   // ChatOps War-Room overrides
   autoCreateWarRoom           Boolean               @default(true) // Auto-create dedicated Slack channel for critical incidents
   warRoomVideoBridge          String? // Override video bridge provider: JITSI, ZOOM, GOOGLE_MEET, NONE

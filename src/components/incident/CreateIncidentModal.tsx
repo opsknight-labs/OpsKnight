@@ -85,6 +85,7 @@ type EscalationPolicy = {
 type Service = {
   id: string;
   name: string;
+  defaultIncidentVisibility?: 'PUBLIC' | 'PRIVATE';
   team?: { id: string; name: string } | null;
   policy?: EscalationPolicy | null;
   autoCreateWarRoom?: boolean;
@@ -409,6 +410,7 @@ function CreateIncidentModalContent({
   const [showPreview, setShowPreview] = useState(true);
   const [descTab, setDescTab] = useState<'write' | 'preview'>('write');
   const [createWarRoom, setCreateWarRoom] = useState(true);
+  const userOverrodeVisibility = useRef(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -432,6 +434,7 @@ function CreateIncidentModalContent({
   const watchedVisibility = form.watch('visibility');
 
   const resetForm = useCallback(() => {
+    userOverrodeVisibility.current = false;
     form.reset({
       title: '',
       description: '',
@@ -446,6 +449,7 @@ function CreateIncidentModalContent({
 
   const applyTemplate = useCallback(
     (template: Template) => {
+      userOverrodeVisibility.current = false;
       form.reset({
         title: template.title,
         description: template.descriptionText || '',
@@ -564,6 +568,13 @@ function CreateIncidentModalContent({
     () => services.find(s => s.id === watchedServiceId),
     [services, watchedServiceId]
   );
+
+  useEffect(() => {
+    if (userOverrodeVisibility.current) return;
+    if (selectedService?.defaultIncidentVisibility) {
+      form.setValue('visibility', selectedService.defaultIncidentVisibility);
+    }
+  }, [selectedService?.defaultIncidentVisibility, form]);
 
   const selectedAssigneeUser = useMemo(
     () => users.find(u => watchedAssigneeId === `user:${u.id}` || watchedAssigneeId === u.id),
@@ -884,7 +895,10 @@ function CreateIncidentModalContent({
                           <button
                             type="button"
                             aria-pressed={field.value === 'PUBLIC'}
-                            onClick={() => field.onChange('PUBLIC')}
+                            onClick={() => {
+                              userOverrodeVisibility.current = true;
+                              field.onChange('PUBLIC');
+                            }}
                             className={cn(
                               'flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer',
                               field.value === 'PUBLIC'
@@ -907,18 +921,29 @@ function CreateIncidentModalContent({
                                 <span className="text-xs font-bold text-foreground">
                                   Customer-Facing Outage
                                 </span>
-                                <Badge
-                                  variant="outline"
-                                  size="xs"
-                                  className={cn(
-                                    'text-[9px] font-semibold',
-                                    field.value === 'PUBLIC'
-                                      ? 'border-sky-500/40 text-sky-600 dark:text-sky-400 bg-sky-500/10'
-                                      : 'opacity-60'
+                                <div className="flex items-center gap-1.5">
+                                  {selectedService?.defaultIncidentVisibility === 'PUBLIC' && (
+                                    <Badge
+                                      variant="secondary"
+                                      size="xs"
+                                      className="text-[9px] font-medium px-1.5 py-0 border-sky-500/30 text-sky-700 dark:text-sky-300 bg-sky-500/10"
+                                    >
+                                      Service Default
+                                    </Badge>
                                   )}
-                                >
-                                  PUBLIC
-                                </Badge>
+                                  <Badge
+                                    variant="outline"
+                                    size="xs"
+                                    className={cn(
+                                      'text-[9px] font-semibold',
+                                      field.value === 'PUBLIC'
+                                        ? 'border-sky-500/40 text-sky-600 dark:text-sky-400 bg-sky-500/10'
+                                        : 'opacity-60'
+                                    )}
+                                  >
+                                    PUBLIC
+                                  </Badge>
+                                </div>
                               </div>
                               <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
                                 Visible on public status pages & client notification broadcasts.
@@ -929,7 +954,10 @@ function CreateIncidentModalContent({
                           <button
                             type="button"
                             aria-pressed={field.value === 'PRIVATE'}
-                            onClick={() => field.onChange('PRIVATE')}
+                            onClick={() => {
+                              userOverrodeVisibility.current = true;
+                              field.onChange('PRIVATE');
+                            }}
                             className={cn(
                               'flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer',
                               field.value === 'PRIVATE'
@@ -952,18 +980,29 @@ function CreateIncidentModalContent({
                                 <span className="text-xs font-bold text-foreground">
                                   Internal System Only
                                 </span>
-                                <Badge
-                                  variant="outline"
-                                  size="xs"
-                                  className={cn(
-                                    'text-[9px] font-semibold',
-                                    field.value === 'PRIVATE'
-                                      ? 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
-                                      : 'opacity-60'
+                                <div className="flex items-center gap-1.5">
+                                  {selectedService?.defaultIncidentVisibility === 'PRIVATE' && (
+                                    <Badge
+                                      variant="secondary"
+                                      size="xs"
+                                      className="text-[9px] font-medium px-1.5 py-0 border-slate-500/30 text-slate-700 dark:text-slate-300 bg-slate-500/10"
+                                    >
+                                      Service Default
+                                    </Badge>
                                   )}
-                                >
-                                  INTERNAL
-                                </Badge>
+                                  <Badge
+                                    variant="outline"
+                                    size="xs"
+                                    className={cn(
+                                      'text-[9px] font-semibold',
+                                      field.value === 'PRIVATE'
+                                        ? 'border-slate-500/40 text-slate-700 dark:text-slate-300 bg-slate-500/10'
+                                        : 'opacity-60'
+                                    )}
+                                  >
+                                    INTERNAL
+                                  </Badge>
+                                </div>
                               </div>
                               <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
                                 Restricted to internal response teams; hidden from status pages.
@@ -1113,6 +1152,15 @@ function CreateIncidentModalContent({
                                         form.setValue('serviceId', service.id, {
                                           shouldValidate: true,
                                         });
+                                        if (
+                                          !userOverrodeVisibility.current &&
+                                          service.defaultIncidentVisibility
+                                        ) {
+                                          form.setValue(
+                                            'visibility',
+                                            service.defaultIncidentVisibility
+                                          );
+                                        }
                                         setServiceOpen(false);
                                       }}
                                       className="cursor-pointer flex items-center justify-between"

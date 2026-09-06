@@ -175,7 +175,7 @@ export async function processEvent(
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
       where: { id: serviceId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, defaultIncidentVisibility: true },
     });
 
     if (!service) {
@@ -346,6 +346,7 @@ export async function processEvent(
             urgency,
             dedupKey: dedup_key,
             serviceId,
+            visibility: service.defaultIncidentVisibility ?? 'PUBLIC',
             escalationStatus: 'COMPLETED',
           },
         });
@@ -402,6 +403,7 @@ export async function processEvent(
           urgency,
           dedupKey: dedup_key,
           serviceId,
+          visibility: service.defaultIncidentVisibility ?? 'PUBLIC',
           createdAt: incidentCreatedAt,
           ...(isFlapping
             ? {

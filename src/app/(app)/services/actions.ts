@@ -117,6 +117,10 @@ export async function updateService(serviceId: string, formData: FormData) {
     }
   }
 
+  const rawVisibility = formData.get('defaultIncidentVisibility');
+  const defaultIncidentVisibility =
+    rawVisibility === 'PRIVATE' ? 'PRIVATE' : rawVisibility === 'PUBLIC' ? 'PUBLIC' : undefined;
+
   try {
     const normalizedName = await assertServiceNameAvailable(name, { excludeId: serviceId });
 
@@ -129,6 +133,7 @@ export async function updateService(serviceId: string, formData: FormData) {
         slaTier: slaTier || null,
         teamId: teamId || null,
         escalationPolicyId: escalationPolicyId || null,
+        ...(defaultIncidentVisibility ? { defaultIncidentVisibility } : {}),
       },
     });
 
@@ -141,6 +146,7 @@ export async function updateService(serviceId: string, formData: FormData) {
         name: normalizedName,
         teamId: teamId || null,
         escalationPolicyId: escalationPolicyId || null,
+        ...(defaultIncidentVisibility ? { defaultIncidentVisibility } : {}),
       },
     });
 
@@ -494,4 +500,38 @@ export async function deleteService(serviceId: string) {
   revalidatePath('/audit');
 
   redirect('/services');
+}
+
+export async function updateServiceDefaultVisibility(
+  serviceId: string,
+  visibility: 'PUBLIC' | 'PRIVATE'
+) {
+  let currentUser: { id: string } | null = null;
+  try {
+    currentUser = await assertCanModifyService(serviceId);
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'Unauthorized');
+  }
+
+  if (visibility !== 'PUBLIC' && visibility !== 'PRIVATE') {
+    throw new Error('Invalid visibility setting. Must be PUBLIC or PRIVATE.');
+  }
+
+  await prisma.service.update({
+    where: { id: serviceId },
+    data: { defaultIncidentVisibility: visibility },
+  });
+
+  await logAudit({
+    action: 'service.updated',
+    entityType: 'SERVICE',
+    entityId: serviceId,
+    actorId: currentUser.id,
+    details: { defaultIncidentVisibility: visibility },
+  });
+
+  revalidatePath(`/services/${serviceId}`);
+  revalidatePath(`/services/${serviceId}/settings`);
+  revalidatePath('/services');
+  return { success: true, visibility };
 }

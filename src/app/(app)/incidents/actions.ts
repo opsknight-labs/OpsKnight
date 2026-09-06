@@ -156,7 +156,9 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
     if (fieldValue) customFieldMap.set(fieldId, fieldValue);
   }
 
-  const rawVisibility = String(formData.get('visibility') ?? 'PUBLIC');
+  const rawVisibility = formData.get('visibility');
+  const visibility =
+    rawVisibility === 'PRIVATE' ? 'PRIVATE' : rawVisibility === 'PUBLIC' ? 'PUBLIC' : undefined;
   const result = await executeIncidentCreation({
     title,
     description,
@@ -166,7 +168,7 @@ async function createIncidentFromFormData(formData: FormData, source: IncidentCr
     dedupKey: String(formData.get('dedupKey') ?? '') || null,
     assigneeId: String(formData.get('assigneeId') ?? '') || null,
     teamId: String(formData.get('teamId') ?? '') || null,
-    visibility: rawVisibility === 'PRIVATE' ? 'PRIVATE' : 'PUBLIC',
+    visibility,
     customFields: [...customFieldMap].map(([fieldId, value]) => ({ fieldId, value })),
     source,
     actor: { id: currentUser.id, name: currentUser.name ?? undefined },
@@ -473,6 +475,7 @@ export async function getIncidentCreationContext() {
       select: {
         id: true,
         name: true,
+        defaultIncidentVisibility: true,
         autoCreateWarRoom: true,
         slackChannel: true,
         team: { select: { id: true, name: true } },
