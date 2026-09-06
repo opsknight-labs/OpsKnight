@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import DashboardRealtimeWrapper from '@/components/DashboardRealtimeWrapper';
 
 // Mock useRealtime hook (overridden per test as needed)
@@ -72,7 +72,7 @@ describe('DashboardRealtimeWrapper', () => {
     expect(onIncidentsUpdate).toHaveBeenCalled();
   });
 
-  it('lets server-rendered dashboards refresh explicitly when updates arrive', () => {
+  it('does not require a full refresh when updates arrive', () => {
     useRealtimeMock.mockReturnValueOnce({
       isConnected: true,
       metrics: { open: 5, acknowledged: 3, resolved24h: 10, highUrgency: 2 },
@@ -86,11 +86,11 @@ describe('DashboardRealtimeWrapper', () => {
       </DashboardRealtimeWrapper>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /dashboard updates available/i }));
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /dashboard updates available/i })).toBeNull();
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 
-  it('shows a new refresh action when the same incident changes lifecycle state', () => {
+  it('keeps same-ID lifecycle updates on the realtime client path', () => {
     useRealtimeMock.mockReturnValue({
       isConnected: true,
       metrics: { open: 5, acknowledged: 3, resolved24h: 10, highUrgency: 2 },
@@ -102,7 +102,6 @@ describe('DashboardRealtimeWrapper', () => {
         <div>Test</div>
       </DashboardRealtimeWrapper>
     );
-    fireEvent.click(screen.getByRole('button', { name: /dashboard updates available/i }));
     expect(screen.queryByRole('button', { name: /dashboard updates available/i })).toBeNull();
 
     useRealtimeMock.mockReturnValue({
@@ -116,6 +115,7 @@ describe('DashboardRealtimeWrapper', () => {
         <div>Test</div>
       </DashboardRealtimeWrapper>
     );
-    expect(screen.getByRole('button', { name: /dashboard updates available/i })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /dashboard updates available/i })).toBeNull();
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 });

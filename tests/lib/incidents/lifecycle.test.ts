@@ -45,6 +45,11 @@ function snapshot(
     currentEscalationStep: number | null;
     snoozedUntil: Date | null;
     snoozeReason: string | null;
+    createdAt: Date;
+    slaPausedMs: bigint;
+    slaPauseStartedAt: Date | null;
+    slaAckElapsedMs: bigint | null;
+    slaResolveElapsedMs: bigint | null;
   }> = {}
 ) {
   return {
@@ -54,6 +59,12 @@ function snapshot(
     currentEscalationStep: 0 as number | null,
     snoozedUntil: null as Date | null,
     snoozeReason: null as string | null,
+    createdAt: new Date('2026-08-27T11:40:00.000Z'),
+    slaPausedMs: BigInt(0),
+    slaPauseStartedAt: null as Date | null,
+    slaAckElapsedMs: null as bigint | null,
+    slaResolveElapsedMs: null as bigint | null,
+    escalationGeneration: 0,
     service: {
       policy: {
         steps: [{ delayMinutes: 5 }, { delayMinutes: 10 }, { delayMinutes: 20 }],
@@ -139,6 +150,38 @@ describe('incident lifecycle command engine', () => {
     expect(mocks.enqueueLifecycleSideEffects).not.toHaveBeenCalled();
   });
 
+  it('captures pause-adjusted ACK elapsed time atomically', async () => {
+    tx.incident.findUnique.mockResolvedValue(snapshot({ slaPausedMs: BigInt(5 * 60_000) }));
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-ack-clock', command: 'ACKNOWLEDGE', source: 'WEB', now: NOW,
+    });
+
+    expect(tx.incident.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ slaAckElapsedMs: BigInt(15 * 60_000) }),
+    }));
+  });
+
+  it('captures resolve elapsed while an SLA pause is open', async () => {
+    tx.incident.findUnique.mockResolvedValue(snapshot({
+      createdAt: new Date('2026-08-27T11:00:00.000Z'),
+      slaPausedMs: BigInt(10 * 60_000),
+      slaPauseStartedAt: new Date('2026-08-27T11:50:00.000Z'),
+    }));
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-resolve-clock', command: 'RESOLVE', source: 'WEB', now: NOW,
+    });
+
+    expect(tx.incident.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        slaResolveElapsedMs: BigInt(40 * 60_000),
+        slaPausedMs: { increment: BigInt(10 * 60_000) },
+        slaPauseStartedAt: null,
+      }),
+    }));
+  });
+
   it('rejects a stale expectedStatus for a real transition', async () => {
     tx.incident.findUnique.mockResolvedValue(snapshot({ status: 'ACKNOWLEDGED' }));
 
@@ -188,6 +231,8 @@ describe('incident lifecycle command engine', () => {
           status: 'OPEN',
           acknowledgedAt: null,
           resolvedAt: null,
+          slaAckElapsedMs: null,
+          slaResolveElapsedMs: null,
           currentEscalationStep: 0,
           escalationStatus: 'ESCALATING',
           escalationGeneration: { increment: 1 },
@@ -225,6 +270,7 @@ describe('incident lifecycle command engine', () => {
         data: expect.objectContaining({
           status: 'OPEN',
           acknowledgedAt: null,
+          slaAckElapsedMs: null,
           escalationStatus: 'ESCALATING',
           escalationGeneration: { increment: 1 },
           nextEscalationAt: new Date('2026-08-27T12:20:00.000Z'),

@@ -29,6 +29,10 @@ export type RealtimeMetrics = {
   acknowledged: number;
   resolved24h: number;
   highUrgency: number;
+  active?: number;
+  snoozed?: number;
+  suppressed?: number;
+  unassigned?: number;
 };
 
 export type RealtimeIncident = Record<string, unknown>;
@@ -43,6 +47,7 @@ function useRealtimeConnection() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
   const authorizationRevoked = useRef(false);
+  const lastEventAt = useRef(0);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -62,7 +67,19 @@ function useRealtimeConnection() {
       setReconnectTrigger(prev => prev + 1);
     };
     window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    const handleVisibility = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        (!eventSourceRef.current || Date.now() - lastEventAt.current >= 90_000)
+      ) {
+        handleOnline();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   useEffect(() => {
@@ -81,6 +98,7 @@ function useRealtimeConnection() {
           setIsConnected(true);
           setError(null);
           reconnectAttempts.current = 0;
+          lastEventAt.current = Date.now();
         };
 
         eventSource.onmessage = event => {
@@ -88,6 +106,7 @@ function useRealtimeConnection() {
 
           try {
             const data: RealtimeEvent = JSON.parse(event.data);
+            lastEventAt.current = Date.now();
 
             switch (data.type) {
               case 'connected':
@@ -124,7 +143,8 @@ function useRealtimeConnection() {
           eventSource.close();
 
           // Attempt to reconnect with exponential backoff
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+          const baseDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+          const delay = Math.min(30_000, Math.round(baseDelay * (0.5 + Math.random())));
           reconnectAttempts.current++;
           reconnectTimeoutRef.current = setTimeout(() => {
             if (mounted) connect();

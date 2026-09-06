@@ -38,13 +38,14 @@ describe('actor-scoped page read contract', () => {
   it('routes user-facing analytics through the actor-first metrics boundary', () => {
     for (const page of [
       pages.analyticsContent,
-      pages.dashboard,
       pages.mobileAnalytics,
       pages.mobileDashboard,
       pages.executiveReport,
     ]) {
       expect(page).toContain('calculateActorSLAMetrics(');
     }
+    expect(pages.dashboard).not.toContain('calculateActorSLAMetrics(');
+    expect(pages.dashboard).toContain('getDashboardOperationalSnapshot(actor');
   });
 
   it.each([

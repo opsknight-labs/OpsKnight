@@ -6,7 +6,7 @@ import type { Prisma } from '@prisma/client';
 import { compileIncidentMetricFilter } from '@/lib/metrics/domain/filter';
 import { activeIncidentStatusesForFilter } from '@/lib/incident-status';
 import { resolveSlaTarget } from '@/lib/metrics/domain/sla-target';
-import { effectiveElapsedMs } from '@/lib/metrics/domain/sla-clock';
+import { effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
 
 /**
  * Centralized Widget Data Provider
@@ -118,7 +118,8 @@ export async function getWidgetRealtimeProjection(
       priority: true,
       slaAckTargetMs: true,
       slaResolveTargetMs: true,
-      slaPauses: { select: { startedAt: true, endedAt: true } },
+      slaPausedMs: true,
+      slaPauseStartedAt: true,
       service: {
         select: { name: true, targetAckMinutes: true, targetResolveMinutes: true },
       },
@@ -136,10 +137,11 @@ export async function getWidgetRealtimeProjection(
         resolveMinutes: incident.service.targetResolveMinutes,
       },
     });
-    const elapsed = effectiveElapsedMs({
+    const elapsed = effectiveMaterializedElapsedMs({
       startedAt: incident.createdAt,
       evaluationAt: now,
-      pauses: incident.slaPauses,
+      pausedMs: incident.slaPausedMs,
+      pauseStartedAt: incident.slaPauseStartedAt,
     });
     return {
       id: incident.id,

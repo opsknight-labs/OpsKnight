@@ -6,18 +6,22 @@ import type { SLAMetrics } from '@/lib/sla';
 
 describe('Ops Pulse dashboard contract', () => {
   const pageSource = readFileSync('src/app/(app)/page.tsx', 'utf8');
+  const operationalSource = readFileSync(
+    'src/lib/dashboard/dashboard-operational-snapshot.ts',
+    'utf8'
+  );
 
   it('queries critical focus incidents directly with authorization and active status', () => {
     expect(pageSource).toContain('criticalFocusIncidents');
-    expect(pageSource).toContain("status: { in: ['OPEN', 'ACKNOWLEDGED'] }");
-    expect(pageSource).toContain("OR: [{ urgency: 'HIGH' }, { priority: 'P1' }]");
-    expect(pageSource).toContain('incidentAccess');
+    expect(operationalSource).toContain("status: { in: ['OPEN', 'ACKNOWLEDGED'] }");
+    expect(operationalSource).toContain("OR: [{ urgency: 'HIGH' }, { priority: 'P1' }]");
+    expect(operationalSource).toContain('incidentReadWhere(actor)');
   });
 
   it('queries user queue incidents and count directly with authorization and active status', () => {
     expect(pageSource).toContain('myQueueIncidents');
     expect(pageSource).toContain('myQueueCount');
-    expect(pageSource).toContain('assigneeId: user.id');
+    expect(operationalSource).toContain('assigneeId: actor.id');
   });
 
   it('uses direct query results for criticalFocus and myQueueItems', () => {

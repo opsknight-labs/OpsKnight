@@ -9,7 +9,7 @@ import {
 import { incidentEventWhereFor } from './incident-event-classifier';
 import { acquireAdvisoryLock, LOCK_KEYS } from './db-locks';
 import { resolveSlaTarget } from './metrics/domain/sla-target';
-import { effectiveElapsedMs } from './metrics/domain/sla-clock';
+import { capturedOrEffectiveElapsedMs, effectiveElapsedMs } from './metrics/domain/sla-clock';
 
 /**
  * Metric Rollup Service
@@ -157,6 +157,8 @@ export async function generateDailyRollup(
             updatedAt: true,
             slaPausedMs: true,
             slaPauseStartedAt: true,
+            slaAckElapsedMs: true,
+            slaResolveElapsedMs: true,
             slaAckTargetMs: true,
             slaResolveTargetMs: true,
             slaPauses: { select: { startedAt: true, endedAt: true } },
@@ -311,10 +313,24 @@ export async function generateDailyRollup(
               evaluationAt,
               pauses: incident.slaPauses,
             });
+          const ackElapsedAt = (evaluationAt: Date) =>
+            capturedOrEffectiveElapsedMs({
+              capturedElapsedMs: incident.slaAckElapsedMs,
+              startedAt: incident.createdAt,
+              evaluationAt,
+              pauses: incident.slaPauses,
+            });
+          const resolveElapsedAt = (evaluationAt: Date) =>
+            capturedOrEffectiveElapsedMs({
+              capturedElapsedMs: incident.slaResolveElapsedMs,
+              startedAt: incident.createdAt,
+              evaluationAt,
+              pauses: incident.slaPauses,
+            });
 
           // MTTA calculation
           if (incident.acknowledgedAt) {
-            const mtta = elapsedAt(incident.acknowledgedAt);
+            const mtta = ackElapsedAt(incident.acknowledgedAt);
             if (mtta >= 0) {
               mttaSum += BigInt(mtta);
               mttaCount++;
@@ -353,7 +369,7 @@ export async function generateDailyRollup(
 
           // MTTR calculation
           if (incident.status === 'RESOLVED' && resolvedTime) {
-            const mttr = elapsedAt(resolvedTime);
+            const mttr = resolveElapsedAt(resolvedTime);
             if (mttr >= 0) {
               mttrSum += BigInt(mttr);
               mttrCount++;

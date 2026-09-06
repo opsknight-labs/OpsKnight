@@ -76,6 +76,19 @@ type IncidentsListTableProps = {
   title?: string;
   showExport?: boolean;
   readOnly?: boolean;
+  realtimeFilter?: {
+    filter?: string;
+    actorId?: string;
+    status?: string;
+    serviceId?: string;
+    assignee?: string;
+    urgency?: string;
+    priority?: string;
+    teamId?: string;
+    search?: string;
+    createdAfter?: string;
+    createdBefore?: string;
+  };
 };
 
 type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
@@ -169,6 +182,84 @@ function parseRealtimeIncident(raw: Record<string, unknown>): IncidentListItem {
   };
 }
 
+function matchesRealtimeFilter(
+  raw: Record<string, unknown>,
+  filter: NonNullable<IncidentsListTableProps['realtimeFilter']>
+): boolean {
+  const status = typeof raw.status === 'string' ? raw.status : '';
+  const assigneeId = typeof raw.assigneeId === 'string' ? raw.assigneeId : null;
+  const serviceId =
+    raw.service &&
+    typeof raw.service === 'object' &&
+    typeof (raw.service as Record<string, unknown>).id === 'string'
+      ? String((raw.service as Record<string, unknown>).id)
+      : '';
+  const filterName = filter.filter?.toLowerCase();
+  if (
+    filterName === 'mine' &&
+    (assigneeId !== filter.actorId || !['OPEN', 'ACKNOWLEDGED'].includes(status))
+  )
+    return false;
+  if (
+    (filterName === 'all_open' || filterName === 'all') &&
+    filter.status === undefined &&
+    filterName === 'all_open' &&
+    !['OPEN', 'ACKNOWLEDGED'].includes(status)
+  )
+    return false;
+  if (filterName === 'muted' && !['SNOOZED', 'SUPPRESSED'].includes(status)) return false;
+  const namedStatus =
+    filterName === 'open'
+      ? 'OPEN'
+      : filterName === 'acknowledged'
+        ? 'ACKNOWLEDGED'
+        : filterName === 'resolved'
+          ? 'RESOLVED'
+          : filterName === 'snoozed'
+            ? 'SNOOZED'
+            : filterName === 'suppressed'
+              ? 'SUPPRESSED'
+              : null;
+  if (namedStatus && status !== namedStatus) return false;
+  if (filter.status && status !== filter.status) return false;
+  if (filter.serviceId && serviceId !== filter.serviceId) return false;
+  if (
+    filter.assignee !== undefined &&
+    assigneeId !== (filter.assignee.toLowerCase() === 'unassigned' ? null : filter.assignee)
+  )
+    return false;
+  if (filter.urgency && filter.urgency !== 'all' && raw.urgency !== filter.urgency.toUpperCase())
+    return false;
+  if (filter.priority && filter.priority !== 'all' && raw.priority !== filter.priority)
+    return false;
+  if (
+    filter.teamId &&
+    filter.teamId !== 'all' &&
+    filter.teamId !== 'mine' &&
+    raw.teamId !== filter.teamId
+  )
+    return false;
+  const createdAt = raw.createdAt
+    ? new Date(raw.createdAt as string | number | Date).getTime()
+    : Number.NaN;
+  if (
+    filter.createdAfter &&
+    (!Number.isFinite(createdAt) || createdAt < new Date(filter.createdAfter).getTime())
+  )
+    return false;
+  if (
+    filter.createdBefore &&
+    (!Number.isFinite(createdAt) || createdAt > new Date(filter.createdBefore).getTime())
+  )
+    return false;
+  if (filter.search) {
+    const needle = filter.search.toLowerCase();
+    const searchable = `${raw.id ?? ''} ${raw.title ?? ''} ${raw.description ?? ''}`.toLowerCase();
+    if (!searchable.includes(needle)) return false;
+  }
+  return true;
+}
+
 export default function IncidentsListTable({
   incidents,
   users,
@@ -177,6 +268,7 @@ export default function IncidentsListTable({
   title,
   showExport = true,
   readOnly = false,
+  realtimeFilter = {},
 }: IncidentsListTableProps) {
   const isManageable = !readOnly && canManageIncidents;
   const router = useRouter();
@@ -193,14 +285,12 @@ export default function IncidentsListTable({
 
   // Local displayed list for instant optimistic real-time updates
   const [displayedIncidents, setDisplayedIncidents] = useState<IncidentListItem[]>(incidents);
-  const prevIncidentIdsRef = useRef<Set<string>>(new Set(incidents.map(i => i.id)));
+  const displayedIncidentIdsRef = useRef<Set<string>>(new Set(incidents.map(i => i.id)));
+  displayedIncidentIdsRef.current = new Set(displayedIncidents.map(incident => incident.id));
 
   // Sync displayed incidents whenever props.incidents updates from the server
   useEffect(() => {
     setDisplayedIncidents(incidents);
-    for (const inc of incidents) {
-      prevIncidentIdsRef.current.add(inc.id);
-    }
   }, [incidents]);
 
   const handleStatusChange = useCallback(
@@ -251,10 +341,11 @@ export default function IncidentsListTable({
       const id = typeof item.id === 'string' ? item.id : null;
       if (!id) continue;
 
-      if (!prevIncidentIdsRef.current.has(id)) {
-        newIds.push(id);
-        prevIncidentIdsRef.current.add(id);
-        newIncomingItems.push(parseRealtimeIncident(item));
+      if (!displayedIncidentIdsRef.current.has(id)) {
+        if (matchesRealtimeFilter(item, realtimeFilter)) {
+          newIds.push(id);
+          newIncomingItems.push(parseRealtimeIncident(item));
+        }
       } else {
         updatedItems.push(item);
       }
@@ -273,9 +364,6 @@ export default function IncidentsListTable({
         newIds.forEach(id => next.add(id));
         return next;
       });
-
-      // Background sync with server
-      router.refresh();
 
       // Clear pulse highlight after 4.5 seconds
       const timer = setTimeout(() => {
@@ -297,21 +385,17 @@ export default function IncidentsListTable({
         const next = prev.map(item => {
           const update = updatedMap.get(item.id);
           if (!update) return item;
+          if (!matchesRealtimeFilter(update, realtimeFilter)) {
+            hasChanges = true;
+            return null;
+          }
           hasChanges = true;
-          return {
-            ...item,
-            ...(update.status ? { status: update.status as IncidentListItem['status'] } : {}),
-            ...(update.urgency ? { urgency: update.urgency as IncidentListItem['urgency'] } : {}),
-            ...(update.priority !== undefined
-              ? { priority: update.priority as string | null }
-              : {}),
-          };
+          return parseRealtimeIncident(update);
         });
-        return hasChanges ? next : prev;
+        return hasChanges ? next.filter((item): item is IncidentListItem => item !== null) : prev;
       });
-      router.refresh();
     }
-  }, [recentIncidents, router]);
+  }, [recentIncidents, realtimeFilter]);
 
   useEffect(() => {
     if (focusedIndex !== null) {

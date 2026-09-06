@@ -36,7 +36,8 @@ describe('realtime temporal projections', () => {
         priority: null,
         slaAckTargetMs: 20 * 60_000,
         slaResolveTargetMs: 120 * 60_000,
-        slaPauses: [],
+        slaPausedMs: BigInt(0),
+        slaPauseStartedAt: null,
         service: { name: 'API', targetAckMinutes: 20, targetResolveMinutes: 120 },
       },
     ] as never);
@@ -49,7 +50,11 @@ describe('realtime temporal projections', () => {
 
   it('ages resolved24h out when a reconciliation epoch changes the cache key', async () => {
     vi.mocked(prisma.incident.groupBy).mockResolvedValue([]);
-    vi.mocked(prisma.incident.count).mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    vi.mocked(prisma.incident.count)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
 
     vi.setSystemTime(new Date('2026-09-05T00:00:00.000Z'));
     const before = await getCachedDashboardMetrics(
@@ -64,6 +69,6 @@ describe('realtime temporal projections', () => {
 
     expect(before?.data.resolved).toBe(1);
     expect(after?.data.resolved).toBe(0);
-    expect(prisma.incident.count).toHaveBeenCalledTimes(2);
+    expect(prisma.incident.count).toHaveBeenCalledTimes(4);
   });
 });

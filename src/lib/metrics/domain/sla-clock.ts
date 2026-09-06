@@ -41,3 +41,29 @@ export function effectiveMaterializedElapsedMs(input: {
       : (input.pausedMs ?? 0);
   return Math.max(0, elapsedWithOpenPause - Math.max(0, closedPauseMs));
 }
+
+/**
+ * Prefer the duration captured atomically with the lifecycle transition. The
+ * durable pause rows remain a rolling-upgrade fallback for incidents created
+ * before the materialized columns existed.
+ */
+export function capturedOrEffectiveElapsedMs(input: {
+  capturedElapsedMs?: bigint | number | null;
+  startedAt: Date;
+  evaluationAt: Date;
+  pauses?: SlaPause[];
+}): number {
+  if (input.capturedElapsedMs !== null && input.capturedElapsedMs !== undefined) {
+    const captured =
+      typeof input.capturedElapsedMs === 'bigint'
+        ? Number(
+            input.capturedElapsedMs > BigInt(Number.MAX_SAFE_INTEGER)
+              ? Number.MAX_SAFE_INTEGER
+              : input.capturedElapsedMs
+          )
+        : input.capturedElapsedMs;
+    return Math.max(0, captured);
+  }
+
+  return effectiveElapsedMs(input);
+}

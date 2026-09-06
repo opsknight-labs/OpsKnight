@@ -14,6 +14,7 @@ import {
   metricScopeLabel,
   type MetricDataState,
 } from '@/lib/metric-contract';
+import { useRealtime } from '@/hooks/useRealtime';
 
 type SystemStatus = {
   label: string;
@@ -75,6 +76,65 @@ export default function DashboardCommandCenter({
   resolvedHref,
   unassignedHref,
 }: DashboardCommandCenterProps) {
+  const { metrics: liveMetrics, recentIncidents } = useRealtime();
+  const [filteredLiveMetrics, setFilteredLiveMetrics] = React.useState<typeof liveMetrics>(null);
+  const hasPopulationFilter = Boolean(
+    filters.service || filters.assignee !== undefined || filters.urgency || filters.search
+  );
+  const filteredMetricQuery = React.useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.service) params.set('service', filters.service);
+    if (filters.assignee !== undefined) {
+      params.set('assignee', filters.assignee === '' ? 'unassigned' : filters.assignee);
+    }
+    if (filters.urgency) params.set('urgency', filters.urgency);
+    if (filters.search) params.set('search', filters.search);
+    return params.toString();
+  }, [filters.assignee, filters.search, filters.service, filters.urgency]);
+  React.useEffect(() => {
+    if (!hasPopulationFilter || !recentIncidents?.length) return;
+    const controller = new AbortController();
+    void fetch(`/api/dashboard/metrics?${filteredMetricQuery}`, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(response => (response.ok ? response.json() : Promise.reject(new Error('unavailable'))))
+      .then((payload: { data: NonNullable<typeof liveMetrics> }) =>
+        setFilteredLiveMetrics(payload.data)
+      )
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [filteredMetricQuery, hasPopulationFilter, recentIncidents, liveMetrics]);
+  const applicableLiveMetrics = hasPopulationFilter ? filteredLiveMetrics : liveMetrics;
+  currentTriggeredCount = applicableLiveMetrics?.open ?? currentTriggeredCount;
+  currentAcknowledgedCount = applicableLiveMetrics?.acknowledged ?? currentAcknowledgedCount;
+  currentActiveCount =
+    applicableLiveMetrics?.active ?? currentTriggeredCount + currentAcknowledgedCount;
+  allActiveIncidentsCount = applicableLiveMetrics?.active ?? allActiveIncidentsCount;
+  currentSnoozedCount = applicableLiveMetrics?.snoozed ?? currentSnoozedCount;
+  currentSuppressedCount = applicableLiveMetrics?.suppressed ?? currentSuppressedCount;
+  currentMutedCount = currentSnoozedCount + currentSuppressedCount;
+  unassignedCount = applicableLiveMetrics?.unassigned ?? unassignedCount;
+  if ((applicableLiveMetrics?.highUrgency ?? 0) > 0) {
+    systemStatus = {
+      label: 'CRITICAL',
+      color: 'var(--color-danger)',
+      bg: 'rgba(239, 68, 68, 0.1)',
+    };
+  } else if (applicableLiveMetrics && currentActiveCount > 0) {
+    systemStatus = {
+      label: 'DEGRADED',
+      color: 'var(--color-warning)',
+      bg: 'rgba(245, 158, 11, 0.1)',
+    };
+  } else if (applicableLiveMetrics) {
+    systemStatus = {
+      label: 'OPERATIONAL',
+      color: 'var(--color-success)',
+      bg: 'rgba(34, 197, 94, 0.1)',
+    };
+  }
   // Determine status badge color
   const statusVariant =
     systemStatus.label === 'CRITICAL'

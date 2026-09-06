@@ -617,6 +617,8 @@ model Incident {
   snoozeReason              String? // Reason for snoozing
   slaPausedMs               BigInt                    @default(0) // Materialized closed SLA pause duration
   slaPauseStartedAt         DateTime? // Current open SLA pause, if any
+  slaAckElapsedMs           BigInt? // Effective SLA time captured at the first ACK transition
+  slaResolveElapsedMs       BigInt? // Effective SLA time captured at the final resolve transition
   slaAckTargetMs            Int? // Immutable effective ACK target captured when the incident is created
   slaResolveTargetMs        Int? // Immutable effective resolve target captured when the incident is created
   slaTargetSource           String? // Provenance for the frozen target (priority/service/default/backfill)

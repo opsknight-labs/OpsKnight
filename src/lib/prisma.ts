@@ -1,27 +1,25 @@
 import { PrismaClient } from '@prisma/client';
+import { configurePrismaDatasource } from './prisma-datasource';
 
 /**
  * Prisma Client Configuration for Scale
  *
  * Connection pool settings for handling 100-500+ concurrent users:
- * - connection_limit: Max connections per instance (default 10 is too low)
+ * - connection_limit: Max connections per instance (safe default: 10)
  * - pool_timeout: How long to wait for a connection
  * - statement_cache_size: Prepared statement cache
  *
  * Configure via DATABASE_URL query params or environment variables:
- * DATABASE_URL="postgresql://...?connection_limit=40&pool_timeout=30"
+ * DATABASE_URL="postgresql://...?connection_limit=10&pool_timeout=30"
  */
 
 const prismaClientSingleton = () => {
   // Log configuration for debugging
-  const poolSize = process.env.DATABASE_POOL_SIZE || '40';
   const logLevel: Array<'error' | 'warn'> = ['error', 'warn'];
-
-  let datasourceUrl = process.env.DATABASE_URL;
-  if (datasourceUrl && !datasourceUrl.includes('connection_limit=')) {
-    const separator = datasourceUrl.includes('?') ? '&' : '?';
-    datasourceUrl = `${datasourceUrl}${separator}connection_limit=${poolSize}&pool_timeout=10&statement_cache_size=100`;
-  }
+  const datasourceUrl = configurePrismaDatasource(
+    process.env.DATABASE_URL,
+    process.env.DATABASE_POOL_SIZE
+  );
 
   return new PrismaClient({
     log: logLevel,

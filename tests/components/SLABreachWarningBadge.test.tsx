@@ -76,6 +76,8 @@ describe('SLABreachWarningBadge', () => {
     warRoomProvisioningAt: null,
     slaPausedMs: BigInt(0),
     slaPauseStartedAt: null,
+    slaAckElapsedMs: null,
+    slaResolveElapsedMs: null,
     slaAckTargetMs: null,
     slaResolveTargetMs: null,
     slaTargetSource: null,

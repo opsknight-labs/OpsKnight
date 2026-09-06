@@ -43,3 +43,37 @@ export function slaEffectiveElapsedSql(evaluationAt: Prisma.Sql, alias?: string)
     ), 0)
   )`;
 }
+
+export function slaCapturedAckElapsedSql(alias?: string) {
+  return Prisma.sql`COALESCE(
+    ${qualified(alias, 'slaAckElapsedMs')},
+    ${slaEffectiveElapsedSql(Prisma.sql`${qualified(alias, 'acknowledgedAt')}`, alias)}
+  )`;
+}
+
+export function slaCapturedResolveElapsedSql(alias?: string) {
+  const resolvedAt = qualified(alias, 'resolvedAt');
+  const updatedAt = qualified(alias, 'updatedAt');
+  return Prisma.sql`COALESCE(
+    ${qualified(alias, 'slaResolveElapsedMs')},
+    ${slaEffectiveElapsedSql(Prisma.sql`COALESCE(${resolvedAt}, ${updatedAt})`, alias)}
+  )`;
+}
+
+/** Fast current clock: all closed pauses are already materialized on Incident. */
+export function slaCurrentMaterializedElapsedSql(evaluationAt: Prisma.Sql, alias?: string) {
+  const createdAt = qualified(alias, 'createdAt');
+  const pausedMs = qualified(alias, 'slaPausedMs');
+  const pauseStartedAt = qualified(alias, 'slaPauseStartedAt');
+  return Prisma.sql`GREATEST(0,
+    EXTRACT(EPOCH FROM (${evaluationAt} - ${createdAt})) * 1000
+    - COALESCE(${pausedMs}, 0)
+    - CASE
+        WHEN ${pauseStartedAt} IS NULL THEN 0
+        ELSE GREATEST(
+          0,
+          EXTRACT(EPOCH FROM (${evaluationAt} - GREATEST(${pauseStartedAt}, ${createdAt}))) * 1000
+        )
+      END
+  )`;
+}

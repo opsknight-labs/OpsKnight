@@ -3,7 +3,6 @@
 import { useRealtime } from '@/hooks/useRealtime';
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
-import { useRouter } from 'next/navigation';
 
 interface DashboardRealtimeWrapperProps {
   children: React.ReactNode;
@@ -40,23 +39,8 @@ function DashboardRealtimeContent({
   onMetricsUpdate,
   onIncidentsUpdate,
 }: DashboardRealtimeWrapperProps) {
-  const router = useRouter();
   const { isConnected, metrics, recentIncidents, error } = useRealtime();
   const [showDisconnected, setShowDisconnected] = useState(false);
-  const [dismissedIncidentKey, setDismissedIncidentKey] = useState('');
-  const incidentUpdateKey = recentIncidents?.length
-    ? JSON.stringify(
-        recentIncidents.map(incident => [
-          incident.id,
-          incident.updatedAt,
-          incident.status,
-          incident.urgency,
-          incident.escalationStatus,
-        ])
-      )
-    : '';
-  const hasUpdates =
-    !onIncidentsUpdate && Boolean(incidentUpdateKey) && dismissedIncidentKey !== incidentUpdateKey;
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -86,20 +70,6 @@ function DashboardRealtimeContent({
   return (
     <>
       {children}
-      {hasUpdates && (
-        <button
-          type="button"
-          onClick={() => {
-            setDismissedIncidentKey(incidentUpdateKey);
-            router.refresh();
-          }}
-          className={`fixed right-4 z-50 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-lg transition-all cursor-pointer ${
-            showDisconnected ? 'bottom-16' : 'bottom-4'
-          }`}
-        >
-          Dashboard updates available — refresh
-        </button>
-      )}
       {showDisconnected && !isConnected && (
         <div
           className="fixed bottom-4 right-4 z-50 px-3.5 py-2 bg-amber-600 text-white text-xs font-medium rounded-lg shadow-lg"
