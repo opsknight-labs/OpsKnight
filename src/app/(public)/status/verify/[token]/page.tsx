@@ -1,6 +1,8 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { logger } from '@/lib/logger';
+import { getStatusPagePublicUrl } from '@/lib/status-page-url';
+import { statusPageSlugMatches } from '@/lib/status-page-resolver';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +12,10 @@ export default async function VerifySubscriptionPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
+  return renderVerifySubscriptionPage(token);
+}
+
+export async function renderVerifySubscriptionPage(token: string, expectedSlug?: string) {
   let status: 'invalid' | 'already_verified' | 'success' | 'error' = 'error';
   let subscription = null;
 
@@ -21,7 +27,7 @@ export default async function VerifySubscriptionPage({
       },
     });
 
-    if (!sub) {
+    if (!sub || !statusPageSlugMatches(sub.statusPage.slug, expectedSlug)) {
       status = 'invalid';
     } else if (sub.verified) {
       status = 'already_verified';
@@ -84,7 +90,7 @@ export default async function VerifySubscriptionPage({
             updates.
           </p>
           <a
-            href="/status"
+            href={getStatusPagePublicUrl(subscription.statusPage)}
             style={{
               display: 'inline-block',
               marginTop: '1.5rem',
@@ -134,7 +140,7 @@ export default async function VerifySubscriptionPage({
             incidents and status changes for {subscription.statusPage.name}.
           </p>
           <a
-            href="/status"
+            href={getStatusPagePublicUrl(subscription.statusPage)}
             style={{
               display: 'inline-block',
               padding: '0.75rem 1.5rem',

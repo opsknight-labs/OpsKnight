@@ -46,11 +46,12 @@ interface StatusPageIncidentsProps {
     incidents: Incident[];
     privacySettings?: PrivacySettings;
     showPostIncidentReview?: boolean;
+    statusPagePath?: string;
 }
 
 const INCIDENTS_PER_PAGE = 10;
 
-export default function StatusPageIncidents({ incidents, privacySettings, showPostIncidentReview }: StatusPageIncidentsProps) {
+export default function StatusPageIncidents({ incidents, privacySettings, showPostIncidentReview, statusPagePath = '/status' }: StatusPageIncidentsProps) {
     const browserTimeZone = useBrowserTimezone();
     const [expandedIncidents, setExpandedIncidents] = useState<Set<string>>(new Set());
     const [currentPage, setCurrentPage] = useState(1);
@@ -457,7 +458,7 @@ export default function StatusPageIncidents({ incidents, privacySettings, showPo
                                             </span>
                                             {showPostmortemLink && (
                                                 <a
-                                                    href={`/status/postmortems/${incident.id}`}
+                                                    href={`${statusPagePath}/postmortems/${incident.id}`}
                                                     style={{
                                                         padding: '0.45rem 0.9rem',
                                                         borderRadius: '999px',

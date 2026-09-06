@@ -3,6 +3,8 @@ import { getBaseUrl } from '@/lib/env-validation';
 export type StatusPageDomainConfig = {
   customDomain?: string | null;
   subdomain?: string | null;
+  slug?: string | null;
+  isDefault?: boolean;
 };
 
 function normalizeHostname(value: string): string {
@@ -90,7 +92,9 @@ export function getStatusPagePublicUrl(
     return baseUrl;
   }
 
-  return `${baseUrl}/status`;
+  return config.slug && !config.isDefault
+    ? `${baseUrl}/status/${encodeURIComponent(config.slug)}`
+    : `${baseUrl}/status`;
 }
 
 export function getStatusPageVerificationUrl(

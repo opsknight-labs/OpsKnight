@@ -1202,6 +1202,7 @@ enum JobType {
   AUTO_UNSNOOZE
   SCHEDULED_TASK
   STATUS_PAGE_NOTIFICATION
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT
   CHATOPS_INTENT
   EXTERNAL_OPERATION
 }
@@ -1287,6 +1288,8 @@ model ChatOpsIntent {
 model StatusPage {
   id               String  @id @default(cuid())
   name             String  @unique @default("Status Page")
+  slug             String? @unique
+  isDefault        Boolean @default(false)
   organizationName String? // Dedicated organization name for email branding
   subdomain        String? @unique // Custom subdomain (e.g., status.yourcompany.com)
   customDomain     String? @unique // Custom domain (e.g., status.yourcompany.com)
@@ -1351,6 +1354,7 @@ model StatusPage {
   webhooks      StatusPageWebhook[]
 
   @@index([enabled])
+  @@index([isDefault, enabled])
 }
 
 // Services shown on status page

@@ -4,12 +4,17 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const statusPage = await prisma.statusPage.findFirst({
+    const statusPages = await prisma.statusPage.findMany({
+      where: { enabled: true },
       select: {
+        id: true,
+        slug: true,
+        isDefault: true,
         enabled: true,
         subdomain: true,
         customDomain: true,
       },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     });
 
     const appUrl = await getAppUrl();
@@ -22,9 +27,8 @@ export async function GET() {
     })();
 
     const response = NextResponse.json({
-      enabled: Boolean(statusPage?.enabled),
-      subdomain: statusPage?.subdomain ?? null,
-      customDomain: statusPage?.customDomain ?? null,
+      enabled: statusPages.length > 0,
+      pages: statusPages,
       appHost,
     });
     response.headers.set('Cache-Control', 'no-store');
@@ -32,8 +36,7 @@ export async function GET() {
   } catch {
     return NextResponse.json({
       enabled: false,
-      subdomain: null,
-      customDomain: null,
+      pages: [],
       appHost: null,
     });
   }

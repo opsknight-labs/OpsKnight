@@ -16,6 +16,7 @@ import {
   EmailButton,
   escapeHtml,
 } from '@/lib/email-components';
+import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 
 export async function notifyStatusPageSubscribers(
   incidentId: string,
@@ -71,14 +72,6 @@ export async function notifyStatusPageSubscribers(
           },
         },
       },
-      include: {
-        subscriptions: {
-          where: {
-            verified: true,
-            unsubscribedAt: null,
-          },
-        },
-      },
     });
 
     if (statusPages.length === 0) {
@@ -93,16 +86,13 @@ export async function notifyStatusPageSubscribers(
     const appBaseUrl = getBaseUrl();
 
     // 3. Batch fetch all email configs upfront (avoids N+1 query pattern)
-    const pagesWithSubscribers = statusPages.filter(p => p.subscriptions.length > 0);
-    const emailConfigs = await Promise.all(
-      pagesWithSubscribers.map(page => getStatusPageEmailConfig(page.id))
+    const emailConfigEntries = await Promise.all(
+      statusPages.map(async page => [page.id, await getStatusPageEmailConfig(page.id)] as const)
     );
-    const emailConfigMap = new Map(
-      pagesWithSubscribers.map((page, idx) => [page.id, emailConfigs[idx]])
-    );
+    const emailConfigMap = new Map(emailConfigEntries);
 
     // 4. Send notifications for each status page
-    for (const page of pagesWithSubscribers) {
+    for (const page of statusPages) {
       const emailConfig = emailConfigMap.get(page.id);
       if (!emailConfig?.enabled) {
         logger.warn(`Email not configured for status page ${page.name} (${page.id})`);
@@ -138,65 +128,84 @@ export async function notifyStatusPageSubscribers(
         }
       );
 
-      logger.info(
-        `Sending notifications to ${page.subscriptions.length} subscribers for page ${page.name}`
-      );
-
       const BATCH_SIZE = 25;
+      const PAGE_SIZE = 500;
       let sent = 0;
       let failed = 0;
+      let cursor: string | undefined;
 
-      for (let i = 0; i < page.subscriptions.length; i += BATCH_SIZE) {
-        const batch = page.subscriptions.slice(i, i + BATCH_SIZE);
-        const results = await Promise.allSettled(
-          batch.map(async sub => {
-            const intent = await enqueueCentralNotification({
-              category: 'STATUS_PAGE',
-              channel: 'EMAIL',
-              recipientType: 'SUBSCRIBER',
-              recipientId: sub.id,
-              recipientAddress: sub.email,
-              incidentId,
-              templateKey: `status-page-incident-${eventType}`,
-              sourceType: 'STATUS_PAGE_INCIDENT',
-              sourceId: `${page.id}:${incidentId}`,
-              eventKey: effectiveDeliveryKey,
-              displayMessage: subject,
-              priority: eventType === 'resolved' ? 3 : 1,
-              payload: {
-                kind: 'EMAIL',
-                to: sub.email,
-                subject,
-                html: html.replaceAll(
-                  '{{unsubscribe_url}}',
-                  `${appBaseUrl}/status/unsubscribe/${sub.token}`
-                ),
-                providerScope: {
-                  statusPageId: page.id,
-                  subscriptionId: sub.id,
-                  incidentId,
-                  eventType,
-                  expectedStatus: incident.status,
-                  escalationGeneration: incident.escalationGeneration,
+      while (true) {
+        const subscriptions = await prisma.statusPageSubscription.findMany({
+          where: { statusPageId: page.id, verified: true, unsubscribedAt: null },
+          orderBy: { id: 'asc' },
+          take: PAGE_SIZE,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          select: { id: true, email: true, token: true },
+        });
+        if (subscriptions.length === 0) break;
+
+        for (let i = 0; i < subscriptions.length; i += BATCH_SIZE) {
+          const batch = subscriptions.slice(i, i + BATCH_SIZE);
+          const results = await Promise.allSettled(
+            batch.map(async sub => {
+              const intent = await enqueueCentralNotification({
+                category: 'STATUS_PAGE',
+                channel: 'EMAIL',
+                recipientType: 'SUBSCRIBER',
+                recipientId: sub.id,
+                recipientAddress: sub.email,
+                incidentId,
+                templateKey: `status-page-incident-${eventType}`,
+                sourceType: 'STATUS_PAGE_INCIDENT',
+                sourceId: `${page.id}:${incidentId}`,
+                eventKey: effectiveDeliveryKey,
+                displayMessage: subject,
+                priority: eventType === 'resolved' ? 3 : 1,
+                payload: {
+                  kind: 'EMAIL',
+                  to: sub.email,
+                  subject,
+                  html: html.replaceAll(
+                    '{{unsubscribe_url}}',
+                    `${statusPageUrl}/unsubscribe/${sub.token}`
+                  ),
+                  providerScope: {
+                    statusPageId: page.id,
+                    subscriptionId: sub.id,
+                    incidentId,
+                    eventType,
+                    expectedStatus: incident.status,
+                    escalationGeneration: incident.escalationGeneration,
+                  },
                 },
-              },
-            });
-            return { success: true, skipped: !intent.created };
-          })
-        );
+              });
+              return { success: true, skipped: !intent.created };
+            })
+          );
 
-        sent += results.filter(
-          r => r.status === 'fulfilled' && r.value.success && !r.value.skipped
-        ).length;
-        failed += results.filter(
-          r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
-        ).length;
+          sent += results.filter(
+            r => r.status === 'fulfilled' && r.value.success && !r.value.skipped
+          ).length;
+          failed += results.filter(
+            r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
+          ).length;
+        }
+        cursor = subscriptions.at(-1)?.id;
+        if (subscriptions.length < PAGE_SIZE || !cursor) break;
       }
 
       logger.info(`Status page notifications sent: ${sent} success, ${failed} failed`);
       totalSent += sent;
       totalFailed += failed;
     }
+    addOperationalMetric('opsknight_status_page_fanout_total', totalSent, {
+      event: 'incident',
+      outcome: 'enqueued',
+    });
+    addOperationalMetric('opsknight_status_page_fanout_total', totalFailed, {
+      event: 'incident',
+      outcome: 'failed',
+    });
     return { success: totalFailed === 0, sent: totalSent, failed: totalFailed };
   } catch (error) {
     logger.error('Failed to notify status page subscribers', {
@@ -387,7 +396,7 @@ function formatEmailBody(
 export async function notifyStatusPageSubscribersAnnouncement(
   announcementId: string,
   statusPageId: string
-) {
+): Promise<{ sent: number; failed: number; skipped?: boolean }> {
   try {
     // 1. Get announcement details
     const announcement = await prisma.statusPageAnnouncement.findUnique({
@@ -396,30 +405,17 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     if (!announcement) {
       logger.error(`Announcement ${announcementId} not found for status page notifications`);
-      return;
+      return { sent: 0, failed: 0, skipped: true };
     }
 
-    // 2. Get status page with subscribers
+    // 2. Load page configuration only. Subscribers are keyset-paginated below.
     const page = await prisma.statusPage.findUnique({
       where: { id: statusPageId },
-      include: {
-        subscriptions: {
-          where: {
-            verified: true,
-            unsubscribedAt: null,
-          },
-        },
-      },
     });
 
     if (!page) {
       logger.error(`Status page ${statusPageId} not found for announcement notifications`);
-      return;
-    }
-
-    if (page.subscriptions.length === 0) {
-      logger.info(`No subscribers found for status page ${page.name}`);
-      return;
+      return { sent: 0, failed: 0, skipped: true };
     }
 
     const appBaseUrl = getBaseUrl();
@@ -428,7 +424,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
     const emailConfig = await getStatusPageEmailConfig(page.id);
     if (!emailConfig.enabled) {
       logger.warn(`Email not configured for status page ${page.name} (${page.id})`);
-      return;
+      return { sent: 0, failed: 1 };
     }
 
     // 4. Prepare email content
@@ -526,56 +522,81 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     html = EmailContainer(announcementHeader + body + footer);
 
-    logger.info(
-      `Sending announcement notifications to ${page.subscriptions.length} subscribers for page ${page.name}`
-    );
-
     const BATCH_SIZE = 25;
+    const PAGE_SIZE = 500;
     let sent = 0;
     let failed = 0;
+    let cursor: string | undefined;
 
-    for (let i = 0; i < page.subscriptions.length; i += BATCH_SIZE) {
-      const batch = page.subscriptions.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map(async sub => {
-          const intent = await enqueueCentralNotification({
-            category: 'STATUS_PAGE',
-            channel: 'EMAIL',
-            recipientType: 'SUBSCRIBER',
-            recipientId: sub.id,
-            recipientAddress: sub.email,
-            templateKey: 'status-page-announcement',
-            sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
-            sourceId: announcement.id,
-            eventKey: announcement.updatedAt.toISOString(),
-            displayMessage: subject,
-            priority: announcement.type === 'INCIDENT' ? 1 : 4,
-            payload: {
-              kind: 'EMAIL',
-              to: sub.email,
-              subject,
-              html: html.replaceAll(
-                '{{unsubscribe_url}}',
-                `${appBaseUrl}/status/unsubscribe/${sub.token}`
-              ),
-              providerScope: { statusPageId: page.id },
-            },
-          });
-          return { success: true, skipped: !intent.created };
-        })
-      );
+    while (true) {
+      const subscriptions = await prisma.statusPageSubscription.findMany({
+        where: { statusPageId, verified: true, unsubscribedAt: null },
+        orderBy: { id: 'asc' },
+        take: PAGE_SIZE,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        select: { id: true, email: true, token: true },
+      });
+      if (subscriptions.length === 0) break;
 
-      sent += results.filter(r => r.status === 'fulfilled' && r.value.success).length;
-      failed += results.filter(
-        r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
-      ).length;
+      for (let i = 0; i < subscriptions.length; i += BATCH_SIZE) {
+        const batch = subscriptions.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(async sub => {
+            const intent = await enqueueCentralNotification({
+              category: 'STATUS_PAGE',
+              channel: 'EMAIL',
+              recipientType: 'SUBSCRIBER',
+              recipientId: sub.id,
+              recipientAddress: sub.email,
+              templateKey: 'status-page-announcement',
+              sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
+              sourceId: announcement.id,
+              eventKey: announcement.updatedAt.toISOString(),
+              displayMessage: subject,
+              priority: announcement.type === 'INCIDENT' ? 1 : 4,
+              payload: {
+                kind: 'EMAIL',
+                to: sub.email,
+                subject,
+                html: html.replaceAll(
+                  '{{unsubscribe_url}}',
+                  `${statusPageUrl}/unsubscribe/${sub.token}`
+                ),
+                providerScope: { statusPageId: page.id },
+              },
+            });
+            return { success: true, skipped: !intent.created };
+          })
+        );
+
+        sent += results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        failed += results.filter(
+          r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
+        ).length;
+      }
+      cursor = subscriptions.at(-1)?.id;
+      if (subscriptions.length < PAGE_SIZE || !cursor) break;
     }
 
     logger.info(`Status announcement notifications sent: ${sent} success, ${failed} failed`);
+    addOperationalMetric('opsknight_status_page_fanout_total', sent, {
+      event: 'announcement',
+      outcome: 'enqueued',
+    });
+    addOperationalMetric('opsknight_status_page_fanout_total', failed, {
+      event: 'announcement',
+      outcome: 'failed',
+    });
+    return { sent, failed, skipped: sent === 0 && failed === 0 };
   } catch (error) {
     logger.error('Failed to notify status page subscribers about announcement', {
       error: error instanceof Error ? error.message : 'Unknown error',
       announcementId,
     });
+    addOperationalMetric('opsknight_status_page_fanout_total', 1, {
+      event: 'announcement',
+      outcome: 'failed',
+    });
+    return { sent: 0, failed: 1 };
   }
 }
