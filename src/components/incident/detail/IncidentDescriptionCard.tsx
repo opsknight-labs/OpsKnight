@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import CopyButton from '@/components/common/CopyButton';
-import { updateIncidentDescription } from '@/app/(app)/incidents/actions';
 import { FileText, Edit2, Check, X, Loader2, ChevronDown, ChevronUp, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +12,7 @@ type IncidentDescriptionCardProps = {
   incidentId: string;
   description: string | null;
   canManage: boolean;
+  onUpdateDescription?: (newDescription: string) => Promise<void>;
   className?: string;
 };
 
@@ -274,10 +274,11 @@ function parseMarkdown(text: string): ReactNode[] {
   return elements;
 }
 
-export default function IncidentDescriptionCard({
-  incidentId,
+export function IncidentDescriptionCard({
+  incidentId: _incidentId,
   description,
   canManage,
+  onUpdateDescription,
   className,
 }: IncidentDescriptionCardProps) {
   const router = useRouter();
@@ -296,7 +297,9 @@ export default function IncidentDescriptionCard({
 
   const handleSave = () => {
     startTransition(async () => {
-      await updateIncidentDescription(incidentId, editedText);
+      if (onUpdateDescription) {
+        await onUpdateDescription(editedText);
+      }
       setIsEditing(false);
       router.refresh();
     });
@@ -460,3 +463,5 @@ export default function IncidentDescriptionCard({
     </div>
   );
 }
+
+export default IncidentDescriptionCard;
