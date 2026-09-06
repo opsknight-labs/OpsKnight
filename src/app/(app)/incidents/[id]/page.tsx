@@ -11,7 +11,6 @@ import IncidentDetailTabs from '@/components/incident/IncidentDetailTabs';
 import IncidentNotes from '@/components/incident/detail/IncidentNotes';
 import IncidentTimeline from '@/components/incident/detail/IncidentTimeline';
 import IncidentResolutionSummary from '@/components/incident/detail/IncidentResolutionSummary';
-import IncidentPostmortemCard from '@/components/incident/detail/IncidentPostmortemCard';
 import IncidentPostmortemTabContent from '@/components/incident/detail/IncidentPostmortemTabContent';
 import IncidentDescriptionCard from '@/components/incident/detail/IncidentDescriptionCard';
 import IncidentSLABadges from '@/components/incident/detail/IncidentSLABadges';
@@ -453,17 +452,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
             }
             warRoomUrl={incident.warRoomUrl}
             slackChannelName={incident.slackChannelName}
-            status={incident.status}
-            postmortemExists={Boolean(postmortem)}
           />
-
-          {incident.status === 'RESOLVED' && (
-            <IncidentPostmortemCard
-              incidentId={id}
-              postmortemStatus={postmortem?.status ?? null}
-              canManage={canManageIncident}
-            />
-          )}
         </aside>
       </div>
     </div>
