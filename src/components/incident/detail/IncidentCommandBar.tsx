@@ -534,6 +534,23 @@ export default function IncidentCommandBar({
                   {canManage && (
                     <button
                       type="button"
+                      onClick={() => handleSyncJira(primaryJira.id)}
+                      disabled={isJiraPending || syncingLinkId === primaryJira.id}
+                      className="text-xs font-semibold text-blue-700 hover:text-blue-950 transition-colors ml-1 pl-2 border-l border-blue-200 cursor-pointer inline-flex items-center gap-1 disabled:opacity-50"
+                      title="Sync status with Jira"
+                    >
+                      <RefreshCw
+                        className={cn(
+                          'h-3 w-3',
+                          syncingLinkId === primaryJira.id && 'animate-spin text-blue-600'
+                        )}
+                      />
+                      <span>Sync</span>
+                    </button>
+                  )}
+                  {canManage && (
+                    <button
+                      type="button"
                       onClick={() => setShowJiraDialog(true)}
                       className="text-xs font-semibold text-blue-700 hover:text-blue-950 transition-colors ml-1 pl-2 border-l border-blue-200 cursor-pointer"
                       title="Manage Jira issues"

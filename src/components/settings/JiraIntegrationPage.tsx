@@ -98,6 +98,7 @@ export default function JiraIntegrationPage({
   const [showApiToken, setShowApiToken] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [copiedWebhookUrl, setCopiedWebhookUrl] = useState(false);
+  const [copiedCloudWebhookUrl, setCopiedCloudWebhookUrl] = useState(false);
   const [showWebhookGuide, setShowWebhookGuide] = useState(false);
 
   // Connection testing state
@@ -143,6 +144,23 @@ export default function JiraIntegrationPage({
       await navigator.clipboard.writeText(webhookUrl);
       setCopiedWebhookUrl(true);
       setTimeout(() => setCopiedWebhookUrl(false), 2000);
+    } catch {
+      // Fallback
+    }
+  };
+
+  const cloudWebhookUrl = useMemo(() => {
+    if (webhookSecret && webhookSecret !== '********') {
+      return `${webhookUrl}?secret=${encodeURIComponent(webhookSecret)}`;
+    }
+    return `${webhookUrl}?secret=YOUR_WEBHOOK_SECRET`;
+  }, [webhookUrl, webhookSecret]);
+
+  const handleCopyCloudWebhookUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(cloudWebhookUrl);
+      setCopiedCloudWebhookUrl(true);
+      setTimeout(() => setCopiedCloudWebhookUrl(false), 2000);
     } catch {
       // Fallback
     }
@@ -403,37 +421,81 @@ export default function JiraIntegrationPage({
           </Button>
         </div>
 
-        {/* Webhook Endpoint Capsule */}
-        <div className="space-y-2">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            OpsKnight Webhook Endpoint
-          </Label>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Input
-                value={webhookUrl}
-                readOnly
-                className="bg-muted/40 font-mono text-xs text-foreground h-9 select-all border-border/80 pr-9"
-              />
+        {/* Webhook Endpoint Capsules */}
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <span>Jira Cloud Webhook URL</span>
+                <Badge variant="neutral" className="text-[10px] font-normal">
+                  Recommended for Cloud
+                </Badge>
+              </Label>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleCopyWebhookUrl}
-              className="h-9 px-3 text-xs gap-1.5 shrink-0"
-            >
-              {copiedWebhookUrl ? (
-                <Check className="h-3.5 w-3.5 text-emerald-500" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-              <span>{copiedWebhookUrl ? 'Copied' : 'Copy URL'}</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Input
+                  value={cloudWebhookUrl}
+                  readOnly
+                  className="bg-muted/40 font-mono text-xs text-foreground h-9 select-all border-border/80 pr-9"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCopyCloudWebhookUrl}
+                className="h-9 px-3 text-xs gap-1.5 shrink-0"
+              >
+                {copiedCloudWebhookUrl ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                <span>{copiedCloudWebhookUrl ? 'Copied' : 'Copy Jira Cloud URL'}</span>
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Includes the authentication secret parameter. Use this URL in Atlassian Jira Cloud
+              (since Jira Cloud WebHooks UI does not support custom HTTP headers).
+            </p>
           </div>
-          <p className="text-[11px] text-muted-foreground">
-            Point Jira webhooks to this URL to sync issue updates automatically.
-          </p>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              OpsKnight Webhook Endpoint
+            </Label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Input
+                  value={webhookUrl}
+                  readOnly
+                  className="bg-muted/40 font-mono text-xs text-foreground h-9 select-all border-border/80 pr-9"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCopyWebhookUrl}
+                className="h-9 px-3 text-xs gap-1.5 shrink-0"
+              >
+                {copiedWebhookUrl ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                <span>{copiedWebhookUrl ? 'Copied' : 'Copy URL'}</span>
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Base webhook endpoint for Jira Server/Data Center or proxies that forward{' '}
+              <code className="bg-muted px-1 py-0.2 rounded font-mono text-[10px]">
+                x-jira-webhook-secret
+              </code>{' '}
+              headers.
+            </p>
+          </div>
         </div>
 
         {/* Webhook Shared Secret */}
@@ -443,7 +505,7 @@ export default function JiraIntegrationPage({
               htmlFor="webhookSecret"
               className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
-              Webhook Secret Header (Optional)
+              Webhook Secret Token (Optional)
             </Label>
             <Button
               type="button"
@@ -466,7 +528,7 @@ export default function JiraIntegrationPage({
               placeholder={
                 config?.webhookSecretEncrypted
                   ? '••••••••••••••••'
-                  : 'Shared secret for HMAC verification'
+                  : 'Shared secret for webhook authentication'
               }
               className="font-mono text-xs h-9 pr-10 bg-background border-border/80"
               disabled={!isAdmin}
@@ -481,11 +543,13 @@ export default function JiraIntegrationPage({
             </button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            When configured, Jira requests must include this secret in an{' '}
+            Validates webhook authenticity via URL query parameter{' '}
+            <code className="bg-muted px-1 py-0.2 rounded font-mono text-[10px]">?secret=</code>{' '}
+            (Jira Cloud) or HTTP header{' '}
             <code className="bg-muted px-1 py-0.2 rounded font-mono text-[10px]">
               x-jira-webhook-secret
             </code>{' '}
-            HTTP header.
+            (Jira Server/DC).
           </p>
         </div>
 
@@ -496,7 +560,7 @@ export default function JiraIntegrationPage({
               <JiraLogo className="h-3.5 w-3.5" />
               <span>How to configure in Atlassian Jira</span>
             </div>
-            <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground leading-relaxed">
+            <ol className="list-decimal list-inside space-y-2 text-muted-foreground leading-relaxed">
               <li>
                 Navigate to <strong>Jira Settings</strong> (Gear icon) → <strong>System</strong> →{' '}
                 <strong>WebHooks</strong>.
@@ -509,7 +573,8 @@ export default function JiraIntegrationPage({
                 .
               </li>
               <li>
-                Paste the <strong>OpsKnight Webhook Endpoint</strong> into the URL field.
+                In the <strong>URL</strong> field, paste the <strong>Jira Cloud Webhook URL</strong>{' '}
+                (with your secret parameter) or standard endpoint.
               </li>
               <li>
                 Under <strong>Issue related events</strong>, check{' '}
@@ -518,11 +583,8 @@ export default function JiraIntegrationPage({
                 <code className="font-mono bg-muted px-1 py-0.5 rounded">deleted</code>.
               </li>
               <li>
-                If a secret is configured above, add custom header{' '}
-                <code className="font-mono bg-muted px-1 py-0.5 rounded">
-                  x-jira-webhook-secret
-                </code>{' '}
-                and save.
+                Click <strong>Save</strong> at the bottom of the Jira WebHooks page. Ticket status
+                transitions (e.g. In Progress → Done) will now sync to OpsKnight automatically!
               </li>
             </ol>
           </div>
