@@ -62,7 +62,7 @@ describe('incident creation action adapters', () => {
       dedupKey: 'db-latency',
       assigneeId: 'user-2',
       teamId: null,
-      visibility: 'PUBLIC',
+      visibility: undefined,
       customFields: [{ fieldId: 'impact', value: 'customer-facing' }],
       source: 'WEB',
       actor: { id: 'user-1', name: 'Test User' },
@@ -70,6 +70,17 @@ describe('incident creation action adapters', () => {
     expect(result).toEqual({ id: 'inc-1', outcome: 'CREATED' });
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/incidents');
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/incidents/inc-1');
+  });
+
+  it('forwards explicit visibility when provided in form data', async () => {
+    const form = formData();
+    form.append('visibility', 'PRIVATE');
+
+    await createIncident(form);
+
+    expect(mocks.executeIncidentCreation).toHaveBeenCalledWith(
+      expect.objectContaining({ visibility: 'PRIVATE' })
+    );
   });
 
   it('uses the MOBILE source without maintaining a second creation implementation', async () => {
