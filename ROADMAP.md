@@ -2,7 +2,7 @@
 
 This roadmap outlines our path to building the ultimate open-source incident management platform.
 
-> **Current Status:** Version 1.4.0 is the current release line. We are focused on operational reliability, community contributions, and advanced automation.
+> **Current Status:** Version 1.4.0 is the current stable release. **OpsKnight 2.0 is currently in active development** (skipping v1.5 due to 220+ merged PRs delivering massive UI, engine, and availability overhauls).
 
 ## 🏗 Phase 1: Foundation & Stability (Completed)
 
