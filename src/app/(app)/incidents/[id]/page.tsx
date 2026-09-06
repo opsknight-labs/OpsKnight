@@ -86,7 +86,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   const postmortem = incident.status === 'RESOLVED' ? await getPostmortem(id) : null;
 
   // Fetch Jira, ChatOps, and Slack data for the incident collaboration bar
-  const [jiraLinks, jiraConfig, chatOpsConfig, globalSlackIntegration] = await Promise.all([
+  const [initialJiraLinks, jiraConfig, chatOpsConfig, globalSlackIntegration] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
@@ -104,6 +104,28 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       select: { workspaceId: true },
     }),
   ]);
+
+  // Auto-sync any linked Jira issue that is stuck in the placeholder 'Created' state
+  // or missing status metadata, so the user sees the real Jira status immediately on view.
+  let jiraLinks = initialJiraLinks;
+  if (
+    jiraConfig?.enabled &&
+    initialJiraLinks.some(l => !l.externalStatus || l.externalStatus.toLowerCase() === 'created')
+  ) {
+    try {
+      const { syncExternalIssueLink } = await import('@/lib/jira-sync');
+      const pendingLinks = initialJiraLinks.filter(
+        l => !l.externalStatus || l.externalStatus.toLowerCase() === 'created'
+      );
+      await Promise.allSettled(pendingLinks.map(link => syncExternalIssueLink(link.id)));
+      jiraLinks = await prisma.externalIssueLink.findMany({
+        where: { incidentId: id, provider: 'JIRA' },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch {
+      // Fallback to initial links if auto-sync fails
+    }
+  }
 
   const hasSlackWorkspace = Boolean(
     (incident.service.slackIntegration?.workspaceId &&

@@ -47,7 +47,25 @@ const JiraWebhookSchema = z
   })
   .passthrough();
 
-async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
+/**
+ * Extracts webhook secret from incoming request.
+ * Supports:
+ * 1. x-jira-webhook-secret HTTP header
+ * 2. Authorization: Bearer <token> HTTP header
+ * 3. ?secret=<token> query parameter (required for Jira Cloud, where the WebHooks UI does not support custom headers)
+ * 4. ?token=<token> query parameter
+ */
+export function extractWebhookProvidedSecret(request: NextRequest): string | null {
+  return (
+    request.headers.get('x-jira-webhook-secret') ??
+    request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
+    request.nextUrl.searchParams.get('secret') ??
+    request.nextUrl.searchParams.get('token') ??
+    null
+  );
+}
+
+export async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
   const config = await prisma.jiraConfig.findUnique({
     where: { id: 'default' },
     select: { webhookSecretEncrypted: true },
@@ -71,10 +89,7 @@ async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
   }
 
   const secret = await decrypt(config.webhookSecretEncrypted);
-  const provided =
-    request.headers.get('x-jira-webhook-secret') ??
-    request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
-    null;
+  const provided = extractWebhookProvidedSecret(request);
 
   if (!provided) return false;
 

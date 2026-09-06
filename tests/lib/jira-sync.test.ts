@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NextRequest } from 'next/server';
 import {
   isValidJiraKey,
   normalizeJiraBaseUrl,
@@ -8,6 +9,7 @@ import {
   isJiraStatusDone,
 } from '@/lib/jira-validation';
 import { extractJiraWebhookStatus, extractJiraWebhookAssignee } from '@/lib/jira-sync';
+import { extractWebhookProvidedSecret } from '@/app/api/jira/webhook/route';
 
 describe('jira validation helpers', () => {
   // -------------------------------------------------------------------------
@@ -468,5 +470,45 @@ describe('formatError (login)', () => {
 
   it('returns generic message for unknown error codes', () => {
     expect(formatError('SomeNewError')).toBe('Authentication failed. Please try again.');
+  });
+});
+
+describe('extractWebhookProvidedSecret (Jira Cloud & Webhook Auth)', () => {
+  it('extracts secret from x-jira-webhook-secret header', () => {
+    const req = new NextRequest('https://opssentinal.com/api/jira/webhook', {
+      headers: { 'x-jira-webhook-secret': 'header-secret-123' },
+    });
+    expect(extractWebhookProvidedSecret(req)).toBe('header-secret-123');
+  });
+
+  it('extracts secret from Authorization: Bearer header', () => {
+    const req = new NextRequest('https://opssentinal.com/api/jira/webhook', {
+      headers: { authorization: 'Bearer bearer-token-xyz' },
+    });
+    expect(extractWebhookProvidedSecret(req)).toBe('bearer-token-xyz');
+  });
+
+  it('extracts secret from ?secret= query parameter (required for Atlassian Jira Cloud)', () => {
+    const req = new NextRequest(
+      'https://opssentinal.com/api/jira/webhook?secret=jira-cloud-token-abc'
+    );
+    expect(extractWebhookProvidedSecret(req)).toBe('jira-cloud-token-abc');
+  });
+
+  it('extracts secret from ?token= query parameter', () => {
+    const req = new NextRequest('https://opssentinal.com/api/jira/webhook?token=query-token-def');
+    expect(extractWebhookProvidedSecret(req)).toBe('query-token-def');
+  });
+
+  it('prioritizes x-jira-webhook-secret header if present along with query param', () => {
+    const req = new NextRequest('https://opssentinal.com/api/jira/webhook?secret=query-secret', {
+      headers: { 'x-jira-webhook-secret': 'header-secret' },
+    });
+    expect(extractWebhookProvidedSecret(req)).toBe('header-secret');
+  });
+
+  it('returns null when no secret is present in headers or query parameters', () => {
+    const req = new NextRequest('https://opssentinal.com/api/jira/webhook');
+    expect(extractWebhookProvidedSecret(req)).toBeNull();
   });
 });

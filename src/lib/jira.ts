@@ -3,6 +3,7 @@ import { decrypt } from '@/lib/encryption';
 import { AppError } from '@/lib/errors';
 import { integrationProviderError } from '@/lib/provider-errors';
 import { normalizeJiraBaseUrl } from '@/lib/jira-validation';
+import { logger } from '@/lib/logger';
 
 export type JiraIssueSummary = {
   id: string;
@@ -178,12 +179,34 @@ export async function createJiraIssue(input: CreateJiraIssueInput): Promise<Jira
     body: JSON.stringify(payload),
   });
 
-  return {
-    id: created.id,
-    key: created.key,
-    url: jiraIssueUrl(config.baseUrl, created.key),
-    status: 'Created',
-  };
+  // Fetch actual issue fields so newly created issues have their true Jira status (e.g. 'To Do', 'Open')
+  // instead of a hardcoded placeholder like 'Created'.
+  try {
+    const issue = await jiraRequest<JiraIssueResponse>(
+      config,
+      `/rest/api/3/issue/${encodeURIComponent(created.key)}?fields=status,assignee`
+    );
+    return {
+      id: created.id,
+      key: created.key,
+      url: jiraIssueUrl(config.baseUrl, created.key),
+      status: issue.fields?.status?.name ?? 'Open',
+      assignee: issue.fields?.assignee?.displayName ?? issue.fields?.assignee?.emailAddress,
+      statusCategoryKey: issue.fields?.status?.statusCategory?.key,
+      statusCategoryName: issue.fields?.status?.statusCategory?.name,
+    };
+  } catch (error) {
+    logger.warn('Could not fetch newly created Jira issue details, falling back to Open status', {
+      key: created.key,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      id: created.id,
+      key: created.key,
+      url: jiraIssueUrl(config.baseUrl, created.key),
+      status: 'Open',
+    };
+  }
 }
 
 export async function getJiraIssue(issueKeyOrId: string): Promise<JiraIssueSummary> {
