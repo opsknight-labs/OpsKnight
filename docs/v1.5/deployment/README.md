@@ -18,6 +18,8 @@ OpsKnight v1.4 ships one Next.js application and PostgreSQL-backed state. Choose
 
 `k8s/kustomization.yaml` is the raw-manifest entry point. [Mobile/PWA](./mobile-pwa) is a client-access guide, not a server deployment method.
 
+For high-volume installations, follow the [dashboard query-isolation and performance certification guide](./dashboard-query-isolation).
+
 ## Shared production requirements
 
 - Supported PostgreSQL with durable storage, backups, and tested recovery.

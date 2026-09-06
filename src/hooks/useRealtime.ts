@@ -28,6 +28,10 @@ export type RealtimeMetrics = {
   acknowledged: number;
   resolved24h: number;
   highUrgency: number;
+  active?: number;
+  snoozed?: number;
+  suppressed?: number;
+  unassigned?: number;
 };
 
 export type RealtimeIncident = Record<string, unknown>;
@@ -61,7 +65,14 @@ function useRealtimeConnection() {
       setReconnectTrigger(prev => prev + 1);
     };
     window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') handleOnline();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   useEffect(() => {

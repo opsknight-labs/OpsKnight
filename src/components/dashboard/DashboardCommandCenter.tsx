@@ -14,6 +14,7 @@ import {
   metricScopeLabel,
   type MetricDataState,
 } from '@/lib/metric-contract';
+import { useRealtime } from '@/hooks/useRealtime';
 
 type SystemStatus = {
   label: string;
@@ -75,6 +76,22 @@ export default function DashboardCommandCenter({
   resolvedHref,
   unassignedHref,
 }: DashboardCommandCenterProps) {
+  const { metrics: liveMetrics } = useRealtime();
+  currentTriggeredCount = liveMetrics?.open ?? currentTriggeredCount;
+  currentAcknowledgedCount = liveMetrics?.acknowledged ?? currentAcknowledgedCount;
+  currentActiveCount = liveMetrics?.active ?? currentTriggeredCount + currentAcknowledgedCount;
+  allActiveIncidentsCount = liveMetrics?.active ?? allActiveIncidentsCount;
+  currentSnoozedCount = liveMetrics?.snoozed ?? currentSnoozedCount;
+  currentSuppressedCount = liveMetrics?.suppressed ?? currentSuppressedCount;
+  currentMutedCount = currentSnoozedCount + currentSuppressedCount;
+  unassignedCount = liveMetrics?.unassigned ?? unassignedCount;
+  if ((liveMetrics?.highUrgency ?? 0) > 0) {
+    systemStatus = { label: 'CRITICAL', color: 'var(--color-danger)', bg: 'rgba(239, 68, 68, 0.1)' };
+  } else if (liveMetrics && currentActiveCount > 0) {
+    systemStatus = { label: 'DEGRADED', color: 'var(--color-warning)', bg: 'rgba(245, 158, 11, 0.1)' };
+  } else if (liveMetrics) {
+    systemStatus = { label: 'OPERATIONAL', color: 'var(--color-success)', bg: 'rgba(34, 197, 94, 0.1)' };
+  }
   // Determine status badge color
   const statusVariant =
     systemStatus.label === 'CRITICAL'

@@ -7,6 +7,7 @@ import { getJobWorkerStatus } from '@/lib/job-worker';
 import { getCronSchedulerStatus } from '@/lib/cron-scheduler';
 import { jsonApiOk } from '@/lib/api-response';
 import { getRealtimeControlPlaneStatus } from '@/lib/realtime-change-control-plane';
+import { getDashboardAnalyticsHealth } from '@/lib/dashboard/dashboard-analytics-cache';
 
 async function authorized(request: Request): Promise<boolean> {
   const token = process.env.PROMETHEUS_SCRAPE_TOKEN;
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
       worker: getJobWorkerStatus(),
       scheduler: await getCronSchedulerStatus(),
       realtime: getRealtimeControlPlaneStatus(),
+      dashboardAnalytics: getDashboardAnalyticsHealth(),
       jobs:
         queue.status === 'fulfilled'
           ? {

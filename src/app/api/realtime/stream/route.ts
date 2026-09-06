@@ -135,6 +135,9 @@ export async function GET(req: NextRequest) {
                     active: metricsResult.data.active,
                     isClipped: metricsResult.data.isClipped,
                     retentionDays: metricsResult.data.retentionDays,
+                    snoozed: metricsResult.data.snoozed,
+                    suppressed: metricsResult.data.suppressed,
+                    unassigned: metricsResult.data.unassigned,
                   },
                   timestamp: new Date().toISOString(),
                 })

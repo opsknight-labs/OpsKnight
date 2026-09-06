@@ -2,28 +2,20 @@ import Link from 'next/link';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import DashboardRealtimeWrapper from '@/components/DashboardRealtimeWrapper';
 import DashboardCommandCenter from '@/components/dashboard/DashboardCommandCenter';
 import DashboardIncidentFilters from '@/components/dashboard/DashboardIncidentFilters';
 import IncidentsListTable from '@/components/incident/IncidentsListTable';
 import QuickActionsPanel from '@/components/dashboard/QuickActionsPanel';
 import OnCallWidget from '@/components/dashboard/OnCallWidget';
-import SidebarWidget, { WIDGET_ICON_BG } from '@/components/dashboard/SidebarWidget';
-import CompactPerformanceMetrics from '@/components/dashboard/compact/CompactPerformanceMetrics';
-import CompactTeamLoad from '@/components/dashboard/compact/CompactTeamLoad';
 import SmartInsightsBanner from '@/components/dashboard/SmartInsightsBanner';
 import {
-  buildRetainedDateFilter,
-  buildIncidentWhere,
-  buildIncidentOrderBy,
   getRangeLabel,
   type DashboardFilters as DashboardFilterParams,
 } from '@/lib/dashboard-utils';
 import { IncidentListItem } from '@/types/incident-list';
 
 // New Imports for SLA Breach Widget
-import { getWidgetData } from '@/lib/widget-data-provider';
 import { WidgetProvider } from '@/components/dashboard/WidgetProvider';
 import SLABreachAlertsWidget from '@/components/dashboard/widgets/SLABreachAlertsWidget';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -34,24 +26,23 @@ import {
   Siren,
   UserRound,
   CheckCircle2,
-  TrendingUp,
-  Users,
 } from 'lucide-react';
-import { IncidentHeatmapWidget } from '@/components/dashboard/widgets/IncidentHeatmapWidget';
 import { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import {
-  actorMetricReadScope,
   dashboardUserReadWhere,
-  incidentReadWhere,
   serviceReadWhere,
 } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
+import { getDashboardOperationalSnapshot } from '@/lib/dashboard/dashboard-operational-snapshot';
+import { DashboardAnalyticsProvider } from '@/components/dashboard/DashboardAnalyticsProvider';
+import {
+  DashboardAnalyticsHeatmap,
+  DashboardPerformanceAnalytics,
+  DashboardTeamLoadAnalytics,
+} from '@/components/dashboard/DashboardAnalyticsWidgets';
 
 export const revalidate = 0;
-
-const INCIDENTS_PREVIEW_LIMIT = 20;
-const DASHBOARD_RECENT_INCIDENTS_LIMIT = 15;
 
 export default async function Dashboard({
   searchParams,
@@ -129,10 +120,8 @@ export default async function Dashboard({
     status: user.status,
     teamIds: user.teamMemberships.map(membership => membership.teamId),
   };
-  const incidentAccess = incidentReadWhere(actor);
   const serviceAccess = serviceReadWhere(actor);
   const userAccess = dashboardUserReadWhere(actor);
-  const metricsScope = actorMetricReadScope(actor);
 
   // Build filters using utility functions
   const filterParams: DashboardFilterParams = {
@@ -146,73 +135,9 @@ export default async function Dashboard({
     customEnd,
   };
 
-  // Main query where clause (includes status filter)
-  const dateFilter = await buildRetainedDateFilter(range, customStart, customEnd);
-  const dashboardWhere = buildIncidentWhere(filterParams, { dateFilter: dateFilter.where });
-  const where = { AND: [incidentAccess, dashboardWhere] };
-
-  // Date filter for SLA calculations
-  const metricsStartDate = dateFilter.window.start;
-  const metricsEndDate = dateFilter.window.end;
   const assigneeFilter = assignee !== undefined ? (assignee === '' ? null : assignee) : undefined;
-  const incidentSelect = {
-    id: true,
-    title: true,
-    status: true,
-    urgency: true,
-    priority: true,
-    createdAt: true,
-    assigneeId: true,
-    teamId: true,
-    escalationStatus: true,
-    currentEscalationStep: true,
-    nextEscalationAt: true,
-    service: {
-      select: {
-        id: true,
-        name: true,
-      },
-    },
-    team: {
-      select: {
-        id: true,
-        name: true,
-      },
-    },
-    assignee: {
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        avatarUrl: true,
-        gender: true,
-      },
-    },
-  };
-
-  // Fetch Data in Parallel
-  const [
-    incidents,
-    recentIncidents,
-    services,
-    users,
-    slaMetrics,
-    criticalFocusIncidents,
-    myQueueIncidents,
-    myQueueCount,
-  ] = await Promise.all([
-    prisma.incident.findMany({
-      where,
-      select: incidentSelect,
-      orderBy: buildIncidentOrderBy(sortBy, sortOrder),
-      take: INCIDENTS_PREVIEW_LIMIT,
-    }),
-    prisma.incident.findMany({
-      where,
-      select: incidentSelect,
-      orderBy: { createdAt: 'desc' },
-      take: DASHBOARD_RECENT_INCIDENTS_LIMIT,
-    }),
+  const [operational, services, users] = await Promise.all([
+    getDashboardOperationalSnapshot(actor, filterParams, sortBy, sortOrder),
     prisma.service.findMany({
       where: serviceAccess,
       select: {
@@ -234,141 +159,24 @@ export default async function Dashboard({
       },
       orderBy: { name: 'asc' },
     }),
-    // Fail-safe wrapper for SLA metrics
-    calculateActorSLAMetrics(actor, {
-      serviceId: service,
-      assigneeId: assigneeFilter,
-      urgency: urgency as 'HIGH' | 'MEDIUM' | 'LOW' | undefined,
-      status: status as 'ACTIVE' | IncidentStatus | undefined,
-      startDate: metricsStartDate,
-      endDate: metricsEndDate,
-      includeAllTime: range === 'all',
-      includeIncidents: true,
-      includeActiveIncidents: true,
-      incidentLimit: 5,
-    }).catch(err => {
-      console.error('Failed to load SLA metrics:', err);
-      // Return safe default object matching return type
-      return {
-        totalIncidents: 0,
-        activeIncidents: 0,
-        activeCount: 0,
-        openCount: 0,
-        acknowledgedCount: 0,
-        snoozedCount: 0,
-        suppressedCount: 0,
-        resolvedCount: 0,
-        criticalCount: 0,
-        highUrgencyCount: 0,
-        mediumUrgencyCount: 0,
-        lowUrgencyCount: 0,
-        mttr: 0,
-        mttd: 0, // Mean Time to Detect/Ack
-        ackCompliance: 100,
-        resolveCompliance: 100,
-        statusMix: [],
-        currentShifts: [],
-        unassignedActive: 0,
-        assigneeLoad: [],
-        serviceMetrics: [],
-        activeIncidentSummaries: [],
-        heatmapData: [],
-        isClipped: false,
-        retentionDays: 30,
-        _metricDataState: 'unavailable' as const,
-      };
-    }),
-    // Ops Pulse: Critical Focus active incidents (most recent critical active incidents)
-    prisma.incident.findMany({
-      where: {
-        AND: [
-          incidentAccess,
-          {
-            status: { in: ['OPEN', 'ACKNOWLEDGED'] },
-            OR: [{ urgency: 'HIGH' }, { priority: 'P1' }],
-            ...(service ? { serviceId: service } : {}),
-          },
-        ],
-      },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        urgency: true,
-        priority: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    }),
-    // Ops Pulse: My Queue active incidents
-    user
-      ? prisma.incident.findMany({
-          where: {
-            AND: [
-              incidentAccess,
-              {
-                status: { in: ['OPEN', 'ACKNOWLEDGED'] },
-                assigneeId: user.id,
-                ...(service ? { serviceId: service } : {}),
-              },
-            ],
-          },
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            urgency: true,
-            priority: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-        })
-      : Promise.resolve([]),
-    // Ops Pulse: My Queue active incident count
-    user
-      ? prisma.incident.count({
-          where: {
-            AND: [
-              incidentAccess,
-              {
-                status: { in: ['OPEN', 'ACKNOWLEDGED'] },
-                assigneeId: user.id,
-                ...(service ? { serviceId: service } : {}),
-              },
-            ],
-          },
-        })
-      : Promise.resolve(0),
   ]);
-
-  const metricDataState =
-    '_metricDataState' in slaMetrics ? slaMetrics._metricDataState : ('available' as const);
-  const metricsAsOf = new Date().toISOString();
-
-  // Derive widget data from already calculated SLA metrics (no duplicate database calls)
-  const widgetData =
-    user && metricDataState === 'available'
-      ? await getWidgetData(
-          user.id,
-          'user',
-          {
-            serviceId: service,
-            assigneeId: assigneeFilter,
-            urgency: urgency as 'HIGH' | 'MEDIUM' | 'LOW' | undefined,
-            status: status as 'ACTIVE' | IncidentStatus | undefined,
-            startDate: metricsStartDate,
-            endDate: metricsEndDate,
-            includeAllTime: range === 'all',
-            ...metricsScope,
-          },
-          slaMetrics
-        ).catch(err => {
-          console.error('Failed to load widget data:', err);
-          return null;
-        })
-      : null;
+  const metricDataState = operational.asOf ? ('available' as const) : ('unavailable' as const);
+  const metricsAsOf = operational.asOf;
+  const incidents = operational.previewIncidents;
+  const recentIncidents = operational.recentIncidents;
+  const criticalFocusIncidents = operational.criticalFocus;
+  const myQueueIncidents = operational.myQueue;
+  const myQueueCount = operational.myQueueCount;
+  const widgetData = {
+    activeIncidents: operational.slaBreachAlerts,
+    slaBreachAlerts: operational.slaBreachAlerts,
+    userOnCall: { isOnCall: false, shiftStart: null, shiftEnd: null, assignedIncidents: myQueueCount },
+    slaMetrics: { mtta: null, mttr: null, ackCompliance: null, resolveCompliance: null, trendMtta: 'stable' as const, trendMttr: 'stable' as const },
+    serviceHealth: [],
+    recentActivity: [],
+    teamWorkload: [],
+    lastUpdated: new Date(operational.asOf),
+  };
 
   // Transform incidents for the list table
   const incidentListItems: IncidentListItem[] = incidents.map(inc => ({
@@ -383,16 +191,16 @@ export default async function Dashboard({
   }));
 
   // Map SLA Server metrics to Dashboard variables
-  const activeShifts = slaMetrics.currentShifts;
-  const metricsTotalCount = slaMetrics.totalIncidents;
-  const currentTriggeredCount = slaMetrics.openCount;
-  const metricsResolvedCount = slaMetrics.statusMix.find(s => s.status === 'RESOLVED')?.count ?? 0;
-  const currentAcknowledgedCount = slaMetrics.acknowledgedCount;
+  const activeShifts = operational.currentShifts;
+  const metricsTotalCount = operational.totalInRange;
+  const currentTriggeredCount = operational.open;
+  const metricsResolvedCount = operational.resolvedInRange;
+  const currentAcknowledgedCount = operational.acknowledged;
   const currentActiveCount = currentTriggeredCount + currentAcknowledgedCount;
-  const currentSnoozedCount = slaMetrics.snoozedCount;
-  const currentSuppressedCount = slaMetrics.suppressedCount;
+  const currentSnoozedCount = operational.snoozed;
+  const currentSuppressedCount = operational.suppressed;
   const currentMutedCount = currentSnoozedCount + currentSuppressedCount;
-  const unassignedCount = slaMetrics.unassignedActive;
+  const unassignedCount = operational.unassigned;
   const listAssignee =
     assigneeFilter === null ? ('unassigned' as const) : (assigneeFilter ?? undefined);
   const strictStatus = status && status !== 'ACTIVE' ? (status as IncidentStatus) : undefined;
@@ -403,14 +211,8 @@ export default async function Dashboard({
   };
   const periodListScope = {
     ...currentListScope,
-    createdAfter: ('effectiveStart' in slaMetrics
-      ? slaMetrics.effectiveStart
-      : metricsStartDate
-    )?.toISOString(),
-    createdBefore: ('effectiveEnd' in slaMetrics
-      ? slaMetrics.effectiveEnd
-      : metricsEndDate
-    )?.toISOString(),
+    createdAfter: operational.effectiveStart.toISOString(),
+    createdBefore: operational.effectiveEnd.toISOString(),
   };
   const totalHref = buildIncidentListHref({
     ...periodListScope,
@@ -445,15 +247,11 @@ export default async function Dashboard({
       })
     : undefined;
 
-  const allActiveIncidentsCount =
-    slaMetrics.activeIncidents ??
-    slaMetrics.activeCount ??
-    slaMetrics.openCount + slaMetrics.acknowledgedCount;
+  const allActiveIncidentsCount = operational.active;
   const currentCriticalActive = Math.max(
-    slaMetrics.criticalCount ?? 0,
+    operational.critical,
     criticalFocusIncidents.length
   );
-  const mttaMinutes = slaMetrics.mttd;
 
   // Calculate system status
   const systemStatus =
@@ -477,8 +275,6 @@ export default async function Dashboard({
   const totalInRange = metricsTotalCount;
   const rangeBadgeLabel =
     range === 'all' ? 'All time' : range === 'custom' ? 'Custom range' : `Last ${range} days`;
-  // Use rawHeatmapData which comes from calculateSLAMetrics (which uses rollups for long ranges)
-  const heatmapData = slaMetrics.heatmapData ?? [];
 
   const criticalFocusFallback = incidentListItems
     .filter(
@@ -491,26 +287,32 @@ export default async function Dashboard({
   const criticalFocus =
     criticalFocusIncidents.length > 0 ? criticalFocusIncidents.slice(0, 3) : criticalFocusFallback;
   const myQueueItems = myQueueIncidents.slice(0, 3);
-  const servicesAtRisk = slaMetrics.serviceMetrics
-    .filter(serviceMetric => (serviceMetric.activeCount ?? 0) > 0)
-    .sort((a, b) => (b.activeCount ?? 0) - (a.activeCount ?? 0))
-    .slice(0, 4)
-    .map(serviceMetric => ({
-      id: serviceMetric.id,
-      name: serviceMetric.name,
-      activeCount: serviceMetric.activeCount ?? 0,
-      criticalCount: serviceMetric.criticalCount ?? 0,
-    }));
-
-  const topServiceByVolume = slaMetrics.serviceMetrics?.[0];
-
-  const teamLoad = slaMetrics.assigneeLoad
-    .slice()
-    .sort((a, b) => b.count - a.count)
+  const servicesAtRisk = operational.serviceLoads
+    .map(load => ({
+      id: load.serviceId,
+      name: services.find(item => item.id === load.serviceId)?.name ?? 'Unknown service',
+      activeCount: load.activeCount,
+      criticalCount: load.criticalCount,
+    }))
+    .sort((left, right) => right.activeCount - left.activeCount)
     .slice(0, 4);
+  const topServiceByVolume = servicesAtRisk[0]
+    ? { ...servicesAtRisk[0], count: servicesAtRisk[0].activeCount }
+    : undefined;
 
   return (
     <DashboardRealtimeWrapper>
+      <DashboardAnalyticsProvider
+        query={{
+          range,
+          startDate: customStart,
+          endDate: customEnd,
+          service,
+          assignee: assignee === '' ? 'unassigned' : assignee,
+          urgency,
+          status,
+        }}
+      >
       <div
         className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 min-h-screen space-y-4 sm:space-y-6"
         style={{ zoom: 0.95 }}
@@ -540,8 +342,8 @@ export default async function Dashboard({
           }}
           currentAcknowledgedCount={currentAcknowledgedCount}
           userTimeZone={userTimeZone}
-          isClipped={slaMetrics.isClipped}
-          retentionDays={slaMetrics.retentionDays}
+          isClipped={operational.isClipped}
+          retentionDays={operational.retentionDays}
           metricDataState={metricDataState}
           metricsAsOf={metricsAsOf}
           totalHref={totalHref}
@@ -865,7 +667,7 @@ export default async function Dashboard({
             </div>
 
             {/* Incident Heatmap (Heartmap - User Requested) */}
-            <IncidentHeatmapWidget data={heatmapData} year={new Date().getFullYear()} />
+            <DashboardAnalyticsHeatmap />
 
             <IncidentsListTable
               incidents={recentIncidentListItems}
@@ -886,36 +688,12 @@ export default async function Dashboard({
             )}
 
             <OnCallWidget activeShifts={activeShifts} />
-            <SidebarWidget
-              title="Performance"
-              iconBg={WIDGET_ICON_BG.blue}
-              icon={<TrendingUp className="h-4 w-4" />}
-            >
-              {metricDataState === 'available' ? (
-                <CompactPerformanceMetrics
-                  mtta={mttaMinutes}
-                  mttr={slaMetrics.mttr}
-                  ackSlaRate={slaMetrics.ackCompliance}
-                  resolveSlaRate={slaMetrics.resolveCompliance}
-                />
-              ) : (
-                <p className="p-3 text-sm text-amber-700">Performance metrics unavailable.</p>
-              )}
-            </SidebarWidget>
-            <SidebarWidget
-              title="Team Load"
-              iconBg={WIDGET_ICON_BG.green}
-              icon={<Users className="h-4 w-4" />}
-            >
-              {metricDataState === 'available' ? (
-                <CompactTeamLoad assigneeLoad={teamLoad} />
-              ) : (
-                <p className="p-3 text-sm text-amber-700">Team-load metrics unavailable.</p>
-              )}
-            </SidebarWidget>
+            <DashboardPerformanceAnalytics />
+            <DashboardTeamLoadAnalytics />
           </aside>
         </div>
       </div>
+      </DashboardAnalyticsProvider>
     </DashboardRealtimeWrapper>
   );
 }

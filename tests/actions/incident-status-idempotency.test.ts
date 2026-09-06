@@ -136,9 +136,18 @@ describe('incident lifecycle action idempotency', () => {
   it('persists durable side-effect work for a real status transition without inline network dispatch', async () => {
     tx.incident.findUnique.mockResolvedValue({
       status: 'OPEN',
+      createdAt: new Date(Date.now() - 60_000),
       acknowledgedAt: null,
       resolvedAt: null,
       currentEscalationStep: 0,
+      slaPausedMs: BigInt(0),
+      slaPauseStartedAt: null,
+      slaAckElapsedMs: null,
+      slaResolveElapsedMs: null,
+      escalationGeneration: 0,
+      snoozedUntil: null,
+      snoozeReason: null,
+      service: { policy: null },
     });
     tx.incident.update.mockResolvedValue({});
 

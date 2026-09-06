@@ -9,11 +9,17 @@ function createTx() {
     incident: {
       findUnique: vi.fn().mockResolvedValue({
         status: 'OPEN',
+        createdAt: new Date('2026-08-28T05:00:00.000Z'),
         acknowledgedAt: null,
         resolvedAt: null,
         currentEscalationStep: 0,
         snoozedUntil: null,
         snoozeReason: null,
+        slaPausedMs: BigInt(0),
+        slaPauseStartedAt: null,
+        slaAckElapsedMs: null,
+        slaResolveElapsedMs: null,
+        escalationGeneration: 0,
         service: { policy: { steps: [{ delayMinutes: 5 }] } },
       }),
       update: vi.fn().mockResolvedValue({}),

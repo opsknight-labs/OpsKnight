@@ -3,7 +3,6 @@
 import { RealtimeProvider, useRealtime } from '@/hooks/useRealtime';
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
-import { useRouter } from 'next/navigation';
 
 interface DashboardRealtimeWrapperProps {
   children: React.ReactNode;
@@ -42,23 +41,8 @@ function DashboardRealtimeContent({
   onMetricsUpdate,
   onIncidentsUpdate,
 }: DashboardRealtimeWrapperProps) {
-  const router = useRouter();
   const { isConnected, metrics, recentIncidents, error } = useRealtime();
   const [showDisconnected, setShowDisconnected] = useState(false);
-  const [dismissedIncidentKey, setDismissedIncidentKey] = useState('');
-  const incidentUpdateKey = recentIncidents?.length
-    ? JSON.stringify(
-        recentIncidents.map(incident => [
-          incident.id,
-          incident.updatedAt,
-          incident.status,
-          incident.urgency,
-          incident.escalationStatus,
-        ])
-      )
-    : '';
-  const hasUpdates =
-    !onIncidentsUpdate && Boolean(incidentUpdateKey) && dismissedIncidentKey !== incidentUpdateKey;
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -88,30 +72,6 @@ function DashboardRealtimeContent({
   return (
     <>
       {children}
-      {hasUpdates && (
-        <button
-          type="button"
-          onClick={() => {
-            setDismissedIncidentKey(incidentUpdateKey);
-            router.refresh();
-          }}
-          style={{
-            position: 'fixed',
-            bottom: showDisconnected ? '4.5rem' : '1rem',
-            right: '1rem',
-            padding: '0.5rem 1rem',
-            background: 'var(--color-primary)',
-            color: 'white',
-            border: 0,
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.875rem',
-            zIndex: 1000,
-            cursor: 'pointer',
-          }}
-        >
-          Dashboard updates available — refresh
-        </button>
-      )}
       {showDisconnected && !isConnected && (
         <div
           style={{

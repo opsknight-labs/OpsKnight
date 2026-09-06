@@ -28,8 +28,12 @@ import { isRollupCompatibleIncidentFilter } from './metrics/domain/rollup-eligib
 import { METRIC_ACCUMULATOR } from './metrics/domain/accumulator';
 import { resolveSlaTarget } from './metrics/domain/sla-target';
 import { slaTargetSql } from './metrics/domain/sla-target-sql';
-import { effectiveElapsedMs } from './metrics/domain/sla-clock';
-import { slaEffectiveElapsedSql } from './metrics/domain/sla-clock-sql';
+import { capturedOrEffectiveElapsedMs, effectiveElapsedMs } from './metrics/domain/sla-clock';
+import {
+  slaCapturedAckElapsedSql,
+  slaCapturedResolveElapsedSql,
+  slaCurrentMaterializedElapsedSql,
+} from './metrics/domain/sla-clock-sql';
 
 /**
  * Build a parameterized SQL `WHERE`-clause fragment that mirrors the full
@@ -249,12 +253,9 @@ async function calculateDbAggregateMetrics(
   // Qualify the outer Incident columns because the correlated pause
   // subquery also has an `id` column. An unqualified `"id"` binds to the
   // inner IncidentSlaPause row and silently makes every pause sum empty.
-  const ackElapsed = slaEffectiveElapsedSql(Prisma.sql`"Incident"."acknowledgedAt"`, 'Incident');
-  const resolveElapsed = slaEffectiveElapsedSql(
-    Prisma.sql`COALESCE("Incident"."resolvedAt", "Incident"."updatedAt")`,
-    'Incident'
-  );
-  const currentElapsed = slaEffectiveElapsedSql(Prisma.sql`NOW()`, 'Incident');
+  const ackElapsed = slaCapturedAckElapsedSql('Incident');
+  const resolveElapsed = slaCapturedResolveElapsedSql('Incident');
+  const currentElapsed = slaCurrentMaterializedElapsedSql(Prisma.sql`NOW()`, 'Incident');
 
   // Keep every aggregate surface aligned with the Prisma filter semantics.
   // Constructing a second filter set from Prisma.IncidentWhereInput omitted
@@ -291,40 +292,52 @@ async function calculateDbAggregateMetrics(
         after_hours_count: bigint;
       }>
     >(Prisma.sql`
+      WITH metric_rows AS MATERIALIZED (
+        SELECT "Incident".*,
+          ${ackElapsed} AS ack_elapsed_ms,
+          ${resolveElapsed} AS resolve_elapsed_ms,
+          ${currentElapsed} AS current_elapsed_ms,
+          ${ackTargetCase} AS ack_target_ms,
+          ${resolveTargetCase} AS resolve_target_ms
+        FROM "Incident"
+        WHERE "createdAt" >= ${start}
+          AND "createdAt" <= ${end}
+          ${incidentFilterSql}
+      )
       SELECT
         COUNT(*) as total_incidents,
         COUNT(*) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as acknowledged_count,
         COUNT(*) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus") as resolved_count,
-        AVG(${ackElapsed})
+        AVG(ack_elapsed_ms)
           FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as avg_mtta_ms,
-        AVG(${resolveElapsed})
+        AVG(resolve_elapsed_ms)
           FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
-        SUM(${ackElapsed})
+        SUM(ack_elapsed_ms)
           FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as mtta_sum_ms,
-        SUM(${resolveElapsed})
+        SUM(resolve_elapsed_ms)
           FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as mttr_sum_ms,
         COUNT(*) FILTER (
           WHERE "acknowledgedAt" IS NOT NULL
-            AND ${ackElapsed} <= ${ackTargetCase}
+            AND ack_elapsed_ms <= ack_target_ms
         ) as ack_sla_met,
         COUNT(*) FILTER (
           WHERE ("acknowledgedAt" IS NOT NULL
-            AND ${ackElapsed} > ${ackTargetCase})
+            AND ack_elapsed_ms > ack_target_ms)
           OR ("acknowledgedAt" IS NULL AND "status" = 'RESOLVED'::"IncidentStatus")
           OR ("acknowledgedAt" IS NULL AND "status" != 'RESOLVED'::"IncidentStatus"
-            AND ${currentElapsed} > ${ackTargetCase})
+            AND current_elapsed_ms > ack_target_ms)
         ) as ack_sla_breached,
         COUNT(*) FILTER (
           WHERE "status" = 'RESOLVED'::"IncidentStatus"
           AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL
-          AND ${resolveElapsed} <= ${resolveTargetCase}
+          AND resolve_elapsed_ms <= resolve_target_ms
         ) as resolve_sla_met,
         COUNT(*) FILTER (
           WHERE ("status" = 'RESOLVED'::"IncidentStatus"
             AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL
-            AND ${resolveElapsed} > ${resolveTargetCase})
+            AND resolve_elapsed_ms > resolve_target_ms)
           OR ("status" != 'RESOLVED'::"IncidentStatus"
-            AND ${currentElapsed} > ${resolveTargetCase})
+            AND current_elapsed_ms > resolve_target_ms)
         ) as resolve_sla_breached,
         COUNT(*) FILTER (WHERE "urgency" = 'HIGH'::"IncidentUrgency") as high_urgency_count,
         COUNT(*) FILTER (WHERE "urgency" = 'MEDIUM'::"IncidentUrgency") as medium_urgency_count,
@@ -342,10 +355,7 @@ async function calculateDbAggregateMetrics(
                  AND EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${tzRawSql}) < ${BUSINESS_HOURS_START}
              END
         ) as after_hours_count
-      FROM "Incident"
-      WHERE "createdAt" >= ${start}
-        AND "createdAt" <= ${end}
-        ${incidentFilterSql}
+      FROM metric_rows
     `);
 
     // Percentile query - separate for cleaner code and optional optimization
@@ -357,23 +367,29 @@ async function calculateDbAggregateMetrics(
         mttr_p95_ms: number | null;
       }>
     >(Prisma.sql`
+      WITH metric_rows AS MATERIALIZED (
+        SELECT "Incident".*,
+          ${ackElapsed} AS ack_elapsed_ms,
+          ${resolveElapsed} AS resolve_elapsed_ms
+        FROM "Incident"
+        WHERE "createdAt" >= ${start}
+          AND "createdAt" <= ${end}
+          ${incidentFilterSql}
+      )
       SELECT
         PERCENTILE_CONT(0.5) WITHIN GROUP (
-          ORDER BY ${ackElapsed}
+          ORDER BY ack_elapsed_ms
         ) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as mtta_p50_ms,
         PERCENTILE_CONT(0.95) WITHIN GROUP (
-          ORDER BY ${ackElapsed}
+          ORDER BY ack_elapsed_ms
         ) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as mtta_p95_ms,
         PERCENTILE_CONT(0.5) WITHIN GROUP (
-          ORDER BY ${resolveElapsed}
+          ORDER BY resolve_elapsed_ms
         ) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL) as mttr_p50_ms,
         PERCENTILE_CONT(0.95) WITHIN GROUP (
-          ORDER BY ${resolveElapsed}
+          ORDER BY resolve_elapsed_ms
         ) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL) as mttr_p95_ms
-      FROM "Incident"
-      WHERE "createdAt" >= ${start}
-        AND "createdAt" <= ${end}
-        ${incidentFilterSql}
+      FROM metric_rows
     `);
 
     // Event counts query — for escalation, reopen, auto-resolve rates.
@@ -963,14 +979,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   // team/urgency/status/visibility/assignee scope produced wrong numbers
   // for those widgets relative to the headline metrics above them.
   const fullIncidentFilterSql = buildIncidentFilterSql(filters);
-  const previousAckElapsed = slaEffectiveElapsedSql(
-    Prisma.sql`"Incident"."acknowledgedAt"`,
-    'Incident'
-  );
-  const previousResolveElapsed = slaEffectiveElapsedSql(
-    Prisma.sql`COALESCE("Incident"."resolvedAt", "Incident"."updatedAt")`,
-    'Incident'
-  );
+  const previousAckElapsed = slaCapturedAckElapsedSql('Incident');
+  const previousResolveElapsed = slaCapturedResolveElapsedSql('Incident');
 
   // Step 3: Parallel fetch - lightweight queries that work at any scale
   const incidentMetricSelect = {
@@ -988,6 +998,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     resolvedAt: true,
     slaPausedMs: true,
     slaPauseStartedAt: true,
+    slaAckElapsedMs: true,
+    slaResolveElapsedMs: true,
     slaAckTargetMs: true,
     slaResolveTargetMs: true,
     slaPauses: { select: { startedAt: true, endedAt: true } },
@@ -1202,21 +1214,27 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         }>
       >(
         Prisma.sql`
+      WITH metric_rows AS MATERIALIZED (
+        SELECT "Incident".*,
+          ${previousAckElapsed} AS ack_elapsed_ms,
+          ${previousResolveElapsed} AS resolve_elapsed_ms
+        FROM "Incident"
+        WHERE "createdAt" >= ${previousStart}
+          AND "createdAt" < ${previousEnd}
+          ${fullIncidentFilterSql}
+      )
       SELECT
         COUNT(*) as total_count,
         COUNT(*) FILTER (WHERE "urgency" = 'HIGH'::"IncidentUrgency") as high_urgency_count,
         COUNT(*) FILTER (WHERE "urgency" = 'MEDIUM'::"IncidentUrgency") as medium_urgency_count,
         COUNT(*) FILTER (WHERE "urgency" = 'LOW'::"IncidentUrgency") as low_urgency_count,
-        AVG(${previousAckElapsed})
+        AVG(ack_elapsed_ms)
           FILTER (WHERE "acknowledgedAt" IS NOT NULL AND "acknowledgedAt" >= "createdAt") as avg_mtta_ms,
-        AVG(${previousResolveElapsed})
+        AVG(resolve_elapsed_ms)
           FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus" AND COALESCE("resolvedAt", "updatedAt") IS NOT NULL AND COALESCE("resolvedAt", "updatedAt") >= "createdAt") as avg_mttr_ms,
         COUNT(*) FILTER (WHERE "acknowledgedAt" IS NOT NULL) as ack_count,
         COUNT(*) FILTER (WHERE "status" = 'RESOLVED'::"IncidentStatus") as resolve_count
-      FROM "Incident"
-      WHERE "createdAt" >= ${previousStart}
-        AND "createdAt" < ${previousEnd}
-        ${fullIncidentFilterSql}
+      FROM metric_rows
     `
       )
       .catch(err => {
@@ -1405,7 +1423,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     for (const incident of recentIncidents) {
       const ackAt = ackMap.get(incident.id);
       if (ackAt && incident.createdAt) {
-        const ackTimeMs = effectiveElapsedMs({
+        const ackTimeMs = capturedOrEffectiveElapsedMs({
+          capturedElapsedMs: incident.slaAckElapsedMs,
           startedAt: incident.createdAt,
           evaluationAt: ackAt,
           pauses: incident.slaPauses,
@@ -1419,7 +1438,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       if (incident.status === 'RESOLVED') {
         const resolvedAt = incident.resolvedAt || incident.updatedAt;
         if (resolvedAt && incident.createdAt) {
-          const resolveTimeMs = effectiveElapsedMs({
+          const resolveTimeMs = capturedOrEffectiveElapsedMs({
+            capturedElapsedMs: incident.slaResolveElapsedMs,
             startedAt: incident.createdAt,
             evaluationAt: resolvedAt,
             pauses: incident.slaPauses,
@@ -1497,6 +1517,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       status: string;
       resolvedAt: Date | null;
       updatedAt?: Date | null;
+      slaAckElapsedMs: bigint | null;
+      slaResolveElapsedMs: bigint | null;
       slaPauses: Array<{ startedAt: Date; endedAt: Date | null }>;
     }>,
     eventsMap: Map<string, Date>
@@ -1517,7 +1539,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       // Ack
       const ackAt = inc.acknowledgedAt || eventsMap.get(inc.id);
       if (ackAt && inc.createdAt) {
-        const diff = effectiveElapsedMs({
+        const diff = capturedOrEffectiveElapsedMs({
+          capturedElapsedMs: inc.slaAckElapsedMs,
           startedAt: inc.createdAt,
           evaluationAt: ackAt,
           pauses: inc.slaPauses,
@@ -1532,7 +1555,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       if (inc.status === 'RESOLVED') {
         const resAt = inc.resolvedAt || inc.updatedAt;
         if (resAt && inc.createdAt) {
-          const diff = effectiveElapsedMs({
+          const diff = capturedOrEffectiveElapsedMs({
+            capturedElapsedMs: inc.slaResolveElapsedMs,
             startedAt: inc.createdAt,
             evaluationAt: resAt,
             pauses: inc.slaPauses,
@@ -1771,7 +1795,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       trendEntry.count += 1;
       const ackAt = ackMap.get(incident.id);
       if (ackAt) {
-        const ackElapsed = effectiveElapsedMs({
+        const ackElapsed = capturedOrEffectiveElapsedMs({
+          capturedElapsedMs: incident.slaAckElapsedMs,
           startedAt: incident.createdAt,
           evaluationAt: ackAt,
           pauses: incident.slaPauses,
@@ -1794,7 +1819,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         if (ackElapsed <= target.ackTargetMs) trendEntry.ackSlaMet += 1;
       }
       if (incident.status === 'RESOLVED' && incident.resolvedAt) {
-        trendEntry.resolveSum += effectiveElapsedMs({
+        trendEntry.resolveSum += capturedOrEffectiveElapsedMs({
+          capturedElapsedMs: incident.slaResolveElapsedMs,
           startedAt: incident.createdAt,
           evaluationAt: incident.resolvedAt,
           pauses: incident.slaPauses,

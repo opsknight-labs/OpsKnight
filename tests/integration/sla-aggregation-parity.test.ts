@@ -39,6 +39,7 @@ describeIfRealDB('SLA aggregation threshold parity', { timeout: 60_000 }, () => 
           priority: 'P2',
           createdAt,
           acknowledgedAt,
+          slaAckElapsedMs: BigInt(20 * 60_000),
         })),
       });
       await testPrisma.incidentSlaPause.createMany({

@@ -28,6 +28,10 @@ vi.mock('@/contexts/TimezoneContext', () => ({
   useTimezone: () => ({ userTimeZone: 'UTC' }),
 }));
 
+vi.mock('@/hooks/useRealtime', () => ({
+  useRealtime: () => ({ metrics: null }),
+}));
+
 describe('Dashboard Flicker Fixes & Command Center Verification', () => {
   beforeEach(() => {
     vi.clearAllMocks();

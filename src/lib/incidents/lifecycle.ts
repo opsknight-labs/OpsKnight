@@ -4,6 +4,7 @@ import type { IncidentEventType, IncidentStatus, Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
 import { enqueueLifecycleSideEffects } from '@/lib/event-outbox';
+import { effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
 
 export const INCIDENT_LIFECYCLE_COMMANDS = [
   'ACKNOWLEDGE',
@@ -57,6 +58,7 @@ export interface IncidentLifecycleResult {
 
 type IncidentLifecycleSnapshot = {
   status: IncidentStatus;
+  createdAt: Date;
   acknowledgedAt: Date | null;
   resolvedAt: Date | null;
   currentEscalationStep: number | null;
@@ -64,6 +66,8 @@ type IncidentLifecycleSnapshot = {
   snoozeReason: string | null;
   slaPausedMs: bigint;
   slaPauseStartedAt: Date | null;
+  slaAckElapsedMs: bigint | null;
+  slaResolveElapsedMs: bigint | null;
   escalationGeneration: number;
   service: {
     policy: {
@@ -382,7 +386,17 @@ function updateDataForCommand(
 
   switch (input.command) {
     case 'ACKNOWLEDGE':
-      if (!incident.acknowledgedAt) data.acknowledgedAt = now;
+      if (!incident.acknowledgedAt) {
+        data.acknowledgedAt = now;
+        data.slaAckElapsedMs = BigInt(
+          effectiveMaterializedElapsedMs({
+            startedAt: incident.createdAt,
+            evaluationAt: now,
+            pausedMs: incident.slaPausedMs,
+            pauseStartedAt: incident.slaPauseStartedAt,
+          })
+        );
+      }
       data.escalationStatus = 'COMPLETED';
       data.nextEscalationAt = null;
       data.snoozedUntil = null;
@@ -390,7 +404,17 @@ function updateDataForCommand(
       break;
 
     case 'RESOLVE':
-      if (!incident.resolvedAt) data.resolvedAt = now;
+      if (!incident.resolvedAt) {
+        data.resolvedAt = now;
+        data.slaResolveElapsedMs = BigInt(
+          effectiveMaterializedElapsedMs({
+            startedAt: incident.createdAt,
+            evaluationAt: now,
+            pausedMs: incident.slaPausedMs,
+            pauseStartedAt: incident.slaPauseStartedAt,
+          })
+        );
+      }
       data.escalationStatus = 'COMPLETED';
       data.nextEscalationAt = null;
       data.snoozedUntil = null;
@@ -401,6 +425,8 @@ function updateDataForCommand(
       const delayMinutes = escalationDelayMinutes(incident, 0);
       data.acknowledgedAt = null;
       data.resolvedAt = null;
+      data.slaAckElapsedMs = null;
+      data.slaResolveElapsedMs = null;
       data.currentEscalationStep = 0;
       data.escalationStatus = 'ESCALATING';
       data.nextEscalationAt = atDelay(now, delayMinutes);
@@ -413,6 +439,7 @@ function updateDataForCommand(
     case 'UNACKNOWLEDGE': {
       const stepIndex = incident.currentEscalationStep ?? 0;
       data.acknowledgedAt = null;
+      data.slaAckElapsedMs = null;
       data.escalationStatus = 'ESCALATING';
       data.nextEscalationAt = atDelay(now, escalationDelayMinutes(incident, stepIndex));
       data.snoozedUntil = null;
@@ -465,6 +492,7 @@ async function loadSnapshot(
     where: { id: incidentId },
     select: {
       status: true,
+      createdAt: true,
       acknowledgedAt: true,
       resolvedAt: true,
       currentEscalationStep: true,
@@ -472,6 +500,8 @@ async function loadSnapshot(
       snoozeReason: true,
       slaPausedMs: true,
       slaPauseStartedAt: true,
+      slaAckElapsedMs: true,
+      slaResolveElapsedMs: true,
       escalationGeneration: true,
       service: {
         select: {

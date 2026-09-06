@@ -146,6 +146,7 @@ export async function getIfChanged<T>(
 import prisma from './prisma';
 import { CAPABILITIES, hasCapability, isAppRole, type AppRole } from './authorization';
 import { incidentReadWhere } from './authorization-filters';
+import { compileIncidentMetricFilter, type IncidentMetricFilter } from './metrics/domain/filter';
 
 /**
  * Cache key generators
@@ -167,16 +168,26 @@ export async function getCachedDashboardMetrics(
   role: string,
   teamIds: string[],
   lastHash?: string,
-  generation?: string | null
+  generation?: string | null,
+  metricFilter: IncidentMetricFilter = {}
 ): Promise<{ data: any; changed: boolean; hash: string } | null> {
   const hasGlobalMetrics = isAppRole(role) && hasCapability(role, CAPABILITIES.METRICS_READ_ALL);
   const scope = hasGlobalMetrics ? 'global' : `user:${userId}`;
-  const key = `${CacheKeys.dashboardMetrics(userId, scope)}:g:${generation ?? 'initial'}`;
+  const filterKey = JSON.stringify({
+    serviceId: metricFilter.serviceId,
+    teamId: metricFilter.teamId,
+    assigneeId: metricFilter.assigneeId,
+    urgency: metricFilter.urgency,
+    status: metricFilter.status,
+  });
+  const key = `${CacheKeys.dashboardMetrics(userId, scope)}:${filterKey}:g:${generation ?? 'initial'}`;
 
   const fetcher = async () => {
-    const scope = hasGlobalMetrics
+    const authorizationScope = hasGlobalMetrics
       ? {}
       : incidentReadWhere({ id: userId, role: role as AppRole, status: 'ACTIVE', teamIds });
+    const selectedScope = compileIncidentMetricFilter({ ...metricFilter, status: undefined }).prisma;
+    const scope: Prisma.IncidentWhereInput = { AND: [authorizationScope, selectedScope] };
     const resolvedSince = new Date(Date.now() - 24 * 60 * 60_000);
     const [statusGroups, resolved24h] = await Promise.all([
       prisma.incident.groupBy({
@@ -194,12 +205,19 @@ export async function getCachedDashboardMetrics(
         .reduce((sum, group) => sum + group._count._all, 0);
     const open = count('OPEN');
     const acknowledged = count('ACKNOWLEDGED');
-    const active = statusGroups
-      .filter(group => group.status !== 'RESOLVED')
-      .reduce((sum, group) => sum + group._count._all, 0);
+    const snoozed = count('SNOOZED');
+    const suppressed = count('SUPPRESSED');
+    const active = open + acknowledged;
     const critical = statusGroups
-      .filter(group => group.status !== 'RESOLVED' && group.urgency === 'HIGH')
+      .filter(
+        group =>
+          (group.status === 'OPEN' || group.status === 'ACKNOWLEDGED') &&
+          group.urgency === 'HIGH'
+      )
       .reduce((sum, group) => sum + group._count._all, 0);
+    const unassigned = await prisma.incident.count({
+      where: { AND: [scope, { status: { in: ['OPEN', 'ACKNOWLEDGED'] }, assigneeId: null }] },
+    });
 
     return {
       open,
@@ -207,6 +225,9 @@ export async function getCachedDashboardMetrics(
       resolved: resolved24h,
       critical,
       active,
+      snoozed,
+      suppressed,
+      unassigned,
       isClipped: false,
       retentionDays: null,
     };

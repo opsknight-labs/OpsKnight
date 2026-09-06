@@ -12,7 +12,7 @@ describe('dashboard retained date-filter boundary', () => {
   });
 
   it('passes only the nested Prisma filter into buildIncidentWhere', () => {
-    const source = readFileSync('src/app/(app)/page.tsx', 'utf8');
+    const source = readFileSync('src/lib/dashboard/dashboard-operational-snapshot.ts', 'utf8');
 
     expect(source).toContain('dateFilter: dateFilter.where');
     expect(source).not.toContain('buildIncidentWhere(filterParams, { dateFilter })');
