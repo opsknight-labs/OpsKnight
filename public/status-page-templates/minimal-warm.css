@@ -1,0 +1,79 @@
+/*
+  Template: Minimal Warm
+  Paste into Settings > Status Page > Custom CSS
+*/
+
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, var(--sp-blue, var(--sp-ocean, #2563eb))));
+  --status-primary-hover: var(--sp-accent-2, var(--sp-primary, var(--sp-blue, #1d4ed8))));\n  --status-card-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+  --sp-ink: #1f2937;
+  --sp-muted: #6b7280;
+  --sp-warm: #f97316;
+  --sp-card: #ffffff;
+}
+
+.status-page-container {
+  background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%) !important;
+  color: var(--sp-ink) !important;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
+}
+
+.status-page-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid rgba(31, 41, 55, 0.08) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #ffffff !important;
+  background: linear-gradient(120deg, #f97316 0%, #fb923c 100%) !important;
+  box-shadow: 0 10px 22px rgba(249, 115, 22, 0.25) !important;
+}
+
+.status-service-card {
+  border-radius: 14px !important;
+  background: var(--sp-card) !important;
+  border: 1px solid rgba(31, 41, 55, 0.08) !important;
+  box-shadow: 0 8px 20px rgba(31, 41, 55, 0.08) !important;
+}
+
+#incidents .status-incident-card {
+  border-radius: 16px !important;
+  background: var(--sp-card) !important;
+  border: 1px solid rgba(31, 41, 55, 0.1) !important;
+  box-shadow: 0 10px 24px rgba(31, 41, 55, 0.12) !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, #f97316 0%, #ea580c 100%) !important;
+  border: none !important;
+  border-radius: 10px !important;
+  box-shadow: 0 10px 22px rgba(249, 115, 22, 0.25) !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--sp-muted) !important;
+}
+
+
+

@@ -1,0 +1,13 @@
+# Example values for GCE Ingress
+ingress:
+  enabled: true
+  className: gce
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: opsknight-ip
+    networking.gke.io/managed-certificates: opsknight-cert
+  hosts:
+    - host: opsknight.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

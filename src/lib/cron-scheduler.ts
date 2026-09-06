@@ -1,0 +1,692 @@
+import { processPendingEscalations } from './escalation';
+import { processPendingJobs, cleanupOldJobs } from './jobs/queue';
+import { logger } from './logger';
+import { getNextNotificationRetryAt, retryFailedNotifications } from './notification-retry';
+import {
+  getNextCentralNotificationAt,
+  processCentralNotificationQueue,
+} from './notification-control-plane';
+import { processAutoUnsnoozeInternal } from '@/lib/unsnooze';
+import { cleanupUserTokens } from '@/lib/user-tokens';
+import { cleanupExpiredRateLimits } from '@/lib/rate-limit';
+import { checkSLABreaches } from './sla-breach-monitor';
+import crypto from 'crypto';
+import { activeIncidentStatuses } from './incident-status';
+
+/**
+ * Production-Grade Cron Scheduler
+ *
+ * FEATURES:
+ * 1. DB-backed state - survives restarts, shared across workers
+ * 2. Distributed locking - only one worker runs at a time
+ * 3. Self-healing - stale locks are reclaimed after timeout
+ * 4. Dynamic scheduling - runs when needed, not on fixed interval
+ * 5. Graceful degradation - continues with defaults on DB errors
+ */
+
+// Generate unique worker ID for this process instance
+const WORKER_ID = `worker-${process.pid}-${crypto.randomUUID().slice(0, 8)}`;
+const LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes - consider lock stale after this
+const MIN_DELAY_MS = 15_000;
+const MAX_DELAY_MS = 2 * 60_000;
+const SINGLETON_ID = 'singleton';
+
+// Local state for timer management (not persisted)
+let timer: NodeJS.Timeout | null = null;
+let activeRun: Promise<void> | null = null;
+let initialized = false;
+let lastJobCleanup = 0;
+
+async function notifyOverdueActionItems(now: Date): Promise<number> {
+  const { default: prisma } = await import('./prisma');
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const [items, admins] = await Promise.all([
+    prisma.actionItem.findMany({
+      where: {
+        status: { in: ['OPEN', 'IN_PROGRESS', 'BLOCKED'] },
+        dueDate: { lt: now },
+      },
+      select: { id: true, title: true, ownerId: true },
+      orderBy: { dueDate: 'asc' },
+      take: 500,
+    }),
+    prisma.user.findMany({
+      where: { role: 'ADMIN', status: 'ACTIVE' },
+      select: { id: true },
+    }),
+  ]);
+  if (items.length === 0) return 0;
+  const existing = await prisma.inAppNotification.findMany({
+    where: {
+      entityType: 'ACTION_ITEM',
+      entityId: { in: items.map(item => item.id) },
+      createdAt: { gte: since },
+    },
+    select: { userId: true, entityId: true },
+  });
+  const existingKeys = new Set(existing.map(row => `${row.userId}:${row.entityId}`));
+  const rows = items.flatMap(item => {
+    const recipients = new Set([...(item.ownerId ? [item.ownerId] : []), ...admins.map(a => a.id)]);
+    return Array.from(recipients)
+      .filter(userId => !existingKeys.has(`${userId}:${item.id}`))
+      .map(userId => ({
+        userId,
+        type: 'ACTION_ITEM' as const,
+        title: 'Overdue postmortem action item',
+        message: item.title,
+        entityType: 'ACTION_ITEM',
+        entityId: item.id,
+      }));
+  });
+  if (rows.length === 0) return 0;
+  return (await prisma.inAppNotification.createMany({ data: rows })).count;
+}
+
+/**
+ * Get or create the singleton scheduler state from database
+ * Uses upsert to avoid race conditions on initial creation
+ */
+async function getState() {
+  const { default: prisma } = await import('./prisma');
+
+  // Use upsert to handle race conditions when creating the singleton
+  const state = await prisma.cronSchedulerState.upsert({
+    where: { id: SINGLETON_ID },
+    update: {}, // No updates needed, just return existing
+    create: { id: SINGLETON_ID },
+  });
+
+  return state;
+}
+
+/**
+ * Attempt to acquire distributed lock
+ * Returns true if lock acquired, false if another worker holds it
+ */
+async function acquireLock(): Promise<boolean> {
+  const { default: prisma } = await import('./prisma');
+
+  try {
+    // PostgreSQL is the sole clock authority for lease expiry. Gating on
+    // nextRunAt also prevents standby replicas from immediately acquiring a
+    // deliberately released lock before the next scheduler cycle is due.
+    const result = await prisma.$executeRaw`
+      UPDATE "cron_scheduler_state"
+      SET "lockedBy" = ${WORKER_ID}, "lockedAt" = NOW()
+      WHERE "id" = ${SINGLETON_ID}
+        AND ("nextRunAt" IS NULL OR "nextRunAt" <= NOW())
+        AND (
+          "lockedBy" IS NULL
+          OR "lockedBy" = ${WORKER_ID}
+          OR "lockedAt" < NOW() - (${LOCK_TIMEOUT_MS} * INTERVAL '1 millisecond')
+        )
+    `;
+
+    if (result > 0) {
+      logger.debug('[Cron] Lock acquired', { workerId: WORKER_ID });
+      return true;
+    }
+
+    // Lock held by another worker
+    const state = await getState();
+    logger.debug('[Cron] Lock held by another worker', {
+      holder: state.lockedBy,
+      since: state.lockedAt?.toISOString(),
+    });
+    return false;
+  } catch (error) {
+    logger.error('[Cron] Failed to acquire lock', { error });
+    return false;
+  }
+}
+
+/**
+ * Release the distributed lock
+ */
+async function releaseLock(nextRunAt: Date): Promise<void> {
+  const { default: prisma } = await import('./prisma');
+
+  try {
+    await prisma.cronSchedulerState.updateMany({
+      where: {
+        id: SINGLETON_ID,
+        lockedBy: WORKER_ID, // Only release if we hold it
+      },
+      data: {
+        lockedBy: null,
+        lockedAt: null,
+        nextRunAt,
+      },
+    });
+    logger.debug('[Cron] Lock released', { workerId: WORKER_ID });
+  } catch (error) {
+    logger.error('[Cron] Failed to release lock', { error });
+  }
+}
+
+/**
+ * Update scheduler state in database
+ */
+async function updateState(data: {
+  lastRunAt?: Date;
+  lastSuccessAt?: Date;
+  lastError?: string | null;
+  nextRunAt?: Date | null;
+  lastRollupDate?: string | null;
+  lastRollupRefreshAt?: Date | null;
+}): Promise<void> {
+  const { default: prisma } = await import('./prisma');
+
+  try {
+    await prisma.cronSchedulerState.update({
+      where: { id: SINGLETON_ID },
+      data,
+    });
+  } catch (error) {
+    logger.error('[Cron] Failed to update state', { error });
+  }
+}
+
+/**
+ * Calculate next scheduled time based on pending work
+ */
+async function getNextScheduledTime(): Promise<Date> {
+  try {
+    const prisma = (await import('./prisma')).default;
+    const [
+      nextIncident,
+      nextJob,
+      nextSlaBreach,
+      nextSnooze,
+      nextNotificationRetry,
+      nextCentralNotification,
+    ] = await Promise.all([
+      prisma.incident.findFirst({
+        where: {
+          escalationStatus: 'ESCALATING',
+          nextEscalationAt: { not: null },
+        },
+        orderBy: { nextEscalationAt: 'asc' },
+        select: { nextEscalationAt: true },
+      }),
+      prisma.backgroundJob.findFirst({
+        where: { status: 'PENDING' },
+        orderBy: { scheduledAt: 'asc' },
+        select: { scheduledAt: true },
+      }),
+      prisma.incident.findFirst({
+        where: {
+          status: { in: activeIncidentStatuses() },
+          service: { serviceNotifyOnSlaBreach: true },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          createdAt: true,
+          acknowledgedAt: true,
+          priority: true,
+          service: {
+            select: {
+              targetAckMinutes: true,
+              targetResolveMinutes: true,
+              serviceNotifyOnSlaBreach: true,
+            },
+          },
+        },
+      }),
+      prisma.incident.findFirst({
+        where: {
+          status: 'SNOOZED',
+          snoozedUntil: { not: null },
+        },
+        orderBy: { snoozedUntil: 'asc' },
+        select: { snoozedUntil: true },
+      }),
+      getNextNotificationRetryAt(),
+      getNextCentralNotificationAt(),
+    ]);
+
+    const times: (number | null)[] = [
+      nextIncident?.nextEscalationAt ? new Date(nextIncident.nextEscalationAt).getTime() : null,
+      nextJob?.scheduledAt ? new Date(nextJob.scheduledAt).getTime() : null,
+      nextSnooze?.snoozedUntil ? new Date(nextSnooze.snoozedUntil).getTime() : null,
+      nextNotificationRetry?.getTime() ?? null,
+      nextCentralNotification?.getTime() ?? null,
+    ];
+
+    // Add SLA breach check time (proportional warning before ack/resolve target)
+    if (nextSlaBreach && nextSlaBreach.service?.serviceNotifyOnSlaBreach) {
+      const createdAt = new Date(nextSlaBreach.createdAt).getTime();
+      const { getPrioritySLATarget } = await import('./sla-priority');
+      const targets = getPrioritySLATarget(nextSlaBreach.priority, nextSlaBreach.service);
+
+      if (!nextSlaBreach.acknowledgedAt) {
+        const targetAckMs = targets.ack * 60 * 1000;
+        const ackWarningMs = Math.min(5 * 60 * 1000, targetAckMs * 0.25);
+        const ackCheckTime = createdAt + targetAckMs - ackWarningMs;
+        times.push(ackCheckTime > Date.now() ? ackCheckTime : null);
+      }
+
+      const targetResolveMs = targets.resolve * 60 * 1000;
+      const resolveWarningMs = Math.min(15 * 60 * 1000, targetResolveMs * 0.25);
+      const resolveCheckTime = createdAt + targetResolveMs - resolveWarningMs;
+      times.push(resolveCheckTime > Date.now() ? resolveCheckTime : null);
+    }
+
+    const validTimes = times.filter((v): v is number => typeof v === 'number');
+
+    if (validTimes.length === 0) {
+      return new Date(Date.now() + MAX_DELAY_MS);
+    }
+
+    // Return the earliest scheduled time, bounded by MIN_DELAY and MAX_DELAY
+    const earliestTime = Math.min(...validTimes);
+    const now = Date.now();
+    const delay = Math.max(MIN_DELAY_MS, Math.min(MAX_DELAY_MS, earliestTime - now));
+
+    return new Date(now + delay);
+  } catch (error) {
+    logger.error('[Cron] Error calculating next scheduled time, using fallback', {
+      component: 'cron-scheduler',
+      error,
+    });
+    return new Date(Date.now() + MAX_DELAY_MS);
+  }
+}
+
+/**
+ * Schedule the next cron run
+ */
+function scheduleNextRun(targetTime: Date, persistToDb: boolean = true) {
+  if (!initialized) return;
+
+  const now = Date.now();
+  const rawDelay = targetTime.getTime() - now;
+  const delay = rawDelay <= 0 ? 0 : Math.min(Math.max(rawDelay, MIN_DELAY_MS), MAX_DELAY_MS);
+  const nextRunAt = new Date(now + delay);
+
+  if (timer) {
+    clearTimeout(timer);
+  }
+
+  timer = setTimeout(() => {
+    activeRun = runOnce().finally(() => {
+      activeRun = null;
+    });
+  }, delay);
+
+  // Update DB with next run time only if leader / active scheduler
+  if (persistToDb) {
+    updateState({ nextRunAt }).catch(() => {});
+  }
+
+  logger.debug('[Cron] Next run scheduled', {
+    nextRunAt: nextRunAt.toISOString(),
+    delayMs: delay,
+    persisted: persistToDb,
+  });
+}
+
+/**
+ * Execute one cron cycle
+ */
+async function runOnce() {
+  const isLeader = await acquireLock();
+  if (!isLeader) {
+    logger.debug('[Cron] Not the leader, scheduling standby check');
+    // Standby replicas must schedule next tick with randomized jitter (15s - 30s) to monitor leader health
+    const standbyDelay = MIN_DELAY_MS + Math.floor(Math.random() * 15000);
+    scheduleNextRun(new Date(Date.now() + standbyDelay), false);
+    return;
+  }
+
+  const startTime = Date.now();
+  await updateState({ lastRunAt: new Date() });
+
+  logger.info('[Cron] Worker tick started', {
+    workerId: WORKER_ID,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Heartbeat to prevent lock expiration during long-running tasks
+  let heartbeat: NodeJS.Timeout | null = setInterval(async () => {
+    try {
+      const { default: prisma } = await import('./prisma');
+      await prisma.$executeRaw`
+        UPDATE "cron_scheduler_state"
+        SET "lockedAt" = NOW()
+        WHERE "id" = ${SINGLETON_ID} AND "lockedBy" = ${WORKER_ID}
+      `;
+    } catch (_) {}
+  }, 30_000);
+
+  try {
+    // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
+    const jobResult = await processPendingJobs(100, 15);
+    const escalationResult = await processPendingEscalations();
+
+    // Reconciliation also runs here so a deployment with no job-worker process
+    // (OPSKNIGHT_PROCESS_ROLE=scheduler) still repairs escalations. Every repair
+    // is idempotent, so both callers running is harmless.
+    const { reconcileEscalations } = await import('./escalation/recovery');
+    const reconciliation = await reconcileEscalations();
+    const { reconcileIntegrationControlPlane } = await import('./integrations/reconciliation');
+    const integrationReconciliation = await reconcileIntegrationControlPlane();
+
+    logger.info('[Cron] Critical tasks processed', {
+      escalations: { processed: escalationResult.processed, total: escalationResult.total },
+      jobs: { processed: jobResult.processed, failed: jobResult.failed, total: jobResult.total },
+      escalationRecovery: reconciliation,
+      integrationRecovery: integrationReconciliation,
+    });
+
+    // Group 2: Secondary tasks (can run in parallel)
+    const { processShiftRotations, processUpcomingShiftReminders } =
+      await import('./oncall-handoff');
+    const [
+      retryResult,
+      centralNotificationResult,
+      autoUnsnoozeResult,
+      breachResult,
+      handoffResult,
+      reminderCount,
+    ] = await Promise.all([
+      // Also on the per-replica critical notification lane. Kept here so a
+      // scheduler-only deployment with no job-worker process still recovers;
+      // both paths claim before delivering, so running both is safe.
+      retryFailedNotifications(),
+      processCentralNotificationQueue(),
+      processAutoUnsnoozeInternal(),
+      checkSLABreaches(),
+      processShiftRotations(new Date()),
+      processUpcomingShiftReminders(new Date(), 60),
+    ]);
+
+    logger.info('[Cron] Secondary tasks processed', {
+      retries: retryResult,
+      centralNotifications: centralNotificationResult,
+      autoUnsnooze: autoUnsnoozeResult,
+      slaBreaches: {
+        activeIncidents: breachResult.activeIncidentCount,
+        warnings: breachResult.warningCount,
+      },
+      shiftHandoff: handoffResult,
+      shiftReminders: reminderCount,
+    });
+
+    // Group 3: Maintenance tasks (low priority, run last)
+    const tokenCleanup = await cleanupUserTokens();
+    const rateLimitCleanup = await cleanupExpiredRateLimits();
+    let jobsCleaned = false;
+    if (Date.now() - lastJobCleanup > 24 * 60 * 60 * 1000) {
+      await cleanupOldJobs(7);
+      lastJobCleanup = Date.now();
+      jobsCleaned = true;
+    }
+    logger.info('[Cron] Maintenance tasks processed', {
+      tokenCleanup,
+      rateLimitCleanup,
+      jobsCleaned,
+    });
+
+    // Daily rollup generation (once per day at/after 1 AM UTC).
+    //
+    // Self-healing: in addition to generating yesterday's rollup, this
+    // also fills any gaps in the historical window (back to
+    // metricsRetentionDays). On a fresh deploy with an empty rollup
+    // table this acts as an initial backfill — the analytics page's
+    // >90-day queries see populated rollup data within one or two cron
+    // cycles instead of waiting weeks for natural daily accumulation.
+    //
+    // Cost cap: at most `MAX_BACKFILL_PER_RUN` days are generated per
+    // tick to bound the lock-holding time. The next tick picks up
+    // where this one left off.
+    const state = await getState();
+    const now = new Date();
+    const todayKey = now.toISOString().split('T')[0];
+    const isNewDay = !state.lastRollupDate || state.lastRollupDate !== todayKey;
+    const isAfter1AM = now.getUTCHours() >= 1;
+
+    if (isNewDay && isAfter1AM) {
+      try {
+        const { generateAllDailyRollups } = await import('./metric-rollup');
+        const { performDataCleanup } = await import('./data-cleanup');
+        const { getRetentionPolicy } = await import('./retention-policy');
+        const { default: prisma } = await import('./prisma');
+        const policy = await getRetentionPolicy();
+
+        // Run data cleanup according to retention policy
+        await performDataCleanup(false).catch(cleanupErr => {
+          logger.warn('[Cron] Daily data cleanup completed with warnings', { error: cleanupErr });
+        });
+        const overdueNotifications = await notifyOverdueActionItems(now);
+
+        // Run automated SLA drift detection and self-healing
+        try {
+          const { runSLADriftDetection } = await import('./sla-drift-detection');
+          await runSLADriftDetection({ windowDaysAgo: 7 });
+        } catch (driftErr) {
+          logger.warn('[Cron] SLA drift detection completed with warnings', { error: driftErr });
+        }
+
+        // Window of days that should have a rollup: yesterday back to
+        // `metricsRetentionDays` ago (computed in pure UTC).
+        const yesterday = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0, 0)
+        );
+
+        const oldestNeeded = new Date(
+          Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate() - policy.metricsRetentionDays,
+            0,
+            0,
+            0,
+            0
+          )
+        );
+
+        // Existing global rollups (serviceId/teamId both null) cover
+        // every per-service/per-team rollup written on the same day,
+        // so the global presence is a sufficient gap probe.
+        const existing = await prisma.incidentMetricRollup.findMany({
+          where: {
+            date: { gte: oldestNeeded, lte: yesterday },
+            granularity: 'daily',
+            serviceId: null,
+            teamId: null,
+          },
+          select: { date: true },
+        });
+        const existingKeys = new Set(existing.map(r => r.date.toISOString().split('T')[0]));
+
+        // Build the list of missing days (newest-first so the most
+        // recent data populates first — analytics queries care most
+        // about the last few days).
+        const missingDays: Date[] = [];
+        const cursor = new Date(yesterday);
+        while (cursor >= oldestNeeded) {
+          const key = cursor.toISOString().split('T')[0];
+          if (!existingKeys.has(key)) {
+            missingDays.push(new Date(cursor));
+          }
+          cursor.setUTCDate(cursor.getUTCDate() - 1);
+        }
+
+        // Bound cost per tick so the distributed lock isn't held for
+        // an unbounded backfill. 30 days/tick × cron cadence (15-120s
+        // between ticks) fills a year-long backfill in a few hours
+        // without starving other cron work.
+        const MAX_BACKFILL_PER_RUN = 30;
+        const toGenerate = missingDays.slice(0, MAX_BACKFILL_PER_RUN);
+
+        // Reconcile historical days affected by late acknowledgements,
+        // resolutions, reopens, or edits. Missing-row backfill alone cannot
+        // repair a rollup whose source incident changed after generation.
+        const refreshSince = state.lastRollupRefreshAt || new Date(now.getTime() - 7 * 86400_000);
+        const dirtyDays = (
+          await prisma.$queryRaw<Array<{ day: Date }>>`
+            SELECT DISTINCT
+              date_trunc('day', "createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS "day"
+            FROM "Incident"
+            WHERE "updatedAt" > ${refreshSince}
+              AND "createdAt" >= ${oldestNeeded}
+              AND "createdAt" <= ${yesterday}
+            ORDER BY "day"
+          `
+        ).map(row => row.day);
+        for (const day of dirtyDays) {
+          await generateAllDailyRollups(day);
+        }
+
+        if (toGenerate.length > 0) {
+          logger.info('[Cron] Backfilling missing daily metric rollups', {
+            missingTotal: missingDays.length,
+            generatingNow: toGenerate.length,
+            newest: toGenerate[0]?.toISOString().split('T')[0],
+            oldest: toGenerate[toGenerate.length - 1]?.toISOString().split('T')[0],
+          });
+          for (const day of toGenerate) {
+            await generateAllDailyRollups(day);
+          }
+        }
+
+        // Only advance lastRollupDate when the backlog is fully
+        // drained. Otherwise the next tick will pick up the rest.
+        if (missingDays.length <= MAX_BACKFILL_PER_RUN) {
+          await updateState({ lastRollupDate: todayKey, lastRollupRefreshAt: now });
+        } else {
+          await updateState({ lastRollupRefreshAt: now });
+        }
+        logger.info('[Cron] Daily rollup maintenance complete', {
+          generated: toGenerate.length,
+          stillMissing: Math.max(0, missingDays.length - toGenerate.length),
+          reconciled: dirtyDays.length,
+          overdueNotifications,
+          rollupsDeleted: 'handled-by-data-cleanup',
+        });
+      } catch (error) {
+        logger.error('[Cron] Failed to generate daily rollups', {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        // Don't update lastRollupDate so it retries next cycle.
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    await updateState({
+      lastSuccessAt: new Date(),
+      lastError: null,
+    });
+
+    logger.info('[Cron] Worker tick completed', {
+      workerId: WORKER_ID,
+      durationMs: duration,
+    });
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    await updateState({ lastError: errorMsg });
+    logger.error('[Cron] Worker tick failed', {
+      workerId: WORKER_ID,
+      error: errorMsg,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+  } finally {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+
+    // Persist the next due time before releasing the lock. This closes the
+    // window where a standby could acquire an unlocked row and run early.
+    let nextTime: Date;
+    try {
+      nextTime = await getNextScheduledTime();
+    } catch (error) {
+      logger.error('[Cron] Failed to schedule next tick, retrying in MAX_DELAY', { error });
+      nextTime = new Date(Date.now() + MAX_DELAY_MS);
+    }
+    await releaseLock(nextTime);
+    scheduleNextRun(nextTime, false);
+  }
+}
+
+/**
+ * Start the cron scheduler
+ */
+export function startCronScheduler() {
+  if (initialized) {
+    logger.debug('[Cron] Already initialized, skipping');
+    return;
+  }
+
+  // Disable during Next.js build phase to avoid DB noise/failures
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    logger.info('[Cron] Skipping scheduler during build (NEXT_PHASE=phase-production-build)');
+    initialized = true;
+    return;
+  }
+
+  const enableInternalCron = process.env.ENABLE_INTERNAL_CRON !== 'false';
+  if (!enableInternalCron) {
+    logger.info('[Cron] Scheduler disabled via ENABLE_INTERNAL_CRON=false');
+    initialized = true;
+    return;
+  }
+
+  initialized = true;
+  logger.info('[Cron] Starting scheduler', { workerId: WORKER_ID });
+
+  // Schedule first run immediately
+  scheduleNextRun(new Date());
+}
+
+/**
+ * Stop the cron scheduler
+ */
+export async function stopCronScheduler() {
+  initialized = false;
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+
+  if (activeRun) await activeRun;
+
+  await releaseLock(new Date());
+
+  logger.info('[Cron] Scheduler stopped', { workerId: WORKER_ID });
+}
+
+/**
+ * Get current scheduler status
+ */
+export async function getCronSchedulerStatus() {
+  try {
+    const state = await getState();
+    return {
+      running: !!timer,
+      workerId: WORKER_ID,
+      lastRunAt: state.lastRunAt,
+      lastSuccessAt: state.lastSuccessAt,
+      lastError: state.lastError,
+      nextRunAt: state.nextRunAt,
+      lockedBy: state.lockedBy,
+      lockedAt: state.lockedAt,
+      schedule: 'dynamic',
+    };
+  } catch (_error) {
+    return {
+      running: !!timer,
+      workerId: WORKER_ID,
+      lastRunAt: null,
+      lastSuccessAt: null,
+      lastError: 'Failed to read state from database',
+      nextRunAt: null,
+      lockedBy: null,
+      lockedAt: null,
+      schedule: 'dynamic',
+    };
+  }
+}

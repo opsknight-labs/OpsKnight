@@ -1,0 +1,80 @@
+name: 🐛 Bug Report
+description: Create a report to help us improve OpsKnight
+title: '[BUG] '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! 
+        Please verify that you are running the latest version of OpsKnight before submitting.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: When I click the "Save" button on the escalation policy page, nothing happens...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment Method
+      description: How are you running OpsKnight?
+      options:
+        - Docker Compose
+        - Helm Charts (Kubernetes)
+        - Kustomize
+        - Bare Metal / Source
+        - OpsKnight Cloud (SaaS)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: OpsKnight Version
+      description: What version of OpsKnight are you running? (e.g. v0.9.0 or main/sha)
+      placeholder: v0.9.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs & Error Output
+      description: Please copy and paste any relevant logs. This is critical for fixing bugs!
+      render: shell
+      placeholder: |
+        [2024-01-01 12:00:00] ERROR: Something went wrong...
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Spec
+      description: 'Any other details? Browser version, OS, Database version, etc.'
+      placeholder: 'Chrome 120, MacOS Sonoma, Postgres 16'
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/opsknight-labs/opsknight/blob/main/CODE_OF_CONDUCT.md)
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

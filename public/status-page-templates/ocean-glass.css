@@ -1,0 +1,82 @@
+/*
+  Template: Ocean Glass
+  Paste into Settings > Status Page > Custom CSS
+*/
+
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, var(--sp-blue, var(--sp-ocean, #2563eb))));
+  --status-primary-hover: var(--sp-accent-2, var(--sp-primary, var(--sp-blue, #1d4ed8))));\n  --status-card-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+  --sp-ink: #0b1f2a;
+  --sp-muted: #4b6a78;
+  --sp-ocean: #0ea5e9;
+  --sp-ocean-dark: #0369a1;
+}
+
+.status-page-container {
+  background:
+    radial-gradient(circle at 10% 15%, rgba(14, 165, 233, 0.18) 0%, rgba(14, 165, 233, 0) 40%),
+    radial-gradient(circle at 90% 20%, rgba(56, 189, 248, 0.18) 0%, rgba(56, 189, 248, 0) 45%),
+    linear-gradient(135deg, #ecfeff 0%, #f0f9ff 55%, #e0f2fe 100%) !important;
+  color: var(--sp-ink) !important;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
+}
+
+.status-page-header {
+  background: linear-gradient(120deg, #ffffff 0%, #e0f2fe 100%) !important;
+  border-bottom: 1px solid rgba(3, 105, 161, 0.12) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #ffffff !important;
+  background: linear-gradient(120deg, #0ea5e9 0%, #0369a1 100%) !important;
+  box-shadow: 0 14px 28px rgba(3, 105, 161, 0.25) !important;
+}
+
+.status-service-card {
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(3, 105, 161, 0.12) !important;
+  box-shadow: 0 12px 28px rgba(3, 105, 161, 0.12) !important;
+}
+
+#incidents .status-incident-card {
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(3, 105, 161, 0.14) !important;
+  box-shadow: 0 16px 36px rgba(3, 105, 161, 0.16) !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, #0ea5e9 0%, #22d3ee 100%) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 22px rgba(14, 165, 233, 0.25) !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--sp-muted) !important;
+}
+
+
+

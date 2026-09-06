@@ -1,0 +1,170 @@
+/* ========================================
+   Dropdown & User Menu Component Styles
+   Extracted from globals.css lines 4350-4480
+   ======================================== */
+
+.user-menu-dropdown {
+   position: absolute;
+   right: 0;
+   top: calc(100% + 0.5rem);
+   min-width: 280px;
+   max-width: 320px;
+   background: #ffffff;
+   border: 1px solid var(--border);
+   border-radius: 12px;
+   box-shadow:
+      0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+   z-index: var(--z-user-menu);
+   overflow: hidden;
+   animation: dropdownFadeIn 0.2s ease-out;
+   pointer-events: auto;
+   padding: 0.5rem;
+}
+
+@keyframes dropdownFadeIn {
+   from {
+      opacity: 0;
+      transform: translateY(-4px);
+   }
+
+   to {
+      opacity: 1;
+      transform: translateY(0);
+   }
+}
+
+.user-menu-header {
+   padding: 1rem;
+   background: var(--surface-hover);
+   border-radius: 8px;
+   display: flex;
+   align-items: center;
+   gap: 1rem;
+   margin-bottom: 0.5rem;
+   flex-direction: row;
+   text-align: left;
+   border: none;
+}
+
+.user-menu-avatar-large {
+   width: 48px;
+   height: 48px;
+   border-radius: 50%;
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   font-weight: 700;
+   font-size: 1.125rem;
+   color: #ffffff;
+   background: #0f172a;
+   border: 2px solid #ffffff;
+   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+   flex-shrink: 0;
+}
+
+.user-menu-details {
+   flex: 1;
+   min-width: 0;
+   display: flex;
+   flex-direction: column;
+   align-items: flex-start;
+   gap: 0;
+}
+
+.user-menu-name {
+   font-size: 0.9375rem;
+   font-weight: 700;
+   color: var(--text-primary);
+   letter-spacing: normal;
+   line-height: 1.3;
+}
+
+.user-menu-email {
+   font-size: 0.8125rem;
+   color: var(--text-muted);
+   background: transparent;
+   padding: 0;
+   border-radius: 0;
+   max-width: 100%;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+
+.user-menu-divider {
+   display: block;
+   height: 1px;
+   background: var(--border);
+   margin: 0.5rem 0.5rem;
+}
+
+.user-menu-section {
+   padding: 0;
+}
+
+.user-menu-item {
+   display: flex;
+   align-items: center;
+   gap: 0.75rem;
+   padding: 0.625rem 0.75rem;
+   border-radius: 6px;
+   color: var(--text-primary);
+   font-size: 0.875rem;
+   font-weight: 500;
+   text-decoration: none;
+   transition: all 0.15s ease;
+   cursor: pointer;
+   border: none;
+   background: transparent;
+   width: 100%;
+   text-align: left;
+}
+
+.user-menu-item:hover {
+   background: var(--surface-hover);
+   color: var(--text-primary);
+}
+
+/* ========================================
+   Dropdown Dark Mode Protection
+   Prevents browser dark mode from affecting dropdown colors
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+   .user-menu-dropdown,
+   [class*="dropdown"],
+   [class*="popover"],
+   [class*="menu"],
+   [role="menu"],
+   [role="listbox"] {
+      background-color: #ffffff !important;
+      color: var(--text-primary) !important;
+      filter: none !important;
+      -webkit-filter: none !important;
+   }
+
+   .user-menu-header {
+      background: var(--surface-hover) !important;
+   }
+
+   .user-menu-name {
+      color: var(--text-primary) !important;
+   }
+
+   .user-menu-email {
+      color: var(--text-muted) !important;
+   }
+
+   .user-menu-item {
+      color: var(--text-primary) !important;
+   }
+
+   .user-menu-item:hover {
+      background: var(--surface-hover) !important;
+   }
+
+   .user-menu-divider {
+      background: var(--border) !important;
+   }
+}

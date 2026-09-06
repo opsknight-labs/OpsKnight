@@ -1,0 +1,41 @@
+# Checkov Configuration
+# Skip certain checks that are either false positives or accepted risks for this project
+
+skip-check:
+  - CKV_SECRET_2: 'False positive in generated report files'
+  - CKV_SECRET_18: 'False positive in generated report files'
+  # Terraform - EBS encryption (using default encryption, not CMK)
+  - CKV_AWS_189
+
+  # Kubernetes - Postgres runs as specific UID required by the image
+  - CKV_K8S_40
+
+  # Kubernetes - Service account tokens needed for internal communication
+  - CKV_K8S_38
+
+  # Kubernetes - Secrets as env vars is acceptable for database connection
+  - CKV_K8S_35
+
+  # Kubernetes - Image digest pinning not practical for postgres:16 tag
+  - CKV_K8S_43
+
+  # Kubernetes - NGINX annotation snippets used for valid configuration
+  - CKV_K8S_153
+
+  # Secrets - Base64 encoded secrets are intentional (k8s secrets format)
+  - CKV_SECRET_6
+
+# Directories to scan
+directory:
+  - .
+
+# Frameworks to scan
+framework:
+  - terraform
+  - kubernetes
+  - dockerfile
+  - secrets
+
+exception:
+  - eslint_output.json
+  - reports/security.sarif

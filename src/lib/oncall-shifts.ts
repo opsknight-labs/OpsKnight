@@ -1,0 +1,317 @@
+import prisma from '@/lib/prisma';
+import { buildScheduleBlocks, getFinalScheduleBlocks, type LayerRestrictions } from './oncall';
+
+export interface DynamicOnCallShift {
+  id: string;
+  userId: string;
+  user: {
+    id: string;
+    name: string | null;
+    email?: string | null;
+    avatarUrl?: string | null;
+    gender?: string | null;
+    timeZone?: string | null;
+    emailNotificationsEnabled?: boolean;
+  };
+  scheduleId: string;
+  schedule: {
+    id: string;
+    name: string;
+  };
+  start: Date;
+  end: Date;
+}
+
+/**
+ * Resolves all active on-call shifts across all schedules for a given point in time.
+ * Replaces legacy queries to the empty `OnCallShift` table with dynamic schedule rotation math.
+ */
+export async function getActiveOnCallShifts(
+  atTime: Date = new Date(),
+  scheduleId?: string
+): Promise<DynamicOnCallShift[]> {
+  if (!prisma?.onCallSchedule?.findMany) {
+    return [];
+  }
+  const windowStart = new Date(atTime.getTime() - 24 * 60 * 60 * 1000);
+  const windowEnd = new Date(atTime.getTime() + 48 * 60 * 60 * 1000);
+
+  const schedules = await prisma.onCallSchedule.findMany({
+    where: scheduleId ? { id: scheduleId } : undefined,
+    include: {
+      layers: {
+        include: {
+          users: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  avatarUrl: true,
+                  gender: true,
+                  status: true,
+                  timeZone: true,
+                  emailNotificationsEnabled: true,
+                },
+              },
+            },
+            orderBy: { position: 'asc' },
+          },
+        },
+        orderBy: { priority: 'desc' },
+      },
+      overrides: {
+        where: {
+          start: { lte: windowEnd },
+          end: { gte: windowStart },
+          user: { status: 'ACTIVE' },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+              gender: true,
+              timeZone: true,
+              emailNotificationsEnabled: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const activeShifts: DynamicOnCallShift[] = [];
+
+  for (const schedule of schedules) {
+    if (!schedule.layers.length && !schedule.overrides.length) continue;
+
+    const blocks = buildScheduleBlocks(
+      schedule.layers.map(layer => ({
+        id: layer.id,
+        name: layer.name,
+        start: layer.start,
+        end: layer.end,
+        rotationLengthHours: layer.rotationLengthHours,
+        shiftLengthHours: (layer as { shiftLengthHours?: number | null }).shiftLengthHours,
+        restrictions: layer.restrictions as LayerRestrictions | null | undefined,
+        priority: (layer as { priority?: number }).priority,
+        users: layer.users
+          .filter(lu => lu.user.status === 'ACTIVE')
+          .map(lu => ({
+            userId: lu.userId,
+            user: {
+              name: lu.user?.name ?? 'Unknown User',
+              email: lu.user?.email ?? null,
+              avatarUrl: lu.user?.avatarUrl ?? null,
+              gender: lu.user?.gender ?? null,
+              timeZone: lu.user?.timeZone ?? null,
+              emailNotificationsEnabled: lu.user?.emailNotificationsEnabled ?? false,
+            },
+            position: lu.position,
+          })),
+      })),
+      schedule.overrides.map(override => ({
+        id: override.id,
+        userId: override.userId,
+        user: {
+          name: override.user?.name ?? 'Unknown User',
+          email: override.user?.email ?? null,
+          avatarUrl: override.user?.avatarUrl ?? null,
+          gender: override.user?.gender ?? null,
+          timeZone: override.user?.timeZone ?? null,
+          emailNotificationsEnabled: override.user?.emailNotificationsEnabled ?? false,
+        },
+        start: override.start,
+        end: override.end,
+        replacesUserId: override.replacesUserId,
+      })),
+      windowStart,
+      windowEnd,
+      schedule.timeZone || 'UTC'
+    );
+
+    const layerPriority = new Map<string, number>(
+      schedule.layers.map(layer => [layer.id, (layer as { priority?: number }).priority ?? 0])
+    );
+
+    const finalBlocks = getFinalScheduleBlocks(blocks, layerPriority);
+
+    const activeBlocks = finalBlocks.filter(
+      b => b.start.getTime() <= atTime.getTime() && b.end.getTime() > atTime.getTime()
+    );
+
+    for (const block of activeBlocks) {
+      activeShifts.push({
+        id: `${schedule.id}-${block.userId}-${block.start.getTime()}`,
+        userId: block.userId,
+        user: {
+          id: block.userId,
+          name: block.userName,
+          email: block.userEmail,
+          avatarUrl: block.userAvatar,
+          gender: block.userGender,
+          timeZone: block.userTimeZone,
+          emailNotificationsEnabled: block.userEmailNotificationsEnabled,
+        },
+        scheduleId: schedule.id,
+        schedule: {
+          id: schedule.id,
+          name: schedule.name,
+        },
+        start: block.start,
+        end: block.end,
+      });
+    }
+  }
+
+  return activeShifts;
+}
+
+/**
+ * Resolves all shifts across all schedules within a time window for coverage & on-call hours calculations.
+ */
+export async function getWindowOnCallShifts(
+  windowStart: Date,
+  windowEnd: Date
+): Promise<DynamicOnCallShift[]> {
+  if (!prisma?.onCallSchedule?.findMany) {
+    return [];
+  }
+  const schedules = await prisma.onCallSchedule.findMany({
+    include: {
+      layers: {
+        include: {
+          users: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  avatarUrl: true,
+                  gender: true,
+                  status: true,
+                  timeZone: true,
+                  emailNotificationsEnabled: true,
+                },
+              },
+            },
+            orderBy: { position: 'asc' },
+          },
+        },
+        orderBy: { priority: 'desc' },
+      },
+      overrides: {
+        where: {
+          start: { lte: windowEnd },
+          end: { gte: windowStart },
+          user: { status: 'ACTIVE' },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+              gender: true,
+              timeZone: true,
+              emailNotificationsEnabled: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const shifts: DynamicOnCallShift[] = [];
+
+  for (const schedule of schedules) {
+    if (!schedule.layers.length && !schedule.overrides.length) continue;
+
+    const blocks = buildScheduleBlocks(
+      schedule.layers.map(layer => ({
+        id: layer.id,
+        name: layer.name,
+        start: layer.start,
+        end: layer.end,
+        rotationLengthHours: layer.rotationLengthHours,
+        shiftLengthHours: (layer as { shiftLengthHours?: number | null }).shiftLengthHours,
+        restrictions: layer.restrictions as LayerRestrictions | null | undefined,
+        priority: (layer as { priority?: number }).priority,
+        users: layer.users
+          .filter(lu => lu.user.status === 'ACTIVE')
+          .map(lu => ({
+            userId: lu.userId,
+            user: {
+              name: lu.user?.name ?? 'Unknown User',
+              email: lu.user?.email ?? null,
+              avatarUrl: lu.user?.avatarUrl ?? null,
+              gender: lu.user?.gender ?? null,
+              timeZone: lu.user?.timeZone ?? null,
+              emailNotificationsEnabled: lu.user?.emailNotificationsEnabled ?? false,
+            },
+            position: lu.position,
+          })),
+      })),
+      schedule.overrides.map(override => ({
+        id: override.id,
+        userId: override.userId,
+        user: {
+          name: override.user?.name ?? 'Unknown User',
+          email: override.user?.email ?? null,
+          avatarUrl: override.user?.avatarUrl ?? null,
+          gender: override.user?.gender ?? null,
+          timeZone: override.user?.timeZone ?? null,
+          emailNotificationsEnabled: override.user?.emailNotificationsEnabled ?? false,
+        },
+        start: override.start,
+        end: override.end,
+        replacesUserId: override.replacesUserId,
+      })),
+      windowStart,
+      windowEnd,
+      schedule.timeZone || 'UTC'
+    );
+
+    const layerPriority = new Map<string, number>(
+      schedule.layers.map(layer => [layer.id, (layer as { priority?: number }).priority ?? 0])
+    );
+
+    const finalBlocks = getFinalScheduleBlocks(blocks, layerPriority);
+
+    // Filter to blocks overlapping the window
+    const overlappingBlocks = finalBlocks.filter(
+      b => b.start.getTime() < windowEnd.getTime() && b.end.getTime() > windowStart.getTime()
+    );
+
+    for (const block of overlappingBlocks) {
+      shifts.push({
+        id: `${schedule.id}-${block.userId}-${block.start.getTime()}`,
+        userId: block.userId,
+        user: {
+          id: block.userId,
+          name: block.userName,
+          email: block.userEmail,
+          avatarUrl: block.userAvatar,
+          gender: block.userGender,
+          timeZone: block.userTimeZone,
+          emailNotificationsEnabled: block.userEmailNotificationsEnabled,
+        },
+        scheduleId: schedule.id,
+        schedule: {
+          id: schedule.id,
+          name: schedule.name,
+        },
+        start: block.start,
+        end: block.end,
+      });
+    }
+  }
+
+  return shifts;
+}

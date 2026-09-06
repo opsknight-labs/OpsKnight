@@ -1,0 +1,64 @@
+/* ========================================
+   Mobile Page Styles & Responsive Overrides
+   Extracted from globals.css
+   ======================================== */
+
+/* Mobile menu button visibility */
+@media (max-width: 768px) {
+    .mobile-menu-button {
+        display: flex !important;
+    }
+
+    .app-shell {
+        padding-left: 0;
+    }
+
+    .content-shell {
+        width: 100%;
+    }
+}
+
+@media (min-width: 769px) {
+    .mobile-menu-button {
+        display: none !important;
+    }
+
+    .mobile-sidebar-backdrop {
+        display: none !important;
+    }
+}
+
+/* Dashboard Mobile Responsive */
+@media (max-width: 1024px) {
+    .dashboard-sidebar {
+        order: -1;
+    }
+
+    .command-center-hero {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .command-center-metrics {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .command-center-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .command-center-actions {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .dashboard-main-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .dashboard-sidebar {
+        order: -1;
+    }
+}

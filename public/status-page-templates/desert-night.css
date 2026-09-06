@@ -1,0 +1,53 @@
+/*
+  Template: Desert Night
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, var(--sp-blue, var(--sp-ocean, #2563eb))));
+  --status-primary-hover: var(--sp-accent-2, var(--sp-primary, var(--sp-blue, #1d4ed8))));\n  --status-card-shadow: 0 8px 18px rgba(15, 23, 42, 0.3); --sp-ink: #f8fafc; --sp-muted: #e2e8f0; --sp-desert: #f59e0b; --sp-night: #1e293b; --sp-panel-bg: rgba(30, 41, 59, 0.9); --sp-panel-border: rgba(245, 158, 11, 0.24); --sp-panel-muted-bg: rgba(15, 23, 42, 0.82); --sp-panel-muted-border: rgba(245, 158, 11, 0.18); --status-text: #f8fafc; --status-text-strong: #fef3c7; --status-text-muted: #e2e8f0; --status-text-subtle: #cbd5e1; --status-panel-bg: rgba(30, 41, 59, 0.85); --status-panel-border: rgba(245, 158, 11, 0.22); --status-panel-muted-bg: rgba(15, 23, 42, 0.7); --status-panel-muted-border: rgba(245, 158, 11, 0.16); }
+.status-page-container {
+  --status-text: #f8fafc;
+  --status-text-strong: #fef3c7;
+  --status-text-muted: #e2e8f0;
+  --status-text-subtle: #cbd5e1;
+  --status-panel-bg: rgba(30, 41, 59, 0.85);
+  --status-panel-border: rgba(245, 158, 11, 0.22);
+  --status-panel-muted-bg: rgba(15, 23, 42, 0.7);
+  --status-panel-muted-border: rgba(245, 158, 11, 0.16);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(245, 158, 11, 0.18) 0%, rgba(245, 158, 11, 0) 45%),
+    linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+  color: var(--sp-ink) !important;
+}
+.status-page-header { background: linear-gradient(120deg, #0f172a 0%, #1e293b 100%) !important; border-bottom: 1px solid rgba(245, 158, 11, 0.2) !important; }
+.status-page-header h1 { color: #f8fafc !important; -webkit-text-fill-color: #f8fafc !important; }
+.status-page-header a { border-color: transparent !important; color: #0f172a !important; background: linear-gradient(120deg, #f59e0b 0%, #f97316 100%) !important; box-shadow: 0 12px 22px rgba(245, 158, 11, 0.35) !important; }
+.status-service-card { background: rgba(30, 41, 59, 0.9) !important; border-radius: 18px !important; border: 1px solid rgba(245, 158, 11, 0.25) !important; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.5) !important; }
+#incidents .status-incident-card { background: rgba(30, 41, 59, 0.92) !important; border-radius: 20px !important; border: 1px solid rgba(245, 158, 11, 0.3) !important; box-shadow: 0 16px 36px rgba(245, 158, 11, 0.25) !important; }
+.status-page-container form button[type="submit"] { background: linear-gradient(120deg, #f59e0b 0%, #d97706 100%) !important; border: none !important; border-radius: 12px !important; }
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--status-text, #f8fafc) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: var(--status-text, #f8fafc) !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--status-text-muted, #e2e8f0) !important;
+}
+
+
+

@@ -1,0 +1,73 @@
+/*
+  Template: Harbor Navy
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, #1d4ed8));
+  --status-primary-hover: var(--sp-accent-2, #1e3a8a);
+  --status-card-shadow: 0 10px 24px rgba(29, 78, 216, 0.18);
+  --sp-ink: #0f172a;
+  --sp-muted: #475569;
+  --sp-primary: #1d4ed8;
+  --sp-soft: #e2e8f0;
+}
+
+.status-page-container {
+  background: linear-gradient(180deg, #f3f6fb 0%, #dbe3f3 100%) !important;
+  color: var(--sp-ink) !important;
+}
+
+.status-page-header {
+  background: linear-gradient(120deg, #f8fbff 0%, #dbe3f3 100%) !important;
+  border-bottom: 1px solid rgba(29, 78, 216, 0.16) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #ffffff !important;
+  background: linear-gradient(120deg, #1d4ed8 0%, #0f172a 100%) !important;
+  box-shadow: 0 12px 22px rgba(29, 78, 216, 0.24) !important;
+}
+
+.status-service-card {
+  background: #f9fbff !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(29, 78, 216, 0.12) !important;
+  box-shadow: 0 12px 26px rgba(29, 78, 216, 0.12) !important;
+}
+
+#incidents .status-incident-card {
+  background: #f9fbff !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(29, 78, 216, 0.16) !important;
+  box-shadow: 0 12px 28px rgba(29, 78, 216, 0.16) !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, #1d4ed8 0%, #0f172a 100%) !important;
+  border: none !important;
+  border-radius: 10px !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--sp-muted) !important;
+}

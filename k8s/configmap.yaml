@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opsknight-config
+  namespace: opsknight
+data:
+  POSTGRES_DB: 'opsknight_db'
+  POSTGRES_HOST: 'opsknight-postgres-service'
+  POSTGRES_PORT: '5432'
+
+  NODE_ENV: 'production'
+  NEXTAUTH_URL: 'http://localhost:3000' # Update this to your public HTTPS origin
+  NEXT_PUBLIC_APP_URL: 'http://localhost:3000' # Normally the same as NEXTAUTH_URL
+  PORT: '3000'
+  HOSTNAME: '0.0.0.0'
+  NEXT_TELEMETRY_DISABLED: '1'
+  NOTIFICATION_CONTROL_PLANE_PERSONAL: 'false'

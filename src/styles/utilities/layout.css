@@ -1,0 +1,148 @@
+/* ========================================
+   Layout Utility Classes
+   Extracted from globals.css
+   ======================================== */
+
+/* Flex utilities */
+.flex {
+   display: flex;
+}
+
+.flex-col {
+   flex-direction: column;
+}
+
+.flex-row {
+   flex-direction: row;
+}
+
+.flex-wrap {
+   flex-wrap: wrap;
+}
+
+.flex-1 {
+   flex: 1;
+}
+
+.flex-shrink-0 {
+   flex-shrink: 0;
+}
+
+/* Alignment */
+.items-center {
+   align-items: center;
+}
+
+.items-start {
+   align-items: flex-start;
+}
+
+.items-end {
+   align-items: flex-end;
+}
+
+.justify-center {
+   justify-content: center;
+}
+
+.justify-between {
+   justify-content: space-between;
+}
+
+.justify-end {
+   justify-content: flex-end;
+}
+
+.justify-start {
+   justify-content: flex-start;
+}
+
+/* Grid utilities */
+.grid {
+   display: grid;
+}
+
+.grid-cols-2 {
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-cols-3 {
+   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-cols-4 {
+   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Gap utilities */
+.gap-1 {
+   gap: var(--spacing-1);
+}
+
+.gap-2 {
+   gap: var(--spacing-2);
+}
+
+.gap-3 {
+   gap: var(--spacing-3);
+}
+
+.gap-4 {
+   gap: var(--spacing-4);
+}
+
+.gap-5 {
+   gap: var(--spacing-5);
+}
+
+.gap-6 {
+   gap: var(--spacing-6);
+}
+
+.gap-8 {
+   gap: var(--spacing-8);
+}
+
+/* Width utilities */
+.w-full {
+   width: 100%;
+}
+
+.w-auto {
+   width: auto;
+}
+
+.min-w-0 {
+   min-width: 0;
+}
+
+/* Height utilities */
+.h-full {
+   height: 100%;
+}
+
+/* Position utilities */
+.relative {
+   position: relative;
+}
+
+.absolute {
+   position: absolute;
+}
+
+.fixed {
+   position: fixed;
+}
+
+.sticky {
+   position: sticky;
+}
+
+/* Overflow */
+.overflow-hidden {
+   overflow: hidden;
+}
+
+.overflow-auto {
+   overflow: auto;
+}

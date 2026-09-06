@@ -1,0 +1,52 @@
+/* ========================================
+   Main Layout Container Styles
+   Extracted from globals.css
+   ======================================== */
+
+/* Main content containers */
+.main-content {
+   flex: 1;
+   display: flex;
+   flex-direction: column;
+   min-height: 0;
+}
+
+.users-main-grid {
+   display: grid;
+   grid-template-columns: minmax(0, 2.3fr) minmax(260px, 320px);
+   gap: 1.3rem;
+}
+
+.users-left-column {
+   display: flex;
+   flex-direction: column;
+   gap: 1.5rem;
+}
+
+.users-right-column {
+   display: flex;
+   flex-direction: column;
+   gap: 0.9rem;
+}
+
+/* Hero sections */
+.hero-stats {
+   display: grid;
+   grid-template-columns: repeat(4, minmax(0, 1fr));
+   gap: 1rem;
+   width: 100%;
+}
+
+/* Two column layouts */
+.two-column-layout {
+   display: grid;
+   grid-template-columns: 240px 1fr;
+   gap: 1rem;
+}
+
+/* Dashboard grids */
+.dashboard-main-grid {
+   display: grid;
+   grid-template-columns: 1fr minmax(280px, 340px);
+   gap: 1.25rem;
+}

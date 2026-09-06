@@ -1,0 +1,95 @@
+/* ========================================
+   Table Component Styles
+   Extracted from globals.css
+   ======================================== */
+
+.table-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.table-panel {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    border-radius: var(--radius-lg);
+}
+
+.table-wrapper-compact {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.table-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--text-muted);
+}
+
+/* Table header typography */
+table th {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+/* Table cell typography */
+table td {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.45;
+    letter-spacing: -0.003em;
+}
+
+.table-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* ========================================
+   Table Dark Mode Protection
+   Prevents browser dark mode from affecting table colors
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+    .table-panel,
+    table,
+    .table-wrapper {
+        background-color: var(--bg-secondary) !important;
+        color: var(--text-primary) !important;
+        filter: none !important;
+        -webkit-filter: none !important;
+    }
+
+    thead,
+    th {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-primary) !important;
+    }
+
+    tbody tr {
+        background-color: #ffffff !important;
+    }
+
+    tbody tr:hover {
+        background-color: var(--bg-primary) !important;
+    }
+
+    td {
+        color: var(--text-primary) !important;
+        border-color: var(--border) !important;
+    }
+
+    .table-label {
+        color: var(--text-muted) !important;
+    }
+}

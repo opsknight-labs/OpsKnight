@@ -1,0 +1,127 @@
+/* ========================================
+   Modal & Dialog Component Styles
+   Extracted from globals.css
+   ======================================== */
+
+/* Modal backdrop overlay */
+.modal-backdrop {
+   position: fixed;
+   inset: 0;
+   background: var(--bg-overlay);
+   z-index: var(--z-modal-backdrop);
+   animation: fadeIn 0.2s ease-out;
+}
+
+/* Modal container */
+.modal-container {
+   position: fixed;
+   inset: 0;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   padding: 1rem;
+   z-index: var(--z-modal);
+}
+
+/* Modal content */
+.modal-content {
+   background: var(--bg-secondary);
+   border-radius: var(--radius-lg);
+   border: 1px solid var(--border);
+   box-shadow: var(--shadow-xl);
+   max-width: 480px;
+   width: 100%;
+   animation: slideUp 0.2s ease-out;
+}
+
+/* Modal header */
+.modal-header {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   padding: 1rem 1.25rem;
+   border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+   font-size: 1.125rem;
+   font-weight: 700;
+   color: var(--text-primary);
+   margin: 0;
+}
+
+/* Modal body */
+.modal-body {
+   padding: 1.25rem;
+}
+
+/* Modal footer */
+.modal-footer {
+   display: flex;
+   justify-content: flex-end;
+   gap: 0.75rem;
+   padding: 1rem 1.25rem;
+   border-top: 1px solid var(--border);
+}
+
+/* Confirm dialog */
+.confirm-dialog {
+   text-align: center;
+}
+
+.confirm-dialog .modal-body {
+   padding: 1.5rem;
+}
+
+.confirm-dialog-icon {
+   width: 48px;
+   height: 48px;
+   margin: 0 auto 1rem;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   border-radius: 50%;
+   background: rgba(239, 68, 68, 0.1);
+   color: var(--color-error);
+}
+
+.confirm-dialog-message {
+   font-size: 0.9375rem;
+   color: var(--text-secondary);
+   line-height: 1.5;
+}
+
+/* ========================================
+   Modal Dark Mode Protection
+   Prevents browser dark mode from affecting modal colors
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+   .modal-content,
+   [role="dialog"],
+   [role="alertdialog"],
+   [class*="dialog"] {
+      background-color: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+      filter: none !important;
+      -webkit-filter: none !important;
+   }
+
+   .modal-title {
+      color: var(--text-primary) !important;
+   }
+
+   .modal-header,
+   .modal-footer {
+      border-color: var(--border) !important;
+   }
+
+   .confirm-dialog-message {
+      color: var(--text-secondary) !important;
+   }
+
+   .confirm-dialog-icon {
+      background: rgba(239, 68, 68, 0.1) !important;
+      color: var(--color-error) !important;
+   }
+}

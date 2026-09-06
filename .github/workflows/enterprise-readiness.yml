@@ -1,0 +1,106 @@
+name: Enterprise readiness drills
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Staging URL to load test (include https://)
+        required: true
+        type: string
+      virtual_users:
+        description: Concurrent virtual users
+        required: true
+        default: '20'
+        type: string
+      duration:
+        description: k6 duration (for example 2m)
+        required: true
+        default: '2m'
+        type: string
+      run_backup_restore:
+        description: Run an isolated database backup/restore drill
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  load-test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate target
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: |
+          case "$BASE_URL" in
+            https://*) ;;
+            *) echo 'Only HTTPS staging targets are allowed'; exit 2 ;;
+          esac
+      - name: Run k6 readiness load test
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          VUS: ${{ inputs.virtual_users }}
+          DURATION: ${{ inputs.duration }}
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -e BASE_URL -e VUS -e DURATION \
+            -v "$PWD:/workspace" \
+            grafana/k6:0.54.0 run --summary-export=/workspace/reports/k6-summary.json \
+            /workspace/scripts/load/opsknight-smoke.js
+      - name: Upload load-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: enterprise-load-test-${{ github.sha }}
+          path: reports/k6-summary.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  backup-restore-drill:
+    if: ${{ inputs.run_backup_restore }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: opsknight
+          POSTGRES_PASSWORD: opsknight
+          POSTGRES_DB: opsknight
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opsknight -d opsknight"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://opsknight:opsknight@127.0.0.1:5432/opsknight
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Build representative database
+        run: npx prisma migrate deploy
+      - name: Create backup
+        run: |
+          mkdir -p reports
+          docker run --rm --network host -v "$PWD/reports:/reports" postgres:15-alpine \
+            pg_dump --format=custom --file=/reports/opsknight-drill.dump "$DATABASE_URL"
+      - name: Restore and verify backup
+        run: scripts/verify-backup-restore.sh "$PWD/reports/opsknight-drill.dump" | tee reports/restore-drill.txt
+      - name: Upload restore evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: enterprise-restore-drill-${{ github.sha }}
+          path: reports/
+          retention-days: 90

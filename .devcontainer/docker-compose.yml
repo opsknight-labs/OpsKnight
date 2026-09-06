@@ -1,0 +1,18 @@
+services:
+  # This is the "Dev Container" where VS Code runs.
+  # It is separate from the application container ("opsknight-app") so you get a full tooling environment.
+  dev:
+    image: mcr.microsoft.com/devcontainers/typescript-node:1-18-bullseye
+    volumes:
+      - ..:/workspaces/OpsKnight:cached
+
+    # Keep the container running
+    command: sleep infinity
+
+    # Connect to the same network as the app/db so we can access them
+    networks:
+      - opsknight-network
+
+  # Override the app container to ensure it doesn't conflict or restart unnecessarily in dev
+  opsknight-app:
+    restart: unless-stopped

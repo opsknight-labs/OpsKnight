@@ -1,0 +1,19 @@
+apiVersion: v2
+name: opsknight
+description: Professional Open-Source Incident Management Platform for SREs and DevOps teams
+type: application
+version: 1.4.0
+appVersion: '1.4.0'
+home: https://github.com/opsknight-labs/OpsKnight
+sources:
+  - https://github.com/opsknight-labs/OpsKnight
+keywords:
+  - incident-management
+  - on-call
+  - sre
+  - devops
+  - monitoring
+maintainers:
+  - name: Dushyant Rahangdale
+    url: https://github.com/dushyant-rahangdale
+icon: https://raw.githubusercontent.com/opsknight-labs/OpsKnight/main/public/OpsKnight.png

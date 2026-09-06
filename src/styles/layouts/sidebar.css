@@ -1,0 +1,619 @@
+/* ========================================
+   Sidebar Layout Styles
+   Extracted from globals.css lines 2950-3288
+   ======================================== */
+.sidebar {
+  width: var(--sidebar-width);
+  /* Dark executive command surface matching Command Center */
+  background: #09090b;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  /* Fixed position below top header on desktop */
+  position: fixed;
+  top: var(--header-height, 56px);
+  left: 0;
+  height: calc(100vh - var(--header-height, 56px));
+  height: calc(100dvh - var(--header-height, 56px));
+  color: #f8fafc;
+  box-shadow: none;
+  z-index: 30;
+  transition: width var(--transition-base), transform var(--transition-slow);
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+[data-theme='dark'] .sidebar,
+.dark .sidebar {
+  background: #09090b;
+  border-right-color: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    top: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 50 !important;
+    width: min(288px, 85vw) !important;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    background: #09090b !important;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .sidebar.sidebar-mobile-open {
+    transform: translateX(0) !important;
+  }
+}
+
+/* Sidebar resilience (zoom/overflow/accessibility) */
+.sidebar,
+.sidebar * {
+  box-sizing: border-box;
+}
+
+.sidebar-header {
+  position: relative;
+}
+
+.sidebar.sidebar-collapsed {
+  width: var(--sidebar-width-collapsed);
+}
+
+/* Legacy toggle styles - kept for reference */
+.sidebar-collapse-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+
+  /* Visible background */
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 8px 12px;
+  border-radius: 8px;
+
+  /* Typography for << >> - larger and brighter */
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.85);
+
+  /* Subtle glow */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.sidebar-collapse-toggle:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 0 15px rgba(255, 255, 255, 0.1);
+  transform: scale(1.05);
+}
+
+.sidebar-collapse-toggle:active {
+  transform: scale(0.95);
+}
+
+.sidebar-collapse-toggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Collapsed state - position below logo with resonating effect */
+.sidebar[data-collapsed='true'] .sidebar-collapse-toggle {
+  /* Position below the logo, centered */
+  top: auto;
+  bottom: -50px;
+  /* Below the header */
+  right: 50%;
+  transform: translateX(50%);
+  padding: 12px 16px;
+
+  /* Much brighter styling when collapsed */
+  background: rgba(255, 255, 255, 0.22);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  font-size: 1.2rem;
+
+  /* Strong resonating (pulsing glow) animation */
+  animation: sidebar-toggle-resonate 1.5s ease-in-out infinite;
+}
+
+/* Resonating glow animation - strong pulse */
+@keyframes sidebar-toggle-resonate {
+
+  0%,
+  100% {
+    box-shadow:
+      0 2px 10px rgba(0, 0, 0, 0.3),
+      0 0 0 0 rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  50% {
+    box-shadow:
+      0 4px 20px rgba(0, 0, 0, 0.4),
+      0 0 25px 6px rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.6);
+  }
+}
+
+.sidebar[data-collapsed='true'] .sidebar-collapse-toggle:hover {
+  transform: translateX(50%) scale(1.1);
+  animation: none;
+  /* Stop animation on hover */
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), 0 0 25px rgba(255, 255, 255, 0.25);
+}
+
+.sidebar-brand {
+  width: 100%;
+}
+
+.sidebar[data-collapsed='true'] .sidebar-brand {
+  gap: 0.35rem;
+}
+
+.sidebar-logo {
+  transition: transform 0.2s ease;
+}
+
+.sidebar[data-collapsed='true'] .sidebar-logo {
+  transform: scale(0.92);
+}
+
+.sidebar-brand-title {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-wrap: balance;
+}
+
+.sidebar-section {
+  position: relative;
+}
+
+.sidebar.sidebar-collapsed .sidebar-section+.sidebar-section {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+  padding-left: 0.25rem;
+}
+
+.sidebar-section-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sidebar-section-title {
+  font-size: 0.6875rem; /* 11px - fixed size */
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.sidebar .nav-item:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+.sidebar .nav-item {
+  padding: 0.5rem 0.75rem; /* Fixed: 8px 12px */
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 7px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 700;
+  font-size: 0.8125rem; /* 13px - compact */
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  min-width: 0;
+  position: relative;
+}
+
+.sidebar.sidebar-collapsed .nav-item {
+  justify-content: center;
+  padding: 0.65rem;
+  border-radius: 10px;
+}
+
+.sidebar .nav-item:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.sidebar .nav-item.active {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.05) 100%);
+  color: white;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar .nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18%;
+  bottom: 18%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+}
+
+.sidebar .nav-icon {
+  width: 18px; /* Fixed size */
+  height: 18px; /* Fixed size */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.sidebar .nav-item.active .nav-icon {
+  opacity: 1;
+}
+
+.sidebar-label {
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #ef4444;
+  color: white;
+  font-size: 0.6875rem; /* Fixed: 11px */
+  font-weight: 700;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sidebar-badge--dot {
+  min-width: 10px;
+  height: 10px;
+  padding: 0;
+  border-radius: 9999px;
+}
+
+.sidebar.sidebar-collapsed .sidebar-badge--dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.sidebar-nav {
+  min-height: 0;
+  /* critical for flex + scroll */
+  scrollbar-gutter: stable both-edges;
+  overscroll-behavior: contain;
+}
+
+.sidebar.sidebar-collapsed .sidebar-nav {
+  align-items: center;
+}
+
+.sidebar.sidebar-collapsed .nav-item {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  gap: 0;
+}
+
+/* Collapsed sidebar helpers */
+.sidebar.sidebar-collapsed .sidebar-subtitle {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    animation: none !important;
+  }
+}
+
+@keyframes sidebar-ambient {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sidebar-item {
+  font-weight: 600;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.sidebar-item.active,
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-section {
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Responsive sidebar branding */
+.sidebar-subtitle {
+  transition: opacity 0.2s ease;
+}
+
+/* Sidebar Scrollbar (Up/Down Slider) Styling */
+.sidebar-nav,
+.sidebar nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar,
+.sidebar nav::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track,
+.sidebar nav::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px 0;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb,
+.sidebar nav::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover,
+.sidebar nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.75);
+  box-shadow: 0 0 6px rgba(244, 63, 94, 0.35);
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:active,
+.sidebar nav::-webkit-scrollbar-thumb:active {
+  background: #f43f5e;
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.6);
+}
+
+/* ========================================
+   Sidebar Badge Styles
+   High contrast badges for dark sidebar background
+   Forces solid colors with white text for visibility
+   ======================================== */
+
+/* MASTER RULE: Force ALL badges in sidebar to have white text */
+.sidebar [data-badge="true"],
+aside.sidebar [data-badge="true"],
+.sidebar [data-badge],
+aside.sidebar [data-badge] {
+  color: #ffffff !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  color-scheme: light only !important;
+}
+
+/* Force white text on all badge text color classes - maximum specificity */
+.sidebar [data-badge="true"][class*="text-red"],
+.sidebar [data-badge="true"][class*="text-blue"],
+.sidebar [data-badge="true"][class*="text-emerald"],
+.sidebar [data-badge="true"][class*="text-amber"],
+.sidebar [data-badge="true"][class*="text-green"],
+aside.sidebar [data-badge="true"][class*="text-red"],
+aside.sidebar [data-badge="true"][class*="text-blue"],
+aside.sidebar [data-badge="true"][class*="text-emerald"],
+aside.sidebar [data-badge="true"][class*="text-amber"],
+aside.sidebar [data-badge="true"][class*="text-green"] {
+  color: #ffffff !important;
+}
+
+/* Danger/red badges - solid red background */
+.sidebar [data-badge="true"][class*="bg-red"],
+aside.sidebar [data-badge="true"][class*="bg-red"] {
+  background-color: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+/* Info/blue badges - solid blue background */
+.sidebar [data-badge="true"][class*="bg-blue"],
+aside.sidebar [data-badge="true"][class*="bg-blue"] {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+/* Success/emerald badges - solid emerald background */
+.sidebar [data-badge="true"][class*="bg-emerald"],
+aside.sidebar [data-badge="true"][class*="bg-emerald"] {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+  color: #ffffff !important;
+}
+
+/* Warning/amber badges - solid amber background */
+.sidebar [data-badge="true"][class*="bg-amber"],
+aside.sidebar [data-badge="true"][class*="bg-amber"] {
+  background-color: #f59e0b !important;
+  border-color: #f59e0b !important;
+  color: #ffffff !important;
+}
+
+/* Classic sidebar-badge class */
+.sidebar-badge {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+.sidebar-badge--dot {
+  background: #ef4444 !important;
+}
+
+/* ========================================
+   NUCLEAR: ID-based selectors for maximum specificity
+   Uses #app-sidebar which is the ID of the sidebar element
+   ======================================== */
+
+#app-sidebar [data-badge="true"],
+#app-sidebar [data-badge] {
+  color: #ffffff !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+#app-sidebar [data-badge="true"][class*="bg-red"] {
+  background-color: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+#app-sidebar [data-badge="true"][class*="bg-blue"] {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+#app-sidebar [data-badge="true"][class*="bg-emerald"] {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+  color: #ffffff !important;
+}
+
+#app-sidebar [data-badge="true"][class*="bg-amber"] {
+  background-color: #f59e0b !important;
+  border-color: #f59e0b !important;
+  color: #ffffff !important;
+}
+
+/* ========================================
+   Sidebar Dark Mode Protection
+   Prevents browser dark mode from affecting sidebar
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+  /* Sidebar badges - use ID for maximum specificity */
+  #app-sidebar [data-badge="true"],
+  .sidebar [data-badge="true"] {
+    color: #ffffff !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+  }
+
+  #app-sidebar [data-badge="true"][class*="bg-red"],
+  .sidebar [data-badge="true"][class*="bg-red"] {
+    background-color: #ef4444 !important;
+    border-color: #ef4444 !important;
+    color: #ffffff !important;
+  }
+
+  #app-sidebar [data-badge="true"][class*="bg-blue"],
+  .sidebar [data-badge="true"][class*="bg-blue"] {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: #ffffff !important;
+  }
+
+  #app-sidebar [data-badge="true"][class*="bg-emerald"],
+  .sidebar [data-badge="true"][class*="bg-emerald"] {
+    background-color: #10b981 !important;
+    border-color: #10b981 !important;
+    color: #ffffff !important;
+  }
+
+  #app-sidebar [data-badge="true"][class*="bg-amber"],
+  .sidebar [data-badge="true"][class*="bg-amber"] {
+    background-color: #f59e0b !important;
+    border-color: #f59e0b !important;
+    color: #ffffff !important;
+  }
+
+  .sidebar-badge {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+  }
+
+  /* Navigation items text */
+  .sidebar .nav-item {
+    color: rgba(255, 255, 255, 0.85) !important;
+    filter: none !important;
+  }
+
+  .sidebar .nav-item.active {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+  }
+
+  .sidebar .nav-icon {
+    color: inherit !important;
+  }
+
+  .sidebar-label {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+
+  .sidebar-section-title {
+    color: rgba(255, 255, 255, 0.5) !important;
+  }
+
+  .sidebar-subtitle {
+    color: rgba(255, 255, 255, 0.4) !important;
+  }
+}

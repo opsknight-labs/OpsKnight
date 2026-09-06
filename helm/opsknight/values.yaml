@@ -1,0 +1,198 @@
+# Default values for opsknight
+# This is a YAML-formatted file.
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/opsknight-labs/opsknight
+  pullPolicy: IfNotPresent
+  tag: ''
+  # When set, digest takes precedence over tag and renders repository@digest.
+  digest: ''
+
+imagePullSecrets: []
+nameOverride: ''
+fullnameOverride: ''
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ''
+  automount: false
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1001
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+metrics:
+  enabled: true
+  path: /api/metrics
+  scrapeTokenSecret:
+    existingSecret: ''
+    key: PROMETHEUS_SCRAPE_TOKEN
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 5s
+    labels: {}
+
+ingress:
+  enabled: false
+  className: ''
+  annotations: {}
+  hosts:
+    - host: opsknight.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+# Disabled by default so a basic install does not depend on metrics-server.
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Spread replicas across nodes by default. Enterprise deployments should use
+# three or more nodes and may change ScheduleAnyway to DoNotSchedule.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+
+terminationGracePeriodSeconds: 30
+
+startupProbe:
+  httpGet:
+    path: /api/health?mode=readiness
+    port: http
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/health?mode=readiness
+    port: http
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 3
+
+secrets:
+  # Use a pre-created Secret instead of rendering secret values into the Helm release.
+  # External Secrets/CSI operators should keep the required keys synchronized.
+  existingSecret: ''
+  keys:
+    databaseUrl: DATABASE_URL
+    nextauthSecret: NEXTAUTH_SECRET
+    encryptionKey: ENCRYPTION_KEY
+    postgresUser: POSTGRES_USER
+    postgresPassword: POSTGRES_PASSWORD
+  nextauthSecret: 'change_this_to_a_random_secret_in_production'
+  encryptionKey: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+
+networkPolicy:
+  enabled: false
+  ingressNamespaceLabels:
+    kubernetes.io/metadata.name: ingress-nginx
+
+config:
+  nodeEnv: production
+  nextauthUrl: 'http://localhost:3000'
+  nextPublicAppUrl: 'http://localhost:3000'
+  port: '3000'
+  hostname: '0.0.0.0'
+  nextTelemetryDisabled: '1'
+  notificationControlPlanePersonal: 'false'
+
+# Full DATABASE_URL override. Prefer this for managed PostgreSQL, TLS parameters,
+# PgBouncer, or credentials containing characters that require URI encoding.
+database:
+  url: ''
+  # NetworkPolicy cannot infer a port reliably from a URL. Keep this aligned
+  # with database.url when using an external database on a non-default port.
+  port: 5432
+
+postgresql:
+  enabled: true
+  database: opsknight_db
+  host: ''
+  port: '5432'
+  username: opsknight
+  password: 'opsknight_secure_password_change_me'
+  connectionLimit: 40
+  poolTimeout: 30
+  storage: 10Gi
+  storageClass: ''
+  image:
+    repository: postgres
+    tag: '15-alpine'
+    pullPolicy: IfNotPresent
+  # postgres:15-alpine uses uid/gid 70 for the postgres user.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 70
+    runAsGroup: 70
+    fsGroup: 70
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 70
+    runAsGroup: 70
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: 2000m

@@ -1,0 +1,89 @@
+/*
+  Template: Obsidian Ember
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, #b45309));
+  --status-primary-hover: var(--sp-accent-2, #c2410c);
+  --status-card-shadow: 0 12px 28px rgba(180, 83, 9, 0.28);
+  --sp-ink: #fef2f2;
+  --sp-muted: #e2e8f0;
+  --sp-primary: #b45309;
+  --sp-soft: rgba(180, 83, 9, 0.18);
+  --status-text: #fef2f2;
+  --status-text-strong: #fff7ed;
+  --status-text-muted: #e2e8f0;
+  --status-text-subtle: #cbd5e1;
+  --status-panel-bg: rgba(17, 24, 39, 0.78);
+  --status-panel-border: rgba(251, 146, 60, 0.22);
+  --status-panel-muted-bg: rgba(17, 24, 39, 0.6);
+  --status-panel-muted-border: rgba(251, 146, 60, 0.16);
+}
+
+.status-page-container {
+  --status-text: #fef2f2;
+  --status-text-strong: #fff7ed;
+  --status-text-muted: #e2e8f0;
+  --status-text-subtle: #cbd5e1;
+  --status-panel-bg: rgba(17, 24, 39, 0.78);
+  --status-panel-border: rgba(251, 146, 60, 0.22);
+  --status-panel-muted-bg: rgba(17, 24, 39, 0.6);
+  --status-panel-muted-border: rgba(251, 146, 60, 0.16);
+  background: radial-gradient(circle at top, #1f2937 0%, #111827 60%, #0b1020 100%) !important;
+  color: var(--sp-ink) !important;
+}
+
+.status-page-header {
+  background: linear-gradient(120deg, rgba(180, 83, 9, 0.18) 0%, rgba(15, 23, 42, 0.85) 100%) !important;
+  border-bottom: 1px solid rgba(251, 146, 60, 0.25) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #fff7ed !important;
+  background: linear-gradient(120deg, #b45309 0%, #f97316 100%) !important;
+  box-shadow: 0 12px 24px rgba(249, 115, 22, 0.35) !important;
+}
+
+.status-service-card {
+  background: rgba(17, 24, 39, 0.75) !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(251, 146, 60, 0.2) !important;
+  box-shadow: 0 14px 30px rgba(10, 12, 24, 0.55) !important;
+}
+
+#incidents .status-incident-card {
+  background: rgba(17, 24, 39, 0.85) !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(251, 146, 60, 0.26) !important;
+  box-shadow: 0 16px 34px rgba(10, 12, 24, 0.65) !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, #b45309 0%, #f97316 100%) !important;
+  border: none !important;
+  border-radius: 12px !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--status-text, #fef2f2) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: var(--status-text, #fef2f2) !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--status-text-muted, #e2e8f0) !important;
+}

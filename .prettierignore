@@ -1,0 +1,18 @@
+node_modules
+.next
+out
+dist
+build
+coverage
+*.min.js
+*.min.css
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+prisma/migrations
+*.log
+
+
+# Ignore Helm templates
+helm/**/templates/**/*.yaml
+helm/**/templates/**/*.tpl

@@ -1,0 +1,73 @@
+/*
+  Template: Minimal Sandstone
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, #7c5c42));
+  --status-primary-hover: var(--sp-accent-2, #6a4f38);
+  --status-card-shadow: 0 8px 20px rgba(124, 92, 66, 0.16);
+  --sp-ink: #2f251f;
+  --sp-muted: #6b5f55;
+  --sp-primary: #7c5c42;
+  --sp-soft: #f7efe6;
+}
+
+.status-page-container {
+  background: linear-gradient(180deg, #f7efe6 0%, #e7dacd 100%) !important;
+  color: var(--sp-ink) !important;
+}
+
+.status-page-header {
+  background: #f7efe6 !important;
+  border-bottom: 1px solid rgba(124, 92, 66, 0.16) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #ffffff !important;
+  background: linear-gradient(120deg, #7c5c42 0%, #6a4f38 100%) !important;
+  box-shadow: 0 10px 18px rgba(124, 92, 66, 0.22) !important;
+}
+
+.status-service-card {
+  background: #fffaf4 !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(124, 92, 66, 0.12) !important;
+  box-shadow: 0 10px 20px rgba(124, 92, 66, 0.1) !important;
+}
+
+#incidents .status-incident-card {
+  background: #fffaf4 !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(124, 92, 66, 0.16) !important;
+  box-shadow: 0 10px 22px rgba(124, 92, 66, 0.14) !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, #7c5c42 0%, #6a4f38 100%) !important;
+  border: none !important;
+  border-radius: 10px !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: #2f251f !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--sp-muted) !important;
+}

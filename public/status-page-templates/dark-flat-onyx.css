@@ -1,0 +1,89 @@
+/*
+  Template: Dark Flat Onyx
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, #475569));
+  --status-primary-hover: var(--sp-accent-2, #64748b);
+  --status-card-shadow: 0 10px 24px rgba(15, 23, 42, 0.5);
+  --sp-ink: #f1f5f9;
+  --sp-muted: #cbd5e1;
+  --sp-primary: #475569;
+  --sp-soft: rgba(71, 85, 105, 0.2);
+  --status-text: #f1f5f9;
+  --status-text-strong: #f8fafc;
+  --status-text-muted: #cbd5e1;
+  --status-text-subtle: #94a3b8;
+  --status-panel-bg: #0b1220;
+  --status-panel-border: rgba(148, 163, 184, 0.2);
+  --status-panel-muted-bg: #0b1220;
+  --status-panel-muted-border: rgba(148, 163, 184, 0.16);
+}
+
+.status-page-container {
+  --status-text: #f1f5f9;
+  --status-text-strong: #f8fafc;
+  --status-text-muted: #cbd5e1;
+  --status-text-subtle: #94a3b8;
+  --status-panel-bg: #0b1220;
+  --status-panel-border: rgba(148, 163, 184, 0.2);
+  --status-panel-muted-bg: #0b1220;
+  --status-panel-muted-border: rgba(148, 163, 184, 0.16);
+  background: #0f172a !important;
+  color: var(--sp-ink) !important;
+}
+
+.status-page-header {
+  background: #111827 !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #e2e8f0 !important;
+  background: linear-gradient(120deg, #475569 0%, #64748b 100%) !important;
+  box-shadow: 0 10px 18px rgba(71, 85, 105, 0.35) !important;
+}
+
+.status-service-card {
+  background: #0b1220 !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  box-shadow: 0 12px 26px rgba(2, 6, 23, 0.6) !important;
+}
+
+#incidents .status-incident-card {
+  background: #0b1220 !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(148, 163, 184, 0.24) !important;
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.7) !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, #475569 0%, #64748b 100%) !important;
+  border: none !important;
+  border-radius: 12px !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--status-text, #f1f5f9) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: var(--status-text, #f1f5f9) !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--status-text-muted, #cbd5e1) !important;
+}

@@ -1,0 +1,44 @@
+/*
+  Template: Charcoal Lime
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, var(--sp-blue, var(--sp-ocean, #2563eb))));
+  --status-primary-hover: var(--sp-accent-2, var(--sp-primary, var(--sp-blue, #1d4ed8))));\n  --status-card-shadow: 0 6px 16px rgba(15, 23, 42, 0.05); --sp-ink: #0b1220; --sp-muted: #6b7280; --sp-charcoal: #111827; --sp-lime: #84cc16; }
+.status-page-container {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(132, 204, 22, 0.18) 0%, rgba(132, 204, 22, 0) 45%),
+    linear-gradient(135deg, #f9fafb 0%, #f7fee7 100%) !important;
+  color: var(--sp-ink) !important;
+}
+.status-page-header { background: linear-gradient(120deg, #ffffff 0%, #e5e7eb 100%) !important; border-bottom: 1px solid rgba(17, 24, 39, 0.12) !important; }
+.status-page-header a { border-color: transparent !important; color: #0b1220 !important; background: linear-gradient(120deg, #84cc16 0%, #a3e635 100%) !important; box-shadow: 0 12px 22px rgba(132, 204, 22, 0.25) !important; }
+.status-service-card { background: #ffffff !important; border-radius: 16px !important; border: 1px solid rgba(17, 24, 39, 0.1) !important; box-shadow: 0 12px 28px rgba(17, 24, 39, 0.12) !important; }
+#incidents .status-incident-card { background: #ffffff !important; border-radius: 18px !important; border: 1px solid rgba(132, 204, 22, 0.2) !important; box-shadow: 0 16px 34px rgba(132, 204, 22, 0.18) !important; }
+.status-page-container form button[type="submit"] { background: linear-gradient(120deg, #111827 0%, #84cc16 100%) !important; border: none !important; border-radius: 12px !important; color: #ffffff !important; }
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--sp-muted) !important;
+}
+
+
+

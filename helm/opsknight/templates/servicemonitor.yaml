@@ -1,0 +1,26 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+{{- if not .Values.metrics.scrapeTokenSecret.existingSecret }}
+{{- fail "metrics.serviceMonitor.enabled requires metrics.scrapeTokenSecret.existingSecret" }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "opsknight.fullname" . }}
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "opsknight.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: {{ .Values.metrics.path }}
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+      bearerTokenSecret:
+        name: {{ .Values.metrics.scrapeTokenSecret.existingSecret }}
+        key: {{ .Values.metrics.scrapeTokenSecret.key }}
+{{- end }}

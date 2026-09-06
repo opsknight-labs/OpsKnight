@@ -1,0 +1,17 @@
+# Example values for NGINX Ingress Controller
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    nginx.ingress.kubernetes.io/proxy-body-size: '10m'
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: opsknight.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: opsknight-tls
+      hosts:
+        - opsknight.yourdomain.com

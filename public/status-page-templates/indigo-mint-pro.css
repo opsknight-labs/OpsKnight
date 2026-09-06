@@ -1,0 +1,31 @@
+/*
+  Template: Indigo Mint (Professional)
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, var(--sp-blue, var(--sp-ocean, #2563eb))));
+  --status-primary-hover: var(--sp-accent-2, var(--sp-primary, var(--sp-blue, #1d4ed8))));\n  --status-card-shadow: 0 6px 14px rgba(15, 23, 42, 0.07); --sp-ink: #0f172a; --sp-muted: #64748b; --sp-primary: #4f46e5; --sp-accent: #10b981; }
+.status-page-container { background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important; color: var(--sp-ink) !important; }
+.status-page-header { background: linear-gradient(120deg, #ffffff 0%, #e2e8f0 100%) !important; border-bottom: 1px solid rgba(79, 70, 229, 0.12) !important; }
+.status-page-header a { border-color: transparent !important; color: #ffffff !important; background: linear-gradient(120deg, #4f46e5 0%, #10b981 100%) !important; box-shadow: 0 10px 18px rgba(79, 70, 229, 0.2) !important; }
+.status-service-card { background: #ffffff !important; border-radius: 12px !important; border: 1px solid rgba(79, 70, 229, 0.1) !important; box-shadow: 0 8px 16px rgba(79, 70, 229, 0.08) !important; }
+#incidents .status-incident-card { background: #ffffff !important; border-radius: 14px !important; border: 1px solid rgba(16, 185, 129, 0.12) !important; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.1) !important; }
+.status-page-container form button[type="submit"] { background: linear-gradient(120deg, #4f46e5 0%, #4338ca 100%) !important; border: none !important; border-radius: 10px !important; }
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 { color: var(--sp-ink) !important; }
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small { color: var(--sp-ink) !important; }
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span { color: var(--sp-muted) !important; }
+
+
+

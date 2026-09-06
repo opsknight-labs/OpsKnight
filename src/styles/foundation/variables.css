@@ -1,0 +1,229 @@
+/* ========================================
+   CSS Custom Properties (Variables)
+   Extracted from globals.css
+   ======================================== */
+:root {
+    /* Primary & Modern Palette: Muted Executive Slate */
+    --primary: #1e293b;
+    --primary-hover: #0f172a;
+    --primary-light: #334155;
+    --primary-dark: #020617;
+    --secondary: #475569;
+    --accent: #2563eb;
+    --status-primary: var(--primary-color);
+    --status-primary-hover: var(--primary-hover);
+
+    /* Semantic Colors - Muted Professional */
+    --color-success: #059669;
+    --color-success-light: #10b981;
+    --color-success-dark: #064e3b;
+    --color-warning: #d97706;
+    --color-warning-light: #f59e0b;
+    --color-warning-dark: #78350f;
+    --color-error: #be123c;
+    --color-error-light: #f43f5e;
+    --color-error-dark: #881337;
+    --color-info: #3b82f6;
+    --color-info-light: #60a5fa;
+    --color-info-dark: #2563eb;
+
+    /* Legacy Support */
+    --success: var(--color-success);
+    --warning: var(--color-warning);
+    --danger: var(--color-error);
+    --info: var(--color-info);
+
+    /* Neutral Colors (Grayscale) */
+    --color-neutral-50: #f9fafb;
+    --color-neutral-100: #f3f4f6;
+    --color-neutral-200: #e5e7eb;
+    --color-neutral-300: #d1d5db;
+    --color-neutral-400: #9ca3af;
+    --color-neutral-500: #6b7280;
+    --color-neutral-600: #4b5563;
+    --color-neutral-700: #374151;
+    --color-neutral-800: #1f2937;
+    --color-neutral-900: #111827;
+
+    /* Background Colors - Clean & Sophisticated */
+    --bg-primary: #e2e8f0;
+    --bg-secondary: #ffffff;
+    --bg-dark: #111827;
+    --bg-surface: #ffffff;
+    --bg-overlay: rgba(0, 0, 0, 0.5);
+
+    /* Glass Morphism */
+    --glass-bg: rgba(255, 255, 255, 0.45);
+    --glass-border: rgba(17, 24, 39, 0.08);
+    --glass-blur: blur(12px);
+
+    /* Text Colors */
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --text-inverse: #ffffff;
+    --text-tertiary: #94a3b8;
+    --text-disabled: #9ca3af;
+
+    /* Border Colors */
+    --border: #cbd5e1;
+    --border-hover: #94a3b8;
+    --border-focus: rgba(15, 23, 42, 0.2);
+    --border-error: var(--color-error);
+
+    /* Border Radius */
+    --radius: 14px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-full: 9999px;
+
+    /* Shadows */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.07);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
+    --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.15);
+    --shadow-primary: 0 4px 14px rgba(15, 23, 42, 0.15);
+    --shadow-success: 0 4px 14px rgba(5, 150, 105, 0.15);
+    --shadow-error: 0 4px 14px rgba(190, 18, 60, 0.15);
+
+    /* Spacing Scale (4px base) */
+    --spacing-1: 0.25rem;
+    /* 4px */
+    --spacing-2: 0.5rem;
+    /* 8px */
+    --spacing-3: 0.75rem;
+    /* 12px */
+    --spacing-4: 1rem;
+    /* 16px */
+    --spacing-5: 1.25rem;
+    /* 20px */
+    --spacing-6: 1.5rem;
+    /* 24px */
+    --spacing-8: 2rem;
+    /* 32px */
+    --spacing-10: 2.5rem;
+    /* 40px */
+    --spacing-12: 3rem;
+    /* 48px */
+    --spacing-16: 4rem;
+    /* 64px */
+    --spacing-20: 5rem;
+    /* 80px */
+    --spacing-24: 6rem;
+    /* 96px */
+
+    /* Typography Scale */
+    --font-size-xs: 0.75rem;
+    /* 12px */
+    --font-size-sm: 0.875rem;
+    /* 14px */
+    --font-size-base: 1rem;
+    /* 16px */
+    --font-size-lg: 1.125rem;
+    /* 18px */
+    --font-size-xl: 1.25rem;
+    /* 20px */
+    --font-size-2xl: 1.5rem;
+    /* 24px */
+    --font-size-3xl: 1.875rem;
+    /* 30px */
+    --font-size-4xl: 2.25rem;
+    /* 36px */
+    --font-size-5xl: 3rem;
+    /* 48px */
+
+    /* Font Weights */
+    --font-weight-light: 300;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    /* Line Heights */
+    --line-height-tight: 1.2;
+    --line-height-normal: 1.5;
+    --line-height-relaxed: 1.6;
+    --line-height-loose: 1.8;
+
+    /* Transitions */
+    --transition-fast: 150ms;
+    --transition-base: 200ms;
+    --transition-slow: 300ms;
+    --transition-slower: 500ms;
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Breakpoints */
+    --breakpoint-sm: 640px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 1024px;
+    --breakpoint-xl: 1280px;
+    --breakpoint-2xl: 1536px;
+
+    /* Z-Index Scale */
+    --z-base: 0;
+    --z-dropdown: 1000;
+    --z-sticky: 1020;
+    --z-fixed: 1030;
+    --z-modal-backdrop: 1040;
+    --z-modal: 1050;
+    --z-popover: 1060;
+    --z-tooltip: 1070;
+
+    /* Ensure user menu is above topbar */
+    --z-user-menu: 1010;
+
+    /* Gradients - Professional Slate-to-Midnight Flow */
+    --gradient-primary: linear-gradient(135deg, #334155 0%, #1e293b 55%, #0f172a 100%);
+    --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    --gradient-glass: linear-gradient(145deg, rgba(255, 255, 255, 0.6) 0%, rgba(248, 250, 252, 0.4) 100%);
+    --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+
+    /* Badge Colors */
+    --badge-success-bg: #bbf7d0;
+    --badge-success-text: #15803d;
+    --badge-warning-bg: #fde68a;
+    --badge-warning-text: #b45309;
+    --badge-info-bg: #bfdbfe;
+    --badge-info-text: #1d4ed8;
+    --badge-error-bg: #fecaca;
+    --badge-error-text: #b91c1c;
+    --badge-snoozed-bg: #e0e7ff;
+    --badge-snoozed-text: #4f46e5;
+    --badge-neutral-bg: #e2e8f0;
+    --badge-neutral-text: #334155;
+
+    /* Layout - Responsive sidebar widths and header */
+    --header-height: 56px;
+    --sidebar-width: 240px;
+    --sidebar-width-collapsed: 64px;
+}
+
+/* 13"-14" Laptops & compact desktop viewports */
+@media (min-width: 769px) and (max-width: 1536px),
+       (min-width: 769px) and (max-height: 860px) {
+    :root {
+        --sidebar-width: 216px;
+    }
+}
+
+/* Very compact screens */
+@media (min-width: 769px) and (max-width: 1280px),
+       (min-width: 769px) and (max-height: 740px) {
+    :root {
+        --sidebar-width: 208px;
+    }
+}
+
+/* Mobile screens: zero sidebar width in main flow */
+@media (max-width: 768px) {
+    :root {
+        --sidebar-width: 0px;
+        --sidebar-width-collapsed: 0px;
+    }
+}

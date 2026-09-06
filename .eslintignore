@@ -1,0 +1,3 @@
+public/
+*.min.js
+scripts/dist/

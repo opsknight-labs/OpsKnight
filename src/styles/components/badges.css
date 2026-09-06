@@ -1,0 +1,278 @@
+/* ========================================
+   Badge & Status Indicator Styles
+   Extracted from globals.css
+   ======================================== */
+
+/* Badge color variables are in foundation/variables.css:
+   --badge-success-bg, --badge-success-text,
+   --badge-warning-bg, --badge-warning-text,
+   --badge-error-bg, --badge-error-text,
+   --badge-snoozed-bg, --badge-snoozed-text,
+   --badge-neutral-bg, --badge-neutral-text
+*/
+
+.status-page-preview-chip {
+   display: inline-flex;
+   align-items: center;
+   gap: 0.375rem;
+   padding: 0.25rem 0.625rem;
+   font-size: 0.6875rem;
+   font-weight: 800;
+   letter-spacing: 0.01em;
+   line-height: 1.35;
+   border-radius: 999px;
+   background: var(--badge-neutral-bg);
+   color: var(--badge-neutral-text);
+}
+
+/* Generic badge typography */
+[data-badge="true"],
+.badge,
+.ui-badge {
+   font-size: 0.6875rem;
+   font-weight: 800;
+   letter-spacing: 0.01em;
+   line-height: 1.35;
+}
+
+.status-page-preview-chip.success {
+   background: var(--badge-success-bg);
+   color: var(--badge-success-text);
+}
+
+.status-page-preview-chip.warning {
+   background: var(--badge-warning-bg);
+   color: var(--badge-warning-text);
+}
+
+.status-page-preview-chip.error {
+   background: var(--badge-error-bg);
+   color: var(--badge-error-text);
+}
+
+/* Status dot indicators */
+.status-dot {
+   width: 8px;
+   height: 8px;
+   border-radius: 50%;
+   flex-shrink: 0;
+}
+
+.status-dot.operational {
+   background: var(--color-success);
+   box-shadow: 0 0 6px rgba(5, 150, 105, 0.4);
+}
+
+.status-dot.degraded {
+   background: var(--color-warning);
+   box-shadow: 0 0 6px rgba(217, 119, 6, 0.4);
+}
+
+.status-dot.down {
+   background: var(--color-error);
+   box-shadow: 0 0 6px rgba(190, 18, 60, 0.4);
+}
+
+/* ========================================
+   Badge Dark Mode Protection
+   Prevents browser dark mode from affecting badge colors
+   ======================================== */
+
+/* Base badge protection */
+[data-badge="true"] {
+   color-scheme: light only !important;
+   filter: none !important;
+   -webkit-filter: none !important;
+   mix-blend-mode: normal;
+   forced-color-adjust: none;
+   -ms-high-contrast-adjust: none;
+}
+
+/* Badge variant color preservation under browser dark mode */
+@media (prefers-color-scheme: dark) {
+   /* Base badge protection */
+   [data-badge="true"] {
+      filter: none !important;
+      -webkit-filter: none !important;
+      color-scheme: light only !important;
+   }
+
+   [data-badge="true"] svg {
+      color: currentColor !important;
+      filter: none !important;
+   }
+
+   /* Custom UI Badge - preserve CSS variable colors */
+   .ui-badge-success {
+      background: var(--badge-success-bg) !important;
+      color: var(--badge-success-text) !important;
+   }
+
+   .ui-badge-warning {
+      background: var(--badge-warning-bg) !important;
+      color: var(--badge-warning-text) !important;
+   }
+
+   .ui-badge-error,
+   .ui-badge-danger {
+      background: var(--badge-error-bg) !important;
+      color: var(--badge-error-text) !important;
+   }
+
+   .ui-badge-info {
+      background: var(--badge-info-bg) !important;
+      color: var(--badge-info-text) !important;
+   }
+
+   .ui-badge-default {
+      background: var(--badge-neutral-bg) !important;
+      color: var(--badge-neutral-text) !important;
+   }
+
+   .ui-badge-primary {
+      background: var(--primary-color) !important;
+      color: var(--text-inverse) !important;
+   }
+
+   /* Shadcn/Tailwind badge color preservation */
+   [data-badge="true"].bg-emerald-100,
+   [data-badge="true"].border-emerald-200 {
+      background-color: #d1fae5 !important;
+      border-color: #a7f3d0 !important;
+      color: #065f46 !important;
+   }
+
+   [data-badge="true"].bg-amber-100,
+   [data-badge="true"].border-amber-200 {
+      background-color: #fef3c7 !important;
+      border-color: #fde68a !important;
+      color: #92400e !important;
+   }
+
+   [data-badge="true"].bg-red-100,
+   [data-badge="true"].border-red-200 {
+      background-color: #fee2e2 !important;
+      border-color: #fecaca !important;
+      color: #991b1b !important;
+   }
+
+   [data-badge="true"].bg-blue-100,
+   [data-badge="true"].border-blue-200 {
+      background-color: #dbeafe !important;
+      border-color: #bfdbfe !important;
+      color: #1e40af !important;
+   }
+
+   [data-badge="true"].bg-slate-100,
+   [data-badge="true"].bg-gray-100 {
+      background-color: #f1f5f9 !important;
+      color: #334155 !important;
+   }
+
+   /* Status page preview chip */
+   .status-page-preview-chip {
+      filter: none !important;
+   }
+
+   .status-page-preview-chip.success {
+      background: var(--badge-success-bg) !important;
+      color: var(--badge-success-text) !important;
+   }
+
+   .status-page-preview-chip.warning {
+      background: var(--badge-warning-bg) !important;
+      color: var(--badge-warning-text) !important;
+   }
+
+   .status-page-preview-chip.error {
+      background: var(--badge-error-bg) !important;
+      color: var(--badge-error-text) !important;
+   }
+
+   /* Sidebar badges */
+   .sidebar [data-badge="true"] {
+      color: #ffffff !important;
+   }
+}
+
+/* Windows High Contrast Mode - preserve badge colors */
+@media (forced-colors: active) {
+   [data-badge="true"] {
+      forced-color-adjust: none !important;
+      border: 1px solid transparent;
+   }
+}
+
+/* ========================================
+   Additional Status Indicator Protection
+   For inline status colors used across components
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+   /* Status dots - preserve all variants */
+   .status-dot {
+      filter: none !important;
+   }
+
+   .status-dot.operational {
+      background: var(--color-success) !important;
+   }
+
+   .status-dot.degraded {
+      background: var(--color-warning) !important;
+   }
+
+   .status-dot.down {
+      background: var(--color-error) !important;
+   }
+
+   /* Animated status indicators */
+   .animate-ping,
+   .animate-pulse,
+   [class*="animate-"] {
+      filter: none !important;
+   }
+
+   /* Integration status toggles */
+   [class*="IntegrationStatus"],
+   [class*="integration-status"] {
+      filter: none !important;
+   }
+
+   /* SLA indicators and progress bars */
+   [class*="SLA"],
+   [class*="sla-"],
+   [class*="progress"] {
+      filter: none !important;
+   }
+
+   /* Urgency/Priority indicators */
+   [class*="urgency"],
+   [class*="priority"] {
+      filter: none !important;
+   }
+
+   /* Generic status-related elements */
+   [class*="status-"],
+   [class*="Status"] {
+      filter: none !important;
+   }
+
+   /* Incident cards and status actions */
+   [class*="incident-"],
+   [class*="Incident"] {
+      filter: none !important;
+   }
+
+   /* Service health indicators */
+   [class*="health"],
+   [class*="Health"] {
+      filter: none !important;
+   }
+
+   /* Operational status component */
+   [class*="operational"],
+   [class*="Operational"] {
+      filter: none !important;
+   }
+}

@@ -1,0 +1,365 @@
+/* ========================================
+   Base HTML Element Styles
+   Extracted from globals.css
+   ======================================== */
+
+/* ========================================
+   Browser Dark Mode Prevention
+   Prevents Chrome/Firefox/Safari dark mode from
+   affecting application colors
+   ======================================== */
+
+:root {
+    color-scheme: light;
+    forced-color-adjust: none;
+    -ms-high-contrast-adjust: none;
+}
+
+html {
+    color-scheme: light !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    forced-color-adjust: none;
+    -ms-high-contrast-adjust: none;
+    /* Default / Mobile: 16px standard to avoid iOS Safari input auto-zoom */
+    font-size: 16px;
+}
+
+/* 13"-14" Laptops & standard compact desktop viewports:
+   width: 769px to 1536px, OR any desktop screen with viewport height <= 860px.
+   90% scaling factor (14.4px root) proportionally scales every REM unit to exactly 90%,
+   reproducing your preferred 90% browser zoom density natively in CSS. */
+@media (min-width: 769px) and (max-width: 1536px),
+       (min-width: 769px) and (max-height: 860px) {
+    html {
+        font-size: 14.4px;
+    }
+}
+
+/* Very compact laptops & lower resolutions (1366x768, 1280x800, or height <= 740px) */
+@media (min-width: 769px) and (max-width: 1280px),
+       (min-width: 769px) and (max-height: 740px) {
+    html {
+        font-size: 14px;
+    }
+}
+
+/* Large external displays (27"-32" desktop monitors > 1536px width AND > 860px height):
+   Full comfortable 16px standard scale for effortless readability from desktop viewing distances */
+@media (min-width: 1537px) and (min-height: 861px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+body {
+    color-scheme: light !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    forced-color-adjust: none;
+    -ms-high-contrast-adjust: none;
+    font-family: var(--font-manrope), 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    line-height: var(--line-height-relaxed);
+    letter-spacing: -0.003em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "ss01" on, "cv01" on;
+    text-rendering: optimizeLegibility;
+    background-image:
+        radial-gradient(circle at 10% 10%, rgba(148, 163, 184, 0.1) 0%, transparent 40%),
+        radial-gradient(circle at 80% 0%, rgba(148, 163, 184, 0.05) 0%, transparent 35%);
+}
+
+html[data-theme='dark'] {
+    color-scheme: dark !important;
+}
+
+html[data-theme='dark'] body {
+    color-scheme: dark !important;
+}
+
+/* Comprehensive browser dark mode override */
+@media (prefers-color-scheme: dark) {
+    html:not([data-theme='dark']),
+    html:not([data-theme='dark']) body {
+        color-scheme: light !important;
+        filter: none !important;
+        -webkit-filter: none !important;
+    }
+
+    /* Keep OS dark mode from overriding light theme colors */
+    html:not([data-theme='dark']) *,
+    html:not([data-theme='dark']) *::before,
+    html:not([data-theme='dark']) *::after {
+        color-scheme: light;
+        forced-color-adjust: none;
+        filter: none !important;
+        -webkit-filter: none !important;
+    }
+
+    html:not([data-theme='dark']) body {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-primary) !important;
+    }
+
+    /* ========================================
+       Tailwind Color Classes Protection
+       Preserves all semantic color classes
+       ======================================== */
+
+    /* Red/Danger colors */
+    .bg-red-50 { background-color: #fef2f2 !important; }
+    .bg-red-100 { background-color: #fee2e2 !important; }
+    .bg-red-200 { background-color: #fecaca !important; }
+    .bg-red-500 { background-color: #ef4444 !important; }
+    .bg-red-600 { background-color: #dc2626 !important; }
+    .text-red-500 { color: #ef4444 !important; }
+    .text-red-600 { color: #dc2626 !important; }
+    .text-red-700 { color: #b91c1c !important; }
+    .text-red-800 { color: #991b1b !important; }
+    .text-red-900 { color: #7f1d1d !important; }
+    .border-red-200 { border-color: #fecaca !important; }
+    .border-red-300 { border-color: #fca5a5 !important; }
+
+    /* Amber/Warning colors */
+    .bg-amber-50 { background-color: #fffbeb !important; }
+    .bg-amber-100 { background-color: #fef3c7 !important; }
+    .bg-amber-200 { background-color: #fde68a !important; }
+    .bg-amber-500 { background-color: #f59e0b !important; }
+    .bg-amber-600 { background-color: #d97706 !important; }
+    .text-amber-500 { color: #f59e0b !important; }
+    .text-amber-600 { color: #d97706 !important; }
+    .text-amber-700 { color: #b45309 !important; }
+    .text-amber-800 { color: #92400e !important; }
+    .text-amber-900 { color: #78350f !important; }
+    .border-amber-200 { border-color: #fde68a !important; }
+    .border-amber-300 { border-color: #fcd34d !important; }
+
+    /* Yellow colors */
+    .bg-yellow-50 { background-color: #fefce8 !important; }
+    .bg-yellow-100 { background-color: #fef9c3 !important; }
+    .bg-yellow-500 { background-color: #eab308 !important; }
+    .text-yellow-600 { color: #ca8a04 !important; }
+    .text-yellow-700 { color: #a16207 !important; }
+
+    /* Green/Emerald/Success colors */
+    .bg-green-50 { background-color: #f0fdf4 !important; }
+    .bg-green-100 { background-color: #dcfce7 !important; }
+    .bg-green-200 { background-color: #bbf7d0 !important; }
+    .bg-green-500 { background-color: #22c55e !important; }
+    .bg-green-600 { background-color: #16a34a !important; }
+    .text-green-500 { color: #22c55e !important; }
+    .text-green-600 { color: #16a34a !important; }
+    .text-green-700 { color: #15803d !important; }
+    .text-green-800 { color: #166534 !important; }
+    .border-green-200 { border-color: #bbf7d0 !important; }
+    .border-green-300 { border-color: #86efac !important; }
+
+    .bg-emerald-50 { background-color: #ecfdf5 !important; }
+    .bg-emerald-100 { background-color: #d1fae5 !important; }
+    .bg-emerald-200 { background-color: #a7f3d0 !important; }
+    .bg-emerald-400 { background-color: #34d399 !important; }
+    .bg-emerald-500 { background-color: #10b981 !important; }
+    .bg-emerald-600 { background-color: #059669 !important; }
+    .text-emerald-500 { color: #10b981 !important; }
+    .text-emerald-600 { color: #059669 !important; }
+    .text-emerald-700 { color: #047857 !important; }
+    .text-emerald-800 { color: #065f46 !important; }
+    .text-emerald-900 { color: #064e3b !important; }
+    .border-emerald-200 { border-color: #a7f3d0 !important; }
+    .border-emerald-300 { border-color: #6ee7b7 !important; }
+
+    /* Blue/Info colors */
+    .bg-blue-50 { background-color: #eff6ff !important; }
+    .bg-blue-100 { background-color: #dbeafe !important; }
+    .bg-blue-200 { background-color: #bfdbfe !important; }
+    .bg-blue-500 { background-color: #3b82f6 !important; }
+    .bg-blue-600 { background-color: #2563eb !important; }
+    .text-blue-500 { color: #3b82f6 !important; }
+    .text-blue-600 { color: #2563eb !important; }
+    .text-blue-700 { color: #1d4ed8 !important; }
+    .text-blue-800 { color: #1e40af !important; }
+    .text-blue-900 { color: #1e3a8a !important; }
+    .border-blue-200 { border-color: #bfdbfe !important; }
+    .border-blue-300 { border-color: #93c5fd !important; }
+
+    /* Purple colors */
+    .bg-purple-50 { background-color: #faf5ff !important; }
+    .bg-purple-100 { background-color: #f3e8ff !important; }
+    .bg-purple-500 { background-color: #a855f7 !important; }
+    .bg-purple-600 { background-color: #9333ea !important; }
+    .text-purple-600 { color: #9333ea !important; }
+    .text-purple-700 { color: #7c3aed !important; }
+    .border-purple-200 { border-color: #e9d5ff !important; }
+
+    /* Indigo colors */
+    .bg-indigo-50 { background-color: #eef2ff !important; }
+    .bg-indigo-100 { background-color: #e0e7ff !important; }
+    .bg-indigo-500 { background-color: #6366f1 !important; }
+    .text-indigo-600 { color: #4f46e5 !important; }
+    .text-indigo-700 { color: #4338ca !important; }
+    .border-indigo-200 { border-color: #c7d2fe !important; }
+
+    /* Slate/Gray neutral colors */
+    .bg-slate-50 { background-color: #f8fafc !important; }
+    .bg-slate-100 { background-color: #f1f5f9 !important; }
+    .bg-slate-200 { background-color: #e2e8f0 !important; }
+    .bg-slate-800 { background-color: #1e293b !important; }
+    .bg-slate-900 { background-color: #0f172a !important; }
+    .text-slate-500 { color: #64748b !important; }
+    .text-slate-600 { color: #475569 !important; }
+    .text-slate-700 { color: #334155 !important; }
+    .text-slate-800 { color: #1e293b !important; }
+    .text-slate-900 { color: #0f172a !important; }
+    .border-slate-200 { border-color: #e2e8f0 !important; }
+    .border-slate-300 { border-color: #cbd5e1 !important; }
+
+    .bg-gray-50 { background-color: #f9fafb !important; }
+    .bg-gray-100 { background-color: #f3f4f6 !important; }
+    .bg-gray-200 { background-color: #e5e7eb !important; }
+    .text-gray-500 { color: #6b7280 !important; }
+    .text-gray-600 { color: #4b5563 !important; }
+    .text-gray-700 { color: #374151 !important; }
+    .border-gray-200 { border-color: #e5e7eb !important; }
+    .border-gray-300 { border-color: #d1d5db !important; }
+
+    /* White background */
+    .bg-white { background-color: #ffffff !important; }
+
+    /* White text - preserve for dark backgrounds */
+    .text-white { color: #ffffff !important; }
+    [class*="text-white\\/"] { color: rgb(255 255 255 / var(--tw-text-opacity, 0.7)) !important; }
+
+    /* White backgrounds with opacity (for cards on dark backgrounds) */
+    [class*="bg-white\\/"] { background-color: rgb(255 255 255 / var(--tw-bg-opacity, 0.1)) !important; }
+
+    /* Specific opacity variants for metric cards */
+    .bg-white\/10 { background-color: rgba(255, 255, 255, 0.1) !important; }
+    .bg-white\/15 { background-color: rgba(255, 255, 255, 0.15) !important; }
+    .bg-white\/20 { background-color: rgba(255, 255, 255, 0.2) !important; }
+    .bg-white\/\[0\.03\] { background-color: rgba(255, 255, 255, 0.03) !important; }
+    .bg-white\/\[0\.08\] { background-color: rgba(255, 255, 255, 0.08) !important; }
+
+    /* Text white with opacity */
+    .text-white\/70 { color: rgba(255, 255, 255, 0.7) !important; }
+    .text-white\/80 { color: rgba(255, 255, 255, 0.8) !important; }
+
+    /* Primary foreground text */
+    .text-primary-foreground { color: hsl(var(--primary-foreground)) !important; }
+    .text-primary-foreground\/80 { color: hsla(var(--primary-foreground), 0.8) !important; }
+
+    /* Gradient backgrounds - preserve via keywords */
+    .via-white { --tw-gradient-stops: var(--tw-gradient-from), #ffffff, var(--tw-gradient-to) !important; }
+    .from-primary\/5 { --tw-gradient-from: rgb(var(--primary) / 0.05) !important; }
+    .to-primary\/5 { --tw-gradient-to: rgb(var(--primary) / 0.05) !important; }
+
+    /* Opacity variants - preserve with opacity */
+    [class*="bg-red-50\\/"] { background-color: rgb(254 242 242 / var(--tw-bg-opacity, 0.7)) !important; }
+    [class*="bg-amber-50\\/"] { background-color: rgb(255 251 235 / var(--tw-bg-opacity, 0.7)) !important; }
+    [class*="bg-green-50\\/"] { background-color: rgb(240 253 244 / var(--tw-bg-opacity, 0.7)) !important; }
+    [class*="bg-emerald-50\\/"] { background-color: rgb(236 253 245 / var(--tw-bg-opacity, 0.7)) !important; }
+    [class*="bg-blue-50\\/"] { background-color: rgb(239 246 255 / var(--tw-bg-opacity, 0.7)) !important; }
+}
+
+/* Windows High Contrast Mode prevention */
+@media (forced-colors: active) {
+    *,
+    *::before,
+    *::after {
+        forced-color-adjust: none !important;
+    }
+}
+
+[data-theme='dark'] body {
+    background-image:
+        radial-gradient(circle at 10% 10%, rgba(15, 23, 42, 0.35) 0%, transparent 45%),
+        radial-gradient(circle at 80% 0%, rgba(15, 23, 42, 0.25) 0%, transparent 40%);
+}
+
+/* Fix dropdown text cutoff issue - ensure text is fully visible */
+select,
+.ui-select,
+select.ui-select {
+    line-height: 1.5 !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    box-sizing: border-box !important;
+    vertical-align: middle !important;
+    min-height: calc(1.5em + 1rem) !important;
+}
+
+/* Ensure dropdown options have proper spacing */
+select option {
+    padding: 0.5rem 0.75rem !important;
+    line-height: 1.5 !important;
+    min-height: calc(1.5em + 1rem) !important;
+}
+
+/* Main Layout Shells */
+.app-shell {
+    display: block;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    position: relative;
+    overflow: hidden;
+}
+
+.content-shell {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: calc(100dvh - var(--header-height, 56px));
+    background-color: var(--bg-primary);
+    /* Position content to start exactly where sidebar ends */
+    margin-left: var(--sidebar-width);
+    width: calc(100% - var(--sidebar-width));
+    transition: margin-left var(--transition-base), width var(--transition-base);
+}
+
+/* When sidebar is collapsed, adjust content area */
+.app-shell:has(.sidebar-collapsed) .content-shell,
+.app-shell:has(.sidebar[data-collapsed='true']) .content-shell {
+    margin-left: var(--sidebar-width-collapsed);
+    width: calc(100% - var(--sidebar-width-collapsed));
+}
+
+@media (max-width: 768px) {
+    .content-shell {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+}
+
+.page-shell {
+    flex: 1;
+    padding: 0.75rem 1rem 1rem;
+    position: relative;
+}
+
+.page-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 15% 0%, rgba(148, 163, 184, 0.1), transparent 45%),
+        radial-gradient(circle at 85% 10%, rgba(148, 163, 184, 0.05), transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+[data-theme='dark'] .page-shell::before {
+    background:
+        radial-gradient(circle at 15% 0%, rgba(15, 23, 42, 0.4), transparent 55%),
+        radial-gradient(circle at 85% 10%, rgba(2, 6, 23, 0.35), transparent 50%);
+}
+
+.page-shell>* {
+    position: relative;
+    z-index: 1;
+}

@@ -1,0 +1,225 @@
+name: Tests (lint + unit)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write # Required for sticky comments
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opsknight_test?schema=public
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          # CI doesn't need git hooks; this also avoids husky-related setup issues.
+          HUSKY: '0'
+        run: npm ci --legacy-peer-deps
+
+      - name: Prepare test database schema
+        # Match pre-prod behavior by applying migrations in order.
+        run: npx prisma migrate deploy
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: DB smoke test (post-migrations)
+        run: |
+          mkdir -p reports
+          node scripts/ci-db-smoke.cjs
+
+      - name: Migration validation
+        run: |
+          mkdir -p reports
+          npm run prisma:validate
+
+      - name: Migration health
+        run: |
+          mkdir -p reports
+          npm run prisma:health
+
+      - name: Unit tests
+        # DB-backed tests share a single database; run files serially to avoid cross-test contention.
+        run: |
+          mkdir -p reports
+          npm run test:ci:unit
+
+      - name: Database integration tests
+        # Enable real database for integration and resilience tests
+        env:
+          VITEST_USE_REAL_DB: '1'
+        run: npm run test:ci:db
+
+      - name: Upload test report artifact (JUnit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-junit
+          path: reports/*.xml
+
+      - name: Publish test results to GitHub Checks
+        if: always()
+        uses: dorny/test-reporter@v3
+        with:
+          name: '✅ Tests: Unit (Vitest)'
+          path: reports/*.xml
+          reporter: java-junit
+
+      - name: Summarize JUnit results for PR comment
+        id: junit_summary
+        if: always()
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+
+          // Robust XML attribute parser
+          const getAttr = (tag, attr) => {
+            const match = tag.match(new RegExp(`${attr}="([^"]*)"`));
+            return match ? Number(match[1]) : 0;
+          };
+
+          const parseXml = (content) => {
+            // Check for root <testsuites>
+            const suitesMatch = content.match(/<testsuites[^>]*>/);
+            if (suitesMatch) {
+              return {
+                tests: getAttr(suitesMatch[0], 'tests'),
+                failures: getAttr(suitesMatch[0], 'failures'),
+                errors: getAttr(suitesMatch[0], 'errors'),
+                skipped: getAttr(suitesMatch[0], 'skipped'),
+              };
+            }
+            
+            // Fallback: Check for root <testsuite> (common in single-suite runs)
+            const suiteMatch = content.match(/<testsuite[^>]*>/);
+            if (suiteMatch) {
+              return {
+                tests: getAttr(suiteMatch[0], 'tests'),
+                failures: getAttr(suiteMatch[0], 'failures'),
+                errors: getAttr(suiteMatch[0], 'errors'),
+                skipped: getAttr(suiteMatch[0], 'skipped'),
+              };
+            }
+            
+            return { tests: 0, failures: 0, errors: 0, skipped: 0 };
+          };
+
+          try {
+            const xmlFiles = fs.readdirSync('reports').filter((f) => f.endsWith('.xml'));
+            console.log(`Found ${xmlFiles.length} XML files: ${xmlFiles.join(', ')}`);
+
+            const totals = xmlFiles.reduce(
+              (acc, f) => {
+                const xml = fs.readFileSync(`reports/${f}`, 'utf8');
+                const c = parseXml(xml);
+                acc.tests += c.tests;
+                acc.failures += c.failures;
+                acc.errors += c.errors;
+                acc.skipped += c.skipped;
+                return acc;
+              },
+              { tests: 0, failures: 0, errors: 0, skipped: 0 }
+            );
+
+            console.log('Parsed Totals:', totals);
+
+            const passed = Math.max(0, totals.tests - totals.failures - totals.errors - totals.skipped);
+            const status = (totals.failures > 0 || totals.errors > 0) ? '❌ Failed' : '✅ Passed';
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+
+            const smokePath = 'reports/ci-db-smoke.xml';
+            let smokeLine = '';
+            if (fs.existsSync(smokePath)) {
+              const smokeXml = fs.readFileSync(smokePath, 'utf8');
+              const smokeCounts = parseXml(smokeXml);
+              const ok = (smokeCounts.failures + smokeCounts.errors) === 0;
+              smokeLine = `- **DB smoke test**: ${ok ? '✅ Passed' : '❌ Failed'}`;
+            }
+
+            const md = [
+              `## ${status} Vitest Results`,
+              '',
+              '| Metric | Count |',
+              '| :--- | :---: |',
+              `| **Total Tests** | ${totals.tests} |`,
+              `| **Passed** | ${passed} |`,
+              `| **Failed** | ${totals.failures + totals.errors} |`,
+              `| **Skipped** | ${totals.skipped} |`,
+              '',
+              smokeLine,
+              '',
+              `[View Full Test Report](${runUrl})`,
+              '',
+            ].join('\n');
+
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `markdown<<EOF\n${md}\nEOF\n`);
+          } catch (error) {
+            console.error('Error summarizing results:', error);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `markdown<<EOF\n## ⚠️ Test Summary generation failed\nCheck job logs for details.\nEOF\n`);
+          }
+          NODE
+
+      - name: Post results to PR conversation (sticky)
+        if: github.event_name == 'pull_request' && always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: vitest
+          message: ${{ steps.junit_summary.outputs.markdown }}
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          HUSKY: '0'
+        run: npm ci --legacy-peer-deps
+
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit

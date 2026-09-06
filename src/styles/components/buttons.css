@@ -1,0 +1,166 @@
+/* ========================================
+   Button Component Styles
+   Extracted from globals.css lines 3780-3841
+   ======================================== */
+
+.btn {
+    border-radius: 999px;
+    padding: 0.45rem 1.1rem;
+    font-weight: 800;
+    font-size: 0.8125rem;
+    letter-spacing: -0.005em;
+    line-height: 1.4;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    background: #111827;
+    color: #ffffff;
+}
+
+.btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: #fff;
+}
+
+.btn-danger {
+    background: #b91c1c;
+    color: #fff;
+}
+
+.btn-outline {
+    background: transparent;
+    border-color: rgba(17, 24, 39, 0.12);
+    color: var(--text-primary);
+}
+
+.btn-ghost {
+    background: #fff;
+    border: 1px solid rgba(17, 24, 39, 0.12);
+    color: var(--text-primary);
+}
+
+.btn-sm {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    padding: 0.3rem 0.85rem;
+}
+
+.btn-md {
+    font-size: 0.875rem;
+    font-weight: 800;
+    letter-spacing: -0.005em;
+}
+
+.btn-lg {
+    font-size: 0.9375rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    padding: 0.6rem 1.4rem;
+}
+
+
+/* Copy Button */
+.copy-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: -0.003em;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.copy-button:hover {
+    background: #f8fafc;
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.copy-button svg {
+    flex-shrink: 0;
+}
+
+/* Force light surfaces under browser dark templates */
+.force-light-surface {
+    color-scheme: light;
+    background: #e2e8f0 !important;
+    color: #334155 !important;
+    border-color: #cbd5e1 !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+}
+
+.force-light-surface:hover {
+    background: #cbd5e1 !important;
+    border-color: #94a3b8 !important;
+}
+
+/* ========================================
+   Button Dark Mode Protection
+   Prevents browser dark mode from affecting button colors
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+    .btn,
+    .btn-primary,
+    .btn-danger,
+    .btn-outline,
+    .btn-ghost,
+    .copy-button,
+    button[class*="bg-"],
+    [role="button"] {
+        filter: none !important;
+        -webkit-filter: none !important;
+        color-scheme: light only;
+    }
+
+    .btn {
+        background: #111827 !important;
+        color: #ffffff !important;
+    }
+
+    .btn-primary {
+        background: var(--primary-color) !important;
+        color: #ffffff !important;
+    }
+
+    .btn-danger {
+        background: #b91c1c !important;
+        color: #ffffff !important;
+    }
+
+    .btn-outline {
+        background: transparent !important;
+        border-color: rgba(17, 24, 39, 0.12) !important;
+        color: var(--text-primary) !important;
+    }
+
+    .btn-ghost,
+    .copy-button {
+        background: #ffffff !important;
+        border-color: rgba(17, 24, 39, 0.12) !important;
+        color: var(--text-primary) !important;
+    }
+}

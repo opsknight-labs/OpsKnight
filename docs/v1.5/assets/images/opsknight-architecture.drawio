@@ -1,0 +1,102 @@
+<mxfile host="app.diagrams.net" modified="2026-01-24T00:00:00.000Z" agent="codex" version="24.7.17" type="device">
+  <diagram id="opsknight-arch" name="OpsKnight Architecture" compressed="false">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="t1" value="OpsKnight Architecture (High-Level)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontFamily=Helvetica;fontSize=28;fontStyle=1;fontColor=#0f172a;" vertex="1" parent="1">
+          <mxGeometry x="60" y="40" width="1000" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="t2" value="Next.js App Router + internal scheduler + PostgreSQL (Prisma) + multi-channel notifications" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontFamily=Helvetica;fontSize=14;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="60" y="80" width="1200" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Deployments chip -->
+        <mxCell id="chip" value="Deployments: Docker Compose • Helm • Kustomize" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=#0f172a;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="44" width="480" height="42" as="geometry"/>
+        </mxCell>
+
+        <!-- Clients card -->
+        <mxCell id="c_card" value="" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="60" y="140" width="360" height="490" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_head" value="Clients" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#e2e8f0;strokeWidth=2;fontFamily=Helvetica;fontSize=14;fontStyle=1;fontColor=#0f172a;align=left;verticalAlign=middle;spacingLeft=18;" vertex="1" parent="1">
+          <mxGeometry x="60" y="140" width="360" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_body" value="• Web App (browser)&#xa;• Mobile PWA (iOS/Android/desktop install)&#xa;• Public Status Page (read-only)&#xa;• API clients &amp; inbound integrations" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontFamily=Helvetica;fontSize=13;fontColor=#334155;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="86" y="214" width="320" height="380" as="geometry"/>
+        </mxCell>
+
+        <!-- App card -->
+        <mxCell id="a_card" value="" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="450" y="140" width="650" height="490" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_head" value="OpsKnight Application (Next.js App Router)" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#e2e8f0;strokeWidth=2;fontFamily=Helvetica;fontSize=14;fontStyle=1;fontColor=#0f172a;align=left;verticalAlign=middle;spacingLeft=18;" vertex="1" parent="1">
+          <mxGeometry x="450" y="140" width="650" height="56" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="a_ui" value="UI + Server Actions&#xa;src/app/(app), src/app/(mobile)" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontColor=#334155;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="480" y="220" width="590" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_api" value="API Routes (/api/*)&#xa;events • integrations • status-page • auth" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontColor=#334155;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="480" y="304" width="590" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_sse" value="Real-time Streams (SSE)&#xa;events/stream • notifications/stream • widgets/stream" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontColor=#334155;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="480" y="388" width="590" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_sched" value="Internal Scheduler + Background Jobs&#xa;DB lock (CronSchedulerState) + Postgres-backed queue (BackgroundJob)" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontColor=#334155;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="480" y="472" width="590" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- DB card -->
+        <mxCell id="d_card" value="" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="140" width="420" height="490" as="geometry"/>
+        </mxCell>
+        <mxCell id="d_head" value="PostgreSQL (Prisma)" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#e2e8f0;strokeWidth=2;fontFamily=Helvetica;fontSize=14;fontStyle=1;fontColor=#0f172a;align=left;verticalAlign=middle;spacingLeft=18;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="140" width="420" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="d_body" value="• Users / Teams / Services&#xa;• Incidents / Alerts / Events&#xa;• On-call schedules &amp; escalation policies&#xa;• Notifications + provider config + push subscriptions&#xa;• SLA/Analytics rollups + job queue + scheduler state" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontFamily=Helvetica;fontSize=13;fontColor=#334155;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="1146" y="214" width="380" height="400" as="geometry"/>
+        </mxCell>
+
+        <!-- Outbound -->
+        <mxCell id="o_card" value="" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="60" y="660" width="1480" height="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="o_head" value="Outbound Channels (Notifications + Webhooks)" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#e2e8f0;strokeWidth=2;fontFamily=Helvetica;fontSize=14;fontStyle=1;fontColor=#0f172a;align=left;verticalAlign=middle;spacingLeft=18;" vertex="1" parent="1">
+          <mxGeometry x="60" y="660" width="1480" height="56" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="o1" value="Email&#xa;Resend / SendGrid / SMTP / SES" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontColor=#334155;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="90" y="734" width="290" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="o2" value="SMS / Voice&#xa;Twilio or AWS SNS" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontColor=#334155;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="400" y="734" width="260" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="o3" value="Web Push (PWA)&#xa;APNs / FCM via Web Push" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontColor=#334155;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="680" y="734" width="290" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="o4" value="Slack&#xa;OAuth + actions" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontColor=#334155;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="990" y="734" width="250" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="o5" value="Webhooks&#xa;Outbound callbacks" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e2e8f0;fontFamily=Helvetica;fontSize=12;fontColor=#334155;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="734" width="250" height="96" as="geometry"/>
+        </mxCell>
+
+        <!-- Connectors -->
+        <mxCell id="e1" style="endArrow=block;endFill=1;strokeWidth=2;strokeColor=#94a3b8;" edge="1" parent="1" source="c_card" target="a_card">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" style="endArrow=block;endFill=1;strokeWidth=2;strokeColor=#94a3b8;" edge="1" parent="1" source="a_card" target="d_card">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" style="endArrow=block;endFill=1;strokeWidth=2;strokeColor=#cbd5e1;" edge="1" parent="1" source="a_sched" target="o_card">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

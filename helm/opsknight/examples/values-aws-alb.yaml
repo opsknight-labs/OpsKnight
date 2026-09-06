@@ -1,0 +1,16 @@
+# Example values for AWS ALB Ingress Controller
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:REGION:ACCOUNT:certificate/CERTIFICATE-ID
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+  hosts:
+    - host: opsknight.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

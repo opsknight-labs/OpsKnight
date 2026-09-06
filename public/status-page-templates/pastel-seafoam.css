@@ -1,0 +1,73 @@
+/*
+  Template: Pastel Seafoam
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, #38bdf8));
+  --status-primary-hover: var(--sp-accent-2, #0ea5e9);
+  --status-card-shadow: 0 10px 24px rgba(56, 189, 248, 0.22);
+  --sp-ink: #0f172a;
+  --sp-muted: #475569;
+  --sp-primary: #38bdf8;
+  --sp-soft: #ecfeff;
+}
+
+.status-page-container {
+  background: linear-gradient(180deg, #ecfeff 0%, #e0f2fe 100%) !important;
+  color: var(--sp-ink) !important;
+}
+
+.status-page-header {
+  background: linear-gradient(120deg, #f0fdfa 0%, #e0f2fe 100%) !important;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.2) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #ffffff !important;
+  background: linear-gradient(120deg, #38bdf8 0%, #99f6e4 100%) !important;
+  box-shadow: 0 12px 24px rgba(56, 189, 248, 0.28) !important;
+}
+
+.status-service-card {
+  background: #f0fdfa !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(56, 189, 248, 0.16) !important;
+  box-shadow: 0 12px 26px rgba(56, 189, 248, 0.16) !important;
+}
+
+#incidents .status-incident-card {
+  background: #f0fdfa !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(56, 189, 248, 0.2) !important;
+  box-shadow: 0 12px 28px rgba(56, 189, 248, 0.18) !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, #38bdf8 0%, #0ea5e9 100%) !important;
+  border: none !important;
+  border-radius: 10px !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: #0f172a !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--sp-muted) !important;
+}

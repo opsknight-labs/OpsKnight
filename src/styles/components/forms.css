@@ -1,0 +1,128 @@
+/* ========================================
+   Form Component Styles
+   Extracted from globals.css
+   ======================================== */
+
+.filter-input,
+.filter-select,
+.role-select,
+.assign-select,
+.form-input,
+.form-select,
+.bulk-actions-select {
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: -0.003em;
+    line-height: 1.5;
+    background: #fff;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-input:focus,
+.filter-select:focus,
+.role-select:focus,
+.assign-select:focus,
+.form-input:focus,
+.form-select:focus,
+.bulk-actions-select:focus {
+    outline: none;
+    border-color: rgba(148, 163, 184, 0.4);
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.form-label {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+.form-error {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--color-error);
+}
+
+.filters-form-actions {
+    display: flex;
+    gap: 0.45rem;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+}
+
+.auth-input {
+    color: inherit;
+    background-color: transparent;
+    caret-color: currentColor;
+    -webkit-text-fill-color: currentColor;
+}
+
+.auth-input:focus {
+    color: inherit;
+    -webkit-text-fill-color: currentColor;
+}
+
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:focus {
+    -webkit-text-fill-color: currentColor;
+    caret-color: currentColor;
+    box-shadow: 0 0 0 1000px transparent inset;
+}
+
+/* ========================================
+   Form Dark Mode Protection
+   Prevents browser dark mode from affecting form colors
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+    .filter-input,
+    .filter-select,
+    .role-select,
+    .assign-select,
+    .form-input,
+    .form-select,
+    .bulk-actions-select,
+    input[type="text"]:not(.login-input):not(.auth-input),
+    input[type="email"]:not(.login-input):not(.auth-input),
+    input[type="password"]:not(.login-input):not(.auth-input),
+    input[type="number"]:not(.login-input):not(.auth-input),
+    input[type="search"]:not(.login-input):not(.auth-input),
+    input[type="tel"]:not(.login-input):not(.auth-input),
+    input[type="url"]:not(.login-input):not(.auth-input),
+    input[type="date"]:not(.login-input):not(.auth-input),
+    input[type="time"]:not(.login-input):not(.auth-input),
+    textarea,
+    select {
+        background-color: #ffffff !important;
+        color: var(--text-primary) !important;
+        border-color: var(--border) !important;
+        filter: none !important;
+        -webkit-filter: none !important;
+        color-scheme: light only !important;
+    }
+
+    .form-label {
+        color: var(--text-secondary) !important;
+    }
+
+    .form-error {
+        color: var(--color-error) !important;
+    }
+
+    /* Placeholder text */
+    input::placeholder,
+    textarea::placeholder {
+        color: var(--text-muted) !important;
+    }
+}

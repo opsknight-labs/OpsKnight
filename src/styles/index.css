@@ -1,0 +1,129 @@
+/* ========================================
+   OpsKnight CSS Entry Point
+   Single import for all core styles
+
+   MIGRATION NOTE:
+   globals.css is imported first to load all existing styles.
+   Modular files are imported after to override duplicates.
+   As content is extracted from globals.css, the duplication
+   will be removed incrementally.
+   ======================================== */
+
+/* Tailwind CSS Directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Micro-interactions & Animations */
+@import './animations.css';
+
+/* Legacy - Import globals.css first (contains all styles) */
+@import '../app/globals.css';
+
+/* Shadcn/ui CSS Variables Layer */
+@layer base {
+   :root {
+      --background: 0 0% 100%;
+      --foreground: 222.2 47.4% 11.2%;
+
+      --muted: 210 40% 96.1%;
+      --muted-foreground: 215.4 16.3% 46.9%;
+
+      --popover: 0 0% 100%;
+      --popover-foreground: 222.2 47.4% 11.2%;
+
+      --card: 0 0% 100%;
+      --card-foreground: 222.2 47.4% 11.2%;
+
+      --border: 214.3 28% 86%;
+      --input: 214.3 28% 86%;
+
+      --primary: 222.2 47.4% 11.2%;
+      --primary-foreground: 210 40% 98%;
+
+      --secondary: 210 40% 96.1%;
+      --secondary-foreground: 222.2 47.4% 11.2%;
+
+      --accent: 210 40% 96.1%;
+      --accent-foreground: 222.2 47.4% 11.2%;
+
+      --destructive: 0 84.2% 60.2%;
+      --destructive-foreground: 210 40% 98%;
+
+      --ring: 215 20.2% 65.1%;
+
+      --radius: 0.5rem;
+   }
+
+   [data-theme='dark'] {
+      --background: 240 10% 3.9%;
+      --foreground: 210 40% 98%;
+
+      --muted: 240 3.7% 15.9%;
+      --muted-foreground: 240 5% 64.9%;
+
+      --popover: 240 5.9% 7.5%;
+      --popover-foreground: 210 40% 98%;
+
+      --card: 240 5.9% 7.5%;
+      --card-foreground: 210 40% 98%;
+
+      --border: 240 3.7% 15.9%;
+      --input: 240 3.7% 15.9%;
+
+      --primary: 210 40% 98%;
+      --primary-foreground: 222.2 47.4% 1.2%;
+
+      --secondary: 240 3.7% 15.9%;
+      --secondary-foreground: 210 40% 98%;
+
+      --accent: 240 3.7% 15.9%;
+      --accent-foreground: 210 40% 98%;
+
+      --destructive: 0 63% 31%;
+      --destructive-foreground: 210 40% 98%;
+
+      --ring: 240 4.9% 83.9%;
+
+      --radius: 0.5rem;
+   }
+}
+
+/* Foundation Layer - Overrides globals.css duplicates */
+/* @import './foundation/fonts.css'; - REMOVED: Now managed by next/font in layout.tsx */
+@import './foundation/variables.css';
+@import './foundation/variables-dark.css';
+@import './foundation/reset.css';
+@import './foundation/base.css';
+
+/* Utilities Layer - Overrides globals.css duplicates */
+@import './utilities/animations.css';
+@import './utilities/effects.css';
+@import './utilities/typography.css';
+@import './utilities/layout.css';
+@import './utilities/spacing.css';
+@import './utilities/colors.css';
+
+/* Layouts Layer - Overrides globals.css duplicates */
+@import './layouts/sidebar.css';
+@import './layouts/topbar.css';
+@import './layouts/main-layout.css';
+@import './layouts/responsive.css';
+
+/* Components Layer - Overrides globals.css duplicates */
+@import './components/buttons.css';
+@import './components/forms.css';
+@import './components/tables.css';
+@import './components/badges.css';
+@import './components/cards.css';
+@import './components/modals.css';
+@import './components/dropdowns.css';
+
+/* Pages Layer - Page-specific styles */
+
+@import './pages/mobile.css';
+@import './pages/schedule.css';
+@import './pages/analytics.css';
+@import './pages/status-page.css';
+@import './pages/settings.css';
+@import './pages/users.css';

@@ -1,0 +1,52 @@
+name: Sync Docs With Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'scripts/sync-docs-to-website.sh'
+      - '.github/workflows/docs-sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip docs-sync]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v7
+
+      - name: Checkout website repo
+        uses: actions/checkout@v7
+        with:
+          repository: opsknight-labs/OpsKnight-website
+          path: opsknight-website
+          # Public clone. Passing an empty or invalid PAT here fails the job
+          # even when the website repo is public.
+          persist-credentials: false
+
+      - name: Sync app docs to website
+        run: ./scripts/sync-docs-to-website.sh ./opsknight-website
+
+      - name: Commit and push website docs
+        working-directory: opsknight-website
+        env:
+          OPSKNIGHT_WEBSITE_PAT: ${{ secrets.OPSKNIGHT_WEBSITE_PAT }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No website changes to commit."
+            exit 0
+          fi
+          if [ -z "$OPSKNIGHT_WEBSITE_PAT" ]; then
+            echo "::error::Docs differ from the website, but secret OPSKNIGHT_WEBSITE_PAT is missing. Add a fine-grained PAT with Contents: Read and write on opsknight-labs/OpsKnight-website as an Actions secret on OpsKnight or the opsknight-labs org."
+            exit 1
+          fi
+          git add -A
+          git commit -m "sync docs from app repo"
+          git push "https://x-access-token:${OPSKNIGHT_WEBSITE_PAT}@github.com/opsknight-labs/OpsKnight-website.git" HEAD:main

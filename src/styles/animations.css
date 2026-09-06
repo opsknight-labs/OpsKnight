@@ -1,0 +1,228 @@
+/* ============================================
+   MICRO-INTERACTIONS & ANIMATIONS
+   Phase 5: Polish & Enhancements
+   ============================================ */
+
+/* Scale In Animation (for modals/dialogs) */
+@keyframes scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.animate-scale-in {
+    animation: scale-in 200ms var(--ease-out) forwards;
+}
+
+/* Fade Out Animation */
+@keyframes fade-out {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+.animate-fade-out {
+    animation: fade-out 200ms var(--ease-in) forwards;
+}
+
+/* Checkmark Draw Animation (for save indicator) */
+@keyframes checkmark-draw {
+    0% {
+        stroke-dashoffset: 24;
+    }
+
+    100% {
+        stroke-dashoffset: 0;
+    }
+}
+
+.animate-checkmark {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+    animation: checkmark-draw 300ms var(--ease-out) forwards;
+}
+
+/* Shimmer Effect for Skeletons */
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.animate-shimmer {
+    background: linear-gradient(90deg,
+            hsl(var(--muted)) 0%,
+            hsl(var(--muted-foreground) / 0.1) 50%,
+            hsl(var(--muted)) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Pulse Animation (for loading indicators) */
+@keyframes pulse-subtle {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.animate-pulse-subtle {
+    animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+/* Spinner Animation */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin-slow {
+    animation: spin 1.5s linear infinite;
+}
+
+/* Slide In Variations */
+@keyframes slide-in-from-top {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slide-in-from-bottom {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-slide-in-from-top {
+    animation: slide-in-from-top 200ms var(--ease-out) forwards;
+}
+
+.animate-slide-in-from-bottom {
+    animation: slide-in-from-bottom 200ms var(--ease-out) forwards;
+}
+
+/* Bounce (subtle) for success states */
+@keyframes bounce-subtle {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-4px);
+    }
+}
+
+.animate-bounce-subtle {
+    animation: bounce-subtle 400ms var(--ease-out);
+}
+
+/* ============================================
+   INTERACTIVE COMPONENT ENHANCEMENTS
+   ============================================ */
+
+/* Button Hover Enhancement */
+.btn-hover-lift {
+    transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+}
+
+.btn-hover-lift:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-hover-lift:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Card Hover Enhancement */
+.card-hover-scale {
+    transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+}
+
+.card-hover-scale:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* Focus Ring for Form Fields */
+.focus-ring {
+    transition: box-shadow 150ms var(--ease-out), border-color 150ms var(--ease-out);
+}
+
+.focus-ring:focus {
+    box-shadow: 0 0 0 3px hsl(var(--primary-color) / 0.15);
+    border-color: hsl(var(--primary-color));
+}
+
+/* Switch Toggle Animation Enhancement */
+.switch-thumb-animate {
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ============================================
+   REDUCED MOTION SUPPORT
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .animate-shimmer,
+    .animate-pulse-subtle,
+    .animate-spin-slow,
+    .animate-bounce-subtle {
+        animation: none !important;
+    }
+
+    .btn-hover-lift:hover,
+    .card-hover-scale:hover,
+    .hover-lift:hover,
+    .hover-lift-lg:hover {
+        transform: none !important;
+    }
+}

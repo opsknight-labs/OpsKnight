@@ -1,0 +1,273 @@
+/**
+ * Encrypted Provider Configuration
+ *
+ * Handles encryption/decryption of sensitive fields in notification provider configs.
+ * API keys, auth tokens, and other secrets are encrypted at rest in the database.
+ */
+
+import { encrypt, decrypt, getEncryptionKey } from './encryption';
+import { logger } from './logger';
+
+/**
+ * Fields that should be encrypted for each provider type
+ */
+const SENSITIVE_FIELDS: Record<string, string[]> = {
+  twilio: ['accountSid', 'authToken', 'whatsappAccountSid', 'whatsappAuthToken'],
+  'aws-sns': ['accessKeyId', 'secretAccessKey'],
+  'web-push': ['vapidPrivateKey'],
+  resend: ['apiKey'],
+  sendgrid: ['apiKey'],
+  smtp: ['password'],
+  ses: ['accessKeyId', 'secretAccessKey'],
+};
+
+function getSensitiveFields(provider: string): string[] {
+  return Object.entries(SENSITIVE_FIELDS).find(([name]) => name === provider)?.[1] ?? [];
+}
+
+/**
+ * Marker prefix for encrypted values
+ */
+const ENCRYPTED_PREFIX = 'enc:';
+export const SECRET_MASK = '••••••••';
+
+/**
+ * Check if a value is already encrypted
+ */
+function isEncrypted(value: unknown): boolean {
+  return typeof value === 'string' && value.startsWith(ENCRYPTED_PREFIX);
+}
+
+/**
+ * Encrypt a single value
+ */
+async function encryptValue(value: string): Promise<string> {
+  if (!value || isEncrypted(value)) {
+    return value;
+  }
+  const encrypted = await encrypt(value);
+  return ENCRYPTED_PREFIX + encrypted;
+}
+
+/**
+ * Decrypt a single value
+ */
+async function decryptValue(value: string): Promise<string> {
+  if (!value || !isEncrypted(value)) {
+    return value;
+  }
+  const encryptedPart = value.slice(ENCRYPTED_PREFIX.length);
+  return await decrypt(encryptedPart);
+}
+
+/**
+ * Encrypt sensitive fields in a provider config before storing in database
+ *
+ * @param provider - The provider type (e.g., 'twilio', 'resend')
+ * @param config - The config object with plaintext sensitive fields
+ * @returns Config object with sensitive fields encrypted
+ */
+export async function encryptProviderConfig(
+  provider: string,
+  config: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const sensitiveFields = getSensitiveFields(provider);
+
+  // Check if encryption is available
+  const key = await getEncryptionKey();
+  if (!key) {
+    logger.error('Encryption key not configured; refusing to store provider secrets', {
+      component: 'encrypted-provider-config',
+      provider,
+    });
+    const containsSecret = Object.entries(config).some(
+      ([field, value]) =>
+        sensitiveFields.includes(field) && typeof value === 'string' && value.length > 0
+    );
+    if (containsSecret) {
+      throw new Error('Provider secrets cannot be stored because encryption is unavailable.');
+    }
+    return { ...config };
+  }
+
+  const encryptedConfig = Object.fromEntries(
+    await Promise.all(
+      Object.entries(config).map(async ([field, value]) => {
+        if (!sensitiveFields.includes(field) || typeof value !== 'string' || !value) {
+          return [field, value];
+        }
+        try {
+          return [field, await encryptValue(value)];
+        } catch (error) {
+          logger.error('Failed to encrypt provider config field', {
+            component: 'encrypted-provider-config',
+            provider,
+            field,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          throw new Error(`Failed to encrypt provider config field: ${field}`);
+        }
+      })
+    )
+  );
+
+  if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
+    encryptedConfig.vapidKeyHistory = await Promise.all(
+      config.vapidKeyHistory.map(async entry => {
+        if (!entry || typeof entry !== 'object') return entry;
+        const keyEntry = entry as Record<string, unknown>;
+        return {
+          ...keyEntry,
+          ...(typeof keyEntry.privateKey === 'string' && keyEntry.privateKey
+            ? { privateKey: await encryptValue(keyEntry.privateKey) }
+            : {}),
+        };
+      })
+    );
+  }
+
+  return encryptedConfig;
+}
+
+/**
+ * Decrypt sensitive fields in a provider config after retrieving from database
+ *
+ * @param provider - The provider type (e.g., 'twilio', 'resend')
+ * @param config - The config object with encrypted sensitive fields
+ * @returns Config object with sensitive fields decrypted
+ */
+export async function decryptProviderConfig(
+  provider: string,
+  config: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const sensitiveFields = getSensitiveFields(provider);
+
+  // Check if encryption is available
+  const key = await getEncryptionKey();
+  if (!key) {
+    // No encryption key - config might be plaintext (legacy) or we can't decrypt
+    return config;
+  }
+
+  const decryptedConfig = Object.fromEntries(
+    await Promise.all(
+      Object.entries(config).map(async ([field, value]) => {
+        if (!sensitiveFields.includes(field) || typeof value !== 'string' || !isEncrypted(value)) {
+          return [field, value];
+        }
+        try {
+          return [field, await decryptValue(value)];
+        } catch (error) {
+          logger.error('Failed to decrypt provider config field', {
+            component: 'encrypted-provider-config',
+            provider,
+            field,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          return [field, ''];
+        }
+      })
+    )
+  );
+
+  if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
+    decryptedConfig.vapidKeyHistory = await Promise.all(
+      config.vapidKeyHistory.map(async entry => {
+        if (!entry || typeof entry !== 'object') return entry;
+        const keyEntry = entry as Record<string, unknown>;
+        return {
+          ...keyEntry,
+          ...(typeof keyEntry.privateKey === 'string' && isEncrypted(keyEntry.privateKey)
+            ? { privateKey: await decryptValue(keyEntry.privateKey) }
+            : {}),
+        };
+      })
+    );
+  }
+
+  return decryptedConfig;
+}
+
+/**
+ * Check if a config has any encrypted fields
+ */
+export function hasEncryptedFields(provider: string, config: Record<string, unknown>): boolean {
+  const sensitiveFields = getSensitiveFields(provider);
+  if (
+    Object.entries(config).some(
+      ([field, value]) =>
+        sensitiveFields.includes(field) && typeof value === 'string' && isEncrypted(value)
+    )
+  ) {
+    return true;
+  }
+
+  if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
+    return config.vapidKeyHistory.some(
+      entry =>
+        entry &&
+        typeof entry === 'object' &&
+        isEncrypted((entry as Record<string, unknown>).privateKey)
+    );
+  }
+
+  return false;
+}
+
+/**
+ * Mask sensitive fields for safe logging/display
+ * Returns the config with sensitive fields replaced with "***"
+ */
+export function maskSensitiveFields(
+  provider: string,
+  config: Record<string, unknown>
+): Record<string, unknown> {
+  const sensitiveFields = getSensitiveFields(provider);
+  const maskedConfig = Object.fromEntries(
+    Object.entries(config).flatMap(([field, value]) => {
+      if (!sensitiveFields.includes(field) || typeof value !== 'string' || !value) {
+        return [[field, value]];
+      }
+      return [
+        [field, SECRET_MASK],
+        [`has${field.charAt(0).toUpperCase()}${field.slice(1)}`, true],
+      ];
+    })
+  );
+
+  if (provider === 'web-push' && Array.isArray(config.vapidKeyHistory)) {
+    maskedConfig.vapidKeyHistory = config.vapidKeyHistory.map(entry => {
+      if (!entry || typeof entry !== 'object') return entry;
+      const keyEntry = entry as Record<string, unknown>;
+      return {
+        publicKey: keyEntry.publicKey,
+        hasPrivateKey: Boolean(keyEntry.privateKey),
+      };
+    });
+  }
+
+  return maskedConfig;
+}
+
+/** Preserve an existing secret when a settings form submits a mask or blank value. */
+export function mergeSensitiveProviderFields(
+  provider: string,
+  incoming: Record<string, unknown>,
+  existing: Record<string, unknown>
+): Record<string, unknown> {
+  const sensitiveFields = new Set(getSensitiveFields(provider));
+  const existingFields = new Map(Object.entries(existing));
+  const merged = Object.fromEntries(
+    Object.entries(incoming).map(([field, value]) => {
+      const preserveExisting =
+        sensitiveFields.has(field) &&
+        (value === SECRET_MASK || value === '' || value === undefined || value === null) &&
+        existingFields.has(field);
+      return [field, preserveExisting ? existingFields.get(field) : value];
+    })
+  );
+  if (provider === 'web-push' && existing.vapidKeyHistory !== undefined) {
+    merged.vapidKeyHistory = existing.vapidKeyHistory;
+  }
+  return merged;
+}

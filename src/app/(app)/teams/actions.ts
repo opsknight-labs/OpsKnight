@@ -1,0 +1,555 @@
+'use server';
+
+import prisma from '@/lib/prisma';
+import { revalidatePath } from 'next/cache';
+import { logAudit } from '@/lib/audit';
+import { assertAdminOrResponder, assertAdmin, assertAdminOrTeamOwner } from '@/lib/rbac';
+import { createInAppNotifications } from '@/lib/in-app-notifications';
+import { logger } from '@/lib/logger';
+import { assertTeamNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
+import { removeTeamMembership } from '@/lib/teams/membership-commands';
+import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import { runSerializableTransaction } from '@/lib/db-utils';
+import type { TeamRole } from '@prisma/client';
+
+type TeamFormState = {
+  error?: string | null;
+  success?: boolean;
+};
+
+export async function createTeam(
+  _prevState: TeamFormState,
+  formData: FormData
+): Promise<TeamFormState> {
+  let currentUser: { id: string } | null = null;
+  try {
+    currentUser = await assertAdminOrResponder();
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unauthorized. Admin or Responder access required.',
+    };
+  }
+  const name = (formData.get('name') as string | null)?.trim() ?? '';
+  const description = (formData.get('description') as string | null)?.trim() ?? '';
+
+  if (!name) {
+    return { error: 'Team name is required.' };
+  }
+
+  let normalizedName = name;
+  try {
+    normalizedName = await assertTeamNameAvailable(name);
+  } catch (error) {
+    if (error instanceof UniqueNameConflictError) {
+      return { error: 'A team with that name already exists.' };
+    }
+    return { error: error instanceof Error ? error.message : 'Failed to validate team name.' };
+  }
+
+  const team = await prisma.team.create({
+    data: {
+      name: normalizedName,
+      description: description || null,
+    },
+  });
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.created',
+    entityType: 'TEAM',
+    entityId: team.id,
+    actorId,
+    details: { name: normalizedName },
+  });
+
+  revalidatePath('/teams');
+  revalidatePath('/services');
+  revalidatePath('/audit');
+
+  logger.info('team.created', { teamId: team.id, name: normalizedName, actorId });
+
+  return { success: true };
+}
+
+export async function updateTeam(teamId: string, formData: FormData) {
+  let currentUser: { id: string } | null = null;
+  try {
+    currentUser = await assertAdminOrTeamOwner(teamId);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unauthorized. Admin or Team Owner access required.',
+    };
+  }
+  const name = formData.get('name') as string;
+  const description = formData.get('description') as string;
+  const teamLeadId = formData.get('teamLeadId') as string;
+
+  // Validate team lead is a team member
+  if (teamLeadId) {
+    const isMember = await prisma.teamMember.findFirst({
+      where: {
+        teamId,
+        userId: teamLeadId,
+      },
+    });
+
+    if (!isMember) {
+      return { error: 'Team lead must be a team member' };
+    }
+  }
+
+  let normalizedName = name;
+  try {
+    normalizedName = await assertTeamNameAvailable(name, { excludeId: teamId });
+  } catch (error) {
+    if (error instanceof UniqueNameConflictError) {
+      return { error: 'A team with that name already exists.' };
+    }
+    return { error: error instanceof Error ? error.message : 'Failed to validate team name.' };
+  }
+
+  await prisma.team.update({
+    where: { id: teamId },
+    data: {
+      name: normalizedName,
+      description: description || null,
+      teamLeadId: teamLeadId || null,
+    },
+  });
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.updated',
+    entityType: 'TEAM',
+    entityId: teamId,
+    actorId,
+    details: { name: normalizedName, teamLeadId: teamLeadId || null },
+  });
+
+  revalidatePath('/teams');
+  revalidatePath('/services');
+  revalidatePath('/audit');
+
+  logger.info('team.updated', {
+    teamId,
+    name: normalizedName,
+    teamLeadId: teamLeadId || null,
+    actorId,
+  });
+}
+
+export async function deleteTeam(teamId: string) {
+  let currentUser: { id: string } | null = null;
+  try {
+    currentUser = await assertAdmin();
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
+    };
+  }
+  await prisma.$transaction([
+    prisma.teamMember.deleteMany({
+      where: { teamId },
+    }),
+    prisma.service.updateMany({
+      where: { teamId },
+      data: { teamId: null },
+    }),
+    prisma.incident.updateMany({
+      where: { teamId },
+      data: { teamId: null },
+    }),
+    prisma.escalationRule.updateMany({
+      where: { targetTeamId: teamId },
+      data: { targetTeamId: null },
+    }),
+    prisma.dashboard.updateMany({
+      where: { teamId },
+      data: { teamId: null },
+    }),
+    prisma.team.delete({
+      where: { id: teamId },
+    }),
+  ]);
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.deleted',
+    entityType: 'TEAM',
+    entityId: teamId,
+    actorId,
+  });
+
+  revalidatePath('/teams');
+  revalidatePath('/services');
+  revalidatePath('/audit');
+
+  logger.info('team.deleted', { teamId, actorId });
+}
+
+export async function addTeamMember(teamId: string, formData: FormData) {
+  let currentUser;
+  try {
+    currentUser = await assertAdminOrTeamOwner(teamId);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unauthorized. Admin or team owner access required.',
+    };
+  }
+  const userId = formData.get('userId') as string;
+  const requestedRole = (formData.get('role') as string) || 'MEMBER';
+
+  if (!userId) return;
+  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(requestedRole)) {
+    return { error: 'Invalid team role.' };
+  }
+  const role = requestedRole as TeamRole;
+
+  await prisma.$transaction(
+    async tx => {
+      await requireOperationalUser(tx, userId);
+      await tx.teamMember.create({
+        data: { teamId, userId, role: role as 'OWNER' | 'ADMIN' | 'MEMBER' },
+      });
+    },
+    { isolationLevel: 'Serializable' }
+  );
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.member.added',
+    entityType: 'TEAM_MEMBER',
+    entityId: `${teamId}:${userId}`,
+    actorId,
+    details: { teamId, userId, role },
+  });
+
+  revalidatePath('/teams');
+  revalidatePath('/users');
+  revalidatePath('/audit');
+
+  logger.info('team.member.added', { teamId, userId, role, actorId });
+
+  // Notify the user
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
+  if (team) {
+    await createInAppNotifications({
+      userIds: [userId],
+      type: 'TEAM',
+      title: 'Added to Team',
+      message: `You were added to team "${team.name}" as ${role}`,
+      entityType: 'TEAM',
+      entityId: teamId,
+    });
+  }
+}
+
+export async function updateTeamMemberRole(
+  memberId: string,
+  formData: FormData
+): Promise<{ error?: string } | undefined> {
+  let currentUser;
+  const requestedRole = (formData.get('role') as string) || 'MEMBER';
+
+  const member = await prisma.teamMember.findUnique({
+    where: { id: memberId },
+  });
+
+  if (!member) {
+    return { error: 'Member not found.' };
+  }
+
+  try {
+    currentUser = await assertAdminOrTeamOwner(member.teamId);
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Unauthorized. Admin or team owner required.',
+    };
+  }
+
+  if (!['OWNER', 'ADMIN', 'MEMBER'].includes(requestedRole)) {
+    return { error: 'Invalid team role.' };
+  }
+  const role = requestedRole as TeamRole;
+
+  try {
+    await runSerializableTransaction(async tx => {
+      const currentMember = await tx.teamMember.findUnique({ where: { id: memberId } });
+      if (!currentMember || currentMember.teamId !== member.teamId) {
+        throw new Error('Member not found.');
+      }
+      if (currentMember.role === 'OWNER' && role !== 'OWNER') {
+        const otherActiveOwners = await tx.teamMember.count({
+          where: {
+            teamId: currentMember.teamId,
+            role: 'OWNER',
+            NOT: { id: currentMember.id },
+            user: { status: 'ACTIVE' },
+          },
+        });
+        if (otherActiveOwners === 0) {
+          throw new Error('Each team must retain at least one active owner.');
+        }
+      }
+      await tx.teamMember.update({
+        where: { id: memberId },
+        data: { role },
+      });
+      await tx.user.update({
+        where: { id: currentMember.userId },
+        data: { tokenVersion: { increment: 1 } },
+      });
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update member role.' };
+  }
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.member.role.updated',
+    entityType: 'TEAM_MEMBER',
+    entityId: `${member.teamId}:${member.userId}`,
+    actorId,
+    details: { teamId: member.teamId, userId: member.userId, role },
+  });
+
+  revalidatePath('/teams');
+  revalidatePath('/users');
+  revalidatePath('/audit');
+
+  logger.info('team.member.role.updated', {
+    memberId,
+    teamId: member.teamId,
+    userId: member.userId,
+    role,
+    actorId,
+  });
+}
+
+export async function updateTeamMemberNotifications(
+  memberId: string,
+  receiveNotifications: boolean
+): Promise<{ error?: string } | undefined> {
+  const member = await prisma.teamMember.findUnique({
+    where: { id: memberId },
+    select: { teamId: true, userId: true },
+  });
+
+  if (!member) {
+    return { error: 'Member not found.' };
+  }
+
+  let currentUser;
+  try {
+    currentUser = await assertAdminOrTeamOwner(member.teamId);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unauthorized. Admin or Team Owner access required.',
+    };
+  }
+
+  await prisma.teamMember.update({
+    where: { id: memberId },
+    data: { receiveTeamNotifications: receiveNotifications },
+  });
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.member.notifications.updated',
+    entityType: 'TEAM_MEMBER',
+    entityId: memberId,
+    actorId,
+    details: {
+      teamId: member.teamId,
+      userId: member.userId,
+      receiveTeamNotifications: receiveNotifications,
+    },
+  });
+
+  revalidatePath('/teams');
+
+  logger.info('team.member.notifications.updated', {
+    memberId,
+    teamId: member.teamId,
+    userId: member.userId,
+    receiveTeamNotifications: receiveNotifications,
+    actorId,
+  });
+}
+
+export async function removeTeamMember(memberId: string): Promise<{ error?: string } | undefined> {
+  // First get the member to find the team ID
+  const member = await prisma.teamMember.findUnique({
+    where: { id: memberId },
+    include: { team: { select: { name: true } } },
+  });
+
+  if (!member) {
+    return { error: 'Member not found.' };
+  }
+
+  // Check if user is admin or owner of this specific team
+  let currentUser;
+  try {
+    currentUser = await assertAdminOrTeamOwner(member.teamId);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unauthorized. Admin or Team Owner access required.',
+    };
+  }
+
+  try {
+    await removeTeamMembership(memberId);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to remove team member.' };
+  }
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.member.removed',
+    entityType: 'TEAM_MEMBER',
+    entityId: memberId,
+    actorId,
+    details: { teamId: member.teamId, userId: member.userId },
+  });
+
+  revalidatePath('/teams');
+  revalidatePath('/users');
+  revalidatePath('/audit');
+
+  logger.info('team.member.removed', {
+    memberId,
+    teamId: member.teamId,
+    userId: member.userId,
+    actorId,
+  });
+
+  // Notify the user
+  if (member.team) {
+    await createInAppNotifications({
+      userIds: [member.userId],
+      type: 'TEAM',
+      title: 'Removed from Team',
+      message: `You were removed from team "${member.team.name}"`,
+      entityType: 'TEAM',
+      entityId: member.teamId,
+    });
+  }
+}
+
+export async function designateTeamLead(teamId: string, userId: string | null) {
+  let currentUser: { id: string } | null = null;
+  try {
+    currentUser = await assertAdminOrTeamOwner(teamId);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unauthorized. Admin or Team Owner access required.',
+    };
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { members: true },
+  });
+
+  if (!team) {
+    return { error: 'Team not found.' };
+  }
+
+  if (userId && !team.members.some(m => m.userId === userId)) {
+    return { error: 'User must be a member of the team to become team lead.' };
+  }
+
+  await prisma.team.update({
+    where: { id: teamId },
+    data: { teamLeadId: userId },
+  });
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.lead_updated',
+    entityType: 'TEAM',
+    entityId: teamId,
+    actorId,
+    details: { teamLeadId: userId },
+  });
+
+  revalidatePath('/teams');
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath('/audit');
+
+  logger.info('team.lead_updated', { teamId, teamLeadId: userId, actorId });
+  return { success: true };
+}
+
+export async function assignServicesToTeam(teamId: string, serviceIds: string[]) {
+  let currentUser: { id: string; role: string } | null = null;
+  try {
+    currentUser = await assertAdminOrTeamOwner(teamId);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Unauthorized. Admin or Team Owner access required.',
+    };
+  }
+
+  if (serviceIds.length === 0) {
+    return { error: 'Please select at least one service to assign.' };
+  }
+
+  const services = await prisma.service.findMany({
+    where: { id: { in: serviceIds } },
+    select: { id: true, teamId: true },
+  });
+  if (services.length !== new Set(serviceIds).size) {
+    return { error: 'One or more services could not be found.' };
+  }
+  if (
+    currentUser.role !== 'ADMIN' &&
+    services.some(service => service.teamId !== null && service.teamId !== teamId)
+  ) {
+    return { error: 'Only administrators can move a service between teams.' };
+  }
+
+  await prisma.service.updateMany({
+    where: { id: { in: serviceIds } },
+    data: { teamId },
+  });
+
+  const actorId = currentUser.id;
+  await logAudit({
+    action: 'team.services_assigned',
+    entityType: 'TEAM',
+    entityId: teamId,
+    actorId,
+    details: { serviceIds },
+  });
+
+  revalidatePath('/teams');
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath('/services');
+  revalidatePath('/audit');
+
+  logger.info('team.services_assigned', { teamId, serviceIds, actorId });
+  return { success: true };
+}

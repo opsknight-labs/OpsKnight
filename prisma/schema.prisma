@@ -1,0 +1,1837 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  RESPONDER
+  AUDITOR
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum AuditEntityType {
+  USER
+  TEAM
+  TEAM_MEMBER
+  SERVICE
+  INCIDENT
+  ESCALATION_POLICY
+  API_KEY
+  SSO_CONFIG
+  SCHEDULE
+  CUSTOM_FIELD
+  STATUS_PAGE
+  SYSTEM_CONFIG
+}
+
+enum UserTokenType {
+  INVITE
+  PASSWORD_RESET
+  ADMIN_RESET_LINK
+}
+
+enum ServiceStatus {
+  OPERATIONAL
+  DEGRADED
+  PARTIAL_OUTAGE
+  MAJOR_OUTAGE
+  MAINTENANCE
+}
+
+enum IncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  SNOOZED
+  SUPPRESSED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  SKIPPED
+}
+
+enum InboundDeliveryStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  SLACK
+  WEBHOOK
+  WHATSAPP
+}
+
+enum NotificationCategory {
+  INCIDENT
+  SECURITY
+  STATUS_PAGE
+  SLA
+  ADMINISTRATION
+  SYSTEM
+}
+
+enum NotificationRecipientType {
+  USER
+  EMAIL
+  PHONE
+  SUBSCRIBER
+  SLACK_CHANNEL
+  WEBHOOK
+}
+
+enum InAppNotificationType {
+  INCIDENT
+  SCHEDULE
+  TEAM
+  SERVICE
+  ACTION_ITEM
+}
+
+enum IncidentUrgency {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum IncidentVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum DashboardVisibility {
+  PRIVATE
+  TEAM
+  PUBLIC
+}
+
+enum EscalationTargetType {
+  USER
+  TEAM
+  SCHEDULE
+}
+
+/// Strongly-typed event taxonomy for IncidentEvent rows.
+///
+/// Pre-existing rows have `type = NULL`. Callers that classify events
+/// (escalation/reopen/auto-resolve detection) must continue to fall
+/// back to ILIKE message matching when `type` is NULL — this keeps the
+/// rolling deploy safe: old writers still produce untyped rows, and a
+/// follow-up release will backfill + flip readers to typed-only.
+///
+/// `LEGACY_OTHER` is the explicit "writer knew, but it's none of the
+/// specific kinds we track" tag — distinct from NULL ("writer didn't
+/// know, infer from message").
+enum IncidentEventType {
+  ACKNOWLEDGED
+  ESCALATED
+  SLA_WARNING
+  SLA_BREACHED
+  REOPENED
+  AUTO_RESOLVED
+  MANUAL_RESOLVED
+  COMMENT
+  STATUS_CHANGE
+  ASSIGNMENT
+  LEGACY_OTHER
+}
+
+enum ActionItemStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+}
+
+enum ActionItemPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ActionItemSource {
+  POSTMORTEM
+  MANUAL
+}
+
+enum ExternalIssueProvider {
+  JIRA
+}
+
+enum ExternalIssueSyncState {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+enum ExternalOperationStatus {
+  PENDING
+  PROCESSING
+  AMBIGUOUS
+  COMPLETED
+  FAILED
+}
+
+model ExternalOperation {
+  id             String                  @id @default(cuid())
+  provider       ExternalIssueProvider
+  operation      String
+  idempotencyKey String
+  incidentId     String?
+  actionItemId   String?
+  status         ExternalOperationStatus @default(PENDING)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  externalId     String?
+  externalKey    String?
+  requestPayload Json?
+  resultPayload  Json?
+  lastError      String?
+  attempts       Int                     @default(0)
+  nextAttemptAt  DateTime                @default(now())
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@unique([provider, idempotencyKey])
+  @@index([status, nextAttemptAt, leaseExpiresAt])
+  @@index([incidentId, operation])
+  @@index([actionItemId, operation])
+}
+
+/// Cluster-wide provider admission/cooldown state. Local circuit breakers are
+/// only fast-fail hints; this row is the shared source of truth for replicas.
+model ProviderAdmission {
+  key              String    @id
+  state            String    @default("CLOSED")
+  blockedUntil     DateTime?
+  consecutiveFails Int       @default(0)
+  lastSuccessAt    DateTime?
+  lastFailureAt    DateTime?
+  lastStatusCode   Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([state, blockedUntil])
+}
+
+model User {
+  id                           String     @id @default(cuid())
+  name                         String
+  email                        String     @unique
+  emailVerified                DateTime?
+  // Session revocation marker: increment to force-logout all JWT sessions
+  tokenVersion                 Int        @default(0)
+  invitationGeneration         Int        @default(0)
+  role                         Role       @default(USER)
+  status                       UserStatus @default(INVITED)
+  passwordHash                 String?
+  timeZone                     String     @default("UTC")
+  // Notification preferences (user-level, on-call tools)
+  emailNotificationsEnabled    Boolean    @default(false)
+  smsNotificationsEnabled      Boolean    @default(false)
+  pushNotificationsEnabled     Boolean    @default(false)
+  whatsappNotificationsEnabled Boolean    @default(false)
+  phoneNumber                  String? // For SMS notifications
+  quietHoursEnabled            Boolean    @default(false) // Explicit opt-in: never suppress paging unless the user enables Quiet Hours
+  quietHoursStartMinutes       Int        @default(1080) // 18:00 local time
+  quietHoursEndMinutes         Int        @default(480) // 08:00 local time
+  quietHoursWeekendAllDay      Boolean    @default(true)
+  // JIT Profile Sync - synced from OIDC provider
+  department                   String?
+  jobTitle                     String?
+  avatarUrl                    String?
+  gender                       String?
+  lastOidcSync                 DateTime?
+  invitedAt                    DateTime?
+  deactivatedAt                DateTime?
+  createdAt                    DateTime   @default(now())
+  updatedAt                    DateTime   @updatedAt
+
+  assignedIncidents    Incident[]
+  teamMemberships      TeamMember[]
+  onCallShifts         OnCallShift[]
+  escalationRules      EscalationRule[]
+  incidentNotes        IncidentNote[]
+  postmortems          Postmortem[]
+  notifications        Notification[]
+  inAppNotifications   InAppNotification[]
+  devices              UserDevice[]
+  incidentWatchers     IncidentWatcher[]
+  auditLogs            AuditLog[]
+  overrides            OnCallOverride[]    @relation("OverrideUser")
+  overrideReplacements OnCallOverride[]    @relation("OverrideReplacesUser")
+  layerAssignments     OnCallLayerUser[]
+
+  apiKeys             ApiKey[]
+  incidentTemplates   IncidentTemplate[]
+  updatedProviders    NotificationProvider[]
+  teamsLed            Team[]                 @relation("TeamLead")
+  slackIntegrations   SlackIntegration[]
+  slackOAuthConfigs   SlackOAuthConfig[]     @relation("SlackOAuthConfigUpdater")
+  jiraConfigsUpdated  JiraConfig[]           @relation("JiraConfigUpdater")
+  oidcConfigs         OidcConfig[]
+  oidcIdentities      OidcIdentity[]
+  oidcLinkingApproval OidcLinkingApproval?
+  avatar              UserAvatar?
+  dashboards          Dashboard[]
+  assignedActionItems ActionItem[]
+  tokens              UserToken[]
+
+  @@index([email]) // CRITICAL: Performance index for email lookups (fixes 2-4s queries)
+  @@index([role, status]) // For filtering users by role and status
+  @@index([status]) // For active user queries
+}
+
+// Separate table for avatar binary data to avoid bloating User queries
+model UserAvatar {
+  userId    String   @id
+  data      Bytes
+  mimeType  String
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Stable link between an IdP identity (issuer+sub) and an internal user.
+// Avoids unsafe "email-only" linking for OIDC sign-in.
+model OidcIdentity {
+  id        String   @id @default(cuid())
+  issuer    String
+  subject   String
+  email     String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issuer, subject])
+  @@index([userId])
+  @@index([issuer])
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members           TeamMember[]
+  services          Service[]
+  escalationRules   EscalationRule[]
+  incidentTemplates IncidentTemplate[]
+  incidents         Incident[] // Team-assigned incidents
+  dashboards        Dashboard[] // Team-shared dashboards
+  teamLeadId        String?
+  teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
+}
+
+model TeamMember {
+  id                       String   @id @default(cuid())
+  userId                   String
+  teamId                   String
+  role                     TeamRole @default(MEMBER)
+  receiveTeamNotifications Boolean  @default(true) // Team-specific notification preference
+
+  user User @relation(fields: [userId], references: [id])
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@unique([userId, teamId])
+  @@index([teamId])
+}
+
+model Service {
+  id                          String                @id @default(cuid())
+  name                        String                @unique
+  description                 String?
+  region                      String? // Service hosting region (e.g., US-East, EU-West)
+  slaTier                     String? // e.g., Gold, Silver, Bronze
+  status                      ServiceStatus         @default(OPERATIONAL)
+  targetAckMinutes            Int                   @default(15)
+  targetResolveMinutes        Int                   @default(120)
+  teamId                      String?
+  escalationPolicyId          String?
+  slackWebhookUrl             String? // Per-service Slack Webhook URL (only notification config at service level)
+  slackChannel                String? // Slack channel name (e.g., #incidents)
+  slackWorkspaceId            String? // Slack workspace ID for future multi-workspace support
+  slackIntegrationId          String? // Reference to workspace-level SlackIntegration (shared by services)
+  webhookUrl                  String? // Per-service generic webhook URL
+  serviceNotificationChannels NotificationChannel[] @default([]) // Service-level notification channels (isolated from escalation)
+  serviceNotifyOnTriggered    Boolean               @default(true)
+  serviceNotifyOnAck          Boolean               @default(true)
+  serviceNotifyOnResolved     Boolean               @default(true)
+  serviceNotifyOnSlaBreach    Boolean               @default(false)
+  // ChatOps War-Room overrides
+  autoCreateWarRoom           Boolean               @default(true) // Auto-create dedicated Slack channel for critical incidents
+  warRoomVideoBridge          String? // Override video bridge provider: JITSI, ZOOM, GOOGLE_MEET, NONE
+  warRoomCustomBridgeUrl      String? // Override custom bridge URL for this service
+  slaDefinitions              SLADefinition[]
+  createdAt                   DateTime              @default(now())
+  updatedAt                   DateTime              @updatedAt
+
+  team      Team?             @relation(fields: [teamId], references: [id])
+  incidents Incident[]
+  policy    EscalationPolicy? @relation(fields: [escalationPolicyId], references: [id])
+
+  integrations        Integration[]
+  alerts              Alert[]
+  incidentTemplates   IncidentTemplate[]
+  statusPageServices  StatusPageService[]
+  webhookIntegrations WebhookIntegration[]
+  slackIntegration    SlackIntegration?    @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
+  jiraServiceMapping  JiraServiceMapping?
+
+  @@index([teamId])
+  @@index([escalationPolicyId])
+  @@index([slackIntegrationId])
+}
+
+// Enhanced Escalation Policy
+model EscalationPolicy {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+
+  // Replaced simple JSON with relational steps
+  steps EscalationRule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  services Service[]
+}
+
+model EscalationRule {
+  id       String           @id @default(cuid())
+  policyId String
+  policy   EscalationPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  delayMinutes Int @default(0) // Time to wait before escalating to next step
+  stepOrder    Int // 0, 1, 2...
+
+  // Target type and ID - one of these will be set based on targetType
+  targetType       EscalationTargetType @default(USER)
+  targetUserId     String?
+  targetTeamId     String?
+  targetScheduleId String?
+
+  // Notification channels for this escalation step (overrides user preferences if set)
+  notificationChannels NotificationChannel[] // Per-step channel configuration
+
+  // Team-specific options
+  notifyOnlyTeamLead Boolean @default(false) // If true, only notify team lead instead of all team members
+
+  targetUser     User?           @relation(fields: [targetUserId], references: [id])
+  targetTeam     Team?           @relation(fields: [targetTeamId], references: [id])
+  targetSchedule OnCallSchedule? @relation(fields: [targetScheduleId], references: [id])
+
+  @@unique([policyId, stepOrder])
+  @@index([policyId])
+  @@index([targetUserId])
+  @@index([targetTeamId])
+  @@index([targetScheduleId])
+}
+
+model Integration {
+  id              String   @id @default(cuid())
+  name            String
+  type            String   @default("EVENTS_API_V2") // EVENTS_API_V2, EMAIL, etc.
+  key             String   @unique // The routing key used in API calls
+  signatureSecret String? // HMAC secret for webhook signature verification
+  snsTopicArn     String? // Expected, tenant-bound AWS SNS topic for CloudWatch deliveries
+  enabled         Boolean  @default(true) // Enable/disable integration
+  serviceId       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+  @@index([type, snsTopicArn])
+}
+
+/// Provider delivery inbox. This is deliberately independent of rate limiting:
+/// a transport delivery is only completed after canonical event processing and
+/// its lease prevents two replicas from executing the same nonce concurrently.
+model InboundDelivery {
+  id             String                @id @default(cuid())
+  integrationId  String
+  provider       String
+  deliveryHash   String
+  status         InboundDeliveryStatus @default(PROCESSING)
+  attempt        Int                   @default(1)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  lastError      String?
+  completedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([integrationId, deliveryHash])
+  @@index([status, leaseExpiresAt])
+}
+
+model WebhookIntegration {
+  id        String   @id @default(cuid())
+  serviceId String
+  name      String // "Google Chat", "Microsoft Teams", etc.
+  type      String // "GOOGLE_CHAT", "TEAMS", "DISCORD", "GENERIC"
+  url       String
+  secret    String? // For HMAC signature
+  channel   String? // Channel/room name
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, name])
+  @@index([serviceId])
+}
+
+// Slack OAuth Configuration (Global - stored in database)
+model SlackOAuthConfig {
+  id            String   @id @default(cuid())
+  clientId      String // Slack App Client ID
+  clientSecret  String // Encrypted Slack App Client Secret
+  signingSecret String? // Encrypted Slack App Signing Secret (verifies inbound requests)
+  redirectUri   String? // Custom redirect URI (optional)
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  updatedBy     String? // User ID who last updated the config
+  updater       User?    @relation("SlackOAuthConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@unique([id]) // Only one config record
+}
+
+// OIDC Single Sign-On Configuration (Global - stored in database)
+model OidcConfig {
+  id             String   @id @default("default")
+  issuer         String
+  clientId       String
+  clientSecret   String
+  enabled        Boolean  @default(true)
+  autoProvision  Boolean  @default(true)
+  allowedDomains String[] @default([])
+  roleMapping    Json?    @default("[]") // Schema: [{ claim: string, value: string, role: Role }]
+  customScopes   String? // e.g. "groups profile email"
+  providerType   String? // e.g. 'google', 'okta', 'azure', 'auth0', 'custom'
+  providerLabel  String? // Custom display name, e.g. "Acme Corp SSO"
+  profileMapping Json?    @default("{}") // { department: "dept", jobTitle: "title", avatarUrl: "picture" }
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      String?
+  updater        User?    @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@unique([id])
+}
+
+// Slack OAuth Integration
+model SlackIntegration {
+  id            String   @id @default(cuid())
+  workspaceId   String // Slack workspace/team ID
+  workspaceName String? // Slack workspace name
+  botToken      String // Encrypted bot token (xoxb-...)
+  signingSecret String? // Encrypted signing secret
+  installedBy   String? // User ID who installed the integration
+  scopes        String[] // OAuth scopes granted
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  services  Service[] @relation("ServiceSlackIntegration")
+  installer User?     @relation(fields: [installedBy], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId]) // One integration per workspace (can be global or service-specific)
+  @@index([workspaceId])
+}
+
+model Alert {
+  id         String   @id @default(cuid())
+  dedupKey   String? // The deduplication key from the event source
+  status     String   @default("TRIGGERED") // TRIGGERED, RESOLVED
+  payload    Json // The full event payload
+  serviceId  String
+  incidentId String?
+  createdAt  DateTime @default(now())
+
+  service  Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  incident Incident? @relation(fields: [incidentId], references: [id])
+
+  @@index([serviceId, status]) // For querying alerts by service and status
+  @@index([incidentId]) // For querying alerts by incident
+  @@index([dedupKey, status]) // For deduplication queries
+  @@index([createdAt]) // For time-based queries
+  // SLA Performance Optimization: Retention-based query indexes
+  @@index([createdAt, incidentId], name: "idx_alert_retention") // For retention cleanup with incident lookup
+  @@index([serviceId, createdAt], name: "idx_alert_by_service") // For service-scoped time-range queries
+}
+
+model Incident {
+  id                        String                    @id @default(cuid())
+  title                     String
+  description               String?
+  status                    IncidentStatus            @default(OPEN)
+  urgency                   IncidentUrgency           @default(HIGH)
+  visibility                IncidentVisibility        @default(PUBLIC)
+  priority                  String? // P1, P2.. P5
+  dedupKey                  String? // Key for deduplication
+  serviceId                 String
+  assigneeId                String?
+  teamId                    String? // Team assignment; DB check constraint keeps it exclusive with assigneeId
+  currentEscalationStep     Int? // Current step index (0-based)
+  nextEscalationAt          DateTime? // When to execute next escalation step
+  escalationStatus          String? // ESCALATING, COMPLETED, PAUSED
+  escalationProcessingAt    DateTime? // When escalation processing was claimed
+  escalationGeneration      Int                       @default(0) // Stable logical run identity; increments on restart/loop
+  acknowledgedAt            DateTime? // When incident was acknowledged (for SLA tracking)
+  resolvedAt                DateTime? // When incident was resolved (for SLA tracking)
+  snoozedUntil              DateTime? // When to auto-unsnooze (for time-based snoozing)
+  snoozeReason              String? // Reason for snoozing
+  slaPausedMs               BigInt                    @default(0) // Materialized closed SLA pause duration
+  slaPauseStartedAt         DateTime? // Current open SLA pause, if any
+  slaAckTargetMs            Int? // Immutable effective ACK target captured when the incident is created
+  slaResolveTargetMs        Int? // Immutable effective resolve target captured when the incident is created
+  slaTargetSource           String? // Provenance for the frozen target (priority/service/default/backfill)
+  slaTargetCapturedAt       DateTime? // When the immutable target contract was captured
+  // ChatOps War-Room fields
+  slackWorkspaceId          String? // Immutable workspace that owns this war-room instance
+  slackChannelId            String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
+  slackChannelName          String? // Channel name (e.g. "inc-104-payments-api")
+  warRoomUrl                String? // Video bridge URL (Jitsi/Zoom/Meet)
+  warRoomArchivedAt         DateTime? // Set when the Slack channel is archived; the channel id is kept for history
+  warRoomProvisioningStatus WarRoomProvisioningStatus @default(NONE)
+  warRoomProvisioningToken  String?
+  warRoomProvisioningAt     DateTime?
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+
+  service                 Service                  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  assignee                User?                    @relation(fields: [assigneeId], references: [id])
+  team                    Team?                    @relation(fields: [teamId], references: [id])
+  events                  IncidentEvent[]
+  notes                   IncidentNote[]
+  postmortem              Postmortem?
+  statusPageAnnouncements StatusPageAnnouncement[]
+  customFieldValues       CustomFieldValue[]
+  alerts                  Alert[] // Relation to raw alerts
+  notifications           Notification[]
+  watchers                IncidentWatcher[]
+  tags                    IncidentTag[]
+  actionItemRecords       ActionItem[]
+  externalIssueLinks      ExternalIssueLink[]
+  pinnedMessages          SlackPinnedMessage[]
+  slaPauses               IncidentSlaPause[]
+
+  @@index([dedupKey]) // Index for fast deduplication lookups
+  @@index([serviceId, dedupKey, status]) // For service-scoped deduplication checks
+  @@index([nextEscalationAt, escalationStatus]) // Index for escalation processing queries
+  @@index([escalationProcessingAt]) // For escalation processing locks
+  @@index([snoozedUntil]) // Index for auto-unsnooze processing
+  @@index([status, createdAt]) // For filtering incidents by status and date
+  @@index([serviceId, status]) // For querying incidents by service and status
+  @@index([assigneeId, status]) // For querying incidents by assignee and status
+  @@index([teamId, status]) // For querying incidents by team and status
+  @@index([createdAt]) // For time-based queries and sorting
+  @@index([urgency, status]) // For filtering by urgency and status
+  @@index([status, urgency, createdAt]) // Composite for count queries with urgency and date filter
+  @@index([status, assigneeId]) // For unassigned count queries (assigneeId: null)
+  // Performance Optimization: Indexes for Analytics & Dashboard Counts
+  @@index([status]) // For simple count queries (e.g. "Open Incidents")
+  @@index([acknowledgedAt]) // For MTTA calculations
+  @@index([resolvedAt]) // For MTTR calculations
+  // SLA Performance Optimization: World-Class Query Indexes
+  @@index([createdAt, status], name: "idx_incident_retention") // For retention-based status queries
+  @@index([serviceId, createdAt, status], name: "idx_incident_sla_by_service") // For service-scoped SLA queries
+  @@index([createdAt, acknowledgedAt], name: "idx_incident_mtta_calc") // For MTTA range calculations
+  @@index([createdAt, resolvedAt, status], name: "idx_incident_mttr_calc") // For MTTR with status filter
+  @@index([assigneeId, createdAt, status], name: "idx_incident_assignee_load") // For assignee workload queries
+  // ChatOps War-Room: Channel lookup from slash commands
+  @@index([slackChannelId], name: "idx_incident_war_room_channel") // For slash command channel→incident resolution
+  @@index([slackWorkspaceId, slackChannelId], name: "idx_incident_war_room_workspace_channel")
+  @@index([warRoomProvisioningStatus, warRoomProvisioningAt])
+  // Realtime SSE polling: updatedAt queries on every active browser connection (every 3-5s)
+  @@index([updatedAt], name: "idx_incident_updated_at") // Prevents full table scan on realtime polling
+  @@index([serviceId, updatedAt], name: "idx_incident_service_updated_at") // Per-service realtime updates
+  // Dashboard filtering by priority (SLA dashboards, widgets, exports)
+  @@index([priority, status], name: "idx_incident_priority_status")
+}
+
+/// Bounded transactional signal appended by database triggers whenever data
+/// that feeds realtime incident/dashboard projections changes.
+model RealtimeChange {
+  id        BigInt   @id @default(autoincrement())
+  changedAt DateTime @default(now())
+}
+
+model IncidentSlaPause {
+  id                  String    @id @default(cuid())
+  incidentId          String
+  reason              String?
+  startedAt           DateTime
+  endedAt             DateTime?
+  lifecycleGeneration Int       @default(0)
+  actorId             String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, startedAt])
+  @@index([incidentId, endedAt])
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String? // Optional color for tag
+  createdAt DateTime @default(now())
+
+  incidents IncidentTag[]
+}
+
+model IncidentTag {
+  id         String   @id @default(cuid())
+  incidentId String
+  tagId      String
+  createdAt  DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, tagId])
+  @@index([incidentId])
+  @@index([tagId])
+}
+
+model IncidentTemplate {
+  id               String          @id @default(cuid())
+  name             String          @unique
+  description      String?
+  title            String // Default title for incidents created from this template
+  descriptionText  String? // Default description text
+  defaultUrgency   IncidentUrgency @default(HIGH)
+  defaultPriority  String? // P1-P5
+  defaultServiceId String? // Default service to use
+  createdById      String? // User who created the template
+  isPublic         Boolean         @default(false) // Whether template is available to all users
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  createdBy      User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  defaultService Service? @relation(fields: [defaultServiceId], references: [id])
+  Team           Team?    @relation(fields: [teamId], references: [id])
+  teamId         String?
+
+  @@index([createdById])
+}
+
+model IncidentWatcher {
+  id         String   @id @default(cuid())
+  incidentId String
+  userId     String
+  role       String   @default("FOLLOWER") // FOLLOWER, STAKEHOLDER, EXEC
+  createdAt  DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([incidentId, userId])
+}
+
+model IncidentEvent {
+  id         String             @id @default(cuid())
+  incidentId String
+  message    String
+  // Strongly-typed event taxonomy. Nullable for rolling-deploy
+  // compatibility: pre-existing rows have NULL, and readers MUST
+  // continue to fall back to ILIKE message matching when type is NULL.
+  // A follow-up release will backfill and flip readers to typed-only.
+  type       IncidentEventType?
+  createdAt  DateTime           @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt]) // For querying events by incident chronologically
+  @@index([incidentId, message, createdAt], name: "idx_event_ack_search") // For ack event searches with message filtering
+  @@index([incidentId, type], name: "idx_event_type") // For typed event classification (escalation/reopen/auto-resolve)
+  @@index([createdAt], name: "idx_event_global_created_at") // For cross-incident timeline feeds and global retention sweeps
+}
+
+model IncidentNote {
+  id         String   @id @default(cuid())
+  incidentId String
+  userId     String?
+  content    String
+  createdAt  DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, createdAt]) // For querying notes by incident chronologically
+}
+
+model Postmortem {
+  id          String    @id @default(cuid())
+  incidentId  String    @unique // One postmortem per incident
+  title       String
+  summary     String? // Executive summary
+  timeline    Json? // Timeline of events (JSON array)
+  impact      Json? // Impact assessment (JSON object)
+  rootCause   String? // Root cause analysis
+  resolution  String? // How it was resolved
+  actionItems Json? // Action items (JSON array)
+  lessons     String? // Lessons learned
+  status      String    @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  isPublic    Boolean   @default(true) // Public visibility on status page
+  publishedAt DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  incident          Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  createdBy         User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  actionItemRecords ActionItem[]
+
+  @@index([incidentId])
+  @@index([status, createdAt])
+  @@index([createdById])
+}
+
+model ActionItem {
+  id           String             @id @default(cuid())
+  postmortemId String
+  incidentId   String
+  title        String
+  description  String?
+  ownerId      String?
+  dueDate      DateTime?
+  status       ActionItemStatus   @default(OPEN)
+  priority     ActionItemPriority @default(MEDIUM)
+  source       ActionItemSource   @default(POSTMORTEM)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  completedAt  DateTime?
+
+  postmortem         Postmortem          @relation(fields: [postmortemId], references: [id], onDelete: Cascade)
+  incident           Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  owner              User?               @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  externalIssueLinks ExternalIssueLink[]
+
+  @@index([postmortemId])
+  @@index([incidentId, status])
+  @@index([ownerId, status])
+  @@index([status, priority])
+  @@index([dueDate])
+}
+
+model JiraConfig {
+  id                     String   @id @default("default")
+  baseUrl                String
+  userEmail              String
+  apiTokenEncrypted      String
+  enabled                Boolean  @default(true)
+  defaultProjectKey      String?
+  webhookSecretEncrypted String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  updatedBy              String?
+
+  updatedByUser User? @relation("JiraConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+}
+
+model JiraServiceMapping {
+  id                          String   @id @default(cuid())
+  serviceId                   String   @unique
+  projectKey                  String
+  incidentIssueType           String
+  actionItemIssueType         String
+  defaultLabels               String[] @default([])
+  defaultComponent            String?
+  autoCreateIncidentIssue     Boolean  @default(false)
+  autoCreateIncidentUrgencies String[] @default([])
+  syncEnabled                 Boolean  @default(true)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([projectKey])
+}
+
+model ExternalIssueLink {
+  id               String                 @id @default(cuid())
+  provider         ExternalIssueProvider  @default(JIRA)
+  incidentId       String?
+  actionItemId     String?
+  externalId       String
+  externalKey      String
+  externalUrl      String
+  externalStatus   String?
+  externalAssignee String?
+  syncState        ExternalIssueSyncState @default(PENDING)
+  lastSyncedAt     DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  incident   Incident?   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  actionItem ActionItem? @relation(fields: [actionItemId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@unique([provider, externalKey])
+  @@index([incidentId])
+  @@index([actionItemId])
+  @@index([syncState])
+  @@index([provider, syncState])
+}
+
+model OnCallSchedule {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  timeZone        String           @default("UTC")
+  layers          OnCallLayer[]
+  overrides       OnCallOverride[]
+  shifts          OnCallShift[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  escalationRules EscalationRule[]
+}
+
+model OnCallLayer {
+  id                  String    @id @default(cuid())
+  scheduleId          String
+  name                String
+  start               DateTime
+  end                 DateTime?
+  rotationLengthHours Int       @default(24)
+  shiftLengthHours    Int? // Optional: If set, defines strict shift duration (leaving gaps)
+  restrictions        Json? // { daysOfWeek: [0-6], startHour: 0-23, endHour: 0-23 }
+  priority            Int       @default(0) // Higher number = higher priority for final schedule
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  schedule OnCallSchedule    @relation(fields: [scheduleId], references: [id])
+  users    OnCallLayerUser[]
+
+  @@index([scheduleId])
+}
+
+model OnCallLayerUser {
+  id       String @id @default(cuid())
+  layerId  String
+  userId   String
+  position Int    @default(0)
+
+  layer OnCallLayer @relation(fields: [layerId], references: [id])
+  user  User        @relation(fields: [userId], references: [id])
+
+  @@unique([layerId, userId])
+}
+
+model OnCallOverride {
+  id             String   @id @default(cuid())
+  scheduleId     String
+  userId         String
+  replacesUserId String?
+  start          DateTime
+  end            DateTime
+  createdAt      DateTime @default(now())
+
+  schedule     OnCallSchedule @relation(fields: [scheduleId], references: [id])
+  user         User           @relation("OverrideUser", fields: [userId], references: [id])
+  replacesUser User?          @relation("OverrideReplacesUser", fields: [replacesUserId], references: [id])
+
+  @@unique([scheduleId, userId, start, end])
+  @@index([scheduleId, start, end]) // For finding active overrides in date range
+  @@index([userId, start, end]) // For user's override schedule queries
+}
+
+model OnCallShift {
+  id         String   @id @default(cuid())
+  scheduleId String
+  userId     String
+  start      DateTime
+  end        DateTime
+
+  schedule OnCallSchedule @relation(fields: [scheduleId], references: [id])
+  user     User           @relation(fields: [userId], references: [id])
+
+  @@index([start, end]) // For date range queries (active shifts)
+  @@index([scheduleId])
+  @@index([userId, start, end]) // For user-specific shift queries
+}
+
+// Notification model for contact attempts
+model Notification {
+  id                String                    @id @default(cuid())
+  incidentId        String?
+  userId            String?
+  channel           NotificationChannel
+  status            NotificationStatus        @default(PENDING)
+  message           String?
+  eventType         String                    @default("triggered")
+  category          NotificationCategory      @default(INCIDENT)
+  recipientType     NotificationRecipientType @default(USER)
+  recipientId       String?
+  recipientDisplay  String?
+  recipientHash     String?
+  templateKey       String?
+  sourceType        String?
+  sourceId          String?
+  deliveryKey       String?                   @unique
+  payloadEncrypted  String?
+  priority          Int                       @default(5)
+  scheduledAt       DateTime                  @default(now())
+  nextAttemptAt     DateTime                  @default(now())
+  lastAttemptAt     DateTime?
+  maxAttempts       Int                       @default(3)
+  expiresAt         DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  failedAt          DateTime?
+  errorMsg          String?
+  providerMessageId String?                   @unique
+  attempts          Int                       @default(0) // Retry attempt count
+  createdAt         DateTime                  @default(now())
+
+  incident         Incident?                     @relation(fields: [incidentId], references: [id])
+  user             User?                         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  deliveryAttempts NotificationDeliveryAttempt[]
+
+  @@index([incidentId]) // For querying notifications by incident
+  @@index([userId]) // For querying notifications by user
+  @@index([userId, createdAt]) // For user notification history queries (performance)
+  @@index([status, createdAt]) // For querying pending/failed notifications
+  @@index([channel, status]) // For querying by channel and status
+  @@index([userId, status, createdAt]) // For user's pending notification queries
+  @@index([incidentId, channel], name: "idx_notification_incident_channel") // For channel fallback detection per incident
+  @@index([incidentId, userId, status], name: "idx_notification_incident_user_status") // For per-incident per-user dedup checks
+  @@index([status, nextAttemptAt, priority, createdAt], name: "idx_notification_delivery_due")
+  @@index([category, createdAt], name: "idx_notification_category_created")
+  @@index([recipientHash, createdAt], name: "idx_notification_recipient_created")
+  @@index([sourceType, sourceId, createdAt], name: "idx_notification_source_created")
+  @@index([createdAt, id], name: "idx_notification_created_cursor")
+}
+
+model NotificationDeliveryAttempt {
+  id                String    @id @default(cuid())
+  notificationId    String
+  ordinal           Int
+  outcome           String
+  provider          String?
+  providerMessageId String?
+  errorCode         String?
+  errorMessage      String?
+  startedAt         DateTime  @default(now())
+  finishedAt        DateTime?
+  latencyMs         Int?
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, ordinal])
+  @@index([notificationId, startedAt])
+  @@index([outcome, startedAt])
+}
+
+model InAppNotification {
+  id         String                @id @default(cuid())
+  userId     String
+  type       InAppNotificationType
+  title      String
+  message    String
+  entityType String?
+  entityId   String?
+  readAt     DateTime?
+  createdAt  DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt]) // For chronological queries
+  @@index([userId, readAt]) // For unread count queries
+  @@index([userId, readAt, createdAt]) // Optomized for "Unread" queries (readAt: null)
+  @@index([createdAt]) // Retention cleanup
+  @@index([createdAt, id]) // Replica-wide notification change feed cursor
+}
+
+// User device tokens for push notifications
+model UserDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  deviceId  String // Unique device identifier
+  token     String // FCM/APNS token
+  platform  String // 'ios', 'android', 'web'
+  userAgent String? // Browser/device info
+  lastUsed  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+  @@index([token])
+}
+
+model AuditLog {
+  id          String          @id @default(cuid())
+  action      String
+  entityType  AuditEntityType
+  entityId    String?
+  actorId     String?
+  actorEmail  String? // Immutable actor snapshot retained after user deletion
+  actorName   String? // Immutable actor snapshot retained after user deletion
+  details     Json?
+  targetEmail String? // For rate limiting queries (avoid JSON scan)
+  ip          String? // For rate limiting queries (avoid JSON scan)
+  createdAt   DateTime        @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId]) // For querying audit logs by entity
+  @@index([actorId, createdAt]) // For querying audit logs by actor
+  @@index([createdAt]) // For time-based queries
+  @@index([entityType, createdAt])
+  @@index([action, createdAt])
+  // Rate Limiting Performance Indexes
+  @@index([action, targetEmail, createdAt]) // For checking email rate limits O(log n)
+  @@index([action, ip, createdAt]) // For checking IP rate limits O(log n)
+}
+
+// User tokens for invite links, password resets, and admin reset links
+// Tokens are stored as SHA256 hashes (never store raw tokens in DB)
+model UserToken {
+  id         String        @id @default(cuid())
+  type       UserTokenType
+  identifier String // typically the user's email (lowercased)
+  userId     String?
+  generation Int           @default(0)
+  tokenHash  String        @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime      @default(now())
+  metadata   Json?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([identifier, type])
+  @@index([userId, type, generation])
+  @@index([expiresAt])
+}
+
+model OidcLinkingApproval {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  approvedById String?
+  approvedAt   DateTime  @default(now())
+  revokedAt    DateTime?
+  generation   Int       @default(1)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([approvedById])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  prefix     String
+  tokenHash  String
+  scopes     String[]
+  userId     String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  expiresAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+// System-level notification provider configuration
+model NotificationProvider {
+  id        String   @id @default(cuid())
+  provider  String   @unique // 'twilio', 'resend', 'sendgrid', 'smtp', 'web-push'
+  enabled   Boolean  @default(false)
+  // Encrypted configuration (JSON stored as text, should be encrypted in production)
+  config    Json // Provider-specific configuration
+  updatedBy String? // User ID who last updated
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  updatedByUser User? @relation(fields: [updatedBy], references: [id])
+
+  @@index([provider])
+}
+
+// Background Job Queue (PostgreSQL-based, no Redis needed)
+enum JobType {
+  ESCALATION
+  NOTIFICATION
+  AUTO_UNSNOOZE
+  SCHEDULED_TASK
+  STATUS_PAGE_NOTIFICATION
+  CHATOPS_INTENT
+  EXTERNAL_OPERATION
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model BackgroundJob {
+  id          String    @id @default(cuid())
+  type        JobType
+  status      JobStatus @default(PENDING)
+  scheduledAt DateTime // When to execute the job
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  error       String? // Error message if failed
+  payload     Json // Job-specific data (incidentId, userId, etc.)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([type, status, scheduledAt]) // For efficient job polling
+  @@index([status, scheduledAt]) // For finding pending jobs
+  @@index([scheduledAt]) // For time-based queries
+}
+
+/// A signed Slack request is first persisted, then executed by the durable
+/// worker. `EFFECT_COMPLETED` intentionally precedes response delivery: Slack
+/// may retry a response URL request, but that must never repeat a mutation.
+enum ChatOpsIntentKind {
+  SLASH_COMMAND
+  INTERACTIVE_ACTION
+}
+
+enum ChatOpsIntentStatus {
+  PENDING
+  EFFECT_PROCESSING
+  EFFECT_COMPLETED
+  RESPONSE_PENDING
+  RESPONSE_PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum WarRoomProvisioningStatus {
+  NONE
+  PROVISIONING
+  READY
+  FAILED
+}
+
+model ChatOpsIntent {
+  id                  String              @id @default(cuid())
+  kind                ChatOpsIntentKind
+  deliveryHash        String
+  workspaceId         String
+  channelId           String?
+  slackUserId         String?
+  encryptedPayload    String
+  status              ChatOpsIntentStatus @default(PENDING)
+  attempt             Int                 @default(0)
+  leaseToken          String?
+  leaseExpiresAt      DateTime?
+  effectCompletedAt   DateTime?
+  responseCompletedAt DateTime?
+  responsePayload     Json?
+  lastError           String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@unique([kind, deliveryHash])
+  @@index([status, leaseExpiresAt])
+  @@index([workspaceId, channelId])
+}
+
+// Status Page Configuration
+model StatusPage {
+  id               String  @id @default(cuid())
+  name             String  @unique @default("Status Page")
+  organizationName String? // Dedicated organization name for email branding
+  subdomain        String? @unique // Custom subdomain (e.g., status.yourcompany.com)
+  customDomain     String? @unique // Custom domain (e.g., status.yourcompany.com)
+  enabled          Boolean @default(false)
+  showServices     Boolean @default(true)
+  showIncidents    Boolean @default(true)
+  showMetrics      Boolean @default(true)
+  showSubscribe    Boolean @default(true)
+  branding         Json? // Logo, colors, favicon
+  footerText       String?
+  contactEmail     String?
+  contactUrl       String?
+
+  // Privacy settings
+  privacyMode              String? @default("PUBLIC") // PUBLIC, RESTRICTED, PRIVATE
+  showIncidentDetails      Boolean @default(true)
+  showIncidentTitles       Boolean @default(true)
+  showIncidentDescriptions Boolean @default(true)
+  showAffectedServices     Boolean @default(true)
+  showIncidentTimestamps   Boolean @default(true)
+  showServiceMetrics       Boolean @default(true)
+  showServiceDescriptions  Boolean @default(true)
+  showServiceRegions       Boolean @default(true)
+  showServicesByRegion     Boolean @default(false)
+  showServiceOwners        Boolean @default(false)
+  showServiceSlaTier       Boolean @default(false)
+  showTeamInformation      Boolean @default(false)
+  showCustomFields         Boolean @default(false)
+  showIncidentAssignees    Boolean @default(false)
+  showIncidentUrgency      Boolean @default(true)
+  showUptimeHistory        Boolean @default(true)
+  showRecentIncidents      Boolean @default(true)
+  showChangelog            Boolean @default(true)
+  showRegionHeatmap        Boolean @default(true)
+  showPostIncidentReview   Boolean @default(true)
+  maxIncidentsToShow       Int     @default(50)
+  incidentHistoryDays      Int     @default(90)
+  allowedCustomFields      Json? // Array of custom field IDs to show
+  dataRetentionDays        Int? // Auto-hide incidents older than X days
+  requireAuth              Boolean @default(false) // Require authentication
+  authProvider             String? // SSO provider if requireAuth=true
+  emailProvider            String? // Email provider for subscription notifications (resend, sendgrid, smtp, or null for auto)
+  enableUptimeExports      Boolean @default(false)
+
+  // Status API access controls
+  statusApiRequireToken       Boolean @default(false)
+  statusApiRateLimitEnabled   Boolean @default(false)
+  statusApiRateLimitMax       Int     @default(120)
+  statusApiRateLimitWindowSec Int     @default(60)
+
+  // Uptime threshold configuration
+  uptimeExcellentThreshold Float @default(99.9) // Threshold for excellent uptime (green)
+  uptimeGoodThreshold      Float @default(99.0) // Threshold for good uptime (yellow)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  services      StatusPageService[]
+  announcements StatusPageAnnouncement[]
+  apiTokens     StatusPageApiToken[]
+  subscriptions StatusPageSubscription[]
+  webhooks      StatusPageWebhook[]
+
+  @@index([enabled])
+}
+
+// Services shown on status page
+model StatusPageService {
+  id           String   @id @default(cuid())
+  statusPageId String
+  serviceId    String
+  displayName  String? // Override service name for display
+  showOnPage   Boolean  @default(true)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  statusPage StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  service    Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([statusPageId, serviceId])
+  @@index([statusPageId, order])
+}
+
+// Announcements/Communications on status page
+model StatusPageAnnouncement {
+  id                 String    @id @default(cuid())
+  statusPageId       String
+  title              String
+  message            String
+  type               String    @default("INFO") // INFO, WARNING, MAINTENANCE, INCIDENT
+  incidentId         String? // Link to incident if applicable
+  affectedServiceIds Json? // Array of affected service IDs (for maintenance/impact mapping)
+  startDate          DateTime
+  endDate            DateTime?
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  statusPage StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  incident   Incident?  @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+
+  @@index([statusPageId, isActive, startDate])
+  @@index([incidentId])
+}
+
+model StatusPageApiToken {
+  id           String    @id @default(cuid())
+  statusPageId String
+  name         String
+  prefix       String
+  tokenHash    String
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+
+  statusPage StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash])
+  @@index([statusPageId, revokedAt])
+}
+
+// Status Page Subscriptions (Email notifications)
+model StatusPageSubscription {
+  id                String    @id @default(cuid())
+  statusPageId      String
+  email             String
+  phone             String? // For SMS (future)
+  token             String    @unique // Unsubscribe token
+  subscribedAt      DateTime  @default(now())
+  unsubscribedAt    DateTime?
+  verified          Boolean   @default(false)
+  verificationToken String?
+  preferences       Json? // Notification preferences (all incidents, major only, etc.)
+
+  statusPage StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
+  @@unique([statusPageId, email])
+  @@index([statusPageId, verified])
+  @@index([token])
+}
+
+// Status Page Webhooks (External integrations)
+model StatusPageWebhook {
+  id              String    @id @default(cuid())
+  statusPageId    String
+  url             String
+  secret          String // Webhook secret for verification
+  events          Json // Array of events to send (incident.created, incident.updated, etc.)
+  enabled         Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  statusPage StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
+  @@index([statusPageId, enabled])
+}
+
+// Custom Fields System
+model CustomField {
+  id           String          @id @default(cuid())
+  name         String
+  key          String          @unique // Unique identifier (e.g., "customer_id")
+  type         CustomFieldType
+  required     Boolean         @default(false)
+  defaultValue String?
+  options      Json? // For SELECT type: array of options
+  order        Int             @default(0)
+  showInList   Boolean         @default(false) // Show in incident table
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  values CustomFieldValue[]
+
+  @@index([key])
+  @@index([order])
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+  BOOLEAN
+  URL
+  EMAIL
+}
+
+model CustomFieldValue {
+  id            String   @id @default(cuid())
+  incidentId    String
+  customFieldId String
+  value         String? // Store as string, parse based on field type
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  incident    Incident    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, customFieldId])
+  @@index([incidentId])
+  @@index([customFieldId])
+  @@index([value]) // For filtering
+}
+
+// Telemetry Metrics Rollup
+model MetricRollup {
+  id        String   @id @default(cuid())
+  name      String // e.g., 'http.request.duration', 'http.request.status'
+  bucket    DateTime // Time bucket start
+  serviceId String? // Optional service association
+  count     Int // Number of sample points
+  sum       Float // Sum of values
+  min       Float?
+  max       Float?
+  tags      Json? // Additional dimensions (status code, method, etc.)
+
+  createdAt DateTime @default(now())
+
+  @@index([name, bucket])
+  @@index([serviceId, bucket])
+  @@index([bucket])
+}
+
+// System-wide settings (singleton pattern)
+model SystemSettings {
+  id            String  @id @default("default")
+  appUrl        String? // Application base URL for links in emails, webhooks, etc.
+  encryptionKey String? // Hex-encoded 32-byte key for encrypting secrets
+
+  // Data Retention Policy (days)
+  incidentRetentionDays Int @default(730) // 2 years - how long to keep incident data
+  alertRetentionDays    Int @default(365) // 1 year - how long to keep alert data
+  logRetentionDays      Int @default(365) // 1 year - audit and incident event history
+  metricsRetentionDays  Int @default(365) // 1 year - how long to keep metric rollups
+  realTimeWindowDays    Int @default(90) // 90 days - real-time queries, older uses rollups
+
+  // Tenant-level after-hours definition. IANA timezone name; defaults to
+  // "UTC" so existing deployments keep current behavior. Used by the SLA
+  // metrics pipeline (live SQL aggregate, in-memory classifier, and the
+  // daily rollup generator) to decide whether an incident's createdAt
+  // falls outside business hours (Mon-Fri 08:00-18:00 in this zone).
+  businessHoursTimeZone String @default("UTC")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Pre-aggregated incident metrics for historical data performance
+// Used for queries beyond realTimeWindowDays
+model IncidentMetricRollup {
+  id          String   @id @default(cuid())
+  date        DateTime // Start of the period (day/week/month)
+  granularity String   @default("daily") // 'daily', 'weekly', 'monthly'
+  serviceId   String? // Optional: per-service rollup
+  teamId      String? // Optional: per-team rollup
+
+  // Incident Counts
+  totalIncidents         Int @default(0)
+  openIncidents          Int @default(0)
+  acknowledgedIncidents  Int @default(0)
+  resolvedIncidents      Int @default(0)
+  highUrgencyIncidents   Int @default(0)
+  mediumUrgencyIncidents Int @default(0)
+  lowUrgencyIncidents    Int @default(0)
+
+  // Priority breakdown (P1-P5)
+  p1Incidents Int @default(0)
+  p2Incidents Int @default(0)
+  p3Incidents Int @default(0)
+  p4Incidents Int @default(0)
+  p5Incidents Int @default(0)
+
+  // SLA Metrics (stored in milliseconds for precision)
+  mttaSum   BigInt @default(0) // Sum of MTTA values
+  mttaCount Int    @default(0) // Count for averaging
+  mttrSum   BigInt @default(0) // Sum of MTTR values  
+  mttrCount Int    @default(0) // Count for averaging
+
+  // SLA Compliance
+  ackSlaMet          Int @default(0)
+  ackSlaBreached     Int @default(0)
+  resolveSlaMet      Int @default(0)
+  resolveSlaBreached Int @default(0)
+
+  // Event Counts
+  escalationCount           Int @default(0)
+  reopenCount               Int @default(0)
+  autoResolveCount          Int @default(0)
+  escalationEventCount      Int @default(0)
+  escalatedIncidentCount    Int @default(0)
+  reopenEventCount          Int @default(0)
+  reopenedIncidentCount     Int @default(0)
+  autoResolveEventCount     Int @default(0)
+  autoResolvedIncidentCount Int @default(0)
+  alertCount                Int @default(0)
+
+  // After Hours
+  afterHoursCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  perPriority IncidentMetricRollupByPriority[]
+
+  // NOTE: This unique constraint does not enforce uniqueness when
+  // `serviceId` and/or `teamId` are NULL (Postgres treats NULLs as
+  // distinct). Partial unique indexes are added in raw SQL by the
+  // accompanying migration to close that hole — search the migration
+  // for `idx_rollup_unique_*`.
+  @@unique([date, granularity, serviceId, teamId])
+  @@index([date])
+  @@index([granularity, date])
+  @@index([serviceId, date])
+  @@index([teamId, date])
+}
+
+/// Per-priority sums attached to an `IncidentMetricRollup`. One row per
+/// priority bucket (P1-P5) per rollup. Lets priority-filtered queries
+/// return real `mttr`/`ackCompliance`/`resolveCompliance` instead of
+/// null. Optional (additive, rolling-safe): historical rollups won't
+/// have these rows until backfilled, so readers must tolerate the empty
+/// case and fall back to the aggregate values on the parent row.
+model IncidentMetricRollupByPriority {
+  id       String @id @default(cuid())
+  rollupId String
+  priority String // 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
+
+  incidents          Int    @default(0)
+  mttaSum            BigInt @default(0)
+  mttaCount          Int    @default(0)
+  mttrSum            BigInt @default(0)
+  mttrCount          Int    @default(0)
+  ackSlaMet          Int    @default(0)
+  ackSlaBreached     Int    @default(0)
+  resolveSlaMet      Int    @default(0)
+  resolveSlaBreached Int    @default(0)
+
+  rollup IncidentMetricRollup @relation(fields: [rollupId], references: [id], onDelete: Cascade)
+
+  @@unique([rollupId, priority])
+  @@index([priority])
+}
+
+// ⚙️ Governance / System Config
+// Stores system-wide policies and security markers (encryption fingerprint, canary)
+model SystemConfig {
+  key       String   @id // e.g., 'encryption_fingerprint'
+  value     Json // Flexible JSON config
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+// Bronze Tier: Raw Log Storage
+model LogEntry {
+  id        String   @id @default(cuid())
+  level     String // 'info', 'error', 'warn', etc.
+  message   String
+  timestamp DateTime
+  serviceId String?
+  context   Json? // Structured log context
+
+  createdAt DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([serviceId, timestamp])
+  @@index([level, timestamp]) // For filtering logs by level (error logs, etc.)
+  @@index([serviceId, level, timestamp]) // For service-specific log level queries
+}
+
+// SLA Management
+model SLADefinition {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Targets (minutes)
+  targetAckTime     Int?
+  targetResolveTime Int?
+
+  // Scope of Applicability
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id])
+  priority  String? // Filter by priority (e.g. "P1")
+
+  // SLA Specifics
+  target     Float // e.g. 99.9
+  window     String // e.g. '30d'
+  metricType String // e.g. 'UPTIME', 'MTTA'
+  version    Int    @default(1)
+
+  activeFrom DateTime  @default(now())
+  activeTo   DateTime?
+
+  snapshots SLASnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Daily SLA Compliance Snapshots
+model SLASnapshot {
+  id              String   @id @default(cuid())
+  slaDefinitionId String
+  date            DateTime // Midnight of the day captured
+
+  totalIncidents        Int
+  metAckTime            Int // Count of incidents meeting ack SLA
+  metResolveTime        Int // Count of incidents meeting resolve SLA
+  evaluatedAckCount     Int       @default(0)
+  evaluatedResolveCount Int       @default(0)
+  complianceScore       Float? // null when no SLA sample was evaluated
+  denominatorUnknown    Boolean   @default(false) // legacy snapshot awaiting canonical regeneration
+  targetAckMinutes      Int? // Immutable definition ACK target used for this materialization
+  targetResolveMinutes  Int? // Immutable definition resolve target used for this materialization
+  definitionVersion     Int? // Immutable SLA definition version used for this materialization
+  targetCapturedAt      DateTime? // When the snapshot target contract was captured
+  targetSource          String? // Provenance for legacy/current target capture
+
+  slaDefinition SLADefinition @relation(fields: [slaDefinitionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, slaDefinitionId])
+}
+
+model SLAPerformanceLog {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+
+  serviceId  String?
+  teamId     String?
+  windowDays Int
+
+  durationMs    Int
+  incidentCount Int
+  dataSource    String @default("live") // live, rollup, or hybrid request path
+
+  @@index([timestamp])
+  @@index([durationMs])
+  @@index([serviceId, timestamp]) // For service-scoped performance queries
+  @@index([teamId, timestamp]) // For team-scoped performance queries
+  @@index([timestamp, durationMs]) // For time-range performance analysis
+  @@index([timestamp, dataSource]) // For per-path operational health analysis
+  @@map("sla_performance_logs")
+}
+
+// Distributed cron scheduler state for production multi-worker environments
+model CronSchedulerState {
+  id                  String    @id @default("singleton") // Only one row exists
+  lastRunAt           DateTime?
+  lastSuccessAt       DateTime?
+  lastError           String?
+  nextRunAt           DateTime?
+  lastRollupDate      String? // "YYYY-MM-DD" format
+  lastRollupRefreshAt DateTime? // Watermark for late incident updates that invalidate old rollups
+  lockedBy            String? // Worker instance ID holding the lock
+  lockedAt            DateTime? // When lock was acquired
+  updatedAt           DateTime  @updatedAt
+
+  @@map("cron_scheduler_state")
+}
+
+// Executive Dashboard - Customizable report dashboards
+model Dashboard {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  visibility  DashboardVisibility @default(PRIVATE)
+  isDefault   Boolean             @default(false) // User's default dashboard
+  isTemplate  Boolean             @default(false) // Pre-built system template
+  templateId  String? // ID of template this was cloned from
+  layout      Json // Grid layout config: { columns: 4, rowHeight: 120 }
+  config      Json? // Global settings: { timeRange: 7, refreshInterval: 60 }
+  userId      String
+  teamId      String? // For team-shared dashboards
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team    Team?             @relation(fields: [teamId], references: [id])
+  widgets DashboardWidget[]
+
+  @@index([userId])
+  @@index([teamId])
+  @@index([isTemplate])
+}
+
+// Dashboard Widget - Individual widget configuration
+model DashboardWidget {
+  id          String   @id @default(cuid())
+  dashboardId String
+  widgetType  String // "metric", "chart", "table", "gauge", "insights"
+  metricKey   String // "totalIncidents", "mttr", "ackCompliance", etc.
+  title       String? // Custom title override
+  position    Json // Grid position: { x: 0, y: 0, w: 1, h: 1 }
+  config      Json // Widget-specific config (chartType, variant, etc.)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([dashboardId])
+}
+
+// Distributed Rate Limiting
+model RateLimit {
+  key       String   @id
+  count     Int      @default(0)
+  expiresAt DateTime
+
+  @@index([expiresAt]) // For cleanup jobs
+}
+
+// ChatOps War-Room Configuration (Global)
+/// One row per Slack message captured into an incident via an emoji pin.
+/// The unique key makes pinning idempotent: re-reacting, or a second person
+/// reacting to the same message, no longer creates duplicate notes.
+model SlackPinnedMessage {
+  id          String   @id @default(cuid())
+  incidentId  String
+  workspaceId String?
+  channelId   String // Slack channel the message lives in
+  messageTs   String // Slack message timestamp — unique within a channel
+  pinnedBy    String? // Display name of whoever reacted
+  createdAt   DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, channelId, messageTs])
+  @@index([incidentId])
+  @@index([workspaceId, channelId])
+}
+
+model ChatOpsConfig {
+  id                      String   @id @default("default")
+  enabled                 Boolean  @default(false)
+  autoCreateOnUrgency     String[] @default(["HIGH"]) // Urgency levels that trigger auto-creation
+  autoCreateOnPriority    String[] @default(["P1", "P2"]) // Priority levels that trigger auto-creation
+  channelPrefix           String   @default("inc") // Channel name prefix (e.g. #inc-104-...)
+  archiveOnResolve        Boolean  @default(true) // Auto-archive war-room channels on resolve
+  defaultVideoBridge      String   @default("JITSI") // JITSI, ZOOM, GOOGLE_MEET, NONE
+  customBridgeUrlTemplate String? // Custom URL pattern with {incidentId} placeholder
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([id])
+}

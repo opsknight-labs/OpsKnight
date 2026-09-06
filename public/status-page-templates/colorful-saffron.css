@@ -1,0 +1,73 @@
+/*
+  Template: Colorful Saffron
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, #f59e0b));
+  --status-primary-hover: var(--sp-accent-2, #d97706);
+  --status-card-shadow: 0 12px 26px rgba(245, 158, 11, 0.22);
+  --sp-ink: #1f2937;
+  --sp-muted: #7c2d12;
+  --sp-primary: #f59e0b;
+  --sp-soft: #fef3c7;
+}
+
+.status-page-container {
+  background: linear-gradient(180deg, #fff7ed 0%, #fef3c7 100%) !important;
+  color: var(--sp-ink) !important;
+}
+
+.status-page-header {
+  background: linear-gradient(120deg, #fff7ed 0%, #fde68a 100%) !important;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.2) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #ffffff !important;
+  background: linear-gradient(120deg, #ef4444 0%, #f59e0b 100%) !important;
+  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.3) !important;
+}
+
+.status-service-card {
+  background: #fff7ed !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(245, 158, 11, 0.16) !important;
+  box-shadow: 0 12px 26px rgba(245, 158, 11, 0.16) !important;
+}
+
+#incidents .status-incident-card {
+  background: #fff7ed !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(239, 68, 68, 0.2) !important;
+  box-shadow: 0 12px 28px rgba(239, 68, 68, 0.18) !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, #ef4444 0%, #f59e0b 100%) !important;
+  border: none !important;
+  border-radius: 10px !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: #1f2937 !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: #1f2937 !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: #7c2d12 !important;
+}

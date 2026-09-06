@@ -1,0 +1,246 @@
+name: Docker Image (build + push)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME_TEST: ghcr.io/${{ github.repository_owner }}/opsknight-test
+  IMAGE_NAME_RELEASE: ghcr.io/${{ github.repository_owner }}/opsknight
+
+jobs:
+  release-quality:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_release
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opsknight_release?schema=public
+      PGPASSWORD: postgres
+    steps:
+      - name: Checkout release history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install candidate dependencies
+        env:
+          HUSKY: '0'
+        run: npm ci --legacy-peer-deps
+
+      - name: Clean-install and migration contract
+        run: |
+          mkdir -p reports
+          npx prisma migrate deploy
+          npx prisma generate
+          npm run prisma:validate
+          npm run prisma:health
+          node scripts/ci-db-smoke.cjs
+          npm run docs:links
+          npm run docs:capabilities
+          npx vitest run -c vitest.unit.config.ts \
+            tests/unit/migration-recovery.test.ts \
+            tests/lib/deployment-config-unit.test.ts
+
+      - name: Event, escalation, and notification contract
+        env:
+          VITEST_USE_REAL_DB: '1'
+        run: |
+          npx vitest run -c vitest.int.config.ts --no-file-parallelism \
+            tests/integration/event-resilience.test.ts \
+            tests/integration/notification-flow.test.ts \
+            tests/integration/job-queue.test.ts
+
+      - name: Upgrade from previous stable release
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREVIOUS_TAG="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -Fvx "$CURRENT_TAG" | head -n 1 || true)"
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo 'No previous stable tag exists; upgrade gate is not applicable.'
+            exit 0
+          fi
+          echo "Testing upgrade from $PREVIOUS_TAG to $CURRENT_TAG"
+          createdb -h localhost -U postgres opsknight_upgrade
+          git worktree add /tmp/opsknight-previous "$PREVIOUS_TAG"
+          (
+            cd /tmp/opsknight-previous
+            HUSKY=0 npm ci --legacy-peer-deps
+            DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_upgrade?schema=public' npx prisma migrate deploy
+          )
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_upgrade?schema=public' npx prisma migrate deploy
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_upgrade?schema=public' npm run prisma:health
+
+      - name: Backup and restore contract
+        run: |
+          POSTGRES_CONTAINER="${{ job.services.postgres.id }}"
+          test -n "$POSTGRES_CONTAINER"
+          # Use the service image's matching PostgreSQL client. The Ubuntu
+          # runner's older pg_dump refuses to dump a PostgreSQL 16 server.
+          docker exec "$POSTGRES_CONTAINER" pg_dump -U postgres -Fc \
+            -f /tmp/opsknight-release.dump opsknight_release
+          docker exec "$POSTGRES_CONTAINER" createdb -U postgres opsknight_restore
+          docker exec "$POSTGRES_CONTAINER" pg_restore -U postgres --no-owner \
+            -d opsknight_restore /tmp/opsknight-release.dump
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_restore?schema=public' npm run prisma:health
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_restore?schema=public' node scripts/ci-db-smoke.cjs
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v5
+
+      - name: Render release deployment contract
+        run: |
+          cp env.example .env
+          docker compose config > /tmp/opsknight-compose.yaml
+          helm lint helm/opsknight
+          helm template opsknight helm/opsknight --namespace opsknight > /tmp/opsknight-helm.yaml
+          kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
+
+  build:
+    needs: release-quality
+    if: >-
+      always() &&
+      (needs.release-quality.result == 'success' || needs.release-quality.result == 'skipped')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate stable release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST_RELEASE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          LATEST_RELEASE_TAG="$LATEST_RELEASE_TAG" node scripts/validate-release-tag.cjs "$GITHUB_REF_NAME"
+
+      - name: Docker metadata (test channel - PR)
+        if: github.event_name == 'pull_request'
+        id: meta_test_pr
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME_TEST }}
+          tags: |
+            type=ref,event=pr,prefix=pr-
+
+      - name: Docker metadata (test channel - main)
+        if: github.ref == 'refs/heads/main'
+        id: meta_test_main
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME_TEST }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short,prefix=sha-
+
+      - name: Docker metadata (release channel - version tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: meta_release_tag
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME_RELEASE }}
+          tags: |
+            type=raw,value=latest
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,format=short,prefix=sha-
+
+      - name: Build (PR validation - no push)
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: ${{ steps.meta_test_pr.outputs.tags }}
+          labels: ${{ steps.meta_test_pr.outputs.labels }}
+          cache-from: type=gha,scope=opsknight-main-amd64
+          provenance: false
+          sbom: false
+
+      - name: Build + push (test channel - main)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta_test_main.outputs.tags }}
+          labels: ${{ steps.meta_test_main.outputs.labels }}
+          cache-from: type=gha,scope=opsknight-main-amd64
+          cache-to: type=gha,scope=opsknight-main-amd64,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Build + push (release channel - version tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta_release_tag.outputs.tags }}
+          labels: ${{ steps.meta_release_tag.outputs.labels }}
+          cache-from: |
+            type=gha,scope=opsknight-release
+            type=gha,scope=opsknight-main-amd64
+          cache-to: type=gha,scope=opsknight-release,mode=max
+          provenance: mode=max
+          sbom: true

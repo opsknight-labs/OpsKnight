@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opsknight.fullname" . }}-config
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+data:
+  NODE_ENV: {{ .Values.config.nodeEnv | quote }}
+  NEXTAUTH_URL: {{ .Values.config.nextauthUrl | quote }}
+  NEXT_PUBLIC_APP_URL: {{ .Values.config.nextPublicAppUrl | quote }}
+  PORT: {{ .Values.config.port | quote }}
+  HOSTNAME: {{ .Values.config.hostname | quote }}
+  NEXT_TELEMETRY_DISABLED: {{ .Values.config.nextTelemetryDisabled | quote }}
+  NOTIFICATION_CONTROL_PLANE_PERSONAL: {{ .Values.config.notificationControlPlanePersonal | quote }}
+  POSTGRES_DB: {{ .Values.postgresql.database | quote }}
+  {{- if .Values.postgresql.enabled }}
+  POSTGRES_HOST: {{ include "opsknight.postgresql.serviceName" . | quote }}
+  {{- else }}
+  POSTGRES_HOST: {{ .Values.postgresql.host | quote }}
+  {{- end }}
+  POSTGRES_PORT: {{ .Values.postgresql.port | quote }}

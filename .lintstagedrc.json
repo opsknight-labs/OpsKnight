@@ -1,0 +1,4 @@
+{
+  "*.{ts,tsx}": ["npx eslint --fix", "npx prettier --write"],
+  "*.{json,md,yml,yaml}": ["npx prettier --write"]
+}

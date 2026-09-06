@@ -1,0 +1,18 @@
+# Example values for Azure Application Gateway (AGIC)
+ingress:
+  enabled: true
+  className: azure-application-gateway
+  annotations:
+    appgw.ingress.kubernetes.io/ssl-redirect: 'true'
+    appgw.ingress.kubernetes.io/backend-protocol: 'http'
+    appgw.ingress.kubernetes.io/request-timeout: '60'
+    appgw.ingress.kubernetes.io/connection-draining: 'true'
+  hosts:
+    - host: opsknight.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: opsknight-tls
+      hosts:
+        - opsknight.yourdomain.com

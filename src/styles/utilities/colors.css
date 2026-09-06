@@ -1,0 +1,79 @@
+/* ========================================
+   Color Utility Classes
+   Extracted from globals.css
+   ======================================== */
+
+/* Text colors */
+.text-primary {
+   color: var(--text-primary);
+}
+
+.text-secondary {
+   color: var(--text-secondary);
+}
+
+.text-muted {
+   color: var(--text-muted);
+}
+
+.text-inverse {
+   color: var(--text-inverse);
+}
+
+.text-success {
+   color: var(--color-success);
+}
+
+.text-warning {
+   color: var(--color-warning);
+}
+
+.text-error {
+   color: var(--color-error);
+}
+
+.text-info {
+   color: var(--color-info);
+}
+
+/* Background colors */
+.bg-primary {
+   background-color: var(--bg-primary);
+}
+
+.bg-secondary {
+   background-color: var(--bg-secondary);
+}
+
+.bg-surface {
+   background-color: var(--bg-surface);
+}
+
+.bg-dark {
+   background-color: var(--bg-dark);
+}
+
+.bg-success {
+   background-color: var(--color-success);
+}
+
+.bg-warning {
+   background-color: var(--color-warning);
+}
+
+.bg-error {
+   background-color: var(--color-error);
+}
+
+/* Border colors */
+.border-default {
+   border-color: var(--border);
+}
+
+.border-hover {
+   border-color: var(--border-hover);
+}
+
+.border-error {
+   border-color: var(--border-error);
+}

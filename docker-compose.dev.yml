@@ -1,0 +1,66 @@
+services:
+  opsknight-db:
+    image: postgres:15-alpine
+    container_name: opsknight_postgres_dev
+    restart: unless-stopped
+    mem_limit: 2g
+    environment:
+      POSTGRES_USER: opsknight
+      POSTGRES_PASSWORD: opsknight_secure_password_change_me
+      POSTGRES_DB: opsknight_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - opsknight_postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U opsknight -d opsknight_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opsknight-dev-network
+
+  opsknight-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: opsknight_app_dev
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=development
+      # Database connection pool settings (40 connections, 30s timeout)
+      - DATABASE_URL=postgresql://opsknight:opsknight_secure_password_change_me@opsknight-db:5432/opsknight_db?connection_limit=40&pool_timeout=30
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=dev-secret-key-for-development-only
+      - NEXTAUTH_SECRET=dev-secret-key-for-development-only
+      # NOTE: Notification providers (Twilio, Email, Push) are configured via UI
+      # Environment variables are NOT used - configure at Settings → System → Notification Providers
+    volumes:
+      # Mount source code for hot reloading
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./prisma:/app/prisma
+      - ./package.json:/app/package.json
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./next.config.ts:/app/next.config.ts
+      - ./middleware.ts:/app/middleware.ts
+      # Exclude node_modules to use container's version
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      opsknight-db:
+        condition: service_healthy
+    networks:
+      - opsknight-dev-network
+    command: >
+      sh -c "npx prisma generate && ./docker-entrypoint.sh"
+
+volumes:
+  opsknight_postgres_dev_data:
+    driver: local
+
+networks:
+  opsknight-dev-network:
+    driver: bridge

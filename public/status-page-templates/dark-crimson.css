@@ -1,0 +1,89 @@
+/*
+  Template: Dark Crimson
+*/
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, #b91c1c));
+  --status-primary-hover: var(--sp-accent-2, #991b1b);
+  --status-card-shadow: 0 12px 28px rgba(185, 28, 28, 0.28);
+  --sp-ink: #fef2f2;
+  --sp-muted: #fee2e2;
+  --status-text: #fef2f2;
+  --status-text-strong: #fff1f2;
+  --status-text-muted: #e5e7eb;
+  --status-text-subtle: #cbd5e1;
+  --status-panel-bg: rgba(22, 10, 10, 0.78);
+  --status-panel-border: rgba(254, 202, 202, 0.2);
+  --status-panel-muted-bg: rgba(22, 10, 10, 0.6);
+  --status-panel-muted-border: rgba(254, 202, 202, 0.16);
+  --sp-primary: #b91c1c;
+  --sp-soft: rgba(185, 28, 28, 0.2);
+}
+
+.status-page-container {
+  --status-text: #fef2f2;
+  --status-text-strong: #fff1f2;
+  --status-text-muted: #e5e7eb;
+  --status-text-subtle: #cbd5e1;
+  --status-panel-bg: rgba(22, 10, 10, 0.78);
+  --status-panel-border: rgba(254, 202, 202, 0.2);
+  --status-panel-muted-bg: rgba(22, 10, 10, 0.6);
+  --status-panel-muted-border: rgba(254, 202, 202, 0.16);
+  background: radial-gradient(circle at top, #1f0f0f 0%, #160a0a 60%, #0d0606 100%) !important;
+  color: var(--sp-ink) !important;
+}
+
+.status-page-header {
+  background: linear-gradient(120deg, rgba(185, 28, 28, 0.22) 0%, rgba(13, 6, 6, 0.9) 100%) !important;
+  border-bottom: 1px solid rgba(254, 202, 202, 0.28) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #fee2e2 !important;
+  background: linear-gradient(120deg, #b91c1c 0%, #dc2626 100%) !important;
+  box-shadow: 0 12px 24px rgba(220, 38, 38, 0.35) !important;
+}
+
+.status-service-card {
+  background: rgba(22, 10, 10, 0.75) !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(254, 202, 202, 0.22) !important;
+  box-shadow: 0 14px 30px rgba(8, 3, 3, 0.7) !important;
+}
+
+#incidents .status-incident-card {
+  background: rgba(22, 10, 10, 0.85) !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(254, 202, 202, 0.3) !important;
+  box-shadow: 0 16px 34px rgba(8, 3, 3, 0.8) !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, #b91c1c 0%, #dc2626 100%) !important;
+  border: none !important;
+  border-radius: 12px !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--status-text, #fef2f2) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: var(--status-text, #fef2f2) !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--status-text-muted, #e5e7eb) !important;
+}

@@ -1,0 +1,94 @@
+/*
+  Template: Aurora Bright
+  Paste into Settings > Status Page > Custom CSS
+*/
+
+:root {
+  --status-primary: var(--sp-accent, var(--sp-primary, var(--sp-blue, var(--sp-ocean, #2563eb))));
+  --status-primary-hover: var(--sp-accent-2, var(--sp-primary, var(--sp-blue, #1d4ed8))));\n  --status-card-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+  --sp-ink: #0b1220;
+  --sp-muted: #5b6473;
+  --sp-accent: #ff6a00;
+  --sp-accent-2: #00c2ff;
+  --sp-accent-3: #7c3aed;
+  --sp-card-bg: rgba(255, 255, 255, 0.88);
+  --sp-glow: 0 16px 40px rgba(15, 23, 42, 0.16);
+}
+
+.status-page-container {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(255, 106, 0, 0.18) 0%, rgba(255, 106, 0, 0) 40%),
+    radial-gradient(circle at 85% 15%, rgba(0, 194, 255, 0.18) 0%, rgba(0, 194, 255, 0) 42%),
+    radial-gradient(circle at 50% 90%, rgba(124, 58, 237, 0.18) 0%, rgba(124, 58, 237, 0) 45%),
+    linear-gradient(135deg, #f8fafc 0%, #eef2ff 55%, #fff7ed 100%) !important;
+  color: var(--sp-ink) !important;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
+}
+
+.status-page-header {
+  background: linear-gradient(120deg, #ffffff 0%, #f1f5f9 100%) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08) !important;
+}
+
+.status-page-header a {
+  border-color: transparent !important;
+  color: #ffffff !important;
+  background: linear-gradient(120deg, var(--sp-accent) 0%, #ff2d95 45%, var(--sp-accent-2) 100%) !important;
+  box-shadow: 0 12px 22px rgba(255, 106, 0, 0.25) !important;
+}
+
+.status-service-card {
+  background: var(--sp-card-bg) !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08) !important;
+  backdrop-filter: blur(10px);
+}
+
+#incidents .status-incident-card {
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14) !important;
+}
+
+.status-page-container .ui-input {
+  border: 2px solid rgba(15, 23, 42, 0.12) !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+}
+
+.status-page-container form button[type="submit"] {
+  background: linear-gradient(120deg, var(--sp-accent-3) 0%, #2563eb 52%, var(--sp-accent-2) 100%) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 22px rgba(37, 99, 235, 0.25) !important;
+}
+
+/* Template text overrides */
+.status-page-container h1,
+.status-page-container h2,
+.status-page-container h3,
+.status-page-container h4,
+.status-page-container h5,
+.status-page-container h6 {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container p,
+.status-page-container li,
+.status-page-container label,
+.status-page-container small {
+  color: var(--sp-ink) !important;
+}
+
+.status-page-container .status-page-header p,
+.status-page-container .status-page-header span,
+.status-page-container footer p,
+.status-page-container footer span {
+  color: var(--sp-muted) !important;
+}
+
+
+

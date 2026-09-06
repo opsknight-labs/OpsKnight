@@ -1,0 +1,57 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "📝 Validating commit message..."
+
+# Read commit message
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Skip validation for merge commits and fixup commits
+if echo "$COMMIT_MSG" | grep -qE "^(Merge|fixup!|squash!)"; then
+  exit 0
+fi
+
+# Conventional commit format: type(scope): description
+# Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
+PATTERN="^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\([a-z0-9-]+\))?: .{3,}"
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+  echo ""
+  echo "❌ Invalid commit message format!"
+  echo ""
+  echo "   Your message: \"$COMMIT_MSG\""
+  echo ""
+  echo "   Expected format: type(scope): description"
+  echo ""
+  echo "   Valid types:"
+  echo "     feat     - New feature"
+  echo "     fix      - Bug fix"
+  echo "     docs     - Documentation only"
+  echo "     style    - Formatting, no code change"
+  echo "     refactor - Code change, no new feature or fix"
+  echo "     test     - Adding tests"
+  echo "     chore    - Maintenance tasks"
+  echo "     perf     - Performance improvement"
+  echo "     ci       - CI/CD changes"
+  echo "     build    - Build system changes"
+  echo "     revert   - Reverting changes"
+  echo ""
+  echo "   Examples:"
+  echo "     feat(auth): add OAuth2 login support"
+  echo "     fix(api): resolve null pointer in user endpoint"
+  echo "     docs: update README with setup instructions"
+  echo ""
+  exit 1
+fi
+
+# Check commit message length
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -1)
+if [ ${#FIRST_LINE} -gt 72 ]; then
+  echo ""
+  echo "⚠️  Commit message first line is too long (${#FIRST_LINE} chars)"
+  echo "   Recommended: 72 characters or less"
+  echo ""
+fi
+
+echo "   ✓ Commit message format is valid"

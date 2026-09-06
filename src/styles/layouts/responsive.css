@@ -1,0 +1,61 @@
+/* ========================================
+   Responsive Layout Utilities
+   Extracted from globals.css
+   ======================================== */
+
+/* Responsive grid adjustments */
+@media (max-width: 1200px) {
+   .users-main-grid {
+      grid-template-columns: 1fr;
+   }
+
+   .hero-stats {
+      grid-template-columns: repeat(2, 1fr);
+   }
+
+   .dashboard-main-grid {
+      grid-template-columns: 1fr;
+   }
+}
+
+@media (max-width: 768px) {
+   .hero-stats {
+      grid-template-columns: 1fr;
+   }
+
+   .two-column-layout {
+      grid-template-columns: 1fr;
+   }
+}
+
+/* Responsive visibility */
+@media (max-width: 640px) {
+   .hide-mobile {
+      display: none !important;
+   }
+}
+
+@media (min-width: 641px) {
+   .show-mobile-only {
+      display: none !important;
+   }
+}
+
+@media (max-width: 768px) {
+   .hide-tablet {
+      display: none !important;
+   }
+}
+
+@media (min-width: 769px) {
+   .show-tablet-only {
+      display: none !important;
+   }
+}
+
+/* Responsive text */
+@media (max-width: 640px) {
+   .text-responsive {
+      font-size: 0.875rem;
+   }
+}

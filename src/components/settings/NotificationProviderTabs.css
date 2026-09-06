@@ -1,0 +1,68 @@
+/* Notification Provider Tabs */
+.notification-provider-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-4);
+}
+
+.notification-tabs-header {
+    display: flex;
+    gap: var(--spacing-2);
+    border-bottom: 2px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.notification-tab {
+    position: relative;
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s var(--ease-out);
+    white-space: nowrap;
+    margin-bottom: -2px;
+}
+
+.notification-tab:hover {
+    color: var(--text-primary);
+    background: var(--color-neutral-50);
+}
+
+.notification-tab.active {
+    color: var(--color-info);
+    border-bottom-color: var(--color-info);
+    background: rgba(59, 130, 246, 0.04);
+}
+
+.notification-tabs-content {
+    padding: var(--spacing-2) 0;
+}
+
+/* Tab content visibility */
+.notification-tabs-content>* {
+    display: none;
+}
+
+/* Show based on data attribute */
+.notification-tabs-content[data-active-tab="sms"]>[data-tab="sms"],
+.notification-tabs-content[data-active-tab="push"]>[data-tab="push"],
+.notification-tabs-content[data-active-tab="whatsapp"]>[data-tab="whatsapp"] {
+    display: block;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+    .notification-tabs-header {
+        padding-bottom: var(--spacing-2);
+    }
+
+    .notification-tab {
+        padding: var(--spacing-2) var(--spacing-3);
+        font-size: var(--font-size-xs);
+    }
+}

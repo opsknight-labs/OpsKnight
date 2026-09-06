@@ -1,0 +1,991 @@
+/* ========================================
+   Status Page Template Styles
+   Extracted from globals.css
+   ======================================== */
+.status-page-input,
+.status-page-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  background: #ffffff;
+  color: inherit;
+}
+
+.status-page-input:focus,
+.status-page-input:focus-visible,
+.status-page-select:focus,
+.status-page-select:focus-visible {
+  border-color: var(--status-primary, var(--primary-color));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-primary, #2563eb) 18%, transparent);
+  outline: none;
+}
+
+.status-page-container {
+  color: var(--status-text, #111827);
+  background-color: var(--status-bg, #ffffff);
+  font-family: var(--status-font-family, inherit);
+  --primary: var(--status-primary, var(--primary-color, #2563eb));
+  --primary-hover: var(--status-primary-hover, var(--primary-hover, #1d4ed8));
+  --status-text: var(--sp-ink, #111827);
+  --status-text-strong: var(--sp-ink-strong, var(--sp-ink, #0f172a));
+  --status-text-muted: var(--sp-muted, #6b7280);
+  --status-text-subtle: var(--sp-muted-2, var(--sp-muted, #94a3b8));
+  --status-text-inverse: var(--sp-inverse, #ffffff);
+  --status-panel-bg: var(--sp-panel-bg, color-mix(in srgb, #ffffff 94%, var(--status-primary, #2563eb) 6%));
+  --status-panel-border: var(--sp-panel-border, color-mix(in srgb, #e5e7eb 82%, var(--status-primary, #2563eb) 18%));
+  --status-panel-muted-bg: var(--sp-panel-muted-bg, color-mix(in srgb, #f8fafc 85%, var(--status-primary, #2563eb) 15%));
+  --status-panel-muted-border: var(--sp-panel-muted-border, color-mix(in srgb, #e2e8f0 80%, var(--status-primary, #2563eb) 20%));
+}
+
+.status-page-button {
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.status-page-button:disabled,
+.status-page-button[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status-page-button[data-active="true"] {
+  background: var(--status-primary, #2563eb);
+  border-color: var(--status-primary, #2563eb);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.status-page-button[data-variant="primary"] {
+  background: var(--status-primary, #0f172a);
+  border-color: var(--status-primary, #0f172a);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  padding: 0.625rem 1.25rem;
+}
+
+.status-page-button:focus,
+.status-page-button:focus-visible {
+  border-color: var(--status-primary, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-primary, #2563eb) 18%, transparent);
+  outline: none;
+}
+
+.status-page-button:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.status-page-button[data-active="true"]:hover,
+.status-page-button[data-variant="primary"]:hover {
+  background: var(--status-primary-hover, #1d4ed8);
+  border-color: var(--status-primary-hover, #1d4ed8);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--status-primary, #2563eb) 22%, transparent);
+}
+
+/* ============================================
+   STATUS PAGE SETTINGS POLISH
+   ============================================ */
+
+.status-page-config-topbar {
+  background: linear-gradient(180deg, #f9fafb 0%, #f1f5f9 100%) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3) !important;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  /* UI: richer navigation bar with calmer depth */
+}
+
+.status-page-config-tab {
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  /* UI: smoother tab affordance */
+}
+
+.status-page-config-tab:hover {
+  transform: translateY(-1px);
+}
+
+.status-page-config-settings {
+  position: relative;
+  background: radial-gradient(900px 220px at 0% 0%, rgba(59, 130, 246, 0.08), transparent 60%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  /* UI: add subtle ambient depth to the settings panel */
+}
+
+.status-page-config-settings::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--spacing-4);
+  width: 1px;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.35) 0%, rgba(148, 163, 184, 0.08) 100%);
+  pointer-events: none;
+  /* UI: soft rail to connect sections */
+}
+
+.status-page-config-stack {
+  position: relative;
+  z-index: 1;
+}
+
+.status-page-settings .ui-card {
+  position: relative;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06) !important;
+  /* UI: refined card surface for status page settings */
+}
+
+.status-page-settings .ui-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+  opacity: 0.12;
+  /* UI: subtle accent rail on cards */
+}
+
+.status-page-settings .ui-card.ui-card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1) !important;
+  /* UI: lighter hover lift */
+}
+
+.status-page-template-grid {
+  align-items: stretch;
+}
+
+.status-page-template-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  /* UI: premium template hover feel */
+}
+
+.status-page-template-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14) !important;
+  border-color: rgba(148, 163, 184, 0.5) !important;
+}
+
+.status-page-template-card.is-selected {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18), 0 20px 40px rgba(15, 23, 42, 0.16) !important;
+  /* UI: selection halo without heavy border weight */
+}
+
+.status-page-template-selected {
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+}
+
+.status-page-template-preview {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.status-page-template-filter {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  /* UI: nicer filter chip interaction */
+}
+
+.status-page-template-filter:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+}
+
+.status-page-template-active {
+  box-shadow: 0 8px 16px rgba(67, 56, 202, 0.18);
+}
+
+.status-page-config-actions {
+  position: sticky;
+  bottom: var(--spacing-4);
+  background: var(--glass-bg) !important;
+  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(12px);
+  z-index: 2;
+  /* UI: premium sticky action bar */
+}
+
+.status-page-config-preview {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  /* UI: softer preview panel contrast */
+}
+
+.status-page-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-4) var(--spacing-5);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: clamp(0.8rem, 1.05vw, 0.9rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  /* UI: clear preview header without visual weight */
+}
+
+.status-page-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  font-size: clamp(0.62rem, 0.85vw, 0.72rem);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  /* UI: polished status indicator */
+}
+
+.status-page-preview-frame {
+  flex: 1;
+  margin: var(--spacing-4);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+/* Responsive Tweaks */
+@container (max-width: 1100px) {
+  .status-page-config-body {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .status-page-config-settings {
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .status-page-config-preview {
+    border-left: none;
+  }
+
+  .status-page-config-preview::before {
+    display: none;
+  }
+
+  .status-page-preview-body {
+    position: static;
+    height: auto;
+  }
+}
+
+@media (max-width: 1200px) {
+  .status-page-config {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .status-page-config-body {
+    flex-direction: column;
+    overflow: visible !important;
+  }
+
+  .status-page-config-settings {
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .status-page-config-preview {
+    border-left: none;
+  }
+
+  .status-page-config-preview::before {
+    display: none;
+  }
+
+  .status-page-preview-body {
+    position: static;
+    height: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .status-page-config-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .status-page-config-tabs {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+.settings-slack-status {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+/* ============================================
+   STATUS PAGE SETTINGS POLISH
+   ============================================ */
+
+.status-page-config-topbar {
+  background: linear-gradient(180deg, #f9fafb 0%, #f1f5f9 100%) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3) !important;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  /* UI: richer navigation bar with calmer depth */
+}
+
+.status-page-config-tab {
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  /* UI: smoother tab affordance */
+}
+
+.status-page-config-tab:hover {
+  transform: translateY(-1px);
+}
+
+.status-page-config-settings {
+  position: relative;
+  background: radial-gradient(900px 220px at 0% 0%, rgba(59, 130, 246, 0.08), transparent 60%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  /* UI: add subtle ambient depth to the settings panel */
+}
+
+.status-page-config-settings::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--spacing-4);
+  width: 1px;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.35) 0%, rgba(148, 163, 184, 0.08) 100%);
+  pointer-events: none;
+  /* UI: soft rail to connect sections */
+}
+
+.status-page-config-stack {
+  position: relative;
+  z-index: 1;
+}
+
+.status-page-settings .ui-card {
+  position: relative;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06) !important;
+  /* UI: refined card surface for status page settings */
+}
+
+.status-page-settings .ui-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+  opacity: 0.12;
+  /* UI: subtle accent rail on cards */
+}
+
+.status-page-settings .ui-card.ui-card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1) !important;
+  /* UI: lighter hover lift */
+}
+
+.status-page-template-grid {
+  align-items: stretch;
+}
+
+.status-page-template-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  /* UI: premium template hover feel */
+}
+
+.status-page-template-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14) !important;
+  border-color: rgba(148, 163, 184, 0.5) !important;
+}
+
+.status-page-template-card.is-selected {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18), 0 20px 40px rgba(15, 23, 42, 0.16) !important;
+  /* UI: selection halo without heavy border weight */
+}
+
+.status-page-template-selected {
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+}
+
+.status-page-template-preview {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.status-page-template-filter {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  /* UI: nicer filter chip interaction */
+}
+
+.status-page-template-filter:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+}
+
+.status-page-template-active {
+  box-shadow: 0 8px 16px rgba(67, 56, 202, 0.18);
+}
+
+.status-page-config-actions {
+  position: sticky;
+  bottom: var(--spacing-4);
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(8px);
+  z-index: 2;
+  /* UI: premium sticky action bar */
+}
+
+.status-page-config-preview {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  /* UI: softer preview panel contrast */
+}
+
+.status-page-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-4) var(--spacing-5);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: clamp(0.8rem, 1.05vw, 0.9rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  /* UI: clear preview header without visual weight */
+}
+
+.status-page-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  font-size: clamp(0.62rem, 0.85vw, 0.72rem);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  /* UI: polished status indicator */
+}
+
+.status-page-preview-frame {
+  flex: 1;
+  margin: var(--spacing-4);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+  /* UI: premium preview stage */
+}
+
+/* Skeleton Component Styles */
+/* Status page form controls */
+.status-page-input,
+.status-page-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  background: #ffffff;
+  color: inherit;
+}
+
+.status-page-input:focus,
+.status-page-input:focus-visible,
+.status-page-select:focus,
+.status-page-select:focus-visible {
+  border-color: var(--status-primary, var(--primary-color));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-primary, #2563eb) 18%, transparent);
+  outline: none;
+}
+
+.status-page-container {
+  --primary: var(--status-primary, var(--primary-color));
+  --primary-hover: var(--status-primary-hover, var(--primary-hover));
+  --status-text: var(--sp-ink, #111827);
+  --status-text-strong: var(--sp-ink-strong, var(--sp-ink, #0f172a));
+  --status-text-muted: var(--sp-muted, #6b7280);
+  --status-text-subtle: var(--sp-muted-2, var(--sp-muted, #94a3b8));
+  --status-text-inverse: var(--sp-inverse, #ffffff);
+  --status-panel-bg: var(--sp-panel-bg, color-mix(in srgb, #ffffff 94%, var(--status-primary, #2563eb) 6%));
+  --status-panel-border: var(--sp-panel-border, color-mix(in srgb, #e5e7eb 82%, var(--status-primary, #2563eb) 18%));
+  --status-panel-muted-bg: var(--sp-panel-muted-bg, color-mix(in srgb, #f8fafc 85%, var(--status-primary, #2563eb) 15%));
+  --status-panel-muted-border: var(--sp-panel-muted-border, color-mix(in srgb, #e2e8f0 80%, var(--status-primary, #2563eb) 20%));
+}
+
+.status-page-button {
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.status-page-button:disabled,
+.status-page-button[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status-page-button[data-active="true"] {
+  background: var(--status-primary, #2563eb);
+  border-color: var(--status-primary, #2563eb);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.status-page-button[data-variant="primary"] {
+  background: var(--status-primary, #0f172a);
+  border-color: var(--status-primary, #0f172a);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  padding: 0.625rem 1.25rem;
+}
+
+.status-page-button:focus,
+.status-page-button:focus-visible {
+  border-color: var(--status-primary, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-primary, #2563eb) 18%, transparent);
+  outline: none;
+}
+
+.status-page-button:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.status-page-button[data-active="true"]:hover,
+.status-page-button[data-variant="primary"]:hover {
+  background: var(--status-primary-hover, #1d4ed8);
+  border-color: var(--status-primary-hover, #1d4ed8);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--status-primary, #2563eb) 22%, transparent);
+}
+
+.status-page-config-preview-toggle:hover {
+  border-color: #b91c1c;
+  background: #b91c1c;
+  color: #ffffff;
+}
+
+.status-page-config-tabs {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem);
+  display: flex;
+  gap: var(--spacing-3);
+  flex-shrink: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  /* Removed overflow hidden/max-width restrictions as wrapping handles it */
+}
+
+.status-page-config-tabs-list {
+  display: flex;
+  gap: 0.5rem;
+  row-gap: 0.75rem;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.25rem 0;
+}
+
+.status-page-config-tabs-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.status-page-config-tab {
+  appearance: none;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.18s var(--ease-out);
+  white-space: nowrap;
+  text-decoration: none;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  flex-shrink: 0;
+}
+
+.status-page-config-tab::after {
+  content: none;
+}
+
+.status-page-config-tab:hover {
+  color: var(--text-primary);
+  background: #f8fafc;
+  border-color: rgba(100, 116, 139, 0.45);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.status-page-config-tab:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.status-page-config-tab.is-active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  border-color: #b91c1c;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+}
+
+
+.status-page-config-tab-badge {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: clamp(0.62rem, 0.85vw, 0.72rem);
+  font-weight: 700;
+  background: #e2e8f0;
+  color: var(--text-muted);
+}
+
+.status-page-config-tab-badge.is-active {
+  background: var(--primary-color);
+  color: #ffffff;
+}
+
+.status-page-config-tab-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+  opacity: 0.75;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.status-page-config-tab:hover .status-page-config-tab-icon {
+  transform: scale(1.15);
+  opacity: 0.95;
+}
+
+.status-page-config-tab.is-active .status-page-config-tab-icon {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.status-page-config-sticky-bar {
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
+}
+
+.status-page-config-body {
+  gap: 0;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.status-page-config-settings {
+  min-width: 0;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.9) 0%, rgba(239, 242, 247, 0.9) 100%);
+}
+
+.status-page-config-settings-inner {
+  width: 100%;
+}
+
+.status-page-config-settings h2 {
+  font-size: clamp(1.1rem, 1.8vw, 1.4rem);
+  font-weight: 700;
+  margin: 0 0 var(--spacing-3) 0;
+}
+
+.status-page-config-card {
+  background: var(--gradient-glass);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04);
+}
+
+.status-page-config-card .ui-card-body {
+  padding: clamp(1.1rem, 2vw, 1.5rem);
+}
+
+.status-page-config-card-title {
+  font-size: clamp(1.1rem, 1.8vw, 1.35rem);
+  font-weight: 700;
+  margin: 0 0 0.35rem 0;
+}
+
+.status-page-config-card-desc {
+  color: var(--text-secondary);
+  font-size: clamp(0.85rem, 1.1vw, 0.95rem);
+  margin: 0 0 var(--spacing-4) 0;
+  line-height: 1.6;
+}
+
+.status-page-config-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.status-page-config-actions {
+  box-shadow: 0 -6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.status-page-config-preview {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.status-page-config-preview::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.12) 0%, rgba(148, 163, 184, 0.35) 50%, rgba(148, 163, 184, 0.12) 100%);
+  pointer-events: none;
+}
+
+.status-page-preview-body {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: clamp(0.9rem, 1.4vw, 1.4rem);
+  gap: var(--spacing-3);
+  min-height: 0;
+}
+
+.status-page-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.65);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+
+.status-page-preview-chip {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(14, 116, 144, 0.12);
+  color: #0e7490;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.status-page-preview-frame {
+  flex: 1;
+  border-radius: calc(var(--radius-xl) + 2px);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  transition: box-shadow 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.status-page-preview-frame:hover {
+  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.1);
+  transform: translateY(-2px);
+}
+
+.status-page-preview-controls {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  padding: var(--status-preview-controls-padding, 0.75rem 0.95rem);
+}
+
+.status-page-preview-device-toggle {
+  background: rgba(226, 232, 240, 0.9);
+}
+
+.status-page-preview-device-btn {
+  font-size: var(--status-preview-device-font, clamp(0.72rem, 1vw, 0.85rem));
+  padding: var(--status-preview-device-padding, clamp(0.35rem, 0.9vw, 0.55rem) clamp(0.6rem, 1vw, 0.9rem));
+}
+
+.status-page-preview-device-btn.is-active {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.status-page-preview-device-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.status-page-preview-zoom-controls {
+  background: #f8fafc;
+}
+
+.status-page-preview-zoom-controls button {
+  font-size: var(--status-preview-zoom-font, clamp(0.7rem, 0.9vw, 0.85rem));
+  padding: var(--status-preview-zoom-button-padding, clamp(0.2rem, 0.6vw, 0.4rem) clamp(0.35rem, 0.7vw, 0.55rem));
+}
+
+.status-page-preview-canvas {
+  min-width: 0;
+  min-height: 0;
+}
+
+.status-page-preview-device-frame {
+  max-width: 100%;
+}
+
+@media (max-width: 1440px) {
+  .status-page-config {
+    --status-preview-padding: clamp(0.65rem, 1.2vw, 1rem);
+  }
+
+  .status-page-config-header {
+    padding: clamp(0.9rem, 1.6vw, 1.35rem) clamp(1rem, 2vw, 1.6rem);
+  }
+
+  .status-page-config-tabs {
+    padding: 0 clamp(1rem, 2vw, 1.6rem);
+    gap: var(--spacing-2);
+  }
+
+  .status-page-config-tab {
+    padding: 0.5rem 0.75rem 0.6rem;
+  }
+}
+
+@media (max-width: 1366px) {
+  .status-page-config {
+    --spacing-6: 1.25rem;
+    --spacing-5: 1rem;
+    --spacing-4: 0.85rem;
+    --spacing-3: 0.65rem;
+    --spacing-2: 0.45rem;
+    --status-preview-padding: clamp(0.55rem, 1.1vw, 0.9rem);
+    --status-preview-controls-padding: clamp(0.5rem, 1vw, 0.7rem) clamp(0.65rem, 1.2vw, 0.85rem);
+    --status-preview-device-padding: clamp(0.3rem, 0.8vw, 0.5rem) clamp(0.55rem, 0.9vw, 0.8rem);
+    --status-preview-device-font: clamp(0.7rem, 1vw, 0.82rem);
+    --status-preview-zoom-font: clamp(0.68rem, 0.9vw, 0.8rem);
+    --status-preview-zoom-button-padding: clamp(0.18rem, 0.5vw, 0.35rem) clamp(0.3rem, 0.6vw, 0.5rem);
+  }
+
+  .status-page-config-header {
+    padding: clamp(0.75rem, 1.3vw, 1.1rem) clamp(0.9rem, 1.7vw, 1.3rem);
+  }
+
+  .status-page-config-tabs {
+    padding: 0.4rem clamp(0.85rem, 1.6vw, 1.2rem);
+    gap: var(--spacing-2);
+  }
+
+  .status-page-config-settings {
+    padding: var(--spacing-5);
+  }
+
+  .status-page-preview-body {
+    padding: clamp(0.7rem, 1.1vw, 1rem);
+  }
+}
+
+@container (max-width: 760px) {
+  .status-page-config-tabs {
+    flex-wrap: wrap;
+    row-gap: 0.4rem;
+  }
+}
+
+@container (max-width: 1100px) {
+  .status-page-config-body {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .status-page-config-settings {
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .status-page-config-preview {
+    border-left: none;
+  }
+
+  .status-page-config-preview::before {
+    display: none;
+  }
+
+  .status-page-preview-body {
+    position: static;
+    height: auto;
+  }
+}
+
+@media (max-width: 1200px) {
+  .status-page-config {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .status-page-config-body {
+    flex-direction: column;
+    overflow: visible !important;
+  }
+
+  .status-page-config-settings {
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .status-page-config-preview {
+    border-left: none;
+  }
+
+  .status-page-config-preview::before {
+    display: none;
+  }
+
+  .status-page-preview-body {
+    position: static;
+    height: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .status-page-config-header {
+    padding: 0.75rem 1rem;
+  }
+}

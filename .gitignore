@@ -1,0 +1,92 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+public/sw.js
+public/swe-worker-*.js
+public/workbox-*.js
+public/uploads/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+/src/generated/prisma
+/scripts/dist/
+
+# debug and test files
+*.log
+check_user_prefs.ts
+debug*.ts
+debug*.js
+query_*.js
+verify_fix.ts
+*.sql
+!prisma/migrations/**/*.sql
+/reports/
+/ci-artifacts/
+
+# debug API routes
+/src/app/api/debug/
+
+# misc
+.FullName
+
+# Temporary test logs and reports
+*.txt
+eslint_output.json
+job_log*.txt
+jobs.json
+run_status.txt
+failed_log.txt
+tsc_*.txt
+vitest_*.txt
+ci_*.txt
+
+# Claude AI & Next.js agent files
+.claude/
+AGENTS.md
+CLAUDE.md
+
+# pre-push build artifacts
+.next-pre-push/
+
+# Playwright
+playwright-report/
+test-results/
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo

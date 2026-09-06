@@ -1,0 +1,381 @@
+name: Security Suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * *' # Run daily to catch new vulnerabilities
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  checks: write
+  pull-requests: write # Required for results summary comment
+
+jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4.37.9
+        with:
+          languages: javascript-typescript
+        continue-on-error: true
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4.37.9
+        continue-on-error: true
+
+  eslint:
+    name: ESLint Security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        env:
+          HUSKY: '0'
+        run: npm ci --legacy-peer-deps
+
+      - name: ESLint Security Scan (SARIF)
+        run: |
+          mkdir -p reports
+          npx eslint . --format @microsoft/eslint-formatter-sarif --output-file reports/eslint-security.sarif || true
+        continue-on-error: true
+
+      - name: Convert ESLint SARIF to JUnit
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const escapeXml = (value) => String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&apos;');
+          const sarif = JSON.parse(fs.readFileSync('reports/eslint-security.sarif', 'utf8'));
+          const results = sarif.runs?.flatMap((run) => run.results || []) || [];
+          const cases = results.map((result) => {
+            const rule = escapeXml(result.ruleId || 'eslint');
+            const message = escapeXml(result.message?.text || 'ESLint finding');
+            return `    <testcase name="${rule}" classname="eslint"><failure message="${message}"/></testcase>`;
+          }).join('\n');
+          const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<testsuites tests="${results.length}" failures="${results.length}"><testsuite name="ESLint Security" tests="${results.length}" failures="${results.length}">\n${cases}\n</testsuite></testsuites>\n`;
+          fs.writeFileSync('reports/eslint-security.xml', xml);
+          NODE
+        continue-on-error: true
+
+      - name: Upload ESLint SARIF
+        uses: github/codeql-action/upload-sarif@v4.37.9
+        if: always()
+        with:
+          sarif_file: reports/eslint-security.sarif
+        continue-on-error: true
+
+      - name: Upload SAST Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sast-reports
+          path: reports/eslint-security.xml
+        continue-on-error: true
+
+  sast:
+    name: SAST (CodeQL & ESLint)
+    needs: [codeql, eslint]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify SAST jobs
+        env:
+          CODEQL_RESULT: ${{ needs.codeql.result }}
+          ESLINT_RESULT: ${{ needs.eslint.result }}
+        run: |
+          test "$CODEQL_RESULT" = success
+          test "$ESLINT_RESULT" = success
+
+  sca:
+    name: SCA (Dependencies & Containers)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        env:
+          # CI doesn't need git hooks; this also avoids husky-related setup issues.
+          HUSKY: '0'
+        run: npm ci --legacy-peer-deps
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      - name: Run npm audit (JSON)
+        run: |
+          npm audit --json > reports/npm-audit.json 2>&1 || true
+        continue-on-error: true
+
+      - name: Convert npm audit to JUnit
+        run: |
+          node -e "
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('reports/npm-audit.json', 'utf8'));
+          const vulns = audit.vulnerabilities || {};
+          const entries = Object.entries(vulns);
+
+          let xml = '<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n';
+          xml += '<testsuites name=\"npm-audit\" tests=\"' + entries.length + '\" failures=\"' + entries.filter(([,v]) => v.severity === 'high' || v.severity === 'critical').length + '\">\n';
+          xml += '  <testsuite name=\"Dependency Security\" tests=\"' + entries.length + '\">\n';
+
+          entries.forEach(([name, vuln]) => {
+            const severity = vuln.severity || 'unknown';
+            const isFail = severity === 'high' || severity === 'critical';
+            xml += '    <testcase name=\"' + name + ' (' + severity + ')\" classname=\"npm-audit\">\n';
+            if (isFail) {
+              xml += '      <failure message=\"' + severity + ' severity vulnerability\">' + (vuln.via?.[0]?.title || 'Vulnerability found') + '</failure>\n';
+            }
+            xml += '    </testcase>\n';
+          });
+
+          xml += '  </testsuite>\n</testsuites>';
+          fs.writeFileSync('reports/npm-audit.xml', xml);
+          console.log('Generated npm-audit.xml with ' + entries.length + ' entries');
+          " || echo '<?xml version="1.0"?><testsuites><testsuite name="npm-audit" tests="0"/></testsuites>' > reports/npm-audit.xml
+        continue-on-error: true
+
+      - name: Run Trivy vulnerability scanner (SARIF)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          format: 'sarif'
+          output: 'reports/trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+        continue-on-error: true
+
+      - name: Run Trivy vulnerability scanner (JSON)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          format: 'json'
+          output: 'reports/trivy-results.json'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+        continue-on-error: true
+
+      - name: Convert Trivy JSON to JUnit
+        run: |
+          node -e "
+          const fs = require('fs');
+          try {
+            const trivy = JSON.parse(fs.readFileSync('reports/trivy-results.json', 'utf8'));
+            const results = trivy.Results || [];
+            let totalVulns = 0;
+            let failures = 0;
+            let testcases = '';
+            
+            results.forEach(r => {
+              (r.Vulnerabilities || []).forEach(v => {
+                totalVulns++;
+                const isFail = v.Severity === 'CRITICAL' || v.Severity === 'HIGH';
+                if (isFail) failures++;
+                testcases += '    <testcase name=\"' + v.VulnerabilityID + ' in ' + (r.Target || 'unknown') + '\" classname=\"trivy\">\n';
+                if (isFail) {
+                  testcases += '      <failure message=\"' + v.Severity + ' severity\">' + (v.Title || v.Description || 'Vulnerability found').substring(0, 200) + '</failure>\n';
+                }
+                testcases += '    </testcase>\n';
+              });
+            });
+            
+            const xml = '<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites name=\"trivy\" tests=\"' + totalVulns + '\" failures=\"' + failures + '\">\n  <testsuite name=\"Container Security\" tests=\"' + totalVulns + '\">\n' + testcases + '  </testsuite>\n</testsuites>';
+            fs.writeFileSync('reports/trivy-results.xml', xml);
+            console.log('Generated trivy-results.xml with ' + totalVulns + ' vulnerabilities');
+          } catch (e) {
+            console.log('No Trivy results, creating empty report');
+            fs.writeFileSync('reports/trivy-results.xml', '<?xml version=\"1.0\"?><testsuites><testsuite name=\"trivy\" tests=\"0\"/></testsuites>');
+          }
+          "
+        continue-on-error: true
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v4.37.9
+        if: always()
+        with:
+          sarif_file: 'reports/trivy-results.sarif'
+        continue-on-error: true
+
+      - name: Upload SCA Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sca-reports
+          path: |
+            reports/npm-audit.xml
+            reports/trivy-results.xml
+        continue-on-error: true
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: reports/bom.json
+        continue-on-error: true
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sbom
+          path: reports/bom.json
+        continue-on-error: true
+
+  secrets:
+    name: Secret Scanning (TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+        continue-on-error: true
+
+  iac:
+    name: IaC Security (Checkov)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      - name: Run Checkov (SARIF)
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          output_format: sarif
+          output_file_path: reports
+          soft_fail: true
+        continue-on-error: true
+
+      - name: Run Checkov (JUnit)
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          output_format: junitxml
+          output_file_path: reports
+          soft_fail: true
+        continue-on-error: true
+
+      - name: Ensure Checkov JUnit file exists
+        run: |
+          ls -la reports/ || true
+          if [ ! -f reports/results_junitxml.xml ]; then
+            echo '<?xml version="1.0"?><testsuites><testsuite name="checkov" tests="0"/></testsuites>' > reports/results_junitxml.xml
+          fi
+        continue-on-error: true
+
+      - name: Upload Checkov SARIF
+        uses: github/codeql-action/upload-sarif@v4.37.9
+        if: always()
+        with:
+          sarif_file: reports/results_sarif.sarif
+        continue-on-error: true
+
+      - name: Upload IaC Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iac-reports
+          path: reports/results_junitxml.xml
+        continue-on-error: true
+
+  dast:
+    name: DAST (OWASP ZAP)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Resolve DAST target
+        id: dast_target
+        env:
+          DAST_TARGET_URL: ${{ secrets.DAST_TARGET_URL }}
+        run: |
+          if [ -n "$DAST_TARGET_URL" ]; then
+            echo "url=$DAST_TARGET_URL" >> "$GITHUB_OUTPUT"
+          else
+            echo 'No DAST_TARGET_URL configured; skipping ZAP scan.'
+          fi
+
+      - name: ZAP Scan
+        if: steps.dast_target.outputs.url != ''
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          docker_name: 'ghcr.io/zaproxy/zaproxy:stable'
+          target: ${{ steps.dast_target.outputs.url }}
+          rules_file_name: '.zap/rules.tsv'
+          fail_action: false
+        continue-on-error: true
+
+  # Consolidated security summary - runs after all scanning jobs
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [sast, sca, iac, secrets, dast]
+    if: always()
+    steps:
+      - name: Download all reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports
+        continue-on-error: true
+
+      - name: Combine all JUnit reports
+        run: |
+          mkdir -p combined-reports
+          find reports -name "*.xml" -exec cp {} combined-reports/ \; 2>/dev/null || true
+          ls -la combined-reports/ || true
+
+          # Create fallback if no reports
+          if [ -z "$(ls -A combined-reports 2>/dev/null)" ]; then
+            echo '<?xml version="1.0"?><testsuites><testsuite name="security" tests="0"/></testsuites>' > combined-reports/fallback.xml
+          fi
+        continue-on-error: true
+
+      - name: Publish Security Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: combined-reports/*.xml
+          check_name: '🔒 Security: Scan Summary'
+          comment_title: '🔒 Security: Results Summary'
+          comment_mode: 'always'
+          fail_on: 'nothing'
+        continue-on-error: true

@@ -1,0 +1,12 @@
+# Default owners for everything
+* @dushyant-rahangdale
+
+# Documentation
+/docs/ @dushyant-rahangdale
+
+# Core logic
+/src/lib/ @dushyant-rahangdale
+/prisma/ @dushyant-rahangdale
+
+# GitHub Actions
+/.github/workflows/ @dushyant-rahangdale
