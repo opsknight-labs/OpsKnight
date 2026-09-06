@@ -89,9 +89,30 @@ Common statuses are 400 invalid input, 401 invalid/missing key, 403 missing scop
 - Record request purpose and response status without logging tokens or sensitive payload data.
 - Test against a non-production service and verify resulting escalation/notifications before production rollout.
 
+## API-key hash secret
+
+`API_KEY_SECRET` is recommended for production and must differ from `NEXTAUTH_SECRET` when configured. It gives API-key lookup hashes independent key material from browser-session JWTs and decouples API-key hashes from ordinary session-secret rotation.
+
+For backward-compatible startup when `API_KEY_SECRET` is omitted, OpsKnight derives a domain-separated API-key root from `NEXTAUTH_SECRET` rather than using the session secret directly as the API-key HMAC key. This removes direct cryptographic key reuse, but API-key hashes still depend on the session secret's lifetime. Production operators should configure a separate `API_KEY_SECRET` when independent rotation is required.
+
+When upgrading from a release that hashed API keys directly from `NEXTAUTH_SECRET`, existing API keys do **not** need to be recreated. OpsKnight recognizes compatible legacy hashes and rewrites a matching stored hash under the current API-key hashing root after the key's next successful request.
+
+Generate independent secrets, for example:
+
+```bash
+openssl rand -base64 32  # NEXTAUTH_SECRET
+openssl rand -base64 32  # API_KEY_SECRET
+```
+
+Do not set both variables to the same value.
+
 ## Key rotation
 
-Create a replacement key, deploy it to consumers, confirm `lastUsedAt` moves on the replacement, then revoke the old key. If `API_KEY_SECRET` or its default `NEXTAUTH_SECRET` basis changes without a migration plan, stored key hashes can no longer be matched; rotate keys deliberately.
+To rotate a user-facing API key, create a replacement key, deploy it to consumers, confirm `lastUsedAt` moves on the replacement, then revoke the old key.
+
+For installations with an explicit `API_KEY_SECRET`, session-secret rotation does not change the primary API-key hash basis. Rotating `API_KEY_SECRET` itself still requires a planned API-key migration or key replacement; the compatibility lookup in this release is specifically for historical hashes written from the previous session-secret basis, not a general multi-secret keyring.
+
+If `API_KEY_SECRET` is omitted, changing `NEXTAUTH_SECRET` changes the derived API-key hash root. Configure an independent `API_KEY_SECRET` before planning session-secret rotation when preserving API-key continuity matters.
 
 ## Related topics
 

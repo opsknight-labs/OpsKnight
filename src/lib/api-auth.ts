@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashLegacyScryptToken, hashTokenV2 } from '@/lib/api-keys';
+import { hashLegacyScryptTokens, hashLegacyV2Tokens, hashTokenV2 } from '@/lib/api-keys';
 
 function extractApiKey(req: NextRequest) {
   const header = req.headers.get('authorization') || '';
@@ -28,27 +28,39 @@ export async function authenticateApiKey(req: NextRequest) {
     where: { tokenHash: v2Hash, ...activeFilter },
   });
 
-  // Lazy migration: Check legacy hash if V2 not found
+  // Lazy migration: releases before API_KEY_SECRET became a production
+  // boundary could write V2 HMACs directly from NEXTAUTH_SECRET. Accept those
+  // hashes once and immediately migrate them to the current API-key secret.
   if (!apiKey) {
-    const v1Hash = await hashLegacyScryptToken(token);
-    apiKey = await prisma.apiKey.findFirst({
-      where: { tokenHash: v1Hash, ...activeFilter },
-    });
-
-    if (apiKey) {
-      // Found with legacy hash - migrate to secure HMAC hash immediately
-      await prisma.apiKey.update({
-        where: { id: apiKey.id },
-        data: {
-          tokenHash: v2Hash,
-          lastUsedAt: new Date(),
-        },
+    const legacyV2Hashes = hashLegacyV2Tokens(token);
+    if (legacyV2Hashes.length > 0) {
+      apiKey = await prisma.apiKey.findFirst({
+        where: { tokenHash: { in: legacyV2Hashes }, ...activeFilter },
       });
-      return apiKey;
     }
   }
 
+  // Older releases used scrypt for lookup hashes. Check every compatible
+  // historical secret basis, then migrate successful matches to V2 HMAC.
+  if (!apiKey) {
+    const legacyScryptHashes = await hashLegacyScryptTokens(token);
+    apiKey = await prisma.apiKey.findFirst({
+      where: { tokenHash: { in: legacyScryptHashes }, ...activeFilter },
+    });
+  }
+
   if (!apiKey) return null;
+
+  if (apiKey.tokenHash !== v2Hash) {
+    await prisma.apiKey.update({
+      where: { id: apiKey.id },
+      data: {
+        tokenHash: v2Hash,
+        lastUsedAt: new Date(),
+      },
+    });
+    return apiKey;
+  }
 
   await prisma.apiKey.updateMany({
     where: {

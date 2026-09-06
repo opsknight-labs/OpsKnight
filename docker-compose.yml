@@ -38,6 +38,7 @@ services:
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
+      API_KEY_SECRET: ${API_KEY_SECRET:-change_this_to_an_independent_api_key_secret_in_production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
       NOTIFICATION_CONTROL_PLANE_PERSONAL: ${NOTIFICATION_CONTROL_PLANE_PERSONAL:-false}
       PROMETHEUS_SCRAPE_TOKEN: ${PROMETHEUS_SCRAPE_TOKEN:-}
