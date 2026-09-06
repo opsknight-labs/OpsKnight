@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  Check,
-  Loader2,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
@@ -36,8 +34,6 @@ export default function GlobalIncidentBanner() {
     nextIncident,
     prevIncident,
     dismissBanner,
-    acknowledgeIncident,
-    isAcknowledging,
   } = useIncidentAlert();
 
   // Tick for elapsed duration every 30 seconds
@@ -176,36 +172,16 @@ export default function GlobalIncidentBanner() {
             </div>
           )}
 
-          {/* 1-Click Acknowledge Button (if not already acknowledged) */}
-          {!isAcked && (
-            <button
-              type="button"
-              onClick={() => acknowledgeIncident(currentIncident.id)}
-              disabled={isAcknowledging}
-              className={cn(
-                'inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-bold text-xs transition-all cursor-pointer shadow-xs border shrink-0',
-                'bg-white text-slate-900 hover:bg-slate-100 active:scale-95 disabled:opacity-50 border-white/60'
-              )}
-            >
-              {isAcknowledging ? (
-                <Loader2 size={12} className="animate-spin shrink-0" />
-              ) : (
-                <Check size={12} className="stroke-[3] shrink-0" />
-              )}
-              <span>Acknowledge</span>
-            </button>
-          )}
-
           {/* View Details Link */}
           <Link
             href={`/incidents/${currentIncident.id}`}
             className={cn(
-              'inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-semibold text-xs transition-all border shadow-xs shrink-0',
-              'bg-white/15 hover:bg-white/25 text-white border-white/30 hover:border-white/40'
+              'inline-flex items-center gap-1.5 px-3 py-1 rounded-md font-semibold text-xs transition-all border shadow-xs shrink-0',
+              'bg-white/15 hover:bg-white/25 active:bg-white/30 text-white border-white/30 hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white/60'
             )}
           >
             <span>View</span>
-            <ArrowRight size={12} className="shrink-0" />
+            <ArrowRight size={12} className="shrink-0 stroke-[2.5]" />
           </Link>
 
           {/* Dismiss Button - High contrast, explicit solid/elevated container visible in both dark & light browser configs */}

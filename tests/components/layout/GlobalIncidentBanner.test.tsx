@@ -38,7 +38,7 @@ describe('GlobalIncidentBanner', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders P1 incident details, service, title, and action buttons', () => {
+  it('renders P1 incident details, service, title, and View link', () => {
     mockContextValue.isBannerVisible = true;
     mockContextValue.currentIncident = {
       id: 'inc-p1-123',
@@ -59,31 +59,12 @@ describe('GlobalIncidentBanner', () => {
     expect(screen.getByText('Payment Gateway Down')).toBeDefined();
     expect(screen.getByText('Active for 10m')).toBeDefined();
     expect(screen.getByText('Triggered')).toBeDefined();
-    expect(screen.getByRole('button', { name: /acknowledge/i })).toBeDefined();
     expect(screen.getByRole('link', { name: /view/i })).toBeDefined();
+    // Acknowledge button is removed in favor of navigating directly to incident
+    expect(screen.queryByRole('button', { name: /acknowledge/i })).toBeNull();
   });
 
-  it('triggers acknowledgeIncident when clicking Acknowledge', () => {
-    mockContextValue.isBannerVisible = true;
-    mockContextValue.currentIncident = {
-      id: 'inc-p1-123',
-      title: 'Payment Gateway Down',
-      status: 'OPEN',
-      priority: 'P1',
-      urgency: 'HIGH',
-      createdAt: new Date().toISOString(),
-      service: { id: 'svc-payments', name: 'Payments API' },
-    };
-
-    render(<GlobalIncidentBanner />);
-
-    const ackButton = screen.getByRole('button', { name: /acknowledge/i });
-    fireEvent.click(ackButton);
-
-    expect(mockContextValue.acknowledgeIncident).toHaveBeenCalledWith('inc-p1-123');
-  });
-
-  it('hides Acknowledge button and displays Acknowledged badge when incident is already acknowledged', () => {
+  it('displays Acknowledged badge when incident status is ACKNOWLEDGED without acknowledge button', () => {
     mockContextValue.isBannerVisible = true;
     mockContextValue.currentIncident = {
       id: 'inc-p1-123',
@@ -97,7 +78,7 @@ describe('GlobalIncidentBanner', () => {
 
     render(<GlobalIncidentBanner />);
 
-    expect(screen.queryByRole('button', { name: /^acknowledge$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /acknowledge/i })).toBeNull();
     expect(screen.getByText('Acknowledged')).toBeDefined();
   });
 
