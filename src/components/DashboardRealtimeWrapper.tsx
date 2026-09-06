@@ -1,6 +1,6 @@
 'use client';
 
-import { RealtimeProvider, useRealtime } from '@/hooks/useRealtime';
+import { useRealtime } from '@/hooks/useRealtime';
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
 import { useRouter } from 'next/navigation';
@@ -26,14 +26,12 @@ export default function DashboardRealtimeWrapper({
   onIncidentsUpdate,
 }: DashboardRealtimeWrapperProps) {
   return (
-    <RealtimeProvider>
-      <DashboardRealtimeContent
-        onMetricsUpdate={onMetricsUpdate}
-        onIncidentsUpdate={onIncidentsUpdate}
-      >
-        {children}
-      </DashboardRealtimeContent>
-    </RealtimeProvider>
+    <DashboardRealtimeContent
+      onMetricsUpdate={onMetricsUpdate}
+      onIncidentsUpdate={onIncidentsUpdate}
+    >
+      {children}
+    </DashboardRealtimeContent>
   );
 }
 
@@ -95,36 +93,16 @@ function DashboardRealtimeContent({
             setDismissedIncidentKey(incidentUpdateKey);
             router.refresh();
           }}
-          style={{
-            position: 'fixed',
-            bottom: showDisconnected ? '4.5rem' : '1rem',
-            right: '1rem',
-            padding: '0.5rem 1rem',
-            background: 'var(--color-primary)',
-            color: 'white',
-            border: 0,
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.875rem',
-            zIndex: 1000,
-            cursor: 'pointer',
-          }}
+          className={`fixed right-4 z-50 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-lg transition-all cursor-pointer ${
+            showDisconnected ? 'bottom-16' : 'bottom-4'
+          }`}
         >
           Dashboard updates available — refresh
         </button>
       )}
       {showDisconnected && !isConnected && (
         <div
-          style={{
-            position: 'fixed',
-            bottom: '1rem',
-            right: '1rem',
-            padding: '0.5rem 1rem',
-            background: 'var(--color-warning)',
-            color: 'white',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.875rem',
-            zIndex: 1000,
-          }}
+          className="fixed bottom-4 right-4 z-50 px-3.5 py-2 bg-amber-600 text-white text-xs font-medium rounded-lg shadow-lg"
           aria-live="polite"
           aria-atomic="true"
         >
