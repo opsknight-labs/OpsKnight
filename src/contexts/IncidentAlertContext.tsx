@@ -41,9 +41,11 @@ export interface IncidentAlertContextValue {
   totalCount: number;
   isBannerVisible: boolean;
   isSnoozed: boolean;
+  isDismissed: boolean;
   nextIncident: () => void;
   prevIncident: () => void;
   selectIncident: (id: string) => void;
+  dismissBanner: () => void;
   snoozeBanner: () => void;
   dismissIncident: (id: string) => void;
   acknowledgeIncident: (id: string) => Promise<void>;
@@ -52,7 +54,9 @@ export interface IncidentAlertContextValue {
 
 const IncidentAlertContext = createContext<IncidentAlertContextValue | null>(null);
 
+const DISMISSED_STORAGE_KEY = 'opsknight:banner_dismissed_at';
 const SNOOZE_STORAGE_KEY = 'opsknight:snoozed_critical_incidents';
+const RECENCY_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function isCriticalIncident(item: {
   status?: unknown;
@@ -110,18 +114,19 @@ export function IncidentAlertProvider({
     return map;
   });
 
-  const [snoozedIds, setSnoozedIds] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
+  // Global banner dismissal timestamp in sessionStorage (persists across page navigation)
+  const [dismissedAt, setDismissedAt] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null;
     try {
-      const stored = sessionStorage.getItem(SNOOZE_STORAGE_KEY);
+      const stored = sessionStorage.getItem(DISMISSED_STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) return new Set(parsed);
+        const val = Number(stored);
+        if (!isNaN(val) && val > 0) return val;
       }
     } catch {
       // Ignore storage read error
     }
-    return new Set();
+    return null;
   });
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -131,36 +136,42 @@ export function IncidentAlertProvider({
   const mountTimestampRef = useRef<number>(Date.now());
   const toastedIdsRef = useRef<Set<string>>(new Set());
 
-  // Keep sessionStorage in sync
-  const updateSnoozedIds = useCallback((updater: (prev: Set<string>) => Set<string>) => {
-    setSnoozedIds(prev => {
-      const next = updater(prev);
-      try {
-        sessionStorage.setItem(SNOOZE_STORAGE_KEY, JSON.stringify([...next]));
-      } catch {
-        // Ignore storage write error
-      }
-      return next;
-    });
+  const dismissBanner = useCallback(() => {
+    const now = Date.now();
+    setDismissedAt(now);
+    try {
+      sessionStorage.setItem(DISMISSED_STORAGE_KEY, String(now));
+    } catch {
+      // Ignore write error
+    }
+  }, []);
+
+  const clearDismissal = useCallback(() => {
+    setDismissedAt(null);
+    try {
+      sessionStorage.removeItem(DISMISSED_STORAGE_KEY);
+    } catch {
+      // Ignore write error
+    }
   }, []);
 
   const acknowledgeIncident = useCallback(
     async (id: string) => {
       setIsAcknowledging(true);
       try {
-        await updateIncidentStatus(id, 'ACKNOWLEDGED');
         setIncidentsMap(prev => {
+          const existing = prev.get(id);
+          if (!existing) return prev;
           const next = new Map(prev);
-          const inc = next.get(id);
-          if (inc) {
-            next.set(id, {
-              ...inc,
-              status: 'ACKNOWLEDGED',
-              acknowledgedAt: new Date().toISOString(),
-            });
-          }
+          next.set(id, {
+            ...existing,
+            status: 'ACKNOWLEDGED',
+            acknowledgedAt: new Date().toISOString(),
+          });
           return next;
         });
+
+        await updateIncidentStatus(id, 'ACKNOWLEDGED');
         notify.success('Incident acknowledged');
       } catch (err) {
         notify.error(err, { description: 'Failed to acknowledge incident' });
@@ -171,7 +182,7 @@ export function IncidentAlertProvider({
     []
   );
 
-  // Sync with real-time SSE stream updates
+  // Sync with real-time SSE stream updates (push-based)
   useEffect(() => {
     if (!recentIncidents || recentIncidents.length === 0) return;
 
@@ -197,13 +208,9 @@ export function IncidentAlertProvider({
             next.set(parsed.id, parsed);
             changed = true;
 
-            // If an incident escalates (e.g. from P2 to P1 or reopens), un-snooze it
+            // If an incident escalates (e.g. from P2 to P1 or reopens), re-open banner across all pages
             if (existing && existing.priority !== 'P1' && parsed.priority === 'P1') {
-              updateSnoozedIds(snoozeSet => {
-                const nextSet = new Set(snoozeSet);
-                nextSet.delete(parsed.id);
-                return nextSet;
-              });
+              clearDismissal();
             }
           }
         }
@@ -218,6 +225,10 @@ export function IncidentAlertProvider({
 
         if (isNewArrival) {
           toastedIdsRef.current.add(parsed.id);
+
+          // A brand-new critical incident breaks any prior dismissal across all pages
+          clearDismissal();
+
           notify.incident(
             {
               id: parsed.id,
@@ -238,30 +249,54 @@ export function IncidentAlertProvider({
 
       return changed ? next : prev;
     });
-  }, [recentIncidents, updateSnoozedIds, acknowledgeIncident]);
+  }, [recentIncidents, clearDismissal, acknowledgeIncident]);
 
-  // Derive visible active critical incidents, sorted by priority (P1 first) and recency
+  // Derive visible active critical incidents scoped to the last 24h
   const activeCriticalIncidents = useMemo(() => {
-    return Array.from(incidentsMap.values()).sort((a, b) => {
-      const pA = a.priority === 'P1' ? 1 : a.priority === 'P2' ? 2 : 3;
-      const pB = b.priority === 'P1' ? 1 : b.priority === 'P2' ? 2 : 3;
-      if (pA !== pB) return pA - pB;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+    const now = Date.now();
+    return Array.from(incidentsMap.values())
+      .filter(inc => {
+        const createdMs = new Date(inc.createdAt).getTime();
+        return (
+          !isNaN(createdMs) &&
+          (now - createdMs <= RECENCY_THRESHOLD_MS || createdMs >= mountTimestampRef.current - 5000)
+        );
+      })
+      .sort((a, b) => {
+        // Open before Acknowledged
+        if (a.status === 'OPEN' && b.status !== 'OPEN') return -1;
+        if (b.status === 'OPEN' && a.status !== 'OPEN') return 1;
+        // P1 before P2
+        const pA = a.priority === 'P1' ? 1 : a.priority === 'P2' ? 2 : 3;
+        const pB = b.priority === 'P1' ? 1 : b.priority === 'P2' ? 2 : 3;
+        if (pA !== pB) return pA - pB;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
   }, [incidentsMap]);
 
   // Context-aware suppression: check if currently viewing an incident's detail page
   const viewingIncidentIdMatch = /^\/incidents\/([^/?#]+)/.exec(pathname);
   const viewingIncidentId = viewingIncidentIdMatch?.at(1) ?? null;
 
-  // Filter out snoozed and contextually suppressed incidents
+  // Filter out contextually suppressed incidents (when user is inside that incident's war room)
   const displayableIncidents = useMemo(() => {
     return activeCriticalIncidents.filter(inc => {
-      if (snoozedIds.has(inc.id)) return false;
       if (viewingIncidentId && inc.id === viewingIncidentId) return false;
       return true;
     });
-  }, [activeCriticalIncidents, snoozedIds, viewingIncidentId]);
+  }, [activeCriticalIncidents, viewingIncidentId]);
+
+  // Once closed (dismissed), banner does NOT show on any page UNLESS a new P1/high incident occurs
+  const hasNewIncidentAfterDismissal = useMemo(() => {
+    if (!dismissedAt) return true;
+    return displayableIncidents.some(inc => {
+      const createdTime = new Date(inc.createdAt).getTime();
+      return createdTime > dismissedAt;
+    });
+  }, [displayableIncidents, dismissedAt]);
+
+  const isBannerVisible = displayableIncidents.length > 0 && hasNewIncidentAfterDismissal;
+  const isDismissed = Boolean(dismissedAt && !hasNewIncidentAfterDismissal);
 
   const totalCount = displayableIncidents.length;
   const clampedIndex = totalCount > 0 ? Math.min(selectedIndex, totalCount - 1) : 0;
@@ -285,20 +320,12 @@ export function IncidentAlertProvider({
     [displayableIncidents]
   );
 
-  const snoozeBanner = useCallback(() => {
-    if (!currentIncident) return;
-    updateSnoozedIds(prev => new Set(prev).add(currentIncident.id));
-  }, [currentIncident, updateSnoozedIds]);
-
   const dismissIncident = useCallback(
-    (id: string) => {
-      updateSnoozedIds(prev => new Set(prev).add(id));
+    (_id: string) => {
+      dismissBanner();
     },
-    [updateSnoozedIds]
+    [dismissBanner]
   );
-
-  const isBannerVisible = totalCount > 0;
-  const isSnoozed = activeCriticalIncidents.length > 0 && totalCount === 0;
 
   const value = useMemo<IncidentAlertContextValue>(
     () => ({
@@ -307,11 +334,13 @@ export function IncidentAlertProvider({
       currentIndex: clampedIndex,
       totalCount,
       isBannerVisible,
-      isSnoozed,
+      isSnoozed: isDismissed,
+      isDismissed,
       nextIncident,
       prevIncident,
       selectIncident,
-      snoozeBanner,
+      dismissBanner,
+      snoozeBanner: dismissBanner, // alias for backwards compatibility
       dismissIncident,
       acknowledgeIncident,
       isAcknowledging,
@@ -322,11 +351,11 @@ export function IncidentAlertProvider({
       clampedIndex,
       totalCount,
       isBannerVisible,
-      isSnoozed,
+      isDismissed,
       nextIncident,
       prevIncident,
       selectIncident,
-      snoozeBanner,
+      dismissBanner,
       dismissIncident,
       acknowledgeIncident,
       isAcknowledging,

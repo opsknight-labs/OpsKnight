@@ -40,10 +40,10 @@ function PriorityPill({
   const p = priority?.toUpperCase() || (urgency === 'HIGH' ? 'HIGH' : urgency ? urgency.toUpperCase() : 'ALERT');
   const color =
     p === 'P1' || p === 'HIGH'
-      ? 'bg-rose-100 text-rose-700 border-rose-200'
+      ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800/60'
       : p === 'P2' || p === 'MEDIUM'
-        ? 'bg-amber-100 text-amber-700 border-amber-200'
-        : 'bg-blue-100 text-blue-700 border-blue-200';
+        ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800/60'
+        : 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800/60';
   return (
     <span
       className={cn(
@@ -89,8 +89,8 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
     return (
       <div
         className={cn(
-          'relative w-[min(380px,calc(100vw-24px))] rounded-xl border border-slate-200/90 bg-white text-slate-900',
-          'shadow-[0_12px_32px_-8px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.06)] overflow-hidden transition-all duration-200'
+          'relative w-[min(380px,calc(100vw-24px))] rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100',
+          'shadow-[0_12px_32px_-8px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_36px_-8px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.08)] overflow-hidden transition-all duration-200'
         )}
       >
         {/* Left priority accent stripe */}
@@ -109,27 +109,27 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
             {/* Top row: Priority Pill + Service + ID */}
             <div className="flex items-center gap-1.5 mb-1 leading-none">
               <PriorityPill priority={primaryIncident.priority} urgency={primaryIncident.urgency} />
-              <span className="text-[11px] font-semibold text-slate-700 truncate max-w-[160px]">
+              <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[160px]">
                 {primaryIncident.service?.name || 'Incident'}
               </span>
-              <span className="text-slate-300">&middot;</span>
-              <span className="font-mono text-[10px] text-slate-400">
+              <span className="text-slate-300 dark:text-slate-700">&middot;</span>
+              <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500">
                 #{primaryIncident.id.slice(-5).toUpperCase()}
               </span>
             </div>
 
             {/* Title: 1 line truncate */}
-            <h4 className="text-xs font-semibold text-slate-900 leading-snug line-clamp-1 break-words">
+            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-snug line-clamp-1 break-words">
               {cleanTitle(primaryIncident.title)}
             </h4>
 
             {/* Bottom Actions Row */}
-            <div className="mt-2 flex items-center justify-between text-[11px]">
+            <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
               <div className="flex items-center gap-3">
                 <Link
                   href={`/incidents/${primaryIncident.id}`}
                   onClick={() => sonnerToast.dismiss(toastId)}
-                  className="inline-flex items-center gap-0.5 font-bold text-rose-600 hover:text-rose-700 transition-colors"
+                  className="inline-flex items-center gap-0.5 font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 transition-colors"
                 >
                   <span>View</span>
                   <ArrowUpRight size={11} className="shrink-0" />
@@ -140,7 +140,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
                     type="button"
                     onClick={() => handleAck(primaryIncident.id)}
                     disabled={ackingId === primaryIncident.id}
-                    className="font-bold text-slate-700 hover:text-slate-950 flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                    className="font-bold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {ackingId === primaryIncident.id ? (
                       <Loader2 size={11} className="animate-spin shrink-0" />
@@ -152,7 +152,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
                 )}
               </div>
 
-              <span className="text-[10px] text-slate-400 font-medium">Just now</span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Just now</span>
             </div>
           </div>
 
@@ -163,7 +163,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               e.stopPropagation();
               sonnerToast.dismiss(toastId);
             }}
-            className="shrink-0 h-6 w-6 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+            className="shrink-0 h-6 w-6 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Dismiss incident alert"
           >
             <X size={14} className="shrink-0 stroke-[2.5]" />
@@ -177,8 +177,8 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
   return (
     <div
       className={cn(
-        'relative w-[min(380px,calc(100vw-24px))] rounded-xl border border-slate-200/90 bg-white text-slate-900',
-        'shadow-[0_12px_32px_-8px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.06)] overflow-hidden transition-all duration-200'
+        'relative w-[min(380px,calc(100vw-24px))] rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100',
+        'shadow-[0_12px_32px_-8px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.06)] dark:shadow-[0_16px_36px_-8px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.08)] overflow-hidden transition-all duration-200'
       )}
     >
       {/* Left accent bar */}
@@ -186,13 +186,13 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
 
       <div className="p-2.5">
         {/* Header */}
-        <div className="pl-1.5 pr-0.5 flex items-center justify-between gap-2 mb-2">
+        <div className="pl-1.5 pr-0.5 flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600" />
             </span>
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400">
               {incidents.length} New Incidents
             </span>
           </div>
@@ -203,7 +203,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               e.stopPropagation();
               sonnerToast.dismiss(toastId);
             }}
-            className="shrink-0 h-5 w-5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+            className="shrink-0 h-5 w-5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
             aria-label="Dismiss all incident alerts"
           >
             <X size={13} className="shrink-0 stroke-[2.5]" />
@@ -217,32 +217,32 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
               key={item.id}
               href={`/incidents/${item.id}`}
               onClick={() => sonnerToast.dismiss(toastId)}
-              className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors group cursor-pointer text-xs"
+              className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group cursor-pointer text-xs"
             >
               <div className="min-w-0 flex-1 flex items-center gap-1.5">
                 <PriorityPill priority={item.priority} urgency={item.urgency} />
-                <span className="font-semibold text-[11px] text-slate-900 truncate group-hover:text-rose-600 transition-colors">
+                <span className="font-semibold text-[11px] text-slate-900 dark:text-slate-200 truncate group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
                   {cleanTitle(item.title)}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 shrink-0 max-w-[100px] truncate">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0 max-w-[100px] truncate">
                 {item.service?.name || 'Service'}
               </span>
             </Link>
           ))}
           {incidents.length > 2 && (
-            <p className="text-[10px] text-slate-400 text-center font-medium pt-0.5">
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center font-medium pt-0.5">
               +{incidents.length - 2} more incidents on board
             </p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] px-1">
+        <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] px-1">
           <Link
             href="/incidents"
             onClick={() => sonnerToast.dismiss(toastId)}
-            className="inline-flex items-center gap-0.5 font-bold text-rose-600 hover:text-rose-700 transition-colors"
+            className="inline-flex items-center gap-0.5 font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 transition-colors"
           >
             <span>View board</span>
             <ArrowUpRight size={11} className="shrink-0" />
@@ -251,7 +251,7 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
           <button
             type="button"
             onClick={() => sonnerToast.dismiss(toastId)}
-            className="text-[10px] font-medium text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+            className="text-[10px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
           >
             Dismiss all
           </button>
