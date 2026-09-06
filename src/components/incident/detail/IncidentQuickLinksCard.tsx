@@ -9,7 +9,6 @@ import {
   BarChart2,
   Users,
   Video,
-  FileText,
   ArrowUpRight,
   ExternalLink,
 } from 'lucide-react';
@@ -33,8 +32,6 @@ export type IncidentQuickLinksCardProps = {
   } | null;
   warRoomUrl?: string | null;
   slackChannelName?: string | null;
-  status: string;
-  postmortemExists?: boolean;
   className?: string;
 };
 
@@ -43,12 +40,8 @@ export default function IncidentQuickLinksCard({
   service,
   team,
   warRoomUrl,
-  status,
-  postmortemExists,
   className,
 }: IncidentQuickLinksCardProps) {
-  const isResolved = status === 'RESOLVED';
-
   return (
     <div
       className={cn(
@@ -184,29 +177,6 @@ export default function IncidentQuickLinksCard({
             </div>
             <ExternalLink className="h-3.5 w-3.5 text-rose-500 opacity-75 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
           </a>
-        )}
-
-        {/* Postmortem (if resolved or exists) */}
-        {isResolved && (
-          <Link
-            href={`/postmortems/${incidentId}`}
-            className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                <FileText className="h-3.5 w-3.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-primary transition-colors">
-                  {postmortemExists ? 'View Postmortem' : 'Create Postmortem'}
-                </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                  Root Cause Analysis &amp; Action Items
-                </p>
-              </div>
-            </div>
-            <ArrowUpRight className="h-3.5 w-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-2" />
-          </Link>
         )}
       </div>
     </div>
