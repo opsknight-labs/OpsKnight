@@ -5,8 +5,15 @@ import {
   IncidentResponsePolicyError,
   saveIncidentSlaPolicy,
 } from '@/lib/incident-sla/policy-config';
-import { saveWorkspaceClassificationPolicy } from '@/lib/incidents/classification-policy';
+import {
+  saveClassificationPolicy,
+  saveWorkspaceClassificationPolicy,
+} from '@/lib/incidents/classification-policy';
 import { logger } from '@/lib/logger';
+import prisma from '@/lib/prisma';
+import { explainIncidentResponsePolicy } from '@/lib/incidents/response-policy';
+import { getUserPermissions } from '@/lib/rbac';
+import { saveSupportHoursPolicy } from '@/lib/incidents/support-hours-policy';
 
 export type IncidentResponsePolicySaveResult =
   | { ok: true; version: number }
@@ -52,6 +59,17 @@ function policySaveError(
   return { ok: false, code: 'UNEXPECTED', message: fallbackMessage };
 }
 
+export async function saveScopedClassificationPolicyAction(
+  input: unknown
+): Promise<IncidentResponsePolicySaveResult> {
+  try {
+    const policy = await saveClassificationPolicy(input);
+    return { ok: true, version: policy.version };
+  } catch (error) {
+    return policySaveError(error, 'Unable to save the scoped classification policy. Try again.');
+  }
+}
+
 export async function saveIncidentSlaPolicyAction(
   input: unknown
 ): Promise<IncidentResponsePolicySaveResult> {
@@ -71,5 +89,30 @@ export async function saveWorkspaceClassificationPolicyAction(
     return { ok: true, version: policy.version };
   } catch (error) {
     return policySaveError(error, 'Unable to save the alert classification policy. Try again.');
+  }
+}
+
+export async function previewResponsePolicyAction(input: unknown) {
+  const permissions = await getUserPermissions();
+  if (!permissions.authenticated || !permissions.capabilities.includes('admin.manage'))
+    return { ok: false as const, message: 'Admin access required.' };
+  try {
+    const value = await prisma.$transaction(tx =>
+      explainIncidentResponsePolicy(tx, input as never)
+    );
+    return { ok: true as const, value };
+  } catch {
+    return { ok: false as const, message: 'Unable to resolve this policy preview.' };
+  }
+}
+
+export async function saveSupportHoursPolicyAction(
+  input: unknown
+): Promise<IncidentResponsePolicySaveResult> {
+  try {
+    const policy = await saveSupportHoursPolicy(input);
+    return { ok: true, version: policy.version };
+  } catch (error) {
+    return policySaveError(error, 'Unable to save support hours.');
   }
 }

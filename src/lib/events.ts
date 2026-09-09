@@ -7,6 +7,7 @@ import { enqueueEventSideEffects, enqueueLifecycleSideEffects } from './event-ou
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 import { resolveNewIncidentSlaContract } from './incident-sla/contract';
 import { resolveIncidentClassification } from './incidents/classification';
+import { deriveNewIncidentSlaTransition } from './incident-sla/next-transition';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -365,6 +366,16 @@ export async function processEvent(
             classificationPolicyId: classification.policyId,
             classificationPolicyVersion: classification.policyVersion,
             classificationRule: classification.rule,
+            classificationPriorityPolicyId: classification.priorityProvenance.policyId,
+            classificationPriorityPolicyVersion: classification.priorityProvenance.policyVersion,
+            classificationPriorityRule: classification.priorityProvenance.rule,
+            classificationPriorityScope: classification.priorityProvenance.scope,
+            classificationUrgencyPolicyId: classification.urgencyProvenance.policyId,
+            classificationUrgencyPolicyVersion: classification.urgencyProvenance.policyVersion,
+            classificationUrgencyRule: classification.urgencyProvenance.rule,
+            classificationUrgencyScope: classification.urgencyProvenance.scope,
+            nextSlaTransitionAt: null,
+            nextSlaTransitionKind: null,
             escalationStatus: 'COMPLETED',
           },
         });
@@ -441,6 +452,18 @@ export async function processEvent(
           classificationPolicyId: classification.policyId,
           classificationPolicyVersion: classification.policyVersion,
           classificationRule: classification.rule,
+          classificationPriorityPolicyId: classification.priorityProvenance.policyId,
+          classificationPriorityPolicyVersion: classification.priorityProvenance.policyVersion,
+          classificationPriorityRule: classification.priorityProvenance.rule,
+          classificationPriorityScope: classification.priorityProvenance.scope,
+          classificationUrgencyPolicyId: classification.urgencyProvenance.policyId,
+          classificationUrgencyPolicyVersion: classification.urgencyProvenance.policyVersion,
+          classificationUrgencyRule: classification.urgencyProvenance.rule,
+          classificationUrgencyScope: classification.urgencyProvenance.scope,
+          ...(() => {
+            const next = deriveNewIncidentSlaTransition(newSla, incidentCreatedAt);
+            return { nextSlaTransitionAt: next?.at, nextSlaTransitionKind: next?.kind };
+          })(),
           createdAt: incidentCreatedAt,
           ...(isFlapping
             ? {

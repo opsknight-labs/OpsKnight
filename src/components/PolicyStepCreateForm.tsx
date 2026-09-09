@@ -16,6 +16,9 @@ import {
 import { Plus, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import PolicyTargetCombobox from '@/components/policies/PolicyTargetCombobox';
+import EscalationConditionsEditor, {
+  type EditableEscalationCondition,
+} from '@/components/policies/EscalationConditionsEditor';
 
 type PolicyStepCreateFormProps = {
   policyId: string;
@@ -43,10 +46,12 @@ export default function PolicyStepCreateForm({
   const [isPending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const [targetType, setTargetType] = useState<'USER' | 'TEAM' | 'SCHEDULE'>('USER');
+  const [conditions, setConditions] = useState<EditableEscalationCondition[]>([]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    formData.set('conditions', JSON.stringify(conditions));
     startTransition(async () => {
       try {
         const result = await addStep(policyId, formData);
@@ -175,6 +180,12 @@ export default function PolicyStepCreateForm({
               Wait time before this step is executed. Use 0 for immediate.
             </p>
           </div>
+
+          <EscalationConditionsEditor
+            value={conditions}
+            onChange={setConditions}
+            disabled={isPending}
+          />
 
           <div className="flex gap-2 pt-2">
             <Button type="submit" disabled={isPending} className="flex-1">

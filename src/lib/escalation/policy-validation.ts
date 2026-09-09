@@ -40,6 +40,11 @@ export interface ValidatedEscalationStep {
   delayMinutes: number;
   notificationChannels: NotificationDeliveryChannel[];
   notifyOnlyTeamLead: boolean;
+  conditions?: Array<{
+    field: 'PRIORITY' | 'URGENCY' | 'SUPPORT_HOURS_STATE';
+    operator: 'IN' | 'NOT_IN' | 'EQUALS' | 'NOT_EQUALS';
+    values: string[];
+  }>;
 }
 
 export type EscalationStepValidation =
@@ -78,6 +83,7 @@ export interface EscalationStepInput {
   delayMinutes?: unknown;
   notificationChannels?: unknown;
   notifyOnlyTeamLead?: unknown;
+  conditions?: unknown;
 }
 
 function trimmedId(value: unknown): string | null {
@@ -144,6 +150,54 @@ export function validateEscalationStep(input: EscalationStepInput): EscalationSt
     if (!channels.includes(channel)) channels.push(channel);
   }
 
+  const rawConditions = Array.isArray(input.conditions) ? input.conditions : [];
+  const conditions: NonNullable<ValidatedEscalationStep['conditions']> = [];
+  if (rawConditions.length > 10)
+    issues.push({ field: 'conditions', message: 'A step can have at most 10 conditions.' });
+  for (const raw of rawConditions.slice(0, 10)) {
+    if (!raw || typeof raw !== 'object') {
+      issues.push({ field: 'conditions', message: 'Invalid escalation condition.' });
+      continue;
+    }
+    const condition = raw as Record<string, unknown>;
+    const field = ['PRIORITY', 'URGENCY', 'SUPPORT_HOURS_STATE'].find(
+      value => value === condition.field
+    ) as NonNullable<ValidatedEscalationStep['conditions']>[number]['field'] | undefined;
+    const operator = ['IN', 'NOT_IN', 'EQUALS', 'NOT_EQUALS'].find(
+      value => value === condition.operator
+    ) as NonNullable<ValidatedEscalationStep['conditions']>[number]['operator'] | undefined;
+    const allowed =
+      field === 'PRIORITY'
+        ? ['P1', 'P2', 'P3', 'P4', 'P5']
+        : field === 'URGENCY'
+          ? ['HIGH', 'MEDIUM', 'LOW']
+          : field === 'SUPPORT_HOURS_STATE'
+            ? ['INSIDE', 'OUTSIDE', 'UNCONFIGURED']
+            : [];
+    const values = Array.isArray(condition.values)
+      ? [
+          ...new Set(
+            condition.values.filter(
+              (value): value is string => typeof value === 'string' && allowed.includes(value)
+            )
+          ),
+        ].slice(0, 10)
+      : [];
+    if (
+      !field ||
+      !operator ||
+      values.length === 0 ||
+      values.length !== (Array.isArray(condition.values) ? condition.values.length : 0)
+    ) {
+      issues.push({
+        field: 'conditions',
+        message: 'Condition values must match the selected typed field.',
+      });
+      continue;
+    }
+    conditions.push({ field, operator, values });
+  }
+
   if (issues.length > 0) return { valid: false, issues };
 
   return {
@@ -160,6 +214,7 @@ export function validateEscalationStep(input: EscalationStepInput): EscalationSt
       // Lead-only is a team concept; on any other target it is noise that
       // would confuse a later reader of the policy.
       notifyOnlyTeamLead: targetType === 'TEAM' && input.notifyOnlyTeamLead === true,
+      ...(input.conditions !== undefined ? { conditions } : {}),
     },
   };
 }

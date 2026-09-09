@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import Link from 'next/link';
 import StepsList from '@/components/policies/StepsList';
+import type { EditableEscalationCondition } from '@/components/policies/EscalationConditionsEditor';
 import PolicyDeleteButton from '@/components/PolicyDeleteButton';
 import PolicyActivityTimeline from '@/components/policies/PolicyActivityTimeline';
 import PolicyDetailTabs from '@/components/policies/PolicyDetailTabs';
@@ -71,6 +72,7 @@ export default async function PolicyDetailPage({
               include: { teamLead: true },
             },
             targetSchedule: true,
+            conditions: true,
           },
           orderBy: { stepOrder: 'asc' },
         },
@@ -128,7 +130,10 @@ export default async function PolicyDetailPage({
   // Tab 1: Escalation Steps Content
   const stepsContent = (
     <StepsList
-      initialSteps={policy.steps}
+      initialSteps={policy.steps.map(step => ({
+        ...step,
+        conditions: step.conditions as EditableEscalationCondition[],
+      }))}
       policyId={policy.id}
       canManage={canManagePolicies}
       updateStep={updatePolicyStep}

@@ -376,6 +376,10 @@ function updateDataForCommand(
 ): Prisma.IncidentUpdateInput {
   const data: Prisma.IncidentUpdateInput = {
     status: targetStatusFor(input.command),
+    // Cleared on every lifecycle mutation. The SLA monitor re-projects from
+    // the immutable contract and repairs the indexed scheduling hint.
+    nextSlaTransitionAt: null,
+    nextSlaTransitionKind: null,
     // Any real lifecycle transition invalidates a worker that claimed the
     // previous escalation generation. The worker re-checks this lock token
     // before assignment, notification delivery, and final state mutation.

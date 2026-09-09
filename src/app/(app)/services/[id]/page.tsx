@@ -63,6 +63,7 @@ import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingS
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import IncidentSlaPolicySettings from '@/components/incident-sla/IncidentSlaPolicySettings';
+import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -191,6 +192,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     chatOpsConfig,
     incidentSlaPolicy,
     workspaceIncidentSlaPolicy,
+    incidentClassificationPolicy,
+    integrationClassificationPolicies,
   ] = await Promise.all([
     prisma.service.findFirst({
       where: { AND: [serviceReadWhere(actor), { id }] },
@@ -276,6 +279,16 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     }),
     prisma.incidentSlaPolicy.findFirst({
       where: { scopeKey: 'workspace', sealedAt: { not: null } },
+      orderBy: { version: 'desc' },
+      include: { rules: true },
+    }),
+    prisma.incidentClassificationPolicy.findFirst({
+      where: { scopeKey: `service:${id}`, sealedAt: { not: null } },
+      orderBy: { version: 'desc' },
+      include: { rules: true },
+    }),
+    prisma.incidentClassificationPolicy.findMany({
+      where: { scopeKey: { startsWith: 'integration:' }, sealedAt: { not: null } },
       orderBy: { version: 'desc' },
       include: { rules: true },
     }),
@@ -647,6 +660,57 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                       </div>
                     ) : null}
                   </div>
+                  {canManageService && (
+                    <details className="border-t pt-3">
+                      <summary className="cursor-pointer text-xs font-semibold">
+                        Classification overrides
+                      </summary>
+                      <div className="mt-3">
+                        {(() => {
+                          const policy =
+                            integrationClassificationPolicies.find(
+                              candidate => candidate.scopeKey === `integration:${integration.id}`
+                            ) ?? null;
+                          return (
+                            <IncidentClassificationSettings
+                              scopeKey={`integration:${integration.id}`}
+                              policy={
+                                policy
+                                  ? {
+                                      version: policy.version,
+                                      derivePriorityFromUrgency: policy.derivePriorityFromUrgency,
+                                      rules: policy.rules.map(rule => ({
+                                        matchValue: rule.matchValue as
+                                          | 'critical'
+                                          | 'error'
+                                          | 'warning'
+                                          | 'info',
+                                        priorityMode: rule.priorityMode as
+                                          | 'INHERIT'
+                                          | 'SET'
+                                          | 'CLEAR',
+                                        priority: rule.priority as
+                                          | 'P1'
+                                          | 'P2'
+                                          | 'P3'
+                                          | 'P4'
+                                          | 'P5'
+                                          | null,
+                                        urgencyMode: rule.urgencyMode as
+                                          | 'INHERIT'
+                                          | 'SET'
+                                          | 'DEFAULT',
+                                        urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
+                                      })),
+                                    }
+                                  : null
+                              }
+                            />
+                          );
+                        })()}
+                      </div>
+                    </details>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -833,6 +897,25 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             policy={incidentSlaPolicy}
             workspacePolicy={workspaceIncidentSlaPolicy}
             canManage={canManageService}
+          />
+          <IncidentClassificationSettings
+            scopeKey={`service:${id}`}
+            policy={
+              incidentClassificationPolicy
+                ? {
+                    version: incidentClassificationPolicy.version,
+                    derivePriorityFromUrgency:
+                      incidentClassificationPolicy.derivePriorityFromUrgency,
+                    rules: incidentClassificationPolicy.rules.map(rule => ({
+                      matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
+                      priorityMode: rule.priorityMode as 'INHERIT' | 'SET' | 'CLEAR',
+                      priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
+                      urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT',
+                      urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
+                    })),
+                  }
+                : null
+            }
           />
 
           <ServiceNotificationSettings

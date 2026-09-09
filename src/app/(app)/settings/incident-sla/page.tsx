@@ -3,6 +3,7 @@ import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 import IncidentSlaPolicySettings from '@/components/incident-sla/IncidentSlaPolicySettings';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
+import ResponsePolicyOperations from '@/components/incident-sla/ResponsePolicyOperations';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Info } from 'lucide-react';
@@ -13,7 +14,15 @@ export default async function IncidentSlaSettingsPage() {
   const permissions = await getUserPermissions();
   if (!permissions.authenticated || !permissions.capabilities.includes('admin.manage'))
     redirect('/settings');
-  const [policy, classificationPolicy, serviceCount, inheritingCount] = await Promise.all([
+  const [
+    policy,
+    classificationPolicy,
+    serviceCount,
+    inheritingCount,
+    services,
+    integrations,
+    supportHoursPolicy,
+  ] = await Promise.all([
     prisma.incidentSlaPolicy.findFirst({
       where: { scopeKey: 'workspace', sealedAt: { not: null } },
       orderBy: { version: 'desc' },
@@ -36,6 +45,17 @@ export default async function IncidentSlaSettingsPage() {
       ) latest ON latest."scopeKey" = 'service:' || s."id"
       WHERE latest."scopeKey" IS NULL OR latest."inheritWorkspace" = true
     `.then(rows => Number(rows[0]?.count ?? 0)),
+    prisma.service.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.integration.findMany({
+      where: { enabled: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, serviceId: true },
+    }),
+    prisma.responseSupportHoursPolicy.findFirst({
+      where: { scopeKey: 'workspace', sealedAt: { not: null } },
+      orderBy: { version: 'desc' },
+      select: { version: true, timezone: true },
+    }),
   ]);
   const viewPolicy = policy
     ? {
@@ -111,12 +131,20 @@ export default async function IncidentSlaSettingsPage() {
                 derivePriorityFromUrgency: classificationPolicy.derivePriorityFromUrgency,
                 rules: classificationPolicy.rules.map(rule => ({
                   matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
+                  priorityMode: rule.priorityMode as 'INHERIT' | 'SET' | 'CLEAR',
                   priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
-                  urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW',
+                  urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT',
+                  urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
                 })),
               }
             : null
         }
+      />
+      <ResponsePolicyOperations
+        services={services}
+        integrations={integrations}
+        supportVersion={supportHoursPolicy?.version ?? 0}
+        supportTimezone={supportHoursPolicy?.timezone ?? 'UTC'}
       />
       <div className="rounded-lg border p-5 text-sm">
         <h2 className="font-semibold">SLA semantics</h2>
