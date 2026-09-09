@@ -91,7 +91,7 @@ export async function checkSLABreaches(
         : {}),
     },
     ...(indexedScheduler
-      ? { orderBy: { nextSlaTransitionAt: { sort: 'asc', nulls: 'first' } }, take: 500 }
+      ? { orderBy: { nextSlaTransitionAt: { sort: 'asc', nulls: 'last' } }, take: 500 }
       : {}),
     select: {
       id: true,

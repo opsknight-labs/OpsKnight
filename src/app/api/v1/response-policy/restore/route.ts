@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { authorizeResponsePolicyApi } from '@/lib/response-policy-api-auth';
 import { saveClassificationPolicy } from '@/lib/incidents/classification-policy';
+import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
 
 const schema = z
   .object({
@@ -39,7 +40,9 @@ export async function POST(request: NextRequest) {
       auth.actor.id
     );
     return jsonOk({ policy }, 201);
-  } catch {
+  } catch (error) {
+    if (error instanceof IncidentResponsePolicyError && error.code === 'CONFLICT')
+      return jsonError('Policy version conflict', 409);
     return jsonError('Invalid restore request', 400);
   }
 }

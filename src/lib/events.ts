@@ -8,6 +8,8 @@ import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 import { resolveNewIncidentSlaContract } from './incident-sla/contract';
 import { resolveIncidentClassification } from './incidents/classification';
 import { deriveNewIncidentSlaTransition } from './incident-sla/next-transition';
+import { resolveSupportHours } from './incidents/support-hours';
+import { resolveIncidentEngagement } from './incidents/engagement';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -429,6 +431,11 @@ export async function processEvent(
         priority: classification.priority,
         now: incidentCreatedAt,
       });
+      const engagement = resolveIncidentEngagement({
+        urgency,
+        supportHours: await resolveSupportHours(tx, { serviceId, at: incidentCreatedAt }),
+        now: incidentCreatedAt,
+      });
       const newIncident = await tx.incident.create({
         data: {
           title: sanitizedTitle,
@@ -516,8 +523,15 @@ export async function processEvent(
         await initializeEscalationExecution(tx, {
           incidentId: newIncident.id,
           serviceId,
+          now: incidentCreatedAt,
+          notBefore: engagement.earliestDeliveryAt,
         });
-        await enqueueEventSideEffects(tx, 'triggered', newIncident.id);
+        await enqueueEventSideEffects(
+          tx,
+          'triggered',
+          newIncident.id,
+          engagement.earliestDeliveryAt
+        );
       }
 
       return {

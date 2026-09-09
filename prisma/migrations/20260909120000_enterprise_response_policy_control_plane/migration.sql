@@ -11,6 +11,9 @@ SET "priorityMode" = CASE WHEN "priority" IS NULL THEN 'CLEAR' ELSE 'SET' END,
 ALTER TABLE "IncidentClassificationPolicyRule" ENABLE TRIGGER incident_classification_rule_immutable;
 
 ALTER TABLE "IncidentClassificationPolicyRule"
+  DROP CONSTRAINT IF EXISTS "incident_classification_rule_effect";
+
+ALTER TABLE "IncidentClassificationPolicyRule"
   ADD CONSTRAINT "classification_priority_mode_valid" CHECK (
     ("priorityMode" = 'SET' AND "priority" IS NOT NULL) OR
     ("priorityMode" IN ('INHERIT', 'CLEAR') AND "priority" IS NULL)

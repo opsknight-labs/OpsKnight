@@ -427,7 +427,7 @@ export async function commitEscalationPlan(input: {
  */
 export async function initializeEscalationExecution(
   tx: Prisma.TransactionClient,
-  input: { incidentId: string; serviceId: string; now?: Date }
+  input: { incidentId: string; serviceId: string; now?: Date; notBefore?: Date }
 ): Promise<{ initialized: boolean; dueAt: Date | null }> {
   const service = await tx.service.findUnique({
     where: { id: input.serviceId },
@@ -443,7 +443,8 @@ export async function initializeEscalationExecution(
   const firstStep = service?.policy?.steps[0];
   if (!firstStep) return { initialized: false, dueAt: null };
 
-  const dueAt = escalationDueAt(input.now ?? new Date(), firstStep.delayMinutes);
+  const policyDueAt = escalationDueAt(input.now ?? new Date(), firstStep.delayMinutes);
+  const dueAt = input.notBefore && input.notBefore > policyDueAt ? input.notBefore : policyDueAt;
   const initialized = await tx.incident.updateMany({
     where: {
       id: input.incidentId,
