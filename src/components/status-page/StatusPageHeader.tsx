@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatDateTime } from '@/lib/timezone';
 
 interface StatusPageHeaderProps {
   statusPage: {
@@ -14,6 +13,8 @@ interface StatusPageHeaderProps {
   apiHref?: string | null;
   /** Visitor browser IANA zone. All visible timestamps on the page use this same value. */
   timeZone: string;
+  generatedAt?: string;
+  refreshIntervalSeconds?: number | null;
 }
 
 function offsetLabel(timeZone: string, at: Date) {
@@ -24,11 +25,28 @@ function offsetLabel(timeZone: string, at: Date) {
   );
 }
 
+function formatLocalClock(timeZone: string, at: Date) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).format(at);
+}
+
+function formatCountdown(totalSeconds: number) {
+  const clamped = Math.max(0, totalSeconds);
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 function ClockIcon() {
   return (
     <svg
-      width="14"
-      height="14"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -41,9 +59,26 @@ function ClockIcon() {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 1 1-2.3-6" strokeLinecap="round" />
+      <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function RssIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M6.18 17.82a2.18 2.18 0 1 1-3.08 0 2.18 2.18 0 0 1 3.08 0ZM2 10.18v3.02A8.8 8.8 0 0 1 10.8 22h3.02A11.82 11.82 0 0 0 2 10.18ZM2 3v3.02A17.98 17.98 0 0 1 17.98 22H21A21 21 0 0 0 2 3Z" />
     </svg>
   );
@@ -52,8 +87,8 @@ function RssIcon() {
 function ApiIcon() {
   return (
     <svg
-      width="14"
-      height="14"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -68,8 +103,8 @@ function ApiIcon() {
 function MailIcon() {
   return (
     <svg
-      width="14"
-      height="14"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -83,7 +118,7 @@ function MailIcon() {
 }
 
 /**
- * Slim public top bar. The clock and every timestamp on the page use the visitor's browser zone.
+ * Slim public top bar. Clock, countdown, and timestamps all use the visitor's browser zone.
  */
 export default function StatusPageHeader({
   statusPage,
@@ -91,25 +126,39 @@ export default function StatusPageHeader({
   rssHref,
   apiHref,
   timeZone,
+  generatedAt,
+  refreshIntervalSeconds = null,
 }: StatusPageHeaderProps) {
   const logoUrl =
     (typeof branding.logoUrl === 'string' && branding.logoUrl) ||
     (typeof branding.logo === 'string' && branding.logo) ||
     '/logo.svg';
   const [now, setNow] = useState<Date | null>(null);
+  const [deadlineMs, setDeadlineMs] = useState<number | null>(null);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
     tick();
-    const id = window.setInterval(tick, 15_000);
+    const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const nextDeadline =
+      refreshIntervalSeconds != null && refreshIntervalSeconds > 0
+        ? Date.now() + refreshIntervalSeconds * 1000
+        : null;
+    const id = window.setTimeout(() => setDeadlineMs(nextDeadline), 0);
+    return () => window.clearTimeout(id);
+  }, [refreshIntervalSeconds, generatedAt]);
+
   const contactHref =
     statusPage.contactUrl || (statusPage.contactEmail ? `mailto:${statusPage.contactEmail}` : null);
-  const localTime = now ? formatDateTime(now, timeZone, { format: 'time', hour12: true }) : null;
+  const localTime = now ? formatLocalClock(timeZone, now) : null;
   const offset = now ? offsetLabel(timeZone, now) : null;
   const zoneName = timeZone.replace(/_/g, ' ');
+  const remainingSeconds =
+    now && deadlineMs != null ? Math.max(0, Math.ceil((deadlineMs - now.getTime()) / 1000)) : null;
 
   return (
     <header className="status-topbar status-page-header">
@@ -137,6 +186,17 @@ export default function StatusPageHeader({
               </span>
               <span className="status-topbar__offset" suppressHydrationWarning>
                 {offset}
+              </span>
+            </span>
+          )}
+          {remainingSeconds != null && (
+            <span
+              className="status-topbar__chip status-topbar__chip--time"
+              title="Seconds until this page fetches the latest published status"
+            >
+              <RefreshIcon />
+              <span className="status-topbar__time" suppressHydrationWarning>
+                {formatCountdown(remainingSeconds)}
               </span>
             </span>
           )}

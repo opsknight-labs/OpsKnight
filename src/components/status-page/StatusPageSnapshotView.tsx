@@ -51,7 +51,11 @@ export default function StatusPageSnapshotView({
       {autoRefresh !== false && (
         <StatusPageAutoRefresh enabled intervalSeconds={Math.max(30, refreshInterval)} />
       )}
-      <StatusPageV3 snapshot={snapshot} stale={stale} />
+      <StatusPageV3
+        snapshot={snapshot}
+        stale={stale}
+        refreshIntervalSeconds={autoRefresh !== false ? Math.max(30, refreshInterval) : null}
+      />
       {customCss && <style dangerouslySetInnerHTML={{ __html: customCss }} />}
     </main>
   );

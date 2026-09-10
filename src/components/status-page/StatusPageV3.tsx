@@ -25,11 +25,14 @@ export default function StatusPageV3({
   stale = false,
   styleMode = 'inline',
   subscribeEnabled = true,
+  refreshIntervalSeconds = null,
 }: {
   snapshot: PublicStatusPageSnapshot;
   stale?: boolean;
   styleMode?: 'inline' | 'inherited';
   subscribeEnabled?: boolean;
+  /** Live-page auto-refresh period. Null in preview or when refresh is disabled. */
+  refreshIntervalSeconds?: number | null;
 }) {
   const page = snapshot.page;
   const branding = page.branding ?? {};
@@ -114,6 +117,8 @@ export default function StatusPageV3({
           rssHref={showRss ? `${apiPath}/rss` : null}
           apiHref={showApi ? apiPath : null}
           timeZone={timeZone}
+          generatedAt={snapshot.freshness?.generatedAt ?? snapshot.generatedAt}
+          refreshIntervalSeconds={refreshIntervalSeconds}
         />
       )}
 

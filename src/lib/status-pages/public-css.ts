@@ -719,24 +719,27 @@ ${R} .status-subscribe-block {
 }
 ${R} .status-topbar__inner {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-  padding-block: .7rem; min-block-size: 3.35rem;
+  padding-block: .85rem; min-block-size: 4rem;
 }
 ${R} .status-topbar__brand {
-  display: inline-flex; align-items: center; gap: .7rem; min-inline-size: 0;
+  display: inline-flex; align-items: center; gap: .8rem; min-inline-size: 0;
   color: var(--status-text-strong); text-decoration: none;
   font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
-  font-weight: 650; font-size: 1.02rem; letter-spacing: -.02em;
+  font-weight: 650; font-size: 1.2rem; letter-spacing: -.02em;
 }
 ${R} .status-topbar__brand:hover { color: var(--primary); }
-${R} .status-topbar__brand img { height: 1.45rem; width: auto; display: block; }
+${R} .status-topbar__brand img {
+  height: 2.05rem; max-inline-size: 10rem;
+  width: auto; display: block; object-fit: contain;
+}
 ${R} .status-topbar__brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-${R} .status-topbar__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .4rem; }
+${R} .status-topbar__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .45rem; }
 ${R} .status-topbar__chip {
-  display: inline-flex; align-items: center; gap: .42rem;
-  padding: .42rem .78rem; border: 1px solid var(--status-panel-border);
+  display: inline-flex; align-items: center; gap: .45rem;
+  padding: .46rem .82rem; border: 1px solid var(--status-panel-border);
   border-radius: 999px;
   background: color-mix(in srgb, var(--status-panel-bg) 70%, transparent);
-  color: var(--status-text); font-size: .75rem; font-weight: 620;
+  color: var(--status-text); font-size: .78rem; font-weight: 620;
   text-decoration: none; line-height: 1; letter-spacing: .01em;
   transition: border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease;
 }
@@ -758,7 +761,7 @@ ${R} .status-topbar__time { color: var(--status-text-strong); font-weight: 680; 
 ${R} .status-topbar__offset {
   padding-inline-start: .5rem; margin-inline-start: .05rem;
   border-inline-start: 1px solid var(--status-panel-border);
-  color: var(--status-text-subtle); font-weight: 600; font-size: .7rem; letter-spacing: .04em;
+  color: var(--status-text-subtle); font-weight: 600; font-size: .72rem; letter-spacing: .04em;
 }
 ${R} .status-topbar__chip--accent {
   background: var(--primary); border-color: var(--primary); color: var(--status-text-inverse);
