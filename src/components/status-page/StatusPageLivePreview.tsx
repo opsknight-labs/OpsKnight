@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { logger } from '@/lib/logger';
-import { toSafeStyleTagContent } from '@/lib/status-page-content';
+import { toPreviewCustomCss } from '@/lib/status-page-content';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
 import { buildPreviewSnapshot } from '@/lib/status-pages/preview-snapshot';
-import StatusPageExperience from '@/components/status-page/StatusPageExperience';
+import StatusPageV3 from '@/components/status-page/StatusPageV3';
 import { STATUS_PAGE_PREVIEW_BASE_CSS } from '@/lib/status-page-preview-css';
 
 export interface StatusPagePreviewService {
@@ -186,25 +186,6 @@ export default function StatusPageLivePreview({
     [previewData]
   );
 
-  const previewPage = useMemo(
-    () => ({
-      id: 'preview',
-      name: previewData.statusPage.name,
-      contactEmail: previewData.statusPage.contactEmail,
-      contactUrl: previewData.statusPage.contactUrl,
-      branding: previewData.branding,
-      footerText: previewData.footerText,
-      showSubscribe: previewData.showSubscribe !== false,
-      showServicesByRegion: previewData.showServicesByRegion === true,
-      showRegionHeatmap: previewData.showRegionHeatmap === true,
-      showChangelog: previewData.showChangelog !== false,
-      showPostIncidentReview: previewData.showPostIncidentReview === true,
-      enableUptimeExports: false,
-      isDefault: true,
-    }),
-    [previewData]
-  );
-
   // Log mounting and prop changes for debugging
   useEffect(() => {
     logger.debug('StatusPageLivePreview mounted/updated', {
@@ -365,18 +346,12 @@ export default function StatusPageLivePreview({
         background: computedTheme.backgroundColor,
         color: computedTheme.textColor,
         fontFamily: computedTheme.fontFamily,
-        padding: 'clamp(1rem, 4vw, 3rem)',
+        padding: 0,
         ...(computedTheme.cssVariables as CSSProperties),
+        ['--status-content-width' as string]: contentMaxWidthValue,
       }}
     >
-      <div style={{ maxWidth: contentMaxWidthValue, margin: '0 auto' }}>
-        <StatusPageExperience
-          page={previewPage}
-          snapshot={previewSnapshot}
-          styleMode="inherited"
-          subscribeEnabled={false}
-        />
-      </div>
+      <StatusPageV3 snapshot={previewSnapshot} styleMode="inherited" subscribeEnabled={false} />
     </main>
   );
 
@@ -715,7 +690,7 @@ export default function StatusPageLivePreview({
                   {previewData.branding?.customCss && (
                     <style
                       dangerouslySetInnerHTML={{
-                        __html: toSafeStyleTagContent(previewData.branding.customCss),
+                        __html: toPreviewCustomCss(previewData.branding.customCss),
                       }}
                     />
                   )}

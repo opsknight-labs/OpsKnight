@@ -11,6 +11,18 @@
  *   - no Tailwind utilities in the public components; they would silently vanish in preview
  *   - no `:host`; it matches only inside a shadow root and would break the live page
  *   - every colour comes from a token defined on the root class, so branding can override it
+ *   - custom CSS / templates load after this file and may use !important
+ *
+ * Stable hooks for custom CSS and future templates (do not rename without a template migration):
+ *   .status-page-container  page shell (live document + preview frame)
+ *   .status-page-surface    token root for the shared stylesheet
+ *   .status-page-header     top bar (also .status-topbar)
+ *   .status-v3-hero         overall status banner
+ *   .status-service-card    service row (also .status-v3-service)
+ *   .status-v3-history      90-day bars — templates should not restyle these
+ *   .status-incident-card   incident row (also .status-v3-incident)
+ *   footer / .status-site-footer
+ *   tokens: --status-* and --sp-*
  */
 export const STATUS_PAGE_SURFACE_CLASS = 'status-page-surface';
 
@@ -50,6 +62,7 @@ ${R} {
 ${R} *, ${R} *::before, ${R} *::after { box-sizing: border-box; }
 ${R} img, ${R} svg, ${R} video { max-inline-size: 100%; }
 ${R} .status-page-content { inline-size: 100%; max-inline-size: 100%; min-inline-size: 0; }
+${R} h1, ${R} h2, ${R} h3, ${R} h4 { font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif; }
 ${R} h1, ${R} h2, ${R} h3, ${R} h4, ${R} p, ${R} dl, ${R} dd, ${R} dt { margin: 0; }
 ${R} button, ${R} input, ${R} select { color: inherit; font: inherit; }
 
@@ -354,6 +367,26 @@ ${R} .status-hint:focus-visible {
   border-radius: .25rem;
 }
 
+/* ---- incident / maintenance / notice feeds ---- */
+${R} .status-feed { display: grid; gap: .75rem; }
+${R} .status-feed-card {
+  display: grid; gap: .65rem; padding: 1rem 1.15rem;
+  border: 1px solid var(--status-panel-border); border-radius: .9rem;
+  background: var(--status-panel-bg);
+}
+${R} .status-feed-card__head {
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .5rem;
+}
+${R} .status-feed-card__head h3 { font-size: 1rem; font-weight: 700; color: var(--status-text-strong); }
+${R} .status-feed-card__meta {
+  display: flex; flex-wrap: wrap; gap: .5rem .75rem; font-size: .8125rem; color: var(--status-text-muted);
+}
+${R} .status-feed-card__body { font-size: .9375rem; line-height: 1.55; color: var(--status-text); white-space: pre-wrap; word-break: break-word; }
+${R} .status-feed-card__updates { display: grid; gap: .5rem; padding-top: .25rem; border-top: 1px solid var(--status-panel-muted-border); }
+${R} .status-feed-card__updates li { display: grid; gap: .15rem; font-size: .8125rem; }
+${R} .status-pager { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+${R} .status-pager button { cursor: pointer; }
+
 /* ---- footer ---- */
 ${R} .status-subscribe {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(100%, 26rem), .8fr);
@@ -469,6 +502,15 @@ ${R} .status-v3-services__list, ${R} .status-v3-maintenance__list, ${R} .status-
 ${R} .status-v3-services__list { grid-template-columns: minmax(0, 1fr); }
 ${R} .status-v3-service { grid-template-columns: minmax(0, 1fr); min-inline-size: 0; }
 ${R} .status-v3-regions__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .9rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+${R} .status-v3-services__bar { display: grid; gap: .75rem; margin-block-end: 1rem; }
+${R} .status-v3-search input {
+  inline-size: 100%; padding: .55rem .85rem; border: 1px solid var(--status-panel-border); border-radius: .65rem;
+  background: var(--status-panel-bg); color: var(--status-text); font: inherit;
+}
+${R} .status-v3-search input:focus-visible { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
+${R} .status-v3-filters { display: flex; flex-wrap: wrap; gap: .4rem; }
+${R} .status-v3-filters .status-v3-chip { cursor: pointer; background: var(--status-panel-bg); }
+${R} .status-v3-filters .status-v3-chip[aria-pressed="true"] { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border)); background: color-mix(in srgb, var(--primary) 10%, var(--status-panel-bg)); }
 ${R} .status-v3-group { display: grid; gap: .75rem; margin-block-end: 1.25rem; }
 ${R} .status-v3-group__title { font-size: .8125rem; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; color: var(--status-text-subtle); margin: 0; }
 
@@ -501,6 +543,12 @@ ${R} .status-v3-grade--below_target { color: var(--status-major-outage); backgro
 
 /* 90-day history sparkline: fills the row on every width */
 ${R} svg.status-v3-history { display: block; inline-size: 100%; block-size: 2.5rem; min-inline-size: 0; }
+${R} svg.status-v3-history .status-operational, ${R} .status-v3-hours__slice.status-operational { color: var(--status-operational); }
+${R} svg.status-v3-history .status-degraded, ${R} .status-v3-hours__slice.status-degraded { color: var(--status-degraded); }
+${R} svg.status-v3-history .status-maintenance, ${R} .status-v3-hours__slice.status-maintenance { color: var(--status-maintenance); }
+${R} svg.status-v3-history .status-partial-outage, ${R} .status-v3-hours__slice.status-partial-outage { color: var(--status-partial-outage); }
+${R} svg.status-v3-history .status-major-outage, ${R} .status-v3-hours__slice.status-major-outage { color: var(--status-major-outage); }
+${R} svg.status-v3-history .status-unknown, ${R} .status-v3-hours__slice.status-unknown { color: var(--status-unknown); }
 ${R} .status-v3-history__day { cursor: pointer; transition: opacity .12s ease; }
 ${R} svg.status-v3-history:hover .status-v3-history__day { opacity: .45; }
 ${R} .status-v3-history__day:hover { opacity: 1; }
@@ -652,5 +700,156 @@ ${R} .status-v3-hours__axis { display: flex; justify-content: space-between; fon
 @media (prefers-reduced-motion: reduce) {
   ${R} .status-v3 > *, ${R} .status-v3-hero[data-status="operational"] .status-v3-dot--lg, ${R} .status-v3-inspector { animation: none !important; }
   ${R} .status-v3-history__day { transition: none !important; }
+}
+
+/* ---- modern chrome (status.x.ai-inspired top/bottom bars) ---- */
+${R} .status-topbar {
+  position: sticky; top: 0; z-index: 40;
+  border-bottom: 1px solid color-mix(in srgb, var(--status-panel-border) 85%, transparent);
+  background: color-mix(in srgb, var(--status-panel-bg, #fff) 78%, transparent);
+  backdrop-filter: blur(22px) saturate(1.4); -webkit-backdrop-filter: blur(22px) saturate(1.4);
+}
+${R} .status-topbar__inner,
+${R} .status-v3,
+${R} .status-site-footer__inner,
+${R} .status-subscribe-block {
+  max-inline-size: var(--status-content-width, 72rem);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 1.75rem);
+}
+${R} .status-topbar__inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding-block: .7rem; min-block-size: 3.35rem;
+}
+${R} .status-topbar__brand {
+  display: inline-flex; align-items: center; gap: .7rem; min-inline-size: 0;
+  color: var(--status-text-strong); text-decoration: none;
+  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 650; font-size: 1.02rem; letter-spacing: -.02em;
+}
+${R} .status-topbar__brand:hover { color: var(--primary); }
+${R} .status-topbar__brand img { height: 1.45rem; width: auto; display: block; }
+${R} .status-topbar__brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${R} .status-topbar__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .4rem; }
+${R} .status-topbar__chip {
+  display: inline-flex; align-items: center; gap: .42rem;
+  padding: .42rem .78rem; border: 1px solid var(--status-panel-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--status-panel-bg) 70%, transparent);
+  color: var(--status-text); font-size: .75rem; font-weight: 620;
+  text-decoration: none; line-height: 1; letter-spacing: .01em;
+  transition: border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+${R} a.status-topbar__chip:hover {
+  color: var(--status-text-strong);
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border));
+  background: color-mix(in srgb, var(--primary) 8%, var(--status-panel-bg));
+  box-shadow: 0 6px 16px -12px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+${R} a.status-topbar__chip:focus-visible {
+  outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+${R} .status-topbar__chip svg { flex: none; opacity: .85; }
+${R} .status-topbar__chip--time {
+  gap: .5rem; color: var(--status-text-muted); cursor: default;
+  font-variant-numeric: tabular-nums;
+}
+${R} .status-topbar__time { color: var(--status-text-strong); font-weight: 680; }
+${R} .status-topbar__offset {
+  padding-inline-start: .5rem; margin-inline-start: .05rem;
+  border-inline-start: 1px solid var(--status-panel-border);
+  color: var(--status-text-subtle); font-weight: 600; font-size: .7rem; letter-spacing: .04em;
+}
+${R} .status-topbar__chip--accent {
+  background: var(--primary); border-color: var(--primary); color: var(--status-text-inverse);
+}
+${R} a.status-topbar__chip--accent:hover {
+  background: var(--primary-hover); border-color: var(--primary-hover); color: var(--status-text-inverse);
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--primary) 70%, transparent);
+}
+
+${R} .status-v3 { padding-block: clamp(1.75rem, 4vw, 2.75rem) 0; gap: clamp(2rem, 5vw, 3.25rem); }
+${R} .status-v3 > section > h2 {
+  position: static; padding-inline-start: 0; display: block;
+  font-size: 1.15rem; font-weight: 650; letter-spacing: -.02em; margin: 0 0 1rem;
+}
+${R} .status-v3 > section > h2::before { display: none; }
+
+${R} .status-v3-hero {
+  display: grid; gap: 1rem; padding: 1.05rem 1.2rem; border-radius: 1.05rem;
+  border: 1px solid var(--status-panel-border);
+  background: color-mix(in srgb, var(--status-panel-bg) 92%, var(--v3-accent, var(--primary)) 8%);
+  box-shadow: none; overflow: hidden; grid-template-columns: minmax(0, 1fr);
+}
+${R} .status-v3-hero::before { display: none; }
+${R} .status-v3-hero__banner { display: flex; align-items: flex-start; gap: .85rem; }
+${R} .status-v3-hero__copy { display: grid; gap: .35rem; min-inline-size: 0; }
+${R} .status-v3-hero__mark { display: inline-flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+${R} .status-v3-hero__banner h1 {
+  font-size: clamp(1.15rem, 2.4vw, 1.45rem); font-weight: 700; letter-spacing: -.02em; line-height: 1.25;
+}
+${R} .status-v3-hero__note, ${R} .status-v3-hero__confidence { margin: 0; color: var(--status-text-muted); font-size: .875rem; }
+${R} .status-v3-hero__stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .6rem; margin: 0;
+}
+${R} .status-v3-hero__stats .status-stat {
+  padding: .65rem .75rem; border: 1px solid var(--status-panel-border); border-radius: .8rem;
+  background: color-mix(in srgb, var(--status-panel-bg) 70%, transparent);
+}
+${R} .status-v3-hero__stats .status-stat__value { font-size: 1.25rem; font-weight: 720; }
+
+${R} .status-v3-service, ${R} .status-v3-region, ${R} .status-v3-maintenance__item,
+${R} .status-v3-incident, ${R} .status-v3-announcement, ${R} .status-v3-changelog__item {
+  box-shadow: none; transform: none; border-radius: 1rem;
+  border: 1px solid var(--status-panel-border);
+  border-inline-start-width: 1px;
+  background: color-mix(in srgb, var(--status-panel-bg) 96%, transparent);
+}
+${R} .status-v3-service:hover, ${R} .status-v3-region:hover, ${R} .status-v3-incident:hover {
+  transform: none; box-shadow: none;
+  border-color: color-mix(in srgb, var(--v3-accent, var(--primary)) 28%, var(--status-panel-border));
+}
+${R} .status-v3-service__head { align-items: center; }
+${R} .status-v3-service__name { font-weight: 620; font-size: .98rem; }
+
+${R} .status-site-footer {
+  margin-block-start: clamp(3rem, 8vw, 5rem);
+  padding-block: 2.75rem 2rem;
+  border-top: 1px solid var(--status-panel-border);
+  background: color-mix(in srgb, var(--status-panel-muted-bg) 55%, transparent);
+}
+${R} .status-site-footer__grid {
+  display: grid; gap: 2rem 1.5rem;
+  grid-template-columns: minmax(12rem, 1.3fr) repeat(3, minmax(8rem, 1fr));
+}
+${R} .status-site-footer h2 {
+  margin: 0 0 .85rem; font-size: .68rem; font-weight: 650;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--status-text-subtle);
+}
+${R} .status-site-footer nav { display: grid; gap: .4rem; align-content: start; }
+${R} .status-site-footer .status-footer-link {
+  color: var(--status-text-muted); text-decoration: none; font-size: .875rem;
+}
+${R} .status-site-footer .status-footer-link:hover { color: var(--status-text-strong); }
+${R} .status-site-footer__brand { display: grid; gap: .55rem; align-content: start; }
+${R} .status-site-footer__logo {
+  color: var(--status-text-strong); text-decoration: none;
+  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700; font-size: 1.15rem; letter-spacing: -.02em;
+}
+${R} .status-site-footer__brand p { margin: 0; max-inline-size: 22rem; color: var(--status-text-muted); font-size: .875rem; line-height: 1.55; }
+${R} .status-site-footer__legal {
+  margin: 2.25rem 0 0; padding-top: 1.25rem; border-top: 1px solid var(--status-panel-border);
+  color: var(--status-text-subtle); font-size: .75rem;
+}
+${R} .status-subscribe-block { padding-block: 1.5rem 0; }
+
+@media (max-width: 48rem) {
+  ${R} .status-topbar { position: sticky; }
+  ${R} .status-topbar__inner { flex-wrap: wrap; }
+  ${R} .status-site-footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 40rem) {
+  ${R} .status-site-footer__grid { grid-template-columns: minmax(0, 1fr); }
 }
 `;

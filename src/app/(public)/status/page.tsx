@@ -23,12 +23,13 @@ export async function getPublicStatusMetadata(slug?: string): Promise<Metadata> 
   }
 
   const branding =
-    statusPage.branding && typeof statusPage.branding === 'object' && !Array.isArray(statusPage.branding)
+    statusPage.branding &&
+    typeof statusPage.branding === 'object' &&
+    !Array.isArray(statusPage.branding)
       ? (statusPage.branding as Record<string, any>)
       : {};
   const title = (branding.metaTitle as string) || statusPage.name;
-  const description =
-    (branding.metaDescription as string) || `Status page for ${statusPage.name}`;
+  const description = (branding.metaDescription as string) || `Status page for ${statusPage.name}`;
   const baseUrl = getBaseUrl();
   const rssUrl = slug
     ? `${baseUrl}/api/status/${encodeURIComponent(slug)}/rss`
@@ -101,13 +102,7 @@ export async function renderPublicStatusPage(slug?: string) {
     }
   }
 
-  return (
-    <StatusPageSnapshotView
-      page={statusPage}
-      snapshot={snapshot}
-      stale={projected.stale}
-    />
-  );
+  return <StatusPageSnapshotView snapshot={snapshot} stale={projected.stale} />;
 }
 
 /**

@@ -11,6 +11,17 @@ export function toSafeStyleTagContent(value: unknown): string {
   return value.replaceAll('<', '\\3C ');
 }
 
+/**
+ * Custom CSS for the admin preview's shadow root.
+ *
+ * Templates set tokens on `:root`, which is the document on the live page but does not apply
+ * inside the preview shadow tree. Mapping `:root` to `:host` keeps the same file working on both
+ * surfaces until the template pack is rewritten against `.status-page-surface`.
+ */
+export function toPreviewCustomCss(value: unknown): string {
+  return toSafeStyleTagContent(value).replace(/(^|[^:]):root\b/g, '$1:host');
+}
+
 export function serializeJsonForHtml(value: unknown): string {
   return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, character => {
     switch (character) {

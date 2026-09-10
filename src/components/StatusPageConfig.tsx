@@ -8,9 +8,6 @@ import StatusPageLivePreview from '@/components/status-page/StatusPageLivePrevie
 import { useRouter } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
-import _StatusPageHeader from '@/components/status-page/StatusPageHeader';
-import _StatusPageIncidents from '@/components/status-page/StatusPageIncidents';
-import _StatusPageAnnouncements from '@/components/status-page/StatusPageAnnouncements';
 import StatusPagePrivacySettings, {
   type PrivacySettings,
 } from '@/components/status-page/StatusPagePrivacySettings';
@@ -1732,7 +1729,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             helperText="Used in email headers (e.g., 'OpsKnight'). Overrides Status Page Name if set."
                             placeholder="e.g. OpsKnight"
                           />
-
                         </div>
                       </div>
                     </Card>

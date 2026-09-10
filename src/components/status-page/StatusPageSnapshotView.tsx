@@ -1,44 +1,39 @@
 import type { CSSProperties } from 'react';
 import StatusPageAutoRefresh from './StatusPageAutoRefresh';
-import StatusPageExperience from './StatusPageExperience';
+import StatusPageV3 from './StatusPageV3';
 import type { StatusPageSnapshot } from '@/lib/status-pages/snapshot';
-import type { StatusPageSnapshotPage } from '@/lib/status-pages/view-model';
 import { toSafeStyleTagContent } from '@/lib/status-page-content';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
 
 /**
  * Themed shell for the published status page.
  *
- * Everything a visitor sees lives in StatusPageExperience, which the admin preview renders too.
- * This wrapper owns only what is specific to serving the page as a document: the theme variables,
- * the page-width layout, customer CSS, and auto-refresh.
+ * Visitor-facing chrome (theme, width, custom CSS, auto-refresh) lives here.
+ * The page body is StatusPageV3, shared with the admin preview.
  */
 export default function StatusPageSnapshotView({
-  page,
   snapshot,
   stale,
 }: {
-  page: StatusPageSnapshotPage;
   snapshot: StatusPageSnapshot;
   stale: boolean;
 }) {
-  const branding =
-    page.branding && typeof page.branding === 'object' && !Array.isArray(page.branding)
-      ? (page.branding as Record<string, unknown>)
-      : {};
+  const page = snapshot.page;
+  const branding = page.branding ?? {};
+  const presentation = page.presentation;
   const theme = computeStatusPageTheme({
-    primaryColor: typeof branding.primaryColor === 'string' ? branding.primaryColor : undefined,
-    backgroundColor:
-      typeof branding.backgroundColor === 'string' ? branding.backgroundColor : undefined,
-    textColor: typeof branding.textColor === 'string' ? branding.textColor : undefined,
-    fontFamily: typeof branding.fontFamily === 'string' ? branding.fontFamily : undefined,
+    primaryColor: branding.primaryColor,
+    backgroundColor: branding.backgroundColor,
+    textColor: branding.textColor,
+    fontFamily: branding.fontFamily,
   });
-  const layout =
-    branding.layout === 'wide' || branding.layout === 'compact' ? branding.layout : 'default';
+  const layout = presentation?.layout ?? branding.layout;
   const maxWidth = layout === 'wide' ? 1600 : layout === 'compact' ? 900 : 1280;
   const refreshInterval =
-    typeof branding.refreshInterval === 'number' ? branding.refreshInterval : 60;
+    presentation?.refreshInterval ??
+    (typeof branding.refreshInterval === 'number' ? branding.refreshInterval : 60);
   const customCss = toSafeStyleTagContent(branding.customCss);
+  const autoRefresh = presentation?.autoRefresh ?? branding.autoRefresh;
 
   return (
     <main
@@ -48,17 +43,15 @@ export default function StatusPageSnapshotView({
         background: theme.backgroundColor,
         color: theme.textColor,
         fontFamily: theme.fontFamily,
-        padding: 'clamp(1rem, 4vw, 3rem)',
+        padding: 0,
         ...(theme.cssVariables as CSSProperties),
+        ['--status-content-width' as string]: `${maxWidth}px`,
       }}
     >
-      {branding.autoRefresh !== false && (
+      {autoRefresh !== false && (
         <StatusPageAutoRefresh enabled intervalSeconds={Math.max(30, refreshInterval)} />
       )}
-      <div style={{ maxWidth, margin: '0 auto' }}>
-        <StatusPageExperience page={page} snapshot={snapshot} stale={stale} />
-      </div>
-      {/* Injected last so customer overrides win the cascade over the shared stylesheet. */}
+      <StatusPageV3 snapshot={snapshot} stale={stale} />
       {customCss && <style dangerouslySetInnerHTML={{ __html: customCss }} />}
     </main>
   );

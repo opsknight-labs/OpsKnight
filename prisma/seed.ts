@@ -1,5 +1,10 @@
 import 'dotenv/config';
-import { PrismaClient, IncidentUrgency as PrismaIncidentUrgency, type Prisma } from '@prisma/client';
+import {
+  PrismaClient,
+  IncidentUrgency as PrismaIncidentUrgency,
+  IncidentEventType,
+  type Prisma,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -144,12 +149,461 @@ function hashSecret(value: string) {
   return bcrypt.hashSync(value, saltRounds);
 }
 
+async function createPublicCatalogIncident(input: {
+  serviceId: string;
+  teamId: string;
+  adminId: string;
+  title: string;
+  description: string;
+  status: IncidentStatus;
+  urgency: IncidentUrgency;
+  createdHoursAgo: number;
+  visibility?: 'PUBLIC' | 'PRIVATE';
+  withPostmortem?: boolean;
+}) {
+  const createdAt = hoursAgo(input.createdHoursAgo);
+  const acknowledgedAt =
+    input.status === 'OPEN'
+      ? null
+      : clampToNow(minutesFrom(createdAt, input.urgency === 'HIGH' ? 4 : 18));
+  const resolvedAt =
+    input.status === 'RESOLVED'
+      ? clampToNow(minutesFrom(acknowledgedAt ?? createdAt, input.urgency === 'HIGH' ? 95 : 180))
+      : null;
+  const incident = await prisma.incident.create({
+    data: {
+      title: input.title,
+      description: input.description,
+      status: input.status,
+      urgency: input.urgency,
+      visibility: input.visibility ?? 'PUBLIC',
+      priority: input.urgency === 'HIGH' ? 'P1' : input.urgency === 'MEDIUM' ? 'P2' : 'P3',
+      serviceId: input.serviceId,
+      teamId: input.teamId,
+      dedupKey: `status-catalog-${input.serviceId}-${input.title}`,
+      slaAckTargetMs: input.urgency === 'HIGH' ? 5 * 60_000 : 15 * 60_000,
+      slaResolveTargetMs: input.urgency === 'HIGH' ? 60 * 60_000 : 240 * 60_000,
+      slaTargetSource: 'service',
+      slaTargetCapturedAt: createdAt,
+      createdAt,
+      updatedAt: resolvedAt ?? acknowledgedAt ?? createdAt,
+      acknowledgedAt,
+      resolvedAt,
+    },
+  });
+  await prisma.incidentEvent.create({
+    data: {
+      incidentId: incident.id,
+      type: IncidentEventType.STATUS_CHANGE,
+      message: 'Incident triggered from monitoring',
+      createdAt,
+    },
+  });
+  if (acknowledgedAt) {
+    await prisma.incidentEvent.create({
+      data: {
+        incidentId: incident.id,
+        type: IncidentEventType.ACKNOWLEDGED,
+        message: 'On-call acknowledged and started mitigation',
+        createdAt: acknowledgedAt,
+      },
+    });
+  }
+  if (resolvedAt) {
+    await prisma.incidentEvent.create({
+      data: {
+        incidentId: incident.id,
+        type: IncidentEventType.MANUAL_RESOLVED,
+        message: 'Service recovered; monitoring is green',
+        createdAt: resolvedAt,
+      },
+    });
+    await prisma.incidentEvent.create({
+      data: {
+        incidentId: incident.id,
+        type: IncidentEventType.COMMENT,
+        message: 'Customer-facing update: impact contained to a single region.',
+        createdAt: minutesFrom(resolvedAt, -20),
+      },
+    });
+  }
+  if (input.withPostmortem && resolvedAt) {
+    await prisma.postmortem.create({
+      data: {
+        incidentId: incident.id,
+        title: `Post-incident review: ${input.title}`,
+        summary: 'Public review of customer impact, detection, and recovery.',
+        rootCause: 'Saturated connection pool in the primary region during a traffic spike.',
+        resolution: 'Scaled the pool and added saturation alerts.',
+        impact: { customers: '8%', durationMinutes: 95, regions: ['us-east-1'] },
+        lessons: 'Saturation alerts must fire before checkout error rate climbs.',
+        status: 'PUBLISHED',
+        isPublic: true,
+        publishedAt: minutesFrom(resolvedAt, 30),
+        createdById: input.adminId,
+      },
+    });
+  }
+  return incident;
+}
+
+async function seedPublicStatusSurface(input: {
+  adminId: string;
+  teams: Array<{ id: string }>;
+  policies: Array<{ id: string; teamId: string }>;
+  services: Array<{ id: string; name: string; teamId: string }>;
+}) {
+  const showcaseSpecs = [
+    {
+      name: 'Checkout API',
+      description: 'Card authorization and order capture.',
+      region: 'us-east-1',
+      slaTier: 'Gold',
+      teamIndex: 0,
+    },
+    {
+      name: 'Identity Gateway',
+      description: 'SSO, session minting, and MFA challenges.',
+      region: 'eu-west-1',
+      slaTier: 'Gold',
+      teamIndex: 1,
+    },
+    {
+      name: 'Payments Ledger',
+      description: 'Ledger writes replicated across two continents.',
+      region: 'us-west-2, eu-central-1',
+      slaTier: 'Gold',
+      teamIndex: 2,
+    },
+    {
+      name: 'Global CDN',
+      description: 'Static assets and edge cache.',
+      region: 'ap-south-1',
+      slaTier: 'Gold',
+      teamIndex: 3,
+    },
+    {
+      name: 'Search Cluster',
+      description: 'Product and knowledge-base search.',
+      region: 'us-east-1, eu-west-1',
+      slaTier: 'Silver',
+      teamIndex: 4,
+    },
+    {
+      name: 'Notification Hub',
+      description: 'Email, SMS, and push fan-out.',
+      region: 'ap-northeast-1',
+      slaTier: 'Bronze',
+      teamIndex: 5,
+    },
+  ] as const;
+
+  const showcase: Array<{ id: string; name: string; teamId: string }> = [];
+  for (const spec of showcaseSpecs) {
+    const team = input.teams[spec.teamIndex] ?? input.teams[0];
+    const policy = input.policies.find(item => item.teamId === team.id);
+    const service = await prisma.service.create({
+      data: {
+        name: spec.name,
+        description: spec.description,
+        status: 'OPERATIONAL',
+        region: spec.region,
+        slaTier: spec.slaTier,
+        teamId: team.id,
+        escalationPolicyId: policy?.id,
+        targetAckMinutes: spec.slaTier === 'Gold' ? 5 : spec.slaTier === 'Silver' ? 15 : 30,
+        targetResolveMinutes: spec.slaTier === 'Gold' ? 60 : spec.slaTier === 'Silver' ? 240 : 480,
+        defaultIncidentVisibility: 'PUBLIC',
+      },
+    });
+    showcase.push({ id: service.id, name: service.name, teamId: team.id });
+  }
+
+  const checkout = showcase[0];
+  const identity = showcase[1];
+  const payments = showcase[2];
+  const search = showcase[4];
+  const notifications = showcase[5];
+
+  const major = await createPublicCatalogIncident({
+    serviceId: checkout.id,
+    teamId: checkout.teamId,
+    adminId: input.adminId,
+    title: 'Checkout API: card authorization timeouts',
+    description:
+      'Customers in us-east-1 cannot complete payment. Authorization calls to the card network are timing out after 8s.',
+    status: 'OPEN',
+    urgency: 'HIGH',
+    createdHoursAgo: 2,
+  });
+  await createPublicCatalogIncident({
+    serviceId: checkout.id,
+    teamId: checkout.teamId,
+    adminId: input.adminId,
+    title: 'Internal: payment-provider secret rotation',
+    description: 'Must not appear on the public status page.',
+    status: 'OPEN',
+    urgency: 'HIGH',
+    createdHoursAgo: 1,
+    visibility: 'PRIVATE',
+  });
+  await createPublicCatalogIncident({
+    serviceId: identity.id,
+    teamId: identity.teamId,
+    adminId: input.adminId,
+    title: 'Identity Gateway: slower MFA challenge delivery',
+    description:
+      'SMS MFA codes are delayed by 20–40 seconds in eu-west-1. Password login is unaffected.',
+    status: 'ACKNOWLEDGED',
+    urgency: 'LOW',
+    createdHoursAgo: 5,
+  });
+  await createPublicCatalogIncident({
+    serviceId: payments.id,
+    teamId: payments.teamId,
+    adminId: input.adminId,
+    title: 'Payments Ledger: elevated write latency in us-west-2',
+    description: 'P95 ledger writes are above the regional SLO. eu-central-1 remains healthy.',
+    status: 'OPEN',
+    urgency: 'MEDIUM',
+    createdHoursAgo: 3,
+  });
+  await createPublicCatalogIncident({
+    serviceId: search.id,
+    teamId: search.teamId,
+    adminId: input.adminId,
+    title: 'Search Cluster: index rebuild caused empty results',
+    description: 'A rolling reindex briefly returned zero hits for catalog queries.',
+    status: 'RESOLVED',
+    urgency: 'HIGH',
+    createdHoursAgo: 40,
+    withPostmortem: true,
+  });
+
+  const statusPage = await prisma.statusPage.create({
+    data: {
+      name: 'OpsKnight Public Status',
+      slug: 'status',
+      organizationName: 'OpsKnight Labs',
+      subdomain: 'status-opsknight',
+      enabled: true,
+      isDefault: true,
+      showServices: true,
+      showIncidents: true,
+      showMetrics: true,
+      showSubscribe: true,
+      showServicesByRegion: true,
+      showRegionHeatmap: true,
+      showServiceDescriptions: true,
+      showServiceRegions: true,
+      showServiceOwners: true,
+      showServiceSlaTier: true,
+      showTeamInformation: true,
+      showUptimeHistory: true,
+      showChangelog: true,
+      showPostIncidentReview: true,
+      enableUptimeExports: true,
+      showIncidentUrgency: true,
+      showIncidentDetails: true,
+      showIncidentDescriptions: true,
+      showIncidentTimestamps: true,
+      showAffectedServices: true,
+      showRecentIncidents: true,
+      showCustomFields: false,
+      incidentHistoryDays: 90,
+      maxIncidentsToShow: 50,
+      uptimeExcellentThreshold: 99.9,
+      uptimeGoodThreshold: 99.0,
+      footerText: 'All systems are actively monitored.',
+      contactEmail: 'status@example.com',
+      contactUrl: 'https://opsknight.com/',
+      branding: {
+        logoUrl: '/logo.png',
+        primaryColor: '#e11d48',
+        backgroundColor: '#ffffff',
+        textColor: '#0f172a',
+        layout: 'wide',
+        showHeader: true,
+        showFooter: true,
+        autoRefresh: true,
+        refreshInterval: 60,
+        showApiLink: true,
+        showRssLink: true,
+        metaTitle: 'OpsKnight Status',
+        metaDescription: 'Live operational status for OpsKnight Labs services.',
+      },
+    },
+  });
+
+  const ordered = [...showcase, ...input.services];
+  for (const [index, service] of ordered.entries()) {
+    await prisma.statusPageService.create({
+      data: {
+        statusPageId: statusPage.id,
+        serviceId: service.id,
+        displayName: service.name,
+        order: index,
+        showOnPage: true,
+      },
+    });
+  }
+
+  const announcements: Prisma.StatusPageAnnouncementCreateManyInput[] = [
+    {
+      statusPageId: statusPage.id,
+      title: 'Checkout disruption',
+      message:
+        'We are mitigating card-authorization timeouts in us-east-1. Alternate payment methods may still succeed.',
+      type: 'INCIDENT',
+      incidentId: major.id,
+      affectedServiceIds: [checkout.id],
+      startDate: hoursAgo(2),
+      endDate: hoursAgo(-6),
+      isActive: true,
+    },
+    {
+      statusPageId: statusPage.id,
+      title: 'Elevated API latency',
+      message: 'A subset of requests may take longer than usual while mitigation is in progress.',
+      type: 'WARNING',
+      affectedServiceIds: [identity.id, payments.id],
+      startDate: hoursAgo(1),
+      endDate: hoursAgo(-5),
+      isActive: true,
+    },
+    {
+      statusPageId: statusPage.id,
+      title: 'Office network maintenance notice',
+      message:
+        'This informational banner does not change service health. VPN users may see brief reconnects.',
+      type: 'INFO',
+      startDate: hoursAgo(3),
+      endDate: hoursAgo(-12),
+      isActive: true,
+    },
+    {
+      statusPageId: statusPage.id,
+      title: 'Notification Hub database failover',
+      message:
+        'In-progress maintenance on the notification datastore. Delivery delays of up to 10 minutes are expected.',
+      type: 'MAINTENANCE',
+      affectedServiceIds: [notifications.id],
+      startDate: hoursAgo(1),
+      endDate: hoursAgo(-3),
+      isActive: true,
+    },
+    {
+      statusPageId: statusPage.id,
+      title: 'Global CDN certificate rotation',
+      message: 'Upcoming edge certificate rotation. No customer impact is expected.',
+      type: 'MAINTENANCE',
+      affectedServiceIds: [showcase[3].id],
+      startDate: hoursAgo(-6),
+      endDate: hoursAgo(-10),
+      isActive: true,
+    },
+    {
+      statusPageId: statusPage.id,
+      title: 'Search Cluster storage expansion',
+      message: 'Completed capacity expansion in us-east-1 and eu-west-1.',
+      type: 'MAINTENANCE',
+      affectedServiceIds: [search.id],
+      startDate: hoursAgo(96),
+      endDate: hoursAgo(90),
+      isActive: true,
+    },
+    {
+      statusPageId: statusPage.id,
+      title: 'Withdrawn Payments window',
+      message: 'This maintenance was cancelled and must not affect current health.',
+      type: 'MAINTENANCE',
+      affectedServiceIds: [payments.id],
+      startDate: hoursAgo(1),
+      endDate: hoursAgo(-4),
+      isActive: false,
+    },
+    {
+      statusPageId: statusPage.id,
+      title: 'Reliability improvements shipped',
+      message:
+        'Expanded regional capacity, tighter SLA cards, and more precise status-history segments.',
+      type: 'UPDATE',
+      affectedServiceIds: showcase.slice(0, 4).map(service => service.id),
+      startDate: hoursAgo(18),
+      endDate: hoursAgo(-72),
+      isActive: true,
+    },
+    {
+      statusPageId: statusPage.id,
+      title: 'Status subscriptions: RSS and JSON API',
+      message: 'Public RSS and JSON feeds are enabled on this page for status automation.',
+      type: 'UPDATE',
+      startDate: hoursAgo(72),
+      endDate: hoursAgo(-24),
+      isActive: true,
+    },
+  ];
+  await prisma.statusPageAnnouncement.createMany({ data: announcements });
+
+  const statusTokenRaw = `status-token-${Date.now()}`;
+  await prisma.statusPageApiToken.create({
+    data: {
+      statusPageId: statusPage.id,
+      name: 'Status API',
+      prefix: statusTokenRaw.slice(0, 8),
+      tokenHash: sha256(statusTokenRaw),
+    },
+  });
+
+  await prisma.statusPageSubscription.create({
+    data: {
+      statusPageId: statusPage.id,
+      email: 'status-updates@example.com',
+      token: sha256('status-subscription'),
+      verified: true,
+      state: 'ACTIVE',
+      verificationToken: sha256('status-verify'),
+      preferences: { incidents: 'all' },
+    },
+  });
+
+  await prisma.statusPageWebhook.create({
+    data: {
+      statusPageId: statusPage.id,
+      url: 'https://example.com/status/webhook',
+      secret: sha256('status-webhook-secret'),
+      events: ['incident.created', 'incident.updated', 'incident.resolved'],
+      enabled: true,
+    },
+  });
+
+  try {
+    const { rebuildStatusPageSnapshot } = await import('../src/lib/status-pages/snapshot');
+    const published = await rebuildStatusPageSnapshot(statusPage.id);
+    process.stdout.write(
+      published
+        ? 'Published public status snapshot.\n'
+        : 'Status snapshot was not published; open /status after the app starts.\n'
+    );
+  } catch (error) {
+    process.stdout.write(
+      `Could not publish status snapshot from seed: ${error instanceof Error ? error.message : String(error)}\n`
+    );
+  }
+
+  return statusPage;
+}
+
 async function clearDatabase() {
   const deleteOperations: Prisma.PrismaPromise<unknown>[] = [
     prisma.statusPageWebhook.deleteMany(),
+    prisma.statusPageSubscriptionToken.deleteMany(),
     prisma.statusPageSubscription.deleteMany(),
     prisma.statusPageApiToken.deleteMany(),
     prisma.statusPageAnnouncement.deleteMany(),
+    prisma.statusPageRouteOperation.deleteMany(),
+    prisma.statusPageAsset.deleteMany(),
+    prisma.statusPageSnapshot.deleteMany(),
     prisma.statusPageService.deleteMany(),
     prisma.statusPage.deleteMany(),
     prisma.sLASnapshot.deleteMany(),
@@ -667,6 +1121,13 @@ async function main() {
         serviceId: service.id,
         teamId: isUserAssigned ? null : service.teamId,
         assigneeId: isUserAssigned ? assignedUser.id : null,
+        visibility: i % 7 === 0 ? 'PRIVATE' : 'PUBLIC',
+        slaAckTargetMs:
+          urgency === 'HIGH' ? 5 * 60_000 : urgency === 'MEDIUM' ? 15 * 60_000 : 30 * 60_000,
+        slaResolveTargetMs:
+          urgency === 'HIGH' ? 60 * 60_000 : urgency === 'MEDIUM' ? 240 * 60_000 : 480 * 60_000,
+        slaTargetSource: 'service',
+        slaTargetCapturedAt: createdAt,
         dedupKey: `seed-${service.id}-${i}`,
         createdAt,
         updatedAt: resolvedAt ?? acknowledgedAt ?? createdAt,
@@ -768,6 +1229,7 @@ async function main() {
             { owner: 'SRE', action: 'Update runbook', dueDate: '2025-03-10' },
           ],
           status: 'PUBLISHED',
+          isPublic: true,
           publishedAt: minutesFrom(resolvedAt, 10),
           createdById: admin.id,
         },
@@ -857,120 +1319,11 @@ async function main() {
     },
   });
 
-  const statusPage = await prisma.statusPage.create({
-    data: {
-      name: 'OpsKnight Public Status',
-      organizationName: 'OpsKnight Labs',
-      subdomain: 'status-opsknight',
-      enabled: true,
-      isDefault: true,
-      showServices: true,
-      showIncidents: true,
-      showMetrics: true,
-      showSubscribe: true,
-      showServicesByRegion: true,
-      showRegionHeatmap: true,
-      showServiceDescriptions: true,
-      showServiceRegions: true,
-      showServiceOwners: true,
-      showServiceSlaTier: true,
-      showTeamInformation: true,
-      showUptimeHistory: true,
-      showChangelog: true,
-      showPostIncidentReview: true,
-      enableUptimeExports: true,
-      showIncidentUrgency: true,
-      showIncidentDetails: true,
-      showRecentIncidents: true,
-      footerText: 'All systems are actively monitored.',
-      contactEmail: 'status@example.com',
-      contactUrl: 'https://opsknight.local/contact',
-      branding: { logo: '/logo.svg', primary: '#0f172a', accent: '#f59e0b' },
-    },
-  });
-
-  for (const [index, service] of services.slice(0, 8).entries()) {
-    await prisma.statusPageService.create({
-      data: {
-        statusPageId: statusPage.id,
-        serviceId: service.id,
-        displayName: service.name,
-        order: index,
-        showOnPage: true,
-      },
-    });
-  }
-
-  await prisma.statusPageAnnouncement.create({
-    data: {
-      statusPageId: statusPage.id,
-      title: 'Planned maintenance',
-      message: 'Database maintenance scheduled for this weekend.',
-      type: 'MAINTENANCE',
-      incidentId: incidents[1]?.id ?? null,
-      affectedServiceIds: services.slice(0, 2).map(service => service.id),
-      startDate: hoursAgo(2),
-      endDate: hoursAgo(-6),
-      isActive: true,
-    },
-  });
-
-  await prisma.statusPageAnnouncement.create({
-    data: {
-      statusPageId: statusPage.id,
-      title: 'Reliability improvements shipped',
-      message: 'Expanded regional capacity and improved status-history precision.',
-      type: 'UPDATE',
-      affectedServiceIds: services.slice(0, 4).map(service => service.id),
-      startDate: hoursAgo(18),
-      endDate: hoursAgo(-72),
-      isActive: true,
-    },
-  });
-
-  await prisma.statusPageAnnouncement.create({
-    data: {
-      statusPageId: statusPage.id,
-      title: 'Elevated API latency',
-      message: 'A subset of requests may take longer than usual while mitigation is in progress.',
-      type: 'WARNING',
-      incidentId: incidents.find(incident => incident.status !== 'RESOLVED')?.id ?? null,
-      affectedServiceIds: services.slice(2, 5).map(service => service.id),
-      startDate: hoursAgo(1),
-      endDate: hoursAgo(-5),
-      isActive: true,
-    },
-  });
-
-  const statusTokenRaw = `status-token-${Date.now()}`;
-  await prisma.statusPageApiToken.create({
-    data: {
-      statusPageId: statusPage.id,
-      name: 'Status API',
-      prefix: statusTokenRaw.slice(0, 8),
-      tokenHash: sha256(statusTokenRaw),
-    },
-  });
-
-  await prisma.statusPageSubscription.create({
-    data: {
-      statusPageId: statusPage.id,
-      email: 'status-updates@example.com',
-      token: sha256('status-subscription'),
-      verified: true,
-      verificationToken: sha256('status-verify'),
-      preferences: { incidents: 'all' },
-    },
-  });
-
-  await prisma.statusPageWebhook.create({
-    data: {
-      statusPageId: statusPage.id,
-      url: 'https://example.com/status/webhook',
-      secret: sha256('status-webhook-secret'),
-      events: ['incident.created', 'incident.updated', 'incident.resolved'],
-      enabled: true,
-    },
+  const statusPage = await seedPublicStatusSurface({
+    adminId: admin.id,
+    teams,
+    policies,
+    services,
   });
 
   for (const service of services.slice(0, 4)) {

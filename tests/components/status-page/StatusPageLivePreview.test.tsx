@@ -6,20 +6,8 @@ import StatusPageLivePreview, {
 } from '@/components/status-page/StatusPageLivePreview';
 
 // Mock sub-components
-vi.mock('@/components/status-page/StatusPageHeader', () => ({
-  default: () => <div data-testid="preview-header">Header</div>,
-}));
-
-vi.mock('@/components/status-page/StatusPageExperience', () => ({
+vi.mock('@/components/status-page/StatusPageV3', () => ({
   default: () => <div data-testid="preview-services">Services</div>,
-}));
-
-vi.mock('@/components/status-page/StatusPageIncidents', () => ({
-  default: () => <div data-testid="preview-incidents">Incidents</div>,
-}));
-
-vi.mock('@/components/status-page/StatusPageAnnouncements', () => ({
-  default: () => <div data-testid="preview-announcements">Announcements</div>,
 }));
 
 // Mock ResizeObserver

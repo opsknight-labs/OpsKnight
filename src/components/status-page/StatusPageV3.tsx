@@ -1,0 +1,206 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { formatDateTime } from '@/lib/timezone';
+import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
+import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
+import StatusPageHeader from './StatusPageHeader';
+import StatusPageFooter from './StatusPageFooter';
+import StatusPageUptimeMetrics from './StatusPageUptimeMetrics';
+import StatusPageSubscribe from './StatusPageSubscribe';
+import StatusHeroV3 from './v3/StatusHeroV3';
+import ServiceHealthV3 from './v3/ServiceHealthV3';
+import RegionHealthV3 from './v3/RegionHealthV3';
+import MaintenanceV3 from './v3/MaintenanceV3';
+import IncidentsV3 from './v3/IncidentsV3';
+import AnnouncementsV3 from './v3/AnnouncementsV3';
+
+/**
+ * Public status page: branding chrome around the V3-native presentation tree.
+ *
+ * Health, uptime, and region status are never recomputed here.
+ */
+export default function StatusPageV3({
+  snapshot,
+  stale = false,
+  styleMode = 'inline',
+  subscribeEnabled = true,
+}: {
+  snapshot: PublicStatusPageSnapshot;
+  stale?: boolean;
+  styleMode?: 'inline' | 'inherited';
+  subscribeEnabled?: boolean;
+}) {
+  const page = snapshot.page;
+  const branding = page.branding ?? {};
+  const presentation = page.presentation;
+  const capabilities = page.capabilities;
+  const resources = page.resources;
+  const vis = page.visibility;
+  const [timeZone, setTimeZone] = useState('UTC');
+
+  useEffect(() => {
+    setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  }, []);
+
+  const visible = (key: keyof NonNullable<typeof vis>, capability?: boolean) => {
+    if (capability === false) return false;
+    if (vis) return vis[key] === true;
+    return true;
+  };
+
+  const showHeader = (presentation?.showHeader ?? branding.showHeader) !== false;
+  const showFooter = (presentation?.showFooter ?? branding.showFooter) !== false;
+  const showServices = visible('services', capabilities?.services) && snapshot.services.length > 0;
+  const showRegions =
+    visible('regions', capabilities?.regions) &&
+    page.showRegionHeatmap === true &&
+    snapshot.regions.length > 0;
+  const showUptime =
+    visible('uptime', capabilities?.uptime) &&
+    visible('metrics') &&
+    snapshot.services.some(service => service.uptime);
+  const showIncidents =
+    visible('incidents', capabilities?.incidents) && snapshot.incidents.length > 0;
+  const showMaintenance =
+    capabilities?.maintenance !== false && (snapshot.maintenance?.length ?? 0) > 0;
+  const showAnnouncements =
+    capabilities?.announcements !== false && snapshot.announcements.length > 0;
+  const showChangelog =
+    visible('changelog', capabilities?.changelog) &&
+    page.showChangelog !== false &&
+    (snapshot.changelog?.length ?? 0) > 0;
+  const showSubscribe =
+    visible('subscribe', capabilities?.subscriptions) &&
+    (page.subscription?.enabled ?? page.showSubscribe) === true;
+  const showApi =
+    (presentation?.showApiLink ?? branding.showApiLink) !== false && resources?.jsonApi !== false;
+  const showRss =
+    (presentation?.showRssLink ?? branding.showRssLink) !== false &&
+    capabilities?.rss !== false &&
+    resources?.rss !== false;
+  const showCsv =
+    page.enableUptimeExports === true &&
+    showUptime &&
+    resources?.uptimeCsv !== false &&
+    capabilities?.uptimeCsv !== false;
+  const showPdf =
+    page.enableUptimeExports === true &&
+    showUptime &&
+    resources?.uptimePdf !== false &&
+    capabilities?.uptimePdf !== false;
+  const postmortemsEnabled =
+    page.showPostIncidentReview === true &&
+    capabilities?.postmortems !== false &&
+    resources?.postmortems !== false;
+
+  const statusPagePath =
+    page.slug && !page.isDefault ? `/status/${encodeURIComponent(page.slug)}` : '/status';
+  const apiPath =
+    page.slug && !page.isDefault ? `/api/status/${encodeURIComponent(page.slug)}` : '/api/status';
+
+  return (
+    <div className={STATUS_PAGE_SURFACE_CLASS}>
+      {styleMode === 'inline' && <style>{STATUS_PAGE_PUBLIC_CSS}</style>}
+
+      {showHeader && (
+        <StatusPageHeader
+          statusPage={{
+            name: page.name,
+            contactEmail: page.contactEmail,
+            contactUrl: page.contactUrl,
+          }}
+          branding={branding}
+          rssHref={showRss ? `${apiPath}/rss` : null}
+          apiHref={showApi ? apiPath : null}
+          timeZone={timeZone}
+        />
+      )}
+
+      {stale && (
+        <p role="note" className="status-muted">
+          Showing the last verified status update.
+        </p>
+      )}
+      <span className="sr-only">Times shown in your local time</span>
+
+      <div className="status-v3">
+        <StatusHeroV3
+          overall={snapshot.overall}
+          updatedLabel={formatDateTime(snapshot.generatedAt, timeZone, {
+            format: 'short',
+            hour12: true,
+          })}
+        />
+        {showMaintenance && (
+          <MaintenanceV3 maintenance={snapshot.maintenance} timeZone={timeZone} />
+        )}
+        {showServices && (
+          <ServiceHealthV3
+            services={snapshot.services}
+            timeZone={timeZone}
+            groupByRegion={page.showServicesByRegion === true}
+          />
+        )}
+        {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
+        {showUptime && <StatusPageUptimeMetrics services={snapshot.services} />}
+        {showIncidents && (
+          <IncidentsV3
+            incidents={snapshot.incidents}
+            timeZone={timeZone}
+            postmortemHref={
+              postmortemsEnabled
+                ? id => `${statusPagePath}/postmortems/${encodeURIComponent(id)}`
+                : undefined
+            }
+          />
+        )}
+        {(showAnnouncements || showChangelog) && (
+          <AnnouncementsV3
+            announcements={showAnnouncements ? snapshot.announcements : []}
+            changelog={showChangelog ? snapshot.changelog : undefined}
+            timeZone={timeZone}
+          />
+        )}
+      </div>
+
+      {showSubscribe && (
+        <section className="status-subscribe-block" aria-labelledby="subscribe-heading">
+          <div className="status-section__head">
+            <h2 id="subscribe-heading">Subscribe to updates</h2>
+            <span className="status-section__count">Get notified when service status changes</span>
+          </div>
+          {subscribeEnabled ? (
+            <StatusPageSubscribe statusPageId={page.id} />
+          ) : (
+            <p className="status-muted">Subscriptions are accepted on the published status page.</p>
+          )}
+        </section>
+      )}
+
+      {showFooter && (
+        <StatusPageFooter
+          footerText={page.footerText}
+          links={{
+            resources: [
+              ...(showApi ? [{ href: apiPath, label: 'JSON API' }] : []),
+              ...(showRss ? [{ href: `${apiPath}/rss`, label: 'RSS Feed' }] : []),
+              ...(showCsv
+                ? [{ href: `${apiPath}/uptime-export?format=csv`, label: 'Uptime CSV' }]
+                : []),
+              ...(showPdf
+                ? [{ href: `${apiPath}/uptime-export?format=pdf`, label: 'Uptime PDF' }]
+                : []),
+            ],
+            support: [
+              ...(page.contactEmail
+                ? [{ href: `mailto:${page.contactEmail}`, label: 'Contact' }]
+                : []),
+              ...(page.contactUrl ? [{ href: page.contactUrl, label: 'Support' }] : []),
+            ],
+          }}
+        />
+      )}
+    </div>
+  );
+}
