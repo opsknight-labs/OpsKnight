@@ -1,9 +1,8 @@
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import { OVERALL_DETAIL, statusPresentation } from '@/lib/status-pages/status-presentation';
-import StatusBadgeV3 from './StatusBadgeV3';
 
 /**
- * Compact overall-status banner. Figures come from the V3 `overall` block only.
+ * Compact overall-status strip. Figures come from the V3 `overall` block only.
  */
 export default function StatusHeroV3({
   overall,
@@ -34,20 +33,20 @@ export default function StatusHeroV3({
       aria-labelledby="status-v3-hero-heading"
     >
       <div className="status-v3-hero__banner">
-        <span className={`status-v3-dot status-v3-dot--lg status-${token}`} aria-hidden="true" />
+        <span className="status-v3-hero__live" aria-hidden="true" />
         <div className="status-v3-hero__copy">
-          <div className="status-v3-hero__mark">
-            <StatusBadgeV3 status={overall.status} />
-            {updatedLabel && (
-              <span className="status-muted" suppressHydrationWarning>
-                Updated {updatedLabel}
-              </span>
-            )}
-          </div>
           <h1 id="status-v3-hero-heading" aria-live="polite">
             {overall.headline}
           </h1>
-          <p className="status-v3-hero__note">{overall.note ?? OVERALL_DETAIL[overall.status]}</p>
+          <p className="status-v3-hero__note">
+            {overall.note ?? OVERALL_DETAIL[overall.status]}
+            {updatedLabel && (
+              <span className="status-v3-hero__updated" suppressHydrationWarning>
+                {' '}
+                · Updated {updatedLabel}
+              </span>
+            )}
+          </p>
           {overall.confidence !== 'complete' && (
             <p className="status-v3-hero__confidence">
               {overall.unknownServiceCount} of{' '}

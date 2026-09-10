@@ -779,27 +779,63 @@ ${R} .status-v3 > section > h2 {
 ${R} .status-v3 > section > h2::before { display: none; }
 
 ${R} .status-v3-hero {
-  display: grid; gap: 1rem; padding: 1.05rem 1.2rem; border-radius: 1.05rem;
-  border: 1px solid var(--status-panel-border);
-  background: color-mix(in srgb, var(--status-panel-bg) 92%, var(--v3-accent, var(--primary)) 8%);
-  box-shadow: none; overflow: hidden; grid-template-columns: minmax(0, 1fr);
+  display: grid; gap: .85rem 1.75rem; align-items: center;
+  padding: .85rem 0 .95rem; overflow: visible; grid-template-columns: minmax(0, 1fr);
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  border-block-end: 2px solid var(--v3-accent, var(--primary));
 }
 ${R} .status-v3-hero::before { display: none; }
-${R} .status-v3-hero__banner { display: flex; align-items: flex-start; gap: .85rem; }
-${R} .status-v3-hero__copy { display: grid; gap: .35rem; min-inline-size: 0; }
-${R} .status-v3-hero__mark { display: inline-flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
-${R} .status-v3-hero__banner h1 {
-  font-size: clamp(1.15rem, 2.4vw, 1.45rem); font-weight: 700; letter-spacing: -.02em; line-height: 1.25;
+${R} .status-v3-hero__banner {
+  display: flex; align-items: flex-start; gap: .75rem; min-inline-size: 0;
 }
-${R} .status-v3-hero__note, ${R} .status-v3-hero__confidence { margin: 0; color: var(--status-text-muted); font-size: .875rem; }
+${R} .status-v3-hero__live {
+  flex: none; margin-block-start: .55rem;
+  inline-size: .55rem; block-size: .55rem; border-radius: 999px;
+  background: var(--v3-accent, var(--primary));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--v3-accent, var(--primary)) 16%, transparent);
+}
+${R} .status-v3-hero__copy { display: grid; gap: .2rem; min-inline-size: 0; }
+${R} .status-v3-hero__banner h1 {
+  margin: 0; text-wrap: balance;
+  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(1.2rem, 2.1vw, 1.45rem); font-weight: 680; letter-spacing: -.03em; line-height: 1.2;
+  color: var(--status-text-strong);
+}
+${R} .status-v3-hero__note, ${R} .status-v3-hero__confidence {
+  margin: 0; max-inline-size: 40rem; color: var(--status-text-muted); font-size: .84rem; line-height: 1.45;
+}
+${R} .status-v3-hero__updated { color: var(--status-text-subtle); }
+${R} .status-v3-hero__confidence { font-size: .78rem; color: var(--status-text-subtle); }
 ${R} .status-v3-hero__stats {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .6rem; margin: 0;
+  display: flex; flex-wrap: wrap; align-items: start; gap: 0; margin: 0;
 }
 ${R} .status-v3-hero__stats .status-stat {
-  padding: .65rem .75rem; border: 1px solid var(--status-panel-border); border-radius: .8rem;
-  background: color-mix(in srgb, var(--status-panel-bg) 70%, transparent);
+  display: grid; gap: .08rem; min-inline-size: 5.75rem;
+  padding: 0 1.1rem; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  border-inline-start: 1px solid var(--status-panel-border);
 }
-${R} .status-v3-hero__stats .status-stat__value { font-size: 1.25rem; font-weight: 720; }
+${R} .status-v3-hero__stats .status-stat:first-child { border-inline-start: 0; padding-inline-start: 0; }
+${R} .status-v3-hero__stats .status-stat__label {
+  font-size: .62rem; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--status-text-subtle);
+}
+${R} .status-v3-hero__stats .status-stat__value {
+  font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.2rem; font-weight: 680; letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums; color: var(--status-text-strong); line-height: 1.15;
+}
+${R} .status-v3-hero__stats .status-stat__hint { font-size: .72rem; color: var(--status-text-muted); }
+@media (min-width: 52rem) {
+  ${R} .status-v3-hero { grid-template-columns: minmax(0, 1fr) auto; padding-block: .9rem 1rem; }
+}
+@media (min-width: 90rem) {
+  ${R} .status-v3-hero { grid-template-columns: minmax(0, 1fr) auto; }
+  ${R} .status-v3-hero__stats { display: flex; grid-template-columns: none; }
+}
+@media (max-width: 40rem) {
+  ${R} .status-v3-hero__stats { width: 100%; }
+  ${R} .status-v3-hero__stats .status-stat { flex: 1 1 0; min-inline-size: 0; padding-inline: .75rem; }
+}
 
 ${R} .status-v3-service, ${R} .status-v3-region, ${R} .status-v3-maintenance__item,
 ${R} .status-v3-incident, ${R} .status-v3-announcement, ${R} .status-v3-changelog__item {
