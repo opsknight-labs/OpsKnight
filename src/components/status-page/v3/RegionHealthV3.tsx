@@ -6,10 +6,37 @@ import { describeRegion } from '@/lib/status-pages/presentation';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
 
+const REGION_LOCATIONS: Record<string, string> = {
+  'us-east-1': 'N. Virginia',
+  'us-east-2': 'Ohio',
+  'us-west-1': 'N. California',
+  'us-west-2': 'Oregon',
+  'eu-west-1': 'Ireland',
+  'eu-west-2': 'London',
+  'eu-west-3': 'Paris',
+  'eu-central-1': 'Frankfurt',
+  'eu-central-2': 'Zurich',
+  'eu-north-1': 'Stockholm',
+  'eu-south-1': 'Milan',
+  'ap-south-1': 'Mumbai',
+  'ap-south-2': 'Hyderabad',
+  'ap-northeast-1': 'Tokyo',
+  'ap-northeast-2': 'Seoul',
+  'ap-northeast-3': 'Osaka',
+  'ap-southeast-1': 'Singapore',
+  'ap-southeast-2': 'Sydney',
+  'ap-southeast-3': 'Jakarta',
+  'ap-east-1': 'Hong Kong',
+  'sa-east-1': 'São Paulo',
+  'me-south-1': 'Bahrain',
+  'af-south-1': 'Cape Town',
+  'ca-central-1': 'Central Canada',
+};
+
 /**
- * Clean, elegant region health overview.
+ * Clean, robust, modern rectangular region health card.
  * Positioned above services to give visitors an immediate geographic pulse.
- * Fits seamlessly across mobile, tablet, and wide screens.
+ * Fits seamlessly across mobile, tablet, and wide screens with zero text collisions.
  */
 export default function RegionHealthV3({ regions }: { regions: PublicRegionStatus[] }) {
   const { impactedCount, totalCount } = useMemo(() => {
@@ -49,20 +76,24 @@ export default function RegionHealthV3({ regions }: { regions: PublicRegionStatu
         {regions.map(region => {
           const isHealthy = region.status === 'OPERATIONAL';
           const label = statusPresentation(region.status).label;
+          const location = REGION_LOCATIONS[region.name.toLowerCase()];
 
           return (
             <li key={region.name} className="status-v3-region-card">
-              <div className="status-v3-region-card__head">
+              <div className="status-v3-region-card__header">
                 <span className="status-v3-region-card__name">{region.name}</span>
+                {location && <span className="status-v3-region-card__location">{location}</span>}
+              </div>
+              <div className="status-v3-region-card__status">
                 <StatusBadge
                   status={region.status}
                   label={label}
-                  size="xs"
+                  size="sm"
                   showDot
                   pulse={!isHealthy}
                 />
               </div>
-              <div className="status-v3-region-card__sub">
+              <div className="status-v3-region-card__footer">
                 <span className="status-v3-region-card__desc">{describeRegion(region)}</span>
               </div>
             </li>

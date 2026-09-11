@@ -1087,14 +1087,14 @@ ${R} .status-v3-regions__grid {
   }
 }
 
-/* Modern, crisp rectangular region card (minimal curve) */
+/* Robust, modern rectangular region card (zero text collisions) */
 ${R} .status-v3-region-card {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 0.45rem;
-  padding: 1.05rem 1.25rem;
-  border-radius: 2px;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 4px;
   border: 1px solid var(--status-panel-border, #e2e8f0);
   background: var(--status-panel-bg, #ffffff);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
@@ -1103,36 +1103,46 @@ ${R} .status-v3-region-card {
 }
 ${R} .status-v3-region-card:hover {
   border-color: color-mix(in srgb, var(--primary) 40%, var(--status-panel-border, #e2e8f0));
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
-${R} .status-v3-region-card__head {
+${R} .status-v3-region-card__header {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.5rem;
   min-inline-size: 0;
 }
 ${R} .status-v3-region-card__name {
-  font-weight: 650;
+  font-weight: 700;
   font-size: 0.95rem;
   letter-spacing: -0.015em;
   color: var(--status-text-strong);
-  min-inline-size: 0;
-  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: inherit;
+  font-family: 'Space Grotesk', Inter, sans-serif;
 }
-${R} .status-v3-region-card__head .status-badge,
-${R} .status-v3-region-card__head [data-badge="true"] {
-  flex-shrink: 0;
-  margin-inline-start: auto;
+${R} .status-v3-region-card__location {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--status-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-${R} .status-v3-region-card__sub {
+${R} .status-v3-region-card__status {
   display: flex;
   align-items: center;
-  min-inline-size: 0;
+}
+${R} .status-v3-region-card__status .status-badge,
+${R} .status-v3-region-card__status [data-badge="true"] {
+  font-size: 0.75rem;
+}
+${R} .status-v3-region-card__footer {
+  display: flex;
+  align-items: center;
+  padding-block-start: 0.55rem;
+  border-block-start: 1px solid color-mix(in srgb, var(--status-panel-border, #e2e8f0) 65%, transparent);
 }
 ${R} .status-v3-region-card__desc {
   font-size: 0.8125rem;
