@@ -42,7 +42,7 @@ describe('Security Components', () => {
       expect(
         screen.getByText(`Within ${PASSWORD_MAX_UTF8_BYTES} UTF-8 bytes (bcrypt safety limit)`)
       ).toBeInTheDocument();
-      expect(screen.getByText('Not a common/default password')).toBeInTheDocument();
+      expect(screen.getByText('Not common, default, or account-identifying')).toBeInTheDocument();
       expect(screen.queryByText(/uppercase letter/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/special character/i)).not.toBeInTheDocument();
     });
