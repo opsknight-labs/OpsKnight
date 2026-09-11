@@ -1,4 +1,17 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+
+vi.mock('@/lib/oidc-validation', () => ({
+  getValidatedOidcRuntimeMetadata: vi.fn().mockImplementation(async (issuer: string) => ({
+    isValid: true,
+    metadata: {
+      issuer,
+      authorizationEndpoint: `${issuer}/authorize`,
+      tokenEndpoint: `${issuer}/token`,
+      jwksUri: `${issuer}/jwks`,
+    },
+  })),
+}));
+
 import { getAuthOptions, resetAuthOptionsCache } from '@/lib/auth';
 import { resetOidcConfigCache } from '@/lib/oidc-config';
 import { encryptWithKey } from '@/lib/encryption';
