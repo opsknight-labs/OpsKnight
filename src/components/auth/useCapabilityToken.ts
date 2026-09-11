@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type CapabilityTokenState = {
   token: string | null;
   ready: boolean;
+  clearToken: () => void;
 };
 
 function readCapabilityToken(): string | null {
@@ -29,7 +30,7 @@ function readCapabilityToken(): string | null {
  */
 export function useCapabilityToken(): CapabilityTokenState {
   const capturedToken = useRef<string | null | undefined>(undefined);
-  const [state, setState] = useState<CapabilityTokenState>({
+  const [state, setState] = useState<Omit<CapabilityTokenState, 'clearToken'>>({
     token: null,
     ready: false,
   });
@@ -46,5 +47,10 @@ export function useCapabilityToken(): CapabilityTokenState {
     }
   }, []);
 
-  return state;
+  const clearToken = useCallback(() => {
+    capturedToken.current = null;
+    setState(current => ({ ...current, token: null }));
+  }, []);
+
+  return { ...state, clearToken };
 }
