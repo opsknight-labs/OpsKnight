@@ -45,7 +45,13 @@ export interface BadgeProps
 
 function Badge({ className, variant, size, ...props }: BadgeProps) {
   return (
-    <div data-badge="true" className={cn(badgeVariants({ variant, size }), className)} {...props} />
+    <div
+      data-badge="true"
+      data-variant={variant || 'default'}
+      data-size={size || 'sm'}
+      className={cn(badgeVariants({ variant, size }), className)}
+      {...props}
+    />
   );
 }
 

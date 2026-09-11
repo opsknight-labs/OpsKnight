@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { serializeJsonForHtml, toSafeStyleTagContent } from '@/lib/status-page-content';
+import {
+  serializeJsonForHtml,
+  toPreviewCustomCss,
+  toSafeStyleTagContent,
+} from '@/lib/status-page-content';
 
 describe('status-page HTML content helpers', () => {
   it('prevents CSS from terminating its style element', () => {
@@ -15,5 +19,15 @@ describe('status-page HTML content helpers', () => {
 
     expect(json).not.toContain('<');
     expect(json).toContain('\\u003c/script\\u003e');
+  });
+
+  it('maps template :root tokens onto the preview shadow host', () => {
+    const css = toPreviewCustomCss(
+      ':root { --sp-ink: #eef2ff; } .status-page-header { color: red; }</style>'
+    );
+
+    expect(css).toContain(':host { --sp-ink: #eef2ff; }');
+    expect(css).not.toContain(':root');
+    expect(css).not.toContain('</style>');
   });
 });

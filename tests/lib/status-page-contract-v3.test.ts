@@ -177,7 +177,7 @@ describe('V3 contract completion (PR2)', () => {
           unknownServiceCount: 1,
           confidence: 'partial',
           headline: 'All known systems operational',
-          note: 'Status unavailable for 1 additional service.',
+          note: 'Status unverified for 1 additional service.',
         },
       })
     );

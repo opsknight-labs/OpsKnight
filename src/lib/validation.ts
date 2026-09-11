@@ -189,7 +189,30 @@ export const StatusPageSettingsSchema = z
       .string()
       .trim()
       .transform(val => (val === '' ? undefined : val))
-      .pipe(z.string().url().optional().nullable())
+      .pipe(
+        z
+          .string()
+          .optional()
+          .nullable()
+          .refine(
+            value => {
+              if (value == null || value === undefined) return true;
+              const trimmed = String(value).trim();
+              if (!trimmed) return true;
+              try {
+                const parsed = new URL(trimmed);
+                return (
+                  parsed.protocol === 'https:' ||
+                  parsed.protocol === 'http:' ||
+                  parsed.protocol === 'mailto:'
+                );
+              } catch {
+                return false;
+              }
+            },
+            { message: 'Contact URL must be https://, http://, or mailto:' }
+          )
+      )
       .optional()
       .nullable(),
     branding: StatusPageBrandingSchema.optional().nullable(),
@@ -226,10 +249,12 @@ export const StatusPageSettingsSchema = z
     showIncidentUrgency: z.boolean().optional(),
     showUptimeHistory: z.boolean().optional(),
     showRecentIncidents: z.boolean().optional(),
+    showIncidentHistoryDetails: z.boolean().optional(),
+    incidentHistoryDetailDays: z.number().int().min(1).max(365).optional(),
     showChangelog: z.boolean().optional(),
     showRegionHeatmap: z.boolean().optional(),
     showPostIncidentReview: z.boolean().optional(),
-    maxIncidentsToShow: z.number().int().min(1).max(500).optional(),
+    maxIncidentsToShow: z.number().int().min(1).max(100).optional(),
     incidentHistoryDays: z.number().int().min(1).max(365).optional(),
     allowedCustomFields: z.array(z.string()).optional().nullable(),
     dataRetentionDays: z.number().int().min(1).optional().nullable(),

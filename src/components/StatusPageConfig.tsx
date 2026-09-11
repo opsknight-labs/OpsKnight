@@ -8,9 +8,6 @@ import StatusPageLivePreview from '@/components/status-page/StatusPageLivePrevie
 import { useRouter } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
-import _StatusPageHeader from '@/components/status-page/StatusPageHeader';
-import _StatusPageIncidents from '@/components/status-page/StatusPageIncidents';
-import _StatusPageAnnouncements from '@/components/status-page/StatusPageAnnouncements';
 import StatusPagePrivacySettings, {
   type PrivacySettings,
 } from '@/components/status-page/StatusPagePrivacySettings';
@@ -98,6 +95,8 @@ type StatusPageConfigProps = {
     showIncidentUrgency?: boolean;
     showUptimeHistory?: boolean;
     showRecentIncidents?: boolean;
+    showIncidentHistoryDetails?: boolean;
+    incidentHistoryDetailDays?: number | null;
     maxIncidentsToShow?: number;
     incidentHistoryDays?: number;
     allowedCustomFields?: string[];
@@ -893,6 +892,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     showIncidentUrgency: statusPage.showIncidentUrgency !== false,
     showUptimeHistory: statusPage.showUptimeHistory !== false,
     showRecentIncidents: statusPage.showRecentIncidents !== false,
+    showIncidentHistoryDetails: statusPage.showIncidentHistoryDetails ?? true,
+    incidentHistoryDetailDays: statusPage.incidentHistoryDetailDays ?? 7,
     maxIncidentsToShow: statusPage.maxIncidentsToShow || 50,
     incidentHistoryDays: statusPage.incidentHistoryDays || 90,
     allowedCustomFields: statusPage.allowedCustomFields || [],
@@ -1060,6 +1061,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                 showIncidentUrgency: privacySettings.showIncidentUrgency,
                 showUptimeHistory: privacySettings.showUptimeHistory,
                 showRecentIncidents: privacySettings.showRecentIncidents,
+                showIncidentHistoryDetails: privacySettings.showIncidentHistoryDetails,
+                incidentHistoryDetailDays: privacySettings.incidentHistoryDetailDays,
                 maxIncidentsToShow: privacySettings.maxIncidentsToShow,
                 incidentHistoryDays: privacySettings.incidentHistoryDays,
                 allowedCustomFields: privacySettings.allowedCustomFields,
@@ -1543,6 +1546,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     showIncidentUrgency: privacySettings.showIncidentUrgency !== false,
     showUptimeHistory: privacySettings.showUptimeHistory !== false,
     showRecentIncidents: privacySettings.showRecentIncidents !== false,
+    showIncidentHistoryDetails: privacySettings.showIncidentHistoryDetails ?? true,
+    incidentHistoryDetailDays: privacySettings.incidentHistoryDetailDays ?? 7,
     maxIncidentsToShow: privacySettings.maxIncidentsToShow || 50,
     incidentHistoryDays: privacySettings.incidentHistoryDays || 90,
     allowedCustomFields: privacySettings.allowedCustomFields || [],
@@ -1732,7 +1737,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             helperText="Used in email headers (e.g., 'OpsKnight'). Overrides Status Page Name if set."
                             placeholder="e.g. OpsKnight"
                           />
-
                         </div>
                       </div>
                     </Card>

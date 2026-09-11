@@ -3,21 +3,31 @@ import type { PublicServiceStatus } from './public-contract';
 /** Canonical product policy for projecting incident urgency onto every public status surface. */
 export function publicStatusForIncidentUrgency(urgency: string): PublicServiceStatus {
   switch (urgency) {
-    case 'LOW': return 'DEGRADED';
-    case 'MEDIUM': return 'PARTIAL_OUTAGE';
-    case 'HIGH': return 'MAJOR_OUTAGE';
-    default: return 'UNKNOWN';
+    case 'LOW':
+      return 'DEGRADED';
+    case 'MEDIUM':
+      return 'PARTIAL_OUTAGE';
+    case 'HIGH':
+      return 'MAJOR_OUTAGE';
+    default:
+      return 'UNKNOWN';
   }
 }
 
 function statusRank(status: PublicServiceStatus): number {
   switch (status) {
-    case 'OPERATIONAL': return 0;
-    case 'UNKNOWN': return 1;
-    case 'MAINTENANCE': return 2;
-    case 'DEGRADED': return 3;
-    case 'PARTIAL_OUTAGE': return 4;
-    case 'MAJOR_OUTAGE': return 5;
+    case 'OPERATIONAL':
+      return 0;
+    case 'UNKNOWN':
+      return 1;
+    case 'MAINTENANCE':
+      return 2;
+    case 'DEGRADED':
+      return 3;
+    case 'PARTIAL_OUTAGE':
+      return 4;
+    case 'MAJOR_OUTAGE':
+      return 5;
   }
 }
 
@@ -26,18 +36,24 @@ export const STATUS_PRESENTATION: Record<
   { label: string; token: string; icon: string }
 > = {
   OPERATIONAL: { label: 'Operational', token: 'operational', icon: '✓' },
-  DEGRADED: { label: 'Degraded', token: 'degraded', icon: '⚠' },
-  MAINTENANCE: { label: 'Maintenance', token: 'maintenance', icon: '⚙' },
-  PARTIAL_OUTAGE: { label: 'Partial outage', token: 'partial-outage', icon: '◐' },
-  MAJOR_OUTAGE: { label: 'Major outage', token: 'major-outage', icon: '✕' },
-  UNKNOWN: { label: 'Status unknown', token: 'unknown', icon: '?' },
+  DEGRADED: { label: 'Degraded Performance', token: 'degraded', icon: '⚠' },
+  MAINTENANCE: { label: 'Under Maintenance', token: 'maintenance', icon: '⚙' },
+  PARTIAL_OUTAGE: { label: 'Partial Outage', token: 'partial-outage', icon: '◐' },
+  MAJOR_OUTAGE: { label: 'Major Outage', token: 'major-outage', icon: '✕' },
+  UNKNOWN: { label: 'Unverified', token: 'unknown', icon: '?' },
 };
 
 export function normalizePublicStatus(value: unknown): PublicServiceStatus {
   switch (value) {
-    case 'OPERATIONAL': case 'DEGRADED': case 'MAINTENANCE':
-    case 'PARTIAL_OUTAGE': case 'MAJOR_OUTAGE': case 'UNKNOWN': return value;
-    default: return 'UNKNOWN';
+    case 'OPERATIONAL':
+    case 'DEGRADED':
+    case 'MAINTENANCE':
+    case 'PARTIAL_OUTAGE':
+    case 'MAJOR_OUTAGE':
+    case 'UNKNOWN':
+      return value;
+    default:
+      return 'UNKNOWN';
   }
 }
 
@@ -45,9 +61,9 @@ export function getWorstPublicStatus(
   statuses: readonly PublicServiceStatus[]
 ): PublicServiceStatus {
   if (statuses.length === 0) return 'UNKNOWN';
-  return statuses.reduce((worst, status) => (
+  return statuses.reduce((worst, status) =>
     statusRank(status) > statusRank(worst) ? status : worst
-  ));
+  );
 }
 
 /** Worst status among services we actually have a signal for. */
@@ -106,42 +122,91 @@ export function deriveOverallPublicHealth(
       knownServiceCount: 0,
       unknownServiceCount,
       confidence: 'none',
-      headline: 'Current status unavailable',
-      note: 'We could not verify service health just now. This page refreshes automatically.',
+      headline: 'Status unverified',
+      note: 'Service health could not be verified. This page refreshes automatically.',
     };
   }
 
   const worst = worstKnownPublicStatus(statuses) ?? 'OPERATIONAL';
+  const worstCount = statuses.filter(status => status === worst).length;
   const plural = unknownServiceCount === 1 ? 'service' : 'services';
   return {
     status: worst,
     knownServiceCount,
     unknownServiceCount,
     confidence: unknownServiceCount === 0 ? 'complete' : 'partial',
-    headline:
-      worst === 'OPERATIONAL'
-        ? unknownServiceCount === 0
-          ? `All ${knownServiceCount} ${knownServiceCount === 1 ? 'service' : 'services'} operational`
-          : 'All known systems operational'
-        : OVERALL_HEADLINE[worst],
+    headline: overallHeadline(worst, {
+      knownServiceCount,
+      unknownServiceCount,
+      worstCount,
+    }),
     note:
       unknownServiceCount === 0
         ? null
-        : `Status unavailable for ${unknownServiceCount} additional ${plural}.`,
+        : `Status unverified for ${unknownServiceCount} additional ${plural}.`,
   };
 }
 
+export function overallHeadline(
+  worst: PublicServiceStatus,
+  counts: { knownServiceCount: number; unknownServiceCount: number; worstCount: number }
+): string {
+  if (worst === 'OPERATIONAL') {
+    return counts.unknownServiceCount === 0
+      ? 'All systems operational'
+      : 'All known systems operational';
+  }
+
+  switch (worst) {
+    case 'MAJOR_OUTAGE':
+      return counts.worstCount === 1
+        ? 'One service down'
+        : counts.worstCount === counts.knownServiceCount
+          ? 'Major outage'
+          : 'Partial outage';
+    case 'PARTIAL_OUTAGE':
+      return counts.worstCount === counts.knownServiceCount
+        ? 'Partial outage'
+        : 'Some services degraded';
+    case 'DEGRADED':
+      return counts.worstCount === counts.knownServiceCount
+        ? 'Degraded performance'
+        : 'Some services degraded';
+    case 'MAINTENANCE':
+      return counts.worstCount === 1
+        ? 'One service under maintenance'
+        : 'Maintenance in progress';
+    case 'UNKNOWN':
+      return OVERALL_HEADLINE.UNKNOWN;
+  }
+}
+
+/** Page-level headline from snapshot status fields, without recomputing health. */
+export function presentOverallHeadline(
+  overall: OverallPublicHealth,
+  serviceStatuses: readonly PublicServiceStatus[]
+): string {
+  if (serviceStatuses.length === 0 || overall.confidence === 'none') {
+    return overall.headline;
+  }
+  return overallHeadline(overall.status, {
+    knownServiceCount: overall.knownServiceCount,
+    unknownServiceCount: overall.unknownServiceCount,
+    worstCount: Math.max(1, serviceStatuses.filter(status => status === overall.status).length),
+  });
+}
+
 /**
- * Header copy per status. Partial and major outage stay distinct: collapsing them into a generic
- * "Outage" hides the difference between some functionality being unavailable and most of it.
+ * Generic header copy per status. Count-aware page headlines are built in `deriveOverallPublicHealth`
+ * so one down service never reads as the whole page being unavailable.
  */
 export const OVERALL_HEADLINE: Record<PublicServiceStatus, string> = {
   OPERATIONAL: 'All systems operational',
-  MAINTENANCE: 'Scheduled maintenance',
+  MAINTENANCE: 'Maintenance in progress',
   DEGRADED: 'Degraded performance',
   PARTIAL_OUTAGE: 'Partial outage',
   MAJOR_OUTAGE: 'Major outage',
-  UNKNOWN: 'Status information unavailable',
+  UNKNOWN: 'Status unverified',
 };
 
 /**
@@ -170,21 +235,27 @@ export function legacyPublicStatus(status: PublicServiceStatus): LegacyPublicSta
 
 /** Supporting sentence under the headline. */
 export const OVERALL_DETAIL: Record<PublicServiceStatus, string> = {
-  OPERATIONAL: 'All services are operating normally.',
-  MAINTENANCE: 'Planned maintenance is currently in progress.',
-  DEGRADED: 'Some services are experiencing reduced performance.',
-  PARTIAL_OUTAGE: 'Some services are currently unavailable.',
-  MAJOR_OUTAGE: 'Multiple services are experiencing disruption.',
-  UNKNOWN: "We can't currently verify service health.",
+  OPERATIONAL: 'All published services are operating normally.',
+  MAINTENANCE: 'Scheduled maintenance is in progress.',
+  DEGRADED: 'One or more services are experiencing degraded performance.',
+  PARTIAL_OUTAGE: 'One or more services are experiencing a partial outage.',
+  MAJOR_OUTAGE: 'One or more services are currently unavailable.',
+  UNKNOWN: 'Service health could not be verified.',
 };
 
 export function statusPresentation(status: PublicServiceStatus) {
   switch (status) {
-    case 'OPERATIONAL': return STATUS_PRESENTATION.OPERATIONAL;
-    case 'DEGRADED': return STATUS_PRESENTATION.DEGRADED;
-    case 'MAINTENANCE': return STATUS_PRESENTATION.MAINTENANCE;
-    case 'PARTIAL_OUTAGE': return STATUS_PRESENTATION.PARTIAL_OUTAGE;
-    case 'MAJOR_OUTAGE': return STATUS_PRESENTATION.MAJOR_OUTAGE;
-    case 'UNKNOWN': return STATUS_PRESENTATION.UNKNOWN;
+    case 'OPERATIONAL':
+      return STATUS_PRESENTATION.OPERATIONAL;
+    case 'DEGRADED':
+      return STATUS_PRESENTATION.DEGRADED;
+    case 'MAINTENANCE':
+      return STATUS_PRESENTATION.MAINTENANCE;
+    case 'PARTIAL_OUTAGE':
+      return STATUS_PRESENTATION.PARTIAL_OUTAGE;
+    case 'MAJOR_OUTAGE':
+      return STATUS_PRESENTATION.MAJOR_OUTAGE;
+    case 'UNKNOWN':
+      return STATUS_PRESENTATION.UNKNOWN;
   }
 }

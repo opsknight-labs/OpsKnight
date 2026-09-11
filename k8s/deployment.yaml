@@ -7,6 +7,11 @@ metadata:
     app: opsknight-app
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: opsknight-app
@@ -17,6 +22,7 @@ spec:
     spec:
       serviceAccountName: opsknight-app
       automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsUser: 1001
         runAsGroup: 1001

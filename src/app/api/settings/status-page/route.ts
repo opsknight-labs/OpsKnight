@@ -94,6 +94,8 @@ export async function POST(req: NextRequest) {
       showIncidentUrgency,
       showUptimeHistory,
       showRecentIncidents,
+      showIncidentHistoryDetails,
+      incidentHistoryDetailDays,
       showChangelog,
       showRegionHeatmap,
       showPostIncidentReview,
@@ -178,6 +180,10 @@ export async function POST(req: NextRequest) {
     if (showIncidentUrgency !== undefined) updateData.showIncidentUrgency = showIncidentUrgency;
     if (showUptimeHistory !== undefined) updateData.showUptimeHistory = showUptimeHistory;
     if (showRecentIncidents !== undefined) updateData.showRecentIncidents = showRecentIncidents;
+    if (showIncidentHistoryDetails !== undefined)
+      updateData.showIncidentHistoryDetails = showIncidentHistoryDetails;
+    if (incidentHistoryDetailDays !== undefined)
+      updateData.incidentHistoryDetailDays = incidentHistoryDetailDays;
     if (showChangelog !== undefined) updateData.showChangelog = showChangelog;
     if (showRegionHeatmap !== undefined) updateData.showRegionHeatmap = showRegionHeatmap;
     if (showPostIncidentReview !== undefined) updateData.showPostIncidentReview = showPostIncidentReview;

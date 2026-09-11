@@ -42,6 +42,8 @@ const sectionFields = new Map<string, readonly string[]>([
       'showIncidentUrgency',
       'showUptimeHistory',
       'showRecentIncidents',
+      'showIncidentHistoryDetails',
+      'incidentHistoryDetailDays',
       'maxIncidentsToShow',
       'incidentHistoryDays',
       'dataRetentionDays',

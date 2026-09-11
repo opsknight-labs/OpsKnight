@@ -1,48 +1,56 @@
 'use client';
 
-import type { PublicStatusService } from '@/lib/status-pages/public-contract';
-import {
-  describeUptimeWindow,
-  UPTIME_TIER_LABEL,
-  uptimeTier,
-} from '@/lib/status-pages/presentation';
+import type { PublicStatusService, PublicUptimeWindow } from '@/lib/status-pages/public-contract';
+import { describeUptimeWindow, UPTIME_TIER_LABEL } from '@/lib/status-pages/presentation';
+import StatusBadge from '@/components/incident/StatusBadge';
+
+function publishedSlaLabel(window: PublicUptimeWindow | undefined) {
+  if (window?.grade === 'EXCELLENT') return UPTIME_TIER_LABEL.excellent;
+  if (window?.grade === 'GOOD') return UPTIME_TIER_LABEL.good;
+  if (window?.grade === 'BELOW_TARGET') return UPTIME_TIER_LABEL.poor;
+  return null;
+}
+
+function publishedMeterTier(window: PublicUptimeWindow | undefined) {
+  if (window?.grade === 'EXCELLENT') return 'excellent';
+  if (window?.grade === 'GOOD') return 'good';
+  if (window?.grade === 'BELOW_TARGET') return 'poor';
+  return 'unknown';
+}
 
 const WINDOWS = [
   { key: 'days30', label: '30 days' },
   { key: 'days90', label: '90 days' },
 ] as const;
 
-/**
- * Availability against the page's own SLA thresholds.
- *
- * A short measurement window reports its percentage and says how many days it covers, rather than
- * claiming the figure is unavailable: twenty days of real data is data.
- */
-export default function StatusPageUptimeMetrics({
-  services,
-  thresholds,
-}: {
-  services: PublicStatusService[];
-  thresholds: { excellent: number; good: number };
-}) {
+/** Published availability windows only — grades come from the snapshot, never recomputed. */
+export default function StatusPageUptimeMetrics({ services }: { services: PublicStatusService[] }) {
   const measured = services.filter(service => service.uptime);
   if (measured.length === 0) return null;
 
   return (
-    <section className="status-section" aria-labelledby="uptime-metrics-heading">
-      <div className="status-section__head">
-        <h2 id="uptime-metrics-heading">Uptime metrics</h2>
-        <span className="status-section__count">Service availability over time</span>
-      </div>
+    <section className="status-v3-uptime-metrics" aria-labelledby="uptime-metrics-heading">
+      <h2 id="uptime-metrics-heading">Uptime metrics</h2>
       <div className="status-uptime-grid">
         {measured.map(service => {
           // The headline badge reflects the longer window, which is the one an SLA is written against.
-          const tier = uptimeTier(service.uptime?.days90, thresholds);
+          const sla = publishedSlaLabel(service.uptime?.days90);
           return (
             <article key={service.id} className="status-uptime-card status-panel">
               <div className="status-uptime-card__head">
                 <h3 className="status-service__name">{service.name}</h3>
-                <span className={`status-tag`}>{UPTIME_TIER_LABEL[tier]}</span>
+                {sla ? (
+                  service.uptime?.days90?.grade ? (
+                    <StatusBadge
+                      status={service.uptime.days90.grade}
+                      label={sla}
+                      size="xs"
+                      showDot
+                    />
+                  ) : (
+                    <span className="status-tag">{sla}</span>
+                  )
+                ) : null}
               </div>
               {WINDOWS.map(({ key, label }) => {
                 const window = service.uptime?.[key];
@@ -55,7 +63,7 @@ export default function StatusPageUptimeMetrics({
                     </div>
                     <div
                       className="status-meter"
-                      data-tier={uptimeTier(window, thresholds)}
+                      data-tier={publishedMeterTier(window)}
                       role="img"
                       aria-label={`${service.name} ${label} availability ${described.value}`}
                     >

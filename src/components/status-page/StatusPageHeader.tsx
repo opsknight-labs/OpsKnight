@@ -1,10 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatDateTime } from '@/lib/timezone';
-import { isDarkHex } from '@/lib/status-page-theme';
-import type { PublicServiceStatus } from '@/lib/status-pages/public-contract';
-import { normalizePublicStatus } from '@/lib/status-pages/status-presentation';
+import type { PublicStatusBranding } from '@/lib/status-pages/public-contract';
 
 interface StatusPageHeaderProps {
   statusPage: {
@@ -12,402 +9,236 @@ interface StatusPageHeaderProps {
     contactEmail?: string | null;
     contactUrl?: string | null;
   };
-  /** Canonical public status. Partial and major outage stay distinct on purpose. */
-  overallStatus: PublicServiceStatus;
-  branding?: Record<string, unknown>;
-  lastUpdated?: string;
+  branding?: (PublicStatusBranding & { logo?: string }) | null;
+  rssHref?: string | null;
+  apiHref?: string | null;
+  onSubscribeClick?: (() => void) | null;
+  /** Visitor browser IANA zone. All visible timestamps on the page use this same value. */
+  timeZone: string;
+  generatedAt?: string;
+  refreshIntervalSeconds?: number | null;
 }
 
-const STATUS_CONFIG: Record<
-  PublicServiceStatus,
-  { badge: string; text: string; color: string; background: string; border: string; pulse: boolean }
-> = {
-  OPERATIONAL: {
-    badge: 'Operational',
-    text: 'All systems operational',
-    color: '#16a34a',
-    background: 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)',
-    border: '#86efac',
-    pulse: true,
-  },
-  DEGRADED: {
-    badge: 'Degraded',
-    text: 'Some services are experiencing reduced performance',
-    color: '#d97706',
-    background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-    border: '#fcd34d',
-    pulse: true,
-  },
-  MAINTENANCE: {
-    badge: 'Maintenance',
-    text: 'Planned maintenance is currently in progress',
-    color: '#2563eb',
-    background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
-    border: '#93c5fd',
-    pulse: true,
-  },
-  // Partial outage reads amber-red rather than sharing the major-outage treatment: some
-  // functionality being unavailable is a different message to most of it being unavailable.
-  PARTIAL_OUTAGE: {
-    badge: 'Partial outage',
-    text: 'Some services are currently unavailable',
-    color: '#ea580c',
-    background: 'linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%)',
-    border: '#fdba74',
-    pulse: true,
-  },
-  MAJOR_OUTAGE: {
-    badge: 'Major outage',
-    text: 'Multiple services are experiencing disruption',
-    color: '#dc2626',
-    background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
-    border: '#fca5a5',
-    pulse: true,
-  },
-  UNKNOWN: {
-    badge: 'Status unavailable',
-    text: "We can't currently verify service health",
-    color: '#475569',
-    background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-    border: '#94a3b8',
-    pulse: false,
-  },
-};
+function offsetLabel(timeZone: string, at: Date) {
+  return (
+    new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' })
+      .formatToParts(at)
+      .find(part => part.type === 'timeZoneName')?.value ?? timeZone
+  );
+}
 
+function formatLocalClock(timeZone: string, at: Date) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).format(at);
+}
+
+function formatCountdown(totalSeconds: number) {
+  const clamped = Math.max(0, totalSeconds);
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function ClockIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 1 1-2.3-6" strokeLinecap="round" />
+      <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function RssIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M6.18 17.82a2.18 2.18 0 1 1-3.08 0 2.18 2.18 0 0 1 3.08 0ZM2 10.18v3.02A8.8 8.8 0 0 1 10.8 22h3.02A11.82 11.82 0 0 0 2 10.18ZM2 3v3.02A17.98 17.98 0 0 1 17.98 22H21A21 21 0 0 0 2 3Z" />
+    </svg>
+  );
+}
+
+function ApiIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="M8 8 4 12l4 4M16 8l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m4 7 8 6 8-6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SubscribeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M4 9a2.5 2.5 0 0 1 2.5-2.5H17A2.5 2.5 0 0 1 19.5 9V16A2.5 2.5 0 0 1 17 18.5H6.5A2.5 2.5 0 0 1 4 16V9Z" />
+      <path d="m5 7.5 7 5 7-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * Slim public top bar. Clock, countdown, and timestamps all use the visitor's browser zone.
+ */
 export default function StatusPageHeader({
   statusPage,
-  overallStatus,
   branding = {},
-  lastUpdated,
+  rssHref,
+  apiHref,
+  onSubscribeClick,
+  timeZone,
+  generatedAt,
+  refreshIntervalSeconds = null,
 }: StatusPageHeaderProps) {
-  // A lookup with an explicit fallback, so an unrecognized value reads as unverifiable rather
-  // than silently claiming everything is fine.
-  const status = STATUS_CONFIG[normalizePublicStatus(overallStatus)] ?? STATUS_CONFIG.UNKNOWN;
+  const brand = branding ?? undefined;
   const logoUrl =
-    (typeof branding.logoUrl === 'string' && branding.logoUrl) ||
-    (typeof branding.logo === 'string' && branding.logo) ||
+    (typeof brand?.logoUrl === 'string' && brand.logoUrl) ||
+    (typeof brand?.logo === 'string' && brand.logo) ||
     '/logo.svg';
-  const primaryColor =
-    (typeof branding.primaryColor === 'string' && branding.primaryColor) ||
-    (typeof branding.primary === 'string' && branding.primary) ||
-    '#667eea';
-  const backgroundColor =
-    (typeof branding.backgroundColor === 'string' && branding.backgroundColor) ||
-    (typeof branding.background === 'string' && branding.background) ||
-    '#ffffff';
-  const isDark = isDarkHex(backgroundColor);
-  const textColor =
-    (typeof branding.textColor === 'string' && branding.textColor) ||
-    (isDark ? '#f8fafc' : 'var(--status-text, #111827)');
-  const [updatedLabel, setUpdatedLabel] = useState<string | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
+  const [deadlineMs, setDeadlineMs] = useState<number | null>(null);
 
   useEffect(() => {
-    setIsVisible(true); // eslint-disable-line react-hooks/set-state-in-effect
+    const tick = () => setNow(new Date());
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
-    if (!lastUpdated) {
-      setUpdatedLabel(null); // eslint-disable-line react-hooks/set-state-in-effect
-      return;
-    }
+    const nextDeadline =
+      refreshIntervalSeconds != null && refreshIntervalSeconds > 0
+        ? Date.now() + refreshIntervalSeconds * 1000
+        : null;
+    const id = window.setTimeout(() => setDeadlineMs(nextDeadline), 0);
+    return () => window.clearTimeout(id);
+  }, [refreshIntervalSeconds, generatedAt]);
 
-    const parsed = new Date(lastUpdated);
-    if (Number.isNaN(parsed.getTime())) {
-      setUpdatedLabel(null);
-      return;
-    }
-
-    const updateLabel = () => {
-      const now = new Date();
-      const diff = now.getTime() - parsed.getTime();
-      const seconds = Math.floor(diff / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-
-      if (seconds < 60) {
-        const remaining = Math.max(0, 60 - seconds);
-        setUpdatedLabel(`00:${String(remaining).padStart(2, '0')}`);
-      } else if (minutes < 60) {
-        setUpdatedLabel(`${minutes} minute${minutes !== 1 ? 's' : ''} ago`);
-      } else if (hours < 24) {
-        setUpdatedLabel(`${hours} hour${hours !== 1 ? 's' : ''} ago`);
-      } else {
-        // Use browser timezone for public status page
-        const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const label = formatDateTime(parsed, browserTz, {
-          format: 'short',
-          hour12: true,
-        });
-        setUpdatedLabel(label);
-      }
-    };
-
-    updateLabel();
-    const interval = setInterval(updateLabel, 1000); // Update every second for the countdown
-    return () => clearInterval(interval);
-  }, [lastUpdated]);
+  const contactHref =
+    statusPage.contactUrl || (statusPage.contactEmail ? `mailto:${statusPage.contactEmail}` : null);
+  const localTime = now ? formatLocalClock(timeZone, now) : null;
+  const offset = now ? offsetLabel(timeZone, now) : null;
+  const zoneName = timeZone.replace(/_/g, ' ');
+  const remainingSeconds =
+    now && deadlineMs != null ? Math.max(0, Math.ceil((deadlineMs - now.getTime()) / 1000)) : null;
 
   return (
-    <header
-      className="status-page-header"
-      style={{
-        background: isDark
-          ? 'linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%)'
-          : 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
-        borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid #e2e8f0',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: isDark ? '0 10px 24px rgba(0, 0, 0, 0.4)' : '0 10px 24px rgba(15, 23, 42, 0.08)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        transition: 'all 0.3s ease',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: 'clamp(0.5rem, 2vw, 1.5rem) clamp(0.5rem, 2vw, 1.5rem)',
-          boxSizing: 'border-box',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 'clamp(0.5rem, 1.5vw, 1rem)', // Reduce gap
-            opacity: isVisible ? 1 : 0,
-            transform: isVisible ? 'translateY(0)' : 'translateY(-10px)',
-            transition: 'opacity 0.5s ease, transform 0.5s ease',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'clamp(0.5rem, 1.5vw, 1rem)', // Reduce gap
-              flex: '1 1 auto', // Allow it to shrink
-              minWidth: 0,
-              flexWrap: 'wrap',
-              justifyContent: 'flex-start',
+    <header className="status-topbar status-page-header">
+      <div className="status-topbar__inner">
+        <a className="status-topbar__brand" href="https://opsknight.com/">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={logoUrl}
+            alt=""
+            onError={event => {
+              (event.target as HTMLImageElement).style.display = 'none';
             }}
-          >
-            {logoUrl && (
-              <div
-                style={{
-                  flexShrink: 0,
-                  padding: 'clamp(0.25rem, 1vw, 0.5rem)',
-                  borderRadius: '0.5rem', // Smaller radius
-                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#ffffff',
-                  border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid transparent',
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.12)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.transform = 'scale(1)';
-                  e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
-                }}
-              >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                  src={logoUrl}
-                  alt={statusPage.name}
-                  style={{
-                    height: 'clamp(24px, 4vw, 40px)', // Smaller logo
-                    maxWidth: 'clamp(80px, 20vw, 180px)',
-                    objectFit: 'contain',
-                    display: 'block',
-                  }}
-                  onError={e => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
-            <div style={{ textAlign: 'left', flex: '1 1 auto', minWidth: 0 }}>
-              <h1
-                style={{
-                  fontSize: 'clamp(1rem, 4vw, 2.25rem)', // Smaller title
-                  fontWeight: '800',
-                  margin: 0,
-                  color: textColor,
-                  letterSpacing: '-0.03em',
-                  background: isDark
-                    ? `linear-gradient(135deg, ${textColor} 0%, rgba(255, 255, 255, 0.75) 100%)`
-                    : `linear-gradient(135deg, ${textColor} 0%, color-mix(in srgb, ${textColor} 85%, transparent) 100%)`,
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  lineHeight: '1.2',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {statusPage.name}
-              </h1>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'clamp(0.375rem, 1.5vw, 0.75rem)',
-                  marginTop: 'clamp(0.125rem, 0.5vw, 0.25rem)', // Tighter margin
-                  flexWrap: 'wrap',
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    color: isDark ? '#94a3b8' : 'var(--status-text-muted, #475569)',
-                    fontSize: 'clamp(0.75rem, 2vw, 0.95rem)', // Smaller subtitle
-                    fontWeight: '500',
-                  }}
-                >
-                  {status.text}
-                </p>
-                {updatedLabel && (
-                  <>
-                    <span
-                      style={{
-                        color: isDark ? '#475569' : 'var(--status-text-subtle, #cbd5e1)',
-                        fontSize: '0.75rem',
-                      }}
-                    >
-                      |
-                    </span>
-                    <p
-                      suppressHydrationWarning
-                      style={{
-                        margin: 0,
-                        color: isDark ? '#64748b' : 'var(--status-text-subtle, #94a3b8)',
-                        fontSize: '0.75rem', // Smaller text
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.25rem',
-                      }}
-                    >
-                      <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                      </svg>
-                      {updatedLabel}
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              flexShrink: 0,
-              flex: '0 0 auto', // Don't grow if not needed
-              justifyContent: 'flex-end',
-              marginTop: '0', // Removing top margin relying on flex wrap gap
-            }}
-          >
-            <div
-              style={{
-                position: 'relative',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}
+          />
+          <span>{statusPage.name}</span>
+        </a>
+        <div className="status-topbar__actions">
+          {localTime && offset && (
+            <span
+              className="status-topbar__chip status-topbar__chip--time"
+              title={`Times on this page use your browser time zone (${zoneName})`}
             >
-              <span
-                style={{
-                  padding: '0.375rem 0.75rem', // Smaller padding
-                  background: status.background,
-                  color: status.color,
-                  border: `1px solid ${status.border}`, // Thinner border
-                  borderRadius: '999px',
-                  fontSize: '0.7rem', // Smaller font
-                  fontWeight: '700',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  boxShadow: `0 1px 2px ${status.border}40`,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.375rem',
-                  position: 'relative',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                  e.currentTarget.style.boxShadow = `0 4px 12px ${status.border}60`;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.transform = 'scale(1)';
-                  e.currentTarget.style.boxShadow = `0 1px 2px ${status.border}40`;
-                }}
-              >
-                {status.badge}
+              <ClockIcon />
+              <span className="status-topbar__time" suppressHydrationWarning>
+                {localTime}
               </span>
-            </div>
-            {(statusPage.contactEmail || statusPage.contactUrl) && (
-              <a
-                href={statusPage.contactUrl || `mailto:${statusPage.contactEmail}`}
-                className="status-page-button"
-                data-variant="primary"
-                style={{
-                  textDecoration: 'none',
-                  fontSize: '0.8125rem',
-                  fontWeight: '700',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  background: primaryColor,
-                  borderColor: primaryColor,
-                  color: '#ffffff',
-                }}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                  <polyline points="22,6 12,13 2,6"></polyline>
-                </svg>
-                Contact
-              </a>
-            )}
-          </div>
+              <span className="status-topbar__offset" suppressHydrationWarning>
+                {offset}
+              </span>
+            </span>
+          )}
+          {remainingSeconds != null && (
+            <span
+              className="status-topbar__chip status-topbar__chip--time"
+              title="Seconds until this page fetches the latest published status"
+            >
+              <RefreshIcon />
+              <span className="status-topbar__time" suppressHydrationWarning>
+                {formatCountdown(remainingSeconds)}
+              </span>
+            </span>
+          )}
+          {onSubscribeClick && (
+            <button type="button" className="status-topbar__chip status-topbar__chip--accent" onClick={onSubscribeClick} aria-haspopup="dialog">
+              <SubscribeIcon />
+              Subscribe
+            </button>
+          )}
+          {rssHref && (
+            <a className="status-topbar__chip" href={rssHref}>
+              <RssIcon />
+              RSS
+            </a>
+          )}
+          {apiHref && (
+            <a className="status-topbar__chip" href={apiHref}>
+              <ApiIcon />
+              JSON
+            </a>
+          )}
+          {contactHref && (
+            <a className="status-topbar__chip status-topbar__chip--accent" href={contactHref}>
+              <MailIcon />
+              Contact
+            </a>
+          )}
         </div>
       </div>
-      <style jsx>{`
-        @keyframes pulse {
-          0%,
-          100% {
-            opacity: 0.6;
-            transform: scale(1);
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1.2);
-          }
-        }
-      `}</style>
     </header>
   );
 }
