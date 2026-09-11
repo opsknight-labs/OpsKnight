@@ -34,5 +34,17 @@ export function getEnterpriseSessionPolicy() {
   return {
     maximumAgeSeconds: boundedSeconds('AUTH_SSO_SESSION_MAX_AGE_SECONDS', 43_200, 900, 2_592_000),
     updateAgeSeconds: boundedSeconds('AUTH_SSO_SESSION_UPDATE_AGE_SECONDS', 3_600, 60, 86_400),
+    idleTimeoutSeconds: boundedSeconds(
+      'AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS',
+      14_400,
+      300,
+      604_800
+    ),
+    reauthenticateAfterSeconds: boundedSeconds(
+      'AUTH_SSO_REAUTH_AFTER_SECONDS',
+      43_200,
+      900,
+      2_592_000
+    ),
   };
 }

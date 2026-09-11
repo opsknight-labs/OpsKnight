@@ -86,6 +86,8 @@ describe('Auth JWT + OIDC callback contract', () => {
     process.env.AUTH_OPTIONS_CACHE_TTL_MS = '0';
     process.env.JWT_USER_REFRESH_TTL_MS = '60000';
     process.env.OIDC_REQUIRE_EMAIL_VERIFIED_STRICT = 'false';
+    process.env.AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS = '14400';
+    process.env.AUTH_SSO_REAUTH_AFTER_SECONDS = '43200';
 
     vi.mocked(getOidcConfig).mockResolvedValue({
       enabled: true,
@@ -320,6 +322,48 @@ describe('Auth JWT + OIDC callback contract', () => {
 
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
     expect(token.role).toBe('USER');
+  });
+
+  it('expires an OIDC session after the configured idle timeout', async () => {
+    const now = Date.now();
+    const jwt = await getJwtCallback();
+    const token = await jwt({
+      token: {
+        sub: 'u1',
+        oidcAuthenticatedAt: now - 1_000,
+        lastActivityAt: now - 14_400_000,
+      },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: undefined,
+      session: undefined,
+    });
+
+    expect(token.sub).toBeUndefined();
+    expect(token.error).toBe('OIDC_SESSION_IDLE_TIMEOUT');
+  });
+
+  it('requires a fresh IdP authentication after the absolute reauthentication window', async () => {
+    const now = Date.now();
+    const jwt = await getJwtCallback();
+    const token = await jwt({
+      token: {
+        sub: 'u1',
+        oidcAuthenticatedAt: now - 43_200_000,
+        lastActivityAt: now,
+      },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: undefined,
+      session: undefined,
+    });
+
+    expect(token.sub).toBeUndefined();
+    expect(token.error).toBe('OIDC_REAUTHENTICATION_REQUIRED');
   });
 
   it('jwt callback revokes an existing session when tokenVersion mismatches', async () => {

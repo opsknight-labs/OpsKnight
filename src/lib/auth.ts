@@ -41,6 +41,10 @@ type AugmentedJWT = JWT & {
   role?: string;
   /** True when user opted into "Remember Me" at login. Used to pick the JWT exp cap. */
   rememberMe?: boolean;
+  /** Last authenticated request seen for an OIDC session, in epoch milliseconds. */
+  lastActivityAt?: number;
+  /** Time the IdP last authenticated this OIDC session, in epoch milliseconds. */
+  oidcAuthenticatedAt?: number;
 };
 
 type AugmentedUser = User & {
@@ -103,6 +107,8 @@ function clearSessionToken(token: AugmentedJWT, reason: string) {
   delete token.role;
   delete token.email;
   delete token.name;
+  delete token.lastActivityAt;
+  delete token.oidcAuthenticatedAt;
   return token;
 }
 
@@ -132,19 +138,15 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
   authOptionsInFlight = (async () => {
     const oidcConfig = await getOidcConfig();
-    // Session design (modelled on PagerDuty / Linear / Slack):
-    //   - No time-based "you've been idle, log back in" on any client.
-    //   - Mobile clients ALWAYS get the long ceiling so push-notification
-    //     listeners don't silently fall off because a timer expired
-    //     without the user noticing. Mobile UA forces rememberMe=true
-    //     in the authorize() call below.
-    //   - Web without "Remember Me" still gets 7 days, but with sliding refresh.
-    //   - Web with "Remember Me" gets the long ceiling.
-    //   - The only way to log a user out is server-side revocation via tokenVersion.
+    // Enterprise OIDC sessions have independent absolute, idle, reauthentication,
+    // and server-side revocation boundaries. Credentials retain remember-me
+    // behavior, while OIDC never extends the original IdP authentication time.
     const enterpriseSession = getEnterpriseSessionPolicy();
     const sessionMaxAgeSeconds = enterpriseSession.maximumAgeSeconds;
     const rememberMeMaxAgeSeconds = enterpriseSession.maximumAgeSeconds;
     const sessionUpdateAgeSeconds = enterpriseSession.updateAgeSeconds;
+    const sessionIdleTimeoutMs = enterpriseSession.idleTimeoutSeconds * 1000;
+    const oidcReauthenticateAfterMs = enterpriseSession.reauthenticateAfterSeconds * 1000;
     const localAuthPolicy = getLocalAuthPolicy();
 
     if (oidcConfig) {
@@ -464,6 +466,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 token.name = dbUser.name;
                 token.email = dbUser.email;
                 (token as AugmentedJWT).tokenVersion = dbUser.tokenVersion ?? 0;
+                (token as AugmentedJWT).lastActivityAt = Date.now();
+                (token as AugmentedJWT).oidcAuthenticatedAt = Date.now();
               } catch (error) {
                 logger.error('[Auth] JWT callback - OIDC identity lookup failed', {
                   component: 'auth:jwt',
@@ -499,6 +503,21 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           if (trigger === 'update') {
             // Force the user refresh below by bypassing the cache check.
+          }
+
+          const augmentedToken = token as AugmentedJWT;
+          if (!user && augmentedToken.oidcAuthenticatedAt) {
+            const currentTime = Date.now();
+            if (currentTime - augmentedToken.oidcAuthenticatedAt >= oidcReauthenticateAfterMs) {
+              return clearSessionToken(augmentedToken, 'OIDC_REAUTHENTICATION_REQUIRED');
+            }
+            if (
+              augmentedToken.lastActivityAt &&
+              currentTime - augmentedToken.lastActivityAt >= sessionIdleTimeoutMs
+            ) {
+              return clearSessionToken(augmentedToken, 'OIDC_SESSION_IDLE_TIMEOUT');
+            }
+            augmentedToken.lastActivityAt = currentTime;
           }
 
           if (token.sub && typeof token.sub === 'string') {
